@@ -1,0 +1,860 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Colorado CareAssist Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 0 24px 32px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 24px;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .nav-menu {
+            padding: 0 16px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin-bottom: 4px;
+            border-radius: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .nav-item:hover {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .nav-item.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .nav-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+
+        .user-section {
+            margin-top: auto;
+            padding: 16px;
+            border-top: 1px solid #334155;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            margin-right: 12px;
+            font-size: 14px;
+        }
+
+        .user-details h4 {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .user-email {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .logout-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s ease;
+            width: 100%;
+        }
+
+        .logout-btn:hover {
+            background: #b91c1c;
+        }
+
+        /* Main Content */
+        .main-content {
+            background: #0f172a;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .header-left h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 6px;
+        }
+
+        .header-left p {
+            font-size: 16px;
+            color: #94a3b8;
+        }
+
+        .admin-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .admin-btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        /* Tool Grid */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .tool-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
+            color: inherit;
+        }
+
+        .tool-card:hover {
+            border-color: #475569;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .tool-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            display: block;
+        }
+
+        .tool-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .tool-description {
+            font-size: 14px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
+        .tool-category {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 12px;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 0;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #f1f5f9;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #cbd5e1;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            color: #f1f5f9;
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 20px 24px;
+            border-top: 1px solid #334155;
+            margin-top: 8px;
+        }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: #2563eb;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-secondary {
+            background: #64748b;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .tools-list {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .tool-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .tool-item:last-child {
+            border-bottom: none;
+        }
+
+        .tool-item-info {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .tool-item-icon {
+            font-size: 24px;
+        }
+
+        .tool-item-details h3 {
+            color: #f1f5f9;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .tool-item-details p {
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .tool-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #94a3b8;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+            
+            .tools-grid {
+                grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px;
+            }
+            
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Colorado CareAssist</div>
+                <div class="sidebar-subtitle">Portal</div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="#" class="nav-item active" onclick="showToolsView(); return false;">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-text">Home</span>
+                </a>
+                <a href="#" class="nav-item" onclick="showAdminView(); return false;" id="adminNavItem" style="display: none;">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-text">Manage Tools</span>
+                </a>
+            </nav>
+
+            <div class="user-section">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">
+                        {{ user.name[0].upper() if user.name else 'U' }}
+                    </div>
+                    <div class="user-details">
+                        <h4 id="userName">{{ user.name or 'User' }}</h4>
+                        <div class="user-email" id="userEmail">{{ user.email }}</div>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="dashboard-header">
+                <div class="header-left">
+                    <h1>Colorado CareAssist Portal</h1>
+                    <p>Access all your tools and platforms</p>
+                </div>
+                <button class="admin-btn" id="adminBtn" onclick="showAdminView()" style="display: none;">
+                    ⚙️ Manage Tools
+                </button>
+            </div>
+
+            <!-- Tools Grid View -->
+            <div id="toolsView">
+                <div class="tools-grid" id="toolsGrid">
+                    <!-- Tools will be loaded here -->
+                </div>
+            </div>
+
+            <!-- Admin View -->
+            <div id="adminView" style="display: none;">
+                <div class="tools-list">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                        <h2 style="color: #f1f5f9; font-size: 20px;">Manage Tools</h2>
+                        <button class="btn" onclick="showAddToolModal()">+ Add Tool</button>
+                    </div>
+                    <div id="toolsList">
+                        <!-- Tools list will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Tool Modal -->
+    <div id="toolModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add Tool</h2>
+                <button class="modal-close" onclick="closeToolModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="toolForm">
+                    <input type="hidden" id="toolId" value="">
+                    <div class="form-group">
+                        <label for="toolName">Tool Name *</label>
+                        <input type="text" id="toolName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="toolUrl">URL *</label>
+                        <input type="url" id="toolUrl" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="toolIcon">Icon (Emoji)</label>
+                        <input type="text" id="toolIcon" placeholder="🔗" maxlength="2">
+                    </div>
+                    <div class="form-group">
+                        <label for="toolDescription">Description</label>
+                        <textarea id="toolDescription"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="toolCategory">Category</label>
+                        <input type="text" id="toolCategory" placeholder="e.g., Analytics, Sales, etc.">
+                    </div>
+                    <div class="form-group">
+                        <label for="toolOrder">Display Order</label>
+                        <input type="number" id="toolOrder" value="0" min="0">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeToolModal()">Cancel</button>
+                <button class="btn btn-danger" id="deleteBtn" onclick="deleteTool()" style="display: none;">Delete</button>
+                <button class="btn" onclick="saveTool()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTools = [];
+        let isAdmin = false; // In production, check user role
+
+        // Check if user is admin (you can implement proper admin check)
+        async function checkAdminStatus() {
+            // For now, show admin for all users (you should implement proper role checking)
+            isAdmin = true;
+            if (isAdmin) {
+                document.getElementById('adminBtn').style.display = 'block';
+                document.getElementById('adminNavItem').style.display = 'block';
+            }
+        }
+
+        // Load tools
+        async function loadTools() {
+            try {
+                const response = await fetch('/api/tools', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentTools = data.tools || [];
+                    renderToolsGrid();
+                    if (isAdmin) {
+                        renderToolsList();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading tools:', error);
+            }
+        }
+
+        // Render tools grid
+        function renderToolsGrid() {
+            const grid = document.getElementById('toolsGrid');
+            
+            if (currentTools.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1;">
+                        <div class="empty-state-icon">🔗</div>
+                        <h3>No tools available</h3>
+                        <p>Tools will appear here once they are added.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = currentTools.map(tool => `
+                <a href="${tool.url}" target="_blank" class="tool-card">
+                    <span class="tool-icon">${tool.icon || '🔗'}</span>
+                    <div class="tool-name">${tool.name}</div>
+                    ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
+                    ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
+                </a>
+            `).join('');
+        }
+
+        // Render tools list for admin
+        function renderToolsList() {
+            const list = document.getElementById('toolsList');
+            
+            if (currentTools.length === 0) {
+                list.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">🔗</div>
+                        <h3>No tools yet</h3>
+                        <p>Click "Add Tool" to get started.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = currentTools.map(tool => `
+                <div class="tool-item">
+                    <div class="tool-item-info">
+                        <span class="tool-item-icon">${tool.icon || '🔗'}</span>
+                        <div class="tool-item-details">
+                            <h3>${tool.name}</h3>
+                            <p>${tool.url}</p>
+                        </div>
+                    </div>
+                    <div class="tool-item-actions">
+                        <button class="btn btn-small" onclick="editTool(${tool.id})">Edit</button>
+                        <button class="btn btn-small btn-danger" onclick="confirmDeleteTool(${tool.id})">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Show tools view
+        function showToolsView() {
+            document.getElementById('toolsView').style.display = 'block';
+            document.getElementById('adminView').style.display = 'none';
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            document.querySelectorAll('.nav-item')[0].classList.add('active');
+        }
+
+        // Show admin view
+        function showAdminView() {
+            document.getElementById('toolsView').style.display = 'none';
+            document.getElementById('adminView').style.display = 'block';
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            if (document.getElementById('adminNavItem')) {
+                document.getElementById('adminNavItem').classList.add('active');
+            }
+            if (isAdmin) {
+                renderToolsList();
+            }
+        }
+
+        // Show add tool modal
+        function showAddToolModal() {
+            document.getElementById('modalTitle').textContent = 'Add Tool';
+            document.getElementById('toolForm').reset();
+            document.getElementById('toolId').value = '';
+            document.getElementById('deleteBtn').style.display = 'none';
+            document.getElementById('toolModal').classList.add('show');
+        }
+
+        // Show edit tool modal
+        function editTool(toolId) {
+            const tool = currentTools.find(t => t.id === toolId);
+            if (!tool) return;
+
+            document.getElementById('modalTitle').textContent = 'Edit Tool';
+            document.getElementById('toolId').value = tool.id;
+            document.getElementById('toolName').value = tool.name;
+            document.getElementById('toolUrl').value = tool.url;
+            document.getElementById('toolIcon').value = tool.icon || '';
+            document.getElementById('toolDescription').value = tool.description || '';
+            document.getElementById('toolCategory').value = tool.category || '';
+            document.getElementById('toolOrder').value = tool.display_order || 0;
+            document.getElementById('deleteBtn').style.display = 'block';
+            document.getElementById('toolModal').classList.add('show');
+        }
+
+        // Close tool modal
+        function closeToolModal() {
+            document.getElementById('toolModal').classList.remove('show');
+        }
+
+        // Save tool
+        async function saveTool() {
+            const toolId = document.getElementById('toolId').value;
+            const toolData = {
+                name: document.getElementById('toolName').value,
+                url: document.getElementById('toolUrl').value,
+                icon: document.getElementById('toolIcon').value || '🔗',
+                description: document.getElementById('toolDescription').value,
+                category: document.getElementById('toolCategory').value,
+                display_order: parseInt(document.getElementById('toolOrder').value) || 0
+            };
+
+            try {
+                let response;
+                if (toolId) {
+                    // Update
+                    response = await fetch(`/api/tools/${toolId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(toolData)
+                    });
+                } else {
+                    // Create
+                    response = await fetch('/api/tools', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(toolData)
+                    });
+                }
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    closeToolModal();
+                    await loadTools();
+                } else {
+                    alert('Error: ' + (result.detail || 'Failed to save tool'));
+                }
+            } catch (error) {
+                console.error('Error saving tool:', error);
+                alert('Error saving tool: ' + error.message);
+            }
+        }
+
+        // Confirm delete tool
+        function confirmDeleteTool(toolId) {
+            const tool = currentTools.find(t => t.id === toolId);
+            if (!tool) return;
+
+            if (confirm(`Are you sure you want to delete "${tool.name}"?`)) {
+                deleteTool(toolId);
+            }
+        }
+
+        // Delete tool
+        async function deleteTool(toolId = null) {
+            const id = toolId || document.getElementById('toolId').value;
+            
+            try {
+                const response = await fetch(`/api/tools/${id}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    closeToolModal();
+                    await loadTools();
+                } else {
+                    alert('Error: ' + (result.detail || 'Failed to delete tool'));
+                }
+            } catch (error) {
+                console.error('Error deleting tool:', error);
+                alert('Error deleting tool: ' + error.message);
+            }
+        }
+
+        // Logout
+        async function logout() {
+            try {
+                await fetch('/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                window.location.href = '/auth/login';
+            } catch (error) {
+                console.error('Error logging out:', error);
+                window.location.href = '/auth/login';
+            }
+        }
+
+        // Close modal on outside click
+        document.getElementById('toolModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeToolModal();
+            }
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAdminStatus();
+            await loadTools();
+        });
+    </script>
+</body>
+</html>
+
