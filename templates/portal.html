@@ -244,6 +244,18 @@
             transition: transform 0.2s ease;
         }
 
+        /* Larger logos for specific tools */
+        .tool-card[href*="ringcentral.com"] .tool-icon img,
+        .tool-card[href*="socialpilot"] .tool-icon img,
+        .tool-card[href*="intuit.com"] .tool-icon img,
+        .tool-card[href*="quickbooks"] .tool-icon img,
+        .tool-card[href*="ads.google.com"] .tool-icon img,
+        .tool-card[href*="adamskeegan.com"] .tool-icon img,
+        .tool-icon img.large-logo {
+            width: 96px;
+            height: 96px;
+        }
+
         .tool-card:hover .tool-icon img {
             transform: scale(1.05);
         }
@@ -885,10 +897,13 @@
                 }
                 
                 // Regular tool card
+                const isLargeLogo = ['RingCentral', 'SocialPilot', 'QuickBooks', 'Google Ads', 'Adams Keegan Efficenter'].includes(tool.name);
+                const logoClass = isLargeLogo ? 'large-logo' : '';
+                
                 const iconHtml = tool.icon && tool.icon.startsWith('http') 
-                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
+                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" class="${logoClass}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
                     : tool.icon && tool.icon.startsWith('/static/')
-                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
+                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" class="${logoClass}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
                     : `<div class="tool-icon"><span>${tool.icon || '🔗'}</span></div>`;
                 
                 return `
