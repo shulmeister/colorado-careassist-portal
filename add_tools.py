@@ -127,6 +127,30 @@ def add_all_tools():
                 "description": "Website analytics and insights",
                 "category": "Analytics",
                 "display_order": 18
+            },
+            {
+                "name": "Colorado Bureau of Investigation",
+                "url": "https://www.cbirecordscheck.com/Index.aspx",
+                "icon": "🔍",
+                "description": "Criminal history background checks",
+                "category": "Background Checks",
+                "display_order": 19
+            },
+            {
+                "name": "Colorado Adult Protective Services (CAPS)",
+                "url": "https://caps.my.site.com/CAPSCheckRequest/login",
+                "icon": "🛡️",
+                "description": "Adult protective services background check",
+                "category": "Background Checks",
+                "display_order": 20
+            },
+            {
+                "name": "Colorado HCPF",
+                "url": "https://hcpf.colorado.gov/our-providers",
+                "icon": "🏥",
+                "description": "Health Care Policy and Financing provider portal",
+                "category": "Healthcare",
+                "display_order": 21
             }
         ]
         
