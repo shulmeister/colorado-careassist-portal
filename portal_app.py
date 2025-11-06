@@ -269,6 +269,13 @@ async def favicon():
     favicon_path = "static/favicon.ico"
     if os.path.exists(favicon_path):
         return FileResponse(favicon_path)
+    # Fallback to SVG if ICO doesn't exist
+    svg_path = "static/favicon.svg"
+    if os.path.exists(svg_path):
+        from fastapi.responses import Response
+        with open(svg_path, 'rb') as f:
+            content = f.read()
+        return Response(content=content, media_type="image/svg+xml")
     from fastapi.responses import Response
     return Response(status_code=204)
 
