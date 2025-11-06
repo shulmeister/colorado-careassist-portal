@@ -12,7 +12,7 @@ try:
     LOGO_MAP = {
         "Google Analytics": "/static/logos/google-analytics.svg",
         "Colorado Bureau of Investigation": "/static/logos/cbi-logo.png",
-        "Gmail": "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico",
+        "Gmail": "https://www.gstatic.com/images/branding/product/1x/gmail_48dp.png",
         "Google Drive": "/static/logos/google-drive.png",
         "Google Calendar": "/static/logos/google-calendar.webp",
         "RingCentral": "/static/logos/ringcentral.png",
