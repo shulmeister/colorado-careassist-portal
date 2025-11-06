@@ -115,28 +115,31 @@
             font-weight: 600;
         }
 
-        .clock-item {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
+        .clocks-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 12px;
-            padding: 8px 0;
-            border-bottom: 1px solid #334155;
         }
 
-        .clock-item:last-child {
-            border-bottom: none;
+        .clock-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+            padding: 8px;
+            border-radius: 8px;
+            background: rgba(30, 41, 59, 0.5);
         }
 
         .clock-face-container {
             flex-shrink: 0;
-            width: 48px;
-            height: 48px;
+            width: 40px;
+            height: 40px;
         }
 
         .clock-face {
-            width: 48px;
-            height: 48px;
+            width: 40px;
+            height: 40px;
             border: 2px solid #475569;
             border-radius: 50%;
             background: #1e293b;
@@ -154,54 +157,55 @@
         }
 
         .clock-hand-hour {
-            width: 2px;
-            height: 14px;
-            margin-left: -1px;
+            width: 1.5px;
+            height: 12px;
+            margin-left: -0.75px;
             background: #cbd5e1;
         }
 
         .clock-hand-minute {
-            width: 1.5px;
-            height: 18px;
-            margin-left: -0.75px;
+            width: 1px;
+            height: 15px;
+            margin-left: -0.5px;
         }
 
         .clock-center {
             position: absolute;
-            width: 4px;
-            height: 4px;
+            width: 3px;
+            height: 3px;
             background: #f1f5f9;
             border-radius: 50%;
             left: 50%;
             top: 50%;
-            margin-left: -2px;
-            margin-top: -2px;
+            margin-left: -1.5px;
+            margin-top: -1.5px;
             z-index: 10;
         }
 
         .clock-info {
-            flex: 1;
             display: flex;
             flex-direction: column;
+            align-items: center;
+            width: 100%;
         }
 
         .clock-city {
-            font-size: 11px;
+            font-size: 10px;
             color: #94a3b8;
             font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .clock-time {
-            font-size: 16px;
-            color: #f1f5f9;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
             margin-bottom: 2px;
         }
 
+        .clock-time {
+            font-size: 13px;
+            color: #f1f5f9;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+            margin-bottom: 1px;
+        }
+
         .clock-date {
-            font-size: 10px;
+            font-size: 9px;
             color: #64748b;
         }
 
@@ -756,60 +760,62 @@
             <!-- World Clocks -->
             <div class="world-clocks">
                 <div class="world-clocks-title">World Clocks</div>
-                <div class="clock-item">
-                    <div class="clock-face-container">
-                        <div class="clock-face" id="clock-face-london">
-                            <div class="clock-hand clock-hand-hour" id="hour-hand-london"></div>
-                            <div class="clock-hand clock-hand-minute" id="minute-hand-london"></div>
-                            <div class="clock-center"></div>
+                <div class="clocks-grid">
+                    <div class="clock-item">
+                        <div class="clock-face-container">
+                            <div class="clock-face" id="clock-face-london">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-london"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-london"></div>
+                                <div class="clock-center"></div>
+                            </div>
+                        </div>
+                        <div class="clock-info">
+                            <div class="clock-city">London</div>
+                            <div class="clock-time" id="clock-london">--:--</div>
+                            <div class="clock-date" id="date-london">--</div>
                         </div>
                     </div>
-                    <div class="clock-info">
-                        <div class="clock-city">London</div>
-                        <div class="clock-time" id="clock-london">--:--</div>
-                        <div class="clock-date" id="date-london">--</div>
-                    </div>
-                </div>
-                <div class="clock-item">
-                    <div class="clock-face-container">
-                        <div class="clock-face" id="clock-face-denver">
-                            <div class="clock-hand clock-hand-hour" id="hour-hand-denver"></div>
-                            <div class="clock-hand clock-hand-minute" id="minute-hand-denver"></div>
-                            <div class="clock-center"></div>
+                    <div class="clock-item">
+                        <div class="clock-face-container">
+                            <div class="clock-face" id="clock-face-denver">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-denver"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-denver"></div>
+                                <div class="clock-center"></div>
+                            </div>
+                        </div>
+                        <div class="clock-info">
+                            <div class="clock-city">Denver</div>
+                            <div class="clock-time" id="clock-denver">--:--</div>
+                            <div class="clock-date" id="date-denver">--</div>
                         </div>
                     </div>
-                    <div class="clock-info">
-                        <div class="clock-city">Denver</div>
-                        <div class="clock-time" id="clock-denver">--:--</div>
-                        <div class="clock-date" id="date-denver">--</div>
-                    </div>
-                </div>
-                <div class="clock-item">
-                    <div class="clock-face-container">
-                        <div class="clock-face" id="clock-face-manila">
-                            <div class="clock-hand clock-hand-hour" id="hour-hand-manila"></div>
-                            <div class="clock-hand clock-hand-minute" id="minute-hand-manila"></div>
-                            <div class="clock-center"></div>
+                    <div class="clock-item">
+                        <div class="clock-face-container">
+                            <div class="clock-face" id="clock-face-manila">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-manila"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-manila"></div>
+                                <div class="clock-center"></div>
+                            </div>
+                        </div>
+                        <div class="clock-info">
+                            <div class="clock-city">Manila</div>
+                            <div class="clock-time" id="clock-manila">--:--</div>
+                            <div class="clock-date" id="date-manila">--</div>
                         </div>
                     </div>
-                    <div class="clock-info">
-                        <div class="clock-city">Manila</div>
-                        <div class="clock-time" id="clock-manila">--:--</div>
-                        <div class="clock-date" id="date-manila">--</div>
-                    </div>
-                </div>
-                <div class="clock-item">
-                    <div class="clock-face-container">
-                        <div class="clock-face" id="clock-face-dhaka">
-                            <div class="clock-hand clock-hand-hour" id="hour-hand-dhaka"></div>
-                            <div class="clock-hand clock-hand-minute" id="minute-hand-dhaka"></div>
-                            <div class="clock-center"></div>
+                    <div class="clock-item">
+                        <div class="clock-face-container">
+                            <div class="clock-face" id="clock-face-dhaka">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-dhaka"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-dhaka"></div>
+                                <div class="clock-center"></div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="clock-info">
-                        <div class="clock-city">Dhaka</div>
-                        <div class="clock-time" id="clock-dhaka">--:--</div>
-                        <div class="clock-date" id="date-dhaka">--</div>
+                        <div class="clock-info">
+                            <div class="clock-city">Dhaka</div>
+                            <div class="clock-time" id="clock-dhaka">--:--</div>
+                            <div class="clock-date" id="date-dhaka">--</div>
+                        </div>
                     </div>
                 </div>
             </div>
