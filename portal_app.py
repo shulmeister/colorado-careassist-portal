@@ -9,6 +9,7 @@ import os
 import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import httpx
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
 from portal_models import PortalTool, Base, UserSession, ToolClick
@@ -393,6 +394,65 @@ async def track_click(
         logger.error(f"Error tracking click: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error tracking click: {str(e)}")
+
+@app.get("/api/weather")
+async def get_weather(
+    q: Optional[str] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get weather data for a location"""
+    try:
+        api_key = os.getenv("OPENWEATHER_API_KEY")
+        if not api_key:
+            return JSONResponse({
+                "success": False,
+                "error": "Weather API key not configured"
+            }, status_code=500)
+        
+        # Build API URL
+        if lat and lon:
+            url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}"
+        elif q:
+            url = f"https://api.openweathermap.org/data/2.5/weather?q={q}&appid={api_key}"
+        else:
+            return JSONResponse({
+                "success": False,
+                "error": "Please provide a city name, zip code, or coordinates"
+            }, status_code=400)
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=10.0)
+            
+            if response.status_code == 200:
+                weather_data = response.json()
+                return JSONResponse({
+                    "success": True,
+                    "weather": weather_data
+                })
+            elif response.status_code == 404:
+                return JSONResponse({
+                    "success": False,
+                    "error": "Location not found. Please check your city name or zip code."
+                }, status_code=404)
+            else:
+                return JSONResponse({
+                    "success": False,
+                    "error": "Unable to fetch weather data"
+                }, status_code=response.status_code)
+                
+    except httpx.TimeoutException:
+        return JSONResponse({
+            "success": False,
+            "error": "Weather service timeout. Please try again."
+        }, status_code=504)
+    except Exception as e:
+        logger.error(f"Error fetching weather: {str(e)}")
+        return JSONResponse({
+            "success": False,
+            "error": f"Error fetching weather: {str(e)}"
+        }, status_code=500)
 
 @app.get("/api/analytics/summary")
 async def get_analytics_summary(

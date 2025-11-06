@@ -11,7 +11,7 @@ class PortalTool(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     url = Column(Text, nullable=False)
-    icon = Column(String(50))  # Emoji or icon identifier
+    icon = Column(Text)  # Emoji, icon identifier, or logo URL
     description = Column(Text, nullable=True)
     category = Column(String(100), nullable=True)
     display_order = Column(Integer, default=0)
