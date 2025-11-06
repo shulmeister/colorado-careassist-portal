@@ -117,13 +117,72 @@
 
         .clock-item {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
+            align-items: center;
+            gap: 12px;
             padding: 8px 0;
             border-bottom: 1px solid #334155;
         }
 
         .clock-item:last-child {
             border-bottom: none;
+        }
+
+        .clock-face-container {
+            flex-shrink: 0;
+            width: 48px;
+            height: 48px;
+        }
+
+        .clock-face {
+            width: 48px;
+            height: 48px;
+            border: 2px solid #475569;
+            border-radius: 50%;
+            background: #1e293b;
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .clock-hand {
+            position: absolute;
+            background: #f1f5f9;
+            transform-origin: bottom center;
+            border-radius: 2px;
+            left: 50%;
+            bottom: 50%;
+        }
+
+        .clock-hand-hour {
+            width: 2px;
+            height: 14px;
+            margin-left: -1px;
+            background: #cbd5e1;
+        }
+
+        .clock-hand-minute {
+            width: 1.5px;
+            height: 18px;
+            margin-left: -0.75px;
+        }
+
+        .clock-center {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #f1f5f9;
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            margin-left: -2px;
+            margin-top: -2px;
+            z-index: 10;
+        }
+
+        .clock-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
         }
 
         .clock-city {
@@ -698,24 +757,60 @@
             <div class="world-clocks">
                 <div class="world-clocks-title">World Clocks</div>
                 <div class="clock-item">
-                    <div class="clock-city">London</div>
-                    <div class="clock-time" id="clock-london">--:--</div>
-                    <div class="clock-date" id="date-london">--</div>
+                    <div class="clock-face-container">
+                        <div class="clock-face" id="clock-face-london">
+                            <div class="clock-hand clock-hand-hour" id="hour-hand-london"></div>
+                            <div class="clock-hand clock-hand-minute" id="minute-hand-london"></div>
+                            <div class="clock-center"></div>
+                        </div>
+                    </div>
+                    <div class="clock-info">
+                        <div class="clock-city">London</div>
+                        <div class="clock-time" id="clock-london">--:--</div>
+                        <div class="clock-date" id="date-london">--</div>
+                    </div>
                 </div>
                 <div class="clock-item">
-                    <div class="clock-city">Denver</div>
-                    <div class="clock-time" id="clock-denver">--:--</div>
-                    <div class="clock-date" id="date-denver">--</div>
+                    <div class="clock-face-container">
+                        <div class="clock-face" id="clock-face-denver">
+                            <div class="clock-hand clock-hand-hour" id="hour-hand-denver"></div>
+                            <div class="clock-hand clock-hand-minute" id="minute-hand-denver"></div>
+                            <div class="clock-center"></div>
+                        </div>
+                    </div>
+                    <div class="clock-info">
+                        <div class="clock-city">Denver</div>
+                        <div class="clock-time" id="clock-denver">--:--</div>
+                        <div class="clock-date" id="date-denver">--</div>
+                    </div>
                 </div>
                 <div class="clock-item">
-                    <div class="clock-city">Manila</div>
-                    <div class="clock-time" id="clock-manila">--:--</div>
-                    <div class="clock-date" id="date-manila">--</div>
+                    <div class="clock-face-container">
+                        <div class="clock-face" id="clock-face-manila">
+                            <div class="clock-hand clock-hand-hour" id="hour-hand-manila"></div>
+                            <div class="clock-hand clock-hand-minute" id="minute-hand-manila"></div>
+                            <div class="clock-center"></div>
+                        </div>
+                    </div>
+                    <div class="clock-info">
+                        <div class="clock-city">Manila</div>
+                        <div class="clock-time" id="clock-manila">--:--</div>
+                        <div class="clock-date" id="date-manila">--</div>
+                    </div>
                 </div>
                 <div class="clock-item">
-                    <div class="clock-city">Dhaka</div>
-                    <div class="clock-time" id="clock-dhaka">--:--</div>
-                    <div class="clock-date" id="date-dhaka">--</div>
+                    <div class="clock-face-container">
+                        <div class="clock-face" id="clock-face-dhaka">
+                            <div class="clock-hand clock-hand-hour" id="hour-hand-dhaka"></div>
+                            <div class="clock-hand clock-hand-minute" id="minute-hand-dhaka"></div>
+                            <div class="clock-center"></div>
+                        </div>
+                    </div>
+                    <div class="clock-info">
+                        <div class="clock-city">Dhaka</div>
+                        <div class="clock-time" id="clock-dhaka">--:--</div>
+                        <div class="clock-date" id="date-dhaka">--</div>
+                    </div>
                 </div>
             </div>
 
@@ -1440,6 +1535,17 @@
                         day: 'numeric',
                         weekday: 'short'
                     });
+                    
+                    // Get hours and minutes for clock hands
+                    const timeFormatter = new Intl.DateTimeFormat('en-US', {
+                        timeZone: tz,
+                        hour: 'numeric',
+                        minute: 'numeric',
+                        hour12: false
+                    });
+                    const parts = timeFormatter.formatToParts(now);
+                    const hour = parseInt(parts.find(p => p.type === 'hour').value);
+                    const minute = parseInt(parts.find(p => p.type === 'minute').value);
 
                     const timeStr = formatter.format(now);
                     const dateStr = dateFormatter.format(now);
@@ -1448,6 +1554,21 @@
                     const dateEl = document.getElementById(`date-${id}`);
                     if (timeEl) timeEl.textContent = timeStr;
                     if (dateEl) dateEl.textContent = dateStr;
+
+                    // Update clock hands
+                    // Hour hand: 30 degrees per hour + 0.5 degrees per minute
+                    const hourAngle = (hour % 12) * 30 + minute * 0.5;
+                    // Minute hand: 6 degrees per minute
+                    const minuteAngle = minute * 6;
+
+                    const hourHand = document.getElementById(`hour-hand-${id}`);
+                    const minuteHand = document.getElementById(`minute-hand-${id}`);
+                    if (hourHand) {
+                        hourHand.style.transform = `rotate(${hourAngle}deg)`;
+                    }
+                    if (minuteHand) {
+                        minuteHand.style.transform = `rotate(${minuteAngle}deg)`;
+                    }
                 } catch (error) {
                     console.error(`Error updating clock for ${city}:`, error);
                 }
