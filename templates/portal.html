@@ -98,12 +98,15 @@
             font-size: 16px;
         }
 
-        /* World Clocks Section */
-        .world-clocks {
-            padding: 16px;
-            margin: 24px 0;
-            border-top: 1px solid #334155;
+        /* World Clocks Section - Header Row */
+        .world-clocks-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+            background: #1e293b;
             border-bottom: 1px solid #334155;
+            margin-bottom: 24px;
         }
 
         .world-clocks-title {
@@ -111,35 +114,37 @@
             color: #64748b;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin-bottom: 12px;
             font-weight: 600;
+            margin-right: 8px;
         }
 
-        .clocks-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
+        .clocks-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex: 1;
         }
 
         .clock-item {
             display: flex;
-            flex-direction: column;
+            flex-direction: row;
             align-items: center;
-            gap: 6px;
-            padding: 8px;
+            gap: 8px;
+            padding: 8px 12px;
             border-radius: 8px;
             background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
         }
 
         .clock-face-container {
             flex-shrink: 0;
-            width: 40px;
-            height: 40px;
+            width: 32px;
+            height: 32px;
         }
 
         .clock-face {
-            width: 40px;
-            height: 40px;
+            width: 32px;
+            height: 32px;
             border: 2px solid #475569;
             border-radius: 50%;
             background: #1e293b;
@@ -158,14 +163,14 @@
 
         .clock-hand-hour {
             width: 1.5px;
-            height: 12px;
+            height: 10px;
             margin-left: -0.75px;
             background: #cbd5e1;
         }
 
         .clock-hand-minute {
             width: 1px;
-            height: 15px;
+            height: 12px;
             margin-left: -0.5px;
         }
 
@@ -185,15 +190,13 @@
         .clock-info {
             display: flex;
             flex-direction: column;
-            align-items: center;
-            width: 100%;
+            gap: 2px;
         }
 
         .clock-city {
             font-size: 10px;
             color: #94a3b8;
             font-weight: 600;
-            margin-bottom: 2px;
         }
 
         .clock-time {
@@ -201,7 +204,6 @@
             color: #f1f5f9;
             font-weight: 700;
             font-variant-numeric: tabular-nums;
-            margin-bottom: 1px;
         }
 
         .clock-date {
@@ -757,10 +759,26 @@
                 </a>
             </nav>
 
-            <!-- World Clocks -->
-            <div class="world-clocks">
+            <div class="user-section">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">
+                        {{ user.name[0].upper() if user.name else 'U' }}
+                    </div>
+                    <div class="user-details">
+                        <h4 id="userName">{{ user.name or 'User' }}</h4>
+                        <div class="user-email" id="userEmail">{{ user.email }}</div>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- World Clocks Header -->
+            <div class="world-clocks-header">
                 <div class="world-clocks-title">World Clocks</div>
-                <div class="clocks-grid">
+                <div class="clocks-row">
                     <div class="clock-item">
                         <div class="clock-face-container">
                             <div class="clock-face" id="clock-face-london">
@@ -818,30 +836,17 @@
                         </div>
                     </div>
                 </div>
+                <button class="admin-btn" id="adminBtn" onclick="showAdminView()" style="display: none; margin-left: auto;">
+                    ⚙️ Manage Tools
+                </button>
             </div>
 
-            <div class="user-section">
-                <div class="user-info">
-                    <div class="user-avatar" id="userAvatar">
-                        {{ user.name[0].upper() if user.name else 'U' }}
-                    </div>
-                    <div class="user-details">
-                        <h4 id="userName">{{ user.name or 'User' }}</h4>
-                        <div class="user-email" id="userEmail">{{ user.email }}</div>
-                    </div>
-                </div>
-                <button class="logout-btn" onclick="logout()">Logout</button>
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <div class="dashboard-header">
+            <div class="dashboard-header" style="display: none;">
                 <div class="header-left">
                     <h1>Colorado CareAssist Portal</h1>
                     <p>Access all your tools and platforms</p>
                 </div>
-                <button class="admin-btn" id="adminBtn" onclick="showAdminView()" style="display: none;">
+                <button class="admin-btn" id="adminBtnOld" onclick="showAdminView()" style="display: none;">
                     ⚙️ Manage Tools
                 </button>
             </div>
