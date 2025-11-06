@@ -248,6 +248,54 @@
             margin-top: 12px;
         }
 
+        /* AI Tools Dropdown Styles */
+        .ai-tools-card {
+            position: relative;
+        }
+
+        .ai-tools-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            margin-top: 8px;
+            padding: 8px;
+            display: none;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .ai-tools-card:hover .ai-tools-dropdown,
+        .ai-tools-card.active .ai-tools-dropdown {
+            display: block;
+        }
+
+        .ai-tools-option {
+            display: block;
+            padding: 10px 12px;
+            color: #f1f5f9;
+            text-decoration: none;
+            border-radius: 6px;
+            transition: background 0.2s ease;
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .ai-tools-option:hover {
+            background: #334155;
+        }
+
+        .ai-tools-option:last-child {
+            margin-bottom: 0;
+        }
+
+        .ai-tools-option-icon {
+            margin-right: 8px;
+        }
+
         /* Modal styles */
         .modal {
             display: none;
@@ -749,14 +797,43 @@
                 return;
             }
 
-            grid.innerHTML = currentTools.map(tool => `
-                <a href="${tool.url}" target="_blank" class="tool-card" onclick="trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return true;">
-                    <span class="tool-icon">${tool.icon || '🔗'}</span>
-                    <div class="tool-name">${tool.name}</div>
-                    ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
-                    ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
-                </a>
-            `).join('');
+            grid.innerHTML = currentTools.map(tool => {
+                // Special handling for AI Tools dropdown
+                if (tool.name === "AI Tools" && tool.url === "#ai-tools-dropdown") {
+                    return `
+                        <div class="tool-card ai-tools-card" onclick="event.stopPropagation();">
+                            <span class="tool-icon">${tool.icon || '🤖'}</span>
+                            <div class="tool-name">${tool.name}</div>
+                            ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
+                            ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
+                            <div class="ai-tools-dropdown">
+                                <a href="https://chatgpt.com/" target="_blank" class="ai-tools-option" onclick="trackToolClick(0, 'ChatGPT', 'https://chatgpt.com/');">
+                                    <span class="ai-tools-option-icon">💬</span> ChatGPT
+                                </a>
+                                <a href="https://gemini.google.com/app" target="_blank" class="ai-tools-option" onclick="trackToolClick(0, 'Gemini', 'https://gemini.google.com/app');">
+                                    <span class="ai-tools-option-icon">✨</span> Gemini
+                                </a>
+                                <a href="https://grok.com/" target="_blank" class="ai-tools-option" onclick="trackToolClick(0, 'Grok', 'https://grok.com/');">
+                                    <span class="ai-tools-option-icon">🚀</span> Grok
+                                </a>
+                                <a href="https://claude.ai/new" target="_blank" class="ai-tools-option" onclick="trackToolClick(0, 'Claude', 'https://claude.ai/new');">
+                                    <span class="ai-tools-option-icon">🧠</span> Claude
+                                </a>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                // Regular tool card
+                return `
+                    <a href="${tool.url}" target="_blank" class="tool-card" onclick="trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return true;">
+                        <span class="tool-icon">${tool.icon || '🔗'}</span>
+                        <div class="tool-name">${tool.name}</div>
+                        ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
+                        ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
+                    </a>
+                `;
+            }).join('');
         }
 
         // Render tools list for admin

@@ -27,6 +27,14 @@ try:
             "description": "VA Health Services Resource Management",
             "category": "Healthcare",
             "display_order": 23
+        },
+        {
+            "name": "AI Tools",
+            "url": "#ai-tools-dropdown",
+            "icon": "🤖",
+            "description": "AI assistant tools",
+            "category": "AI",
+            "display_order": 24
         }
     ]
     
