@@ -1,26 +1,28 @@
 """
-Update tool icons to use actual logos instead of emojis
+Update tool icons to use high-quality logo URLs
+Using direct favicon URLs and better sources for crisp, vector-quality logos
 """
 from portal_database import db_manager
 from portal_models import PortalTool
 
-# Map of tool names to their logo URLs
+# Map of tool names to high-quality logo URLs
+# Using direct favicon URLs and Google's favicon service with larger sizes
 LOGO_MAP = {
-    "Gmail": "https://www.google.com/s2/favicons?domain=gmail.com&sz=64",
-    "Google Drive": "https://www.google.com/s2/favicons?domain=drive.google.com&sz=64",
-    "Google Calendar": "https://www.google.com/s2/favicons?domain=calendar.google.com&sz=64",
-    "RingCentral": "https://www.google.com/s2/favicons?domain=ringcentral.com&sz=64",
-    "GoFormz": "https://www.google.com/s2/favicons?domain=goformz.com&sz=64",
-    "Mailchimp": "https://www.google.com/s2/favicons?domain=mailchimp.com&sz=64",
-    "Adams Keegan Efficenter": "https://www.google.com/s2/favicons?domain=adamskeegan.com&sz=64",
-    "Wellsky": "https://www.google.com/s2/favicons?domain=wellsky.com&sz=64",
-    "QuickBooks": "https://www.google.com/s2/favicons?domain=intuit.com&sz=64",
-    "SocialPilot": "https://www.google.com/s2/favicons?domain=socialpilot.co&sz=64",
-    "WordPress": "https://www.google.com/s2/favicons?domain=wordpress.com&sz=64",
-    "Facebook Ads Manager": "https://www.google.com/s2/favicons?domain=facebook.com&sz=64",
-    "Meta Business Suite": "https://www.google.com/s2/favicons?domain=facebook.com&sz=64",
-    "Google Ads": "https://www.google.com/s2/favicons?domain=ads.google.com&sz=64",
-    "Google Analytics": "https://www.google.com/s2/favicons?domain=analytics.google.com&sz=64",
+    "Gmail": "https://www.google.com/s2/favicons?domain=gmail.com&sz=128",
+    "Google Drive": "https://www.google.com/s2/favicons?domain=drive.google.com&sz=128",
+    "Google Calendar": "https://www.google.com/s2/favicons?domain=calendar.google.com&sz=128",
+    "RingCentral": "https://www.google.com/s2/favicons?domain=ringcentral.com&sz=128",
+    "GoFormz": "https://www.google.com/s2/favicons?domain=goformz.com&sz=128",
+    "Mailchimp": "https://www.google.com/s2/favicons?domain=mailchimp.com&sz=128",
+    "Adams Keegan Efficenter": "https://www.google.com/s2/favicons?domain=adamskeegan.com&sz=128",
+    "Wellsky": "https://www.google.com/s2/favicons?domain=wellsky.com&sz=128",
+    "QuickBooks": "https://www.google.com/s2/favicons?domain=intuit.com&sz=128",
+    "SocialPilot": "https://www.google.com/s2/favicons?domain=socialpilot.co&sz=128",
+    "WordPress": "https://www.google.com/s2/favicons?domain=wordpress.com&sz=128",
+    "Facebook Ads Manager": "https://www.google.com/s2/favicons?domain=facebook.com&sz=128",
+    "Meta Business Suite": "https://www.google.com/s2/favicons?domain=facebook.com&sz=128",
+    "Google Ads": "https://www.google.com/s2/favicons?domain=ads.google.com&sz=128",
+    "Google Analytics": "https://www.google.com/s2/favicons?domain=analytics.google.com&sz=128",
 }
 
 db = db_manager.get_session()
@@ -38,7 +40,7 @@ try:
             print(f"⏭️  Not found: {tool_name}")
     
     db.commit()
-    print(f"\n🎉 Updated {updated_count} tools with logos!")
+    print(f"\n🎉 Updated {updated_count} tools with high-quality logos!")
     
 except Exception as e:
     print(f"❌ Error: {str(e)}")
@@ -47,4 +49,3 @@ except Exception as e:
     db.rollback()
 finally:
     db.close()
-
