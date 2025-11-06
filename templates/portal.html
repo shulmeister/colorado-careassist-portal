@@ -1162,6 +1162,8 @@
             
             if (orderChanged) {
                 currentTools = reorderedTools;
+                // Update admin list view immediately
+                renderToolsList();
                 // Update display_order and save to server
                 updateToolOrder();
             }
