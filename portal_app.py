@@ -40,6 +40,7 @@ app.add_middleware(
 
 # Mount static files and templates
 templates = Jinja2Templates(directory="templates")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Authentication endpoints
 @app.get("/auth/login")
@@ -264,7 +265,12 @@ async def delete_tool(
 async def favicon():
     """Serve favicon"""
     from fastapi.responses import FileResponse
-    return FileResponse("static/favicon.ico")
+    import os
+    favicon_path = "static/favicon.ico"
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    from fastapi.responses import Response
+    return Response(status_code=204)
 
 @app.get("/health")
 async def health_check():
