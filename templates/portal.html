@@ -537,6 +537,18 @@
 
         .tool-item-icon {
             font-size: 20px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tool-item-icon img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+            border-radius: 4px;
         }
 
         .tool-item-details h3 {
@@ -932,22 +944,32 @@
                 return;
             }
 
-            list.innerHTML = currentTools.map((tool, index) => `
-                <div class="tool-item" draggable="true" data-tool-id="${tool.id}" data-index="${index}">
-                    <div class="tool-item-info">
-                        <span class="drag-handle">☰</span>
-                        <span class="tool-item-icon">${tool.icon || '🔗'}</span>
-                        <div class="tool-item-details">
-                            <h3>${tool.name}</h3>
-                            <p>${tool.url}</p>
+            list.innerHTML = currentTools.map((tool, index) => {
+                // Handle icon display - show image if URL, otherwise show emoji/text
+                let iconHtml = '';
+                if (tool.icon && (tool.icon.startsWith('http') || tool.icon.startsWith('/static/'))) {
+                    iconHtml = `<img src="${tool.icon}" alt="${tool.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"><span style="display:none;">🔗</span>`;
+                } else {
+                    iconHtml = tool.icon || '🔗';
+                }
+                
+                return `
+                    <div class="tool-item" draggable="true" data-tool-id="${tool.id}" data-index="${index}">
+                        <div class="tool-item-info">
+                            <span class="drag-handle">☰</span>
+                            <span class="tool-item-icon">${iconHtml}</span>
+                            <div class="tool-item-details">
+                                <h3>${tool.name}</h3>
+                                <p>${tool.url}</p>
+                            </div>
+                        </div>
+                        <div class="tool-item-actions">
+                            <button class="btn btn-small" onclick="editTool(${tool.id})">Edit</button>
+                            <button class="btn btn-small btn-danger" onclick="confirmDeleteTool(${tool.id})">Delete</button>
                         </div>
                     </div>
-                    <div class="tool-item-actions">
-                        <button class="btn btn-small" onclick="editTool(${tool.id})">Edit</button>
-                        <button class="btn btn-small btn-danger" onclick="confirmDeleteTool(${tool.id})">Delete</button>
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
             
             // Initialize drag and drop
             initializeDragAndDrop();
