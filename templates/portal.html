@@ -776,6 +776,26 @@
         </div>
     </div>
 
+    <!-- Joke of the Day Modal -->
+    <div id="jokeModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>😄 Joke of the Day</h2>
+                <button class="modal-close" onclick="closeJokeModal()">&times;</button>
+            </div>
+            <div class="modal-body" style="text-align: center; padding: 40px 24px;">
+                <div id="jokeContent" style="min-height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center;">
+                    <div style="font-size: 48px; margin-bottom: 20px;">😄</div>
+                    <div style="color: #94a3b8;">Loading joke...</div>
+                </div>
+            </div>
+            <div class="modal-actions" style="justify-content: center;">
+                <button class="btn" onclick="getNewJoke()">Get Another Joke</button>
+                <button class="btn btn-secondary" onclick="closeJokeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentTools = [];
         let isAdmin = false; // In production, check user role
@@ -848,6 +868,18 @@
                                     <span class="ai-tools-option-icon">🧠</span> Claude
                                 </a>
                             </div>
+                        </div>
+                    `;
+                }
+                
+                // Special handling for Joke of the Day
+                if (tool.name === "Joke of the Day" && tool.url === "#joke-of-the-day") {
+                    return `
+                        <div class="tool-card" onclick="showJokeModal(); trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return false;" style="cursor: pointer;">
+                            <div class="tool-icon"><span>${tool.icon || '😄'}</span></div>
+                            <div class="tool-name">${tool.name}</div>
+                            ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
+                            ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
                         </div>
                     `;
                 }
@@ -967,6 +999,87 @@
         function closeToolModal() {
             document.getElementById('toolModal').classList.remove('show');
         }
+
+        // Joke of the Day functions
+        function showJokeModal() {
+            document.getElementById('jokeModal').classList.add('show');
+            getNewJoke();
+        }
+
+        function closeJokeModal() {
+            document.getElementById('jokeModal').classList.remove('show');
+        }
+
+        async function getNewJoke() {
+            const jokeContent = document.getElementById('jokeContent');
+            jokeContent.innerHTML = `
+                <div style="font-size: 48px; margin-bottom: 20px;">😄</div>
+                <div style="color: #94a3b8;">Loading joke...</div>
+            `;
+
+            try {
+                // Try multiple joke APIs for variety
+                const apis = [
+                    'https://v2.jokeapi.dev/joke/Any?type=single',
+                    'https://v2.jokeapi.dev/joke/Any?type=twopart',
+                    'https://official-joke-api.appspot.com/random_joke'
+                ];
+                
+                const api = apis[Math.floor(Math.random() * apis.length)];
+                const response = await fetch(api);
+                const data = await response.json();
+
+                let jokeHtml = '';
+                
+                if (data.type === 'twopart') {
+                    // Two-part joke
+                    jokeHtml = `
+                        <div style="font-size: 48px; margin-bottom: 24px;">😄</div>
+                        <div style="color: #f1f5f9; font-size: 18px; font-weight: 600; margin-bottom: 16px; line-height: 1.5;">
+                            ${data.setup}
+                        </div>
+                        <div style="color: #3b82f6; font-size: 16px; line-height: 1.5; font-style: italic;">
+                            ${data.delivery}
+                        </div>
+                    `;
+                } else if (data.joke) {
+                    // Single joke from official-joke-api
+                    jokeHtml = `
+                        <div style="font-size: 48px; margin-bottom: 24px;">😄</div>
+                        <div style="color: #f1f5f9; font-size: 18px; font-weight: 600; margin-bottom: 16px; line-height: 1.5;">
+                            ${data.setup || data.joke}
+                        </div>
+                        ${data.punchline ? `<div style="color: #3b82f6; font-size: 16px; line-height: 1.5; font-style: italic; margin-top: 12px;">${data.punchline}</div>` : ''}
+                    `;
+                } else if (data.joke) {
+                    // Single joke from jokeapi
+                    jokeHtml = `
+                        <div style="font-size: 48px; margin-bottom: 24px;">😄</div>
+                        <div style="color: #f1f5f9; font-size: 18px; line-height: 1.5;">
+                            ${data.joke}
+                        </div>
+                    `;
+                } else {
+                    throw new Error('Unexpected joke format');
+                }
+
+                jokeContent.innerHTML = jokeHtml;
+            } catch (error) {
+                console.error('Error fetching joke:', error);
+                jokeContent.innerHTML = `
+                    <div style="font-size: 48px; margin-bottom: 20px;">😅</div>
+                    <div style="color: #94a3b8;">Couldn't load a joke right now, but here's a smile! 😊</div>
+                    <div style="color: #64748b; font-size: 14px; margin-top: 12px;">Try again in a moment!</div>
+                `;
+            }
+        }
+
+        // Close joke modal on outside click
+        document.getElementById('jokeModal')?.addEventListener('click', function(e) {
+            if (e.target.id === 'jokeModal') {
+                closeJokeModal();
+            }
+        });
 
         // Save tool
         async function saveTool() {
