@@ -1042,14 +1042,16 @@
                             ${data.delivery}
                         </div>
                     `;
-                } else if (data.joke) {
-                    // Single joke from official-joke-api
+                } else if (data.setup && data.punchline) {
+                    // Two-part joke from official-joke-api
                     jokeHtml = `
                         <div style="font-size: 48px; margin-bottom: 24px;">😄</div>
                         <div style="color: #f1f5f9; font-size: 18px; font-weight: 600; margin-bottom: 16px; line-height: 1.5;">
-                            ${data.setup || data.joke}
+                            ${data.setup}
                         </div>
-                        ${data.punchline ? `<div style="color: #3b82f6; font-size: 16px; line-height: 1.5; font-style: italic; margin-top: 12px;">${data.punchline}</div>` : ''}
+                        <div style="color: #3b82f6; font-size: 16px; line-height: 1.5; font-style: italic; margin-top: 12px;">
+                            ${data.punchline}
+                        </div>
                     `;
                 } else if (data.joke) {
                     // Single joke from jokeapi
