@@ -1119,6 +1119,10 @@
             const afterElement = getDragAfterElement(document.getElementById('toolsList'), e.clientY);
             const dragging = document.querySelector('.dragging');
             
+            if (!dragging || dragging === afterElement) {
+                return false;
+            }
+            
             if (afterElement == null) {
                 document.getElementById('toolsList').appendChild(dragging);
             } else {
@@ -1136,22 +1140,30 @@
             
             e.preventDefault();
             
-            if (draggedElement && draggedElement !== this) {
-                // Get the new position
-                const allItems = Array.from(document.querySelectorAll('.tool-item'));
-                const newIndex = allItems.indexOf(this);
-                const toolId = parseInt(draggedElement.dataset.toolId);
+            if (!draggedElement) {
+                return false;
+            }
+            
+            // Get the final order from the DOM after drag
+            const allItems = Array.from(document.querySelectorAll('.tool-item'));
+            const newOrder = allItems.map(item => parseInt(item.dataset.toolId));
+            
+            // Reorder currentTools array to match DOM order
+            const reorderedTools = [];
+            for (const toolId of newOrder) {
                 const tool = currentTools.find(t => t.id === toolId);
-                
-                if (tool && newIndex !== draggedIndex) {
-                    // Reorder tools array
-                    currentTools.splice(draggedIndex, 1);
-                    const actualNewIndex = newIndex > draggedIndex ? newIndex - 1 : newIndex;
-                    currentTools.splice(actualNewIndex, 0, tool);
-                    
-                    // Update display_order and save to server
-                    updateToolOrder();
+                if (tool) {
+                    reorderedTools.push(tool);
                 }
+            }
+            
+            // Only update if order actually changed
+            const orderChanged = JSON.stringify(newOrder) !== JSON.stringify(currentTools.map(t => t.id));
+            
+            if (orderChanged) {
+                currentTools = reorderedTools;
+                // Update display_order and save to server
+                updateToolOrder();
             }
             
             return false;
