@@ -264,19 +264,24 @@ async def delete_tool(
 @app.get("/favicon.ico")
 async def favicon():
     """Serve favicon"""
-    from fastapi.responses import FileResponse
+    from fastapi.responses import FileResponse, Response
     import os
+    
     favicon_path = "static/favicon.ico"
     if os.path.exists(favicon_path):
-        return FileResponse(favicon_path)
+        response = FileResponse(favicon_path)
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+    
     # Fallback to SVG if ICO doesn't exist
     svg_path = "static/favicon.svg"
     if os.path.exists(svg_path):
-        from fastapi.responses import Response
         with open(svg_path, 'rb') as f:
             content = f.read()
-        return Response(content=content, media_type="image/svg+xml")
-    from fastapi.responses import Response
+        response = Response(content=content, media_type="image/svg+xml")
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+    
     return Response(status_code=204)
 
 @app.get("/health")
