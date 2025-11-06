@@ -121,7 +121,7 @@
         .clocks-row {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 20px;
             flex: 1;
         }
 
@@ -129,11 +129,12 @@
             display: flex;
             flex-direction: row;
             align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
+            gap: 10px;
+            padding: 8px 14px;
             border-radius: 8px;
             background: rgba(30, 41, 59, 0.5);
             border: 1px solid #334155;
+            min-width: 140px;
         }
 
         .clock-face-container {
@@ -191,6 +192,7 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
+            flex: 1;
         }
 
         .clock-city {
@@ -209,6 +211,17 @@
         .clock-date {
             font-size: 9px;
             color: #64748b;
+        }
+
+        .weather-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.8;
         }
 
         .user-section {
@@ -786,6 +799,7 @@
                                 <div class="clock-center"></div>
                             </div>
                         </div>
+                        <div class="weather-icon" id="weather-icon-london">🌤️</div>
                         <div class="clock-info">
                             <div class="clock-city">London</div>
                             <div class="clock-time" id="clock-london">--:--</div>
@@ -800,6 +814,7 @@
                                 <div class="clock-center"></div>
                             </div>
                         </div>
+                        <div class="weather-icon" id="weather-icon-denver">🌤️</div>
                         <div class="clock-info">
                             <div class="clock-city">Denver</div>
                             <div class="clock-time" id="clock-denver">--:--</div>
@@ -814,6 +829,7 @@
                                 <div class="clock-center"></div>
                             </div>
                         </div>
+                        <div class="weather-icon" id="weather-icon-manila">🌤️</div>
                         <div class="clock-info">
                             <div class="clock-city">Manila</div>
                             <div class="clock-time" id="clock-manila">--:--</div>
@@ -828,6 +844,7 @@
                                 <div class="clock-center"></div>
                             </div>
                         </div>
+                        <div class="weather-icon" id="weather-icon-dhaka">🌤️</div>
                         <div class="clock-info">
                             <div class="clock-city">Dhaka</div>
                             <div class="clock-time" id="clock-dhaka">--:--</div>
@@ -1751,10 +1768,10 @@
         // World Clocks
         function updateWorldClocks() {
             const timezones = [
-                { id: 'london', tz: 'Europe/London', city: 'London' },
-                { id: 'denver', tz: 'America/Denver', city: 'Denver' },
-                { id: 'manila', tz: 'Asia/Manila', city: 'Manila' },
-                { id: 'dhaka', tz: 'Asia/Dhaka', city: 'Dhaka' }
+                { id: 'london', tz: 'Europe/London', city: 'London', weatherCity: 'London,GB' },
+                { id: 'denver', tz: 'America/Denver', city: 'Denver', weatherCity: 'Denver,US' },
+                { id: 'manila', tz: 'Asia/Manila', city: 'Manila', weatherCity: 'Manila,PH' },
+                { id: 'dhaka', tz: 'Asia/Dhaka', city: 'Dhaka', weatherCity: 'Dhaka,BD' }
             ];
 
             timezones.forEach(({ id, tz, city }) => {
@@ -1812,15 +1829,63 @@
             });
         }
 
+        // Update weather icons for clock cities
+        async function updateClockWeather() {
+            const cities = [
+                { id: 'london', query: 'London,GB' },
+                { id: 'denver', query: 'Denver,US' },
+                { id: 'manila', query: 'Manila,PH' },
+                { id: 'dhaka', query: 'Dhaka,BD' }
+            ];
+
+            const weatherIcons = {
+                'clear': '☀️',
+                'clouds': '☁️',
+                'rain': '🌧️',
+                'drizzle': '🌦️',
+                'thunderstorm': '⛈️',
+                'snow': '❄️',
+                'mist': '🌫️',
+                'fog': '🌫️',
+                'haze': '🌫️'
+            };
+
+            for (const { id, query } of cities) {
+                try {
+                    const response = await fetch(`/api/weather?q=${encodeURIComponent(query)}`, {
+                        credentials: 'include'
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success && data.weather) {
+                        const mainCondition = data.weather.weather[0].main.toLowerCase();
+                        const icon = weatherIcons[mainCondition] || '🌤️';
+                        const weatherIconEl = document.getElementById(`weather-icon-${id}`);
+                        if (weatherIconEl) {
+                            weatherIconEl.textContent = icon;
+                        }
+                    }
+                } catch (error) {
+                    console.error(`Error fetching weather for ${query}:`, error);
+                    // Keep default icon on error
+                }
+            }
+        }
+
         // Update clocks immediately and then every minute
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => {
                 updateWorldClocks();
                 setInterval(updateWorldClocks, 60000);
+                // Update weather icons on load and every 30 minutes
+                updateClockWeather();
+                setInterval(updateClockWeather, 1800000); // 30 minutes
             });
         } else {
             updateWorldClocks();
             setInterval(updateWorldClocks, 60000);
+            updateClockWeather();
+            setInterval(updateClockWeather, 1800000); // 30 minutes
         }
 
         // Initialize
