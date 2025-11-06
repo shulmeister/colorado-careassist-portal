@@ -264,7 +264,13 @@ async def delete_tool(
 async def favicon():
     """Serve favicon"""
     from fastapi.responses import FileResponse
-    return FileResponse("static/favicon.ico")
+    import os
+    favicon_path = "static/favicon.ico"
+    if os.path.exists(favicon_path):
+        return FileResponse(favicon_path)
+    # Return 204 No Content if favicon doesn't exist
+    from fastapi.responses import Response
+    return Response(status_code=204)
 
 @app.get("/health")
 async def health_check():
