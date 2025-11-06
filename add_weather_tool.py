@@ -8,11 +8,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from portal_database import db_manager
 from portal_models import PortalTool
-from sqlalchemy.orm import Session
 
 def add_weather_tool():
     """Add Weather tool to database"""
-    db = next(db_manager.get_db())
+    db = db_manager.get_session()
     
     try:
         # Check if Weather tool already exists
