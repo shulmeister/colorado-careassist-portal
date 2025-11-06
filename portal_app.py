@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
-from portal_models import PortalTool, Base
+from portal_models import PortalTool, Base, UserSession, ToolClick
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -264,18 +264,152 @@ async def delete_tool(
 async def favicon():
     """Serve favicon"""
     from fastapi.responses import FileResponse
-    import os
-    favicon_path = "static/favicon.ico"
-    if os.path.exists(favicon_path):
-        return FileResponse(favicon_path)
-    # Return 204 No Content if favicon doesn't exist
-    from fastapi.responses import Response
-    return Response(status_code=204)
+    return FileResponse("static/favicon.ico")
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "Colorado CareAssist Portal"}
+
+# Analytics endpoints
+@app.post("/api/analytics/track-session")
+async def track_session(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Track user session (login/logout)"""
+    try:
+        data = await request.json()
+        action = data.get("action")
+        duration_seconds = data.get("duration_seconds")
+        
+        # Get IP address
+        ip_address = request.client.host
+        if request.headers.get("X-Forwarded-For"):
+            ip_address = request.headers.get("X-Forwarded-For").split(",")[0].strip()
+        
+        user_agent = request.headers.get("User-Agent", "")
+        
+        if action == "login":
+            # Create new session
+            session = UserSession(
+                user_email=current_user.get("email"),
+                user_name=current_user.get("name"),
+                login_time=datetime.utcnow(),
+                ip_address=ip_address,
+                user_agent=user_agent
+            )
+            db.add(session)
+            db.commit()
+            db.refresh(session)
+            
+            return JSONResponse({
+                "success": True,
+                "session_id": session.id
+            })
+        elif action == "logout":
+            # Find active session (most recent without logout_time)
+            session = db.query(UserSession).filter(
+                UserSession.user_email == current_user.get("email"),
+                UserSession.logout_time.is_(None)
+            ).order_by(UserSession.login_time.desc()).first()
+            
+            if session:
+                session.logout_time = datetime.utcnow()
+                if duration_seconds:
+                    session.duration_seconds = duration_seconds
+                else:
+                    # Calculate duration
+                    duration = (session.logout_time - session.login_time).total_seconds()
+                    session.duration_seconds = int(duration)
+                db.commit()
+            
+            return JSONResponse({
+                "success": True
+            })
+        else:
+            raise HTTPException(status_code=400, detail="Invalid action")
+            
+    except Exception as e:
+        logger.error(f"Error tracking session: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error tracking session: {str(e)}")
+
+@app.post("/api/analytics/track-click")
+async def track_click(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Track tool click"""
+    try:
+        data = await request.json()
+        
+        # Get IP address
+        ip_address = request.client.host
+        if request.headers.get("X-Forwarded-For"):
+            ip_address = request.headers.get("X-Forwarded-For").split(",")[0].strip()
+        
+        user_agent = request.headers.get("User-Agent", "")
+        
+        click = ToolClick(
+            user_email=current_user.get("email"),
+            user_name=current_user.get("name"),
+            tool_id=data.get("tool_id"),
+            tool_name=data.get("tool_name"),
+            tool_url=data.get("tool_url"),
+            clicked_at=datetime.utcnow(),
+            ip_address=ip_address,
+            user_agent=user_agent
+        )
+        
+        db.add(click)
+        db.commit()
+        
+        return JSONResponse({
+            "success": True
+        })
+        
+    except Exception as e:
+        logger.error(f"Error tracking click: {str(e)}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error tracking click: {str(e)}")
+
+@app.get("/api/analytics/summary")
+async def get_analytics_summary(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get analytics summary"""
+    try:
+        from sqlalchemy import func, distinct
+        
+        # Get summary stats
+        total_sessions = db.query(func.count(UserSession.id)).scalar() or 0
+        total_clicks = db.query(func.count(ToolClick.id)).scalar() or 0
+        active_users = db.query(func.count(distinct(UserSession.user_email))).scalar() or 0
+        
+        # Get recent sessions (last 50)
+        sessions = db.query(UserSession).order_by(UserSession.login_time.desc()).limit(50).all()
+        
+        # Get recent clicks (last 100)
+        clicks = db.query(ToolClick).order_by(ToolClick.clicked_at.desc()).limit(100).all()
+        
+        return JSONResponse({
+            "success": True,
+            "summary": {
+                "total_sessions": total_sessions,
+                "total_clicks": total_clicks,
+                "active_users": active_users
+            },
+            "sessions": [session.to_dict() for session in sessions],
+            "clicks": [click.to_dict() for click in clicks]
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting analytics summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting analytics: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
