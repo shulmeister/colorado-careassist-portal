@@ -1838,17 +1838,71 @@
                 { id: 'dhaka', query: 'Dhaka,BD' }
             ];
 
-            const weatherIcons = {
-                'clear': '☀️',
-                'clouds': '☁️',
-                'rain': '🌧️',
-                'drizzle': '🌦️',
-                'thunderstorm': '⛈️',
-                'snow': '❄️',
-                'mist': '🌫️',
-                'fog': '🌫️',
-                'haze': '🌫️'
-            };
+            // More detailed weather icon mapping based on OpenWeatherMap icon codes and descriptions
+            function getWeatherIcon(weatherData) {
+                if (!weatherData || !weatherData.weather || !weatherData.weather[0]) {
+                    return '🌤️';
+                }
+
+                const main = weatherData.weather[0].main.toLowerCase();
+                const description = weatherData.weather[0].description.toLowerCase();
+                const iconCode = weatherData.weather[0].icon;
+
+                // Use icon code for more accurate representation
+                // OpenWeatherMap icon codes: 01d/01n = clear, 02d/02n = few clouds, 03d/03n = scattered clouds,
+                // 04d/04n = broken clouds, 09d/09n = shower rain, 10d/10n = rain, 11d/11n = thunderstorm,
+                // 13d/13n = snow, 50d/50n = mist
+                
+                if (iconCode) {
+                    if (iconCode.startsWith('01')) {
+                        return '☀️'; // Clear sky
+                    } else if (iconCode.startsWith('02')) {
+                        return '🌤️'; // Few clouds / partly cloudy
+                    } else if (iconCode.startsWith('03')) {
+                        return '⛅'; // Scattered clouds
+                    } else if (iconCode.startsWith('04')) {
+                        return '☁️'; // Broken clouds / overcast
+                    } else if (iconCode.startsWith('09')) {
+                        return '🌦️'; // Shower rain
+                    } else if (iconCode.startsWith('10')) {
+                        return '🌧️'; // Rain
+                    } else if (iconCode.startsWith('11')) {
+                        return '⛈️'; // Thunderstorm
+                    } else if (iconCode.startsWith('13')) {
+                        return '❄️'; // Snow
+                    } else if (iconCode.startsWith('50')) {
+                        return '🌫️'; // Mist/Fog
+                    }
+                }
+
+                // Fallback to main condition if icon code not available
+                if (main === 'clear') {
+                    return '☀️';
+                } else if (main === 'clouds') {
+                    // Check description for more detail
+                    if (description.includes('few') || description.includes('scattered')) {
+                        return '🌤️'; // Partly cloudy
+                    } else if (description.includes('broken') || description.includes('overcast')) {
+                        return '☁️'; // Cloudy/Overcast
+                    }
+                    return '☁️'; // Default for clouds
+                } else if (main === 'rain') {
+                    if (description.includes('drizzle') || description.includes('light')) {
+                        return '🌦️';
+                    }
+                    return '🌧️';
+                } else if (main === 'drizzle') {
+                    return '🌦️';
+                } else if (main === 'thunderstorm') {
+                    return '⛈️';
+                } else if (main === 'snow') {
+                    return '❄️';
+                } else if (main === 'mist' || main === 'fog' || main === 'haze') {
+                    return '🌫️';
+                }
+
+                return '🌤️'; // Default
+            }
 
             for (const { id, query } of cities) {
                 try {
@@ -1858,16 +1912,25 @@
                     const data = await response.json();
                     
                     if (data.success && data.weather) {
-                        const mainCondition = data.weather.weather[0].main.toLowerCase();
-                        const icon = weatherIcons[mainCondition] || '🌤️';
+                        const icon = getWeatherIcon(data.weather);
                         const weatherIconEl = document.getElementById(`weather-icon-${id}`);
                         if (weatherIconEl) {
                             weatherIconEl.textContent = icon;
+                        }
+                    } else {
+                        // If API key not configured or error, show default icon
+                        const weatherIconEl = document.getElementById(`weather-icon-${id}`);
+                        if (weatherIconEl) {
+                            weatherIconEl.textContent = '🌤️';
                         }
                     }
                 } catch (error) {
                     console.error(`Error fetching weather for ${query}:`, error);
                     // Keep default icon on error
+                    const weatherIconEl = document.getElementById(`weather-icon-${id}`);
+                    if (weatherIconEl) {
+                        weatherIconEl.textContent = '🌤️';
+                    }
                 }
             }
         }
