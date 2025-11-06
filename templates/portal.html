@@ -233,8 +233,8 @@
         }
 
         .tool-icon img {
-            width: 48px;
-            height: 48px;
+            width: 64px;
+            height: 64px;
             object-fit: contain;
             border-radius: 8px;
             image-rendering: -webkit-optimize-contrast;
@@ -242,14 +242,6 @@
             image-rendering: high-quality;
             filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
             transition: transform 0.2s ease;
-        }
-
-        /* QuickBooks logo - larger size */
-        .tool-card[href*="intuit.com"] .tool-icon img,
-        .tool-card[href*="quickbooks"] .tool-icon img,
-        .tool-icon img.quickbooks-logo {
-            width: 64px;
-            height: 64px;
         }
 
         .tool-card:hover .tool-icon img {
@@ -896,7 +888,7 @@
                 const iconHtml = tool.icon && tool.icon.startsWith('http') 
                     ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
                     : tool.icon && tool.icon.startsWith('/static/')
-                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" class="${tool.name === 'QuickBooks' ? 'quickbooks-logo' : ''}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
+                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
                     : `<div class="tool-icon"><span>${tool.icon || '🔗'}</span></div>`;
                 
                 return `
