@@ -228,6 +228,13 @@
             display: block;
         }
 
+        .tool-icon img {
+            width: 48px;
+            height: 48px;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+
         .tool-name {
             font-size: 15px;
             font-weight: 700;
@@ -826,9 +833,13 @@
                 }
                 
                 // Regular tool card
+                const iconHtml = tool.icon && tool.icon.startsWith('http') 
+                    ? `<img src="${tool.icon}" alt="${tool.name}" class="tool-icon" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span class="tool-icon" style="display:none;">🔗</span>`
+                    : `<span class="tool-icon">${tool.icon || '🔗'}</span>`;
+                
                 return `
                     <a href="${tool.url}" target="_blank" class="tool-card" onclick="trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return true;">
-                        <span class="tool-icon">${tool.icon || '🔗'}</span>
+                        ${iconHtml}
                         <div class="tool-name">${tool.name}</div>
                         ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
                         ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
