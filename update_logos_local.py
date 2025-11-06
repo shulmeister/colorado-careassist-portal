@@ -11,6 +11,7 @@ try:
     # Using /static/logos/ for local files, fallback to high-quality external sources
     LOGO_MAP = {
         "Google Analytics": "/static/logos/google-analytics.svg",
+        "Colorado Bureau of Investigation": "/static/logos/cbi-logo.png",
         "Gmail": "https://www.google.com/s2/favicons?domain=gmail.com&sz=128",
         "Google Drive": "https://www.google.com/s2/favicons?domain=drive.google.com&sz=128",
         "Google Calendar": "https://www.google.com/s2/favicons?domain=calendar.google.com&sz=128",
