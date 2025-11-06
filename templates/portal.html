@@ -239,8 +239,13 @@
             border-radius: 8px;
             image-rendering: -webkit-optimize-contrast;
             image-rendering: crisp-edges;
-            image-rendering: pixelated;
+            image-rendering: high-quality;
             filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+            transition: transform 0.2s ease;
+        }
+
+        .tool-card:hover .tool-icon img {
+            transform: scale(1.05);
         }
 
         .tool-icon span {
