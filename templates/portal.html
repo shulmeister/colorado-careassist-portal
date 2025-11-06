@@ -1099,7 +1099,6 @@
                 item.addEventListener('dragover', handleDragOver);
                 item.addEventListener('drop', handleDrop);
                 item.addEventListener('dragend', handleDragEnd);
-                item.addEventListener('dragleave', handleDragLeave);
             });
         }
 
@@ -1129,24 +1128,26 @@
             return false;
         }
 
-        function handleDragLeave(e) {
-            this.classList.remove('drag-over');
-        }
 
         function handleDrop(e) {
             if (e.stopPropagation) {
                 e.stopPropagation();
             }
             
-            if (draggedElement !== this) {
-                // Reorder tools array
-                const newIndex = Array.from(document.querySelectorAll('.tool-item')).indexOf(this);
+            e.preventDefault();
+            
+            if (draggedElement && draggedElement !== this) {
+                // Get the new position
+                const allItems = Array.from(document.querySelectorAll('.tool-item'));
+                const newIndex = allItems.indexOf(this);
                 const toolId = parseInt(draggedElement.dataset.toolId);
                 const tool = currentTools.find(t => t.id === toolId);
                 
-                if (tool) {
+                if (tool && newIndex !== draggedIndex) {
+                    // Reorder tools array
                     currentTools.splice(draggedIndex, 1);
-                    currentTools.splice(newIndex, 0, tool);
+                    const actualNewIndex = newIndex > draggedIndex ? newIndex - 1 : newIndex;
+                    currentTools.splice(actualNewIndex, 0, tool);
                     
                     // Update display_order and save to server
                     updateToolOrder();
