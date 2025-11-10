@@ -35,7 +35,7 @@ Central hub/launchpad providing access to all tools and platforms used by Colora
    RINGCENTRAL_EMBED_SERVER=https://platform.ringcentral.com  # or https://platform.devtest.ringcentral.com for Sandbox
    RINGCENTRAL_EMBED_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
    RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
-   RINGCENTRAL_EMBED_DEFAULT_TAB=chat
+   RINGCENTRAL_EMBED_DEFAULT_TAB=messages
    RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
    ```
    > ⚠️ Only the RingCentral browser app's client ID is used in the portal. Store your client secret securely and never commit it to source control.
@@ -81,7 +81,7 @@ The app is configured for Heroku deployment:
    heroku config:set RINGCENTRAL_EMBED_SERVER=https://platform.ringcentral.com
    heroku config:set RINGCENTRAL_EMBED_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
    heroku config:set RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
-   heroku config:set RINGCENTRAL_EMBED_DEFAULT_TAB=chat
+   heroku config:set RINGCENTRAL_EMBED_DEFAULT_TAB=messages
    heroku config:set RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
    ```
 
