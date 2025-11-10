@@ -34,10 +34,14 @@ RINGCENTRAL_EMBED_ADAPTER_URL = os.getenv(
     "RINGCENTRAL_EMBED_ADAPTER_URL",
     "https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js",
 )
-RINGCENTRAL_EMBED_DEFAULT_TAB = os.getenv("RINGCENTRAL_EMBED_DEFAULT_TAB", "chat")
+RINGCENTRAL_EMBED_DEFAULT_TAB = os.getenv("RINGCENTRAL_EMBED_DEFAULT_TAB", "glip")
 RINGCENTRAL_EMBED_REDIRECT_URI = os.getenv(
     "RINGCENTRAL_EMBED_REDIRECT_URI",
     "https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html",
+)
+RINGCENTRAL_EMBED_HIDDEN_TABS = os.getenv(
+    "RINGCENTRAL_EMBED_HIDDEN_TABS",
+    "Contacts,Fax,Video,Voicemail,Settings"
 )
 
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
@@ -133,6 +137,12 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
         # Redirect to login if not authenticated
         return RedirectResponse(url="/auth/login")
     
+    hidden_tabs_list = []
+    if RINGCENTRAL_EMBED_HIDDEN_TABS:
+        hidden_tabs_list = [
+            tab.strip() for tab in RINGCENTRAL_EMBED_HIDDEN_TABS.split(",") if tab.strip()
+        ]
+
     ringcentral_config = {
         "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
         "client_id": RINGCENTRAL_EMBED_CLIENT_ID,
@@ -141,6 +151,8 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
         "adapter_url": RINGCENTRAL_EMBED_ADAPTER_URL,
         "default_tab": RINGCENTRAL_EMBED_DEFAULT_TAB,
         "redirect_uri": RINGCENTRAL_EMBED_REDIRECT_URI,
+        "hidden_tabs": RINGCENTRAL_EMBED_HIDDEN_TABS,
+        "hidden_tabs_list": hidden_tabs_list,
         "query_string": "",
     }
 
@@ -153,6 +165,7 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
             params["defaultTab"] = RINGCENTRAL_EMBED_DEFAULT_TAB
         if RINGCENTRAL_EMBED_REDIRECT_URI:
             params["redirectUri"] = RINGCENTRAL_EMBED_REDIRECT_URI
+        # Note: hiddenTabs are now controlled via postMessage in the template
         ringcentral_config["query_string"] = urlencode(params)
 
     response = templates.TemplateResponse("portal.html", {

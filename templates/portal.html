@@ -816,6 +816,12 @@
     </style>
     {% if ringcentral.enabled %}
     <script>
+        window.RingCentralEmbeddable = {
+            config: {
+                defaultTab: "{{ ringcentral.default_tab }}",
+                hiddenTabs: [{% for tab in ringcentral.hidden_tabs_list %}"{{ tab }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+            }
+        };
         (function() {
             var rcs = document.createElement("script");
             var adapterSrc = "{{ ringcentral.adapter_url }}";
@@ -882,6 +888,29 @@
                     src="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
                 ></iframe>
             </div>
+            <script>
+                // Hide unwanted RingCentral tabs (keep only: Phone, Text, Message, Contacts)
+                (function() {
+                    var rcFrame = document.querySelector('#rc-widget-sidebar');
+                    if (!rcFrame) return;
+                    
+                    // Wait for iframe to load
+                    rcFrame.addEventListener('load', function() {
+                        var tabsToHide = ['fax', 'video', 'voicemail', 'settings', 'meeting'];
+                        
+                        // Send hide message for each unwanted tab
+                        tabsToHide.forEach(function(tabId) {
+                            rcFrame.contentWindow.postMessage({
+                                type: 'rc-adapter-register-customized-page',
+                                page: {
+                                    id: tabId,
+                                    hidden: true
+                                }
+                            }, '*');
+                        });
+                    });
+                })();
+            </script>
             {% endif %}
 
             <div class="user-section">
