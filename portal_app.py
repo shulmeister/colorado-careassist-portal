@@ -165,11 +165,12 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
             params["defaultTab"] = RINGCENTRAL_EMBED_DEFAULT_TAB
         if RINGCENTRAL_EMBED_REDIRECT_URI:
             params["redirectUri"] = RINGCENTRAL_EMBED_REDIRECT_URI
-        # Try disabling features via URL parameters
-        params["disableMessages"] = "false"  # Enable team messaging/Glip
-        params["disableGlip"] = "false"      # Enable Glip explicitly
+        # Control which features are shown
+        params["disableMessages"] = "false"  # Enable team messaging/Chat
+        params["disableGlip"] = "false"      # Enable Chat explicitly
+        params["enableGlip"] = "true"        # Explicitly enable Chat
         params["disableConferences"] = "true"  # Disable video/meetings
-        params["enableGlip"] = "true"        # Explicitly enable Glip
+        params["disableSettings"] = "true"   # Hide Settings tab
         ringcentral_config["query_string"] = urlencode(params)
 
     response = templates.TemplateResponse("portal.html", {
