@@ -10,6 +10,7 @@ Central hub/launchpad providing access to all tools and platforms used by Colora
 - **Admin Interface** - Manage tools (add/edit/delete) with modal-based interface
 - **Responsive Design** - Works on desktop, tablet, and mobile
 - **Exact Dashboard Styling** - Matches the sales dashboard design exactly
+- **RingCentral Embedded Workspace** *(optional)* - RingCentral softphone/chat lives in the left sidebar with an expandable full-width workspace
 
 ## Setup
 
@@ -29,7 +30,25 @@ Central hub/launchpad providing access to all tools and platforms used by Colora
    APP_SECRET_KEY=your_secret_key
    ALLOWED_DOMAINS=coloradocareassist.com
    DATABASE_URL=sqlite:///./portal.db
+   # Optional RingCentral Embeddable widget
+   RINGCENTRAL_EMBED_CLIENT_ID=your_ringcentral_browser_app_id
+   RINGCENTRAL_EMBED_SERVER=https://platform.ringcentral.com  # or https://platform.devtest.ringcentral.com for Sandbox
+   RINGCENTRAL_EMBED_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
+   RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
+   RINGCENTRAL_EMBED_DEFAULT_TAB=chat
+   RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
    ```
+   > ⚠️ Only the RingCentral browser app's client ID is used in the portal. Store your client secret securely and never commit it to source control.
+
+   **RingCentral developer portal configuration**
+
+   1. Sign in to the [RingCentral Developer Portal](https://developers.ringcentral.com/).
+   2. Open your Browser-Based or Embeddable app that owns the client ID above.
+   3. On the *OAuth / Redirect URI* section, add:
+      ```
+      https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
+      ```
+   4. Save the app. Without this redirect URI you will see `OAU-113: No redirect URI is registered for this client application`.
 
 3. **Initialize Database**
    ```bash
@@ -57,6 +76,13 @@ The app is configured for Heroku deployment:
    heroku config:set GOOGLE_REDIRECT_URI=https://portal-coloradocareassist.herokuapp.com/auth/callback
    heroku config:set APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
    heroku config:set ALLOWED_DOMAINS=coloradocareassist.com
+   # Optional RingCentral embeddable widget
+   heroku config:set RINGCENTRAL_EMBED_CLIENT_ID=your_ringcentral_browser_app_id
+   heroku config:set RINGCENTRAL_EMBED_SERVER=https://platform.ringcentral.com
+   heroku config:set RINGCENTRAL_EMBED_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
+   heroku config:set RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
+   heroku config:set RINGCENTRAL_EMBED_DEFAULT_TAB=chat
+   heroku config:set RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
    ```
 
 2. **Add PostgreSQL**
@@ -134,4 +160,7 @@ The portal uses the **exact same styling** as the sales dashboard:
 - Same typography, spacing, and colors
 - Same navigation sidebar
 - Same responsive breakpoints
+
+
+
 
