@@ -10,6 +10,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import httpx
+from urllib.parse import urlencode
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
 from portal_models import PortalTool, Base, UserSession, ToolClick
@@ -21,6 +22,23 @@ load_dotenv()
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# RingCentral Embeddable configuration
+RINGCENTRAL_EMBED_CLIENT_ID = os.getenv("RINGCENTRAL_EMBED_CLIENT_ID")
+RINGCENTRAL_EMBED_SERVER = os.getenv("RINGCENTRAL_EMBED_SERVER", "https://platform.ringcentral.com")
+RINGCENTRAL_EMBED_APP_URL = os.getenv(
+    "RINGCENTRAL_EMBED_APP_URL",
+    "https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html",
+)
+RINGCENTRAL_EMBED_ADAPTER_URL = os.getenv(
+    "RINGCENTRAL_EMBED_ADAPTER_URL",
+    "https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js",
+)
+RINGCENTRAL_EMBED_DEFAULT_TAB = os.getenv("RINGCENTRAL_EMBED_DEFAULT_TAB", "chat")
+RINGCENTRAL_EMBED_REDIRECT_URI = os.getenv(
+    "RINGCENTRAL_EMBED_REDIRECT_URI",
+    "https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html",
+)
 
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
 
@@ -115,9 +133,32 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
         # Redirect to login if not authenticated
         return RedirectResponse(url="/auth/login")
     
+    ringcentral_config = {
+        "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
+        "client_id": RINGCENTRAL_EMBED_CLIENT_ID,
+        "app_server": RINGCENTRAL_EMBED_SERVER,
+        "app_url": RINGCENTRAL_EMBED_APP_URL,
+        "adapter_url": RINGCENTRAL_EMBED_ADAPTER_URL,
+        "default_tab": RINGCENTRAL_EMBED_DEFAULT_TAB,
+        "redirect_uri": RINGCENTRAL_EMBED_REDIRECT_URI,
+        "query_string": "",
+    }
+
+    if ringcentral_config["enabled"]:
+        params = {
+            "clientId": RINGCENTRAL_EMBED_CLIENT_ID,
+            "appServer": RINGCENTRAL_EMBED_SERVER,
+        }
+        if RINGCENTRAL_EMBED_DEFAULT_TAB:
+            params["defaultTab"] = RINGCENTRAL_EMBED_DEFAULT_TAB
+        if RINGCENTRAL_EMBED_REDIRECT_URI:
+            params["redirectUri"] = RINGCENTRAL_EMBED_REDIRECT_URI
+        ringcentral_config["query_string"] = urlencode(params)
+
     response = templates.TemplateResponse("portal.html", {
         "request": request,
-        "user": current_user
+        "user": current_user,
+        "ringcentral": ringcentral_config,
     })
     # Add cache-busting headers
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
