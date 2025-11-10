@@ -166,11 +166,8 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
         if RINGCENTRAL_EMBED_REDIRECT_URI:
             params["redirectUri"] = RINGCENTRAL_EMBED_REDIRECT_URI
         # Control which features are shown
-        params["disableMessages"] = "false"  # Enable team messaging/Chat
-        params["disableGlip"] = "false"      # Enable Chat explicitly
-        params["enableGlip"] = "true"        # Explicitly enable Chat
+        params["enableGlip"] = "true"        # Enable Chat tab
         params["disableConferences"] = "true"  # Disable video/meetings
-        params["disableSettings"] = "true"   # Hide Settings tab
         params["theme"] = "dark"             # Set dark theme to match dashboard
         ringcentral_config["query_string"] = urlencode(params)
 
