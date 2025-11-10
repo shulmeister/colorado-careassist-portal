@@ -171,6 +171,7 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
         params["enableGlip"] = "true"        # Explicitly enable Chat
         params["disableConferences"] = "true"  # Disable video/meetings
         params["disableSettings"] = "true"   # Hide Settings tab
+        params["theme"] = "dark"             # Set dark theme to match dashboard
         ringcentral_config["query_string"] = urlencode(params)
 
     response = templates.TemplateResponse("portal.html", {
