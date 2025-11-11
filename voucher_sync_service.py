@@ -262,53 +262,61 @@ class VoucherSyncService:
         Parse voucher data from OCR text
         
         Expected patterns:
-        - Voucher numbers: XXXXX-XXXXX format
-        - Client names: Usually at top of voucher
+        - Voucher numbers: XXXXX-CODE#### format (e.g., 12357-ROS8227)
+        - Client names: Extracted from 3-letter code (ROS=Rosell, BES=Besch, etc.)
         - Dates: MM/DD/YYYY or Month DD - Month DD format
-        - Amounts: $XXX.XX or XXX
+        - Amounts: hours × $30/hour (6 hours = $180, 15 hours = $450)
         """
         try:
+            # Client code mapping (from existing vouchers)
+            CLIENT_CODE_MAP = {
+                "ROS": "Shirley Rosell",
+                "BES": "Charles Besch",
+                "BRO": "Christine Brock",
+                "BRN": "Margot Brown",
+                "BUR": "Herbert Burley",
+                "THO": "Mildred Tomkins",
+                "FLE": "Jessica Whelehan Trow (Ann Fletcher)",
+                "JON": "Joanne Jones",
+                "BEC": "Judy Tuetken",
+                "LIP": "Betty Jean Lipsy",
+                "LIG": "Dawn Light (Ed Witt)",
+                "GRI": "Mary Poole",
+                "SAL": "Marlene Morin",
+                "LIV": "Christine Brock",  # Alternative code
+                "RAY": "Margarita Rubio",
+            }
+            
             voucher_data = {
                 "voucher_image_url": file_url,
                 "notes": f"Auto-imported from {file_name}"
             }
             
             # Extract voucher number (e.g., "12345-ABC1234")
-            voucher_pattern = r'\b(\d{4,5}-[A-Z]{3,}\s*\d{3,5})\b'
+            voucher_pattern = r'\b(\d{4,5})\s*-?\s*([A-Z]{3,})\s*(\d{3,5})\b'
             voucher_match = re.search(voucher_pattern, text, re.IGNORECASE)
+            
             if voucher_match:
-                voucher_data["voucher_number"] = voucher_match.group(1).strip()
+                voucher_num = voucher_match.group(1)
+                client_code = voucher_match.group(2).upper()[:3]
+                suffix = voucher_match.group(3)
+                voucher_data["voucher_number"] = f"{voucher_num}-{client_code} {suffix}"
+                
+                # Map client code to full name
+                voucher_data["client_name"] = CLIENT_CODE_MAP.get(client_code, f"Unknown Client ({client_code})")
             else:
                 # Try alternative pattern from filename
-                filename_pattern = r'(\d{4,5}-[A-Z]+\s*\d+)'
+                filename_pattern = r'(\d{4,5}).*?([A-Z]{3})[^\d]*(\d+)'
                 filename_match = re.search(filename_pattern, file_name, re.IGNORECASE)
                 if filename_match:
-                    voucher_data["voucher_number"] = filename_match.group(1).strip()
+                    voucher_num = filename_match.group(1)
+                    client_code = filename_match.group(2).upper()
+                    suffix = filename_match.group(3)
+                    voucher_data["voucher_number"] = f"{voucher_num}-{client_code}{suffix}"
+                    voucher_data["client_name"] = CLIENT_CODE_MAP.get(client_code, f"Unknown Client ({client_code})")
                 else:
                     logger.warning(f"Could not find voucher number in {file_name}")
                     return None
-            
-            # Extract client name (usually appears after "Name:" or at the top)
-            name_patterns = [
-                r'(?:Name|Client|Recipient):\s*([A-Z][a-zA-Z\s]+?)(?:\n|$)',
-                r'(?:For|To):\s*([A-Z][a-zA-Z\s]+?)(?:\n|$)',
-            ]
-            
-            for pattern in name_patterns:
-                name_match = re.search(pattern, text, re.IGNORECASE)
-                if name_match:
-                    voucher_data["client_name"] = name_match.group(1).strip()
-                    break
-            
-            # If still no name, try to extract from filename or first capitalized line
-            if "client_name" not in voucher_data:
-                # Try filename
-                name_from_file = re.search(r'-([A-Z]{3})\s*\d+', file_name)
-                if name_from_file:
-                    # This gives us an abbreviation, we'll need to map it
-                    voucher_data["client_name"] = f"Client {name_from_file.group(1)}"
-                else:
-                    voucher_data["client_name"] = "Unknown Client"
             
             # Extract dates
             # Pattern 1: "July 1 - July 31" or "Aug 1 - Aug 31"
@@ -370,30 +378,51 @@ class VoucherSyncService:
                 today = datetime.now()
                 voucher_data["invoice_date"] = today.replace(day=1).date().isoformat()
             
-            # Extract amount (look for dollar signs or "Amount:")
-            amount_patterns = [
-                r'\$\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2})?)',
-                r'(?:Amount|Total):\s*\$?\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2})?)',
+            # Extract hours and calculate amount (rate is always $30/hour)
+            HOURLY_RATE = 30.0
+            
+            # Look for hours in text (e.g., "6 hours", "15 hours", "6.0", etc.)
+            hours_patterns = [
+                r'(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)',  # "6 hours", "15 hrs"
+                r'(?:hours?|hrs?):\s*(\d+(?:\.\d+)?)',  # "Hours: 6"
+                r'\b(\d+(?:\.\d+)?)\s*(?:hour|hr)\b',  # "6 hour"
             ]
             
-            for pattern in amount_patterns:
-                amount_match = re.search(pattern, text, re.IGNORECASE)
-                if amount_match:
-                    amount_str = amount_match.group(1).replace(',', '')
-                    voucher_data["amount"] = float(amount_str)
+            hours = None
+            for pattern in hours_patterns:
+                hours_match = re.search(pattern, text, re.IGNORECASE)
+                if hours_match:
+                    hours = float(hours_match.group(1))
                     break
             
-            # Default amounts (common voucher amounts)
-            if "amount" not in voucher_data:
-                # Check text for common amounts
-                if '180' in text:
-                    voucher_data["amount"] = 180.0
-                elif '360' in text:
-                    voucher_data["amount"] = 360.0
-                elif '450' in text:
-                    voucher_data["amount"] = 450.0
-                else:
-                    voucher_data["amount"] = 180.0  # Default
+            # If we found hours, calculate amount
+            if hours:
+                voucher_data["amount"] = hours * HOURLY_RATE
+            else:
+                # Try to extract dollar amount directly
+                amount_patterns = [
+                    r'\$\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2})?)',
+                    r'(?:Amount|Total):\s*\$?\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2})?)',
+                ]
+                
+                for pattern in amount_patterns:
+                    amount_match = re.search(pattern, text, re.IGNORECASE)
+                    if amount_match:
+                        amount_str = amount_match.group(1).replace(',', '')
+                        voucher_data["amount"] = float(amount_str)
+                        break
+                
+                # Default amounts based on common patterns
+                if "amount" not in voucher_data:
+                    # Check text for common amounts or back-calculate from hours
+                    if '450' in text or '15' in text:
+                        voucher_data["amount"] = 450.0  # 15 hours × $30
+                    elif '180' in text or '6' in text:
+                        voucher_data["amount"] = 180.0  # 6 hours × $30
+                    elif '360' in text or '12' in text:
+                        voucher_data["amount"] = 360.0  # 12 hours × $30
+                    else:
+                        voucher_data["amount"] = 180.0  # Default to 6 hours
             
             # Set status
             voucher_data["status"] = "Pending"
