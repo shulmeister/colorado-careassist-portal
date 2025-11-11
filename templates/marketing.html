@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Marketing Dashboard - Colorado CareAssist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <style>
+        :root {
+            color-scheme: dark;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 0 24px 32px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 24px;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .sidebar-subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .back-to-portal {
+            margin-top: 16px;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            color: #dbeafe;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(59, 130, 246, 0.25);
+            border-color: rgba(59, 130, 246, 0.55);
+            color: #e0f2fe;
+            transform: translateX(-2px);
+        }
+
+        .sidebar-nav {
+            padding: 0 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar-link:hover {
+            background: rgba(148, 163, 184, 0.15);
+            color: #f8fafc;
+        }
+
+        .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.18);
+            border: 1px solid rgba(59, 130, 246, 0.45);
+            color: #bfdbfe;
+        }
+
+        .sidebar-link .icon {
+            font-size: 16px;
+        }
+
+        /* RingCentral */
+        .sidebar-ringcentral {
+            margin: 16px;
+            padding: 12px;
+            background: #1e293b;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        .sidebar-ringcentral-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .sidebar-ringcentral-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-ringcentral-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .sidebar-ringcentral-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .sidebar-ringcentral-expand {
+            padding: 4px 8px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .sidebar-ringcentral-expand:hover {
+            background: #2563eb;
+        }
+
+        .sidebar-ringcentral-frame {
+            width: 100%;
+            min-height: 320px;
+            border: none;
+            border-radius: 6px;
+            background: rgba(15, 23, 42, 0.6);
+        }
+
+        /* Content */
+        .content {
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 1) 100%);
+            padding: 32px;
+            overflow-x: hidden;
+        }
+
+        .content-header {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .breadcrumb {
+            font-size: 13px;
+            color: #64748b;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .page-description {
+            font-size: 15px;
+            color: #94a3b8;
+            max-width: 780px;
+        }
+
+        .filters-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 16px;
+            padding: 20px;
+            background: rgba(30, 41, 59, 0.75);
+            border: 1px solid rgba(51, 65, 85, 0.7);
+            border-radius: 14px;
+            margin-top: 8px;
+        }
+
+        .filters-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .date-picker, .preset-select, .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .preset-select select,
+        .date-picker input[type="date"] {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        .toggle-group button {
+            background: rgba(30, 41, 59, 0.8);
+            color: #cbd5f5;
+            border: 1px solid #1d4ed8;
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .toggle-group button.active,
+        .toggle-group button:hover {
+            background: #1d4ed8;
+            color: white;
+        }
+
+        .refresh-status {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .refresh-button {
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            background: rgba(59, 130, 246, 0.15);
+            color: #bfdbfe;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .refresh-button:hover {
+            background: rgba(59, 130, 246, 0.25);
+            color: #e0f2fe;
+        }
+
+        .sections {
+            margin-top: 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 32px;
+        }
+
+        .section {
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid rgba(51, 65, 85, 0.7);
+            border-radius: 18px;
+            padding: 24px 28px;
+        }
+
+        .section-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-description {
+            font-size: 13px;
+            color: #94a3b8;
+            max-width: 600px;
+        }
+
+        .grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        }
+
+        .panel {
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.12);
+            border-radius: 16px;
+            padding: 18px;
+            min-height: 160px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+
+        .panel-subtitle {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .kpi-trend {
+            font-size: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 999px;
+        }
+
+        .trend-up {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+        }
+
+        .trend-down {
+            background: rgba(248, 113, 113, 0.18);
+            color: #fca5a5;
+        }
+
+        .chart-placeholder {
+            flex: 1;
+            border-radius: 12px;
+            border: 1px dashed rgba(148, 163, 184, 0.25);
+            background: rgba(15, 23, 42, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-size: 13px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .table thead {
+            background: rgba(15, 23, 42, 0.95);
+        }
+
+        .table th, .table td {
+            padding: 12px 14px;
+            text-align: left;
+        }
+
+        .table tbody tr {
+            border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+        }
+
+        .table tbody tr:hover {
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 28px;
+            color: #64748b;
+            font-size: 13px;
+        }
+
+        .empty-state strong {
+            color: #e2e8f0;
+        }
+
+        @media (max-width: 960px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                position: static;
+                height: auto;
+            }
+
+            .content {
+                padding: 24px 18px 80px;
+            }
+
+            .filters-bar {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .refresh-status {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Marketing Dashboard</div>
+                <div class="sidebar-subtitle">Performance & Attribution</div>
+                <div class="back-to-portal">
+                    <a href="/" class="back-button">← Back to Portal</a>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a class="sidebar-link active"><span class="icon">📊</span> Overview</a>
+                <a class="sidebar-link"><span class="icon">📱</span> Social Performance</a>
+                <a class="sidebar-link"><span class="icon">🎯</span> Paid Media</a>
+                <a class="sidebar-link"><span class="icon">💬</span> Engagement</a>
+                <a class="sidebar-link"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
+            </nav>
+
+            {% if ringcentral.enabled %}
+            <div class="sidebar-ringcentral">
+                <div class="sidebar-ringcentral-header">
+                    <div class="sidebar-ringcentral-title">
+                        <span class="icon">💬</span>
+                        <div>
+                            <div class="sidebar-ringcentral-name">RingCentral</div>
+                            <div class="sidebar-ringcentral-subtitle">Calls & SMS</div>
+                        </div>
+                    </div>
+                    <a class="sidebar-ringcentral-expand"
+                       href="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
+                       target="_blank"
+                       rel="noopener">
+                        Open App
+                    </a>
+                </div>
+                <iframe
+                    class="sidebar-ringcentral-frame"
+                    allow="microphone; camera; autoplay; clipboard-write"
+                    loading="lazy"
+                    title="RingCentral Sidebar"
+                    src="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}">
+                </iframe>
+            </div>
+            {% endif %}
+        </aside>
+
+        <main class="content">
+            <div class="content-header">
+                <div class="breadcrumb">Home · Dashboards · Marketing</div>
+                <div>
+                    <h1 class="page-title">Marketing Performance Overview</h1>
+                    <p class="page-description">
+                        High-level KPIs spanning social platforms, paid media, and acquisition funnels. Default view shows the last 30 days—adjust filters on the fly to analyze trends, compare periods, and monitor ROI.
+                    </p>
+                </div>
+
+                <div class="filters-bar">
+                    <div class="filters-group">
+                        <div class="preset-select">
+                            <label for="datePreset">Preset</label>
+                            <select id="datePreset">
+                                {% for preset in date_presets %}
+                                    <option value="{{ preset.value }}" {% if preset.default %}selected{% endif %}>
+                                        {{ preset.label }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="date-picker">
+                            <label for="startDate">From</label>
+                            <input id="startDate" type="date" value="{{ default_range.start }}">
+                        </div>
+                        <div class="date-picker">
+                            <label for="endDate">To</label>
+                            <input id="endDate" type="date" value="{{ default_range.end }}">
+                        </div>
+                    </div>
+
+                    <div class="toggle-group" role="group" aria-label="Comparison toggles">
+                        <button type="button" data-toggle="compare-previous">Prev Period</button>
+                        <button type="button" data-toggle="compare-yoy">YoY</button>
+                    </div>
+
+                    <div class="refresh-status">
+                        <span id="lastRefreshed">Last refreshed: Just now</span>
+                        <button class="refresh-button" id="refreshBtn">↻ Refresh Data</button>
+                    </div>
+                </div>
+            </div>
+
+            <section class="sections">
+                <!-- Social Performance -->
+                <div class="section" id="section-social">
+                    <header class="section-header">
+                        <div>
+                            <h2 class="section-title">📱 Social Performance</h2>
+                            <p class="section-description">
+                                Engagement and growth metrics across Facebook, Instagram, and LinkedIn. Track reach, clicks, and audience actions with period-over-period comparisons.
+                            </p>
+                        </div>
+                    </header>
+
+                    <div class="grid grid-3" id="socialKpis">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <div class="panel-title">Total Page Likes</div>
+                                    <div class="panel-subtitle">All platforms combined</div>
+                                </div>
+                                <div class="kpi-trend trend-up">+0% vs prev</div>
+                            </div>
+                            <div class="kpi-value">—</div>
+                            <div class="chart-placeholder">Trend chart will render here</div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <div class="panel-title">Reach & Impressions</div>
+                                    <div class="panel-subtitle">Organic & Paid</div>
+                                </div>
+                            </div>
+                            <div class="chart-placeholder">Stacked area chart placeholder</div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <div class="panel-title">Engagement Actions</div>
+                                    <div class="panel-subtitle">Clicks, Directions, Phone</div>
+                                </div>
+                            </div>
+                            <div class="chart-placeholder">Bar chart placeholder</div>
+                        </div>
+                    </div>
+
+                    <div class="panel" style="margin-top: 20px;">
+                        <div class="panel-header">
+                            <div>
+                                <div class="panel-title">Top Posts</div>
+                                <div class="panel-subtitle">Titles, reach, clicks, engagement</div>
+                            </div>
+                        </div>
+                        <div id="topPostsTable" class="empty-state">
+                            <strong>Top posts data not connected yet.</strong>
+                            Connect Facebook/Instagram/LinkedIn APIs to populate this table.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ads Performance -->
+                <div class="section" id="section-ads">
+                    <header class="section-header">
+                        <div>
+                            <h2 class="section-title">🎯 Google & Meta Ads Performance</h2>
+                            <p class="section-description">
+                                Spend efficiency, conversions, and funnel metrics blended across Google Ads and Meta Ads. Drill into campaigns, ad sets, and geo spend.
+                            </p>
+                        </div>
+                    </header>
+
+                    <div class="grid grid-2" id="adsOverview">
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <div class="panel-title">Spend & ROI</div>
+                                    <div class="panel-subtitle">Cost, conversion value, ROAS</div>
+                                </div>
+                            </div>
+                            <div class="chart-placeholder">Gauge & KPI cards will go here</div>
+                        </div>
+                        <div class="panel">
+                            <div class="panel-header">
+                                <div>
+                                    <div class="panel-title">Efficiency Metrics</div>
+                                    <div class="panel-subtitle">CPC, CPM, CTR</div>
+                                </div>
+                            </div>
+                            <div class="chart-placeholder">Comparison chart placeholder</div>
+                        </div>
+                    </div>
+
+                    <div class="panel" style="margin-top: 20px;">
+                        <div class="panel-header">
+                            <div>
+                                <div class="panel-title">Campaign & Ad Set Overview</div>
+                                <div class="panel-subtitle">Costs, clicks, conversions by dimension</div>
+                            </div>
+                        </div>
+                        <div class="chart-placeholder" style="min-height: 220px;">
+                            Data tables will render here once APIs are connected.
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const datePreset = document.getElementById("datePreset");
+        const startDate = document.getElementById("startDate");
+        const endDate = document.getElementById("endDate");
+        const refreshBtn = document.getElementById("refreshBtn");
+        const lastRefreshed = document.getElementById("lastRefreshed");
+
+        const defaultRange = {
+            start: "{{ default_range.start }}",
+            end: "{{ default_range.end }}"
+        };
+
+        const presetMap = {
+            "last_7_days": 7,
+            "last_30_days": 30
+            // Additional presets (MTD, QTD, etc.) will be handled in JS helpers.
+        };
+
+        function applyPreset(value) {
+            if (presetMap[value]) {
+                const days = presetMap[value];
+                const today = new Date();
+                const start = new Date(today);
+                start.setDate(today.getDate() - (days - 1));
+                startDate.value = start.toISOString().slice(0, 10);
+                endDate.value = today.toISOString().slice(0, 10);
+            } else {
+                // Keep current custom range
+            }
+        }
+
+        datePreset.addEventListener("change", (event) => {
+            applyPreset(event.target.value);
+            // TODO: trigger data reload
+        });
+
+        refreshBtn.addEventListener("click", () => {
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = "Refreshing...";
+            // TODO: call API to refresh data immediately
+            setTimeout(() => {
+                const now = new Date();
+                lastRefreshed.textContent = `Last refreshed: ${now.toLocaleString()}`;
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = "↻ Refresh Data";
+            }, 1200);
+        });
+
+        // Initialize with default preset
+        applyPreset(datePreset.value);
+    </script>
+</body>
+</html>
+

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import os
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 import httpx
 from urllib.parse import urlencode
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
@@ -824,6 +824,74 @@ async def recruitment_dashboard_redirect(
     # For now, redirect back to portal if recruitment dashboard doesn't exist
     # Replace with actual URL when recruitment dashboard is deployed
     return RedirectResponse(url="/", status_code=302)
+
+
+@app.get("/marketing", response_class=HTMLResponse)
+async def marketing_dashboard(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Marketing dashboard shell (Social + Ads metrics)"""
+    # Compute default date range (last 30 days)
+    end_date = datetime.now().date()
+    start_date = end_date - timedelta(days=29)
+    
+    # Wire up RingCentral config for sidebar
+    ringcentral_config = {
+        "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
+        "app_url": RINGCENTRAL_EMBED_APP_URL,
+        "adapter_url": RINGCENTRAL_EMBED_ADAPTER_URL,
+        "query_string": ""
+    }
+    
+    if ringcentral_config["enabled"]:
+        import time
+        params = {
+            "clientId": RINGCENTRAL_EMBED_CLIENT_ID,
+            "appServer": RINGCENTRAL_EMBED_SERVER,
+        }
+        if RINGCENTRAL_EMBED_DEFAULT_TAB:
+            params["defaultTab"] = RINGCENTRAL_EMBED_DEFAULT_TAB
+        if RINGCENTRAL_EMBED_REDIRECT_URI:
+            params["redirectUri"] = RINGCENTRAL_EMBED_REDIRECT_URI
+        params["enableGlip"] = "true"
+        params["disableGlip"] = "false"
+        params["disableConferences"] = "true"
+        params["theme"] = "dark"
+        params["_t"] = str(int(time.time()))
+        ringcentral_config["query_string"] = urlencode(params)
+    
+    # Placeholder datasets (will be replaced once APIs are wired)
+    placeholder_metrics = {
+        "social": {
+            "summary": [],
+            "top_posts": []
+        },
+        "ads": {
+            "overview": [],
+            "campaigns": []
+        }
+    }
+    
+    return templates.TemplateResponse("marketing.html", {
+        "request": request,
+        "user": current_user,
+        "ringcentral": ringcentral_config,
+        "date_presets": [
+            {"label": "Last 7 Days", "value": "last_7_days"},
+            {"label": "Last 30 Days", "value": "last_30_days", "default": True},
+            {"label": "Month to Date", "value": "month_to_date"},
+            {"label": "Quarter to Date", "value": "quarter_to_date"},
+            {"label": "Year to Date", "value": "year_to_date"},
+            {"label": "Previous 12 Months", "value": "last_12_months"},
+            {"label": "Custom Range", "value": "custom"}
+        ],
+        "default_range": {
+            "start": start_date.isoformat(),
+            "end": end_date.isoformat()
+        },
+        "placeholder_metrics": placeholder_metrics
+    })
 
 if __name__ == "__main__":
     import uvicorn
