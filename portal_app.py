@@ -787,6 +787,42 @@ async def get_sync_status(
         logger.error(f"Error getting sync status: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting status: {str(e)}")
 
+# ==================== Embedded Dashboards ====================
+
+@app.get("/sales", response_class=HTMLResponse)
+async def sales_dashboard_embedded(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Embedded Sales Dashboard"""
+    sales_dashboard_url = os.getenv(
+        "SALES_DASHBOARD_URL",
+        "https://dashboard-coloradocareassist-3b35b12e9d9b.herokuapp.com"
+    )
+    
+    return templates.TemplateResponse("sales_embedded.html", {
+        "request": request,
+        "user": current_user,
+        "dashboard_url": sales_dashboard_url
+    })
+
+@app.get("/recruitment", response_class=HTMLResponse)
+async def recruitment_dashboard_embedded(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Embedded Recruitment Dashboard"""
+    recruitment_dashboard_url = os.getenv(
+        "RECRUITMENT_DASHBOARD_URL",
+        "https://recruitment-coloradocareassist.herokuapp.com"
+    )
+    
+    return templates.TemplateResponse("recruitment_embedded.html", {
+        "request": request,
+        "user": current_user,
+        "dashboard_url": recruitment_dashboard_url
+    })
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
