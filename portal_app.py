@@ -789,39 +789,31 @@ async def get_sync_status(
 
 # ==================== Embedded Dashboards ====================
 
-@app.get("/sales", response_class=HTMLResponse)
-async def sales_dashboard_embedded(
-    request: Request,
+@app.get("/sales")
+async def sales_dashboard_redirect(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Embedded Sales Dashboard"""
+    """Redirect to Sales Dashboard (shares same OAuth, so already authenticated)"""
     sales_dashboard_url = os.getenv(
         "SALES_DASHBOARD_URL",
-        "https://dashboard-coloradocareassist-3b35b12e9d9b.herokuapp.com"
+        "https://careassist-tracker.herokuapp.com"
     )
     
-    return templates.TemplateResponse("sales_embedded.html", {
-        "request": request,
-        "user": current_user,
-        "dashboard_url": sales_dashboard_url
-    })
+    return RedirectResponse(url=sales_dashboard_url, status_code=302)
 
-@app.get("/recruitment", response_class=HTMLResponse)
-async def recruitment_dashboard_embedded(
-    request: Request,
+@app.get("/recruitment")
+async def recruitment_dashboard_redirect(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Embedded Recruitment Dashboard"""
+    """Redirect to Recruitment Dashboard (when deployed)"""
     recruitment_dashboard_url = os.getenv(
         "RECRUITMENT_DASHBOARD_URL",
         "https://recruitment-coloradocareassist.herokuapp.com"
     )
     
-    return templates.TemplateResponse("recruitment_embedded.html", {
-        "request": request,
-        "user": current_user,
-        "dashboard_url": recruitment_dashboard_url
-    })
+    # For now, redirect back to portal if recruitment dashboard doesn't exist
+    # Replace with actual URL when recruitment dashboard is deployed
+    return RedirectResponse(url="/", status_code=302)
 
 if __name__ == "__main__":
     import uvicorn
