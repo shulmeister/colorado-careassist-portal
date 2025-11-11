@@ -147,12 +147,8 @@ class VoucherSyncService:
             return None
     
     def extract_text_from_image(self, image_bytes: bytes, is_pdf: bool = False) -> str:
-        """Extract text from image using Google Vision API"""
+        """Extract text from image using Google Vision API with Tesseract fallback"""
         try:
-            if not self.vision_client:
-                logger.error("Vision client not initialized")
-                return ""
-            
             # If it's a PDF, convert first page to image
             if is_pdf:
                 try:
@@ -160,40 +156,100 @@ class VoucherSyncService:
                     from PIL import Image
                     import io as image_io
                     
-                    # Convert first page of PDF to image
-                    images = convert_from_bytes(image_bytes, first_page=1, last_page=1)
+                    logger.info("Converting PDF to image...")
+                    # Convert first page of PDF to image with explicit poppler path
+                    images = convert_from_bytes(
+                        image_bytes, 
+                        first_page=1, 
+                        last_page=1,
+                        dpi=300  # Higher DPI for better OCR
+                    )
+                    
                     if not images:
-                        logger.error("Failed to convert PDF to image")
-                        return ""
+                        logger.error("Failed to convert PDF to image - no images returned")
+                        return self._extract_with_tesseract_fallback(image_bytes, is_pdf=True)
+                    
+                    logger.info(f"Successfully converted PDF to image: {images[0].size}")
                     
                     # Convert PIL Image to bytes
                     img_byte_arr = image_io.BytesIO()
                     images[0].save(img_byte_arr, format='PNG')
                     image_bytes = img_byte_arr.getvalue()
                     
-                except ImportError:
-                    logger.error("pdf2image library not available, trying direct PDF processing")
-                    # Fall through to try direct processing
+                except ImportError as e:
+                    logger.error(f"pdf2image library not available: {str(e)}")
+                    return self._extract_with_tesseract_fallback(image_bytes, is_pdf=True)
                 except Exception as e:
-                    logger.error(f"Error converting PDF to image: {str(e)}")
-                    return ""
+                    logger.error(f"Error converting PDF to image: {str(e)}", exc_info=True)
+                    return self._extract_with_tesseract_fallback(image_bytes, is_pdf=True)
             
-            image = vision.Image(content=image_bytes)
-            response = self.vision_client.text_detection(image=image)
-            
-            if response.error.message:
-                logger.error(f"Vision API error: {response.error.message}")
-                return ""
-            
-            texts = response.text_annotations
-            if texts:
-                # First annotation contains all text
-                return texts[0].description
-            
-            return ""
+            # Try Google Vision API first
+            if self.vision_client:
+                try:
+                    logger.info("Attempting OCR with Google Vision API...")
+                    image = vision.Image(content=image_bytes)
+                    response = self.vision_client.text_detection(image=image)
+                    
+                    if response.error.message:
+                        logger.error(f"Vision API error: {response.error.message}")
+                        return self._extract_with_tesseract_fallback(image_bytes, is_pdf=False)
+                    
+                    texts = response.text_annotations
+                    if texts and len(texts) > 0:
+                        extracted_text = texts[0].description
+                        logger.info(f"Successfully extracted {len(extracted_text)} characters with Vision API")
+                        return extracted_text
+                    else:
+                        logger.warning("Vision API returned no text, trying Tesseract...")
+                        return self._extract_with_tesseract_fallback(image_bytes, is_pdf=False)
+                        
+                except Exception as e:
+                    logger.error(f"Vision API exception: {str(e)}", exc_info=True)
+                    return self._extract_with_tesseract_fallback(image_bytes, is_pdf=False)
+            else:
+                logger.warning("Vision client not initialized, using Tesseract")
+                return self._extract_with_tesseract_fallback(image_bytes, is_pdf=False)
             
         except Exception as e:
-            logger.error(f"Error extracting text from image: {str(e)}")
+            logger.error(f"Error extracting text from image: {str(e)}", exc_info=True)
+            return self._extract_with_tesseract_fallback(image_bytes, is_pdf=False)
+    
+    def _extract_with_tesseract_fallback(self, image_bytes: bytes, is_pdf: bool = False) -> str:
+        """Fallback OCR using Tesseract (like your biz card scanner)"""
+        try:
+            import pytesseract
+            from PIL import Image
+            import io as image_io
+            
+            logger.info("Attempting OCR with Tesseract...")
+            
+            # If PDF, try to convert it first
+            if is_pdf:
+                try:
+                    from pdf2image import convert_from_bytes
+                    images = convert_from_bytes(image_bytes, first_page=1, last_page=1, dpi=300)
+                    if images:
+                        img = images[0]
+                    else:
+                        logger.error("Could not convert PDF for Tesseract")
+                        return ""
+                except Exception as e:
+                    logger.error(f"PDF conversion failed for Tesseract: {str(e)}")
+                    return ""
+            else:
+                # Load image from bytes
+                img = Image.open(image_io.BytesIO(image_bytes))
+            
+            # Use Tesseract to extract text
+            text = pytesseract.image_to_string(img, config='--psm 6')
+            logger.info(f"Tesseract extracted {len(text)} characters")
+            return text
+            
+        except ImportError:
+            logger.error("Tesseract not available - no OCR method available")
+            return ""
+        except Exception as e:
+            logger.error(f"Tesseract OCR failed: {str(e)}", exc_info=True)
             return ""
     
     def parse_voucher_data(self, text: str, file_name: str, file_url: str) -> Optional[Dict[str, Any]]:
