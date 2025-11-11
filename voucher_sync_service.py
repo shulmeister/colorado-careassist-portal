@@ -373,56 +373,81 @@ class VoucherSyncService:
                     except:
                         pass
             
-            # If no invoice date, use first of current month
+            # If no invoice date, calculate from voucher end date (first of next month)
             if "invoice_date" not in voucher_data:
-                today = datetime.now()
-                voucher_data["invoice_date"] = today.replace(day=1).date().isoformat()
+                if "voucher_end_date" in voucher_data:
+                    # Parse the end date and add 1 month
+                    end_date = datetime.fromisoformat(voucher_data["voucher_end_date"])
+                    # First day of next month
+                    if end_date.month == 12:
+                        invoice_date = datetime(end_date.year + 1, 1, 1).date()
+                    else:
+                        invoice_date = datetime(end_date.year, end_date.month + 1, 1).date()
+                    voucher_data["invoice_date"] = invoice_date.isoformat()
+                else:
+                    # Fallback to first of current month
+                    today = datetime.now()
+                    voucher_data["invoice_date"] = today.replace(day=1).date().isoformat()
             
             # Extract hours and calculate amount (rate is always $30/hour)
             HOURLY_RATE = 30.0
             
-            # Look for hours in text (e.g., "6 hours", "15 hours", "6.0", etc.)
-            hours_patterns = [
-                r'(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)',  # "6 hours", "15 hrs"
-                r'(?:hours?|hrs?):\s*(\d+(?:\.\d+)?)',  # "Hours: 6"
-                r'\b(\d+(?:\.\d+)?)\s*(?:hour|hr)\b',  # "6 hour"
+            # First, try to find dollar amounts directly (most reliable)
+            amount_patterns = [
+                r'\$\s*(\d{1,4})(?:\.\d{2})?',  # "$180", "$450.00"
+                r'(?:Amount|Total|Value):\s*\$?\s*(\d{1,4})',  # "Amount: 180"
+                r'\b(\d{3,4})\s*(?:dollars?|\$)',  # "180 dollars"
             ]
             
-            hours = None
-            for pattern in hours_patterns:
-                hours_match = re.search(pattern, text, re.IGNORECASE)
-                if hours_match:
-                    hours = float(hours_match.group(1))
-                    break
+            found_amount = False
+            for pattern in amount_patterns:
+                amount_match = re.search(pattern, text, re.IGNORECASE)
+                if amount_match:
+                    amount_str = amount_match.group(1).replace(',', '')
+                    amount_val = float(amount_str)
+                    # Validate it's a reasonable voucher amount (30-500)
+                    if 30 <= amount_val <= 500:
+                        voucher_data["amount"] = amount_val
+                        found_amount = True
+                        logger.info(f"Found amount ${amount_val} in text")
+                        break
             
-            # If we found hours, calculate amount
-            if hours:
-                voucher_data["amount"] = hours * HOURLY_RATE
-            else:
-                # Try to extract dollar amount directly
-                amount_patterns = [
-                    r'\$\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2})?)',
-                    r'(?:Amount|Total):\s*\$?\s*(\d{1,4}(?:,\d{3})*(?:\.\d{2})?)',
+            # If no dollar amount found, try to extract hours
+            if not found_amount:
+                hours_patterns = [
+                    r'(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)',  # "6 hours", "15 hrs"
+                    r'(?:hours?|hrs?):\s*(\d+(?:\.\d+)?)',  # "Hours: 6"
+                    r'\b(\d+)\s+hours?\b',  # "6 hours"
                 ]
                 
-                for pattern in amount_patterns:
-                    amount_match = re.search(pattern, text, re.IGNORECASE)
-                    if amount_match:
-                        amount_str = amount_match.group(1).replace(',', '')
-                        voucher_data["amount"] = float(amount_str)
-                        break
-                
-                # Default amounts based on common patterns
-                if "amount" not in voucher_data:
-                    # Check text for common amounts or back-calculate from hours
-                    if '450' in text or '15' in text:
-                        voucher_data["amount"] = 450.0  # 15 hours × $30
-                    elif '180' in text or '6' in text:
-                        voucher_data["amount"] = 180.0  # 6 hours × $30
-                    elif '360' in text or '12' in text:
-                        voucher_data["amount"] = 360.0  # 12 hours × $30
-                    else:
-                        voucher_data["amount"] = 180.0  # Default to 6 hours
+                hours = None
+                for pattern in hours_patterns:
+                    hours_match = re.search(pattern, text, re.IGNORECASE)
+                    if hours_match:
+                        hours = float(hours_match.group(1))
+                        # Validate reasonable hours (1-20)
+                        if 1 <= hours <= 20:
+                            voucher_data["amount"] = hours * HOURLY_RATE
+                            found_amount = True
+                            logger.info(f"Found {hours} hours, calculated ${hours * HOURLY_RATE}")
+                            break
+            
+            # Last resort: check for common amounts in text
+            if not found_amount:
+                # Look for exact dollar amounts in text
+                if re.search(r'\b450\b', text):
+                    voucher_data["amount"] = 450.0  # 15 hours × $30
+                    logger.info("Found 450 in text")
+                elif re.search(r'\b180\b', text):
+                    voucher_data["amount"] = 180.0  # 6 hours × $30
+                    logger.info("Found 180 in text")
+                elif re.search(r'\b360\b', text):
+                    voucher_data["amount"] = 360.0  # 12 hours × $30
+                    logger.info("Found 360 in text")
+                else:
+                    # Absolute fallback: default to 6 hours
+                    voucher_data["amount"] = 180.0
+                    logger.warning(f"Could not find amount in text, defaulting to $180")
             
             # Set status
             voucher_data["status"] = "Pending"
