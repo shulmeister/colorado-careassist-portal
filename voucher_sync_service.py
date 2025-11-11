@@ -113,7 +113,10 @@ class VoucherSyncService:
             results = self.drive_service.files().list(
                 q=query,
                 fields="files(id, name, mimeType, createdTime, webViewLink)",
-                orderBy="createdTime desc"
+                orderBy="createdTime desc",
+                corpora='allDrives',
+                includeItemsFromAllDrives=True,
+                supportsAllDrives=True
             ).execute()
             
             files = results.get('files', [])
@@ -128,7 +131,7 @@ class VoucherSyncService:
     def download_file(self, file_id: str) -> Optional[bytes]:
         """Download a file from Google Drive"""
         try:
-            request = self.drive_service.files().get_media(fileId=file_id)
+            request = self.drive_service.files().get_media(fileId=file_id, supportsAllDrives=True)
             file_buffer = io.BytesIO()
             downloader = MediaIoBaseDownload(file_buffer, request)
             
