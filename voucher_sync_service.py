@@ -405,8 +405,13 @@ class VoucherSyncService:
                 if amount_match:
                     amount_str = amount_match.group(1).replace(',', '')
                     amount_val = float(amount_str)
-                    # Validate it's a reasonable voucher amount (30-500)
-                    if 30 <= amount_val <= 500:
+                    # Skip $30 as it's the hourly rate, not the total
+                    # Valid voucher totals: $180 (6 hrs), $360 (12 hrs), $450 (15 hrs)
+                    if amount_val == 30:
+                        logger.info(f"Skipping $30 (hourly rate, not total)")
+                        continue
+                    # Validate it's a reasonable voucher amount (60-500)
+                    if 60 <= amount_val <= 500:
                         voucher_data["amount"] = amount_val
                         found_amount = True
                         logger.info(f"Found amount ${amount_val} in text")
