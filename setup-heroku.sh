@@ -51,3 +51,6 @@ echo "Then initialize database:"
 echo "   heroku run python portal_setup.py --app $APP_NAME"
 echo ""
 
+
+
+

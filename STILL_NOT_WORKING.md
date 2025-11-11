@@ -61,3 +61,6 @@ If it's still not working after waiting:
 - What does "see error details" show? (the exact redirect URI Google received)
 - Can you confirm the Client ID you're editing matches what's in Heroku config?
 
+
+
+

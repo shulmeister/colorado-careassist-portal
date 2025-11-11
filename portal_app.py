@@ -736,6 +736,57 @@ async def delete_voucher(
         logger.error(f"Error deleting voucher: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error deleting voucher: {str(e)}")
 
+# Voucher Sync Routes
+@app.post("/api/vouchers/sync")
+async def trigger_voucher_sync(
+    hours_back: int = 24,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Manually trigger voucher sync from Google Drive"""
+    try:
+        from voucher_sync_service import run_sync
+        
+        logger.info(f"Manual sync triggered by {current_user.get('email')}")
+        summary = run_sync(hours_back=hours_back)
+        
+        return JSONResponse({
+            "success": True,
+            "summary": summary,
+            "message": f"Sync complete. Processed {summary['files_processed']} of {summary['files_found']} files."
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in manual sync: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+@app.get("/api/vouchers/sync/status")
+async def get_sync_status(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get status of voucher sync configuration"""
+    try:
+        status = {
+            "drive_folder_configured": bool(os.getenv("GOOGLE_DRIVE_VOUCHER_FOLDER_ID")),
+            "service_account_configured": bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")),
+            "sheets_id_configured": bool(os.getenv("GOOGLE_SHEETS_VOUCHER_ID")),
+            "ready": False
+        }
+        
+        status["ready"] = all([
+            status["drive_folder_configured"],
+            status["service_account_configured"],
+            status["sheets_id_configured"]
+        ])
+        
+        return JSONResponse({
+            "success": True,
+            "status": status
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting sync status: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting status: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

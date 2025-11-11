@@ -498,9 +498,14 @@
                         placeholder="🔍 Filter by status..."
                     />
                 </div>
-                <button class="btn btn-primary" onclick="openAddModal()">
-                    ➕ Add Voucher
-                </button>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-secondary" onclick="syncVouchers()" id="syncBtn">
+                        🔄 Sync from Drive
+                    </button>
+                    <button class="btn btn-primary" onclick="openAddModal()">
+                        ➕ Add Voucher
+                    </button>
+                </div>
             </div>
 
             <div class="voucher-table-container">
@@ -841,6 +846,58 @@
                 closeModal();
             }
         });
+
+        // Sync vouchers from Google Drive
+        async function syncVouchers() {
+            const syncBtn = document.getElementById('syncBtn');
+            const originalText = syncBtn.innerHTML;
+            
+            if (syncBtn.disabled) return;
+            
+            if (!confirm('Sync new vouchers from Google Drive? This will check for files added in the last 24 hours and process them using OCR.')) {
+                return;
+            }
+            
+            try {
+                syncBtn.disabled = true;
+                syncBtn.innerHTML = '⏳ Syncing...';
+                
+                const response = await fetch('/api/vouchers/sync', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    await loadVouchers();
+                    
+                    let message = data.message;
+                    if (data.summary.vouchers_created && data.summary.vouchers_created.length > 0) {
+                        message += '\n\nNew vouchers:\n';
+                        data.summary.vouchers_created.forEach(v => {
+                            message += `• ${v.client_name} - ${v.voucher_number} ($${v.amount})\n`;
+                        });
+                    }
+                    if (data.summary.errors && data.summary.errors.length > 0) {
+                        message += '\n\nErrors:\n';
+                        data.summary.errors.forEach(err => {
+                            message += `• ${err}\n`;
+                        });
+                    }
+                    
+                    alert(message);
+                } else {
+                    alert('Sync failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error syncing vouchers:', error);
+                alert('Sync failed. Please check your Google Drive and API configuration.');
+            } finally {
+                syncBtn.disabled = false;
+                syncBtn.innerHTML = originalText;
+            }
+        }
 
         // Load vouchers on page load
         loadVouchers();

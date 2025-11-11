@@ -79,3 +79,6 @@ heroku open --app portal-coloradocareassist
 
 Your Colorado CareAssist Portal is now deployed and ready to use!
 
+
+
+

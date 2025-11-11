@@ -76,3 +76,6 @@ Take a screenshot of your "Authorized redirect URIs" section in Google Cloud Con
 
 The other errors (pageMenu, console warnings) are browser extension issues - ignore those, they're not related to the OAuth problem.
 
+
+
+

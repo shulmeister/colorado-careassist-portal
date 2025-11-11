@@ -71,3 +71,4 @@ If tabs disappear:
 - Check that URL parameters haven't changed
 - Ensure browser cache is cleared (hard refresh: Shift+Reload)
 
+
