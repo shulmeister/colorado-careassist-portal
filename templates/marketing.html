@@ -580,10 +580,10 @@
                                     <div class="panel-title">Total Page Likes</div>
                                     <div class="panel-subtitle">All platforms combined</div>
                                 </div>
-                                <div class="kpi-trend trend-up">+0% vs prev</div>
+                                <div class="kpi-trend" id="totalPageLikesTrend">Loading…</div>
                             </div>
-                            <div class="kpi-value">—</div>
-                            <div class="chart-placeholder">Trend chart will render here</div>
+                            <div class="kpi-value" id="totalPageLikesValue">—</div>
+                            <div class="chart-placeholder" id="totalPageLikesChart">Trend chart will render here</div>
                         </div>
                         <div class="panel">
                             <div class="panel-header">
@@ -592,7 +592,7 @@
                                     <div class="panel-subtitle">Organic & Paid</div>
                                 </div>
                             </div>
-                            <div class="chart-placeholder">Stacked area chart placeholder</div>
+                            <div class="chart-placeholder" id="reachImpressionsPlaceholder">Stacked area chart placeholder</div>
                         </div>
                         <div class="panel">
                             <div class="panel-header">
@@ -601,7 +601,7 @@
                                     <div class="panel-subtitle">Clicks, Directions, Phone</div>
                                 </div>
                             </div>
-                            <div class="chart-placeholder">Bar chart placeholder</div>
+                            <div class="chart-placeholder" id="clickActionsPlaceholder">Bar chart placeholder</div>
                         </div>
                     </div>
 
@@ -638,7 +638,7 @@
                                     <div class="panel-subtitle">Cost, conversion value, ROAS</div>
                                 </div>
                             </div>
-                            <div class="chart-placeholder">Gauge & KPI cards will go here</div>
+                        <div class="chart-placeholder" id="adsSpendPlaceholder">Gauge & KPI cards will go here</div>
                         </div>
                         <div class="panel">
                             <div class="panel-header">
@@ -647,7 +647,7 @@
                                     <div class="panel-subtitle">CPC, CPM, CTR</div>
                                 </div>
                             </div>
-                            <div class="chart-placeholder">Comparison chart placeholder</div>
+                        <div class="chart-placeholder" id="adsEfficiencyPlaceholder">Comparison chart placeholder</div>
                         </div>
                     </div>
 
@@ -658,7 +658,7 @@
                                 <div class="panel-subtitle">Costs, clicks, conversions by dimension</div>
                             </div>
                         </div>
-                        <div class="chart-placeholder" style="min-height: 220px;">
+                        <div class="chart-placeholder" style="min-height: 220px;" id="adsBreakdownPlaceholder">
                             Data tables will render here once APIs are connected.
                         </div>
                     </div>
@@ -673,16 +673,15 @@
         const endDate = document.getElementById("endDate");
         const refreshBtn = document.getElementById("refreshBtn");
         const lastRefreshed = document.getElementById("lastRefreshed");
+        const toggleButtons = document.querySelectorAll(".toggle-group button");
 
-        const defaultRange = {
-            start: "{{ default_range.start }}",
-            end: "{{ default_range.end }}"
-        };
+        let compareMode = null;
+        let isLoading = false;
 
         const presetMap = {
             "last_7_days": 7,
             "last_30_days": 30
-            // Additional presets (MTD, QTD, etc.) will be handled in JS helpers.
+            // Additional presets (MTD, QTD, etc.) handled separately.
         };
 
         function applyPreset(value) {
@@ -693,30 +692,298 @@
                 start.setDate(today.getDate() - (days - 1));
                 startDate.value = start.toISOString().slice(0, 10);
                 endDate.value = today.toISOString().slice(0, 10);
-            } else {
-                // Keep current custom range
             }
+        }
+
+        async function loadMarketingData() {
+            if (isLoading) return;
+            isLoading = true;
+            refreshBtn.disabled = true;
+            refreshBtn.textContent = "Refreshing...";
+
+            try {
+                const params = new URLSearchParams({
+                    from: startDate.value,
+                    to: endDate.value
+                });
+                if (compareMode) {
+                    params.append("compare", compareMode);
+                }
+
+                const [socialRes, adsRes] = await Promise.all([
+                    fetch(`/api/marketing/social?${params.toString()}`),
+                    fetch(`/api/marketing/ads?${params.toString()}`)
+                ]);
+
+                if (!socialRes.ok || !adsRes.ok) {
+                    throw new Error("Failed to load marketing metrics");
+                }
+
+                const socialData = await socialRes.json();
+                const adsData = await adsRes.json();
+
+                renderSocialMetrics(socialData.data);
+                renderAdsMetrics(adsData.data);
+
+                const now = new Date();
+                lastRefreshed.textContent = `Last refreshed: ${now.toLocaleString()}`;
+            } catch (error) {
+                console.error(error);
+                lastRefreshed.textContent = "Last refreshed: error loading data";
+            } finally {
+                isLoading = false;
+                refreshBtn.disabled = false;
+                refreshBtn.textContent = "↻ Refresh Data";
+            }
+        }
+
+        function renderSocialMetrics(data) {
+            const likesValueEl = document.getElementById("totalPageLikesValue");
+            const likesTrendEl = document.getElementById("totalPageLikesTrend");
+            const reachPlaceholder = document.getElementById("reachImpressionsPlaceholder");
+            const clickPlaceholder = document.getElementById("clickActionsPlaceholder");
+            const topPostsContainer = document.getElementById("topPostsTable");
+
+            if (!data) return;
+
+            // Total page likes
+            const totalLikes = data.summary?.total_page_likes || {};
+            likesValueEl.textContent = formatNumber(totalLikes.value);
+            const change = totalLikes.change ?? 0;
+            likesTrendEl.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(1)}% vs prev`;
+            likesTrendEl.classList.remove("trend-up", "trend-down");
+            likesTrendEl.classList.add(change >= 0 ? "trend-up" : "trend-down");
+
+            // Reach & impressions
+            const reach = data.summary?.reach || {};
+            const impressions = data.summary?.impressions || 0;
+            reachPlaceholder.innerHTML = `
+                <div>
+                    <strong>Total Reach:</strong> ${formatNumber(reach.total || 0)}<br>
+                    <small>Organic: ${formatNumber(reach.organic || 0)}, Paid: ${formatNumber(reach.paid || 0)}</small>
+                </div>
+                <div style="margin-top:12px;">
+                    <strong>Impressions:</strong> ${formatNumber(impressions)}
+                </div>
+            `;
+
+            // Click actions
+            const actions = data.click_actions || {};
+            clickPlaceholder.innerHTML = `
+                <ul style="list-style:none; width:100%; max-width:240px;">
+                    <li>📍 Get Directions: <strong>${formatNumber(actions.get_directions || 0)}</strong></li>
+                    <li>📞 Phone Clicks: <strong>${formatNumber(actions.phone_clicks || 0)}</strong></li>
+                    <li>🔗 Website Clicks: <strong>${formatNumber(actions.website_clicks || 0)}</strong></li>
+                    <li>✅ Action Button: <strong>${formatNumber(actions.action_button || 0)}</strong></li>
+                </ul>
+            `;
+
+            // Top posts
+            const posts = data.top_posts || [];
+            if (!posts.length) {
+                topPostsContainer.innerHTML = `
+                    <div class="empty-state">
+                        <strong>No top posts found for the selected range.</strong>
+                        Connect Facebook/Instagram/LinkedIn to populate this section.
+                    </div>
+                `;
+            } else {
+                let tableHtml = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Post</th>
+                                <th>Platform</th>
+                                <th>Reach</th>
+                                <th>Clicks</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                posts.forEach((post) => {
+                    tableHtml += `
+                        <tr>
+                            <td>${escapeHtml(post.title || "Untitled post")}</td>
+                            <td>${post.platform || "—"}</td>
+                            <td>${formatNumber(post.reach || 0)}</td>
+                            <td>${formatNumber(post.clicks || 0)}</td>
+                        </tr>
+                    `;
+                });
+                tableHtml += "</tbody></table>";
+                topPostsContainer.innerHTML = tableHtml;
+            }
+        }
+
+        function renderAdsMetrics(data) {
+            if (!data) return;
+
+            const spendPlaceholder = document.getElementById("adsSpendPlaceholder");
+            const efficiencyPlaceholder = document.getElementById("adsEfficiencyPlaceholder");
+            const breakdownPlaceholder = document.getElementById("adsBreakdownPlaceholder");
+
+            const spend = data.spend || {};
+            const efficiency = data.efficiency || {};
+            const campaigns = data.campaigns || [];
+            const adSets = data.ad_sets || [];
+            const geo = data.geo || [];
+
+            const spendChange = spend.change ?? 0;
+            const trendClass = spendChange >= 0 ? "trend-up" : "trend-down";
+            spendPlaceholder.innerHTML = `
+                <div style="display:flex; flex-direction:column; gap:12px; width:100%;">
+                    <div>
+                        <span style="font-size:28px; font-weight:700;">$${formatCurrency(spend.total || 0)}</span>
+                        <span class="kpi-trend ${trendClass}" style="margin-left:12px;">
+                            ${spendChange >= 0 ? "+" : ""}${spendChange.toFixed(1)}%
+                        </span>
+                    </div>
+                    <div>Conversion value: <strong>$${formatCurrency(data.performance?.conversion_value || 0)}</strong></div>
+                    <div style="font-size:12px; color:#94a3b8;">(ROAS placeholder until live data)</div>
+                </div>
+            `;
+
+            efficiencyPlaceholder.innerHTML = `
+                <ul style="list-style:none; width:100%; max-width:260px;">
+                    <li>💵 CPC: <strong>$${formatCurrency(efficiency.cpc || 0)}</strong></li>
+                    <li>📣 CPM: <strong>$${formatCurrency(efficiency.cpm || 0)}</strong></li>
+                    <li>🚀 CTR: <strong>${(efficiency.ctr || 0).toFixed(1)}%</strong></li>
+                    <li>🎯 Conversion Rate: <strong>${(efficiency.conversion_rate || 0).toFixed(1)}%</strong></li>
+                </ul>
+            `;
+
+            let tableHtml = `
+                <div style="display:grid; gap:16px;">
+                    <div>
+                        <strong>Campaigns</strong>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Campaign</th>
+                                    <th>Spend</th>
+                                    <th>Clicks</th>
+                                    <th>Conversions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+            campaigns.forEach((c) => {
+                tableHtml += `
+                    <tr>
+                        <td>${escapeHtml(c.name || "Campaign")}</td>
+                        <td>$${formatCurrency(c.spend || 0)}</td>
+                        <td>${formatNumber(c.clicks || 0)}</td>
+                        <td>${formatNumber(c.conversions || 0)}</td>
+                    </tr>
+                `;
+            });
+            tableHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <strong>Ad Sets</strong>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Ad Set</th>
+                                    <th>Impressions</th>
+                                    <th>Spend</th>
+                                    <th>Conversions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+            adSets.forEach((set) => {
+                tableHtml += `
+                    <tr>
+                        <td>${escapeHtml(set.name || "Ad Set")}</td>
+                        <td>${formatNumber(set.impressions || 0)}</td>
+                        <td>$${formatCurrency(set.spend || 0)}</td>
+                        <td>${formatNumber(set.conversions || 0)}</td>
+                    </tr>
+                `;
+            });
+            tableHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                    <div>
+                        <strong>Geo Spend</strong>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Country</th>
+                                    <th>Spend</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            `;
+            geo.forEach((g) => {
+                tableHtml += `
+                    <tr>
+                        <td>${escapeHtml(g.country || "—")}</td>
+                        <td>$${formatCurrency(g.spend || 0)}</td>
+                    </tr>
+                `;
+            });
+            tableHtml += `
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            breakdownPlaceholder.innerHTML = tableHtml;
+        }
+
+        function formatNumber(value) {
+            return Number(value || 0).toLocaleString();
+        }
+
+        function formatCurrency(value) {
+            return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        function escapeHtml(str) {
+            return String(str || "").replace(/[&<>"']/g, (m) => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            }[m]));
         }
 
         datePreset.addEventListener("change", (event) => {
             applyPreset(event.target.value);
-            // TODO: trigger data reload
+            loadMarketingData();
+        });
+
+        startDate.addEventListener("change", () => loadMarketingData());
+        endDate.addEventListener("change", () => loadMarketingData());
+
+        toggleButtons.forEach((button) => {
+            button.addEventListener("click", () => {
+                if (button.classList.contains("active")) {
+                    button.classList.remove("active");
+                    compareMode = null;
+                } else {
+                    toggleButtons.forEach((btn) => btn.classList.remove("active"));
+                    button.classList.add("active");
+                    compareMode = button.dataset.toggle === "compare-yoy" ? "yoy" : "previous";
+                }
+                loadMarketingData();
+            });
         });
 
         refreshBtn.addEventListener("click", () => {
-            refreshBtn.disabled = true;
-            refreshBtn.textContent = "Refreshing...";
-            // TODO: call API to refresh data immediately
-            setTimeout(() => {
-                const now = new Date();
-                lastRefreshed.textContent = `Last refreshed: ${now.toLocaleString()}`;
-                refreshBtn.disabled = false;
-                refreshBtn.textContent = "↻ Refresh Data";
-            }, 1200);
+            loadMarketingData();
         });
 
-        // Initialize with default preset
+        // Initialize with default preset and load data.
         applyPreset(datePreset.value);
+        loadMarketingData();
     </script>
 </body>
 </html>

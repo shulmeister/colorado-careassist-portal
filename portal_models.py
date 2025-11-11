@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, Date, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
+import json
 
 Base = declarative_base()
 
@@ -145,4 +146,42 @@ class Voucher(Base):
             end = self.voucher_end_date.strftime("%b %d, %Y")
             return f"{start} - {end}"
         return None
+
+class MarketingMetricSnapshot(Base):
+    """
+    Cached snapshot of marketing metrics for a given data source
+    (e.g., facebook_social, google_ads_overview) and date range.
+    """
+    __tablename__ = "marketing_metric_snapshots"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    source = Column(String(100), nullable=False, index=True)
+    start_date = Column(Date, nullable=False, index=True)
+    end_date = Column(Date, nullable=False, index=True)
+    data = Column(Text, nullable=False)  # JSON payload
+    comparison_data = Column(Text, nullable=True)  # Optional JSON
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    def data_json(self):
+        try:
+            return json.loads(self.data) if self.data else {}
+        except Exception:
+            return {}
+    
+    def comparison_json(self):
+        try:
+            return json.loads(self.comparison_data) if self.comparison_data else {}
+        except Exception:
+            return {}
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "source": self.source,
+            "start_date": self.start_date.isoformat() if self.start_date else None,
+            "end_date": self.end_date.isoformat() if self.end_date else None,
+            "data": self.data_json(),
+            "comparison_data": self.comparison_json(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
 

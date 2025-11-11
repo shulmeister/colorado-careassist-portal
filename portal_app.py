@@ -8,12 +8,13 @@ from sqlalchemy.orm import Session
 import os
 import logging
 from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as date_cls
 import httpx
 from urllib.parse import urlencode
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
 from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher
+from services.marketing.metrics_service import get_social_metrics, get_ads_metrics
 from dotenv import load_dotenv
 from datetime import date
 
@@ -891,6 +892,74 @@ async def marketing_dashboard(
             "end": end_date.isoformat()
         },
         "placeholder_metrics": placeholder_metrics
+    })
+
+def _parse_date_param(value: Optional[str], fallback: date_cls) -> date_cls:
+    if not value:
+        return fallback
+    try:
+        return date_cls.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid date format: {value}. Use YYYY-MM-DD.")
+
+
+@app.get("/api/marketing/social")
+async def api_marketing_social(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+    compare: Optional[str] = Query(None)
+):
+    """Return social performance metrics (placeholder until APIs wired)."""
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+    
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+    
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+    
+    data = get_social_metrics(start, end, compare)
+    
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": (end - start).days + 1
+        },
+        "compare": compare,
+        "data": data
+    })
+
+
+@app.get("/api/marketing/ads")
+async def api_marketing_ads(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+    compare: Optional[str] = Query(None)
+):
+    """Return ads performance metrics (placeholder until APIs wired)."""
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+    
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+    
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+    
+    data = get_ads_metrics(start, end, compare)
+    
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": (end - start).days + 1
+        },
+        "compare": compare,
+        "data": data
     })
 
 if __name__ == "__main__":
