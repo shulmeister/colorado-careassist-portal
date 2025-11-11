@@ -102,10 +102,10 @@ class VoucherSyncService:
             cutoff_time = datetime.utcnow() - timedelta(hours=hours_back)
             cutoff_str = cutoff_time.isoformat() + 'Z'
             
-            # Query for new image files in the folder
+            # Query for new PDF and image files in the folder
             query = (
                 f"'{GOOGLE_DRIVE_FOLDER_ID}' in parents "
-                f"and mimeType contains 'image/' "
+                f"and (mimeType contains 'image/' or mimeType = 'application/pdf') "
                 f"and createdTime > '{cutoff_str}' "
                 f"and trashed = false"
             )
