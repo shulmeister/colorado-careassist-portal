@@ -13,8 +13,9 @@ import httpx
 from urllib.parse import urlencode
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
-from portal_models import PortalTool, Base, UserSession, ToolClick
+from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher
 from dotenv import load_dotenv
+from datetime import date
 
 # Load environment variables
 load_dotenv()
@@ -534,6 +535,206 @@ async def get_analytics_summary(
     except Exception as e:
         logger.error(f"Error getting analytics summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting analytics: {str(e)}")
+
+# Voucher Management Routes
+@app.get("/vouchers", response_class=HTMLResponse)
+async def voucher_list_page(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Render the voucher list page"""
+    # Configure RingCentral
+    ringcentral_config = {
+        "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
+        "app_url": RINGCENTRAL_EMBED_APP_URL,
+        "adapter_url": RINGCENTRAL_EMBED_ADAPTER_URL,
+        "query_string": ""
+    }
+    
+    if ringcentral_config["enabled"]:
+        params = {
+            "clientId": RINGCENTRAL_EMBED_CLIENT_ID,
+            "appServer": RINGCENTRAL_EMBED_SERVER,
+        }
+        if RINGCENTRAL_EMBED_DEFAULT_TAB:
+            params["defaultTab"] = RINGCENTRAL_EMBED_DEFAULT_TAB
+        if RINGCENTRAL_EMBED_REDIRECT_URI:
+            params["redirectUri"] = RINGCENTRAL_EMBED_REDIRECT_URI
+        # Control which features are shown
+        params["enableGlip"] = "true"        # Enable Chat/Glip tab
+        params["disableGlip"] = "false"      # Make sure Glip is not disabled
+        params["disableConferences"] = "true"  # Disable video/meetings
+        params["theme"] = "dark"             # Set dark theme to match dashboard
+        ringcentral_config["query_string"] = urlencode(params)
+    
+    return templates.TemplateResponse("vouchers.html", {
+        "request": request,
+        "user": current_user,
+        "ringcentral": ringcentral_config
+    })
+
+@app.get("/api/vouchers")
+async def get_vouchers(
+    client_name: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get all vouchers with optional filtering"""
+    try:
+        query = db.query(Voucher)
+        
+        # Apply filters if provided
+        if client_name:
+            query = query.filter(Voucher.client_name.ilike(f"%{client_name}%"))
+        if status:
+            query = query.filter(Voucher.status.ilike(f"%{status}%"))
+        
+        # Order by invoice date descending
+        vouchers = query.order_by(Voucher.invoice_date.desc()).all()
+        
+        return JSONResponse({
+            "success": True,
+            "vouchers": [voucher.to_dict() for voucher in vouchers],
+            "total": len(vouchers)
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting vouchers: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting vouchers: {str(e)}")
+
+@app.post("/api/vouchers")
+async def create_voucher(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Create a new voucher"""
+    try:
+        data = await request.json()
+        
+        # Parse dates if provided
+        voucher_start_date = None
+        voucher_end_date = None
+        invoice_date = None
+        
+        if data.get("voucher_start_date"):
+            voucher_start_date = datetime.strptime(data["voucher_start_date"], "%Y-%m-%d").date()
+        if data.get("voucher_end_date"):
+            voucher_end_date = datetime.strptime(data["voucher_end_date"], "%Y-%m-%d").date()
+        if data.get("invoice_date"):
+            invoice_date = datetime.strptime(data["invoice_date"], "%Y-%m-%d").date()
+        
+        # Create new voucher
+        voucher = Voucher(
+            client_name=data["client_name"],
+            voucher_number=data["voucher_number"],
+            voucher_start_date=voucher_start_date,
+            voucher_end_date=voucher_end_date,
+            invoice_date=invoice_date,
+            amount=data["amount"],
+            status=data.get("status", "Pending"),
+            notes=data.get("notes"),
+            voucher_image_url=data.get("voucher_image_url"),
+            created_by=current_user.get("email")
+        )
+        
+        db.add(voucher)
+        db.commit()
+        db.refresh(voucher)
+        
+        return JSONResponse({
+            "success": True,
+            "voucher": voucher.to_dict(),
+            "message": "Voucher created successfully"
+        })
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating voucher: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error creating voucher: {str(e)}")
+
+@app.put("/api/vouchers/{voucher_id}")
+async def update_voucher(
+    voucher_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Update an existing voucher"""
+    try:
+        voucher = db.query(Voucher).filter(Voucher.id == voucher_id).first()
+        
+        if not voucher:
+            raise HTTPException(status_code=404, detail="Voucher not found")
+        
+        data = await request.json()
+        
+        # Update fields
+        if "client_name" in data:
+            voucher.client_name = data["client_name"]
+        if "voucher_number" in data:
+            voucher.voucher_number = data["voucher_number"]
+        if "voucher_start_date" in data and data["voucher_start_date"]:
+            voucher.voucher_start_date = datetime.strptime(data["voucher_start_date"], "%Y-%m-%d").date()
+        if "voucher_end_date" in data and data["voucher_end_date"]:
+            voucher.voucher_end_date = datetime.strptime(data["voucher_end_date"], "%Y-%m-%d").date()
+        if "invoice_date" in data and data["invoice_date"]:
+            voucher.invoice_date = datetime.strptime(data["invoice_date"], "%Y-%m-%d").date()
+        if "amount" in data:
+            voucher.amount = data["amount"]
+        if "status" in data:
+            voucher.status = data["status"]
+        if "notes" in data:
+            voucher.notes = data["notes"]
+        if "voucher_image_url" in data:
+            voucher.voucher_image_url = data["voucher_image_url"]
+        
+        voucher.updated_by = current_user.get("email")
+        
+        db.commit()
+        db.refresh(voucher)
+        
+        return JSONResponse({
+            "success": True,
+            "voucher": voucher.to_dict(),
+            "message": "Voucher updated successfully"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating voucher: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating voucher: {str(e)}")
+
+@app.delete("/api/vouchers/{voucher_id}")
+async def delete_voucher(
+    voucher_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Delete a voucher"""
+    try:
+        voucher = db.query(Voucher).filter(Voucher.id == voucher_id).first()
+        
+        if not voucher:
+            raise HTTPException(status_code=404, detail="Voucher not found")
+        
+        db.delete(voucher)
+        db.commit()
+        
+        return JSONResponse({
+            "success": True,
+            "message": "Voucher deleted successfully"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting voucher: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error deleting voucher: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

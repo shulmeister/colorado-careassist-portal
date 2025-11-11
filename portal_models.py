@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, Date, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 
@@ -99,4 +99,50 @@ class ToolClick(Base):
             "clicked_at": self.clicked_at.isoformat() if self.clicked_at else None,
             "ip_address": self.ip_address
         }
+
+class Voucher(Base):
+    """AAA Voucher tracking and reconciliation"""
+    __tablename__ = "vouchers"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    client_name = Column(String(255), nullable=False, index=True)
+    voucher_number = Column(String(100), nullable=False, unique=True, index=True)
+    voucher_start_date = Column(Date, nullable=True)
+    voucher_end_date = Column(Date, nullable=True)
+    invoice_date = Column(Date, nullable=True, index=True)
+    amount = Column(Numeric(10, 2), nullable=False)
+    status = Column(String(100), nullable=True)  # e.g., "Valid", "Redeemed", "Pending"
+    notes = Column(Text, nullable=True)
+    voucher_image_url = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(String(255), nullable=True)
+    updated_by = Column(String(255), nullable=True)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "client_name": self.client_name,
+            "voucher_number": self.voucher_number,
+            "voucher_start_date": self.voucher_start_date.isoformat() if self.voucher_start_date else None,
+            "voucher_end_date": self.voucher_end_date.isoformat() if self.voucher_end_date else None,
+            "voucher_date_range": self._format_date_range(),
+            "invoice_date": self.invoice_date.isoformat() if self.invoice_date else None,
+            "amount": float(self.amount) if self.amount else None,
+            "status": self.status,
+            "notes": self.notes,
+            "voucher_image_url": self.voucher_image_url,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_by": self.created_by,
+            "updated_by": self.updated_by
+        }
+    
+    def _format_date_range(self):
+        """Format voucher date range"""
+        if self.voucher_start_date and self.voucher_end_date:
+            start = self.voucher_start_date.strftime("%b %d")
+            end = self.voucher_end_date.strftime("%b %d, %Y")
+            return f"{start} - {end}"
+        return None
 
