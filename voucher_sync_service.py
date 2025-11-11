@@ -146,12 +146,37 @@ class VoucherSyncService:
             logger.error(f"Error downloading file {file_id}: {str(e)}")
             return None
     
-    def extract_text_from_image(self, image_bytes: bytes) -> str:
+    def extract_text_from_image(self, image_bytes: bytes, is_pdf: bool = False) -> str:
         """Extract text from image using Google Vision API"""
         try:
             if not self.vision_client:
                 logger.error("Vision client not initialized")
                 return ""
+            
+            # If it's a PDF, convert first page to image
+            if is_pdf:
+                try:
+                    from pdf2image import convert_from_bytes
+                    from PIL import Image
+                    import io as image_io
+                    
+                    # Convert first page of PDF to image
+                    images = convert_from_bytes(image_bytes, first_page=1, last_page=1)
+                    if not images:
+                        logger.error("Failed to convert PDF to image")
+                        return ""
+                    
+                    # Convert PIL Image to bytes
+                    img_byte_arr = image_io.BytesIO()
+                    images[0].save(img_byte_arr, format='PNG')
+                    image_bytes = img_byte_arr.getvalue()
+                    
+                except ImportError:
+                    logger.error("pdf2image library not available, trying direct PDF processing")
+                    # Fall through to try direct processing
+                except Exception as e:
+                    logger.error(f"Error converting PDF to image: {str(e)}")
+                    return ""
             
             image = vision.Image(content=image_bytes)
             response = self.vision_client.text_detection(image=image)
@@ -432,8 +457,9 @@ class VoucherSyncService:
                     file_id = file_info['id']
                     file_name = file_info['name']
                     file_url = file_info.get('webViewLink', '')
+                    mime_type = file_info.get('mimeType', '')
                     
-                    logger.info(f"Processing file: {file_name}")
+                    logger.info(f"Processing file: {file_name} (type: {mime_type})")
                     
                     # Download the file
                     image_bytes = self.download_file(file_id)
@@ -442,8 +468,11 @@ class VoucherSyncService:
                         summary["errors"].append(f"Failed to download {file_name}")
                         continue
                     
+                    # Check if it's a PDF
+                    is_pdf = mime_type == 'application/pdf' or file_name.lower().endswith('.pdf')
+                    
                     # Extract text using OCR
-                    text = self.extract_text_from_image(image_bytes)
+                    text = self.extract_text_from_image(image_bytes, is_pdf=is_pdf)
                     if not text:
                         summary["files_failed"] += 1
                         summary["errors"].append(f"No text extracted from {file_name}")
