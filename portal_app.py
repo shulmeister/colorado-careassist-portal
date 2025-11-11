@@ -146,6 +146,7 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
     }
 
     if ringcentral_config["enabled"]:
+        import time
         params = {
             "clientId": RINGCENTRAL_EMBED_CLIENT_ID,
             "appServer": RINGCENTRAL_EMBED_SERVER,
@@ -158,7 +159,11 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
         params["enableGlip"] = "true"        # Enable Chat/Glip tab
         params["disableGlip"] = "false"      # Make sure Glip is not disabled
         params["disableConferences"] = "true"  # Disable video/meetings
-        params["theme"] = "dark"             # Set dark theme to match dashboard
+        
+        # ALWAYS USE DARK THEME - DO NOT CHANGE
+        params["theme"] = "dark"             # Force dark theme to match portal design
+        params["_t"] = str(int(time.time()))  # Cache buster to force theme reload
+        
         ringcentral_config["query_string"] = urlencode(params)
 
     response = templates.TemplateResponse("portal.html", {
@@ -552,6 +557,7 @@ async def voucher_list_page(
     }
     
     if ringcentral_config["enabled"]:
+        import time
         params = {
             "clientId": RINGCENTRAL_EMBED_CLIENT_ID,
             "appServer": RINGCENTRAL_EMBED_SERVER,
@@ -564,7 +570,11 @@ async def voucher_list_page(
         params["enableGlip"] = "true"        # Enable Chat/Glip tab
         params["disableGlip"] = "false"      # Make sure Glip is not disabled
         params["disableConferences"] = "true"  # Disable video/meetings
-        params["theme"] = "dark"             # Set dark theme to match dashboard
+        
+        # ALWAYS USE DARK THEME - DO NOT CHANGE
+        params["theme"] = "dark"             # Force dark theme to match portal design
+        params["_t"] = str(int(time.time()))  # Cache buster to force theme reload
+        
         ringcentral_config["query_string"] = urlencode(params)
     
     return templates.TemplateResponse("vouchers.html", {
