@@ -415,6 +415,8 @@ class VoucherSyncService:
             # If no dollar amount found, try to extract hours
             if not found_amount:
                 hours_patterns = [
+                    r'(?:Units of Service|Units)\s+(\d+(?:\.\d+)?)@',  # "Units of Service 6.0@"
+                    r'(\d+(?:\.\d+)?)\s*@\s*\$?\s*30',  # "6.0 @ $30"
                     r'(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)',  # "6 hours", "15 hrs"
                     r'(?:hours?|hrs?):\s*(\d+(?:\.\d+)?)',  # "Hours: 6"
                     r'\b(\d+)\s+hours?\b',  # "6 hours"
