@@ -253,6 +253,70 @@ VOUCHER_DATA = [
         "amount": 180,
         "status": "Redeemed 11/1",
         "notes": ""
+    },
+    # November 2024 vouchers
+    {
+        "client_name": "Jessica Whelehan Trow (Ann Fletcher)",
+        "voucher_number": "12275-FLE 1484",
+        "voucher_dates": "Nov 1 - Nov 30",
+        "invoice_date": "12/1/2024",
+        "amount": 450,
+        "status": "Valid for Nov",
+        "notes": ""
+    },
+    {
+        "client_name": "Joanne Jones",
+        "voucher_number": "12282-JON 3551",
+        "voucher_dates": "Oct 16 - Nov 30",
+        "invoice_date": "12/1/2024",
+        "amount": 450,
+        "status": "Valid for Nov",
+        "notes": ""
+    },
+    {
+        "client_name": "Judy Tuetken",
+        "voucher_number": "12289-BEC 1733",
+        "voucher_dates": "Nov 1 - Nov 30",
+        "invoice_date": "12/1/2024",
+        "amount": 450,
+        "status": "Valid for Nov",
+        "notes": ""
+    },
+    {
+        "client_name": "Charles Besch",
+        "voucher_number": "12344-BES8469",
+        "voucher_dates": "Nov 1 - Nov 30",
+        "invoice_date": "12/1/2024",
+        "amount": 180,
+        "status": "Valid for Nov",
+        "notes": ""
+    },
+    {
+        "client_name": "Christine Brock",
+        "voucher_number": "12321-BRO8622",
+        "voucher_dates": "Nov 1 - Nov 30",
+        "invoice_date": "12/1/2024",
+        "amount": 180,
+        "status": "Valid for Nov",
+        "notes": ""
+    },
+    {
+        "client_name": "Margot Brown",
+        "voucher_number": "12358-BRN5197",
+        "voucher_dates": "Nov 1 - Nov 30",
+        "invoice_date": "12/1/2024",
+        "amount": 180,
+        "status": "Valid for Nov",
+        "notes": ""
+    },
+    {
+        "client_name": "Shirley Rosell",
+        "voucher_number": "12357-ROS8227",
+        "voucher_dates": "Nov 1 - Nov 30",
+        "invoice_date": "12/1/2024",
+        "amount": 180,
+        "status": "Valid for Nov",
+        "notes": ""
     }
 ]
 
