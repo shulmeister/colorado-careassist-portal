@@ -806,7 +806,7 @@ async def sales_dashboard_redirect(
     """Redirect to Sales Dashboard (shares same OAuth, so already authenticated)"""
     sales_dashboard_url = os.getenv(
         "SALES_DASHBOARD_URL",
-        "https://careassist-tracker.herokuapp.com"
+        "https://careassist-tracker-0fcf2cecdb22.herokuapp.com"
     )
     
     return RedirectResponse(url=sales_dashboard_url, status_code=302)
