@@ -642,6 +642,7 @@
                 <a class="sidebar-link" data-tab="social"><span class="icon">📱</span> Social Performance</a>
                 <a class="sidebar-link" data-tab="paid-media"><span class="icon">🎯</span> Paid Media</a>
                 <a class="sidebar-link" data-tab="email"><span class="icon">📧</span> Email Marketing</a>
+                <a class="sidebar-link" data-tab="website"><span class="icon">🌐</span> Website & GBP</a>
                 <a class="sidebar-link" data-tab="engagement"><span class="icon">💬</span> Engagement</a>
                 <a class="sidebar-link disabled" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
             </nav>
@@ -1207,6 +1208,231 @@
                         <div class="panel">
                             <div id="emailTopLinksTable" class="empty-state">
                                 Loading link performance data...
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Website & GBP Tab -->
+            <div class="tab-content" id="tab-website">
+                <section class="sections">
+                    <!-- Website Overview -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">🌐 Website & Google Business Profile</h2>
+                                <p class="section-description">
+                                    Google Analytics 4 website traffic and Google Business Profile performance metrics.
+                                </p>
+                            </div>
+                        </header>
+
+                        <!-- Top KPIs -->
+                        <div class="grid grid-4">
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon blue">👥</div>
+                                <div class="panel-title">Total Users</div>
+                                <div class="panel-subtitle">Last 30 days</div>
+                                <div class="kpi-value" id="websiteTotalUsers">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon green">📈</div>
+                                <div class="panel-title">Sessions</div>
+                                <div class="panel-subtitle">Last 30 days</div>
+                                <div class="kpi-value" id="websiteSessions">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon purple">🎯</div>
+                                <div class="panel-title">Conversions</div>
+                                <div class="panel-subtitle">Goals completed</div>
+                                <div class="kpi-value" id="websiteConversions">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon orange">📊</div>
+                                <div class="panel-title">Conversion Rate</div>
+                                <div class="panel-subtitle">User conversion</div>
+                                <div class="kpi-value" id="websiteConversionRate">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- GA4 Metrics -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">📊 Google Analytics 4 Metrics</h2>
+                                <p class="section-description">
+                                    Website traffic, engagement, and user behavior.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="grid grid-3">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Users Over Time</div>
+                                        <div class="panel-subtitle">Daily traffic trend</div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-height: 200px; padding: 16px;">
+                                    <canvas id="websiteUsersChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Sessions by Source</div>
+                                        <div class="panel-subtitle">Traffic channels</div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-height: 200px; padding: 16px;">
+                                    <canvas id="websiteSessionsBySourceChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Engagement Metrics</div>
+                                        <div class="panel-subtitle">User behavior</div>
+                                    </div>
+                                </div>
+                                <div style="padding: 16px;">
+                                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                                        <div>
+                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Avg Session Duration</div>
+                                            <div style="font-size: 24px; font-weight: 700; color: #3b82f6;" id="websiteAvgSessionDuration">—</div>
+                                        </div>
+                                        <div>
+                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Engagement Rate</div>
+                                            <div style="font-size: 24px; font-weight: 700; color: #10b981;" id="websiteEngagementRate">—</div>
+                                        </div>
+                                        <div>
+                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Bounce Rate</div>
+                                            <div style="font-size: 24px; font-weight: 700; color: #ef4444;" id="websiteBounceRate">—</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sessions by Medium -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">📡 Sessions by Medium</h2>
+                                <p class="section-description">
+                                    Traffic breakdown by session medium over time.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="panel">
+                            <div style="flex: 1; min-height: 300px; padding: 16px;">
+                                <canvas id="websiteSessionsByMediumChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Pages & Sources -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">📄 Top Pages & Traffic Sources</h2>
+                                <p class="section-description">
+                                    Most visited pages and top traffic sources.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="grid grid-2">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Top Pages</div>
+                                        <div class="panel-subtitle">By views</div>
+                                    </div>
+                                </div>
+                                <div id="websiteTopPagesTable" class="empty-state">
+                                    Loading page data...
+                                </div>
+                            </div>
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Conversions by Source</div>
+                                        <div class="panel-subtitle">Goal completions</div>
+                                    </div>
+                                </div>
+                                <div id="websiteConversionsBySourceTable" class="empty-state">
+                                    Loading conversion data...
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Google Business Profile -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">🏢 Google Business Profile Performance</h2>
+                                <p class="section-description">
+                                    Local search visibility and customer interactions.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="grid grid-4">
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon blue">🔍</div>
+                                <div class="panel-title">Searches</div>
+                                <div class="panel-subtitle">Last 30 days</div>
+                                <div class="kpi-value" id="gbpSearches">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon green">👁️</div>
+                                <div class="panel-title">Views</div>
+                                <div class="panel-subtitle">Profile views</div>
+                                <div class="kpi-value" id="gbpViews">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon purple">📞</div>
+                                <div class="panel-title">Phone Calls</div>
+                                <div class="panel-subtitle">Direct calls</div>
+                                <div class="kpi-value" id="gbpPhoneCalls">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon orange">🗺️</div>
+                                <div class="panel-title">Direction Requests</div>
+                                <div class="panel-subtitle">Get directions</div>
+                                <div class="kpi-value" id="gbpDirections">—</div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-2" style="margin-top: 20px;">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Searches by Keyword</div>
+                                        <div class="panel-subtitle">Top search terms</div>
+                                    </div>
+                                </div>
+                                <div id="gbpSearchKeywordsTable" class="empty-state">
+                                    Loading search data...
+                                </div>
+                            </div>
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Actions Over Time</div>
+                                        <div class="panel-subtitle">User interactions</div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-height: 200px; padding: 16px;">
+                                    <canvas id="gbpActionsChart"></canvas>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -2172,6 +2398,7 @@
                     'social': 'Social Performance',
                     'paid-media': 'Paid Media Performance',
                     'email': 'Email Marketing Performance',
+                    'website': 'Website & Google Business Profile',
                     'engagement': 'Engagement Metrics'
                 };
                 document.querySelector('.page-title').textContent = tabTitles[targetTab] || 'Marketing Dashboard';
@@ -2669,12 +2896,504 @@
             }
         }
 
+        // Website & GBP chart instances
+        let websiteUsersChart = null;
+        let websiteSessionsBySourceChart = null;
+        let websiteSessionsByMediumChart = null;
+        let gbpActionsChart = null;
+
+        // Render website & GBP metrics
+        function renderWebsiteMetrics(websiteData) {
+            if (!websiteData) {
+                // Use mock data matching the Databox dashboard
+                websiteData = {
+                    ga4: {
+                        total_users: 188,
+                        sessions: 245,
+                        conversions: 32,
+                        conversion_rate: 10.75,
+                        avg_session_duration: '2:34',
+                        engagement_rate: 68.5,
+                        bounce_rate: 31.5,
+                        users_over_time: [
+                            { date: '2025-10-12', users: 4 },
+                            { date: '2025-10-16', users: 6 },
+                            { date: '2025-10-20', users: 22 },
+                            { date: '2025-10-24', users: 12 },
+                            { date: '2025-10-28', users: 18 },
+                            { date: '2025-11-01', users: 22 },
+                            { date: '2025-11-05', users: 18 },
+                            { date: '2025-11-09', users: 10 }
+                        ],
+                        sessions_by_source: {
+                            direct: 10,
+                            google: 5,
+                            fb: 5,
+                            'l.facebook.com': 1
+                        },
+                        conversions_by_source: {
+                            direct: 13,
+                            google: 12,
+                            fb: 6,
+                            'l.facebook.com': 1
+                        },
+                        sessions_by_medium: [
+                            { date: '2025-10-12', none: 2, cpc: 1, paid: 0, referral: 1, organic: 0 },
+                            { date: '2025-10-16', none: 3, cpc: 2, paid: 1, referral: 0, organic: 1 },
+                            { date: '2025-10-20', none: 8, cpc: 5, paid: 3, referral: 4, organic: 2 },
+                            { date: '2025-10-24', none: 5, cpc: 3, paid: 1, referral: 2, organic: 1 },
+                            { date: '2025-10-28', none: 7, cpc: 4, paid: 2, referral: 3, organic: 2 },
+                            { date: '2025-11-01', none: 9, cpc: 5, paid: 3, referral: 3, organic: 2 },
+                            { date: '2025-11-05', none: 7, cpc: 4, paid: 2, referral: 3, organic: 2 },
+                            { date: '2025-11-09', none: 4, cpc: 2, paid: 1, referral: 2, organic: 1 }
+                        ],
+                        top_pages: [
+                            { path: '/', views: 145, engagement_rate: 72.3 },
+                            { path: '/services', views: 98, engagement_rate: 68.1 },
+                            { path: '/about', views: 67, engagement_rate: 65.4 },
+                            { path: '/contact', views: 54, engagement_rate: 71.2 },
+                            { path: '/careers', views: 42, engagement_rate: 59.8 }
+                        ]
+                    },
+                    gbp: {
+                        searches: 156,
+                        views: 234,
+                        phone_calls: 45,
+                        directions: 38,
+                        website_clicks: 67,
+                        search_keywords: [
+                            { keyword: 'home care services', count: 42 },
+                            { keyword: 'senior care colorado', count: 38 },
+                            { keyword: 'caregiver jobs', count: 28 },
+                            { keyword: 'elderly care', count: 24 },
+                            { keyword: 'respite care', count: 24 }
+                        ],
+                        actions_over_time: [
+                            { date: '2025-10-12', calls: 2, directions: 1, website: 3 },
+                            { date: '2025-10-16', calls: 3, directions: 2, website: 4 },
+                            { date: '2025-10-20', calls: 5, directions: 4, website: 7 },
+                            { date: '2025-10-24', calls: 4, directions: 3, website: 6 },
+                            { date: '2025-10-28', calls: 4, directions: 3, website: 7 },
+                            { date: '2025-11-01', calls: 5, directions: 4, website: 8 },
+                            { date: '2025-11-05', calls: 4, directions: 3, website: 6 },
+                            { date: '2025-11-09', calls: 3, directions: 2, website: 5 }
+                        ]
+                    }
+                };
+            }
+
+            // Update KPIs
+            document.getElementById('websiteTotalUsers').textContent = formatNumber(websiteData.ga4?.total_users || 0);
+            document.getElementById('websiteSessions').textContent = formatNumber(websiteData.ga4?.sessions || 0);
+            document.getElementById('websiteConversions').textContent = formatNumber(websiteData.ga4?.conversions || 0);
+            document.getElementById('websiteConversionRate').textContent = (websiteData.ga4?.conversion_rate || 0).toFixed(1) + '%';
+
+            // Engagement metrics
+            document.getElementById('websiteAvgSessionDuration').textContent = websiteData.ga4?.avg_session_duration || '—';
+            document.getElementById('websiteEngagementRate').textContent = (websiteData.ga4?.engagement_rate || 0).toFixed(1) + '%';
+            document.getElementById('websiteBounceRate').textContent = (websiteData.ga4?.bounce_rate || 0).toFixed(1) + '%';
+
+            // GBP KPIs
+            document.getElementById('gbpSearches').textContent = formatNumber(websiteData.gbp?.searches || 0);
+            document.getElementById('gbpViews').textContent = formatNumber(websiteData.gbp?.views || 0);
+            document.getElementById('gbpPhoneCalls').textContent = formatNumber(websiteData.gbp?.phone_calls || 0);
+            document.getElementById('gbpDirections').textContent = formatNumber(websiteData.gbp?.directions || 0);
+
+            // Users Over Time Chart
+            const websiteUsersCtx = document.getElementById('websiteUsersChart');
+            if (websiteUsersCtx) {
+                if (websiteUsersChart) websiteUsersChart.destroy();
+                
+                const usersData = websiteData.ga4?.users_over_time || [];
+                websiteUsersChart = new Chart(websiteUsersCtx, {
+                    type: 'line',
+                    data: {
+                        labels: usersData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                        datasets: [{
+                            label: 'Users',
+                            data: usersData.map(d => d.users),
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#3b82f6',
+                            pointBorderColor: '#1e293b',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#f8fafc',
+                                bodyColor: '#e2e8f0',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 10
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 }
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Sessions by Source Chart (Doughnut)
+            const websiteSessionsBySourceCtx = document.getElementById('websiteSessionsBySourceChart');
+            if (websiteSessionsBySourceCtx) {
+                if (websiteSessionsBySourceChart) websiteSessionsBySourceChart.destroy();
+                
+                const sourceData = websiteData.ga4?.sessions_by_source || {};
+                const sources = Object.keys(sourceData);
+                const values = Object.values(sourceData);
+                
+                websiteSessionsBySourceChart = new Chart(websiteSessionsBySourceCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: sources,
+                        datasets: [{
+                            data: values,
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(139, 92, 246, 0.8)',
+                                'rgba(16, 185, 129, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
+                                'rgba(239, 68, 68, 0.8)'
+                            ],
+                            borderColor: '#1e293b',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#e2e8f0',
+                                    padding: 12,
+                                    font: { size: 11 }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#f8fafc',
+                                bodyColor: '#e2e8f0',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 10
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Sessions by Medium Chart (Stacked Bar)
+            const websiteSessionsByMediumCtx = document.getElementById('websiteSessionsByMediumChart');
+            if (websiteSessionsByMediumCtx) {
+                if (websiteSessionsByMediumChart) websiteSessionsByMediumChart.destroy();
+                
+                const mediumData = websiteData.ga4?.sessions_by_medium || [];
+                websiteSessionsByMediumChart = new Chart(websiteSessionsByMediumCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: mediumData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                        datasets: [
+                            {
+                                label: '(none)',
+                                data: mediumData.map(d => d.none),
+                                backgroundColor: 'rgba(148, 163, 184, 0.8)',
+                                borderColor: '#94a3b8',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'cpc',
+                                data: mediumData.map(d => d.cpc),
+                                backgroundColor: 'rgba(16, 185, 129, 0.8)',
+                                borderColor: '#10b981',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'paid',
+                                data: mediumData.map(d => d.paid),
+                                backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                                borderColor: '#8b5cf6',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'referral',
+                                data: mediumData.map(d => d.referral),
+                                backgroundColor: 'rgba(245, 158, 11, 0.8)',
+                                borderColor: '#f59e0b',
+                                borderWidth: 1
+                            },
+                            {
+                                label: 'organic',
+                                data: mediumData.map(d => d.organic),
+                                backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                                borderColor: '#3b82f6',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#e2e8f0',
+                                    padding: 12,
+                                    font: { size: 11 }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#f8fafc',
+                                bodyColor: '#e2e8f0',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 10
+                            }
+                        },
+                        scales: {
+                            x: {
+                                stacked: true,
+                                grid: { display: false },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 }
+                                }
+                            },
+                            y: {
+                                stacked: true,
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // GBP Actions Chart
+            const gbpActionsCtx = document.getElementById('gbpActionsChart');
+            if (gbpActionsCtx) {
+                if (gbpActionsChart) gbpActionsChart.destroy();
+                
+                const actionsData = websiteData.gbp?.actions_over_time || [];
+                gbpActionsChart = new Chart(gbpActionsCtx, {
+                    type: 'line',
+                    data: {
+                        labels: actionsData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                        datasets: [
+                            {
+                                label: 'Phone Calls',
+                                data: actionsData.map(d => d.calls),
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Directions',
+                                data: actionsData.map(d => d.directions),
+                                borderColor: '#8b5cf6',
+                                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Website Clicks',
+                                data: actionsData.map(d => d.website),
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#e2e8f0',
+                                    padding: 12,
+                                    font: { size: 11 }
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#f8fafc',
+                                bodyColor: '#e2e8f0',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 10
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 }
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Top Pages Table
+            const websiteTopPagesTable = document.getElementById('websiteTopPagesTable');
+            if (websiteTopPagesTable) {
+                const pages = websiteData.ga4?.top_pages || [];
+                if (pages.length > 0) {
+                    let tableHtml = `
+                        <div class="table-section-title">Most Visited Pages</div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Page Path</th>
+                                    <th style="text-align: right;">Views</th>
+                                    <th style="text-align: right;">Engagement Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    pages.forEach((page) => {
+                        tableHtml += `
+                            <tr>
+                                <td>${page.path}</td>
+                                <td style="text-align: right;"><span class="metric-badge impressions">${formatNumber(page.views)}</span></td>
+                                <td style="text-align: right;"><span class="metric-badge conversions">${page.engagement_rate.toFixed(1)}%</span></td>
+                            </tr>
+                        `;
+                    });
+                    tableHtml += `</tbody></table>`;
+                    websiteTopPagesTable.innerHTML = tableHtml;
+                } else {
+                    websiteTopPagesTable.innerHTML = '<div class="empty-state">No page data available</div>';
+                }
+            }
+
+            // Conversions by Source Table
+            const websiteConversionsBySourceTable = document.getElementById('websiteConversionsBySourceTable');
+            if (websiteConversionsBySourceTable) {
+                const conversions = websiteData.ga4?.conversions_by_source || {};
+                const sources = Object.keys(conversions);
+                if (sources.length > 0) {
+                    let tableHtml = `
+                        <div class="table-section-title">Goal Completions by Source</div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Source</th>
+                                    <th style="text-align: right;">Conversions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    sources.forEach((source) => {
+                        tableHtml += `
+                            <tr>
+                                <td>${source}</td>
+                                <td style="text-align: right;"><span class="metric-badge conversions">${formatNumber(conversions[source])}</span></td>
+                            </tr>
+                        `;
+                    });
+                    tableHtml += `</tbody></table>`;
+                    websiteConversionsBySourceTable.innerHTML = tableHtml;
+                } else {
+                    websiteConversionsBySourceTable.innerHTML = '<div class="empty-state">No conversion data available</div>';
+                }
+            }
+
+            // GBP Search Keywords Table
+            const gbpSearchKeywordsTable = document.getElementById('gbpSearchKeywordsTable');
+            if (gbpSearchKeywordsTable) {
+                const keywords = websiteData.gbp?.search_keywords || [];
+                if (keywords.length > 0) {
+                    let tableHtml = `
+                        <div class="table-section-title">Top Search Terms</div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Keyword</th>
+                                    <th style="text-align: right;">Searches</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    keywords.forEach((kw) => {
+                        tableHtml += `
+                            <tr>
+                                <td>${kw.keyword}</td>
+                                <td style="text-align: right;"><span class="metric-badge clicks">${formatNumber(kw.count)}</span></td>
+                            </tr>
+                        `;
+                    });
+                    tableHtml += `</tbody></table>`;
+                    gbpSearchKeywordsTable.innerHTML = tableHtml;
+                } else {
+                    gbpSearchKeywordsTable.innerHTML = '<div class="empty-state">No search data available</div>';
+                }
+            }
+        }
+
         // Initialize with default preset and load data.
         applyPreset(datePreset.value);
         loadMarketingData();
         
-        // Load email data on page load
+        // Load email and website data on page load
         renderEmailMetrics();
+        renderWebsiteMetrics();
     </script>
 </body>
 </html>
