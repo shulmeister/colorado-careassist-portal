@@ -407,27 +407,96 @@
 
         .table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
             font-size: 13px;
-            border-radius: 12px;
             overflow: hidden;
+            border-radius: 12px;
+            border: 1px solid rgba(51, 65, 85, 0.5);
         }
 
         .table thead {
-            background: rgba(15, 23, 42, 0.95);
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15));
+            border-bottom: 2px solid rgba(59, 130, 246, 0.3);
         }
 
-        .table th, .table td {
-            padding: 12px 14px;
+        .table th {
+            padding: 14px 16px;
             text-align: left;
+            font-weight: 700;
+            color: #dbeafe;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            border-bottom: 2px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .table td {
+            padding: 14px 16px;
+            border-top: 1px solid rgba(51, 65, 85, 0.3);
+            color: #e2e8f0;
+            background: rgba(15, 23, 42, 0.4);
         }
 
         .table tbody tr {
-            border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+            transition: all 0.2s ease;
         }
 
         .table tbody tr:hover {
             background: rgba(59, 130, 246, 0.08);
+            transform: translateX(2px);
+        }
+
+        .table tbody tr:hover td {
+            background: transparent;
+            color: #f8fafc;
+        }
+
+        .table-section-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 12px;
+            padding-left: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .table-section-title::before {
+            content: '';
+            width: 4px;
+            height: 18px;
+            background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+            border-radius: 2px;
+        }
+
+        .metric-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .metric-badge.spend {
+            background: rgba(139, 92, 246, 0.15);
+            color: #c4b5fd;
+        }
+
+        .metric-badge.clicks {
+            background: rgba(59, 130, 246, 0.15);
+            color: #93c5fd;
+        }
+
+        .metric-badge.conversions {
+            background: rgba(16, 185, 129, 0.15);
+            color: #6ee7b7;
+        }
+
+        .metric-badge.impressions {
+            background: rgba(245, 158, 11, 0.15);
+            color: #fcd34d;
         }
 
         .empty-state {
@@ -828,21 +897,22 @@
                     <table class="table">
                         <thead>
                             <tr>
-                                <th>Post</th>
+                                <th>Post Title</th>
                                 <th>Platform</th>
-                                <th>Reach</th>
-                                <th>Clicks</th>
+                                <th style="text-align: right;">Reach</th>
+                                <th style="text-align: right;">Clicks</th>
                             </tr>
                         </thead>
                         <tbody>
                 `;
                 posts.forEach((post) => {
+                    const platformEmoji = post.platform === "Facebook" ? "📘" : post.platform === "Instagram" ? "📷" : post.platform === "LinkedIn" ? "💼" : "📱";
                     tableHtml += `
                         <tr>
-                            <td>${escapeHtml(post.title || "Untitled post")}</td>
-                            <td>${post.platform || "—"}</td>
-                            <td>${formatNumber(post.reach || 0)}</td>
-                            <td>${formatNumber(post.clicks || 0)}</td>
+                            <td style="font-weight: 600; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(post.title || "Untitled post")}</td>
+                            <td>${platformEmoji} ${post.platform || "—"}</td>
+                            <td style="text-align: right;"><span class="metric-badge impressions">${formatNumber(post.reach || 0)}</span></td>
+                            <td style="text-align: right;"><span class="metric-badge clicks">${formatNumber(post.clicks || 0)}</span></td>
                         </tr>
                     `;
                 });
@@ -879,27 +949,30 @@
             renderEfficiencyChart(efficiency);
 
             let tableHtml = `
-                <div style="display:grid; gap:16px;">
+                <div style="display:grid; gap:24px;">
                     <div>
-                        <strong>Campaigns</strong>
+                        <div class="table-section-title">🎯 Campaigns</div>
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Campaign</th>
-                                    <th>Spend</th>
-                                    <th>Clicks</th>
-                                    <th>Conversions</th>
+                                    <th>Campaign Name</th>
+                                    <th style="text-align: right;">Spend</th>
+                                    <th style="text-align: right;">Clicks</th>
+                                    <th style="text-align: right;">Conversions</th>
+                                    <th style="text-align: right;">CPA</th>
                                 </tr>
                             </thead>
                             <tbody>
             `;
             campaigns.forEach((c) => {
+                const cpa = c.cpa || 0;
                 tableHtml += `
                     <tr>
-                        <td>${escapeHtml(c.name || "Campaign")}</td>
-                        <td>$${formatCurrency(c.spend || 0)}</td>
-                        <td>${formatNumber(c.clicks || 0)}</td>
-                        <td>${formatNumber(c.conversions || 0)}</td>
+                        <td style="font-weight: 600;">${escapeHtml(c.name || "Campaign")}</td>
+                        <td style="text-align: right;"><span class="metric-badge spend">$${formatCurrency(c.spend || 0)}</span></td>
+                        <td style="text-align: right;"><span class="metric-badge clicks">${formatNumber(c.clicks || 0)}</span></td>
+                        <td style="text-align: right;"><span class="metric-badge conversions">${formatNumber(c.conversions || 0)}</span></td>
+                        <td style="text-align: right; color: #94a3b8;">$${formatCurrency(cpa)}</td>
                     </tr>
                 `;
             });
@@ -908,14 +981,14 @@
                         </table>
                     </div>
                     <div>
-                        <strong>Ad Sets</strong>
+                        <div class="table-section-title">📊 Ad Sets</div>
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>Ad Set</th>
-                                    <th>Impressions</th>
-                                    <th>Spend</th>
-                                    <th>Conversions</th>
+                                    <th>Ad Set Name</th>
+                                    <th style="text-align: right;">Impressions</th>
+                                    <th style="text-align: right;">Spend</th>
+                                    <th style="text-align: right;">Conversions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -923,10 +996,10 @@
             adSets.forEach((set) => {
                 tableHtml += `
                     <tr>
-                        <td>${escapeHtml(set.name || "Ad Set")}</td>
-                        <td>${formatNumber(set.impressions || 0)}</td>
-                        <td>$${formatCurrency(set.spend || 0)}</td>
-                        <td>${formatNumber(set.conversions || 0)}</td>
+                        <td style="font-weight: 600;">${escapeHtml(set.name || "Ad Set")}</td>
+                        <td style="text-align: right;"><span class="metric-badge impressions">${formatNumber(set.impressions || 0)}</span></td>
+                        <td style="text-align: right;"><span class="metric-badge spend">$${formatCurrency(set.spend || 0)}</span></td>
+                        <td style="text-align: right;"><span class="metric-badge conversions">${formatNumber(set.conversions || 0)}</span></td>
                     </tr>
                 `;
             });
@@ -935,21 +1008,26 @@
                         </table>
                     </div>
                     <div>
-                        <strong>Geo Spend</strong>
+                        <div class="table-section-title">🌍 Geographic Spend</div>
                         <table class="table">
                             <thead>
                                 <tr>
                                     <th>Country</th>
-                                    <th>Spend</th>
+                                    <th style="text-align: right;">Total Spend</th>
+                                    <th style="text-align: right;">% of Total</th>
                                 </tr>
                             </thead>
                             <tbody>
             `;
+            const totalGeoSpend = geo.reduce((sum, g) => sum + (g.spend || 0), 0);
             geo.forEach((g) => {
+                const percentage = totalGeoSpend > 0 ? ((g.spend / totalGeoSpend) * 100).toFixed(1) : 0;
+                const countryEmoji = g.country === "United States" ? "🇺🇸" : g.country === "Canada" ? "🇨🇦" : g.country === "Mexico" ? "🇲🇽" : "🌐";
                 tableHtml += `
                     <tr>
-                        <td>${escapeHtml(g.country || "—")}</td>
-                        <td>$${formatCurrency(g.spend || 0)}</td>
+                        <td style="font-weight: 600;">${countryEmoji} ${escapeHtml(g.country || "—")}</td>
+                        <td style="text-align: right;"><span class="metric-badge spend">$${formatCurrency(g.spend || 0)}</span></td>
+                        <td style="text-align: right; color: #94a3b8;">${percentage}%</td>
                     </tr>
                 `;
             });
