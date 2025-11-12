@@ -115,9 +115,6 @@
             background: linear-gradient(135deg, #ffe01b, #ffc800);
         }
 
-        .connection-icon.linkedin {
-            background: linear-gradient(135deg, #0077b5, #00a0dc);
-        }
 
         .connection-icon.instagram {
             background: linear-gradient(135deg, #e4405f, #f77737, #fcaf45);
@@ -367,27 +364,6 @@
                     <button class="btn btn-danger" onclick="disconnectService('facebook')">Disconnect</button>
                 </div>
             </div>
-
-            <!-- LinkedIn -->
-            <div class="connection-card">
-                <div class="connection-header">
-                    <div class="connection-icon linkedin">💼</div>
-                    <div class="connection-info">
-                        <div class="connection-name">LinkedIn</div>
-                        <div class="connection-description">Company page analytics and ad campaign performance</div>
-                    </div>
-                </div>
-                <div class="connection-status disconnected">
-                    <span class="status-dot"></span>
-                    Not Connected
-                </div>
-                <div class="connection-details">
-                    Connect your LinkedIn account to track professional network engagement
-                </div>
-                <div class="connection-actions">
-                    <button class="btn btn-primary" onclick="connectLinkedIn()">Connect LinkedIn</button>
-                </div>
-            </div>
         </div>
 
         <h2 class="section-title">Advertising</h2>
@@ -528,11 +504,6 @@
             window.open('/auth/facebook', 'facebook_auth', 'width=600,height=700');
         }
 
-        function connectLinkedIn() {
-            alert('Connecting to LinkedIn...\n\nThis will open a new window for OAuth authentication.');
-            // TODO: Implement OAuth flow
-            window.open('/auth/linkedin', 'linkedin_auth', 'width=600,height=700');
-        }
 
         function connectGoogleAds() {
             alert('Connecting to Google Ads...\n\nThis will open a new window for OAuth authentication.');

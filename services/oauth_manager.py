@@ -20,21 +20,13 @@ class OAuthManager:
         
         # OAuth configurations for each service
         self.configs = {
-            "google_ads": {
+            "google-ads": {
                 "client_id": os.getenv("GOOGLE_CLIENT_ID"),
                 "client_secret": os.getenv("GOOGLE_CLIENT_SECRET"),
                 "auth_url": "https://accounts.google.com/o/oauth2/v2/auth",
                 "token_url": "https://oauth2.googleapis.com/token",
                 "scopes": ["https://www.googleapis.com/auth/adwords"],
                 "redirect_uri": f"{self.base_url}/auth/google-ads/callback"
-            },
-            "linkedin": {
-                "client_id": os.getenv("LINKEDIN_CLIENT_ID"),
-                "client_secret": os.getenv("LINKEDIN_CLIENT_SECRET"),
-                "auth_url": "https://www.linkedin.com/oauth/v2/authorization",
-                "token_url": "https://www.linkedin.com/oauth/v2/accessToken",
-                "scopes": ["r_organization_social", "rw_organization_admin", "r_ads", "r_ads_reporting"],
-                "redirect_uri": f"{self.base_url}/auth/linkedin/callback"
             },
             "facebook": {
                 "client_id": os.getenv("FACEBOOK_APP_ID"),
@@ -45,7 +37,6 @@ class OAuthManager:
                     "pages_show_list",
                     "pages_read_engagement",
                     "pages_read_user_content",
-                    "pages_manage_ads",
                     "ads_read",
                     "business_management"
                 ],
