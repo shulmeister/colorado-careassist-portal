@@ -198,7 +198,7 @@ class OAuthToken(Base):
     token_type = Column(String(50), default="Bearer")
     expires_at = Column(DateTime, nullable=True)
     scope = Column(Text, nullable=True)  # Granted scopes
-    metadata = Column(JSON, nullable=True)  # Additional service-specific data
+    extra_data = Column(JSON, nullable=True)  # Additional service-specific data
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

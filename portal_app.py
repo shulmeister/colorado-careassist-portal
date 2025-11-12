@@ -991,7 +991,7 @@ async def oauth_callback(
                 token_type=token_data.get("token_type", "Bearer"),
                 expires_at=expires_at,
                 scope=token_data.get("scope"),
-                metadata=token_data.get("metadata")
+                extra_data=token_data.get("extra_data")
             )
             db.add(new_token)
         
