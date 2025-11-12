@@ -816,15 +816,13 @@ async def sales_dashboard_redirect(
 async def recruitment_dashboard_redirect(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Redirect to Recruitment Dashboard (when deployed)"""
+    """Redirect to Recruitment Dashboard"""
     recruitment_dashboard_url = os.getenv(
         "RECRUITMENT_DASHBOARD_URL",
-        "https://recruitment-coloradocareassist.herokuapp.com"
+        "https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com/"
     )
     
-    # For now, redirect back to portal if recruitment dashboard doesn't exist
-    # Replace with actual URL when recruitment dashboard is deployed
-    return RedirectResponse(url="/", status_code=302)
+    return RedirectResponse(url=recruitment_dashboard_url, status_code=302)
 
 
 @app.get("/marketing", response_class=HTMLResponse)
