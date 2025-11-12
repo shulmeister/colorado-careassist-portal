@@ -960,6 +960,43 @@ async def api_marketing_ads(
         "data": data
     })
 
+
+@app.get("/api/marketing/website")
+async def api_marketing_website(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to")
+):
+    """Return website and GBP metrics from GA4 and Google Business Profile."""
+    from services.marketing.ga4_service import ga4_service
+    from services.marketing.gbp_service import gbp_service
+    
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+    
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+    
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+    
+    # Fetch GA4 and GBP data
+    ga4_data = ga4_service.get_website_metrics(start, end)
+    gbp_data = gbp_service.get_gbp_metrics(start, end)
+    
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": (end - start).days + 1
+        },
+        "data": {
+            "ga4": ga4_data,
+            "gbp": gbp_data
+        }
+    })
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

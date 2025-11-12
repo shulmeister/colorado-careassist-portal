@@ -2037,6 +2037,7 @@
 
         refreshBtn.addEventListener("click", () => {
             loadMarketingData();
+            loadWebsiteData();
         });
 
         // Store overview chart instances
@@ -3387,13 +3388,40 @@
             }
         }
 
+        // Function to load website and GBP data
+        async function loadWebsiteData() {
+            try {
+                const params = new URLSearchParams({
+                    from: startDate.value,
+                    to: endDate.value
+                });
+
+                const websiteRes = await fetch(`/api/marketing/website?${params.toString()}`);
+
+                if (!websiteRes.ok) {
+                    throw new Error("Failed to load website metrics");
+                }
+
+                const websiteData = await websiteRes.json();
+                
+                // Store data globally
+                window.lastWebsiteData = websiteData.data;
+                
+                renderWebsiteMetrics(websiteData.data);
+            } catch (error) {
+                console.error('Error loading website data:', error);
+                // Fall back to mock data
+                renderWebsiteMetrics();
+            }
+        }
+
         // Initialize with default preset and load data.
         applyPreset(datePreset.value);
         loadMarketingData();
         
         // Load email and website data on page load
         renderEmailMetrics();
-        renderWebsiteMetrics();
+        loadWebsiteData();
     </script>
 </body>
 </html>
