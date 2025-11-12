@@ -4,6 +4,7 @@ from datetime import date, datetime, timedelta
 from typing import Dict, Any, List
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 logger = logging.getLogger(__name__)
 
@@ -25,16 +26,18 @@ class GBPService:
                 credentials = service_account.Credentials.from_service_account_info(
                     credentials_dict,
                     scopes=[
-                        "https://www.googleapis.com/auth/business.manage",
-                        "https://www.googleapis.com/auth/businessprofileperformance"
+                        "https://www.googleapis.com/auth/business.manage"
                     ]
                 )
-                # Use Business Profile Performance API
-                self.service = build('businessprofileperformance', 'v1', credentials=credentials)
+                # Use My Business Business Information API v1
+                self.service = build('mybusinessbusinessinformation', 'v1', credentials=credentials)
+                # Also initialize the Account Management API to get accounts
+                self.account_service = build('mybusinessaccountmanagement', 'v1', credentials=credentials)
                 logger.info("GBP service initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize GBP client: {e}")
                 self.service = None
+                self.account_service = None
 
     def get_gbp_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """
@@ -48,8 +51,10 @@ class GBPService:
             Dictionary containing GBP metrics
         """
         if not self.service:
-            logger.info("GBP service not configured, returning mock data")
+            logger.warning("GBP service not configured, returning mock data")
             return self._get_mock_data(start_date, end_date)
+        
+        logger.info(f"Fetching GBP metrics for locations {self.location_ids} from {start_date} to {end_date}")
         
         try:
             # Aggregate metrics from all locations
@@ -58,81 +63,106 @@ class GBPService:
             total_phone_calls = 0
             total_directions = 0
             total_website_clicks = 0
-            all_search_keywords = []
-            all_actions_over_time = {}
+            all_search_keywords = {}
+            actions_by_date = {}
             
             for location_id in self.location_ids:
                 try:
                     location_name = f"locations/{location_id}"
                     
-                    # Fetch search insights
-                    search_request = {
-                        "locationNames": [location_name],
-                        "basicRequest": {
-                            "metricRequests": [
-                                {"metric": "QUERIES_DIRECT"},
-                                {"metric": "QUERIES_INDIRECT"},
-                                {"metric": "VIEWS_MAPS"},
-                                {"metric": "VIEWS_SEARCH"},
-                                {"metric": "ACTIONS_PHONE"},
-                                {"metric": "ACTIONS_WEBSITE"},
-                                {"metric": "ACTIONS_DRIVING_DIRECTIONS"}
-                            ],
-                            "timeRange": {
-                                "startTime": start_date.strftime("%Y-%m-%dT00:00:00Z"),
-                                "endTime": end_date.strftime("%Y-%m-%dT23:59:59Z")
-                            }
-                        }
-                    }
+                    # Try to get location info first to verify access
+                    try:
+                        location_info = self.service.locations().get(name=location_name).execute()
+                        logger.info(f"Successfully accessed location: {location_info.get('title', location_id)}")
+                    except HttpError as e:
+                        if e.resp.status == 403:
+                            logger.error(f"Access denied to location {location_id}. Service account may not have permission.")
+                        elif e.resp.status == 404:
+                            logger.error(f"Location {location_id} not found. Check if the ID is correct.")
+                        else:
+                            logger.error(f"Error accessing location {location_id}: {e}")
+                        continue
                     
-                    insights = self.service.locations().searchKeywords().impressions().monthly().list(
-                        parent=location_name
-                    ).execute()
+                    # Note: The Business Profile Performance API (for metrics like views, searches, actions)
+                    # requires a separate API and has limited availability. It's primarily available through
+                    # the Google Business Profile dashboard or requires special access.
                     
-                    # Note: The actual API structure may vary. This is a simplified version.
-                    # You may need to adjust based on the actual API response structure.
-                    
-                    # For now, we'll use mock data as the GBP API can be complex
-                    logger.warning(f"GBP API integration for location {location_id} needs refinement. Using mock data.")
+                    # For now, we'll use mock data with a note that real metrics require
+                    # either the Performance API (limited access) or Google Analytics integration
+                    logger.warning(f"GBP Performance metrics require special API access. Using mock data for location {location_id}.")
                     
                 except Exception as e:
                     logger.error(f"Error fetching GBP metrics for location {location_id}: {e}")
                     continue
             
-            # Return mock data for now
+            # Return mock data with a note
+            logger.info("GBP API accessed successfully, but performance metrics require additional setup. Returning mock data.")
             return self._get_mock_data(start_date, end_date)
             
         except Exception as e:
             logger.error(f"Error fetching GBP metrics: {e}")
             return self._get_mock_data(start_date, end_date)
 
+    def get_location_info(self) -> List[Dict[str, Any]]:
+        """
+        Get basic information about the configured locations.
+        
+        Returns:
+            List of location information dictionaries
+        """
+        if not self.service:
+            return []
+        
+        locations = []
+        for location_id in self.location_ids:
+            try:
+                location_name = f"locations/{location_id}"
+                location_info = self.service.locations().get(name=location_name).execute()
+                locations.append({
+                    "id": location_id,
+                    "name": location_info.get("title", "Unknown"),
+                    "address": location_info.get("storefrontAddress", {}),
+                    "phone": location_info.get("phoneNumbers", {}).get("primaryPhone", ""),
+                    "website": location_info.get("websiteUri", "")
+                })
+            except Exception as e:
+                logger.error(f"Error getting info for location {location_id}: {e}")
+                continue
+        
+        return locations
+
     def _get_mock_data(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """Return mock data for testing."""
+        # Calculate days for more realistic mock data
+        days = (end_date - start_date).days + 1
+        
+        # Scale mock data based on time period
+        scale = days / 30.0
+        
         return {
-            "searches": 156,
-            "views": 234,
-            "phone_calls": 45,
-            "directions": 38,
-            "website_clicks": 67,
+            "searches": int(156 * scale),
+            "views": int(234 * scale),
+            "phone_calls": int(45 * scale),
+            "directions": int(38 * scale),
+            "website_clicks": int(67 * scale),
             "search_keywords": [
-                {"keyword": "home care services", "count": 42},
-                {"keyword": "senior care colorado", "count": 38},
-                {"keyword": "caregiver jobs", "count": 28},
-                {"keyword": "elderly care", "count": 24},
-                {"keyword": "respite care", "count": 24}
+                {"keyword": "home care services", "count": int(42 * scale)},
+                {"keyword": "senior care colorado", "count": int(38 * scale)},
+                {"keyword": "caregiver jobs", "count": int(28 * scale)},
+                {"keyword": "elderly care", "count": int(24 * scale)},
+                {"keyword": "respite care", "count": int(24 * scale)}
             ],
             "actions_over_time": [
-                {"date": "2025-10-12", "calls": 2, "directions": 1, "website": 3},
-                {"date": "2025-10-16", "calls": 3, "directions": 2, "website": 4},
-                {"date": "2025-10-20", "calls": 5, "directions": 4, "website": 7},
-                {"date": "2025-10-24", "calls": 4, "directions": 3, "website": 6},
-                {"date": "2025-10-28", "calls": 4, "directions": 3, "website": 7},
-                {"date": "2025-11-01", "calls": 5, "directions": 4, "website": 8},
-                {"date": "2025-11-05", "calls": 4, "directions": 3, "website": 6},
-                {"date": "2025-11-09", "calls": 3, "directions": 2, "website": 5}
-            ]
+                {
+                    "date": (start_date + timedelta(days=i)).isoformat(),
+                    "calls": 2 + (i % 4),
+                    "directions": 1 + (i % 3),
+                    "website": 3 + (i % 5)
+                }
+                for i in range(0, min(days, 30), max(1, days // 8))
+            ],
+            "note": "GBP Performance metrics require Google Business Profile Performance API access. Contact Google for API access or use Google Analytics for website traffic data."
         }
 
 
 gbp_service = GBPService()
-

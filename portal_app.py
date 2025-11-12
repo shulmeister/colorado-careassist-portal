@@ -1035,6 +1035,31 @@ async def test_ga4_connection():
     return JSONResponse(status)
 
 
+@app.get("/api/marketing/test-gbp")
+async def test_gbp_connection():
+    """Test GBP connection and return status."""
+    from services.marketing.gbp_service import gbp_service
+    import os
+    
+    status = {
+        "service_account_configured": bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")),
+        "location_ids": os.getenv("GBP_LOCATION_IDS", "").split(","),
+        "service_initialized": gbp_service.service is not None,
+    }
+    
+    if gbp_service.service:
+        try:
+            # Try to get location info
+            locations = gbp_service.get_location_info()
+            status["locations_accessible"] = len(locations)
+            status["locations"] = locations
+        except Exception as e:
+            status["locations_accessible"] = 0
+            status["error"] = str(e)
+    
+    return JSONResponse(status)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
