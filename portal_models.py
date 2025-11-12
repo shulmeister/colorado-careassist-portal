@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, Date, Numeric
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, Date, Numeric, JSON
 from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 import json
@@ -184,4 +184,43 @@ class MarketingMetricSnapshot(Base):
             "comparison_data": self.comparison_json(),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class OAuthToken(Base):
+    """Store OAuth tokens for external service integrations"""
+    __tablename__ = "oauth_tokens"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_email = Column(String(255), nullable=False, index=True)  # User who connected the service
+    service = Column(String(100), nullable=False, index=True)  # e.g., 'linkedin', 'google_ads', 'facebook'
+    access_token = Column(Text, nullable=False)
+    refresh_token = Column(Text, nullable=True)
+    token_type = Column(String(50), default="Bearer")
+    expires_at = Column(DateTime, nullable=True)
+    scope = Column(Text, nullable=True)  # Granted scopes
+    metadata = Column(JSON, nullable=True)  # Additional service-specific data
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+    
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "user_email": self.user_email,
+            "service": self.service,
+            "token_type": self.token_type,
+            "expires_at": self.expires_at.isoformat() if self.expires_at else None,
+            "scope": self.scope,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "last_used_at": self.last_used_at.isoformat() if self.last_used_at else None,
+        }
+    
+    def is_expired(self) -> bool:
+        """Check if the token is expired"""
+        if not self.expires_at:
+            return False
+        return datetime.utcnow() >= self.expires_at
 

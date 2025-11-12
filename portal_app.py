@@ -837,6 +837,211 @@ async def connections_page(
     })
 
 
+# OAuth Routes
+@app.get("/auth/{service}")
+async def oauth_initiate(
+    service: str,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Initiate OAuth flow for a service"""
+    from services.oauth_manager import oauth_manager
+    import secrets
+    
+    # Generate and store CSRF state token
+    state = secrets.token_urlsafe(32)
+    request.session[f"oauth_state_{service}"] = state
+    request.session["oauth_user_email"] = current_user.get("email")
+    
+    # Get authorization URL
+    auth_url = oauth_manager.get_authorization_url(service, state)
+    
+    if not auth_url:
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>OAuth Error</title></head>
+                <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                    <h1>⚠️ OAuth Not Configured</h1>
+                    <p>The {service} integration is not yet configured with OAuth credentials.</p>
+                    <p><a href="/connections">← Back to Connections</a></p>
+                    <script>
+                        setTimeout(() => {{
+                            window.close();
+                        }}, 3000);
+                    </script>
+                </body>
+            </html>
+            """,
+            status_code=400
+        )
+    
+    return RedirectResponse(url=auth_url)
+
+
+@app.get("/auth/{service}/callback")
+async def oauth_callback(
+    service: str,
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    request: Request = None
+):
+    """Handle OAuth callback from service"""
+    from services.oauth_manager import oauth_manager
+    from portal_models import OAuthToken
+    from datetime import datetime
+    
+    # Check for errors
+    if error:
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>OAuth Error</title></head>
+                <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                    <h1>❌ Authentication Failed</h1>
+                    <p>Error: {error}</p>
+                    <p><a href="/connections">← Back to Connections</a></p>
+                    <script>
+                        setTimeout(() => {{
+                            window.opener.postMessage({{type: 'oauth_error', service: '{service}', error: '{error}'}}, '*');
+                            window.close();
+                        }}, 2000);
+                    </script>
+                </body>
+            </html>
+            """
+        )
+    
+    # Verify state (CSRF protection)
+    expected_state = request.session.get(f"oauth_state_{service}")
+    if not state or state != expected_state:
+        return HTMLResponse(
+            content="""
+            <html>
+                <head><title>Security Error</title></head>
+                <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                    <h1>🔒 Security Error</h1>
+                    <p>Invalid state parameter. Please try again.</p>
+                    <p><a href="/connections">← Back to Connections</a></p>
+                    <script>
+                        setTimeout(() => {
+                            window.close();
+                        }, 2000);
+                    </script>
+                </body>
+            </html>
+            """,
+            status_code=400
+        )
+    
+    # Exchange code for token
+    token_data = await oauth_manager.exchange_code_for_token(service, code)
+    
+    if not token_data:
+        return HTMLResponse(
+            content="""
+            <html>
+                <head><title>Token Exchange Failed</title></head>
+                <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                    <h1>❌ Token Exchange Failed</h1>
+                    <p>Could not obtain access token. Please try again.</p>
+                    <p><a href="/connections">← Back to Connections</a></p>
+                    <script>
+                        setTimeout(() => {
+                            window.close();
+                        }, 2000);
+                    </script>
+                </body>
+            </html>
+            """,
+            status_code=500
+        )
+    
+    # Store token in database
+    try:
+        user_email = request.session.get("oauth_user_email", "unknown@example.com")
+        
+        # Parse expires_at
+        expires_at = None
+        if token_data.get("expires_at"):
+            expires_at = datetime.fromisoformat(token_data["expires_at"])
+        
+        # Check if token already exists for this user/service
+        existing_token = db.query(OAuthToken).filter(
+            OAuthToken.user_email == user_email,
+            OAuthToken.service == service
+        ).first()
+        
+        if existing_token:
+            # Update existing token
+            existing_token.access_token = token_data.get("access_token")
+            existing_token.refresh_token = token_data.get("refresh_token")
+            existing_token.expires_at = expires_at
+            existing_token.scope = token_data.get("scope")
+            existing_token.is_active = True
+            existing_token.updated_at = datetime.utcnow()
+        else:
+            # Create new token
+            new_token = OAuthToken(
+                user_email=user_email,
+                service=service,
+                access_token=token_data.get("access_token"),
+                refresh_token=token_data.get("refresh_token"),
+                token_type=token_data.get("token_type", "Bearer"),
+                expires_at=expires_at,
+                scope=token_data.get("scope"),
+                metadata=token_data.get("metadata")
+            )
+            db.add(new_token)
+        
+        db.commit()
+        
+        # Clean up session
+        request.session.pop(f"oauth_state_{service}", None)
+        
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>Success!</title></head>
+                <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                    <h1>✅ Connected Successfully!</h1>
+                    <p>{service.replace('_', ' ').title()} has been connected to your account.</p>
+                    <p>This window will close automatically...</p>
+                    <script>
+                        window.opener.postMessage({{type: 'oauth_success', service: '{service}'}}, '*');
+                        setTimeout(() => {{
+                            window.close();
+                        }}, 1500);
+                    </script>
+                </body>
+            </html>
+            """
+        )
+        
+    except Exception as e:
+        logger.error(f"Error storing OAuth token: {e}")
+        db.rollback()
+        return HTMLResponse(
+            content=f"""
+            <html>
+                <head><title>Storage Error</title></head>
+                <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+                    <h1>⚠️ Storage Error</h1>
+                    <p>Token obtained but could not be saved: {str(e)}</p>
+                    <p><a href="/connections">← Back to Connections</a></p>
+                    <script>
+                        setTimeout(() => {{
+                            window.close();
+                        }}, 3000);
+                    </script>
+                </body>
+            </html>
+            """,
+            status_code=500
+        )
+
+
 @app.get("/marketing", response_class=HTMLResponse)
 async def marketing_dashboard(
     request: Request,

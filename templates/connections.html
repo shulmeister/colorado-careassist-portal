@@ -485,6 +485,19 @@
     </div>
 
     <script>
+        // Listen for OAuth success messages from popup windows
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'oauth_success') {
+                alert(`✅ Successfully connected to ${event.data.service.replace('_', ' ')}!`);
+                // Reload the page to show updated connection status
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else if (event.data.type === 'oauth_error') {
+                alert(`❌ Failed to connect to ${event.data.service.replace('_', ' ')}: ${event.data.error}`);
+            }
+        });
+
         function testConnection(service) {
             const endpoints = {
                 'ga4': '/api/marketing/test-ga4',
