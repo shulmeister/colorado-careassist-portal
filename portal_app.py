@@ -44,6 +44,11 @@ RINGCENTRAL_EMBED_REDIRECT_URI = os.getenv(
 
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
 
+# Add session middleware for OAuth state management
+from starlette.middleware.sessions import SessionMiddleware
+import secrets
+app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32)))
+
 # Add security middleware
 app.add_middleware(
     CORSMiddleware,
