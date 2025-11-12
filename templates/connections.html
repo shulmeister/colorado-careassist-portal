@@ -377,15 +377,24 @@
                         <div class="connection-description">Campaign performance, spend, conversions, and ROI</div>
                     </div>
                 </div>
-                <div class="connection-status disconnected">
+                <div class="connection-status {% if connected_services.get('google-ads') %}connected{% else %}disconnected{% endif %}">
                     <span class="status-dot"></span>
-                    Not Connected
+                    {% if connected_services.get('google-ads') %}Connected{% else %}Not Connected{% endif %}
                 </div>
                 <div class="connection-details">
-                    Connect to track your Google Ads campaigns and spending
+                    {% if connected_services.get('google-ads') %}
+                        Successfully connected to Google Ads
+                    {% else %}
+                        Connect to track your Google Ads campaigns and spending
+                    {% endif %}
                 </div>
                 <div class="connection-actions">
-                    <button class="btn btn-primary" onclick="connectGoogleAds()">Connect Google Ads</button>
+                    {% if connected_services.get('google-ads') %}
+                        <button class="btn btn-secondary" onclick="reconnectGoogleAds()">Reconnect</button>
+                        <button class="btn btn-danger" onclick="disconnectService('google-ads')">Disconnect</button>
+                    {% else %}
+                        <button class="btn btn-primary" onclick="connectGoogleAds()">Connect Google Ads</button>
+                    {% endif %}
                 </div>
             </div>
 
@@ -398,15 +407,24 @@
                         <div class="connection-description">Facebook & Instagram ad campaigns and performance</div>
                     </div>
                 </div>
-                <div class="connection-status disconnected">
+                <div class="connection-status {% if connected_services.get('facebook') %}connected{% else %}disconnected{% endif %}">
                     <span class="status-dot"></span>
-                    Not Connected
+                    {% if connected_services.get('facebook') %}Connected{% else %}Not Connected{% endif %}
                 </div>
                 <div class="connection-details">
-                    Connect to track Facebook and Instagram advertising
+                    {% if connected_services.get('facebook') %}
+                        Successfully connected to Meta Ads Manager
+                    {% else %}
+                        Connect to track Facebook and Instagram advertising
+                    {% endif %}
                 </div>
                 <div class="connection-actions">
-                    <button class="btn btn-primary" onclick="connectMetaAds()">Connect Meta Ads</button>
+                    {% if connected_services.get('facebook') %}
+                        <button class="btn btn-secondary" onclick="reconnectMetaAds()">Reconnect</button>
+                        <button class="btn btn-danger" onclick="disconnectService('facebook')">Disconnect</button>
+                    {% else %}
+                        <button class="btn btn-primary" onclick="connectMetaAds()">Connect Meta Ads</button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -422,15 +440,24 @@
                         <div class="connection-description">Email campaigns, subscriber growth, and engagement metrics</div>
                     </div>
                 </div>
-                <div class="connection-status disconnected">
+                <div class="connection-status {% if connected_services.get('mailchimp') %}connected{% else %}disconnected{% endif %}">
                     <span class="status-dot"></span>
-                    Not Connected
+                    {% if connected_services.get('mailchimp') %}Connected{% else %}Not Connected{% endif %}
                 </div>
                 <div class="connection-details">
-                    API key configured, ready to connect
+                    {% if connected_services.get('mailchimp') %}
+                        Successfully connected to Mailchimp
+                    {% else %}
+                        API key configured, ready to connect
+                    {% endif %}
                 </div>
                 <div class="connection-actions">
-                    <button class="btn btn-primary" onclick="connectMailchimp()">Connect Mailchimp</button>
+                    {% if connected_services.get('mailchimp') %}
+                        <button class="btn btn-secondary" onclick="reconnectMailchimp()">Reconnect</button>
+                        <button class="btn btn-danger" onclick="disconnectService('mailchimp')">Disconnect</button>
+                    {% else %}
+                        <button class="btn btn-primary" onclick="connectMailchimp()">Connect Mailchimp</button>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -446,15 +473,24 @@
                         <div class="connection-description">Revenue, expenses, profit & loss, and cash flow</div>
                     </div>
                 </div>
-                <div class="connection-status disconnected">
+                <div class="connection-status {% if connected_services.get('quickbooks') %}connected{% else %}disconnected{% endif %}">
                     <span class="status-dot"></span>
-                    Not Connected
+                    {% if connected_services.get('quickbooks') %}Connected{% else %}Not Connected{% endif %}
                 </div>
                 <div class="connection-details">
-                    Connect to track financial performance and accounting data
+                    {% if connected_services.get('quickbooks') %}
+                        Successfully connected to QuickBooks Online
+                    {% else %}
+                        Connect to track financial performance and accounting data
+                    {% endif %}
                 </div>
                 <div class="connection-actions">
-                    <button class="btn btn-primary" onclick="connectQuickBooks()">Connect QuickBooks</button>
+                    {% if connected_services.get('quickbooks') %}
+                        <button class="btn btn-secondary" onclick="reconnectQuickBooks()">Reconnect</button>
+                        <button class="btn btn-danger" onclick="disconnectService('quickbooks')">Disconnect</button>
+                    {% else %}
+                        <button class="btn btn-primary" onclick="connectQuickBooks()">Connect QuickBooks</button>
+                    {% endif %}
                 </div>
             </div>
         </div>

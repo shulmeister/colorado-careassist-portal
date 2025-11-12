@@ -833,12 +833,29 @@ async def recruitment_dashboard_redirect(
 @app.get("/connections", response_class=HTMLResponse)
 async def connections_page(
     request: Request,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Render the data connections management page."""
+    from portal_models import OAuthToken
+    
+    # Check which services are connected for this user
+    user_email = current_user.get("email", "unknown@example.com")
+    connected_services = {}
+    
+    services = ["facebook", "google-ads", "mailchimp", "quickbooks"]
+    for service in services:
+        token = db.query(OAuthToken).filter(
+            OAuthToken.user_email == user_email,
+            OAuthToken.service == service,
+            OAuthToken.is_active == True
+        ).first()
+        connected_services[service] = token is not None
+    
     return templates.TemplateResponse("connections.html", {
         "request": request,
-        "user": current_user
+        "user": current_user,
+        "connected_services": connected_services
     })
 
 
