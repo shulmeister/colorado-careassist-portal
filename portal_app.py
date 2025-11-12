@@ -890,7 +890,8 @@ async def oauth_callback(
     code: Optional[str] = None,
     state: Optional[str] = None,
     error: Optional[str] = None,
-    request: Request = None
+    request: Request = None,
+    db: Session = Depends(get_db)
 ):
     """Handle OAuth callback from service"""
     from services.oauth_manager import oauth_manager
