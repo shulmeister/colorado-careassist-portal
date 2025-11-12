@@ -48,8 +48,10 @@ class GA4Service:
             Dictionary containing GA4 metrics
         """
         if not self.client:
-            logger.info("GA4 client not configured, returning mock data")
+            logger.warning("GA4 client not configured, returning mock data")
             return self._get_mock_data(start_date, end_date)
+        
+        logger.info(f"Fetching GA4 metrics for property {self.property_id} from {start_date} to {end_date}")
         
         try:
             # Fetch main metrics

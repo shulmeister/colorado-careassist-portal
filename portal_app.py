@@ -969,6 +969,9 @@ async def api_marketing_website(
     """Return website and GBP metrics from GA4 and Google Business Profile."""
     from services.marketing.ga4_service import ga4_service
     from services.marketing.gbp_service import gbp_service
+    import logging
+    
+    logger = logging.getLogger(__name__)
     
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
@@ -979,9 +982,16 @@ async def api_marketing_website(
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
     
+    # Log the request
+    logger.info(f"Fetching website metrics from {start} to {end}")
+    
     # Fetch GA4 and GBP data
     ga4_data = ga4_service.get_website_metrics(start, end)
     gbp_data = gbp_service.get_gbp_metrics(start, end)
+    
+    # Log if we're using mock data
+    if ga4_data.get("total_users") == 188:
+        logger.warning("GA4 returned mock data - check service account permissions")
     
     return JSONResponse({
         "success": True,
@@ -995,6 +1005,34 @@ async def api_marketing_website(
             "gbp": gbp_data
         }
     })
+
+
+@app.get("/api/marketing/test-ga4")
+async def test_ga4_connection():
+    """Test GA4 connection and return status."""
+    from services.marketing.ga4_service import ga4_service
+    import os
+    
+    status = {
+        "service_account_configured": bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")),
+        "property_id": os.getenv("GA4_PROPERTY_ID", "445403783"),
+        "client_initialized": ga4_service.client is not None,
+    }
+    
+    if ga4_service.client:
+        try:
+            # Try a simple query
+            from datetime import date, timedelta
+            end = date.today()
+            start = end - timedelta(days=7)
+            test_data = ga4_service.get_website_metrics(start, end)
+            status["test_query_successful"] = True
+            status["sample_users"] = test_data.get("total_users", 0)
+        except Exception as e:
+            status["test_query_successful"] = False
+            status["error"] = str(e)
+    
+    return JSONResponse(status)
 
 
 if __name__ == "__main__":
