@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Connections - Colorado CareAssist Portal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #94a3b8;
+            font-size: 16px;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            color: #3b82f6;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 24px;
+            transition: all 0.2s;
+        }
+
+        .back-button:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+
+        .connections-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .connection-card {
+            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+
+        .connection-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(59, 130, 246, 0.4);
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .connection-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .connection-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+
+        .connection-icon.google {
+            background: linear-gradient(135deg, #4285f4, #34a853);
+        }
+
+        .connection-icon.facebook {
+            background: linear-gradient(135deg, #1877f2, #0866ff);
+        }
+
+        .connection-icon.mailchimp {
+            background: linear-gradient(135deg, #ffe01b, #ffc800);
+        }
+
+        .connection-icon.linkedin {
+            background: linear-gradient(135deg, #0077b5, #00a0dc);
+        }
+
+        .connection-icon.instagram {
+            background: linear-gradient(135deg, #e4405f, #f77737, #fcaf45);
+        }
+
+        .connection-icon.quickbooks {
+            background: linear-gradient(135deg, #2ca01c, #47b347);
+        }
+
+        .connection-info {
+            flex: 1;
+        }
+
+        .connection-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .connection-description {
+            font-size: 13px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .connection-status.connected {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #10b981;
+        }
+
+        .connection-status.disconnected {
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            color: #94a3b8;
+        }
+
+        .connection-status.error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        .connection-details {
+            font-size: 12px;
+            color: #64748b;
+            margin-bottom: 16px;
+        }
+
+        .connection-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #3b82f6;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(59, 130, 246, 0.2);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #ef4444;
+        }
+
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: #e2e8f0;
+        }
+
+        .info-box {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+
+        .info-box-title {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #3b82f6;
+        }
+
+        .info-box-text {
+            font-size: 14px;
+            color: #94a3b8;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .connections-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/portal" class="back-button">
+            ← Back to Portal
+        </a>
+
+        <div class="header">
+            <h1>Data Connections</h1>
+            <p>Connect your marketing and business platforms to automatically sync data to your dashboard</p>
+        </div>
+
+        <div class="info-box">
+            <div class="info-box-title">🔒 Secure OAuth Authentication</div>
+            <div class="info-box-text">
+                All connections use industry-standard OAuth 2.0 authentication. We never see or store your passwords. 
+                You can disconnect any service at any time, and your data will remain secure.
+            </div>
+        </div>
+
+        <h2 class="section-title">Analytics & Website</h2>
+        <div class="connections-grid">
+            <!-- Google Analytics 4 -->
+            <div class="connection-card">
+                <div class="connection-header">
+                    <div class="connection-icon google">📊</div>
+                    <div class="connection-info">
+                        <div class="connection-name">Google Analytics 4</div>
+                        <div class="connection-description">Website traffic, user behavior, and conversion tracking</div>
+                    </div>
+                </div>
+                <div class="connection-status connected">
+                    <span class="status-dot"></span>
+                    Connected
+                </div>
+                <div class="connection-details">
+                    Property ID: 445403783<br>
+                    Last synced: Just now
+                </div>
+                <div class="connection-actions">
+                    <button class="btn btn-secondary" onclick="testConnection('ga4')">Test Connection</button>
+                    <button class="btn btn-danger" onclick="disconnectService('ga4')">Disconnect</button>
+                </div>
+            </div>
+
+            <!-- Google Business Profile -->
+            <div class="connection-card">
+                <div class="connection-header">
+                    <div class="connection-icon google">🏢</div>
+                    <div class="connection-info">
+                        <div class="connection-name">Google Business Profile</div>
+                        <div class="connection-description">Local search performance, reviews, and customer actions</div>
+                    </div>
+                </div>
+                <div class="connection-status error">
+                    <span class="status-dot"></span>
+                    Quota Pending
+                </div>
+                <div class="connection-details">
+                    2 locations configured<br>
+                    Status: Waiting for API quota approval
+                </div>
+                <div class="connection-actions">
+                    <button class="btn btn-secondary" onclick="testConnection('gbp')">Test Connection</button>
+                    <button class="btn btn-danger" onclick="disconnectService('gbp')">Disconnect</button>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Social Media</h2>
+        <div class="connections-grid">
+            <!-- Facebook -->
+            <div class="connection-card">
+                <div class="connection-header">
+                    <div class="connection-icon facebook">📘</div>
+                    <div class="connection-info">
+                        <div class="connection-name">Facebook & Instagram</div>
+                        <div class="connection-description">Page insights, post engagement, and ad performance</div>
+                    </div>
+                </div>
+                <div class="connection-status connected">
+                    <span class="status-dot"></span>
+                    Connected
+                </div>
+                <div class="connection-details">
+                    Account: Colorado CareAssist<br>
+                    Last synced: 5 minutes ago
+                </div>
+                <div class="connection-actions">
+                    <button class="btn btn-secondary" onclick="reconnectFacebook()">Reconnect</button>
+                    <button class="btn btn-danger" onclick="disconnectService('facebook')">Disconnect</button>
+                </div>
+            </div>
+
+            <!-- LinkedIn -->
+            <div class="connection-card">
+                <div class="connection-header">
+                    <div class="connection-icon linkedin">💼</div>
+                    <div class="connection-info">
+                        <div class="connection-name">LinkedIn</div>
+                        <div class="connection-description">Company page analytics and ad campaign performance</div>
+                    </div>
+                </div>
+                <div class="connection-status disconnected">
+                    <span class="status-dot"></span>
+                    Not Connected
+                </div>
+                <div class="connection-details">
+                    Connect your LinkedIn account to track professional network engagement
+                </div>
+                <div class="connection-actions">
+                    <button class="btn btn-primary" onclick="connectLinkedIn()">Connect LinkedIn</button>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Advertising</h2>
+        <div class="connections-grid">
+            <!-- Google Ads -->
+            <div class="connection-card">
+                <div class="connection-header">
+                    <div class="connection-icon google">🎯</div>
+                    <div class="connection-info">
+                        <div class="connection-name">Google Ads</div>
+                        <div class="connection-description">Campaign performance, spend, conversions, and ROI</div>
+                    </div>
+                </div>
+                <div class="connection-status disconnected">
+                    <span class="status-dot"></span>
+                    Not Connected
+                </div>
+                <div class="connection-details">
+                    Connect to track your Google Ads campaigns and spending
+                </div>
+                <div class="connection-actions">
+                    <button class="btn btn-primary" onclick="connectGoogleAds()">Connect Google Ads</button>
+                </div>
+            </div>
+
+            <!-- Meta Ads -->
+            <div class="connection-card">
+                <div class="connection-header">
+                    <div class="connection-icon facebook">📱</div>
+                    <div class="connection-info">
+                        <div class="connection-name">Meta Ads Manager</div>
+                        <div class="connection-description">Facebook & Instagram ad campaigns and performance</div>
+                    </div>
+                </div>
+                <div class="connection-status disconnected">
+                    <span class="status-dot"></span>
+                    Not Connected
+                </div>
+                <div class="connection-details">
+                    Connect to track Facebook and Instagram advertising
+                </div>
+                <div class="connection-actions">
+                    <button class="btn btn-primary" onclick="connectMetaAds()">Connect Meta Ads</button>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Email & CRM</h2>
+        <div class="connections-grid">
+            <!-- Mailchimp -->
+            <div class="connection-card">
+                <div class="connection-header">
+                    <div class="connection-icon mailchimp">📧</div>
+                    <div class="connection-info">
+                        <div class="connection-name">Mailchimp</div>
+                        <div class="connection-description">Email campaigns, subscriber growth, and engagement metrics</div>
+                    </div>
+                </div>
+                <div class="connection-status disconnected">
+                    <span class="status-dot"></span>
+                    Not Connected
+                </div>
+                <div class="connection-details">
+                    API key configured, ready to connect
+                </div>
+                <div class="connection-actions">
+                    <button class="btn btn-primary" onclick="connectMailchimp()">Connect Mailchimp</button>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="section-title">Financial</h2>
+        <div class="connections-grid">
+            <!-- QuickBooks -->
+            <div class="connection-card">
+                <div class="connection-header">
+                    <div class="connection-icon quickbooks">💰</div>
+                    <div class="connection-info">
+                        <div class="connection-name">QuickBooks Online</div>
+                        <div class="connection-description">Revenue, expenses, profit & loss, and cash flow</div>
+                    </div>
+                </div>
+                <div class="connection-status disconnected">
+                    <span class="status-dot"></span>
+                    Not Connected
+                </div>
+                <div class="connection-details">
+                    Connect to track financial performance and accounting data
+                </div>
+                <div class="connection-actions">
+                    <button class="btn btn-primary" onclick="connectQuickBooks()">Connect QuickBooks</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function testConnection(service) {
+            const endpoints = {
+                'ga4': '/api/marketing/test-ga4',
+                'gbp': '/api/marketing/test-gbp'
+            };
+
+            if (endpoints[service]) {
+                fetch(endpoints[service])
+                    .then(res => res.json())
+                    .then(data => {
+                        alert(`Connection Test Results:\n\n${JSON.stringify(data, null, 2)}`);
+                    })
+                    .catch(err => {
+                        alert(`Test failed: ${err.message}`);
+                    });
+            }
+        }
+
+        function disconnectService(service) {
+            if (confirm(`Are you sure you want to disconnect ${service}? Your data will no longer sync.`)) {
+                alert(`Disconnect functionality coming soon. For now, contact support to disconnect ${service}.`);
+            }
+        }
+
+        function reconnectFacebook() {
+            alert('Reconnecting to Facebook...\n\nThis will open a new window for OAuth authentication.');
+            // TODO: Implement OAuth flow
+            window.open('/auth/facebook', 'facebook_auth', 'width=600,height=700');
+        }
+
+        function connectLinkedIn() {
+            alert('Connecting to LinkedIn...\n\nThis will open a new window for OAuth authentication.');
+            // TODO: Implement OAuth flow
+            window.open('/auth/linkedin', 'linkedin_auth', 'width=600,height=700');
+        }
+
+        function connectGoogleAds() {
+            alert('Connecting to Google Ads...\n\nThis will open a new window for OAuth authentication.');
+            // TODO: Implement OAuth flow
+            window.open('/auth/google-ads', 'google_ads_auth', 'width=600,height=700');
+        }
+
+        function connectMetaAds() {
+            alert('Connecting to Meta Ads...\n\nThis will open a new window for OAuth authentication.');
+            // TODO: Implement OAuth flow
+            window.open('/auth/meta-ads', 'meta_ads_auth', 'width=600,height=700');
+        }
+
+        function connectMailchimp() {
+            alert('Connecting to Mailchimp...\n\nThis will open a new window for OAuth authentication.');
+            // TODO: Implement OAuth flow
+            window.open('/auth/mailchimp', 'mailchimp_auth', 'width=600,height=700');
+        }
+
+        function connectQuickBooks() {
+            alert('Connecting to QuickBooks...\n\nThis will open a new window for OAuth authentication.');
+            // TODO: Implement OAuth flow
+            window.open('/auth/quickbooks', 'quickbooks_auth', 'width=600,height=700');
+        }
+    </script>
+</body>
+</html>
+

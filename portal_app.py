@@ -825,6 +825,18 @@ async def recruitment_dashboard_redirect(
     return RedirectResponse(url=recruitment_dashboard_url, status_code=302)
 
 
+@app.get("/connections", response_class=HTMLResponse)
+async def connections_page(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Render the data connections management page."""
+    return templates.TemplateResponse("connections.html", {
+        "request": request,
+        "user": current_user
+    })
+
+
 @app.get("/marketing", response_class=HTMLResponse)
 async def marketing_dashboard(
     request: Request,
