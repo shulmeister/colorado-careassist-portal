@@ -641,6 +641,7 @@
                 <a class="sidebar-link active" data-tab="overview"><span class="icon">📊</span> Overview</a>
                 <a class="sidebar-link" data-tab="social"><span class="icon">📱</span> Social Performance</a>
                 <a class="sidebar-link" data-tab="paid-media"><span class="icon">🎯</span> Paid Media</a>
+                <a class="sidebar-link" data-tab="email"><span class="icon">📧</span> Email Marketing</a>
                 <a class="sidebar-link" data-tab="engagement"><span class="icon">💬</span> Engagement</a>
                 <a class="sidebar-link disabled" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
             </nav>
@@ -1041,6 +1042,174 @@
                         </div>
                     </div>
                 </div>
+                </section>
+            </div>
+
+            <!-- Email Marketing Tab -->
+            <div class="tab-content" id="tab-email">
+                <section class="sections">
+                    <!-- Email Overview -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">📧 Email Campaign Performance</h2>
+                                <p class="section-description">
+                                    Mailchimp campaign metrics including subscribers, open rates, click rates, and audience engagement.
+                                </p>
+                            </div>
+                        </header>
+
+                        <!-- Top KPIs -->
+                        <div class="grid grid-4">
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon blue">👥</div>
+                                <div class="panel-title">Total Subscribers</div>
+                                <div class="panel-subtitle">All audiences</div>
+                                <div class="kpi-value" id="emailTotalSubscribers">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon green">📬</div>
+                                <div class="panel-title">New Subscribers</div>
+                                <div class="panel-subtitle">This month</div>
+                                <div class="kpi-value" id="emailNewSubscribers">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon purple">📨</div>
+                                <div class="panel-title">Campaigns Sent</div>
+                                <div class="panel-subtitle">This month</div>
+                                <div class="kpi-value" id="emailCampaignsSent">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon orange">📊</div>
+                                <div class="panel-title">Avg Open Rate</div>
+                                <div class="panel-subtitle">All campaigns</div>
+                                <div class="kpi-value" id="emailAvgOpenRate">—</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campaign Performance -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">📈 Campaign Performance</h2>
+                                <p class="section-description">
+                                    Detailed metrics for recent email campaigns.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="grid grid-2">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Open Rate Trends</div>
+                                        <div class="panel-subtitle">Last 30 days</div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-height: 220px; padding: 16px;">
+                                    <canvas id="emailOpenRateTrendChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Click Rate Trends</div>
+                                        <div class="panel-subtitle">Last 30 days</div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-height: 220px; padding: 16px;">
+                                    <canvas id="emailClickRateTrendChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Campaigns Table -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">📋 Recent Campaigns</h2>
+                                <p class="section-description">
+                                    Performance breakdown by campaign.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="panel">
+                            <div id="emailCampaignsTable" class="empty-state">
+                                Loading campaign data...
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Audience Performance -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">👥 Audience Performance</h2>
+                                <p class="section-description">
+                                    Subscriber growth and engagement by audience.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="grid grid-2">
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Subscriber Growth</div>
+                                        <div class="panel-subtitle">Last 30 days</div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-height: 200px; padding: 16px;">
+                                    <canvas id="emailSubscriberGrowthChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="panel">
+                                <div class="panel-header">
+                                    <div>
+                                        <div class="panel-title">Audience Stats</div>
+                                        <div class="panel-subtitle">Current status</div>
+                                    </div>
+                                </div>
+                                <div style="padding: 16px;">
+                                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                                        <div>
+                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Subscribed</div>
+                                            <div style="font-size: 24px; font-weight: 700; color: #10b981;" id="emailSubscribedCount">—</div>
+                                        </div>
+                                        <div>
+                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Unsubscribed</div>
+                                            <div style="font-size: 24px; font-weight: 700; color: #ef4444;" id="emailUnsubscribedCount">—</div>
+                                        </div>
+                                        <div>
+                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Cleaned</div>
+                                            <div style="font-size: 24px; font-weight: 700; color: #64748b;" id="emailCleanedCount">—</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Performing Links -->
+                    <div class="section">
+                        <header class="section-header">
+                            <div>
+                                <h2 class="section-title">🔗 Top Performing Links</h2>
+                                <p class="section-description">
+                                    Most clicked links across all campaigns.
+                                </p>
+                            </div>
+                        </header>
+
+                        <div class="panel">
+                            <div id="emailTopLinksTable" class="empty-state">
+                                Loading link performance data...
+                            </div>
+                        </div>
+                    </div>
                 </section>
             </div>
 
@@ -2002,6 +2171,7 @@
                     'overview': 'Marketing Performance Overview',
                     'social': 'Social Performance',
                     'paid-media': 'Paid Media Performance',
+                    'email': 'Email Marketing Performance',
                     'engagement': 'Engagement Metrics'
                 };
                 document.querySelector('.page-title').textContent = tabTitles[targetTab] || 'Marketing Dashboard';
@@ -2168,10 +2338,343 @@
         // Store social data globally for engagement tab
         window.lastSocialData = null;
         window.lastAdsData = null;
+        window.lastEmailData = null;
+
+        // Email marketing chart instances
+        let emailOpenRateTrendChart = null;
+        let emailClickRateTrendChart = null;
+        let emailSubscriberGrowthChart = null;
+
+        // Render email marketing metrics
+        function renderEmailMetrics(emailData) {
+            if (!emailData) {
+                // Use mock data if no real data
+                emailData = {
+                    subscribers: {
+                        total: 721,
+                        new_this_month: 45,
+                        subscribed: 721,
+                        unsubscribed: 12,
+                        cleaned: 8
+                    },
+                    campaigns: {
+                        sent_this_month: 8,
+                        avg_open_rate: 32.5,
+                        avg_click_rate: 5.8,
+                        recent: [
+                            { name: 'Partner Newsletter September 2025', send_date: '09/23/2025', open_rate: 13.5, click_rate: 5.3, recipients: 721 },
+                            { name: 'Partner Newsletter Oct 2025', send_date: '10/30/2025', open_rate: 9.4, click_rate: 3.8, recipients: 721 },
+                            { name: 'Family Care Update #1', send_date: '06/23/2025', open_rate: 5.3, click_rate: 2.1, recipients: 650 },
+                            { name: 'Partner Newsletter 2', send_date: '07/10/2025', open_rate: 3.8, click_rate: 1.5, recipients: 680 },
+                            { name: 'Partner Newsletter Template - July 31 2025', send_date: '07/31/2025', open_rate: 3.2, click_rate: 1.2, recipients: 695 },
+                            { name: 'Family Care Update #2', send_date: '08/20/2025', open_rate: 3.1, click_rate: 1.1, recipients: 710 }
+                        ]
+                    },
+                    growth: {
+                        daily: [
+                            { date: '2025-10-13', subscribers: 676 },
+                            { date: '2025-10-14', subscribers: 678 },
+                            { date: '2025-10-15', subscribers: 680 },
+                            { date: '2025-10-16', subscribers: 683 },
+                            { date: '2025-10-17', subscribers: 685 },
+                            { date: '2025-10-18', subscribers: 688 },
+                            { date: '2025-10-19', subscribers: 690 },
+                            { date: '2025-10-20', subscribers: 693 },
+                            { date: '2025-10-21', subscribers: 695 },
+                            { date: '2025-10-22', subscribers: 698 },
+                            { date: '2025-10-23', subscribers: 700 },
+                            { date: '2025-10-24', subscribers: 703 },
+                            { date: '2025-10-25', subscribers: 706 },
+                            { date: '2025-10-26', subscribers: 708 },
+                            { date: '2025-10-27', subscribers: 711 },
+                            { date: '2025-10-28', subscribers: 713 },
+                            { date: '2025-10-29', subscribers: 716 },
+                            { date: '2025-10-30', subscribers: 718 },
+                            { date: '2025-11-01', subscribers: 721 }
+                        ]
+                    },
+                    top_links: [
+                        { url: 'https://coloradocareassist.com/services', clicks: 156, campaign: 'Partner Newsletter Oct 2025' },
+                        { url: 'https://coloradocareassist.com/contact', clicks: 98, campaign: 'Family Care Update #1' },
+                        { url: 'https://coloradocareassist.com/about', clicks: 72, campaign: 'Partner Newsletter September 2025' }
+                    ]
+                };
+            }
+
+            // Update KPIs
+            document.getElementById('emailTotalSubscribers').textContent = formatNumber(emailData.subscribers?.total || 0);
+            document.getElementById('emailNewSubscribers').textContent = formatNumber(emailData.subscribers?.new_this_month || 0);
+            document.getElementById('emailCampaignsSent').textContent = formatNumber(emailData.campaigns?.sent_this_month || 0);
+            document.getElementById('emailAvgOpenRate').textContent = (emailData.campaigns?.avg_open_rate || 0).toFixed(1) + '%';
+
+            // Audience stats
+            document.getElementById('emailSubscribedCount').textContent = formatNumber(emailData.subscribers?.subscribed || 0);
+            document.getElementById('emailUnsubscribedCount').textContent = formatNumber(emailData.subscribers?.unsubscribed || 0);
+            document.getElementById('emailCleanedCount').textContent = formatNumber(emailData.subscribers?.cleaned || 0);
+
+            // Open Rate Trend Chart
+            const emailOpenRateCtx = document.getElementById('emailOpenRateTrendChart');
+            if (emailOpenRateCtx) {
+                if (emailOpenRateTrendChart) emailOpenRateTrendChart.destroy();
+                
+                const campaigns = emailData.campaigns?.recent || [];
+                emailOpenRateTrendChart = new Chart(emailOpenRateCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: campaigns.map(c => c.name.substring(0, 25) + '...'),
+                        datasets: [{
+                            label: 'Open Rate %',
+                            data: campaigns.map(c => c.open_rate),
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderColor: '#3b82f6',
+                            borderWidth: 1,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#f8fafc',
+                                bodyColor: '#e2e8f0',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 10,
+                                callbacks: {
+                                    label: (context) => context.parsed.y.toFixed(1) + '%'
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 9 },
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 },
+                                    callback: (value) => value + '%'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Click Rate Trend Chart
+            const emailClickRateCtx = document.getElementById('emailClickRateTrendChart');
+            if (emailClickRateCtx) {
+                if (emailClickRateTrendChart) emailClickRateTrendChart.destroy();
+                
+                const campaigns = emailData.campaigns?.recent || [];
+                emailClickRateTrendChart = new Chart(emailClickRateCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: campaigns.map(c => c.name.substring(0, 25) + '...'),
+                        datasets: [{
+                            label: 'Click Rate %',
+                            data: campaigns.map(c => c.click_rate),
+                            backgroundColor: 'rgba(139, 92, 246, 0.8)',
+                            borderColor: '#8b5cf6',
+                            borderWidth: 1,
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#f8fafc',
+                                bodyColor: '#e2e8f0',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 10,
+                                callbacks: {
+                                    label: (context) => context.parsed.y.toFixed(1) + '%'
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 9 },
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 },
+                                    callback: (value) => value + '%'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Subscriber Growth Chart
+            const emailSubscriberGrowthCtx = document.getElementById('emailSubscriberGrowthChart');
+            if (emailSubscriberGrowthCtx) {
+                if (emailSubscriberGrowthChart) emailSubscriberGrowthChart.destroy();
+                
+                const growth = emailData.growth?.daily || [];
+                emailSubscriberGrowthChart = new Chart(emailSubscriberGrowthCtx, {
+                    type: 'line',
+                    data: {
+                        labels: growth.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                        datasets: [{
+                            label: 'Subscribers',
+                            data: growth.map(d => d.subscribers),
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            pointBackgroundColor: '#10b981',
+                            pointBorderColor: '#1e293b',
+                            pointBorderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#f8fafc',
+                                bodyColor: '#e2e8f0',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 10
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { display: false },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 }
+                                }
+                            },
+                            y: {
+                                grid: {
+                                    color: 'rgba(148, 163, 184, 0.1)',
+                                    drawBorder: false
+                                },
+                                ticks: {
+                                    color: '#94a3b8',
+                                    font: { size: 10 }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Recent Campaigns Table
+            const emailCampaignsTable = document.getElementById('emailCampaignsTable');
+            if (emailCampaignsTable) {
+                const campaigns = emailData.campaigns?.recent || [];
+                if (campaigns.length > 0) {
+                    let tableHtml = `
+                        <div class="table-section-title">Campaign Performance</div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Campaign</th>
+                                    <th>Send Date</th>
+                                    <th style="text-align: right;">Recipients</th>
+                                    <th style="text-align: right;">Open Rate</th>
+                                    <th style="text-align: right;">Click Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    campaigns.forEach((campaign) => {
+                        tableHtml += `
+                            <tr>
+                                <td>${campaign.name}</td>
+                                <td>${campaign.send_date}</td>
+                                <td style="text-align: right;">${formatNumber(campaign.recipients)}</td>
+                                <td style="text-align: right;"><span class="metric-badge clicks">${campaign.open_rate.toFixed(1)}%</span></td>
+                                <td style="text-align: right;"><span class="metric-badge conversions">${campaign.click_rate.toFixed(1)}%</span></td>
+                            </tr>
+                        `;
+                    });
+                    tableHtml += `</tbody></table>`;
+                    emailCampaignsTable.innerHTML = tableHtml;
+                } else {
+                    emailCampaignsTable.innerHTML = '<div class="empty-state">No campaigns data available</div>';
+                }
+            }
+
+            // Top Links Table
+            const emailTopLinksTable = document.getElementById('emailTopLinksTable');
+            if (emailTopLinksTable) {
+                const links = emailData.top_links || [];
+                if (links.length > 0) {
+                    let tableHtml = `
+                        <div class="table-section-title">Top Clicked Links</div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>URL</th>
+                                    <th>Campaign</th>
+                                    <th style="text-align: right;">Total Clicks</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    links.forEach((link) => {
+                        tableHtml += `
+                            <tr>
+                                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${link.url}</td>
+                                <td>${link.campaign}</td>
+                                <td style="text-align: right;"><span class="metric-badge clicks">${formatNumber(link.clicks)}</span></td>
+                            </tr>
+                        `;
+                    });
+                    tableHtml += `</tbody></table>`;
+                    emailTopLinksTable.innerHTML = tableHtml;
+                } else {
+                    emailTopLinksTable.innerHTML = '<div class="empty-state">No link data available</div>';
+                }
+            }
+        }
 
         // Initialize with default preset and load data.
         applyPreset(datePreset.value);
         loadMarketingData();
+        
+        // Load email data on page load
+        renderEmailMetrics();
     </script>
 </body>
 </html>
