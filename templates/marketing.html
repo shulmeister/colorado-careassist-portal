@@ -17,28 +17,42 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background: #1a1f35;
             color: #e5e7eb;
-            line-height: 1.5;
-            padding: 20px;
+            line-height: 1.4;
+            padding: 16px;
+            overflow: hidden;
+        }
+        
+        .dashboard-wrapper {
+            max-height: 100vh;
+            overflow-y: auto;
         }
 
         .dashboard-header {
-            margin-bottom: 30px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
 
         .back-link {
             display: inline-flex;
             align-items: center;
-            gap: 8px;
-            padding: 10px 16px;
+            gap: 6px;
+            padding: 6px 12px;
             background: rgba(59, 130, 246, 0.15);
             border: 1px solid rgba(59, 130, 246, 0.35);
-            border-radius: 8px;
+            border-radius: 6px;
             color: #60a5fa;
             text-decoration: none;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
             transition: all 0.2s;
-            margin-bottom: 20px;
         }
 
         .back-link:hover {
@@ -47,47 +61,46 @@
         }
 
         .dashboard-title {
-            font-size: 28px;
+            font-size: 20px;
             font-weight: 700;
             color: #f9fafb;
-            margin-bottom: 8px;
+            margin: 0;
         }
 
         .date-range {
-            font-size: 14px;
+            font-size: 11px;
             color: #9ca3af;
-            margin-bottom: 20px;
+            margin: 0;
         }
 
         .filters {
             display: flex;
-            gap: 12px;
+            gap: 8px;
             align-items: center;
-            margin-bottom: 30px;
         }
 
         .filter-select {
-            padding: 8px 14px;
+            padding: 6px 10px;
             background: #252d47;
             border: 1px solid #374151;
-            border-radius: 8px;
+            border-radius: 6px;
             color: #e5e7eb;
-            font-size: 14px;
+            font-size: 12px;
             cursor: pointer;
         }
 
         .refresh-btn {
-            padding: 8px 14px;
+            padding: 6px 12px;
             background: #3b82f6;
             border: none;
-            border-radius: 8px;
+            border-radius: 6px;
             color: white;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
             cursor: pointer;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
             transition: all 0.2s;
         }
 
@@ -98,8 +111,8 @@
         /* Grid Layout */
         .grid {
             display: grid;
-            gap: 20px;
-            margin-bottom: 20px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
 
         .grid-3 {
@@ -113,46 +126,62 @@
         .grid-4 {
             grid-template-columns: repeat(4, 1fr);
         }
+        
+        .grid-6 {
+            grid-template-columns: repeat(6, 1fr);
+        }
 
         /* Card Styles */
         .card {
             background: #252d47;
             border: 1px solid #374151;
-            border-radius: 12px;
-            padding: 20px;
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .card-compact {
+            padding: 10px;
         }
 
         .card-header {
-            margin-bottom: 16px;
-        }
-
-        .card-label {
-            font-size: 12px;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 4px;
-        }
-
-        .card-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #f9fafb;
-        }
-
-        .metric-value {
-            font-size: 32px;
-            font-weight: 700;
-            color: #f9fafb;
             margin-bottom: 8px;
         }
 
-        .metric-change {
+        .card-label {
+            font-size: 9px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            margin-bottom: 2px;
+        }
+
+        .card-title {
             font-size: 13px;
+            font-weight: 600;
+            color: #f9fafb;
+            line-height: 1.2;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #f9fafb;
+            margin-bottom: 4px;
+            line-height: 1;
+        }
+        
+        .metric-value-small {
+            font-size: 18px;
+        }
+
+        .metric-change {
+            font-size: 11px;
             font-weight: 600;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 3px;
         }
 
         .metric-change.positive {
@@ -172,25 +201,38 @@
         /* Chart Container */
         .chart-container {
             position: relative;
-            height: 120px;
-            margin-top: 12px;
+            height: 80px;
+            margin-top: 8px;
+            flex: 1;
         }
 
+        .chart-container-medium {
+            position: relative;
+            height: 100px;
+            margin-top: 8px;
+            flex: 1;
+        }
+        
         .chart-container-large {
             position: relative;
-            height: 200px;
-            margin-top: 12px;
+            height: 120px;
+            margin-top: 8px;
+            flex: 1;
         }
 
         /* Stats Table */
         .stats-table {
             width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
         }
 
         .stats-row {
             display: flex;
             justify-content: space-between;
-            padding: 10px 0;
+            padding: 6px 0;
             border-bottom: 1px solid #374151;
         }
 
@@ -199,19 +241,19 @@
         }
 
         .stats-label {
-            font-size: 14px;
+            font-size: 11px;
             color: #9ca3af;
         }
 
         .stats-value {
-            font-size: 14px;
+            font-size: 12px;
             font-weight: 600;
             color: #f9fafb;
         }
 
         .stats-change {
-            font-size: 12px;
-            margin-left: 8px;
+            font-size: 10px;
+            margin-left: 6px;
         }
 
         .stats-change.positive {
@@ -226,22 +268,23 @@
         .campaigns-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 16px;
+            margin-top: 8px;
+            font-size: 11px;
         }
 
         .campaigns-table th {
             text-align: left;
-            font-size: 12px;
+            font-size: 10px;
             color: #9ca3af;
             font-weight: 600;
-            padding: 8px 12px;
+            padding: 4px 6px;
             border-bottom: 1px solid #374151;
         }
 
         .campaigns-table td {
-            font-size: 14px;
+            font-size: 11px;
             color: #e5e7eb;
-            padding: 12px;
+            padding: 6px;
             border-bottom: 1px solid #374151;
         }
 
@@ -252,46 +295,31 @@
         .campaign-name {
             color: #f9fafb;
             font-weight: 500;
+            font-size: 11px;
         }
 
         .campaign-id {
-            font-size: 11px;
+            font-size: 9px;
             color: #6b7280;
+            display: block;
+            margin-top: 2px;
         }
 
-        /* Footer */
-        .dashboard-footer {
-            margin-top: 40px;
-            padding: 20px;
-            text-align: center;
-            border-top: 1px solid #374151;
-        }
-
-        .dashboard-footer-title {
-            font-size: 16px;
-            color: #9ca3af;
-            margin-bottom: 8px;
-        }
-
-        .databox-logo {
-            font-size: 12px;
-            color: #6b7280;
-        }
+        /* Footer - REMOVED */
 
         /* Empty State */
         .empty-state {
             text-align: center;
-            padding: 40px 20px;
+            padding: 20px 10px;
             color: #6b7280;
-        }
-
-        .empty-state-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
         }
 
         .empty-state-text {
-            font-size: 14px;
+            font-size: 11px;
         }
 
         /* Loading State */
@@ -340,9 +368,13 @@
 </head>
 <body>
     <div class="dashboard-header">
-        <a href="/" class="back-link">← Back to Portal</a>
-        <h1 class="dashboard-title">Facebook Ads & Google Ads Dashboard</h1>
-        <div class="date-range" id="dateRangeDisplay">Last 30 days (Oct 14 - Nov 12)</div>
+        <div class="header-left">
+            <a href="/" class="back-link">← Back to Portal</a>
+            <div>
+                <h1 class="dashboard-title">Facebook Ads & Google Ads Dashboard</h1>
+                <div class="date-range" id="dateRangeDisplay">Last 30 days (Oct 14 - Nov 12)</div>
+            </div>
+        </div>
         
         <div class="filters">
             <select class="filter-select" id="datePreset">
@@ -360,11 +392,12 @@
         </div>
     </div>
 
-    <!-- Top Row: ROAS & Cost Charts -->
-    <div class="grid grid-3">
-        <div class="card">
+    <!-- Compact 6-column grid -->
+    <div class="grid grid-6">
+        <!-- ROAS Chart -->
+        <div class="card card-compact">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">ROAS (Performance Max)</div>
             </div>
             <div class="chart-container">
@@ -372,9 +405,10 @@
             </div>
         </div>
 
-        <div class="card">
+        <!-- Cost Chart -->
+        <div class="card card-compact">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Cost (Performance Max)</div>
             </div>
             <div class="chart-container">
@@ -382,44 +416,54 @@
             </div>
         </div>
 
-        <div class="card">
+        <!-- Cost/Conv Chart -->
+        <div class="card card-compact">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
-                <div class="card-title">Cost / conv. (Performance Max)</div>
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Cost / conv. (Perf Max)</div>
             </div>
             <div class="chart-container">
                 <canvas id="costConvChart"></canvas>
             </div>
         </div>
-    </div>
-
-    <!-- Amount Spent Cards -->
-    <div class="grid grid-2">
-        <div class="card">
-            <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
-            <div class="card-title">Amount Spent</div>
-            <div class="metric-value" id="googleAdsSpend">$ 2,385.92</div>
-            <div class="card-label">Google Ads Spent</div>
+        
+        <!-- Google Ads Spend -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">Google Ads Spent</div>
+                <div class="card-title">Amount Spent</div>
+            </div>
+            <div class="metric-value metric-value-small" id="googleAdsSpend">$ 2,385.92</div>
         </div>
 
-        <div class="card">
-            <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
-            <div class="card-title">Amount Spent</div>
-            <div class="metric-value" id="facebookAdsSpend">$ 334.88</div>
-            <div class="card-label">Facebook Ads Spent</div>
+        <!-- Facebook Ads Spend -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">Facebook Ads Spent</div>
+                <div class="card-title">Amount Spent</div>
+            </div>
+            <div class="metric-value metric-value-small" id="facebookAdsSpend">$ 334.88</div>
             <div class="metric-change positive" id="facebookAdsChange">
                 <span>▲ 172%</span>
-                <span class="metric-change-detail">vs previous period ($ 122.90)</span>
             </div>
+        </div>
+        
+        <!-- Sessions -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Sessions</div>
+            </div>
+            <div class="metric-value metric-value-small" id="totalSessions">16,460</div>
         </div>
     </div>
 
-    <!-- Main Stats Row -->
-    <div class="grid grid-4">
-        <!-- Account Overview (Google Ads) -->
-        <div class="card">
+    <!-- Second Row: Stats and Charts -->
+    <div class="grid grid-6">
+        <!-- Google Account Overview -->
+        <div class="card card-compact">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Account overview</div>
             </div>
             <div class="stats-table">
@@ -448,41 +492,38 @@
                     <div class="stats-label">Purchases</div>
                     <div>
                         <span class="stats-value" id="googlePurchases">0</span>
-                        <span class="stats-change">0%</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Impressions Chart -->
-        <div class="card">
+        <!-- Impressions -->
+        <div class="card card-compact" style="grid-column: span 2;">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Impressions</div>
             </div>
-            <div class="metric-value" id="totalImpressions">20,174</div>
-            <div class="card-label">vs previous period (3,454)</div>
-            <div class="chart-container-large">
+            <div class="metric-value metric-value-small" id="totalImpressions">20,174</div>
+            <div class="chart-container-medium">
                 <canvas id="impressionsChart"></canvas>
             </div>
         </div>
 
-        <!-- Sessions Chart -->
-        <div class="card">
+        <!-- Sessions with Chart -->
+        <div class="card card-compact" style="grid-column: span 2;">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Sessions</div>
             </div>
-            <div class="metric-value" id="totalSessions">16,460</div>
-            <div class="chart-container-large">
+            <div class="chart-container-medium">
                 <canvas id="sessionsChart"></canvas>
             </div>
         </div>
 
-        <!-- Account Overview (Facebook Ads) -->
-        <div class="card">
+        <!-- Facebook Account Overview -->
+        <div class="card card-compact">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Account Overview</div>
             </div>
             <div class="stats-table">
@@ -506,12 +547,12 @@
         </div>
     </div>
 
-    <!-- Campaigns & Interactions -->
-    <div class="grid grid-4">
-        <!-- Campaigns Overview (Google) -->
-        <div class="card">
+    <!-- Bottom Row: Campaigns and Interactions -->
+    <div class="grid grid-6">
+        <!-- Google Campaigns -->
+        <div class="card card-compact" style="grid-column: span 2;">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Campaigns Overview</div>
             </div>
             <table class="campaigns-table">
@@ -519,7 +560,7 @@
                     <tr>
                         <th>#</th>
                         <th>Dimension</th>
-                        <th>Impressions</th>
+                        <th>Impr.</th>
                         <th>Spent</th>
                     </tr>
                 </thead>
@@ -527,8 +568,8 @@
                     <tr>
                         <td>1</td>
                         <td>
-                            <div class="campaign-name">Caregiver Recruitment - Denver</div>
-                            <div class="campaign-id">(1202322604584110573)</div>
+                            <span class="campaign-name">Caregiver Recruitment - Denver</span>
+                            <span class="campaign-id">(1202322604584110573)</span>
                         </td>
                         <td>13,103</td>
                         <td>$ 177.70</td>
@@ -536,8 +577,8 @@
                     <tr>
                         <td>2</td>
                         <td>
-                            <div class="campaign-name">Caregiver Recruitment - Denver - Copy</div>
-                            <div class="campaign-id">(1202337037746708575)</div>
+                            <span class="campaign-name">Caregiver Recruitment - Denver - Copy</span>
+                            <span class="campaign-id">(1202337037746708575)</span>
                         </td>
                         <td>4,541</td>
                         <td>$ 66.91</td>
@@ -545,8 +586,8 @@
                     <tr>
                         <td>3</td>
                         <td>
-                            <div class="campaign-name">Caregiver Recruitment - Colorado Springs/Pueblo</div>
-                            <div class="campaign-id">(1202257411495570575)</div>
+                            <span class="campaign-name">Caregiver Recruitment - CO Springs/Pueblo</span>
+                            <span class="campaign-id">(1202257411495570575)</span>
                         </td>
                         <td>2,530</td>
                         <td>$ 90.27</td>
@@ -555,21 +596,21 @@
             </table>
         </div>
 
-        <!-- Interactions Chart -->
-        <div class="card">
+        <!-- Interactions Chart 1 -->
+        <div class="card card-compact">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Interactions</div>
             </div>
-            <div class="chart-container-large">
+            <div class="chart-container-medium">
                 <canvas id="interactionsChart1"></canvas>
             </div>
         </div>
 
-        <!-- Campaigns Overview (Facebook) -->
-        <div class="card">
+        <!-- Facebook Campaigns -->
+        <div class="card card-compact" style="grid-column: span 2;">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Campaigns Overview</div>
             </div>
             <table class="campaigns-table">
@@ -578,19 +619,19 @@
                         <th>#</th>
                         <th>Dimension</th>
                         <th>Cost</th>
-                        <th>Impressions</th>
+                        <th>Impr.</th>
                     </tr>
                 </thead>
                 <tbody id="facebookCampaignsTable">
                     <tr>
                         <td>1</td>
-                        <td class="campaign-name">October 2025 PMax Lead Gen Denver</td>
+                        <td><span class="campaign-name">October 2025 PMax Lead Gen Denver</span></td>
                         <td>$ 1,190.78</td>
                         <td>8,930</td>
                     </tr>
                     <tr>
                         <td>2</td>
-                        <td class="campaign-name">October 2025 PMax Lead Gen - Springs</td>
+                        <td><span class="campaign-name">October 2025 PMax Lead Gen - Springs</span></td>
                         <td>$ 1,195.14</td>
                         <td>7,530</td>
                     </tr>
@@ -598,45 +639,16 @@
             </table>
         </div>
 
-        <!-- Phone Calls -->
-        <div class="card">
+        <!-- Interactions Chart 2 -->
+        <div class="card card-compact">
             <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
-                <div class="card-title">Phone Calls</div>
-            </div>
-            <div class="empty-state">
-                <div class="empty-state-text">No data to display</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Interactions Row -->
-    <div class="grid grid-2">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-label">Last 30 days</div>
                 <div class="card-title">Interactions</div>
             </div>
-            <div class="chart-container-large">
+            <div class="chart-container-medium">
                 <canvas id="interactionsChart2"></canvas>
             </div>
         </div>
-
-        <div class="card">
-            <div class="card-header">
-                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
-                <div class="card-title">Interactions</div>
-            </div>
-            <div class="chart-container-large">
-                <canvas id="interactionsChart3"></canvas>
-            </div>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <div class="dashboard-footer">
-        <div class="dashboard-footer-title">Facebook Ads & Google Ads Dashboard</div>
-        <div class="databox-logo">Powered by 📊 databox</div>
     </div>
 
     <script>
@@ -793,18 +805,6 @@
                 options: chartDefaults
             });
 
-            charts.interactions3 = new Chart(document.getElementById('interactionsChart3'), {
-                type: 'bar',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateInteractionData(30),
-                        backgroundColor: '#06b6d4',
-                        borderRadius: 4
-                    }]
-                },
-                options: chartDefaults
-            });
         }
 
         // Helper functions
