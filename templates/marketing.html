@@ -131,13 +131,16 @@
         .tab-content {
             display: none;
             width: 100%;
-            min-height: 500px;
         }
 
         .tab-content.active {
-            display: block !important;
+            display: flex !important;
+            flex-direction: column !important;
             visibility: visible !important;
             opacity: 1 !important;
+            width: 100%;
+            height: auto;
+            min-height: 600px;
         }
         
         /* Main Content */
@@ -216,7 +219,8 @@
             display: grid;
             gap: 8px;
             margin-bottom: 8px;
-            min-height: 50px;
+            min-height: 100px;
+            width: 100%;
         }
 
         .grid-3 {
@@ -1368,7 +1372,13 @@
                     console.log('Tab display style:', window.getComputedStyle(targetTab).display);
                     console.log('Tab visibility:', window.getComputedStyle(targetTab).visibility);
                     console.log('Tab height:', targetTab.offsetHeight);
+                    console.log('Tab scrollHeight:', targetTab.scrollHeight);
                     console.log('Tab has children:', targetTab.children.length);
+                    
+                    // Check children
+                    Array.from(targetTab.children).forEach((child, idx) => {
+                        console.log(`  Child ${idx}:`, child.className, 'height:', child.offsetHeight, 'display:', window.getComputedStyle(child).display);
+                    });
                 } else {
                     console.error('Tab not found: tab-' + tab);
                 }
