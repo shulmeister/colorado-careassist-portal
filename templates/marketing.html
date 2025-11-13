@@ -755,211 +755,135 @@
 
             <!-- Overview Tab -->
             <div class="tab-content active" id="tab-overview">
-                <section class="sections">
-                    <!-- Top KPIs -->
-                    <div class="section full-width">
-                        <header class="section-header">
-                            <h2 class="section-title">📊 KPIs</h2>
-                        </header>
-                        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));">
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon blue">📱</div>
-                                <div class="panel-title">Social Reach</div>
-                                <div class="kpi-value" id="overviewSocialReach">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon purple">💰</div>
-                                <div class="panel-title">Ad Spend</div>
-                                <div class="kpi-value" id="overviewAdSpend">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon green">👆</div>
-                                <div class="panel-title">Total Clicks</div>
-                                <div class="kpi-value" id="overviewTotalClicks">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon orange">🎯</div>
-                                <div class="panel-title">Conversions</div>
-                                <div class="kpi-value" id="overviewConversions">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon blue">👁️</div>
-                                <div class="panel-title">Impressions</div>
-                                <div class="kpi-value" id="overviewImpressions">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon green">💵</div>
-                                <div class="panel-title">CPC</div>
-                                <div class="kpi-value" id="overviewCPC">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon purple">📊</div>
-                                <div class="panel-title">CTR</div>
-                                <div class="kpi-value" id="overviewCTR">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon green">💸</div>
-                                <div class="panel-title">ROAS</div>
-                                <div class="kpi-value" id="overviewROAS">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon orange">💲</div>
-                                <div class="panel-title">Cost/Conv</div>
-                                <div class="kpi-value" id="overviewCostPerConv">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon blue">📈</div>
-                                <div class="panel-title">Conv Rate</div>
-                                <div class="kpi-value" id="overviewConvRate">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon purple">💬</div>
-                                <div class="panel-title">Engagement</div>
-                                <div class="kpi-value" id="overviewEngagement">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon green">📧</div>
-                                <div class="panel-title">Email Open</div>
-                                <div class="kpi-value" id="overviewEmailOpen">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon blue">👥</div>
-                                <div class="panel-title">Page Likes</div>
-                                <div class="kpi-value" id="overviewPageLikes">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon orange">📞</div>
-                                <div class="panel-title">Call Clicks</div>
-                                <div class="kpi-value" id="overviewCallClicks">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon purple">🗺️</div>
-                                <div class="panel-title">Directions</div>
-                                <div class="kpi-value" id="overviewDirections">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon green">🌐</div>
-                                <div class="panel-title">Web Clicks</div>
-                                <div class="kpi-value" id="overviewWebClicks">—</div>
-                            </div>
+                <!-- Databox-style grid layout -->
+                <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-top: 12px;">
+                    
+                    <!-- Row 1: Large featured metrics -->
+                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 20px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Ad Spend</div>
+                        <div style="font-size: 36px; font-weight: 700; color: #f8fafc;" id="overviewAdSpend">—</div>
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Last 30 days</div>
+                    </div>
+
+                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 20px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Social Reach</div>
+                        <div style="font-size: 36px; font-weight: 700; color: #f8fafc;" id="overviewSocialReach">—</div>
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Last 30 days</div>
+                    </div>
+
+                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 20px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Conversions</div>
+                        <div style="font-size: 36px; font-weight: 700; color: #f8fafc;" id="overviewConversions">—</div>
+                        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Last 30 days</div>
+                    </div>
+
+                    <!-- Row 2: Medium metrics with charts -->
+                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">ROAS</div>
+                        <div style="font-size: 28px; font-weight: 700; color: #f8fafc;" id="overviewROAS">—</div>
+                        <div style="height: 60px; margin-top: 12px; position: relative;">
+                            <canvas id="roasChart"></canvas>
                         </div>
                     </div>
 
-                    <!-- Social Performance Overview -->
-                    <div class="section">
-                        <header class="section-header">
-                            <h2 class="section-title">📱 Social</h2>
-                        </header>
-                        <div class="grid grid-3">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Total Page Likes</div>
-                                        <div class="panel-subtitle">All platforms combined</div>
-                                    </div>
-                                    <div class="kpi-trend" id="overviewPageLikesTrend">Loading…</div>
-                                </div>
-                                <div class="kpi-value" id="overviewPageLikesValue">—</div>
-                                <div style="height: 40px; position: relative;">
-                                    <canvas id="overviewPageLikesChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Post Engagement</div>
-                                        <div class="panel-subtitle">Likes, comments, shares</div>
-                                    </div>
-                                </div>
-                                <div class="kpi-value" id="overviewEngagementValue">—</div>
-                                <div style="display: flex; gap: 12px; font-size: 12px; color: #94a3b8; margin-top: 12px;">
-                                    <div>
-                                        <span style="color: #3b82f6;">●</span> Likes
-                                    </div>
-                                    <div>
-                                        <span style="color: #8b5cf6;">●</span> Comments
-                                    </div>
-                                    <div>
-                                        <span style="color: #10b981;">●</span> Shares
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Click Actions</div>
-                                        <div class="panel-subtitle">User interactions</div>
-                                    </div>
-                                </div>
-                                <div style="height: 40px;">
-                                    <canvas id="overviewClickActionsChart"></canvas>
-                                </div>
-                            </div>
+                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Cost / Conversion</div>
+                        <div style="font-size: 28px; font-weight: 700; color: #f8fafc;" id="overviewCostPerConv">—</div>
+                        <div style="height: 60px; margin-top: 12px; position: relative;">
+                            <canvas id="costPerConvChart"></canvas>
                         </div>
                     </div>
 
-                    <!-- Paid Media Overview -->
-                    <div class="section">
-                        <header class="section-header">
-                            <h2 class="section-title">🎯 Paid Media</h2>
-                        </header>
-                        <div class="grid grid-2">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Spend Trend</div>
-                                        <div class="panel-subtitle">Daily ad spend over time</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 200px; padding: 16px;">
-                                    <canvas id="overviewSpendTrendChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Ad Efficiency Metrics</div>
-                                        <div class="panel-subtitle">CPC, CPM, CTR, Conversion Rate</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 200px; padding: 16px;">
-                                    <canvas id="overviewEfficiencyChart"></canvas>
-                                </div>
-                            </div>
+                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Impressions</div>
+                        <div style="font-size: 28px; font-weight: 700; color: #f8fafc;" id="overviewImpressions">—</div>
+                        <div style="height: 60px; margin-top: 12px; position: relative;">
+                            <canvas id="impressionsChart"></canvas>
                         </div>
                     </div>
 
-                    <!-- Top Performers - Collapsed by default to save space -->
-                    <div class="section full-width" style="display: none;">
-                        <header class="section-header">
-                            <h2 class="section-title">🏆 Top Performers</h2>
-                        </header>
-                        <div class="grid grid-2">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Top Social Posts</div>
-                                        <div class="panel-subtitle">By reach and engagement</div>
-                                    </div>
-                                </div>
-                                <div id="overviewTopPostsTable" class="empty-state">
-                                    Loading...
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Top Ad Campaigns</div>
-                                        <div class="panel-subtitle">By conversions and ROI</div>
-                                    </div>
-                                </div>
-                                <div id="overviewTopCampaignsTable" class="empty-state">
-                                    Loading...
-                                </div>
-                            </div>
+                    <!-- Row 3: Compact metrics -->
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Total Clicks</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewTotalClicks">—</div>
+                    </div>
+
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">CPC</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewCPC">—</div>
+                    </div>
+
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">CTR</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewCTR">—</div>
+                    </div>
+
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Conv Rate</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewConvRate">—</div>
+                    </div>
+
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Engagement</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewEngagement">—</div>
+                    </div>
+
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Page Likes</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewPageLikes">—</div>
+                    </div>
+
+                    <!-- Row 4: Charts -->
+                    <div style="grid-column: span 3; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Spend Trend</div>
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">Daily ad spend over time</div>
+                        <div style="height: 120px; position: relative;">
+                            <canvas id="overviewSpendTrendChart"></canvas>
                         </div>
                     </div>
-                </section>
+
+                    <div style="grid-column: span 3; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Ad Efficiency Metrics</div>
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">CPC, CPM, CTR, Conversion Rate</div>
+                        <div style="height: 120px; position: relative;">
+                            <canvas id="overviewEfficiencyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Row 5: More compact metrics -->
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Call Clicks</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewCallClicks">—</div>
+                    </div>
+
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Directions</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewDirections">—</div>
+                    </div>
+
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Web Clicks</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewWebClicks">—</div>
+                    </div>
+
+                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Email Open</div>
+                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewEmailOpen">—</div>
+                    </div>
+
+                    <!-- Row 6: Account Overview Table -->
+                    <div style="grid-column: span 3; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 12px;">Account Overview</div>
+                        <div id="accountOverviewTable"></div>
+                    </div>
+
+                    <!-- Row 6: Campaigns Overview Table -->
+                    <div style="grid-column: span 3; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
+                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 12px;">Campaigns Overview</div>
+                        <div id="campaignsOverviewTable"></div>
+                    </div>
+
+                </div>
             </div>
 
             <!-- Social Performance Tab -->
