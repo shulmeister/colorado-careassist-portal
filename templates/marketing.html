@@ -196,7 +196,7 @@
         /* Content */
         .content {
             background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 1) 100%);
-            padding: 12px 16px 20px;
+            padding: 8px 12px 12px;
             overflow-x: hidden;
             height: calc(100vh - 20px);
             overflow-y: auto;
@@ -206,8 +206,8 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
         .breadcrumb {
@@ -217,7 +217,7 @@
         }
 
         .page-title {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             color: #f8fafc;
             margin: 0;
@@ -231,11 +231,11 @@
             display: flex;
             flex-wrap: wrap;
             align-items: center;
-            gap: 8px;
-            padding: 8px 12px;
+            gap: 6px;
+            padding: 6px 10px;
             background: rgba(30, 41, 59, 0.75);
             border: 1px solid rgba(51, 65, 85, 0.7);
-            border-radius: 8px;
+            border-radius: 6px;
         }
 
         .filters-group {
@@ -305,17 +305,17 @@
         }
 
         .sections {
-            margin-top: 10px;
+            margin-top: 6px;
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 8px;
         }
 
         .section {
             background: rgba(30, 41, 59, 0.85);
             border: 1px solid rgba(51, 65, 85, 0.7);
-            border-radius: 10px;
-            padding: 10px 12px;
+            border-radius: 8px;
+            padding: 8px 10px;
         }
 
         .section.full-width {
@@ -326,17 +326,17 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
-            margin-bottom: 10px;
+            gap: 6px;
+            margin-bottom: 8px;
         }
 
         .section-title {
-            font-size: 13px;
+            font-size: 12px;
             font-weight: 700;
             color: #f8fafc;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 4px;
         }
 
         .section-description {
@@ -345,7 +345,7 @@
 
         .grid {
             display: grid;
-            gap: 8px;
+            gap: 6px;
         }
 
         .grid-6 {
@@ -366,6 +366,12 @@
 
         .grid-2 {
             grid-template-columns: repeat(2, 1fr);
+        }
+
+        @media (min-width: 1800px) {
+            .sections {
+                grid-template-columns: repeat(4, 1fr);
+            }
         }
 
         @media (max-width: 1400px) {
@@ -389,17 +395,17 @@
         .panel {
             background: rgba(15, 23, 42, 0.9);
             border: 1px solid rgba(148, 163, 184, 0.12);
-            border-radius: 8px;
-            padding: 10px;
-            min-height: 80px;
-            max-height: 180px;
+            border-radius: 6px;
+            padding: 8px;
+            min-height: 60px;
+            max-height: 140px;
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
         }
 
         .panel canvas {
-            max-height: 120px !important;
+            max-height: 80px !important;
         }
 
         .panel-header {
@@ -409,18 +415,19 @@
         }
 
         .panel-title {
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 600;
             color: #e2e8f0;
+            line-height: 1.2;
         }
 
         .panel-subtitle {
-            font-size: 9px;
+            font-size: 8px;
             color: #64748b;
         }
 
         .kpi-value {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
             color: #f8fafc;
             line-height: 1;
@@ -429,11 +436,11 @@
         .kpi-panel {
             background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
             border: 1px solid rgba(59, 130, 246, 0.2);
-            padding: 8px 10px;
+            padding: 6px 8px;
             position: relative;
             overflow: hidden;
             transition: all 0.2s ease;
-            min-height: 70px;
+            min-height: 60px;
         }
 
         .kpi-panel::before {
@@ -442,7 +449,7 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 4px;
+            height: 2px;
             background: linear-gradient(90deg, #3b82f6, #8b5cf6, #10b981, #f59e0b);
             opacity: 0.8;
         }
@@ -454,14 +461,14 @@
         }
 
         .kpi-icon {
-            width: 28px;
-            height: 28px;
-            border-radius: 6px;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 16px;
-            margin-bottom: 6px;
+            font-size: 14px;
+            margin-bottom: 4px;
         }
 
         .kpi-icon.blue {
@@ -809,7 +816,7 @@
                                     <div class="kpi-trend" id="overviewPageLikesTrend">Loading…</div>
                                 </div>
                                 <div class="kpi-value" id="overviewPageLikesValue">—</div>
-                                <div style="height: 100px; position: relative;">
+                                <div style="height: 70px; position: relative;">
                                     <canvas id="overviewPageLikesChart"></canvas>
                                 </div>
                             </div>
@@ -840,7 +847,7 @@
                                         <div class="panel-subtitle">User interactions</div>
                                     </div>
                                 </div>
-                                <div style="height: 100px;">
+                                <div style="height: 70px;">
                                     <canvas id="overviewClickActionsChart"></canvas>
                                 </div>
                             </div>
@@ -946,11 +953,11 @@
                                     <div class="panel-subtitle">Organic & Paid</div>
                                 </div>
                             </div>
-                            <div style="height: 90px;">
-                                <div id="reachImpressionsData" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 11px;">
+                            <div style="height: 70px;">
+                                <div id="reachImpressionsData" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10px;">
                                     <div>
                                         <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Total Reach</div>
-                                        <div style="font-size: 18px; font-weight: 700;" id="totalReachValue">—</div>
+                                        <div style="font-size: 16px; font-weight: 700;" id="totalReachValue">—</div>
                                         <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
                                             <span style="color: #10b981;">●</span> Organic: <span id="organicReachValue">—</span><br>
                                             <span style="color: #3b82f6;">●</span> Paid: <span id="paidReachValue">—</span>
@@ -958,7 +965,7 @@
                                     </div>
                                     <div>
                                         <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Impressions</div>
-                                        <div style="font-size: 18px; font-weight: 700;" id="impressionsValue">—</div>
+                                        <div style="font-size: 16px; font-weight: 700;" id="impressionsValue">—</div>
                                     </div>
                                 </div>
                             </div>
@@ -970,7 +977,7 @@
                                     <div class="panel-subtitle">Clicks, Directions, Phone</div>
                                 </div>
                             </div>
-                            <div style="height: 100px; position: relative;">
+                            <div style="height: 70px; position: relative;">
                                 <canvas id="clickActionsChart"></canvas>
                             </div>
                         </div>
@@ -1014,12 +1021,12 @@
                                     <div class="panel-subtitle">Cost, conversion value, ROAS</div>
                                 </div>
                             </div>
-                        <div style="height: 90px;">
-                                <div id="adsSpendData" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="height: 70px;">
+                                <div id="adsSpendData" style="display: flex; flex-direction: column; gap: 6px;">
                                     <div>
                                         <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Total Spend</div>
                                         <div style="display: flex; align-items: center; gap: 12px;">
-                                            <div style="font-size: 20px; font-weight: 700;" id="totalSpendValue">—</div>
+                                            <div style="font-size: 16px; font-weight: 700;" id="totalSpendValue">—</div>
                                             <div class="kpi-trend" id="spendTrend">—</div>
                                         </div>
                                     </div>
@@ -1043,7 +1050,7 @@
                                     <div class="panel-subtitle">CPC, CPM, CTR</div>
                                 </div>
                             </div>
-                        <div style="height: 100px; position: relative;">
+                        <div style="height: 70px; position: relative;">
                                 <canvas id="adsEfficiencyChart"></canvas>
                             </div>
                         </div>
