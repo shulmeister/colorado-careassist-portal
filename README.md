@@ -65,6 +65,17 @@ Central hub/launchpad providing access to all tools and platforms used by Colora
 
 ## Deployment
 
+### ⚠️ ALWAYS DEPLOY TO BOTH GIT AND HEROKU
+
+**After making ANY code changes, ALWAYS run these commands:**
+
+```bash
+git add .
+git commit -m "Describe your changes"
+git push origin main      # Push to GitHub
+git push heroku main      # Push to Heroku (REQUIRED!)
+```
+
 ### Heroku
 
 The app is configured for Heroku deployment:

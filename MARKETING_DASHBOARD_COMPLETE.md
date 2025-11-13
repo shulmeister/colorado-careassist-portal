@@ -1,5 +1,31 @@
 # Marketing Dashboard - Implementation Complete
 
+## ⚠️ DEPLOYMENT CHECKLIST
+**ALWAYS do these steps after making ANY changes:**
+
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
+
+# 1. Add files to git
+git add .
+
+# 2. Commit changes
+git commit -m "Your commit message here"
+
+# 3. Push to GitHub
+git push origin main
+
+# 4. Push to Heroku (ALWAYS!)
+git push heroku main
+```
+
+**✅ These changes have already been deployed!**
+- Git: `66cf8d7` - "Rebuild marketing dashboard to match Databox design"
+- Heroku: Deployed as release v174
+- Live at: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/marketing
+
+---
+
 ## Overview
 The Marketing Dashboard has been rebuilt to match the Databox-style interface shown in your reference screenshot. It displays comprehensive Facebook Ads and Google Ads metrics in a clean, modern dark-themed interface.
 
