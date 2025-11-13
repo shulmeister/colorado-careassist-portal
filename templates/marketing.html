@@ -15,19 +15,136 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #1a1f35;
+            background: #0f172a;
             color: #e5e7eb;
             line-height: 1.4;
-            padding: 16px;
+            margin: 0;
+            padding: 0;
             overflow: hidden;
         }
         
-        .dashboard-wrapper {
-            max-height: 100vh;
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
 
-        .dashboard-header {
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .back-to-portal {
+            margin-top: 12px;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            color: #dbeafe;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(59, 130, 246, 0.25);
+            border-color: rgba(59, 130, 246, 0.55);
+            color: #e0f2fe;
+            transform: translateX(-2px);
+        }
+
+        .sidebar-nav {
+            padding: 0 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .sidebar-link:hover {
+            background: rgba(148, 163, 184, 0.15);
+            color: #f8fafc;
+        }
+
+        .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.18);
+            border: 1px solid rgba(59, 130, 246, 0.45);
+            color: #bfdbfe;
+        }
+
+        .sidebar-link.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .sidebar-link .icon {
+            font-size: 15px;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Main Content */
+        .content {
+            background: #0f172a;
+            padding: 16px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        .content-header {
             margin-bottom: 12px;
             display: flex;
             align-items: center;
@@ -36,38 +153,17 @@
         
         .header-left {
             display: flex;
-            align-items: center;
-            gap: 16px;
+            flex-direction: column;
         }
 
-        .back-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: rgba(59, 130, 246, 0.15);
-            border: 1px solid rgba(59, 130, 246, 0.35);
-            border-radius: 6px;
-            color: #60a5fa;
-            text-decoration: none;
-            font-size: 12px;
-            font-weight: 600;
-            transition: all 0.2s;
-        }
-
-        .back-link:hover {
-            background: rgba(59, 130, 246, 0.25);
-            transform: translateX(-2px);
-        }
-
-        .dashboard-title {
+        .page-title {
             font-size: 20px;
             font-weight: 700;
             color: #f9fafb;
             margin: 0;
         }
 
-        .date-range {
+        .page-subtitle {
             font-size: 11px;
             color: #9ca3af;
             margin: 0;
@@ -367,30 +463,53 @@
     </style>
 </head>
 <body>
-    <div class="dashboard-header">
-        <div class="header-left">
-            <a href="/" class="back-link">← Back to Portal</a>
-            <div>
-                <h1 class="dashboard-title">Facebook Ads & Google Ads Dashboard</h1>
-                <div class="date-range" id="dateRangeDisplay">Last 30 days (Oct 14 - Nov 12)</div>
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Marketing Dashboard</div>
+                <div class="sidebar-subtitle">Performance & Attribution</div>
+                <div class="back-to-portal">
+                    <a href="/" class="back-button">← Back to Portal</a>
+                </div>
             </div>
-        </div>
+            
+            <nav class="sidebar-nav">
+                <a class="sidebar-link active" data-tab="overview"><span class="icon">📊</span> Overview</a>
+                <a class="sidebar-link" data-tab="social"><span class="icon">📱</span> Social Performance</a>
+                <a class="sidebar-link" data-tab="paid-media"><span class="icon">🎯</span> Paid Media</a>
+                <a class="sidebar-link" data-tab="email"><span class="icon">📧</span> Email Marketing</a>
+                <a class="sidebar-link" data-tab="website"><span class="icon">🌐</span> Website & GBP</a>
+                <a class="sidebar-link" data-tab="engagement"><span class="icon">💬</span> Engagement</a>
+                <a class="sidebar-link disabled" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
+            </nav>
+        </aside>
         
-        <div class="filters">
-            <select class="filter-select" id="datePreset">
-                <option value="last_7_days">Last 7 Days</option>
-                <option value="last_30_days" selected>Last 30 Days</option>
-                <option value="month_to_date">Month to Date</option>
-                <option value="quarter_to_date">Quarter to Date</option>
-                <option value="year_to_date">Year to Date</option>
-                <option value="last_12_months">Last 12 Months</option>
-            </select>
-            <button class="refresh-btn" id="refreshBtn">
-                <span>↻</span>
-                <span>Refresh</span>
-            </button>
-        </div>
-    </div>
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Overview Tab -->
+            <div class="tab-content active" id="tab-overview">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Facebook Ads & Google Ads Dashboard</h1>
+                        <div class="page-subtitle" id="dateRangeDisplay">Last 30 days (Oct 14 - Nov 12)</div>
+                    </div>
+                    
+                    <div class="filters">
+                        <select class="filter-select" id="datePreset">
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                            <option value="quarter_to_date">Quarter to Date</option>
+                            <option value="year_to_date">Year to Date</option>
+                            <option value="last_12_months">Last 12 Months</option>
+                        </select>
+                        <button class="refresh-btn" id="refreshBtn">
+                            <span>↻</span>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </div>
 
     <!-- Compact 6-column grid -->
     <div class="grid grid-6">
@@ -649,8 +768,76 @@
                 <canvas id="interactionsChart2"></canvas>
             </div>
         </div>
+            </div>
+            
+            <!-- Other Tabs (Placeholder) -->
+            <div class="tab-content" id="tab-social">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Social Performance</h1>
+                        <div class="page-subtitle">Coming Soon</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="tab-paid-media">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Paid Media</h1>
+                        <div class="page-subtitle">Coming Soon</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="tab-email">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Email Marketing</h1>
+                        <div class="page-subtitle">Coming Soon</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="tab-website">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Website & Google Business Profile</h1>
+                        <div class="page-subtitle">Coming Soon</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="tab-content" id="tab-engagement">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Engagement</h1>
+                        <div class="page-subtitle">Coming Soon</div>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
+    <script>
+        // Tab switching functionality
+        document.querySelectorAll('.sidebar-link').forEach(link => {
+            link.addEventListener('click', function(e) {
+                if (this.classList.contains('disabled')) return;
+                
+                e.preventDefault();
+                const tab = this.getAttribute('data-tab');
+                
+                // Update active link
+                document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Update active tab
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+                document.getElementById('tab-' + tab).classList.add('active');
+            });
+        });
+    </script>
+    
     <script>
         // Configuration
         const API_BASE = '/api/marketing';
