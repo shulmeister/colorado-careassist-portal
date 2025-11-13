@@ -130,10 +130,14 @@
 
         .tab-content {
             display: none;
+            width: 100%;
+            min-height: 500px;
         }
 
         .tab-content.active {
-            display: block;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         /* Main Content */
@@ -1358,6 +1362,11 @@
                 if (targetTab) {
                     targetTab.classList.add('active');
                     console.log('Showing tab:', targetTab.id);
+                    console.log('Tab element:', targetTab);
+                    console.log('Tab display style:', window.getComputedStyle(targetTab).display);
+                    console.log('Tab visibility:', window.getComputedStyle(targetTab).visibility);
+                    console.log('Tab height:', targetTab.offsetHeight);
+                    console.log('Tab has children:', targetTab.children.length);
                 } else {
                     console.error('Tab not found: tab-' + tab);
                 }
