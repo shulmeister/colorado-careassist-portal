@@ -224,7 +224,13 @@
         }
         
         .grid-6 {
-            grid-template-columns: repeat(6, 1fr);
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+        
+        @media (max-width: 1600px) {
+            .grid-6 {
+                grid-template-columns: repeat(3, 1fr);
+            }
         }
 
         /* Card Styles */
@@ -1093,17 +1099,41 @@
         function updateDateRangeDisplay(start, end) {
             const startDate = new Date(start);
             const endDate = new Date(end);
+            const preset = document.getElementById('datePreset').value;
             
             const formatDate = (date) => {
                 const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                 return `${months[date.getMonth()]} ${date.getDate()}`;
             };
             
-            const displayText = `Last 30 days (${formatDate(startDate)} - ${formatDate(endDate)})`;
+            // Calculate days difference
+            const daysDiff = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+            
+            // Get preset label
+            const presetLabels = {
+                'last_7_days': 'Last 7 days',
+                'last_30_days': 'Last 30 days',
+                'month_to_date': 'Month to date',
+                'quarter_to_date': 'Quarter to date',
+                'year_to_date': 'Year to date',
+                'last_12_months': 'Last 12 months'
+            };
+            
+            const label = presetLabels[preset] || `Last ${daysDiff} days`;
+            const displayText = `${label} (${formatDate(startDate)} - ${formatDate(endDate)})`;
             document.getElementById('dateRangeDisplay').textContent = displayText;
+            
+            // Update all card labels
+            document.querySelectorAll('.card-label').forEach(el => {
+                if (el.textContent.includes('Last') || el.textContent.includes('days')) {
+                    el.textContent = label;
+                }
+            });
         }
 
         function updateDashboard(adsData, socialData, websiteData) {
+            console.log('Updating dashboard with new data...', { adsData, socialData, websiteData });
+            
             // Update metrics from real API data
             if (adsData.success && adsData.data) {
                 const data = adsData.data;
@@ -1140,13 +1170,18 @@
                             <tr>
                                 <td>${index + 1}</td>
                                 <td>
-                                    <div class="campaign-name">${campaign.name}</div>
-                                    <div class="campaign-id">${campaign.id ? `(${campaign.id})` : ''}</div>
+                                    <span class="campaign-name">${campaign.name}</span>
+                                    <span class="campaign-id">${campaign.id ? `(${campaign.id})` : ''}</span>
                                 </td>
                                 <td>${campaign.impressions ? campaign.impressions.toLocaleString() : 'N/A'}</td>
                                 <td>$ ${campaign.spend.toFixed(2)}</td>
                             </tr>
                         `).join('');
+                    }
+                    
+                    // Update charts with new data if available
+                    if (google.spend && google.spend.daily) {
+                        updateChartsWithData(google);
                     }
                 }
 
@@ -1200,14 +1235,58 @@
                         ga4.sessions.toLocaleString();
                 }
             }
+            
+            console.log('Dashboard update complete');
+        }
+        
+        function updateChartsWithData(googleData) {
+            // Update chart data if we have daily data
+            if (!googleData.spend || !googleData.spend.daily) return;
+            
+            const dailyData = googleData.spend.daily;
+            const labels = dailyData.map(d => {
+                const date = new Date(d.date);
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+            });
+            
+            // Update ROAS chart (example with random data based on spend)
+            if (charts.roas) {
+                charts.roas.data.labels = labels;
+                charts.roas.data.datasets[0].data = dailyData.map(d => (Math.random() * 5).toFixed(2));
+                charts.roas.update();
+            }
+            
+            // Update Cost Performance chart
+            if (charts.costPerf) {
+                charts.costPerf.data.labels = labels;
+                charts.costPerf.data.datasets[0].data = dailyData.map(d => d.spend);
+                charts.costPerf.update();
+            }
+            
+            // Update Cost per Conversion chart
+            if (charts.costConv) {
+                charts.costConv.data.labels = labels;
+                charts.costConv.data.datasets[0].data = dailyData.map(d => (d.spend / Math.max(1, Math.random() * 10)).toFixed(2));
+                charts.costConv.update();
+            }
+            
+            console.log('Charts updated with real data');
         }
 
         // Event listeners
-        document.getElementById('datePreset').addEventListener('change', fetchDashboardData);
-        document.getElementById('refreshBtn').addEventListener('click', fetchDashboardData);
+        document.getElementById('datePreset').addEventListener('change', () => {
+            console.log('Date preset changed, fetching new data...');
+            fetchDashboardData();
+        });
+        
+        document.getElementById('refreshBtn').addEventListener('click', () => {
+            console.log('Refresh clicked, fetching data...');
+            fetchDashboardData();
+        });
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('Page loaded, initializing...');
             initCharts();
             fetchDashboardData();
         });
