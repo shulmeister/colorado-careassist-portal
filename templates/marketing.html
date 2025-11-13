@@ -212,15 +212,16 @@
         }
 
         .page-title {
-            font-size: 28px;
+            font-size: 22px;
             font-weight: 700;
             color: #f8fafc;
         }
 
         .page-description {
-            font-size: 15px;
+            font-size: 13px;
             color: #94a3b8;
             max-width: 780px;
+            line-height: 1.4;
         }
 
         .filters-bar {
@@ -302,17 +303,17 @@
         }
 
         .sections {
-            margin-top: 28px;
+            margin-top: 20px;
             display: flex;
             flex-direction: column;
-            gap: 32px;
+            gap: 20px;
         }
 
         .section {
             background: rgba(30, 41, 59, 0.85);
             border: 1px solid rgba(51, 65, 85, 0.7);
-            border-radius: 18px;
-            padding: 24px 28px;
+            border-radius: 14px;
+            padding: 18px 20px;
         }
 
         .section-header {
@@ -320,28 +321,37 @@
             flex-wrap: wrap;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            margin-bottom: 20px;
+            gap: 10px;
+            margin-bottom: 14px;
         }
 
         .section-title {
-            font-size: 20px;
+            font-size: 17px;
             font-weight: 700;
             color: #f8fafc;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
         .section-description {
-            font-size: 13px;
+            font-size: 12px;
             color: #94a3b8;
             max-width: 600px;
+            line-height: 1.4;
         }
 
         .grid {
             display: grid;
-            gap: 20px;
+            gap: 14px;
+        }
+
+        .grid-6 {
+            grid-template-columns: repeat(6, 1fr);
+        }
+
+        .grid-5 {
+            grid-template-columns: repeat(5, 1fr);
         }
 
         .grid-4 {
@@ -356,14 +366,20 @@
             grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
         }
 
+        @media (max-width: 1400px) {
+            .grid-6 {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
         @media (max-width: 1200px) {
-            .grid-4 {
+            .grid-6, .grid-5, .grid-4 {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
 
         @media (max-width: 768px) {
-            .grid-4 {
+            .grid-6, .grid-5, .grid-4 {
                 grid-template-columns: 1fr;
             }
         }
@@ -386,18 +402,18 @@
         }
 
         .panel-title {
-            font-size: 15px;
+            font-size: 13px;
             font-weight: 600;
             color: #e2e8f0;
         }
 
         .panel-subtitle {
-            font-size: 12px;
+            font-size: 11px;
             color: #64748b;
         }
 
         .kpi-value {
-            font-size: 28px;
+            font-size: 24px;
             font-weight: 700;
             color: #f8fafc;
         }
@@ -405,7 +421,7 @@
         .kpi-panel {
             background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
             border: 1px solid rgba(59, 130, 246, 0.2);
-            padding: 28px 24px;
+            padding: 16px 14px;
             position: relative;
             overflow: hidden;
             transition: all 0.3s ease;
@@ -429,14 +445,14 @@
         }
 
         .kpi-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: 12px;
+            width: 38px;
+            height: 38px;
+            border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            margin-bottom: 16px;
+            font-size: 20px;
+            margin-bottom: 10px;
         }
 
         .kpi-icon.blue {
@@ -733,7 +749,7 @@
                                 </p>
                             </div>
                         </header>
-                        <div class="grid grid-4">
+                        <div class="grid grid-6">
                             <div class="panel kpi-panel">
                                 <div class="kpi-icon blue">📱</div>
                                 <div class="panel-title">Social Reach</div>
@@ -757,6 +773,18 @@
                                 <div class="panel-title">Conversions</div>
                                 <div class="panel-subtitle">Last 30 days</div>
                                 <div class="kpi-value" id="overviewConversions">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon blue">👁️</div>
+                                <div class="panel-title">Impressions</div>
+                                <div class="panel-subtitle">Last 30 days</div>
+                                <div class="kpi-value" id="overviewImpressions">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon green">💵</div>
+                                <div class="panel-title">Cost per Click</div>
+                                <div class="panel-subtitle">Average CPC</div>
+                                <div class="kpi-value" id="overviewCPC">—</div>
                             </div>
                         </div>
                     </div>
@@ -2055,6 +2083,8 @@
             const overviewAdSpend = document.getElementById('overviewAdSpend');
             const overviewTotalClicks = document.getElementById('overviewTotalClicks');
             const overviewConversions = document.getElementById('overviewConversions');
+            const overviewImpressions = document.getElementById('overviewImpressions');
+            const overviewCPC = document.getElementById('overviewCPC');
 
             if (overviewSocialReach) {
                 const reach = socialData.summary?.reach?.total || 0;
@@ -2075,6 +2105,19 @@
             if (overviewConversions) {
                 const conversions = adsData.performance?.conversions || 0;
                 overviewConversions.textContent = formatNumber(conversions);
+            }
+
+            if (overviewImpressions) {
+                const socialImpressions = socialData.summary?.impressions || 0;
+                const adsImpressions = adsData.performance?.impressions || 0;
+                overviewImpressions.textContent = formatNumber(socialImpressions + adsImpressions);
+            }
+
+            if (overviewCPC) {
+                const totalClicks = (socialData.summary?.unique_clicks || 0) + (adsData.performance?.clicks || 0);
+                const totalSpend = adsData.spend?.total || 0;
+                const cpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
+                overviewCPC.textContent = '$' + cpc.toFixed(2);
             }
 
             // Social Performance Snapshot
