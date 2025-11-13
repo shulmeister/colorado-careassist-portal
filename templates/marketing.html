@@ -307,8 +307,8 @@
         .sections {
             margin-top: 6px;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 8px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 6px;
         }
 
         .section {
@@ -396,16 +396,16 @@
             background: rgba(15, 23, 42, 0.9);
             border: 1px solid rgba(148, 163, 184, 0.12);
             border-radius: 6px;
-            padding: 8px;
-            min-height: 60px;
-            max-height: 140px;
+            padding: 6px;
+            min-height: 50px;
+            max-height: 120px;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 3px;
         }
 
         .panel canvas {
-            max-height: 80px !important;
+            max-height: 60px !important;
         }
 
         .panel-header {
@@ -415,7 +415,7 @@
         }
 
         .panel-title {
-            font-size: 10px;
+            font-size: 9px;
             font-weight: 600;
             color: #e2e8f0;
             line-height: 1.2;
@@ -427,7 +427,7 @@
         }
 
         .kpi-value {
-            font-size: 18px;
+            font-size: 16px;
             font-weight: 700;
             color: #f8fafc;
             line-height: 1;
@@ -436,11 +436,11 @@
         .kpi-panel {
             background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
             border: 1px solid rgba(59, 130, 246, 0.2);
-            padding: 6px 8px;
+            padding: 5px 6px;
             position: relative;
             overflow: hidden;
             transition: all 0.2s ease;
-            min-height: 60px;
+            min-height: 52px;
         }
 
         .kpi-panel::before {
@@ -461,14 +461,14 @@
         }
 
         .kpi-icon {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
             border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 14px;
-            margin-bottom: 4px;
+            font-size: 12px;
+            margin-bottom: 3px;
         }
 
         .kpi-icon.blue {
@@ -761,42 +761,86 @@
                         <header class="section-header">
                             <h2 class="section-title">📊 KPIs</h2>
                         </header>
-                        <div class="grid grid-6">
+                        <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));">
                             <div class="panel kpi-panel">
                                 <div class="kpi-icon blue">📱</div>
                                 <div class="panel-title">Social Reach</div>
-                                <div class="panel-subtitle">Last 30 days</div>
                                 <div class="kpi-value" id="overviewSocialReach">—</div>
                             </div>
                             <div class="panel kpi-panel">
                                 <div class="kpi-icon purple">💰</div>
                                 <div class="panel-title">Ad Spend</div>
-                                <div class="panel-subtitle">Last 30 days</div>
                                 <div class="kpi-value" id="overviewAdSpend">—</div>
                             </div>
                             <div class="panel kpi-panel">
                                 <div class="kpi-icon green">👆</div>
                                 <div class="panel-title">Total Clicks</div>
-                                <div class="panel-subtitle">Last 30 days</div>
                                 <div class="kpi-value" id="overviewTotalClicks">—</div>
                             </div>
                             <div class="panel kpi-panel">
                                 <div class="kpi-icon orange">🎯</div>
                                 <div class="panel-title">Conversions</div>
-                                <div class="panel-subtitle">Last 30 days</div>
                                 <div class="kpi-value" id="overviewConversions">—</div>
                             </div>
                             <div class="panel kpi-panel">
                                 <div class="kpi-icon blue">👁️</div>
                                 <div class="panel-title">Impressions</div>
-                                <div class="panel-subtitle">Last 30 days</div>
                                 <div class="kpi-value" id="overviewImpressions">—</div>
                             </div>
                             <div class="panel kpi-panel">
                                 <div class="kpi-icon green">💵</div>
-                                <div class="panel-title">Cost per Click</div>
-                                <div class="panel-subtitle">Average CPC</div>
+                                <div class="panel-title">CPC</div>
                                 <div class="kpi-value" id="overviewCPC">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon purple">📊</div>
+                                <div class="panel-title">CTR</div>
+                                <div class="kpi-value" id="overviewCTR">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon green">💸</div>
+                                <div class="panel-title">ROAS</div>
+                                <div class="kpi-value" id="overviewROAS">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon orange">💲</div>
+                                <div class="panel-title">Cost/Conv</div>
+                                <div class="kpi-value" id="overviewCostPerConv">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon blue">📈</div>
+                                <div class="panel-title">Conv Rate</div>
+                                <div class="kpi-value" id="overviewConvRate">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon purple">💬</div>
+                                <div class="panel-title">Engagement</div>
+                                <div class="kpi-value" id="overviewEngagement">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon green">📧</div>
+                                <div class="panel-title">Email Open</div>
+                                <div class="kpi-value" id="overviewEmailOpen">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon blue">👥</div>
+                                <div class="panel-title">Page Likes</div>
+                                <div class="kpi-value" id="overviewPageLikes">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon orange">📞</div>
+                                <div class="panel-title">Call Clicks</div>
+                                <div class="kpi-value" id="overviewCallClicks">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon purple">🗺️</div>
+                                <div class="panel-title">Directions</div>
+                                <div class="kpi-value" id="overviewDirections">—</div>
+                            </div>
+                            <div class="panel kpi-panel">
+                                <div class="kpi-icon green">🌐</div>
+                                <div class="panel-title">Web Clicks</div>
+                                <div class="kpi-value" id="overviewWebClicks">—</div>
                             </div>
                         </div>
                     </div>
@@ -816,7 +860,7 @@
                                     <div class="kpi-trend" id="overviewPageLikesTrend">Loading…</div>
                                 </div>
                                 <div class="kpi-value" id="overviewPageLikesValue">—</div>
-                                <div style="height: 70px; position: relative;">
+                                <div style="height: 55px; position: relative;">
                                     <canvas id="overviewPageLikesChart"></canvas>
                                 </div>
                             </div>
@@ -847,7 +891,7 @@
                                         <div class="panel-subtitle">User interactions</div>
                                     </div>
                                 </div>
-                                <div style="height: 70px;">
+                                <div style="height: 55px;">
                                     <canvas id="overviewClickActionsChart"></canvas>
                                 </div>
                             </div>
@@ -885,8 +929,8 @@
                         </div>
                     </div>
 
-                    <!-- Top Performers -->
-                    <div class="section full-width">
+                    <!-- Top Performers - Collapsed by default to save space -->
+                    <div class="section full-width" style="display: none;">
                         <header class="section-header">
                             <h2 class="section-title">🏆 Top Performers</h2>
                         </header>
@@ -953,8 +997,8 @@
                                     <div class="panel-subtitle">Organic & Paid</div>
                                 </div>
                             </div>
-                            <div style="height: 70px;">
-                                <div id="reachImpressionsData" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; font-size: 10px;">
+                            <div style="height: 55px;">
+                                <div id="reachImpressionsData" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; font-size: 9px;">
                                     <div>
                                         <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Total Reach</div>
                                         <div style="font-size: 16px; font-weight: 700;" id="totalReachValue">—</div>
@@ -977,7 +1021,7 @@
                                     <div class="panel-subtitle">Clicks, Directions, Phone</div>
                                 </div>
                             </div>
-                            <div style="height: 70px; position: relative;">
+                            <div style="height: 55px; position: relative;">
                                 <canvas id="clickActionsChart"></canvas>
                             </div>
                         </div>
@@ -1021,8 +1065,8 @@
                                     <div class="panel-subtitle">Cost, conversion value, ROAS</div>
                                 </div>
                             </div>
-                        <div style="height: 70px;">
-                                <div id="adsSpendData" style="display: flex; flex-direction: column; gap: 6px;">
+                        <div style="height: 55px;">
+                                <div id="adsSpendData" style="display: flex; flex-direction: column; gap: 4px;">
                                     <div>
                                         <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Total Spend</div>
                                         <div style="display: flex; align-items: center; gap: 12px;">
@@ -1050,7 +1094,7 @@
                                     <div class="panel-subtitle">CPC, CPM, CTR</div>
                                 </div>
                             </div>
-                        <div style="height: 70px; position: relative;">
+                        <div style="height: 55px; position: relative;">
                                 <canvas id="adsEfficiencyChart"></canvas>
                             </div>
                         </div>
@@ -2075,47 +2119,76 @@
         function renderOverviewMetrics(socialData, adsData) {
             if (!socialData || !adsData) return;
 
-            // Top KPIs
+            // Top KPIs - Basic Metrics
             const overviewSocialReach = document.getElementById('overviewSocialReach');
             const overviewAdSpend = document.getElementById('overviewAdSpend');
             const overviewTotalClicks = document.getElementById('overviewTotalClicks');
             const overviewConversions = document.getElementById('overviewConversions');
             const overviewImpressions = document.getElementById('overviewImpressions');
             const overviewCPC = document.getElementById('overviewCPC');
+            
+            // Additional KPIs
+            const overviewCTR = document.getElementById('overviewCTR');
+            const overviewROAS = document.getElementById('overviewROAS');
+            const overviewCostPerConv = document.getElementById('overviewCostPerConv');
+            const overviewConvRate = document.getElementById('overviewConvRate');
+            const overviewEngagement = document.getElementById('overviewEngagement');
+            const overviewEmailOpen = document.getElementById('overviewEmailOpen');
+            const overviewPageLikes = document.getElementById('overviewPageLikes');
+            const overviewCallClicks = document.getElementById('overviewCallClicks');
+            const overviewDirections = document.getElementById('overviewDirections');
+            const overviewWebClicks = document.getElementById('overviewWebClicks');
 
-            if (overviewSocialReach) {
-                const reach = socialData.summary?.reach?.total || 0;
-                overviewSocialReach.textContent = formatNumber(reach);
-            }
+            // Basic metrics
+            const reach = socialData.summary?.reach?.total || 0;
+            const spend = adsData.spend?.total || 0;
+            const socialClicks = socialData.summary?.unique_clicks || 0;
+            const adsClicks = adsData.performance?.clicks || 0;
+            const totalClicks = socialClicks + adsClicks;
+            const conversions = adsData.performance?.conversions || 0;
+            const socialImpressions = socialData.summary?.impressions || 0;
+            const adsImpressions = adsData.performance?.impressions || 0;
+            const totalImpressions = socialImpressions + adsImpressions;
 
-            if (overviewAdSpend) {
-                const spend = adsData.spend?.total || 0;
-                overviewAdSpend.textContent = '$' + formatNumber(spend);
-            }
+            if (overviewSocialReach) overviewSocialReach.textContent = formatNumber(reach);
+            if (overviewAdSpend) overviewAdSpend.textContent = '$' + formatNumber(spend);
+            if (overviewTotalClicks) overviewTotalClicks.textContent = formatNumber(totalClicks);
+            if (overviewConversions) overviewConversions.textContent = formatNumber(conversions);
+            if (overviewImpressions) overviewImpressions.textContent = formatNumber(totalImpressions);
 
-            if (overviewTotalClicks) {
-                const socialClicks = socialData.summary?.unique_clicks || 0;
-                const adsClicks = adsData.performance?.clicks || 0;
-                overviewTotalClicks.textContent = formatNumber(socialClicks + adsClicks);
-            }
+            // Calculated metrics
+            const cpc = totalClicks > 0 ? spend / totalClicks : 0;
+            const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+            const conversionValue = adsData.performance?.conversion_value || 0;
+            const roas = spend > 0 ? conversionValue / spend : 0;
+            const costPerConv = conversions > 0 ? spend / conversions : 0;
+            const convRate = totalClicks > 0 ? (conversions / totalClicks) * 100 : 0;
 
-            if (overviewConversions) {
-                const conversions = adsData.performance?.conversions || 0;
-                overviewConversions.textContent = formatNumber(conversions);
-            }
+            if (overviewCPC) overviewCPC.textContent = '$' + cpc.toFixed(2);
+            if (overviewCTR) overviewCTR.textContent = ctr.toFixed(2) + '%';
+            if (overviewROAS) overviewROAS.textContent = roas.toFixed(2) + 'x';
+            if (overviewCostPerConv) overviewCostPerConv.textContent = '$' + formatNumber(costPerConv);
+            if (overviewConvRate) overviewConvRate.textContent = convRate.toFixed(2) + '%';
 
-            if (overviewImpressions) {
-                const socialImpressions = socialData.summary?.impressions || 0;
-                const adsImpressions = adsData.performance?.impressions || 0;
-                overviewImpressions.textContent = formatNumber(socialImpressions + adsImpressions);
-            }
+            // Social engagement
+            const totalEngagement = (socialData.summary?.total_engagement || 0);
+            if (overviewEngagement) overviewEngagement.textContent = formatNumber(totalEngagement);
 
-            if (overviewCPC) {
-                const totalClicks = (socialData.summary?.unique_clicks || 0) + (adsData.performance?.clicks || 0);
-                const totalSpend = adsData.spend?.total || 0;
-                const cpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
-                overviewCPC.textContent = '$' + cpc.toFixed(2);
-            }
+            // Email metrics (placeholder - will be populated when email data is available)
+            if (overviewEmailOpen) overviewEmailOpen.textContent = '—';
+
+            // Page likes
+            const totalPageLikes = socialData.summary?.total_page_likes?.total || 0;
+            if (overviewPageLikes) overviewPageLikes.textContent = formatNumber(totalPageLikes);
+
+            // Click actions from GBP/social
+            const callClicks = socialData.summary?.call_clicks || 0;
+            const directions = socialData.summary?.get_directions_clicks || 0;
+            const webClicks = socialData.summary?.website_clicks || 0;
+            
+            if (overviewCallClicks) overviewCallClicks.textContent = formatNumber(callClicks);
+            if (overviewDirections) overviewDirections.textContent = formatNumber(directions);
+            if (overviewWebClicks) overviewWebClicks.textContent = formatNumber(webClicks);
 
             // Social Performance Snapshot
             const totalLikes = socialData.summary?.total_page_likes || {};
