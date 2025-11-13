@@ -145,7 +145,7 @@
         }
 
         .content-header {
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -157,16 +157,18 @@
         }
 
         .page-title {
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 700;
             color: #f9fafb;
             margin: 0;
+            line-height: 1.2;
         }
 
         .page-subtitle {
-            font-size: 11px;
+            font-size: 10px;
             color: #9ca3af;
             margin: 0;
+            line-height: 1.2;
         }
 
         .filters {
@@ -204,11 +206,11 @@
             background: #2563eb;
         }
 
-        /* Grid Layout */
+        /* Grid Layout - ULTRA COMPACT */
         .grid {
             display: grid;
-            gap: 12px;
-            margin-bottom: 12px;
+            gap: 8px;
+            margin-bottom: 8px;
         }
 
         .grid-3 {
@@ -233,49 +235,52 @@
             }
         }
 
-        /* Card Styles */
+        /* Card Styles - ULTRA COMPACT */
         .card {
             background: #252d47;
             border: 1px solid #374151;
-            border-radius: 8px;
-            padding: 12px;
+            border-radius: 6px;
+            padding: 8px;
             display: flex;
             flex-direction: column;
+            min-height: 0;
         }
         
         .card-compact {
-            padding: 10px;
+            padding: 8px;
         }
 
         .card-header {
-            margin-bottom: 8px;
+            margin-bottom: 4px;
         }
 
         .card-label {
-            font-size: 9px;
+            font-size: 8px;
             color: #6b7280;
             text-transform: uppercase;
-            letter-spacing: 0.3px;
-            margin-bottom: 2px;
+            letter-spacing: 0.2px;
+            margin-bottom: 1px;
+            line-height: 1;
         }
 
         .card-title {
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 600;
             color: #f9fafb;
-            line-height: 1.2;
+            line-height: 1.1;
+            margin-bottom: 2px;
         }
 
         .metric-value {
-            font-size: 24px;
+            font-size: 20px;
             font-weight: 700;
             color: #f9fafb;
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             line-height: 1;
         }
         
         .metric-value-small {
-            font-size: 18px;
+            font-size: 16px;
         }
 
         .metric-change {
@@ -300,25 +305,25 @@
             margin-left: 4px;
         }
 
-        /* Chart Container */
+        /* Chart Container - ULTRA COMPACT */
         .chart-container {
             position: relative;
-            height: 80px;
-            margin-top: 8px;
+            height: 60px;
+            margin-top: 4px;
             flex: 1;
         }
 
         .chart-container-medium {
             position: relative;
-            height: 100px;
-            margin-top: 8px;
+            height: 80px;
+            margin-top: 4px;
             flex: 1;
         }
         
         .chart-container-large {
             position: relative;
-            height: 120px;
-            margin-top: 8px;
+            height: 100px;
+            margin-top: 4px;
             flex: 1;
         }
 
@@ -334,28 +339,29 @@
         .stats-row {
             display: flex;
             justify-content: space-between;
-            padding: 6px 0;
+            padding: 4px 0;
             border-bottom: 1px solid #374151;
         }
 
         .stats-row:last-child {
             border-bottom: none;
+            padding-bottom: 0;
         }
 
         .stats-label {
-            font-size: 11px;
+            font-size: 10px;
             color: #9ca3af;
         }
 
         .stats-value {
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 600;
             color: #f9fafb;
         }
 
         .stats-change {
-            font-size: 10px;
-            margin-left: 6px;
+            font-size: 9px;
+            margin-left: 4px;
         }
 
         .stats-change.positive {
@@ -776,48 +782,552 @@
         </div>
             </div>
             
-            <!-- Other Tabs (Placeholder) -->
+            <!-- Social Performance Tab -->
             <div class="tab-content" id="tab-social">
                 <div class="content-header">
                     <div class="header-left">
                         <h1 class="page-title">Social Performance</h1>
-                        <div class="page-subtitle">Coming Soon</div>
+                        <div class="page-subtitle" id="socialDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="socialDatePreset">
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="socialRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Social KPIs Grid -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">FACEBOOK</div>
+                            <div class="card-title">Page Likes</div>
+                        </div>
+                        <div class="metric-value" id="socialPageLikes">2,785</div>
+                        <div class="metric-change positive">▲ 4.6%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">REACH</div>
+                            <div class="card-title">Total Reach</div>
+                        </div>
+                        <div class="metric-value" id="socialReach">26,980</div>
+                        <div class="metric-change negative">▼ 2.1%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT</div>
+                            <div class="card-title">Post Engagements</div>
+                        </div>
+                        <div class="metric-value" id="socialEngagement">1,468</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CONTENT</div>
+                            <div class="card-title">Posts Published</div>
+                        </div>
+                        <div class="metric-value" id="socialPosts">18</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">IMPRESSIONS</div>
+                            <div class="card-title">Total Impressions</div>
+                        </div>
+                        <div class="metric-value" id="socialImpressions">38,950</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">VIDEO</div>
+                            <div class="card-title">Video Views</div>
+                        </div>
+                        <div class="metric-value" id="socialVideoViews">5,190</div>
+                    </div>
+                </div>
+                
+                <!-- Social Performance Charts -->
+                <div class="grid grid-3">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">REACH TREND</div>
+                            <div class="card-title">Organic vs Paid Reach</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="socialReachChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT RATE</div>
+                            <div class="card-title">Post Engagement Over Time</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="socialEngagementChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOP POSTS</div>
+                            <div class="card-title">Best Performing Content</div>
+                        </div>
+                        <div class="stats-table">
+                            <div class="stats-row">
+                                <div class="stats-label">Fall caregiver event</div>
+                                <div class="stats-value">1,250</div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Team spotlight</div>
+                                <div class="stats-value">980</div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Client success story</div>
+                                <div class="stats-value">860</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             
+            <!-- Paid Media Tab -->
             <div class="tab-content" id="tab-paid-media">
                 <div class="content-header">
                     <div class="header-left">
                         <h1 class="page-title">Paid Media</h1>
-                        <div class="page-subtitle">Coming Soon</div>
+                        <div class="page-subtitle" id="paidDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="paidDatePreset">
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="paidRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Paid Media KPIs -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOTAL SPEND</div>
+                            <div class="card-title">All Platforms</div>
+                        </div>
+                        <div class="metric-value" id="paidTotalSpend">$4,517.88</div>
+                        <div class="metric-change positive">▲ 8.2%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GOOGLE ADS</div>
+                            <div class="card-title">Amount Spent</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidGoogleSpend">$4,183.00</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">FACEBOOK ADS</div>
+                            <div class="card-title">Amount Spent</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidFacebookSpend">$334.88</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOTAL CLICKS</div>
+                            <div class="card-title">All Campaigns</div>
+                        </div>
+                        <div class="metric-value" id="paidClicks">851</div>
+                        <div class="metric-change positive">▲ 14.3%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">AVG CPC</div>
+                            <div class="card-title">Cost Per Click</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidCPC">$5.31</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CONVERSIONS</div>
+                            <div class="card-title">Leads Generated</div>
+                        </div>
+                        <div class="metric-value" id="paidConversions">43</div>
+                    </div>
+                </div>
+                
+                <!-- Paid Media Charts -->
+                <div class="grid grid-2">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CAMPAIGN PERFORMANCE</div>
+                            <div class="card-title">Top Campaigns by ROAS</div>
+                        </div>
+                        <div class="stats-table">
+                            <div class="stats-row">
+                                <div class="stats-label">Search - Colorado Caregiving</div>
+                                <div class="stats-value">4.8x <span class="stats-change positive">▲ 12%</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Display - Denver Metro</div>
+                                <div class="stats-value">3.2x <span class="stats-change negative">▼ 3%</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Facebook - Lead Gen</div>
+                                <div class="stats-value">2.9x <span class="stats-change positive">▲ 8%</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Search - Senior Care Services</div>
+                                <div class="stats-value">2.4x</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SPEND BY PLATFORM</div>
+                            <div class="card-title">Budget Allocation</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="paidSpendChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
             
+            <!-- Email Marketing Tab -->
             <div class="tab-content" id="tab-email">
                 <div class="content-header">
                     <div class="header-left">
                         <h1 class="page-title">Email Marketing</h1>
-                        <div class="page-subtitle">Coming Soon</div>
+                        <div class="page-subtitle" id="emailDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="emailDatePreset">
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="emailRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Email KPIs -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CAMPAIGNS</div>
+                            <div class="card-title">Emails Sent</div>
+                        </div>
+                        <div class="metric-value" id="emailCampaigns">12</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SUBSCRIBERS</div>
+                            <div class="card-title">Total Contacts</div>
+                        </div>
+                        <div class="metric-value" id="emailSubscribers">3,428</div>
+                        <div class="metric-change positive">▲ 5.2%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">OPEN RATE</div>
+                            <div class="card-title">Average</div>
+                        </div>
+                        <div class="metric-value" id="emailOpenRate">28.4%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CLICK RATE</div>
+                            <div class="card-title">Average CTR</div>
+                        </div>
+                        <div class="metric-value" id="emailClickRate">4.2%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">DELIVERABILITY</div>
+                            <div class="card-title">Delivery Rate</div>
+                        </div>
+                        <div class="metric-value" id="emailDeliveryRate">98.6%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CONVERSIONS</div>
+                            <div class="card-title">From Email</div>
+                        </div>
+                        <div class="metric-value" id="emailConversions">67</div>
+                    </div>
+                </div>
+                
+                <!-- Email Performance -->
+                <div class="grid grid-3">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOP CAMPAIGNS</div>
+                            <div class="card-title">Best Performing</div>
+                        </div>
+                        <div class="stats-table">
+                            <div class="stats-row">
+                                <div class="stats-label">Fall Newsletter</div>
+                                <div class="stats-value">42.1%</div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Care Tips Weekly</div>
+                                <div class="stats-value">38.6%</div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Event Invitation</div>
+                                <div class="stats-value">35.2%</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT TREND</div>
+                            <div class="card-title">Opens & Clicks Over Time</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="emailEngagementChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">LIST GROWTH</div>
+                            <div class="card-title">Subscriber Growth</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="emailGrowthChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
             
+            <!-- Website & GBP Tab -->
             <div class="tab-content" id="tab-website">
                 <div class="content-header">
                     <div class="header-left">
                         <h1 class="page-title">Website & Google Business Profile</h1>
-                        <div class="page-subtitle">Coming Soon</div>
+                        <div class="page-subtitle" id="websiteDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="websiteDatePreset">
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="websiteRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Website KPIs -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GA4</div>
+                            <div class="card-title">Total Sessions</div>
+                        </div>
+                        <div class="metric-value" id="websiteSessions">1,872</div>
+                        <div class="metric-change positive">▲ 12.4%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">USERS</div>
+                            <div class="card-title">Unique Visitors</div>
+                        </div>
+                        <div class="metric-value" id="websiteUsers">1,403</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">BOUNCE RATE</div>
+                            <div class="card-title">Exit %</div>
+                        </div>
+                        <div class="metric-value" id="websiteBounceRate">42.8%</div>
+                        <div class="metric-change positive">▼ 5.1%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">AVG SESSION</div>
+                            <div class="card-title">Duration</div>
+                        </div>
+                        <div class="metric-value" id="websiteAvgSession">2:34</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GBP VIEWS</div>
+                            <div class="card-title">Profile Views</div>
+                        </div>
+                        <div class="metric-value" id="gbpViews">3,240</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GBP ACTIONS</div>
+                            <div class="card-title">Total Actions</div>
+                        </div>
+                        <div class="metric-value" id="gbpActions">486</div>
+                    </div>
+                </div>
+                
+                <!-- Website & GBP Charts -->
+                <div class="grid grid-3">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TRAFFIC SOURCES</div>
+                            <div class="card-title">Top Channels</div>
+                        </div>
+                        <div class="stats-table">
+                            <div class="stats-row">
+                                <div class="stats-label">Organic Search</div>
+                                <div class="stats-value">680 <span class="stats-change">(36%)</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Direct</div>
+                                <div class="stats-value">560 <span class="stats-change">(30%)</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Paid Search</div>
+                                <div class="stats-value">410 <span class="stats-change">(22%)</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Social</div>
+                                <div class="stats-value">222 <span class="stats-change">(12%)</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SESSION TREND</div>
+                            <div class="card-title">Daily Sessions</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="websiteSessionsChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GBP SEARCHES</div>
+                            <div class="card-title">Discovery vs Direct</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="gbpSearchesChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
             
+            <!-- Engagement Tab -->
             <div class="tab-content" id="tab-engagement">
                 <div class="content-header">
                     <div class="header-left">
                         <h1 class="page-title">Engagement</h1>
-                        <div class="page-subtitle">Coming Soon</div>
+                        <div class="page-subtitle" id="engagementDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="engagementDatePreset">
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="engagementRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Engagement KPIs -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOTAL</div>
+                            <div class="card-title">All Engagements</div>
+                        </div>
+                        <div class="metric-value" id="engagementTotal">4,820</div>
+                        <div class="metric-change positive">▲ 9.3%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SOCIAL</div>
+                            <div class="card-title">Likes + Comments</div>
+                        </div>
+                        <div class="metric-value" id="engagementSocial">2,456</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SHARES</div>
+                            <div class="card-title">Content Shared</div>
+                        </div>
+                        <div class="metric-value" id="engagementShares">328</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">COMMENTS</div>
+                            <div class="card-title">Total Comments</div>
+                        </div>
+                        <div class="metric-value" id="engagementComments">689</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">MESSAGES</div>
+                            <div class="card-title">Direct Messages</div>
+                        </div>
+                        <div class="metric-value" id="engagementMessages">143</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SAVES</div>
+                            <div class="card-title">Bookmarks</div>
+                        </div>
+                        <div class="metric-value" id="engagementSaves">204</div>
+                    </div>
+                </div>
+                
+                <!-- Engagement Analysis -->
+                <div class="grid grid-2">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT BREAKDOWN</div>
+                            <div class="card-title">By Type</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="engagementTypeChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">DAILY TREND</div>
+                            <div class="card-title">Engagement Over Time</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="engagementTrendChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -993,6 +1503,193 @@
                         data: interactionsData,
                         backgroundColor: '#06b6d4',
                         borderRadius: 4
+                    }]
+                },
+                options: chartDefaults
+            });
+
+            // Social Performance Tab Charts
+            charts.socialReach = new Chart(document.getElementById('socialReachChart'), {
+                type: 'line',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [
+                        {
+                            label: 'Organic',
+                            data: generateRandomData(30, 500, 1200),
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Paid',
+                            data: generateRandomData(30, 200, 600),
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: true, labels: { color: '#9ca3af', font: { size: 10 } } } } }
+            });
+
+            charts.socialEngagement = new Chart(document.getElementById('socialEngagementChart'), {
+                type: 'line',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: generateRandomData(30, 20, 80),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: chartDefaults
+            });
+
+            // Paid Media Tab Charts
+            charts.paidSpend = new Chart(document.getElementById('paidSpendChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Google Ads', 'Facebook Ads', 'Other'],
+                    datasets: [{
+                        data: [4183, 335, 0],
+                        backgroundColor: ['#3b82f6', '#8b5cf6', '#06b6d4'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, padding: 10 } },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#e5e7eb',
+                            borderColor: '#374151',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            });
+
+            // Email Marketing Tab Charts
+            charts.emailEngagement = new Chart(document.getElementById('emailEngagementChart'), {
+                type: 'line',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [
+                        {
+                            label: 'Opens',
+                            data: generateRandomData(30, 100, 400),
+                            borderColor: '#3b82f6',
+                            tension: 0.4
+                        },
+                        {
+                            label: 'Clicks',
+                            data: generateRandomData(30, 20, 100),
+                            borderColor: '#10b981',
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: true, labels: { color: '#9ca3af', font: { size: 10 } } } } }
+            });
+
+            charts.emailGrowth = new Chart(document.getElementById('emailGrowthChart'), {
+                type: 'line',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: [3200, 3210, 3225, 3240, 3255, 3270, 3280, 3290, 3305, 3315, 
+                               3330, 3340, 3352, 3360, 3370, 3380, 3390, 3398, 3405, 3412,
+                               3418, 3422, 3426, 3428, 3428, 3428, 3428, 3428, 3428, 3428],
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: chartDefaults
+            });
+
+            // Website & GBP Tab Charts
+            charts.websiteSessions = new Chart(document.getElementById('websiteSessionsChart'), {
+                type: 'line',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: generateSessionData(30),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: chartDefaults
+            });
+
+            charts.gbpSearches = new Chart(document.getElementById('gbpSearchesChart'), {
+                type: 'bar',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [
+                        {
+                            label: 'Discovery',
+                            data: generateRandomData(30, 50, 150),
+                            backgroundColor: '#3b82f6'
+                        },
+                        {
+                            label: 'Direct',
+                            data: generateRandomData(30, 30, 80),
+                            backgroundColor: '#8b5cf6'
+                        }
+                    ]
+                },
+                options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: true, labels: { color: '#9ca3af', font: { size: 10 } } } } }
+            });
+
+            // Engagement Tab Charts
+            charts.engagementType = new Chart(document.getElementById('engagementTypeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Likes', 'Comments', 'Shares', 'Saves', 'Messages'],
+                    datasets: [{
+                        data: [2456, 689, 328, 204, 143],
+                        backgroundColor: ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#06b6d4'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true, position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, padding: 10 } },
+                        tooltip: {
+                            backgroundColor: '#1f2937',
+                            titleColor: '#f9fafb',
+                            bodyColor: '#e5e7eb',
+                            borderColor: '#374151',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            });
+
+            charts.engagementTrend = new Chart(document.getElementById('engagementTrendChart'), {
+                type: 'line',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: generateRandomData(30, 100, 250),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4
                     }]
                 },
                 options: chartDefaults
@@ -1293,3 +1990,4 @@
     </script>
 </body>
 </html>
+
