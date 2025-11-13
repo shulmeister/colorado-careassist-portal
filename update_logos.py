@@ -17,7 +17,7 @@ LOGO_MAP = {
     "Adams Keegan Efficenter": "https://www.google.com/s2/favicons?domain=adamskeegan.com&sz=128",
     "Wellsky": "https://www.google.com/s2/favicons?domain=wellsky.com&sz=128",
     "QuickBooks": "https://www.google.com/s2/favicons?domain=intuit.com&sz=128",
-    "SocialPilot": "https://www.google.com/s2/favicons?domain=socialpilot.co&sz=128",
+    "Predis.ai": "https://www.google.com/s2/favicons?domain=predis.ai&sz=128",
     "WordPress": "https://www.google.com/s2/favicons?domain=wordpress.com&sz=128",
     "Facebook Ads Manager": "https://www.google.com/s2/favicons?domain=facebook.com&sz=128",
     "Meta Business Suite": "https://www.google.com/s2/favicons?domain=facebook.com&sz=128",
