@@ -3,17 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
     <title>Marketing Dashboard - Colorado CareAssist</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        :root {
-            color-scheme: dark;
-        }
-
         * {
             margin: 0;
             padding: 0;
@@ -22,342 +15,91 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background: #0f172a;
-            color: #e2e8f0;
-            min-height: 100vh;
+            background: #1a1f35;
+            color: #e5e7eb;
             line-height: 1.5;
+            padding: 20px;
         }
 
-        .dashboard-container {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            min-height: 100vh;
+        .dashboard-header {
+            margin-bottom: 30px;
         }
 
-        /* Sidebar */
-        .sidebar {
-            background: #1e293b;
-            border-right: 1px solid #334155;
-            padding: 24px 0;
-            position: sticky;
-            top: 0;
-            height: 100vh;
-            overflow-y: auto;
-        }
-
-        .sidebar-header {
-            padding: 0 24px 32px;
-            border-bottom: 1px solid #334155;
-            margin-bottom: 24px;
-        }
-
-        .sidebar-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: #f8fafc;
-        }
-
-        .sidebar-subtitle {
-            font-size: 13px;
-            color: #94a3b8;
-            margin-top: 4px;
-        }
-
-        .back-to-portal {
-            margin-top: 16px;
-        }
-
-        .back-button {
+        .back-link {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 8px 14px;
-            border-radius: 8px;
+            padding: 10px 16px;
             background: rgba(59, 130, 246, 0.15);
             border: 1px solid rgba(59, 130, 246, 0.35);
-            color: #dbeafe;
+            border-radius: 8px;
+            color: #60a5fa;
             text-decoration: none;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
-            transition: all 0.2s ease;
+            transition: all 0.2s;
+            margin-bottom: 20px;
         }
 
-        .back-button:hover {
+        .back-link:hover {
             background: rgba(59, 130, 246, 0.25);
-            border-color: rgba(59, 130, 246, 0.55);
-            color: #e0f2fe;
             transform: translateX(-2px);
         }
 
-        .sidebar-nav {
-            padding: 0 16px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+        .dashboard-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f9fafb;
+            margin-bottom: 8px;
         }
 
-        .sidebar-link {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 12px 16px;
-            border-radius: 10px;
-            text-decoration: none;
-            color: #94a3b8;
+        .date-range {
             font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s ease;
+            color: #9ca3af;
+            margin-bottom: 20px;
         }
 
-        .sidebar-link:hover {
-            background: rgba(148, 163, 184, 0.15);
-            color: #f8fafc;
+        .filters {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 30px;
         }
 
-        .sidebar-link.active {
-            background: rgba(59, 130, 246, 0.18);
-            border: 1px solid rgba(59, 130, 246, 0.45);
-            color: #bfdbfe;
-        }
-
-        .sidebar-link.disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            pointer-events: none;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .sidebar-link .icon {
-            font-size: 16px;
-        }
-
-        /* RingCentral */
-        .sidebar-ringcentral {
-            margin: 16px;
-            padding: 12px;
-            background: #1e293b;
+        .filter-select {
+            padding: 8px 14px;
+            background: #252d47;
+            border: 1px solid #374151;
             border-radius: 8px;
-            border: 1px solid #334155;
+            color: #e5e7eb;
+            font-size: 14px;
+            cursor: pointer;
         }
 
-        .sidebar-ringcentral-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .sidebar-ringcentral-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .sidebar-ringcentral-name {
+        .refresh-btn {
+            padding: 8px 14px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 8px;
+            color: white;
             font-size: 14px;
             font-weight: 600;
-            color: #f8fafc;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
         }
 
-        .sidebar-ringcentral-subtitle {
-            font-size: 12px;
-            color: #94a3b8;
-        }
-
-        .sidebar-ringcentral-expand {
-            padding: 4px 8px;
-            background: #3b82f6;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            font-size: 12px;
-            transition: background 0.2s;
-        }
-
-        .sidebar-ringcentral-expand:hover {
+        .refresh-btn:hover {
             background: #2563eb;
         }
 
-        .sidebar-ringcentral-frame {
-            width: 100%;
-            min-height: 320px;
-            border: none;
-            border-radius: 6px;
-            background: rgba(15, 23, 42, 0.6);
-        }
-
-        /* Content */
-        .content {
-            background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(15, 23, 42, 1) 100%);
-            padding: 6px 10px 10px;
-            overflow-x: hidden;
-            height: calc(100vh - 20px);
-            overflow-y: auto;
-        }
-
-        .content-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 6px;
-            margin-bottom: 6px;
-        }
-
-        .breadcrumb {
-            font-size: 11px;
-            color: #64748b;
-            display: none; /* Hide breadcrumb to save space */
-        }
-
-        .page-title {
-            font-size: 14px;
-            font-weight: 700;
-            color: #f8fafc;
-            margin: 0;
-        }
-
-        .page-description {
-            display: none; /* Hide description to save space */
-        }
-
-        .filters-bar {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 4px;
-            padding: 4px 8px;
-            background: rgba(30, 41, 59, 0.75);
-            border: 1px solid rgba(51, 65, 85, 0.7);
-            border-radius: 4px;
-        }
-
-        .filters-group {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .date-picker, .preset-select, .toggle-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .preset-select select,
-        .date-picker input[type="date"] {
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid #334155;
-            color: #e2e8f0;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 13px;
-        }
-
-        .toggle-group button {
-            background: rgba(30, 41, 59, 0.8);
-            color: #cbd5f5;
-            border: 1px solid #1d4ed8;
-            border-radius: 999px;
-            padding: 6px 14px;
-            font-size: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .toggle-group button.active,
-        .toggle-group button:hover {
-            background: #1d4ed8;
-            color: white;
-        }
-
-        .refresh-status {
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 12px;
-            color: #64748b;
-        }
-
-        .refresh-button {
-            padding: 8px 14px;
-            border-radius: 8px;
-            border: 1px solid rgba(59, 130, 246, 0.4);
-            background: rgba(59, 130, 246, 0.15);
-            color: #bfdbfe;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .refresh-button:hover {
-            background: rgba(59, 130, 246, 0.25);
-            color: #e0f2fe;
-        }
-
-        .sections {
-            margin-top: 4px;
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 4px;
-        }
-
-        .section {
-            background: rgba(30, 41, 59, 0.85);
-            border: 1px solid rgba(51, 65, 85, 0.7);
-            border-radius: 6px;
-            padding: 6px 8px;
-        }
-
-        .section.full-width {
-            grid-column: 1 / -1;
-        }
-
-        .section-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 4px;
-            margin-bottom: 6px;
-        }
-
-        .section-title {
-            font-size: 10px;
-            font-weight: 700;
-            color: #f8fafc;
-            display: flex;
-            align-items: center;
-            gap: 3px;
-        }
-
-        .section-description {
-            display: none; /* Hide descriptions to save space */
-        }
-
+        /* Grid Layout */
         .grid {
             display: grid;
-            gap: 4px;
-        }
-
-        .grid-6 {
-            grid-template-columns: repeat(6, 1fr);
-        }
-
-        .grid-5 {
-            grid-template-columns: repeat(5, 1fr);
-        }
-
-        .grid-4 {
-            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
         }
 
         .grid-3 {
@@ -368,3098 +110,920 @@
             grid-template-columns: repeat(2, 1fr);
         }
 
-        @media (min-width: 1800px) {
-            .sections {
-                grid-template-columns: repeat(4, 1fr);
-            }
+        .grid-4 {
+            grid-template-columns: repeat(4, 1fr);
         }
 
+        /* Card Styles */
+        .card {
+            background: #252d47;
+            border: 1px solid #374151;
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .card-header {
+            margin-bottom: 16px;
+        }
+
+        .card-label {
+            font-size: 12px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f9fafb;
+        }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #f9fafb;
+            margin-bottom: 8px;
+        }
+
+        .metric-change {
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .metric-change.positive {
+            color: #34d399;
+        }
+
+        .metric-change.negative {
+            color: #f87171;
+        }
+
+        .metric-change-detail {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-left: 4px;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            position: relative;
+            height: 120px;
+            margin-top: 12px;
+        }
+
+        .chart-container-large {
+            position: relative;
+            height: 200px;
+            margin-top: 12px;
+        }
+
+        /* Stats Table */
+        .stats-table {
+            width: 100%;
+        }
+
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #374151;
+        }
+
+        .stats-row:last-child {
+            border-bottom: none;
+        }
+
+        .stats-label {
+            font-size: 14px;
+            color: #9ca3af;
+        }
+
+        .stats-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f9fafb;
+        }
+
+        .stats-change {
+            font-size: 12px;
+            margin-left: 8px;
+        }
+
+        .stats-change.positive {
+            color: #34d399;
+        }
+
+        .stats-change.negative {
+            color: #f87171;
+        }
+
+        /* Campaigns Table */
+        .campaigns-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+        }
+
+        .campaigns-table th {
+            text-align: left;
+            font-size: 12px;
+            color: #9ca3af;
+            font-weight: 600;
+            padding: 8px 12px;
+            border-bottom: 1px solid #374151;
+        }
+
+        .campaigns-table td {
+            font-size: 14px;
+            color: #e5e7eb;
+            padding: 12px;
+            border-bottom: 1px solid #374151;
+        }
+
+        .campaigns-table tr:hover {
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .campaign-name {
+            color: #f9fafb;
+            font-weight: 500;
+        }
+
+        .campaign-id {
+            font-size: 11px;
+            color: #6b7280;
+        }
+
+        /* Footer */
+        .dashboard-footer {
+            margin-top: 40px;
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid #374151;
+        }
+
+        .dashboard-footer-title {
+            font-size: 16px;
+            color: #9ca3af;
+            margin-bottom: 8px;
+        }
+
+        .databox-logo {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .empty-state-text {
+            font-size: 14px;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #9ca3af;
+        }
+
+        .spinner {
+            border: 3px solid #374151;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
         @media (max-width: 1400px) {
-            .grid-6 {
-                grid-template-columns: repeat(3, 1fr);
+            .grid-4 {
+                grid-template-columns: repeat(2, 1fr);
             }
         }
 
-        @media (max-width: 1200px) {
-            .grid-6, .grid-5, .grid-4 {
+        @media (max-width: 1024px) {
+            .grid-3 {
                 grid-template-columns: repeat(2, 1fr);
             }
         }
 
         @media (max-width: 768px) {
-            .grid-6, .grid-5, .grid-4 {
+            .grid-2, .grid-3, .grid-4 {
                 grid-template-columns: 1fr;
-            }
-        }
-
-        .panel {
-            background: rgba(15, 23, 42, 0.9);
-            border: 1px solid rgba(148, 163, 184, 0.12);
-            border-radius: 4px;
-            padding: 5px;
-            min-height: 40px;
-            max-height: 100px;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .panel canvas {
-            max-height: 45px !important;
-        }
-
-        .panel-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .panel-title {
-            font-size: 8px;
-            font-weight: 600;
-            color: #e2e8f0;
-            line-height: 1.1;
-        }
-
-        .panel-subtitle {
-            font-size: 7px;
-            color: #64748b;
-        }
-
-        .kpi-value {
-            font-size: 14px;
-            font-weight: 700;
-            color: #f8fafc;
-            line-height: 1;
-        }
-
-        .kpi-panel {
-            background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            padding: 4px 5px;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.2s ease;
-            min-height: 42px;
-        }
-
-        .kpi-panel::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, #3b82f6, #8b5cf6, #10b981, #f59e0b);
-            opacity: 0.8;
-        }
-
-        .kpi-panel:hover {
-            transform: translateY(-4px);
-            border-color: rgba(59, 130, 246, 0.4);
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
-        }
-
-        .kpi-icon {
-            width: 16px;
-            height: 16px;
-            border-radius: 3px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            margin-bottom: 2px;
-        }
-
-        .kpi-icon.blue {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05));
-            border: 1px solid rgba(59, 130, 246, 0.3);
-        }
-
-        .kpi-icon.purple {
-            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.05));
-            border: 1px solid rgba(139, 92, 246, 0.3);
-        }
-
-        .kpi-icon.green {
-            background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(16, 185, 129, 0.05));
-            border: 1px solid rgba(16, 185, 129, 0.3);
-        }
-
-        .kpi-icon.orange {
-            background: linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(245, 158, 11, 0.05));
-            border: 1px solid rgba(245, 158, 11, 0.3);
-        }
-
-        .kpi-trend {
-            font-size: 12px;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 8px;
-            border-radius: 999px;
-        }
-
-        .trend-up {
-            background: rgba(34, 197, 94, 0.15);
-            color: #4ade80;
-        }
-
-        .trend-down {
-            background: rgba(248, 113, 113, 0.18);
-            color: #fca5a5;
-        }
-
-        .chart-placeholder {
-            flex: 1;
-            border-radius: 12px;
-            border: 1px dashed rgba(148, 163, 184, 0.25);
-            background: rgba(15, 23, 42, 0.75);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #64748b;
-            font-size: 13px;
-            padding: 16px;
-            text-align: center;
-        }
-
-        .table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            font-size: 13px;
-            overflow: hidden;
-            border-radius: 12px;
-            border: 1px solid rgba(51, 65, 85, 0.5);
-        }
-
-        .table thead {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(139, 92, 246, 0.15));
-            border-bottom: 2px solid rgba(59, 130, 246, 0.3);
-        }
-
-        .table th {
-            padding: 8px 10px;
-            text-align: left;
-            font-weight: 700;
-            color: #dbeafe;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.6px;
-            border-bottom: 2px solid rgba(59, 130, 246, 0.2);
-        }
-
-        .table td {
-            padding: 8px 10px;
-            border-top: 1px solid rgba(51, 65, 85, 0.3);
-            color: #e2e8f0;
-            background: rgba(15, 23, 42, 0.4);
-            font-size: 12px;
-        }
-
-        .table tbody tr {
-            transition: all 0.2s ease;
-        }
-
-        .table tbody tr:hover {
-            background: rgba(59, 130, 246, 0.08);
-            transform: translateX(2px);
-        }
-
-        .table tbody tr:hover td {
-            background: transparent;
-            color: #f8fafc;
-        }
-
-        .table-section-title {
-            font-size: 12px;
-            font-weight: 700;
-            color: #f8fafc;
-            margin-bottom: 8px;
-            padding-left: 4px;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .table-section-title::before {
-            content: '';
-            width: 4px;
-            height: 18px;
-            background: linear-gradient(180deg, #3b82f6, #8b5cf6);
-            border-radius: 2px;
-        }
-
-        .metric-badge {
-            display: inline-block;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .metric-badge.spend {
-            background: rgba(139, 92, 246, 0.15);
-            color: #c4b5fd;
-        }
-
-        .metric-badge.clicks {
-            background: rgba(59, 130, 246, 0.15);
-            color: #93c5fd;
-        }
-
-        .metric-badge.conversions {
-            background: rgba(16, 185, 129, 0.15);
-            color: #6ee7b7;
-        }
-
-        .metric-badge.impressions {
-            background: rgba(245, 158, 11, 0.15);
-            color: #fcd34d;
-        }
-
-        .empty-state {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 28px;
-            color: #64748b;
-            font-size: 13px;
-        }
-
-        .empty-state strong {
-            color: #e2e8f0;
-        }
-
-        @media (max-width: 960px) {
-            .dashboard-container {
-                grid-template-columns: 1fr;
-            }
-
-            .sidebar {
-                position: static;
-                height: auto;
-            }
-
-            .content {
-                padding: 24px 18px 80px;
-            }
-
-            .filters-bar {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .refresh-status {
-                margin-left: 0;
             }
         }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-title">Marketing Dashboard</div>
-                <div class="sidebar-subtitle">Performance & Attribution</div>
-                <div class="back-to-portal">
-                    <a href="/" class="back-button">← Back to Portal</a>
-                </div>
+    <div class="dashboard-header">
+        <a href="/" class="back-link">← Back to Portal</a>
+        <h1 class="dashboard-title">Facebook Ads & Google Ads Dashboard</h1>
+        <div class="date-range" id="dateRangeDisplay">Last 30 days (Oct 14 - Nov 12)</div>
+        
+        <div class="filters">
+            <select class="filter-select" id="datePreset">
+                <option value="last_7_days">Last 7 Days</option>
+                <option value="last_30_days" selected>Last 30 Days</option>
+                <option value="month_to_date">Month to Date</option>
+                <option value="quarter_to_date">Quarter to Date</option>
+                <option value="year_to_date">Year to Date</option>
+                <option value="last_12_months">Last 12 Months</option>
+            </select>
+            <button class="refresh-btn" id="refreshBtn">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Top Row: ROAS & Cost Charts -->
+    <div class="grid grid-3">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">ROAS (Performance Max)</div>
             </div>
-
-            <nav class="sidebar-nav">
-                <a class="sidebar-link active" data-tab="overview"><span class="icon">📊</span> Overview</a>
-                <a class="sidebar-link" data-tab="social"><span class="icon">📱</span> Social Performance</a>
-                <a class="sidebar-link" data-tab="paid-media"><span class="icon">🎯</span> Paid Media</a>
-                <a class="sidebar-link" data-tab="email"><span class="icon">📧</span> Email Marketing</a>
-                <a class="sidebar-link" data-tab="website"><span class="icon">🌐</span> Website & GBP</a>
-                <a class="sidebar-link" data-tab="engagement"><span class="icon">💬</span> Engagement</a>
-                <a class="sidebar-link disabled" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
-            </nav>
-
-            {% if ringcentral.enabled %}
-            <div class="sidebar-ringcentral">
-                <div class="sidebar-ringcentral-header">
-                    <div class="sidebar-ringcentral-title">
-                        <span class="icon">💬</span>
-                        <div>
-                            <div class="sidebar-ringcentral-name">RingCentral</div>
-                            <div class="sidebar-ringcentral-subtitle">Calls & SMS</div>
-                        </div>
-                    </div>
-                    <a class="sidebar-ringcentral-expand"
-                       href="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
-                       target="_blank"
-                       rel="noopener">
-                        Open App
-                    </a>
-                </div>
-                <iframe
-                    class="sidebar-ringcentral-frame"
-                    allow="microphone; camera; autoplay; clipboard-write"
-                    loading="lazy"
-                    title="RingCentral Sidebar"
-                    src="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}">
-                </iframe>
+            <div class="chart-container">
+                <canvas id="roasChart"></canvas>
             </div>
-            {% endif %}
-        </aside>
+        </div>
 
-        <main class="content">
-            <div class="content-header">
-                <div class="breadcrumb">Home · Dashboards · Marketing</div>
-                <div>
-                    <h1 class="page-title">Marketing Performance Overview</h1>
-                    <p class="page-description">
-                        High-level KPIs spanning social platforms, paid media, and acquisition funnels. Default view shows the last 30 days—adjust filters on the fly to analyze trends, compare periods, and monitor ROI.
-                    </p>
-                </div>
-
-                <div class="filters-bar">
-                    <div class="filters-group">
-                        <div class="preset-select">
-                            <label for="datePreset">Preset</label>
-                            <select id="datePreset">
-                                {% for preset in date_presets %}
-                                    <option value="{{ preset.value }}" {% if preset.default %}selected{% endif %}>
-                                        {{ preset.label }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-
-                        <div class="date-picker">
-                            <label for="startDate">From</label>
-                            <input id="startDate" type="date" value="{{ default_range.start }}">
-                        </div>
-                        <div class="date-picker">
-                            <label for="endDate">To</label>
-                            <input id="endDate" type="date" value="{{ default_range.end }}">
-                        </div>
-                    </div>
-
-                    <div class="toggle-group" role="group" aria-label="Comparison toggles">
-                        <button type="button" data-toggle="compare-previous">Prev Period</button>
-                        <button type="button" data-toggle="compare-yoy">YoY</button>
-                    </div>
-
-                    <div class="refresh-status">
-                        <span id="lastRefreshed">Last refreshed: Just now</span>
-                        <button class="refresh-button" id="refreshBtn">↻ Refresh Data</button>
-                    </div>
-                </div>
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Cost (Performance Max)</div>
             </div>
-
-            <!-- Overview Tab -->
-            <div class="tab-content active" id="tab-overview">
-                <!-- Databox-style grid layout -->
-                <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-top: 12px;">
-                    
-                    <!-- Row 1: Large featured metrics -->
-                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 20px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Ad Spend</div>
-                        <div style="font-size: 36px; font-weight: 700; color: #f8fafc;" id="overviewAdSpend">—</div>
-                        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Last 30 days</div>
-                    </div>
-
-                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 20px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Social Reach</div>
-                        <div style="font-size: 36px; font-weight: 700; color: #f8fafc;" id="overviewSocialReach">—</div>
-                        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Last 30 days</div>
-                    </div>
-
-                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 20px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Conversions</div>
-                        <div style="font-size: 36px; font-weight: 700; color: #f8fafc;" id="overviewConversions">—</div>
-                        <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Last 30 days</div>
-                    </div>
-
-                    <!-- Row 2: Medium metrics with charts -->
-                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">ROAS</div>
-                        <div style="font-size: 28px; font-weight: 700; color: #f8fafc;" id="overviewROAS">—</div>
-                        <div style="height: 60px; margin-top: 12px; position: relative;">
-                            <canvas id="roasChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Cost / Conversion</div>
-                        <div style="font-size: 28px; font-weight: 700; color: #f8fafc;" id="overviewCostPerConv">—</div>
-                        <div style="height: 60px; margin-top: 12px; position: relative;">
-                            <canvas id="costPerConvChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div style="grid-column: span 2; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Impressions</div>
-                        <div style="font-size: 28px; font-weight: 700; color: #f8fafc;" id="overviewImpressions">—</div>
-                        <div style="height: 60px; margin-top: 12px; position: relative;">
-                            <canvas id="impressionsChart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Row 3: Compact metrics -->
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Total Clicks</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewTotalClicks">—</div>
-                    </div>
-
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">CPC</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewCPC">—</div>
-                    </div>
-
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">CTR</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewCTR">—</div>
-                    </div>
-
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Conv Rate</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewConvRate">—</div>
-                    </div>
-
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Engagement</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewEngagement">—</div>
-                    </div>
-
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Page Likes</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewPageLikes">—</div>
-                    </div>
-
-                    <!-- Row 4: Charts -->
-                    <div style="grid-column: span 3; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Spend Trend</div>
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">Daily ad spend over time</div>
-                        <div style="height: 120px; position: relative;">
-                            <canvas id="overviewSpendTrendChart"></canvas>
-                        </div>
-                    </div>
-
-                    <div style="grid-column: span 3; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 8px;">Ad Efficiency Metrics</div>
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">CPC, CPM, CTR, Conversion Rate</div>
-                        <div style="height: 120px; position: relative;">
-                            <canvas id="overviewEfficiencyChart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Row 5: More compact metrics -->
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Call Clicks</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewCallClicks">—</div>
-                    </div>
-
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Directions</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewDirections">—</div>
-                    </div>
-
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Web Clicks</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewWebClicks">—</div>
-                    </div>
-
-                    <div style="background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 10px; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">Email Open</div>
-                        <div style="font-size: 22px; font-weight: 700; color: #f8fafc;" id="overviewEmailOpen">—</div>
-                    </div>
-
-                    <!-- Row 6: Account Overview Table -->
-                    <div style="grid-column: span 3; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 12px;">Account Overview</div>
-                        <div id="accountOverviewTable"></div>
-                    </div>
-
-                    <!-- Row 6: Campaigns Overview Table -->
-                    <div style="grid-column: span 3; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(51, 65, 85, 0.7); border-radius: 12px; padding: 16px;">
-                        <div style="font-size: 11px; color: #64748b; text-transform: uppercase; margin-bottom: 12px;">Campaigns Overview</div>
-                        <div id="campaignsOverviewTable"></div>
-                    </div>
-
-                </div>
+            <div class="chart-container">
+                <canvas id="costPerfChart"></canvas>
             </div>
+        </div>
 
-            <!-- Social Performance Tab -->
-            <div class="tab-content" id="tab-social">
-                <section class="sections">
-                    <!-- Social Performance -->
-                    <div class="section" id="section-social">
-                    <header class="section-header">
-                        <div>
-                            <h2 class="section-title">📱 Social Performance</h2>
-                            <p class="section-description">
-                                Engagement and growth metrics across Facebook, Instagram, and LinkedIn. Track reach, clicks, and audience actions with period-over-period comparisons.
-                            </p>
-                        </div>
-                    </header>
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Cost / conv. (Performance Max)</div>
+            </div>
+            <div class="chart-container">
+                <canvas id="costConvChart"></canvas>
+            </div>
+        </div>
+    </div>
 
-                    <div class="grid grid-3" id="socialKpis">
-                        <div class="panel">
-                            <div class="panel-header">
-                                <div>
-                                    <div class="panel-title">Total Page Likes</div>
-                                    <div class="panel-subtitle">All platforms combined</div>
-                                </div>
-                                <div class="kpi-trend" id="totalPageLikesTrend">Loading…</div>
-                            </div>
-                            <div class="kpi-value" id="totalPageLikesValue">—</div>
-                            <div style="flex: 1; min-height: 80px; position: relative;">
-                                <canvas id="totalPageLikesChart"></canvas>
-                            </div>
-                        </div>
-                        <div class="panel">
-                            <div class="panel-header">
-                                <div>
-                                    <div class="panel-title">Reach & Impressions</div>
-                                    <div class="panel-subtitle">Organic & Paid</div>
-                                </div>
-                            </div>
-                            <div style="height: 40px;">
-                                <div id="reachImpressionsData" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; font-size: 8px;">
-                                    <div>
-                                        <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Total Reach</div>
-                                        <div style="font-size: 13px; font-weight: 700;" id="totalReachValue">—</div>
-                                        <div style="color: #64748b; font-size: 11px; margin-top: 4px;">
-                                            <span style="color: #10b981;">●</span> Organic: <span id="organicReachValue">—</span><br>
-                                            <span style="color: #3b82f6;">●</span> Paid: <span id="paidReachValue">—</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Impressions</div>
-                                        <div style="font-size: 13px; font-weight: 700;" id="impressionsValue">—</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="panel">
-                            <div class="panel-header">
-                                <div>
-                                    <div class="panel-title">Engagement Actions</div>
-                                    <div class="panel-subtitle">Clicks, Directions, Phone</div>
-                                </div>
-                            </div>
-                            <div style="height: 40px; position: relative;">
-                                <canvas id="clickActionsChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
+    <!-- Amount Spent Cards -->
+    <div class="grid grid-2">
+        <div class="card">
+            <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+            <div class="card-title">Amount Spent</div>
+            <div class="metric-value" id="googleAdsSpend">$ 2,385.92</div>
+            <div class="card-label">Google Ads Spent</div>
+        </div>
 
-                    <div class="panel" style="margin-top: 20px;">
-                        <div class="panel-header">
-                            <div>
-                                <div class="panel-title">Top Posts</div>
-                                <div class="panel-subtitle">Titles, reach, clicks, engagement</div>
-                            </div>
-                        </div>
-                        <div id="topPostsTable" class="empty-state">
-                            <strong>Top posts data not connected yet.</strong>
-                            Connect Facebook/Instagram/LinkedIn APIs to populate this table.
-                        </div>
+        <div class="card">
+            <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+            <div class="card-title">Amount Spent</div>
+            <div class="metric-value" id="facebookAdsSpend">$ 334.88</div>
+            <div class="card-label">Facebook Ads Spent</div>
+            <div class="metric-change positive" id="facebookAdsChange">
+                <span>▲ 172%</span>
+                <span class="metric-change-detail">vs previous period ($ 122.90)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Stats Row -->
+    <div class="grid grid-4">
+        <!-- Account Overview (Google Ads) -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Account overview</div>
+            </div>
+            <div class="stats-table">
+                <div class="stats-row">
+                    <div class="stats-label">Clicks</div>
+                    <div>
+                        <span class="stats-value" id="googleClicks">1,522</span>
+                        <span class="stats-change positive">▲ 483%</span>
                     </div>
                 </div>
-                </section>
-            </div>
-
-            <!-- Paid Media Tab -->
-            <div class="tab-content" id="tab-paid-media">
-                <section class="sections">
-                <!-- Ads Performance -->
-                <div class="section" id="section-ads">
-                    <header class="section-header">
-                        <div>
-                            <h2 class="section-title">🎯 Google & Meta Ads Performance</h2>
-                            <p class="section-description">
-                                Spend efficiency, conversions, and funnel metrics blended across Google Ads and Meta Ads. Drill into campaigns, ad sets, and geo spend.
-                            </p>
-                        </div>
-                    </header>
-
-                    <div class="grid grid-2" id="adsOverview">
-                        <div class="panel">
-                            <div class="panel-header">
-                                <div>
-                                    <div class="panel-title">Spend & ROI</div>
-                                    <div class="panel-subtitle">Cost, conversion value, ROAS</div>
-                                </div>
-                            </div>
-                        <div style="height: 40px;">
-                                <div id="adsSpendData" style="display: flex; flex-direction: column; gap: 3px;">
-                                    <div>
-                                        <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Total Spend</div>
-                                        <div style="display: flex; align-items: center; gap: 12px;">
-                                            <div style="font-size: 13px; font-weight: 700;" id="totalSpendValue">—</div>
-                                            <div class="kpi-trend" id="spendTrend">—</div>
-                                        </div>
-                                    </div>
-                                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 12px;">
-                                        <div>
-                                            <span style="color: #94a3b8;">Conversion Value:</span><br>
-                                            <strong id="conversionValue">—</strong>
-                                        </div>
-                                        <div>
-                                            <span style="color: #94a3b8;">ROAS:</span><br>
-                                            <strong id="roasValue">—</strong>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="panel">
-                            <div class="panel-header">
-                                <div>
-                                    <div class="panel-title">Efficiency Metrics</div>
-                                    <div class="panel-subtitle">CPC, CPM, CTR</div>
-                                </div>
-                            </div>
-                        <div style="height: 40px; position: relative;">
-                                <canvas id="adsEfficiencyChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="panel" style="margin-top: 20px;">
-                        <div class="panel-header">
-                            <div>
-                                <div class="panel-title">Campaign & Ad Set Overview</div>
-                                <div class="panel-subtitle">Costs, clicks, conversions by dimension</div>
-                            </div>
-                        </div>
-                        <div class="chart-placeholder" style="min-height: 220px;" id="adsBreakdownPlaceholder">
-                            Data tables will render here once APIs are connected.
-                        </div>
+                <div class="stats-row">
+                    <div class="stats-label">CTR (All)</div>
+                    <div>
+                        <span class="stats-value" id="googleCTR">7.54%</span>
+                        <span class="stats-change positive">▲ 1.1%</span>
                     </div>
                 </div>
-                </section>
+                <div class="stats-row">
+                    <div class="stats-label">CPC</div>
+                    <div>
+                        <span class="stats-value" id="googleCPC">$ 0.22</span>
+                        <span class="stats-change positive">▼ 53%</span>
+                    </div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Purchases</div>
+                    <div>
+                        <span class="stats-value" id="googlePurchases">0</span>
+                        <span class="stats-change">0%</span>
+                    </div>
+                </div>
             </div>
+        </div>
 
-            <!-- Email Marketing Tab -->
-            <div class="tab-content" id="tab-email">
-                <section class="sections">
-                    <!-- Email Overview -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">📧 Email Campaign Performance</h2>
-                                <p class="section-description">
-                                    Mailchimp campaign metrics including subscribers, open rates, click rates, and audience engagement.
-                                </p>
-                            </div>
-                        </header>
-
-                        <!-- Top KPIs -->
-                        <div class="grid grid-4">
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon blue">👥</div>
-                                <div class="panel-title">Total Subscribers</div>
-                                <div class="panel-subtitle">All audiences</div>
-                                <div class="kpi-value" id="emailTotalSubscribers">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon green">📬</div>
-                                <div class="panel-title">New Subscribers</div>
-                                <div class="panel-subtitle">This month</div>
-                                <div class="kpi-value" id="emailNewSubscribers">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon purple">📨</div>
-                                <div class="panel-title">Campaigns Sent</div>
-                                <div class="panel-subtitle">This month</div>
-                                <div class="kpi-value" id="emailCampaignsSent">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon orange">📊</div>
-                                <div class="panel-title">Avg Open Rate</div>
-                                <div class="panel-subtitle">All campaigns</div>
-                                <div class="kpi-value" id="emailAvgOpenRate">—</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Campaign Performance -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">📈 Campaign Performance</h2>
-                                <p class="section-description">
-                                    Detailed metrics for recent email campaigns.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="grid grid-2">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Open Rate Trends</div>
-                                        <div class="panel-subtitle">Last 30 days</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 220px; padding: 16px;">
-                                    <canvas id="emailOpenRateTrendChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Click Rate Trends</div>
-                                        <div class="panel-subtitle">Last 30 days</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 220px; padding: 16px;">
-                                    <canvas id="emailClickRateTrendChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Campaigns Table -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">📋 Recent Campaigns</h2>
-                                <p class="section-description">
-                                    Performance breakdown by campaign.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="panel">
-                            <div id="emailCampaignsTable" class="empty-state">
-                                Loading campaign data...
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Audience Performance -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">👥 Audience Performance</h2>
-                                <p class="section-description">
-                                    Subscriber growth and engagement by audience.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="grid grid-2">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Subscriber Growth</div>
-                                        <div class="panel-subtitle">Last 30 days</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 200px; padding: 16px;">
-                                    <canvas id="emailSubscriberGrowthChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Audience Stats</div>
-                                        <div class="panel-subtitle">Current status</div>
-                                    </div>
-                                </div>
-                                <div style="padding: 16px;">
-                                    <div style="display: flex; flex-direction: column; gap: 16px;">
-                                        <div>
-                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Subscribed</div>
-                                            <div style="font-size: 18px; font-weight: 700; color: #10b981;" id="emailSubscribedCount">—</div>
-                                        </div>
-                                        <div>
-                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Unsubscribed</div>
-                                            <div style="font-size: 18px; font-weight: 700; color: #ef4444;" id="emailUnsubscribedCount">—</div>
-                                        </div>
-                                        <div>
-                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Cleaned</div>
-                                            <div style="font-size: 18px; font-weight: 700; color: #64748b;" id="emailCleanedCount">—</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Top Performing Links -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">🔗 Top Performing Links</h2>
-                                <p class="section-description">
-                                    Most clicked links across all campaigns.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="panel">
-                            <div id="emailTopLinksTable" class="empty-state">
-                                Loading link performance data...
-                            </div>
-                        </div>
-                    </div>
-                </section>
+        <!-- Impressions Chart -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Impressions</div>
             </div>
-
-            <!-- Website & GBP Tab -->
-            <div class="tab-content" id="tab-website">
-                <section class="sections">
-                    <!-- Website Overview -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">🌐 Website & Google Business Profile</h2>
-                                <p class="section-description">
-                                    Google Analytics 4 website traffic and Google Business Profile performance metrics.
-                                </p>
-                            </div>
-                        </header>
-
-                        <!-- Top KPIs -->
-                        <div class="grid grid-4">
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon blue">👥</div>
-                                <div class="panel-title">Total Users</div>
-                                <div class="panel-subtitle">Last 30 days</div>
-                                <div class="kpi-value" id="websiteTotalUsers">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon green">📈</div>
-                                <div class="panel-title">Sessions</div>
-                                <div class="panel-subtitle">Last 30 days</div>
-                                <div class="kpi-value" id="websiteSessions">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon purple">🎯</div>
-                                <div class="panel-title">Conversions</div>
-                                <div class="panel-subtitle">Goals completed</div>
-                                <div class="kpi-value" id="websiteConversions">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon orange">📊</div>
-                                <div class="panel-title">Conversion Rate</div>
-                                <div class="panel-subtitle">User conversion</div>
-                                <div class="kpi-value" id="websiteConversionRate">—</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- GA4 Metrics -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">📊 Google Analytics 4 Metrics</h2>
-                                <p class="section-description">
-                                    Website traffic, engagement, and user behavior.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="grid grid-3">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Users Over Time</div>
-                                        <div class="panel-subtitle">Daily traffic trend</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 200px; padding: 16px;">
-                                    <canvas id="websiteUsersChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Sessions by Source</div>
-                                        <div class="panel-subtitle">Traffic channels</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 200px; padding: 16px;">
-                                    <canvas id="websiteSessionsBySourceChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Engagement Metrics</div>
-                                        <div class="panel-subtitle">User behavior</div>
-                                    </div>
-                                </div>
-                                <div style="padding: 16px;">
-                                    <div style="display: flex; flex-direction: column; gap: 16px;">
-                                        <div>
-                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Avg Session Duration</div>
-                                            <div style="font-size: 18px; font-weight: 700; color: #3b82f6;" id="websiteAvgSessionDuration">—</div>
-                                        </div>
-                                        <div>
-                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Engagement Rate</div>
-                                            <div style="font-size: 18px; font-weight: 700; color: #10b981;" id="websiteEngagementRate">—</div>
-                                        </div>
-                                        <div>
-                                            <div style="color: #94a3b8; font-size: 11px; text-transform: uppercase; margin-bottom: 4px;">Bounce Rate</div>
-                                            <div style="font-size: 18px; font-weight: 700; color: #ef4444;" id="websiteBounceRate">—</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Sessions by Medium -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">📡 Sessions by Medium</h2>
-                                <p class="section-description">
-                                    Traffic breakdown by session medium over time.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="panel">
-                            <div style="flex: 1; min-height: 300px; padding: 16px;">
-                                <canvas id="websiteSessionsByMediumChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Top Pages & Sources -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">📄 Top Pages & Traffic Sources</h2>
-                                <p class="section-description">
-                                    Most visited pages and top traffic sources.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="grid grid-2">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Top Pages</div>
-                                        <div class="panel-subtitle">By views</div>
-                                    </div>
-                                </div>
-                                <div id="websiteTopPagesTable" class="empty-state">
-                                    Loading page data...
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Conversions by Source</div>
-                                        <div class="panel-subtitle">Goal completions</div>
-                                    </div>
-                                </div>
-                                <div id="websiteConversionsBySourceTable" class="empty-state">
-                                    Loading conversion data...
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Google Business Profile -->
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">🏢 Google Business Profile Performance</h2>
-                                <p class="section-description">
-                                    Local search visibility and customer interactions.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="grid grid-4">
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon blue">🔍</div>
-                                <div class="panel-title">Searches</div>
-                                <div class="panel-subtitle">Last 30 days</div>
-                                <div class="kpi-value" id="gbpSearches">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon green">👁️</div>
-                                <div class="panel-title">Views</div>
-                                <div class="panel-subtitle">Profile views</div>
-                                <div class="kpi-value" id="gbpViews">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon purple">📞</div>
-                                <div class="panel-title">Phone Calls</div>
-                                <div class="panel-subtitle">Direct calls</div>
-                                <div class="kpi-value" id="gbpPhoneCalls">—</div>
-                            </div>
-                            <div class="panel kpi-panel">
-                                <div class="kpi-icon orange">🗺️</div>
-                                <div class="panel-title">Direction Requests</div>
-                                <div class="panel-subtitle">Get directions</div>
-                                <div class="kpi-value" id="gbpDirections">—</div>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-2" style="margin-top: 20px;">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Searches by Keyword</div>
-                                        <div class="panel-subtitle">Top search terms</div>
-                                    </div>
-                                </div>
-                                <div id="gbpSearchKeywordsTable" class="empty-state">
-                                    Loading search data...
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Actions Over Time</div>
-                                        <div class="panel-subtitle">User interactions</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 200px; padding: 16px;">
-                                    <canvas id="gbpActionsChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+            <div class="metric-value" id="totalImpressions">20,174</div>
+            <div class="card-label">vs previous period (3,454)</div>
+            <div class="chart-container-large">
+                <canvas id="impressionsChart"></canvas>
             </div>
+        </div>
 
-            <!-- Engagement Tab -->
-            <div class="tab-content" id="tab-engagement">
-                <section class="sections">
-                    <div class="section">
-                        <header class="section-header">
-                            <div>
-                                <h2 class="section-title">💬 Engagement Metrics</h2>
-                                <p class="section-description">
-                                    Deep dive into user interactions, click actions, and engagement patterns across all platforms.
-                                </p>
-                            </div>
-                        </header>
-
-                        <div class="grid grid-3">
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Click Actions</div>
-                                        <div class="panel-subtitle">User interactions</div>
-                                    </div>
-                                </div>
-                                <div style="flex: 1; min-height: 200px;">
-                                    <canvas id="clickActionsEngagementChart"></canvas>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Post Engagement</div>
-                                        <div class="panel-subtitle">Likes, comments, shares</div>
-                                    </div>
-                                </div>
-                                <div class="kpi-value" id="totalEngagementValue">—</div>
-                                <div style="display: flex; gap: 12px; font-size: 12px; color: #94a3b8; margin-top: 12px;">
-                                    <div>
-                                        <span style="color: #3b82f6;">●</span> Likes: <span id="likesValue">—</span>
-                                    </div>
-                                    <div>
-                                        <span style="color: #8b5cf6;">●</span> Comments: <span id="commentsValue">—</span>
-                                    </div>
-                                    <div>
-                                        <span style="color: #10b981;">●</span> Shares: <span id="sharesValue">—</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="panel">
-                                <div class="panel-header">
-                                    <div>
-                                        <div class="panel-title">Video Views</div>
-                                        <div class="panel-subtitle">3-second views</div>
-                                    </div>
-                                </div>
-                                <div class="kpi-value" id="videoViewsValue">—</div>
-                            </div>
-                        </div>
-
-                        <div class="panel" style="margin-top: 24px;">
-                            <div class="panel-header">
-                                <div>
-                                    <div class="panel-title">Engagement Rate Trends</div>
-                                    <div class="panel-subtitle">Daily engagement over time</div>
-                                </div>
-                            </div>
-                            <div style="flex: 1; min-height: 280px; padding: 16px;">
-                                <canvas id="engagementTrendChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+        <!-- Sessions Chart -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Sessions</div>
             </div>
-        </main>
+            <div class="metric-value" id="totalSessions">16,460</div>
+            <div class="chart-container-large">
+                <canvas id="sessionsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Account Overview (Facebook Ads) -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Account Overview</div>
+            </div>
+            <div class="stats-table">
+                <div class="stats-row">
+                    <div class="stats-label">Clicks</div>
+                    <div class="stats-value" id="facebookClicks">529</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">CTR</div>
+                    <div class="stats-value" id="facebookCTR">0.03%</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Avg. CPC</div>
+                    <div class="stats-value" id="facebookCPC">$ 4.51</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Conversions</div>
+                    <div class="stats-value" id="facebookConversions">60</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Campaigns & Interactions -->
+    <div class="grid grid-4">
+        <!-- Campaigns Overview (Google) -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Campaigns Overview</div>
+            </div>
+            <table class="campaigns-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Dimension</th>
+                        <th>Impressions</th>
+                        <th>Spent</th>
+                    </tr>
+                </thead>
+                <tbody id="googleCampaignsTable">
+                    <tr>
+                        <td>1</td>
+                        <td>
+                            <div class="campaign-name">Caregiver Recruitment - Denver</div>
+                            <div class="campaign-id">(1202322604584110573)</div>
+                        </td>
+                        <td>13,103</td>
+                        <td>$ 177.70</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>
+                            <div class="campaign-name">Caregiver Recruitment - Denver - Copy</div>
+                            <div class="campaign-id">(1202337037746708575)</div>
+                        </td>
+                        <td>4,541</td>
+                        <td>$ 66.91</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>
+                            <div class="campaign-name">Caregiver Recruitment - Colorado Springs/Pueblo</div>
+                            <div class="campaign-id">(1202257411495570575)</div>
+                        </td>
+                        <td>2,530</td>
+                        <td>$ 90.27</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Interactions Chart -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Interactions</div>
+            </div>
+            <div class="chart-container-large">
+                <canvas id="interactionsChart1"></canvas>
+            </div>
+        </div>
+
+        <!-- Campaigns Overview (Facebook) -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Campaigns Overview</div>
+            </div>
+            <table class="campaigns-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Dimension</th>
+                        <th>Cost</th>
+                        <th>Impressions</th>
+                    </tr>
+                </thead>
+                <tbody id="facebookCampaignsTable">
+                    <tr>
+                        <td>1</td>
+                        <td class="campaign-name">October 2025 PMax Lead Gen Denver</td>
+                        <td>$ 1,190.78</td>
+                        <td>8,930</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td class="campaign-name">October 2025 PMax Lead Gen - Springs</td>
+                        <td>$ 1,195.14</td>
+                        <td>7,530</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Phone Calls -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Phone Calls</div>
+            </div>
+            <div class="empty-state">
+                <div class="empty-state-text">No data to display</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactions Row -->
+    <div class="grid grid-2">
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Interactions</div>
+            </div>
+            <div class="chart-container-large">
+                <canvas id="interactionsChart2"></canvas>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days (Oct 14 - Nov 12)</div>
+                <div class="card-title">Interactions</div>
+            </div>
+            <div class="chart-container-large">
+                <canvas id="interactionsChart3"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="dashboard-footer">
+        <div class="dashboard-footer-title">Facebook Ads & Google Ads Dashboard</div>
+        <div class="databox-logo">Powered by 📊 databox</div>
     </div>
 
     <script>
-        const datePreset = document.getElementById("datePreset");
-        const startDate = document.getElementById("startDate");
-        const endDate = document.getElementById("endDate");
-        const refreshBtn = document.getElementById("refreshBtn");
-        const lastRefreshed = document.getElementById("lastRefreshed");
-        const toggleButtons = document.querySelectorAll(".toggle-group button");
+        // Configuration
+        const API_BASE = '/api/marketing';
+        let currentDateRange = { start: null, end: null };
 
-        let compareMode = null;
-        let isLoading = false;
-
-        const presetMap = {
-            "last_7_days": 7,
-            "last_30_days": 30
-            // Additional presets (MTD, QTD, etc.) handled separately.
+        // Chart configurations
+        const chartDefaults = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1f2937',
+                    titleColor: '#f9fafb',
+                    bodyColor: '#e5e7eb',
+                    borderColor: '#374151',
+                    borderWidth: 1,
+                    padding: 12,
+                    displayColors: false
+                }
+            },
+            scales: {
+                x: {
+                    display: true,
+                    grid: { display: false, color: '#374151' },
+                    ticks: { color: '#9ca3af', font: { size: 10 } }
+                },
+                y: {
+                    display: true,
+                    grid: { color: '#374151', drawBorder: false },
+                    ticks: { color: '#9ca3af', font: { size: 10 } }
+                }
+            }
         };
 
-        function applyPreset(value) {
-            if (presetMap[value]) {
-                const days = presetMap[value];
-                const today = new Date();
-                const start = new Date(today);
-                start.setDate(today.getDate() - (days - 1));
-                startDate.value = start.toISOString().slice(0, 10);
-                endDate.value = today.toISOString().slice(0, 10);
-            }
-        }
+        // Initialize charts
+        let charts = {};
 
-        async function loadMarketingData() {
-            if (isLoading) return;
-            isLoading = true;
-            refreshBtn.disabled = true;
-            refreshBtn.textContent = "Refreshing...";
-
-            try {
-                const params = new URLSearchParams({
-                    from: startDate.value,
-                    to: endDate.value
-                });
-                if (compareMode) {
-                    params.append("compare", compareMode);
-                }
-
-                const [socialRes, adsRes] = await Promise.all([
-                    fetch(`/api/marketing/social?${params.toString()}`),
-                    fetch(`/api/marketing/ads?${params.toString()}`)
-                ]);
-
-                if (!socialRes.ok || !adsRes.ok) {
-                    throw new Error("Failed to load marketing metrics");
-                }
-
-                const socialData = await socialRes.json();
-                const adsData = await adsRes.json();
-
-                // Store data globally for other tabs
-                window.lastSocialData = socialData.data;
-                window.lastAdsData = adsData.data;
-
-                renderSocialMetrics(socialData.data);
-                renderAdsMetrics(adsData.data);
-                renderEngagementCharts(socialData.data);
-                renderOverviewMetrics(socialData.data, adsData.data);
-
-                const now = new Date();
-                lastRefreshed.textContent = `Last refreshed: ${now.toLocaleString()}`;
-            } catch (error) {
-                console.error(error);
-                lastRefreshed.textContent = "Last refreshed: error loading data";
-            } finally {
-                isLoading = false;
-                refreshBtn.disabled = false;
-                refreshBtn.textContent = "↻ Refresh Data";
-            }
-        }
-
-        // Store chart instances
-        let likesChart = null;
-        let clickActionsChart = null;
-        let efficiencyChart = null;
-
-        function renderSocialMetrics(data) {
-            const likesValueEl = document.getElementById("totalPageLikesValue");
-            const likesTrendEl = document.getElementById("totalPageLikesTrend");
-            const topPostsContainer = document.getElementById("topPostsTable");
-
-            if (!data) return;
-
-            // Total page likes
-            const totalLikes = data.summary?.total_page_likes || {};
-            likesValueEl.textContent = formatNumber(totalLikes.value);
-            const change = totalLikes.change ?? 0;
-            likesTrendEl.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(1)}% vs prev`;
-            likesTrendEl.classList.remove("trend-up", "trend-down");
-            likesTrendEl.classList.add(change >= 0 ? "trend-up" : "trend-down");
-
-            // Render likes trend chart
-            renderLikesTrendChart(totalLikes.value || 0);
-
-            // Reach & impressions
-            const reach = data.summary?.reach || {};
-            const impressions = data.summary?.impressions || 0;
-            document.getElementById("totalReachValue").textContent = formatNumber(reach.total || 0);
-            document.getElementById("organicReachValue").textContent = formatNumber(reach.organic || 0);
-            document.getElementById("paidReachValue").textContent = formatNumber(reach.paid || 0);
-            document.getElementById("impressionsValue").textContent = formatNumber(impressions);
-
-            // Click actions chart
-            const actions = data.click_actions || {};
-            renderClickActionsChart(actions);
-
-            // Top posts
-            const posts = data.top_posts || [];
-            if (!posts.length) {
-                topPostsContainer.innerHTML = `
-                    <div class="empty-state">
-                        <strong>No top posts found for the selected range.</strong>
-                        Connect Facebook/Instagram/LinkedIn to populate this section.
-                    </div>
-                `;
-            } else {
-                let tableHtml = `
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Post Title</th>
-                                <th>Platform</th>
-                                <th style="text-align: right;">Reach</th>
-                                <th style="text-align: right;">Clicks</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                posts.forEach((post) => {
-                    const platformEmoji = post.platform === "Facebook" ? "📘" : post.platform === "Instagram" ? "📷" : post.platform === "LinkedIn" ? "💼" : "📱";
-                    tableHtml += `
-                        <tr>
-                            <td style="font-weight: 600; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(post.title || "Untitled post")}</td>
-                            <td>${platformEmoji} ${post.platform || "—"}</td>
-                            <td style="text-align: right;"><span class="metric-badge impressions">${formatNumber(post.reach || 0)}</span></td>
-                            <td style="text-align: right;"><span class="metric-badge clicks">${formatNumber(post.clicks || 0)}</span></td>
-                        </tr>
-                    `;
-                });
-                tableHtml += "</tbody></table>";
-                topPostsContainer.innerHTML = tableHtml;
-            }
-        }
-
-        function renderAdsMetrics(data) {
-            if (!data) return;
-
-            const breakdownPlaceholder = document.getElementById("adsBreakdownPlaceholder");
-
-            const spend = data.spend || {};
-            const efficiency = data.efficiency || {};
-            const campaigns = data.campaigns || [];
-            const adSets = data.ad_sets || [];
-            const geo = data.geo || [];
-
-            // Update spend data
-            const spendChange = spend.change ?? 0;
-            const trendClass = spendChange >= 0 ? "trend-up" : "trend-down";
-            document.getElementById("totalSpendValue").textContent = `$${formatCurrency(spend.total || 0)}`;
-            const spendTrendEl = document.getElementById("spendTrend");
-            spendTrendEl.textContent = `${spendChange >= 0 ? "+" : ""}${spendChange.toFixed(1)}%`;
-            spendTrendEl.className = `kpi-trend ${trendClass}`;
-            
-            const conversionValue = data.performance?.conversion_value || 0;
-            const roas = spend.total > 0 ? (conversionValue / spend.total).toFixed(2) : "0.00";
-            document.getElementById("conversionValue").textContent = `$${formatCurrency(conversionValue)}`;
-            document.getElementById("roasValue").textContent = `${roas}x`;
-
-            // Render efficiency chart
-            renderEfficiencyChart(efficiency);
-
-            let tableHtml = `
-                <div style="display:grid; gap:24px;">
-                    <div>
-                        <div class="table-section-title">🎯 Campaigns</div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Campaign Name</th>
-                                    <th style="text-align: right;">Spend</th>
-                                    <th style="text-align: right;">Clicks</th>
-                                    <th style="text-align: right;">Conversions</th>
-                                    <th style="text-align: right;">CPA</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
-            campaigns.forEach((c) => {
-                const cpa = c.cpa || 0;
-                tableHtml += `
-                    <tr>
-                        <td style="font-weight: 600;">${escapeHtml(c.name || "Campaign")}</td>
-                        <td style="text-align: right;"><span class="metric-badge spend">$${formatCurrency(c.spend || 0)}</span></td>
-                        <td style="text-align: right;"><span class="metric-badge clicks">${formatNumber(c.clicks || 0)}</span></td>
-                        <td style="text-align: right;"><span class="metric-badge conversions">${formatNumber(c.conversions || 0)}</span></td>
-                        <td style="text-align: right; color: #94a3b8;">$${formatCurrency(cpa)}</td>
-                    </tr>
-                `;
+        function initCharts() {
+            // ROAS Chart
+            charts.roas = new Chart(document.getElementById('roasChart'), {
+                type: 'bar',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: generateRandomData(30, 0, 5),
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: chartDefaults
             });
-            tableHtml += `
-                            </tbody>
-                        </table>
-                    </div>
-                    <div>
-                        <div class="table-section-title">📊 Ad Sets</div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Ad Set Name</th>
-                                    <th style="text-align: right;">Impressions</th>
-                                    <th style="text-align: right;">Spend</th>
-                                    <th style="text-align: right;">Conversions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
-            adSets.forEach((set) => {
-                tableHtml += `
-                    <tr>
-                        <td style="font-weight: 600;">${escapeHtml(set.name || "Ad Set")}</td>
-                        <td style="text-align: right;"><span class="metric-badge impressions">${formatNumber(set.impressions || 0)}</span></td>
-                        <td style="text-align: right;"><span class="metric-badge spend">$${formatCurrency(set.spend || 0)}</span></td>
-                        <td style="text-align: right;"><span class="metric-badge conversions">${formatNumber(set.conversions || 0)}</span></td>
-                    </tr>
-                `;
+
+            // Cost Performance Chart
+            charts.costPerf = new Chart(document.getElementById('costPerfChart'), {
+                type: 'bar',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: generateRandomData(30, 50, 150),
+                        backgroundColor: '#06b6d4',
+                        borderRadius: 4
+                    }]
+                },
+                options: chartDefaults
             });
-            tableHtml += `
-                            </tbody>
-                        </table>
-                    </div>
-                    <div>
-                        <div class="table-section-title">🌍 Geographic Spend</div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Country</th>
-                                    <th style="text-align: right;">Total Spend</th>
-                                    <th style="text-align: right;">% of Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-            `;
-            const totalGeoSpend = geo.reduce((sum, g) => sum + (g.spend || 0), 0);
-            geo.forEach((g) => {
-                const percentage = totalGeoSpend > 0 ? ((g.spend / totalGeoSpend) * 100).toFixed(1) : 0;
-                const countryEmoji = g.country === "United States" ? "🇺🇸" : g.country === "Canada" ? "🇨🇦" : g.country === "Mexico" ? "🇲🇽" : "🌐";
-                tableHtml += `
-                    <tr>
-                        <td style="font-weight: 600;">${countryEmoji} ${escapeHtml(g.country || "—")}</td>
-                        <td style="text-align: right;"><span class="metric-badge spend">$${formatCurrency(g.spend || 0)}</span></td>
-                        <td style="text-align: right; color: #94a3b8;">${percentage}%</td>
-                    </tr>
-                `;
+
+            // Cost per Conversion Chart
+            charts.costConv = new Chart(document.getElementById('costConvChart'), {
+                type: 'bar',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: generateRandomData(30, 10, 60),
+                        backgroundColor: '#8b5cf6',
+                        borderRadius: 4
+                    }]
+                },
+                options: chartDefaults
             });
-            tableHtml += `
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            `;
 
-            breakdownPlaceholder.innerHTML = tableHtml;
-        }
-
-        function formatNumber(value) {
-            return Number(value || 0).toLocaleString();
-        }
-
-        function formatCurrency(value) {
-            return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
-
-        function escapeHtml(str) {
-            return String(str || "").replace(/[&<>"']/g, (m) => ({
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                '"': "&quot;",
-                "'": "&#39;"
-            }[m]));
-        }
-
-        // Chart rendering functions
-        function renderLikesTrendChart(currentValue) {
-            const ctx = document.getElementById('totalPageLikesChart');
-            if (!ctx) return;
-
-            // Destroy existing chart
-            if (likesChart) {
-                likesChart.destroy();
-            }
-
-            // Generate sample trend data (last 7 days)
-            const trendData = [];
-            for (let i = 6; i >= 0; i--) {
-                const variance = Math.random() * 100 - 50;
-                trendData.push(Math.max(0, currentValue - (i * 10) + variance));
-            }
-
-            likesChart = new Chart(ctx, {
+            // Impressions Chart
+            charts.impressions = new Chart(document.getElementById('impressionsChart'), {
                 type: 'line',
                 data: {
-                    labels: ['', '', '', '', '', '', ''],
+                    labels: generateDateLabels(30),
                     datasets: [{
-                        data: trendData,
+                        data: generateImpressionData(30),
                         borderColor: '#3b82f6',
                         backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        borderWidth: 2,
                         fill: true,
                         tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                        pointBackgroundColor: '#3b82f6',
-                        pointBorderColor: '#1e293b',
-                        pointBorderWidth: 2
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }, {
+                        data: generateImpressionData(30, -5),
+                        borderColor: '#6b7280',
+                        backgroundColor: 'transparent',
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        borderWidth: 1,
+                        pointRadius: 0
                     }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: '#1e293b',
-                            titleColor: '#f8fafc',
-                            bodyColor: '#e2e8f0',
-                            borderColor: '#334155',
-                            borderWidth: 1,
-                            padding: 8,
-                            displayColors: false,
-                            callbacks: {
-                                label: (context) => formatNumber(context.parsed.y) + ' likes'
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { display: false },
-                        y: { display: false }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    }
-                }
+                options: chartDefaults
             });
-        }
 
-        function renderClickActionsChart(actions) {
-            const ctx = document.getElementById('clickActionsChart');
-            if (!ctx) return;
+            // Sessions Chart
+            charts.sessions = new Chart(document.getElementById('sessionsChart'), {
+                type: 'line',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: generateSessionData(30),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 2,
+                        pointRadius: 0
+                    }]
+                },
+                options: chartDefaults
+            });
 
-            // Destroy existing chart
-            if (clickActionsChart) {
-                clickActionsChart.destroy();
-            }
-
-            clickActionsChart = new Chart(ctx, {
+            // Interactions Charts
+            const interactionsData = generateInteractionData(30);
+            
+            charts.interactions1 = new Chart(document.getElementById('interactionsChart1'), {
                 type: 'bar',
                 data: {
-                    labels: ['Get Directions', 'Phone', 'Website', 'Action Button'],
+                    labels: generateDateLabels(30),
                     datasets: [{
-                        data: [
-                            actions.get_directions || 0,
-                            actions.phone_clicks || 0,
-                            actions.website_clicks || 0,
-                            actions.action_button || 0
-                        ],
-                        backgroundColor: [
-                            '#10b981',
-                            '#3b82f6',
-                            '#8b5cf6',
-                            '#f59e0b'
-                        ],
-                        borderRadius: 6,
-                        borderSkipped: false
+                        data: interactionsData,
+                        backgroundColor: '#06b6d4',
+                        borderRadius: 4
                     }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: '#1e293b',
-                            titleColor: '#f8fafc',
-                            bodyColor: '#e2e8f0',
-                            borderColor: '#334155',
-                            borderWidth: 1,
-                            padding: 8,
-                            displayColors: false,
-                            callbacks: {
-                                label: (context) => formatNumber(context.parsed.y) + ' clicks'
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                color: '#94a3b8',
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            grid: {
-                                color: 'rgba(148, 163, 184, 0.1)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#94a3b8',
-                                font: { size: 10 }
-                            }
-                        }
-                    }
-                }
+                options: chartDefaults
             });
-        }
 
-        function renderEfficiencyChart(efficiency) {
-            const ctx = document.getElementById('adsEfficiencyChart');
-            if (!ctx) return;
-
-            // Destroy existing chart
-            if (efficiencyChart) {
-                efficiencyChart.destroy();
-            }
-
-            efficiencyChart = new Chart(ctx, {
+            charts.interactions2 = new Chart(document.getElementById('interactionsChart2'), {
                 type: 'bar',
                 data: {
-                    labels: ['CPC', 'CPM', 'CTR %', 'Conv Rate %'],
+                    labels: generateDateLabels(30),
                     datasets: [{
-                        data: [
-                            efficiency.cpc || 0,
-                            efficiency.cpm || 0,
-                            efficiency.ctr || 0,
-                            efficiency.conversion_rate || 0
-                        ],
-                        backgroundColor: [
-                            '#06b6d4',
-                            '#8b5cf6',
-                            '#ec4899',
-                            '#10b981'
-                        ],
-                        borderRadius: 6,
-                        borderSkipped: false
+                        data: interactionsData,
+                        backgroundColor: '#06b6d4',
+                        borderRadius: 4
                     }]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: '#1e293b',
-                            titleColor: '#f8fafc',
-                            bodyColor: '#e2e8f0',
-                            borderColor: '#334155',
-                            borderWidth: 1,
-                            padding: 8,
-                            displayColors: false,
-                            callbacks: {
-                                label: (context) => {
-                                    const label = context.label;
-                                    const value = context.parsed.y;
-                                    if (label.includes('CPC') || label.includes('CPM')) {
-                                        return '$' + formatCurrency(value);
-                                    }
-                                    return value.toFixed(1) + '%';
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                color: '#94a3b8',
-                                font: { size: 10 }
-                            }
-                        },
-                        y: {
-                            grid: {
-                                color: 'rgba(148, 163, 184, 0.1)',
-                                drawBorder: false
-                            },
-                            ticks: {
-                                color: '#94a3b8',
-                                font: { size: 10 }
-                            }
-                        }
-                    }
-                }
+                options: chartDefaults
+            });
+
+            charts.interactions3 = new Chart(document.getElementById('interactionsChart3'), {
+                type: 'bar',
+                data: {
+                    labels: generateDateLabels(30),
+                    datasets: [{
+                        data: generateInteractionData(30),
+                        backgroundColor: '#06b6d4',
+                        borderRadius: 4
+                    }]
+                },
+                options: chartDefaults
             });
         }
 
-        datePreset.addEventListener("change", (event) => {
-            applyPreset(event.target.value);
-            loadMarketingData();
-        });
-
-        startDate.addEventListener("change", () => loadMarketingData());
-        endDate.addEventListener("change", () => loadMarketingData());
-
-        toggleButtons.forEach((button) => {
-            button.addEventListener("click", () => {
-                if (button.classList.contains("active")) {
-                    button.classList.remove("active");
-                    compareMode = null;
-                } else {
-                    toggleButtons.forEach((btn) => btn.classList.remove("active"));
-                    button.classList.add("active");
-                    compareMode = button.dataset.toggle === "compare-yoy" ? "yoy" : "previous";
-                }
-                loadMarketingData();
-            });
-        });
-
-        refreshBtn.addEventListener("click", () => {
-            loadMarketingData();
-            loadWebsiteData();
-        });
-
-        // Store overview chart instances
-        let overviewPageLikesChart = null;
-        let overviewClickActionsChart = null;
-        let overviewSpendTrendChart = null;
-        let overviewEfficiencyChart = null;
-
-        // Render overview metrics
-        function renderOverviewMetrics(socialData, adsData) {
-            if (!socialData || !adsData) return;
-
-            // Top KPIs - Basic Metrics
-            const overviewSocialReach = document.getElementById('overviewSocialReach');
-            const overviewAdSpend = document.getElementById('overviewAdSpend');
-            const overviewTotalClicks = document.getElementById('overviewTotalClicks');
-            const overviewConversions = document.getElementById('overviewConversions');
-            const overviewImpressions = document.getElementById('overviewImpressions');
-            const overviewCPC = document.getElementById('overviewCPC');
-            
-            // Additional KPIs
-            const overviewCTR = document.getElementById('overviewCTR');
-            const overviewROAS = document.getElementById('overviewROAS');
-            const overviewCostPerConv = document.getElementById('overviewCostPerConv');
-            const overviewConvRate = document.getElementById('overviewConvRate');
-            const overviewEngagement = document.getElementById('overviewEngagement');
-            const overviewEmailOpen = document.getElementById('overviewEmailOpen');
-            const overviewPageLikes = document.getElementById('overviewPageLikes');
-            const overviewCallClicks = document.getElementById('overviewCallClicks');
-            const overviewDirections = document.getElementById('overviewDirections');
-            const overviewWebClicks = document.getElementById('overviewWebClicks');
-
-            // Basic metrics
-            const reach = socialData.summary?.reach?.total || 0;
-            const spend = adsData.spend?.total || 0;
-            const socialClicks = socialData.summary?.unique_clicks || 0;
-            const adsClicks = adsData.performance?.clicks || 0;
-            const totalClicks = socialClicks + adsClicks;
-            const conversions = adsData.performance?.conversions || 0;
-            const socialImpressions = socialData.summary?.impressions || 0;
-            const adsImpressions = adsData.performance?.impressions || 0;
-            const totalImpressions = socialImpressions + adsImpressions;
-
-            if (overviewSocialReach) overviewSocialReach.textContent = formatNumber(reach);
-            if (overviewAdSpend) overviewAdSpend.textContent = '$' + formatNumber(spend);
-            if (overviewTotalClicks) overviewTotalClicks.textContent = formatNumber(totalClicks);
-            if (overviewConversions) overviewConversions.textContent = formatNumber(conversions);
-            if (overviewImpressions) overviewImpressions.textContent = formatNumber(totalImpressions);
-
-            // Calculated metrics
-            const cpc = totalClicks > 0 ? spend / totalClicks : 0;
-            const ctr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-            const conversionValue = adsData.performance?.conversion_value || 0;
-            const roas = spend > 0 ? conversionValue / spend : 0;
-            const costPerConv = conversions > 0 ? spend / conversions : 0;
-            const convRate = totalClicks > 0 ? (conversions / totalClicks) * 100 : 0;
-
-            if (overviewCPC) overviewCPC.textContent = '$' + cpc.toFixed(2);
-            if (overviewCTR) overviewCTR.textContent = ctr.toFixed(2) + '%';
-            if (overviewROAS) overviewROAS.textContent = roas.toFixed(2) + 'x';
-            if (overviewCostPerConv) overviewCostPerConv.textContent = '$' + formatNumber(costPerConv);
-            if (overviewConvRate) overviewConvRate.textContent = convRate.toFixed(2) + '%';
-
-            // Social engagement
-            const totalEngagement = (socialData.summary?.total_engagement || 0);
-            if (overviewEngagement) overviewEngagement.textContent = formatNumber(totalEngagement);
-
-            // Email metrics (placeholder - will be populated when email data is available)
-            if (overviewEmailOpen) overviewEmailOpen.textContent = '—';
-
-            // Page likes
-            const totalPageLikes = socialData.summary?.total_page_likes?.total || 0;
-            if (overviewPageLikes) overviewPageLikes.textContent = formatNumber(totalPageLikes);
-
-            // Click actions from GBP/social
-            const callClicks = socialData.summary?.call_clicks || 0;
-            const directions = socialData.summary?.get_directions_clicks || 0;
-            const webClicks = socialData.summary?.website_clicks || 0;
-            
-            if (overviewCallClicks) overviewCallClicks.textContent = formatNumber(callClicks);
-            if (overviewDirections) overviewDirections.textContent = formatNumber(directions);
-            if (overviewWebClicks) overviewWebClicks.textContent = formatNumber(webClicks);
-
-            // Social Performance Snapshot
-            const totalLikes = socialData.summary?.total_page_likes || {};
-            const overviewPageLikesValue = document.getElementById('overviewPageLikesValue');
-            const overviewPageLikesTrend = document.getElementById('overviewPageLikesTrend');
-            
-            if (overviewPageLikesValue) {
-                overviewPageLikesValue.textContent = formatNumber(totalLikes.value || 0);
+        // Helper functions
+        function generateDateLabels(days) {
+            const labels = [];
+            for (let i = days - 1; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                labels.push(date.getMonth() + 1 + '/' + date.getDate());
             }
-            
-            if (overviewPageLikesTrend) {
-                const change = totalLikes.change ?? 0;
-                overviewPageLikesTrend.textContent = `${change >= 0 ? "+" : ""}${change.toFixed(1)}% vs prev`;
-                overviewPageLikesTrend.classList.remove("trend-up", "trend-down");
-                overviewPageLikesTrend.classList.add(change >= 0 ? "trend-up" : "trend-down");
-            }
-
-            // Page Likes Chart
-            const overviewPageLikesCtx = document.getElementById('overviewPageLikesChart');
-            if (overviewPageLikesCtx) {
-                if (overviewPageLikesChart) overviewPageLikesChart.destroy();
-                
-                const trendData = [];
-                const currentValue = totalLikes.value || 0;
-                for (let i = 6; i >= 0; i--) {
-                    const variance = Math.random() * 100 - 50;
-                    trendData.push(Math.max(0, currentValue - (i * 10) + variance));
-                }
-
-                overviewPageLikesChart = new Chart(overviewPageLikesCtx, {
-                    type: 'line',
-                    data: {
-                        labels: ['', '', '', '', '', '', ''],
-                        datasets: [{
-                            data: trendData,
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: {
-                            x: { display: false },
-                            y: { display: false }
-                        }
-                    }
-                });
-            }
-
-            // Post Engagement
-            const overviewEngagementValue = document.getElementById('overviewEngagementValue');
-            if (overviewEngagementValue) {
-                const engagement = socialData.post_overview?.engagement_by_post || 0;
-                overviewEngagementValue.textContent = formatNumber(engagement);
-            }
-
-            // Click Actions Chart
-            const overviewClickActionsCtx = document.getElementById('overviewClickActionsChart');
-            if (overviewClickActionsCtx) {
-                if (overviewClickActionsChart) overviewClickActionsChart.destroy();
-                
-                const clickActions = socialData.click_actions || {};
-                overviewClickActionsChart = new Chart(overviewClickActionsCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Directions', 'Phone', 'Website', 'Button'],
-                        datasets: [{
-                            data: [
-                                clickActions.get_directions || 0,
-                                clickActions.phone_clicks || 0,
-                                clickActions.website_clicks || 0,
-                                clickActions.action_button || 0
-                            ],
-                            backgroundColor: [
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(139, 92, 246, 0.8)',
-                                'rgba(16, 185, 129, 0.8)',
-                                'rgba(245, 158, 11, 0.8)'
-                            ],
-                            borderColor: '#1e293b',
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    color: '#e2e8f0',
-                                    padding: 8,
-                                    font: { size: 10 }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Spend Trend Chart
-            const overviewSpendTrendCtx = document.getElementById('overviewSpendTrendChart');
-            if (overviewSpendTrendCtx) {
-                if (overviewSpendTrendChart) overviewSpendTrendChart.destroy();
-                
-                const spendDaily = adsData.spend?.daily || [];
-                overviewSpendTrendChart = new Chart(overviewSpendTrendCtx, {
-                    type: 'line',
-                    data: {
-                        labels: spendDaily.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-                        datasets: [{
-                            label: 'Daily Spend',
-                            data: spendDaily.map(d => d.spend),
-                            borderColor: '#8b5cf6',
-                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10,
-                                callbacks: {
-                                    label: (context) => '$' + formatNumber(context.parsed.y)
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 },
-                                    callback: (value) => '$' + formatNumber(value)
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Efficiency Chart
-            const overviewEfficiencyCtx = document.getElementById('overviewEfficiencyChart');
-            if (overviewEfficiencyCtx) {
-                if (overviewEfficiencyChart) overviewEfficiencyChart.destroy();
-                
-                const efficiency = adsData.efficiency || {};
-                overviewEfficiencyChart = new Chart(overviewEfficiencyCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: ['CPC', 'CPM', 'CTR %', 'Conv %'],
-                        datasets: [{
-                            data: [
-                                efficiency.cpc || 0,
-                                efficiency.cpm || 0,
-                                efficiency.ctr || 0,
-                                efficiency.conversion_rate || 0
-                            ],
-                            backgroundColor: [
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(139, 92, 246, 0.8)',
-                                'rgba(16, 185, 129, 0.8)',
-                                'rgba(245, 158, 11, 0.8)'
-                            ],
-                            borderColor: '#1e293b',
-                            borderWidth: 1,
-                            borderRadius: 6
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Top Posts Table
-            const overviewTopPostsTable = document.getElementById('overviewTopPostsTable');
-            if (overviewTopPostsTable) {
-                const posts = socialData.top_posts || [];
-                if (posts.length > 0) {
-                    let tableHtml = `
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Post</th>
-                                    <th style="text-align: right;">Reach</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-                    posts.slice(0, 5).forEach((post) => {
-                        const platformEmoji = post.platform === 'Facebook' ? '📘' : post.platform === 'Instagram' ? '📷' : '💼';
-                        tableHtml += `
-                            <tr>
-                                <td>${platformEmoji} ${post.title}</td>
-                                <td style="text-align: right;">${formatNumber(post.reach)}</td>
-                            </tr>
-                        `;
-                    });
-                    tableHtml += `</tbody></table>`;
-                    overviewTopPostsTable.innerHTML = tableHtml;
-                } else {
-                    overviewTopPostsTable.innerHTML = '<div class="empty-state">No posts data available</div>';
-                }
-            }
-
-            // Top Campaigns Table
-            const overviewTopCampaignsTable = document.getElementById('overviewTopCampaignsTable');
-            if (overviewTopCampaignsTable) {
-                const campaigns = adsData.campaigns || [];
-                if (campaigns.length > 0) {
-                    let tableHtml = `
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Campaign</th>
-                                    <th style="text-align: right;">Conv.</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-                    campaigns.slice(0, 5).forEach((campaign) => {
-                        tableHtml += `
-                            <tr>
-                                <td>${campaign.name}</td>
-                                <td style="text-align: right;">${formatNumber(campaign.conversions)}</td>
-                            </tr>
-                        `;
-                    });
-                    tableHtml += `</tbody></table>`;
-                    overviewTopCampaignsTable.innerHTML = tableHtml;
-                } else {
-                    overviewTopCampaignsTable.innerHTML = '<div class="empty-state">No campaigns data available</div>';
-                }
-            }
+            return labels;
         }
 
-        // Tab switching
-        const tabLinks = document.querySelectorAll('.sidebar-link[data-tab]');
-        const tabContents = document.querySelectorAll('.tab-content');
-
-        tabLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                
-                // Don't switch if disabled
-                if (link.classList.contains('disabled')) return;
-                
-                const targetTab = link.dataset.tab;
-                
-                // Update active link
-                tabLinks.forEach(l => l.classList.remove('active'));
-                link.classList.add('active');
-                
-                // Update active content
-                tabContents.forEach(content => {
-                    content.classList.remove('active');
-                });
-                document.getElementById(`tab-${targetTab}`).classList.add('active');
-                
-                // Update page title
-                const tabTitles = {
-                    'overview': 'Marketing Performance Overview',
-                    'social': 'Social Performance',
-                    'paid-media': 'Paid Media Performance',
-                    'email': 'Email Marketing Performance',
-                    'website': 'Website & Google Business Profile',
-                    'engagement': 'Engagement Metrics'
-                };
-                document.querySelector('.page-title').textContent = tabTitles[targetTab] || 'Marketing Dashboard';
-            });
-        });
-
-        // Initialize engagement charts
-        let clickActionsEngagementChart = null;
-        let engagementTrendChart = null;
-
-        function renderEngagementCharts(socialData) {
-            if (!socialData) return;
-
-            // Click Actions Chart (for Engagement tab)
-            const clickActionsCtx = document.getElementById('clickActionsEngagementChart');
-            if (clickActionsCtx) {
-                if (clickActionsEngagementChart) {
-                    clickActionsEngagementChart.destroy();
-                }
-
-                const clickActions = socialData.click_actions || {};
-                clickActionsEngagementChart = new Chart(clickActionsCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Get Directions', 'Phone Clicks', 'Website Clicks', 'Action Button'],
-                        datasets: [{
-                            data: [
-                                clickActions.get_directions || 0,
-                                clickActions.phone_clicks || 0,
-                                clickActions.website_clicks || 0,
-                                clickActions.action_button || 0
-                            ],
-                            backgroundColor: [
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(139, 92, 246, 0.8)',
-                                'rgba(16, 185, 129, 0.8)',
-                                'rgba(245, 158, 11, 0.8)'
-                            ],
-                            borderColor: '#1e293b',
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    color: '#e2e8f0',
-                                    padding: 12,
-                                    font: { size: 11 }
-                                }
-                            },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Engagement Trend Chart
-            const engagementTrendCtx = document.getElementById('engagementTrendChart');
-            if (engagementTrendCtx) {
-                if (engagementTrendChart) {
-                    engagementTrendChart.destroy();
-                }
-
-                const postOverview = socialData.post_overview || {};
-                const chartData = postOverview.chart || [];
-                
-                engagementTrendChart = new Chart(engagementTrendCtx, {
-                    type: 'line',
-                    data: {
-                        labels: chartData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-                        datasets: [
-                            {
-                                label: 'Reach',
-                                data: chartData.map(d => d.reach),
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4
-                            },
-                            {
-                                label: 'Engagement',
-                                data: chartData.map(d => d.engagement),
-                                borderColor: '#8b5cf6',
-                                backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.4
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                                labels: {
-                                    color: '#e2e8f0',
-                                    padding: 16,
-                                    font: { size: 12 }
-                                }
-                            },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Update engagement values
-            const summary = socialData.summary || {};
-            const postOverview = socialData.post_overview || {};
-            
-            const totalEngagementEl = document.getElementById('totalEngagementValue');
-            const likesEl = document.getElementById('likesValue');
-            const commentsEl = document.getElementById('commentsValue');
-            const sharesEl = document.getElementById('sharesValue');
-            const videoViewsEl = document.getElementById('videoViewsValue');
-            
-            if (totalEngagementEl) totalEngagementEl.textContent = formatNumber(postOverview.engagement_by_post || 0);
-            if (likesEl) likesEl.textContent = formatNumber(Math.floor((postOverview.engagement_by_post || 0) * 0.6));
-            if (commentsEl) commentsEl.textContent = formatNumber(Math.floor((postOverview.engagement_by_post || 0) * 0.25));
-            if (sharesEl) sharesEl.textContent = formatNumber(Math.floor((postOverview.engagement_by_post || 0) * 0.15));
-            if (videoViewsEl) videoViewsEl.textContent = formatNumber(summary.video_views_3s || 0);
+        function generateRandomData(days, min, max) {
+            return Array.from({ length: days }, () => 
+                Math.floor(Math.random() * (max - min + 1)) + min
+            );
         }
 
-        // Store social data globally for engagement tab
-        window.lastSocialData = null;
-        window.lastAdsData = null;
-        window.lastEmailData = null;
-
-        // Email marketing chart instances
-        let emailOpenRateTrendChart = null;
-        let emailClickRateTrendChart = null;
-        let emailSubscriberGrowthChart = null;
-
-        // Render email marketing metrics
-        function renderEmailMetrics(emailData) {
-            if (!emailData) {
-                // Use mock data if no real data
-                emailData = {
-                    subscribers: {
-                        total: 721,
-                        new_this_month: 45,
-                        subscribed: 721,
-                        unsubscribed: 12,
-                        cleaned: 8
-                    },
-                    campaigns: {
-                        sent_this_month: 8,
-                        avg_open_rate: 32.5,
-                        avg_click_rate: 5.8,
-                        recent: [
-                            { name: 'Partner Newsletter September 2025', send_date: '09/23/2025', open_rate: 13.5, click_rate: 5.3, recipients: 721 },
-                            { name: 'Partner Newsletter Oct 2025', send_date: '10/30/2025', open_rate: 9.4, click_rate: 3.8, recipients: 721 },
-                            { name: 'Family Care Update #1', send_date: '06/23/2025', open_rate: 5.3, click_rate: 2.1, recipients: 650 },
-                            { name: 'Partner Newsletter 2', send_date: '07/10/2025', open_rate: 3.8, click_rate: 1.5, recipients: 680 },
-                            { name: 'Partner Newsletter Template - July 31 2025', send_date: '07/31/2025', open_rate: 3.2, click_rate: 1.2, recipients: 695 },
-                            { name: 'Family Care Update #2', send_date: '08/20/2025', open_rate: 3.1, click_rate: 1.1, recipients: 710 }
-                        ]
-                    },
-                    growth: {
-                        daily: [
-                            { date: '2025-10-13', subscribers: 676 },
-                            { date: '2025-10-14', subscribers: 678 },
-                            { date: '2025-10-15', subscribers: 680 },
-                            { date: '2025-10-16', subscribers: 683 },
-                            { date: '2025-10-17', subscribers: 685 },
-                            { date: '2025-10-18', subscribers: 688 },
-                            { date: '2025-10-19', subscribers: 690 },
-                            { date: '2025-10-20', subscribers: 693 },
-                            { date: '2025-10-21', subscribers: 695 },
-                            { date: '2025-10-22', subscribers: 698 },
-                            { date: '2025-10-23', subscribers: 700 },
-                            { date: '2025-10-24', subscribers: 703 },
-                            { date: '2025-10-25', subscribers: 706 },
-                            { date: '2025-10-26', subscribers: 708 },
-                            { date: '2025-10-27', subscribers: 711 },
-                            { date: '2025-10-28', subscribers: 713 },
-                            { date: '2025-10-29', subscribers: 716 },
-                            { date: '2025-10-30', subscribers: 718 },
-                            { date: '2025-11-01', subscribers: 721 }
-                        ]
-                    },
-                    top_links: [
-                        { url: 'https://coloradocareassist.com/services', clicks: 156, campaign: 'Partner Newsletter Oct 2025' },
-                        { url: 'https://coloradocareassist.com/contact', clicks: 98, campaign: 'Family Care Update #1' },
-                        { url: 'https://coloradocareassist.com/about', clicks: 72, campaign: 'Partner Newsletter September 2025' }
-                    ]
-                };
-            }
-
-            // Update KPIs
-            document.getElementById('emailTotalSubscribers').textContent = formatNumber(emailData.subscribers?.total || 0);
-            document.getElementById('emailNewSubscribers').textContent = formatNumber(emailData.subscribers?.new_this_month || 0);
-            document.getElementById('emailCampaignsSent').textContent = formatNumber(emailData.campaigns?.sent_this_month || 0);
-            document.getElementById('emailAvgOpenRate').textContent = (emailData.campaigns?.avg_open_rate || 0).toFixed(1) + '%';
-
-            // Audience stats
-            document.getElementById('emailSubscribedCount').textContent = formatNumber(emailData.subscribers?.subscribed || 0);
-            document.getElementById('emailUnsubscribedCount').textContent = formatNumber(emailData.subscribers?.unsubscribed || 0);
-            document.getElementById('emailCleanedCount').textContent = formatNumber(emailData.subscribers?.cleaned || 0);
-
-            // Open Rate Trend Chart
-            const emailOpenRateCtx = document.getElementById('emailOpenRateTrendChart');
-            if (emailOpenRateCtx) {
-                if (emailOpenRateTrendChart) emailOpenRateTrendChart.destroy();
-                
-                const campaigns = emailData.campaigns?.recent || [];
-                emailOpenRateTrendChart = new Chart(emailOpenRateCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: campaigns.map(c => c.name.substring(0, 25) + '...'),
-                        datasets: [{
-                            label: 'Open Rate %',
-                            data: campaigns.map(c => c.open_rate),
-                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                            borderColor: '#3b82f6',
-                            borderWidth: 1,
-                            borderRadius: 6
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10,
-                                callbacks: {
-                                    label: (context) => context.parsed.y.toFixed(1) + '%'
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 9 },
-                                    maxRotation: 45,
-                                    minRotation: 45
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 },
-                                    callback: (value) => value + '%'
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Click Rate Trend Chart
-            const emailClickRateCtx = document.getElementById('emailClickRateTrendChart');
-            if (emailClickRateCtx) {
-                if (emailClickRateTrendChart) emailClickRateTrendChart.destroy();
-                
-                const campaigns = emailData.campaigns?.recent || [];
-                emailClickRateTrendChart = new Chart(emailClickRateCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: campaigns.map(c => c.name.substring(0, 25) + '...'),
-                        datasets: [{
-                            label: 'Click Rate %',
-                            data: campaigns.map(c => c.click_rate),
-                            backgroundColor: 'rgba(139, 92, 246, 0.8)',
-                            borderColor: '#8b5cf6',
-                            borderWidth: 1,
-                            borderRadius: 6
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10,
-                                callbacks: {
-                                    label: (context) => context.parsed.y.toFixed(1) + '%'
-                                }
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 9 },
-                                    maxRotation: 45,
-                                    minRotation: 45
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 },
-                                    callback: (value) => value + '%'
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Subscriber Growth Chart
-            const emailSubscriberGrowthCtx = document.getElementById('emailSubscriberGrowthChart');
-            if (emailSubscriberGrowthCtx) {
-                if (emailSubscriberGrowthChart) emailSubscriberGrowthChart.destroy();
-                
-                const growth = emailData.growth?.daily || [];
-                emailSubscriberGrowthChart = new Chart(emailSubscriberGrowthCtx, {
-                    type: 'line',
-                    data: {
-                        labels: growth.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-                        datasets: [{
-                            label: 'Subscribers',
-                            data: growth.map(d => d.subscribers),
-                            borderColor: '#10b981',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                            borderWidth: 2,
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 2,
-                            pointHoverRadius: 5,
-                            pointBackgroundColor: '#10b981',
-                            pointBorderColor: '#1e293b',
-                            pointBorderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Recent Campaigns Table
-            const emailCampaignsTable = document.getElementById('emailCampaignsTable');
-            if (emailCampaignsTable) {
-                const campaigns = emailData.campaigns?.recent || [];
-                if (campaigns.length > 0) {
-                    let tableHtml = `
-                        <div class="table-section-title">Campaign Performance</div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Campaign</th>
-                                    <th>Send Date</th>
-                                    <th style="text-align: right;">Recipients</th>
-                                    <th style="text-align: right;">Open Rate</th>
-                                    <th style="text-align: right;">Click Rate</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-                    campaigns.forEach((campaign) => {
-                        tableHtml += `
-                            <tr>
-                                <td>${campaign.name}</td>
-                                <td>${campaign.send_date}</td>
-                                <td style="text-align: right;">${formatNumber(campaign.recipients)}</td>
-                                <td style="text-align: right;"><span class="metric-badge clicks">${campaign.open_rate.toFixed(1)}%</span></td>
-                                <td style="text-align: right;"><span class="metric-badge conversions">${campaign.click_rate.toFixed(1)}%</span></td>
-                            </tr>
-                        `;
-                    });
-                    tableHtml += `</tbody></table>`;
-                    emailCampaignsTable.innerHTML = tableHtml;
-                } else {
-                    emailCampaignsTable.innerHTML = '<div class="empty-state">No campaigns data available</div>';
-                }
-            }
-
-            // Top Links Table
-            const emailTopLinksTable = document.getElementById('emailTopLinksTable');
-            if (emailTopLinksTable) {
-                const links = emailData.top_links || [];
-                if (links.length > 0) {
-                    let tableHtml = `
-                        <div class="table-section-title">Top Clicked Links</div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>URL</th>
-                                    <th>Campaign</th>
-                                    <th style="text-align: right;">Total Clicks</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-                    links.forEach((link) => {
-                        tableHtml += `
-                            <tr>
-                                <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${link.url}</td>
-                                <td>${link.campaign}</td>
-                                <td style="text-align: right;"><span class="metric-badge clicks">${formatNumber(link.clicks)}</span></td>
-                            </tr>
-                        `;
-                    });
-                    tableHtml += `</tbody></table>`;
-                    emailTopLinksTable.innerHTML = tableHtml;
-                } else {
-                    emailTopLinksTable.innerHTML = '<div class="empty-state">No link data available</div>';
-                }
-            }
+        function generateImpressionData(days, offset = 0) {
+            const base = [400, 800, 1200, 600, 500, 450, 350, 300, 500, 700, 900, 800, 
+                         700, 650, 600, 550, 900, 1100, 1000, 800, 700, 900, 1100, 
+                         950, 850, 800, 750, 900, 800, 600];
+            return base.slice(0, days).map(v => v + offset * 50);
         }
 
-        // Website & GBP chart instances
-        let websiteUsersChart = null;
-        let websiteSessionsBySourceChart = null;
-        let websiteSessionsByMediumChart = null;
-        let gbpActionsChart = null;
-
-        // Render website & GBP metrics
-        function renderWebsiteMetrics(websiteData) {
-            if (!websiteData) {
-                // Use mock data matching the Databox dashboard
-                websiteData = {
-                    ga4: {
-                        total_users: 188,
-                        sessions: 245,
-                        conversions: 32,
-                        conversion_rate: 10.75,
-                        avg_session_duration: '2:34',
-                        engagement_rate: 68.5,
-                        bounce_rate: 31.5,
-                        users_over_time: [
-                            { date: '2025-10-12', users: 4 },
-                            { date: '2025-10-16', users: 6 },
-                            { date: '2025-10-20', users: 22 },
-                            { date: '2025-10-24', users: 12 },
-                            { date: '2025-10-28', users: 18 },
-                            { date: '2025-11-01', users: 22 },
-                            { date: '2025-11-05', users: 18 },
-                            { date: '2025-11-09', users: 10 }
-                        ],
-                        sessions_by_source: {
-                            direct: 10,
-                            google: 5,
-                            fb: 5,
-                            'l.facebook.com': 1
-                        },
-                        conversions_by_source: {
-                            direct: 13,
-                            google: 12,
-                            fb: 6,
-                            'l.facebook.com': 1
-                        },
-                        sessions_by_medium: [
-                            { date: '2025-10-12', none: 2, cpc: 1, paid: 0, referral: 1, organic: 0 },
-                            { date: '2025-10-16', none: 3, cpc: 2, paid: 1, referral: 0, organic: 1 },
-                            { date: '2025-10-20', none: 8, cpc: 5, paid: 3, referral: 4, organic: 2 },
-                            { date: '2025-10-24', none: 5, cpc: 3, paid: 1, referral: 2, organic: 1 },
-                            { date: '2025-10-28', none: 7, cpc: 4, paid: 2, referral: 3, organic: 2 },
-                            { date: '2025-11-01', none: 9, cpc: 5, paid: 3, referral: 3, organic: 2 },
-                            { date: '2025-11-05', none: 7, cpc: 4, paid: 2, referral: 3, organic: 2 },
-                            { date: '2025-11-09', none: 4, cpc: 2, paid: 1, referral: 2, organic: 1 }
-                        ],
-                        top_pages: [
-                            { path: '/', views: 145, engagement_rate: 72.3 },
-                            { path: '/services', views: 98, engagement_rate: 68.1 },
-                            { path: '/about', views: 67, engagement_rate: 65.4 },
-                            { path: '/contact', views: 54, engagement_rate: 71.2 },
-                            { path: '/careers', views: 42, engagement_rate: 59.8 }
-                        ]
-                    },
-                    gbp: {
-                        searches: 156,
-                        views: 234,
-                        phone_calls: 45,
-                        directions: 38,
-                        website_clicks: 67,
-                        search_keywords: [
-                            { keyword: 'home care services', count: 42 },
-                            { keyword: 'senior care colorado', count: 38 },
-                            { keyword: 'caregiver jobs', count: 28 },
-                            { keyword: 'elderly care', count: 24 },
-                            { keyword: 'respite care', count: 24 }
-                        ],
-                        actions_over_time: [
-                            { date: '2025-10-12', calls: 2, directions: 1, website: 3 },
-                            { date: '2025-10-16', calls: 3, directions: 2, website: 4 },
-                            { date: '2025-10-20', calls: 5, directions: 4, website: 7 },
-                            { date: '2025-10-24', calls: 4, directions: 3, website: 6 },
-                            { date: '2025-10-28', calls: 4, directions: 3, website: 7 },
-                            { date: '2025-11-01', calls: 5, directions: 4, website: 8 },
-                            { date: '2025-11-05', calls: 4, directions: 3, website: 6 },
-                            { date: '2025-11-09', calls: 3, directions: 2, website: 5 }
-                        ]
-                    }
-                };
-            }
-
-            // Update KPIs
-            document.getElementById('websiteTotalUsers').textContent = formatNumber(websiteData.ga4?.total_users || 0);
-            document.getElementById('websiteSessions').textContent = formatNumber(websiteData.ga4?.sessions || 0);
-            document.getElementById('websiteConversions').textContent = formatNumber(websiteData.ga4?.conversions || 0);
-            document.getElementById('websiteConversionRate').textContent = (websiteData.ga4?.conversion_rate || 0).toFixed(1) + '%';
-
-            // Engagement metrics
-            document.getElementById('websiteAvgSessionDuration').textContent = websiteData.ga4?.avg_session_duration || '—';
-            document.getElementById('websiteEngagementRate').textContent = (websiteData.ga4?.engagement_rate || 0).toFixed(1) + '%';
-            document.getElementById('websiteBounceRate').textContent = (websiteData.ga4?.bounce_rate || 0).toFixed(1) + '%';
-
-            // GBP KPIs
-            document.getElementById('gbpSearches').textContent = formatNumber(websiteData.gbp?.searches || 0);
-            document.getElementById('gbpViews').textContent = formatNumber(websiteData.gbp?.views || 0);
-            document.getElementById('gbpPhoneCalls').textContent = formatNumber(websiteData.gbp?.phone_calls || 0);
-            document.getElementById('gbpDirections').textContent = formatNumber(websiteData.gbp?.directions || 0);
-
-            // Users Over Time Chart
-            const websiteUsersCtx = document.getElementById('websiteUsersChart');
-            if (websiteUsersCtx) {
-                if (websiteUsersChart) websiteUsersChart.destroy();
-                
-                const usersData = websiteData.ga4?.users_over_time || [];
-                websiteUsersChart = new Chart(websiteUsersCtx, {
-                    type: 'line',
-                    data: {
-                        labels: usersData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-                        datasets: [{
-                            label: 'Users',
-                            data: usersData.map(d => d.users),
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            borderWidth: 3,
-                            fill: true,
-                            tension: 0.4,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
-                            pointBackgroundColor: '#3b82f6',
-                            pointBorderColor: '#1e293b',
-                            pointBorderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Sessions by Source Chart (Doughnut)
-            const websiteSessionsBySourceCtx = document.getElementById('websiteSessionsBySourceChart');
-            if (websiteSessionsBySourceCtx) {
-                if (websiteSessionsBySourceChart) websiteSessionsBySourceChart.destroy();
-                
-                const sourceData = websiteData.ga4?.sessions_by_source || {};
-                const sources = Object.keys(sourceData);
-                const values = Object.values(sourceData);
-                
-                websiteSessionsBySourceChart = new Chart(websiteSessionsBySourceCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: sources,
-                        datasets: [{
-                            data: values,
-                            backgroundColor: [
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(139, 92, 246, 0.8)',
-                                'rgba(16, 185, 129, 0.8)',
-                                'rgba(245, 158, 11, 0.8)',
-                                'rgba(239, 68, 68, 0.8)'
-                            ],
-                            borderColor: '#1e293b',
-                            borderWidth: 2
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    color: '#e2e8f0',
-                                    padding: 12,
-                                    font: { size: 11 }
-                                }
-                            },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Sessions by Medium Chart (Stacked Bar)
-            const websiteSessionsByMediumCtx = document.getElementById('websiteSessionsByMediumChart');
-            if (websiteSessionsByMediumCtx) {
-                if (websiteSessionsByMediumChart) websiteSessionsByMediumChart.destroy();
-                
-                const mediumData = websiteData.ga4?.sessions_by_medium || [];
-                websiteSessionsByMediumChart = new Chart(websiteSessionsByMediumCtx, {
-                    type: 'bar',
-                    data: {
-                        labels: mediumData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-                        datasets: [
-                            {
-                                label: '(none)',
-                                data: mediumData.map(d => d.none),
-                                backgroundColor: 'rgba(148, 163, 184, 0.8)',
-                                borderColor: '#94a3b8',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'cpc',
-                                data: mediumData.map(d => d.cpc),
-                                backgroundColor: 'rgba(16, 185, 129, 0.8)',
-                                borderColor: '#10b981',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'paid',
-                                data: mediumData.map(d => d.paid),
-                                backgroundColor: 'rgba(139, 92, 246, 0.8)',
-                                borderColor: '#8b5cf6',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'referral',
-                                data: mediumData.map(d => d.referral),
-                                backgroundColor: 'rgba(245, 158, 11, 0.8)',
-                                borderColor: '#f59e0b',
-                                borderWidth: 1
-                            },
-                            {
-                                label: 'organic',
-                                data: mediumData.map(d => d.organic),
-                                backgroundColor: 'rgba(59, 130, 246, 0.8)',
-                                borderColor: '#3b82f6',
-                                borderWidth: 1
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    color: '#e2e8f0',
-                                    padding: 12,
-                                    font: { size: 11 }
-                                }
-                            },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10
-                            }
-                        },
-                        scales: {
-                            x: {
-                                stacked: true,
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            },
-                            y: {
-                                stacked: true,
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // GBP Actions Chart
-            const gbpActionsCtx = document.getElementById('gbpActionsChart');
-            if (gbpActionsCtx) {
-                if (gbpActionsChart) gbpActionsChart.destroy();
-                
-                const actionsData = websiteData.gbp?.actions_over_time || [];
-                gbpActionsChart = new Chart(gbpActionsCtx, {
-                    type: 'line',
-                    data: {
-                        labels: actionsData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-                        datasets: [
-                            {
-                                label: 'Phone Calls',
-                                data: actionsData.map(d => d.calls),
-                                borderColor: '#3b82f6',
-                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                                borderWidth: 2,
-                                fill: false,
-                                tension: 0.4
-                            },
-                            {
-                                label: 'Directions',
-                                data: actionsData.map(d => d.directions),
-                                borderColor: '#8b5cf6',
-                                backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                                borderWidth: 2,
-                                fill: false,
-                                tension: 0.4
-                            },
-                            {
-                                label: 'Website Clicks',
-                                data: actionsData.map(d => d.website),
-                                borderColor: '#10b981',
-                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                borderWidth: 2,
-                                fill: false,
-                                tension: 0.4
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom',
-                                labels: {
-                                    color: '#e2e8f0',
-                                    padding: 12,
-                                    font: { size: 11 }
-                                }
-                            },
-                            tooltip: {
-                                backgroundColor: '#1e293b',
-                                titleColor: '#f8fafc',
-                                bodyColor: '#e2e8f0',
-                                borderColor: '#334155',
-                                borderWidth: 1,
-                                padding: 10
-                            }
-                        },
-                        scales: {
-                            x: {
-                                grid: { display: false },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            },
-                            y: {
-                                grid: {
-                                    color: 'rgba(148, 163, 184, 0.1)',
-                                    drawBorder: false
-                                },
-                                ticks: {
-                                    color: '#94a3b8',
-                                    font: { size: 10 }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-            // Top Pages Table
-            const websiteTopPagesTable = document.getElementById('websiteTopPagesTable');
-            if (websiteTopPagesTable) {
-                const pages = websiteData.ga4?.top_pages || [];
-                if (pages.length > 0) {
-                    let tableHtml = `
-                        <div class="table-section-title">Most Visited Pages</div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Page Path</th>
-                                    <th style="text-align: right;">Views</th>
-                                    <th style="text-align: right;">Engagement Rate</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-                    pages.forEach((page) => {
-                        tableHtml += `
-                            <tr>
-                                <td>${page.path}</td>
-                                <td style="text-align: right;"><span class="metric-badge impressions">${formatNumber(page.views)}</span></td>
-                                <td style="text-align: right;"><span class="metric-badge conversions">${page.engagement_rate.toFixed(1)}%</span></td>
-                            </tr>
-                        `;
-                    });
-                    tableHtml += `</tbody></table>`;
-                    websiteTopPagesTable.innerHTML = tableHtml;
-                } else {
-                    websiteTopPagesTable.innerHTML = '<div class="empty-state">No page data available</div>';
-                }
-            }
-
-            // Conversions by Source Table
-            const websiteConversionsBySourceTable = document.getElementById('websiteConversionsBySourceTable');
-            if (websiteConversionsBySourceTable) {
-                const conversions = websiteData.ga4?.conversions_by_source || {};
-                const sources = Object.keys(conversions);
-                if (sources.length > 0) {
-                    let tableHtml = `
-                        <div class="table-section-title">Goal Completions by Source</div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Source</th>
-                                    <th style="text-align: right;">Conversions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-                    sources.forEach((source) => {
-                        tableHtml += `
-                            <tr>
-                                <td>${source}</td>
-                                <td style="text-align: right;"><span class="metric-badge conversions">${formatNumber(conversions[source])}</span></td>
-                            </tr>
-                        `;
-                    });
-                    tableHtml += `</tbody></table>`;
-                    websiteConversionsBySourceTable.innerHTML = tableHtml;
-                } else {
-                    websiteConversionsBySourceTable.innerHTML = '<div class="empty-state">No conversion data available</div>';
-                }
-            }
-
-            // GBP Search Keywords Table
-            const gbpSearchKeywordsTable = document.getElementById('gbpSearchKeywordsTable');
-            if (gbpSearchKeywordsTable) {
-                const keywords = websiteData.gbp?.search_keywords || [];
-                if (keywords.length > 0) {
-                    let tableHtml = `
-                        <div class="table-section-title">Top Search Terms</div>
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>Keyword</th>
-                                    <th style="text-align: right;">Searches</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-                    keywords.forEach((kw) => {
-                        tableHtml += `
-                            <tr>
-                                <td>${kw.keyword}</td>
-                                <td style="text-align: right;"><span class="metric-badge clicks">${formatNumber(kw.count)}</span></td>
-                            </tr>
-                        `;
-                    });
-                    tableHtml += `</tbody></table>`;
-                    gbpSearchKeywordsTable.innerHTML = tableHtml;
-                } else {
-                    gbpSearchKeywordsTable.innerHTML = '<div class="empty-state">No search data available</div>';
-                }
-            }
+        function generateSessionData(days) {
+            return [300, 500, 800, 900, 1100, 950, 800, 700, 650, 900, 1200, 1100, 
+                   950, 850, 800, 750, 950, 1050, 900, 800, 1000, 1100, 1150, 
+                   1000, 900, 950, 1000, 1050, 1100, 900].slice(0, days);
         }
 
-        // Function to load website and GBP data
-        async function loadWebsiteData() {
+        function generateInteractionData(days) {
+            return [2, 3, 6, 8, 5, 4, 2, 1, 3, 7, 10, 8, 6, 5, 4, 3, 5, 9, 
+                   11, 8, 6, 4, 7, 9, 10, 8, 6, 5, 7, 4].slice(0, days);
+        }
+
+        // Fetch real data from APIs
+        async function fetchDashboardData() {
             try {
-                const params = new URLSearchParams({
-                    from: startDate.value,
-                    to: endDate.value
-                });
-
-                const websiteRes = await fetch(`/api/marketing/website?${params.toString()}`);
-
-                if (!websiteRes.ok) {
-                    throw new Error("Failed to load website metrics");
-                }
-
-                const websiteData = await websiteRes.json();
+                const preset = document.getElementById('datePreset').value;
                 
-                // Store data globally
-                window.lastWebsiteData = websiteData.data;
+                // Calculate date range based on preset
+                const { start, end } = calculateDateRange(preset);
+                updateDateRangeDisplay(start, end);
                 
-                renderWebsiteMetrics(websiteData.data);
+                // Fetch ads data
+                const adsResponse = await fetch(`${API_BASE}/ads?from=${start}&to=${end}`);
+                const adsData = await adsResponse.json();
+                
+                // Fetch social data  
+                const socialResponse = await fetch(`${API_BASE}/social?from=${start}&to=${end}`);
+                const socialData = await socialResponse.json();
+
+                // Fetch website data
+                const websiteResponse = await fetch(`${API_BASE}/website?from=${start}&to=${end}`);
+                const websiteData = await websiteResponse.json();
+
+                updateDashboard(adsData, socialData, websiteData);
             } catch (error) {
-                console.error('Error loading website data:', error);
-                // Fall back to mock data
-                renderWebsiteMetrics();
+                console.error('Error fetching dashboard data:', error);
             }
         }
 
-        // Initialize with default preset and load data.
-        applyPreset(datePreset.value);
-        loadMarketingData();
-        
-        // Load email and website data on page load
-        renderEmailMetrics();
-        loadWebsiteData();
+        function calculateDateRange(preset) {
+            const end = new Date();
+            let start = new Date();
+            
+            switch (preset) {
+                case 'last_7_days':
+                    start.setDate(end.getDate() - 7);
+                    break;
+                case 'last_30_days':
+                    start.setDate(end.getDate() - 30);
+                    break;
+                case 'month_to_date':
+                    start = new Date(end.getFullYear(), end.getMonth(), 1);
+                    break;
+                case 'quarter_to_date':
+                    const quarter = Math.floor(end.getMonth() / 3);
+                    start = new Date(end.getFullYear(), quarter * 3, 1);
+                    break;
+                case 'year_to_date':
+                    start = new Date(end.getFullYear(), 0, 1);
+                    break;
+                case 'last_12_months':
+                    start.setMonth(end.getMonth() - 12);
+                    break;
+                default:
+                    start.setDate(end.getDate() - 30);
+            }
+            
+            return {
+                start: start.toISOString().split('T')[0],
+                end: end.toISOString().split('T')[0]
+            };
+        }
+
+        function updateDateRangeDisplay(start, end) {
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            
+            const formatDate = (date) => {
+                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                return `${months[date.getMonth()]} ${date.getDate()}`;
+            };
+            
+            const displayText = `Last 30 days (${formatDate(startDate)} - ${formatDate(endDate)})`;
+            document.getElementById('dateRangeDisplay').textContent = displayText;
+        }
+
+        function updateDashboard(adsData, socialData, websiteData) {
+            // Update metrics from real API data
+            if (adsData.success && adsData.data) {
+                const data = adsData.data;
+                
+                // Update Google Ads metrics
+                if (data.google_ads) {
+                    const google = data.google_ads;
+                    
+                    if (google.spend) {
+                        document.getElementById('googleAdsSpend').textContent = 
+                            `$ ${google.spend.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    }
+                    
+                    if (google.performance) {
+                        document.getElementById('googleClicks').textContent = 
+                            google.performance.clicks.toLocaleString();
+                        document.getElementById('googlePurchases').textContent = 
+                            google.performance.purchases || 0;
+                        document.getElementById('totalImpressions').textContent = 
+                            google.performance.impressions.toLocaleString();
+                    }
+                    
+                    if (google.efficiency) {
+                        document.getElementById('googleCPC').textContent = 
+                            `$ ${google.efficiency.cpc.toFixed(2)}`;
+                        document.getElementById('googleCTR').textContent = 
+                            `${google.efficiency.ctr.toFixed(2)}%`;
+                    }
+
+                    // Update Google campaigns table
+                    if (google.campaigns && google.campaigns.length > 0) {
+                        const tableBody = document.getElementById('googleCampaignsTable');
+                        tableBody.innerHTML = google.campaigns.slice(0, 3).map((campaign, index) => `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>
+                                    <div class="campaign-name">${campaign.name}</div>
+                                    <div class="campaign-id">${campaign.id ? `(${campaign.id})` : ''}</div>
+                                </td>
+                                <td>${campaign.impressions ? campaign.impressions.toLocaleString() : 'N/A'}</td>
+                                <td>$ ${campaign.spend.toFixed(2)}</td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+
+                // Update Facebook Ads metrics
+                if (data.facebook_ads && data.facebook_ads.account) {
+                    const fb = data.facebook_ads.account;
+                    
+                    document.getElementById('facebookAdsSpend').textContent = 
+                        `$ ${fb.spend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                    
+                    if (fb.spend_change !== undefined) {
+                        const changeEl = document.getElementById('facebookAdsChange');
+                        const isPositive = fb.spend_change > 0;
+                        changeEl.className = `metric-change ${isPositive ? 'positive' : 'negative'}`;
+                        changeEl.innerHTML = `
+                            <span>${isPositive ? '▲' : '▼'} ${Math.abs(fb.spend_change).toFixed(0)}%</span>
+                            <span class="metric-change-detail">vs previous period ($ ${fb.spend_previous.toFixed(2)})</span>
+                        `;
+                    }
+                    
+                    document.getElementById('facebookClicks').textContent = 
+                        fb.clicks.toLocaleString();
+                    document.getElementById('facebookCTR').textContent = 
+                        `${fb.ctr.toFixed(2)}%`;
+                    document.getElementById('facebookCPC').textContent = 
+                        `$ ${fb.cpc.toFixed(2)}`;
+                    document.getElementById('facebookConversions').textContent = 
+                        fb.conversions.toLocaleString();
+
+                    // Update Facebook campaigns table
+                    if (data.facebook_ads.campaigns && data.facebook_ads.campaigns.length > 0) {
+                        const tableBody = document.getElementById('facebookCampaignsTable');
+                        tableBody.innerHTML = data.facebook_ads.campaigns.slice(0, 2).map((campaign, index) => `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td class="campaign-name">${campaign.name}</td>
+                                <td>$ ${campaign.cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                <td>${campaign.impressions.toLocaleString()}</td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            }
+
+            // Update website metrics (sessions from GA4)
+            if (websiteData.success && websiteData.data && websiteData.data.ga4) {
+                const ga4 = websiteData.data.ga4;
+                
+                if (ga4.sessions !== undefined) {
+                    document.getElementById('totalSessions').textContent = 
+                        ga4.sessions.toLocaleString();
+                }
+            }
+        }
+
+        // Event listeners
+        document.getElementById('datePreset').addEventListener('change', fetchDashboardData);
+        document.getElementById('refreshBtn').addEventListener('click', fetchDashboardData);
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            fetchDashboardData();
+        });
     </script>
 </body>
 </html>
-
