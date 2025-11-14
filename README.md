@@ -45,19 +45,17 @@
 
 ### ⚠️ CRITICAL DEPLOYMENT RULES
 
-**ALWAYS FOLLOW THIS FLOW: Desktop → GitHub → Heroku**
+**ALWAYS FOLLOW THIS FLOW: Desktop → GitHub → Heroku (Auto-Deploy)**
 
-**After making ANY code changes, ALWAYS:**
-1. Commit to local git (Desktop)
-2. Push to GitHub (`git push origin main`)
-3. Push to Heroku (`git push heroku main`)
+**Recommended: GitHub Integration (Auto-Deploy Enabled)**
+- Connect Heroku to GitHub in Heroku dashboard
+- Enable "Automatic deploys" from `main` branch
+- **After making ANY code changes:**
+  1. Commit to local git (Desktop)
+  2. Push to GitHub (`git push origin main`)
+  3. ✅ **Heroku automatically deploys!** (no manual push needed)
 
-**Use the sync script** (once recruiter-dashboard GitHub repo is created):
-```bash
-./SYNC_ALL_REPOS.sh
-```
-
-**Manual sync commands:**
+**Manual sync commands (if NOT using GitHub integration):**
 
 #### Portal (Hub)
 ```bash
@@ -65,7 +63,7 @@ cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub
-git push heroku main      # Push to Heroku
+git push heroku main      # Push to Heroku (only if NOT using GitHub integration)
 ```
 
 #### Sales Dashboard (Spoke)

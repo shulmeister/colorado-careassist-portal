@@ -20,40 +20,69 @@
 
 ## Standard Workflow (Desktop → GitHub → Heroku)
 
-**For Portal**:
+**Recommended: GitHub Integration (Auto-Deploy)**
+- Connect Heroku to GitHub in Heroku dashboard
+- Enable "Automatic deploys" from `main` branch
+- Push to GitHub → Heroku automatically deploys!
+
+**For Portal** (with GitHub integration):
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
+git add .
+git commit -m "Your message"
+git push origin main    # Desktop → GitHub → Heroku (auto-deploys)
+```
+
+**For Portal** (without GitHub integration):
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Your message"
 git push origin main    # Desktop → GitHub
-git push heroku main    # Desktop → Heroku
+git push heroku main    # Desktop → Heroku (manual)
 ```
 
-**For Sales Dashboard**:
+**For Sales Dashboard** (with GitHub integration):
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
+git add .
+git commit -m "Your message"
+git push origin main    # Desktop → GitHub → Heroku (auto-deploys)
+```
+
+**For Sales Dashboard** (without GitHub integration):
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
 git add .
 git commit -m "Your message"
 git push origin main    # Desktop → GitHub
-git push heroku main    # Desktop → Heroku
+git push heroku main    # Desktop → Heroku (manual)
 ```
 
-**For Marketing Dashboard**:
+**For Marketing Dashboard** (deploys with Portal):
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/marketing
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub
+git push origin main    # Desktop → GitHub → Heroku (auto-deploys with portal)
 # Note: Marketing Dashboard deploys as part of portal (no separate Heroku app)
 ```
 
-**For Recruiter Dashboard**:
+**For Recruiter Dashboard** (with GitHub integration):
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
+git add .
+git commit -m "Your message"
+git push origin main    # Desktop → GitHub → Heroku (auto-deploys)
+```
+
+**For Recruiter Dashboard** (without GitHub integration):
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Your message"
 git push origin main    # Desktop → GitHub
-git push heroku main    # Desktop → Heroku
+git push heroku main    # Desktop → Heroku (manual)
 ```
 
 **Or use the sync script**:
