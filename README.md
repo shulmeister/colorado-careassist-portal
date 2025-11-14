@@ -35,10 +35,12 @@
 - **Features**: Caregiver recruitment, candidate pipeline, Facebook leads
 
 #### 3. Marketing Dashboard
-- **Repository**: Built INTO `colorado-careassist-portal` (NOT a separate repo)
-- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/templates/marketing.html`
-- **Portal Route**: `/marketing` (built-in route)
-- **Tech**: Jinja2 template, Chart.js, FastAPI routes
+- **Repository**: `marketing-dashboard` (SEPARATE GitHub repo)
+- **GitHub**: https://github.com/shulmeister/marketing-dashboard
+- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/marketing/`
+- **Tech**: Jinja2 template, Chart.js, FastAPI routes (integrated into portal)
+- **Git Structure**: Nested git repo (has its own `.git` folder)
+- **Portal Route**: `/marketing` (built-in route in portal_app.py)
 - **Features**: Social media metrics, Google Ads, GA4, GBP analytics
 
 ### ⚠️ CRITICAL DEPLOYMENT RULES

@@ -9,7 +9,7 @@
 | **Portal** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
 | **Sales Dashboard** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
 | **Recruiter Dashboard** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
-| **Marketing Dashboard** | ✅ | ✅ (part of portal) | ✅ (part of portal) | ✅ **FULLY SYNCED** |
+| **Marketing Dashboard** | ✅ | ✅ | ✅ (part of portal) | ✅ **FULLY SYNCED** |
 
 ## ✅ All Repos Synced!
 
@@ -35,7 +35,16 @@ git push origin main    # Desktop → GitHub
 git push heroku main    # Desktop → Heroku
 ```
 
-**For Recruiter Dashboard** (once GitHub repo exists):
+**For Marketing Dashboard**:
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/marketing
+git add .
+git commit -m "Your message"
+git push origin main    # Desktop → GitHub
+# Note: Marketing Dashboard deploys as part of portal (no separate Heroku app)
+```
+
+**For Recruiter Dashboard**:
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
