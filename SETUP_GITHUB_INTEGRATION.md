@@ -95,8 +95,8 @@ After setup, verify in Heroku dashboard:
 | Dashboard | Heroku App | GitHub Repo | Status |
 |-----------|------------|-------------|--------|
 | Portal | `portal-coloradocareassist` | `shulmeister/colorado-careassist-portal` | ✅ Connected |
-| Sales | `careassist-tracker` | `shulmeister/sales-dashboard` | ⏳ **Needs Setup** |
-| Recruiter | `caregiver-lead-tracker` | `shulmeister/recruiter-dashboard` | ⏳ **Needs Setup** |
+| Sales | `careassist-tracker` | `shulmeister/sales-dashboard` | ✅ Connected |
+| Recruiter | `caregiver-lead-tracker` | `shulmeister/recruiter-dashboard` | ✅ Connected |
 
 ---
 

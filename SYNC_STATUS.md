@@ -25,38 +25,20 @@
 - Enable "Automatic deploys" from `main` branch
 - Push to GitHub → Heroku automatically deploys!
 
-**For Portal** (with GitHub integration):
+**For Portal**:
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Heroku (auto-deploys)
+git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
 ```
 
-**For Portal** (without GitHub integration):
-```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
-git add .
-git commit -m "Your message"
-git push origin main    # Desktop → GitHub
-git push heroku main    # Desktop → Heroku (manual)
-```
-
-**For Sales Dashboard** (with GitHub integration):
+**For Sales Dashboard**:
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Heroku (auto-deploys)
-```
-
-**For Sales Dashboard** (without GitHub integration):
-```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
-git add .
-git commit -m "Your message"
-git push origin main    # Desktop → GitHub
-git push heroku main    # Desktop → Heroku (manual)
+git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
 ```
 
 **For Marketing Dashboard** (deploys with Portal):
@@ -68,21 +50,12 @@ git push origin main    # Desktop → GitHub → Heroku (auto-deploys with porta
 # Note: Marketing Dashboard deploys as part of portal (no separate Heroku app)
 ```
 
-**For Recruiter Dashboard** (with GitHub integration):
+**For Recruiter Dashboard**:
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Heroku (auto-deploys)
-```
-
-**For Recruiter Dashboard** (without GitHub integration):
-```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
-git add .
-git commit -m "Your message"
-git push origin main    # Desktop → GitHub
-git push heroku main    # Desktop → Heroku (manual)
+git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
 ```
 
 **Or use the sync script**:
