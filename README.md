@@ -1,6 +1,24 @@
 # Colorado CareAssist Portal
 
-Central hub/launchpad providing access to all tools and platforms used by Colorado CareAssist.
+## 🎯 CRITICAL: HUB-AND-SPOKE ARCHITECTURE
+
+**READ THIS FIRST - THIS IS A HUB-AND-SPOKE SYSTEM:**
+
+- **THIS REPO (colorado-careassist-portal)** = THE HUB
+  - A central launchpad with tiles that link to other apps
+  - Location: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal`
+  - Heroku: `portal-coloradocareassist-3e1a4bb34793.herokuapp.com`
+  - Tech: FastAPI, Jinja2, PostgreSQL
+
+- **SPOKES** = Individual apps accessed through the hub:
+  - **Sales Dashboard**: `/dashboards/sales/` (React app, Firebase, deploys to `careassist-tracker-0fcf2cecdb22.herokuapp.com`)
+  - **Marketing Dashboard**: Built INTO the portal at `/marketing` route (NOT a separate app)
+  - Other tools: Third-party SaaS apps linked from tiles
+
+**DEPLOYMENT RULES:**
+- Sales Dashboard: Deploy from `/dashboards/sales/` directory (has its own git with heroku remote)
+- Marketing Dashboard: Deploy from portal root (it's part of the main app)
+- ALWAYS push to BOTH git origin AND heroku after changes
 
 ## Features
 
