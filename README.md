@@ -4,21 +4,113 @@
 
 **READ THIS FIRST - THIS IS A HUB-AND-SPOKE SYSTEM:**
 
-- **THIS REPO (colorado-careassist-portal)** = THE HUB
-  - A central launchpad with tiles that link to other apps
-  - Location: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal`
-  - Heroku: `portal-coloradocareassist-3e1a4bb34793.herokuapp.com`
-  - Tech: FastAPI, Jinja2, PostgreSQL
+### THE HUB (Main Portal)
+- **Repository**: `colorado-careassist-portal`
+- **GitHub**: https://github.com/shulmeister/colorado-careassist-portal
+- **Heroku**: `portal-coloradocareassist` → `portal-coloradocareassist-3e1a4bb34793.herokuapp.com`
+- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal`
+- **Tech**: FastAPI, Jinja2, PostgreSQL
+- **Purpose**: Central launchpad with tiles that link to other apps
 
-- **SPOKES** = Individual apps accessed through the hub:
-  - **Sales Dashboard**: `/dashboards/sales/` (React app, Firebase, deploys to `careassist-tracker-0fcf2cecdb22.herokuapp.com`)
-  - **Marketing Dashboard**: Built INTO the portal at `/marketing` route (NOT a separate app)
-  - Other tools: Third-party SaaS apps linked from tiles
+### SPOKES (Individual Apps)
 
-**DEPLOYMENT RULES:**
-- Sales Dashboard: Deploy from `/dashboards/sales/` directory (has its own git with heroku remote)
-- Marketing Dashboard: Deploy from portal root (it's part of the main app)
-- ALWAYS push to BOTH git origin AND heroku after changes
+#### 1. Sales Dashboard
+- **Repository**: `sales-dashboard` (SEPARATE GitHub repo)
+- **GitHub**: https://github.com/shulmeister/sales-dashboard
+- **Heroku**: `careassist-tracker` → `careassist-tracker-0fcf2cecdb22.herokuapp.com`
+- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales/`
+- **Tech**: Python FastAPI, Jinja2, PostgreSQL
+- **Git Structure**: Nested git repo (has its own `.git` folder)
+- **Portal Route**: `/sales` (redirects to Heroku URL)
+- **Features**: Visits tracking, business cards, closed sales, contacts, Lead Tracker, activity logs
+
+#### 2. Recruiter Dashboard
+- **Repository**: `recruiter-dashboard` (SEPARATE GitHub repo - needs to be created)
+- **GitHub**: https://github.com/shulmeister/recruiter-dashboard (TO BE CREATED)
+- **Heroku**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com`
+- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment/`
+- **Tech**: Flask, SQLAlchemy, PostgreSQL
+- **Git Structure**: Nested git repo (has its own `.git` folder)
+- **Portal Route**: `/recruitment` (embedded iframe)
+- **Features**: Caregiver recruitment, candidate pipeline, Facebook leads
+
+#### 3. Marketing Dashboard
+- **Repository**: Built INTO `colorado-careassist-portal` (NOT a separate repo)
+- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/templates/marketing.html`
+- **Portal Route**: `/marketing` (built-in route)
+- **Tech**: Jinja2 template, Chart.js, FastAPI routes
+- **Features**: Social media metrics, Google Ads, GA4, GBP analytics
+
+### ⚠️ CRITICAL DEPLOYMENT RULES
+
+**ALWAYS push to BOTH GitHub AND Heroku after ANY changes:**
+
+#### Portal (Hub)
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
+git add .
+git commit -m "Describe changes"
+git push origin main      # Push to GitHub
+git push heroku main      # Push to Heroku
+```
+
+#### Sales Dashboard (Spoke)
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
+git add .
+git commit -m "Describe changes"
+git push origin main      # Push to GitHub
+git push heroku main      # Push to Heroku
+```
+
+#### Recruiter Dashboard (Spoke)
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
+git add .
+git commit -m "Describe changes"
+git push origin main      # Push to GitHub (once repo is created)
+git push heroku main      # Push to Heroku
+```
+
+### 📁 Git Repository Structure
+
+```
+colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
+├── .git/                            # Portal's git repo
+├── dashboards/
+│   ├── sales/
+│   │   ├── .git/                    # Sales Dashboard's OWN git repo
+│   │   ├── app.py
+│   │   └── ...
+│   └── recruitment/
+│       ├── .git/                    # Recruiter Dashboard's OWN git repo
+│       ├── app.py
+│       └── ...
+├── templates/
+│   ├── marketing.html               # Marketing Dashboard (built into portal)
+│   └── ...
+└── portal_app.py                    # Main portal app
+```
+
+**IMPORTANT**: Each dashboard (`sales` and `recruitment`) is a **nested git repository** with its own remotes. They are NOT submodules - they're independent repos that happen to live inside the portal directory.
+
+### 🔄 Syncing Status (Last Updated: Nov 13, 2025)
+
+| Component | GitHub | Heroku | Status |
+|-----------|--------|--------|--------|
+| Portal | ✅ https://github.com/shulmeister/colorado-careassist-portal | ✅ portal-coloradocareassist | ✅ Synced |
+| Sales Dashboard | ✅ https://github.com/shulmeister/sales-dashboard | ✅ careassist-tracker | ✅ Synced |
+| Recruiter Dashboard | ❌ **NEEDS CREATION** | ✅ caregiver-lead-tracker | ⚠️ Heroku only |
+| Marketing Dashboard | ✅ (part of portal repo) | ✅ (part of portal) | ✅ Synced |
+
+**TODO**: Create GitHub repo `recruiter-dashboard` and push code from `/dashboards/recruitment/`
+
+### 🚨 Common Mistakes to Avoid
+
+1. **Don't commit from portal root when working on dashboards** - Each dashboard has its own git repo
+2. **Don't assume all code is in one place** - Check which repo you're in with `git remote -v`
+3. **Always push to BOTH GitHub AND Heroku** - They're separate remotes
+4. **Marketing Dashboard is NOT a separate repo** - It's in `templates/marketing.html` in the portal repo
 
 ## Features
 
