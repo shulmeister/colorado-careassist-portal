@@ -832,11 +832,16 @@ async def recruitment_dashboard_embedded(
     session_token = request.cookies.get("session_token", "")
     
     # Append session token as query parameter (Recruiter Dashboard needs to accept this)
-    from urllib.parse import urlencode
+    from urllib.parse import urlencode, quote_plus
     if session_token:
         separator = "&" if "?" in recruitment_dashboard_url else "?"
-        recruitment_url_with_auth = f"{recruitment_dashboard_url}{separator}portal_token={session_token}&portal_user_email={current_user.get('email', '')}"
+        # URL encode the token to handle special characters
+        encoded_token = quote_plus(session_token)
+        encoded_email = quote_plus(current_user.get('email', ''))
+        recruitment_url_with_auth = f"{recruitment_dashboard_url}{separator}portal_token={encoded_token}&portal_user_email={encoded_email}"
+        logger.info(f"Passing portal token to Recruiter Dashboard for user: {current_user.get('email')}")
     else:
+        logger.warning("No session token found - Recruiter Dashboard will require login")
         recruitment_url_with_auth = recruitment_dashboard_url
     
     return templates.TemplateResponse("recruitment_embedded.html", {
