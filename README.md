@@ -72,7 +72,8 @@ cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sa
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub
-git push heroku main      # Push to Heroku
+# If GitHub integration enabled: Heroku auto-deploys
+# Otherwise: git push heroku main
 ```
 
 #### Recruiter Dashboard (Spoke)
@@ -80,8 +81,9 @@ git push heroku main      # Push to Heroku
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Describe changes"
-git push origin main      # Push to GitHub (once repo is created)
-git push heroku main      # Push to Heroku
+git push origin main      # Push to GitHub
+# If GitHub integration enabled: Heroku auto-deploys
+# Otherwise: git push heroku main
 ```
 
 ### 📁 Git Repository Structure
