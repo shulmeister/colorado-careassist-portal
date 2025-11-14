@@ -13,7 +13,10 @@
 
 ## ✅ All Repos Synced!
 
-**Recruiter Dashboard GitHub repo created and synced**: https://github.com/shulmeister/recruiter-dashboard
+**All dashboard repos created and synced:**
+- **Sales Dashboard**: https://github.com/shulmeister/sales-dashboard
+- **Recruiter Dashboard**: https://github.com/shulmeister/recruiter-dashboard
+- **Marketing Dashboard**: https://github.com/shulmeister/marketing-dashboard
 
 ## Standard Workflow (Desktop → GitHub → Heroku)
 
