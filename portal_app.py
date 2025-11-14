@@ -828,10 +828,21 @@ async def recruitment_dashboard_embedded(
         "https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com/"
     )
     
+    # Get session token from cookie to pass to dashboard
+    session_token = request.cookies.get("session_token", "")
+    
+    # Append session token as query parameter (Recruiter Dashboard needs to accept this)
+    from urllib.parse import urlencode
+    if session_token:
+        separator = "&" if "?" in recruitment_dashboard_url else "?"
+        recruitment_url_with_auth = f"{recruitment_dashboard_url}{separator}portal_token={session_token}&portal_user_email={current_user.get('email', '')}"
+    else:
+        recruitment_url_with_auth = recruitment_dashboard_url
+    
     return templates.TemplateResponse("recruitment_embedded.html", {
         "request": request,
         "user": current_user,
-        "recruitment_url": recruitment_dashboard_url
+        "recruitment_url": recruitment_url_with_auth
     })
 
 
