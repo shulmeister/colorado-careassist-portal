@@ -43,7 +43,19 @@
 
 ### ⚠️ CRITICAL DEPLOYMENT RULES
 
-**ALWAYS push to BOTH GitHub AND Heroku after ANY changes:**
+**ALWAYS FOLLOW THIS FLOW: Desktop → GitHub → Heroku**
+
+**After making ANY code changes, ALWAYS:**
+1. Commit to local git (Desktop)
+2. Push to GitHub (`git push origin main`)
+3. Push to Heroku (`git push heroku main`)
+
+**Use the sync script** (once recruiter-dashboard GitHub repo is created):
+```bash
+./SYNC_ALL_REPOS.sh
+```
+
+**Manual sync commands:**
 
 #### Portal (Hub)
 ```bash
