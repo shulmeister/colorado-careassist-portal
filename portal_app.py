@@ -817,17 +817,22 @@ async def sales_dashboard_redirect(
     
     return RedirectResponse(url=sales_dashboard_url, status_code=302)
 
-@app.get("/recruitment")
-async def recruitment_dashboard_redirect(
+@app.get("/recruitment", response_class=HTMLResponse)
+async def recruitment_dashboard_embedded(
+    request: Request,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Redirect to Recruitment Dashboard"""
+    """Embedded Recruitment Dashboard (iframe)"""
     recruitment_dashboard_url = os.getenv(
         "RECRUITMENT_DASHBOARD_URL",
         "https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com/"
     )
     
-    return RedirectResponse(url=recruitment_dashboard_url, status_code=302)
+    return templates.TemplateResponse("recruitment_embedded.html", {
+        "request": request,
+        "user": current_user,
+        "recruitment_url": recruitment_dashboard_url
+    })
 
 
 @app.get("/connections", response_class=HTMLResponse)
