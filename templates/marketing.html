@@ -1791,6 +1791,174 @@
                    11, 8, 6, 4, 7, 9, 10, 8, 6, 5, 7, 4].slice(0, days);
         }
 
+        const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+        const randomFloat = (min, max, dec = 1) => (min + Math.random() * (max - min)).toFixed(dec);
+        const formatDuration = (seconds) => {
+            const mins = Math.floor(seconds / 60);
+            const secs = String(seconds % 60).padStart(2, "0");
+            return `${mins}:${secs}`;
+        };
+
+        function updateSocialSection({ range }) {
+            document.getElementById("socialPageLikes").textContent = randomInt(2600, 3300).toLocaleString();
+            document.getElementById("socialReach").textContent = randomInt(22000, 36000).toLocaleString();
+            document.getElementById("socialEngagement").textContent = randomInt(1200, 2200).toLocaleString();
+            document.getElementById("socialPosts").textContent = randomInt(12, 24).toLocaleString();
+            document.getElementById("socialImpressions").textContent = randomInt(32000, 46000).toLocaleString();
+            document.getElementById("socialVideoViews").textContent = randomInt(3800, 6200).toLocaleString();
+
+            const days = Math.min(getDaySpan(range.start, range.end), 30);
+            const labels = generateDateLabels(days);
+
+            if (charts.socialReach) {
+                charts.socialReach.data.labels = labels;
+                charts.socialReach.data.datasets[0].data = generateRandomData(days, 400, 1200);
+                charts.socialReach.data.datasets[1].data = generateRandomData(days, 150, 600);
+                charts.socialReach.update();
+            }
+
+            if (charts.socialEngagement) {
+                charts.socialEngagement.data.labels = labels;
+                charts.socialEngagement.data.datasets[0].data = generateRandomData(days, 30, 90);
+                charts.socialEngagement.update();
+            }
+        }
+
+        function updatePaidSection({ range }) {
+            const totalSpend = randomInt(3000, 6000);
+            const googleSpend = randomInt(2500, totalSpend - 200);
+            const facebookSpend = totalSpend - googleSpend;
+
+            document.getElementById("paidTotalSpend").textContent = `$${totalSpend.toLocaleString()}`;
+            document.getElementById("paidGoogleSpend").textContent = `$${googleSpend.toLocaleString()}`;
+            document.getElementById("paidFacebookSpend").textContent = `$${facebookSpend.toLocaleString()}`;
+            document.getElementById("paidClicks").textContent = randomInt(600, 1200).toLocaleString();
+            document.getElementById("paidCPC").textContent = `$${randomFloat(2.5, 6.5, 2)}`;
+            document.getElementById("paidConversions").textContent = randomInt(25, 60).toLocaleString();
+
+            if (charts.paidSpend) {
+                charts.paidSpend.data.datasets[0].data = [googleSpend, facebookSpend, randomInt(0, 300)];
+                charts.paidSpend.update();
+            }
+        }
+
+        function updateEmailSection({ range }) {
+            document.getElementById("emailCampaigns").textContent = randomInt(6, 16).toLocaleString();
+            document.getElementById("emailSubscribers").textContent = randomInt(3200, 3600).toLocaleString();
+            document.getElementById("emailOpenRate").textContent = `${randomFloat(24, 42, 1)}%`;
+            document.getElementById("emailClickRate").textContent = `${randomFloat(3, 8, 1)}%`;
+            document.getElementById("emailDeliveryRate").textContent = `${randomFloat(97, 99.5, 1)}%`;
+            document.getElementById("emailConversions").textContent = randomInt(40, 80).toLocaleString();
+
+            const days = Math.min(getDaySpan(range.start, range.end), 30);
+            const labels = generateDateLabels(days);
+
+            if (charts.emailEngagement) {
+                charts.emailEngagement.data.labels = labels;
+                charts.emailEngagement.data.datasets[0].data = generateRandomData(days, 120, 380);
+                charts.emailEngagement.data.datasets[1].data = generateRandomData(days, 20, 110);
+                charts.emailEngagement.update();
+            }
+
+            if (charts.emailGrowth) {
+                let current = randomInt(3200, 3300);
+                const growth = [];
+                for (let i = 0; i < days; i += 1) {
+                    current += randomInt(0, 12);
+                    growth.push(current);
+                }
+                charts.emailGrowth.data.labels = labels;
+                charts.emailGrowth.data.datasets[0].data = growth;
+                charts.emailGrowth.update();
+            }
+        }
+
+        function updateWebsiteSection({ range }) {
+            document.getElementById("websiteSessions").textContent = randomInt(1500, 2300).toLocaleString();
+            document.getElementById("websiteUsers").textContent = randomInt(1100, 1900).toLocaleString();
+            document.getElementById("websiteBounceRate").textContent = `${randomFloat(38, 50, 1)}%`;
+            document.getElementById("websiteAvgSession").textContent = formatDuration(randomInt(120, 240));
+            document.getElementById("gbpViews").textContent = randomInt(2800, 4200).toLocaleString();
+            document.getElementById("gbpActions").textContent = randomInt(360, 620).toLocaleString();
+
+            const days = Math.min(getDaySpan(range.start, range.end), 30);
+            const labels = generateDateLabels(days);
+
+            if (charts.websiteSessions) {
+                charts.websiteSessions.data.labels = labels;
+                charts.websiteSessions.data.datasets[0].data = generateSessionData(days);
+                charts.websiteSessions.update();
+            }
+
+            if (charts.gbpSearches) {
+                charts.gbpSearches.data.labels = labels;
+                charts.gbpSearches.data.datasets[0].data = generateRandomData(days, 60, 160);
+                charts.gbpSearches.data.datasets[1].data = generateRandomData(days, 30, 90);
+                charts.gbpSearches.update();
+            }
+        }
+
+        function updateEngagementSection({ range }) {
+            document.getElementById("engagementTotal").textContent = randomInt(3800, 5200).toLocaleString();
+            document.getElementById("engagementSocial").textContent = randomInt(1900, 2800).toLocaleString();
+            document.getElementById("engagementShares").textContent = randomInt(250, 420).toLocaleString();
+            document.getElementById("engagementComments").textContent = randomInt(520, 820).toLocaleString();
+            document.getElementById("engagementMessages").textContent = randomInt(110, 220).toLocaleString();
+            document.getElementById("engagementSaves").textContent = randomInt(160, 260).toLocaleString();
+
+            if (charts.engagementType) {
+                charts.engagementType.data.datasets[0].data = [
+                    randomInt(1800, 2600),
+                    randomInt(500, 900),
+                    randomInt(240, 420),
+                    randomInt(150, 260),
+                    randomInt(120, 200),
+                ];
+                charts.engagementType.update();
+            }
+
+            if (charts.engagementTrend) {
+                const days = Math.min(getDaySpan(range.start, range.end), 30);
+                const labels = generateDateLabels(days);
+                charts.engagementTrend.data.labels = labels;
+                charts.engagementTrend.data.datasets[0].data = generateRandomData(days, 120, 260);
+                charts.engagementTrend.update();
+            }
+        }
+
+        function setupSectionFilters() {
+            const sections = [
+                { presetId: "socialDatePreset", refreshId: "socialRefreshBtn", labelId: "socialDateRange", updater: updateSocialSection },
+                { presetId: "paidDatePreset", refreshId: "paidRefreshBtn", labelId: "paidDateRange", updater: updatePaidSection },
+                { presetId: "emailDatePreset", refreshId: "emailRefreshBtn", labelId: "emailDateRange", updater: updateEmailSection },
+                { presetId: "websiteDatePreset", refreshId: "websiteRefreshBtn", labelId: "websiteDateRange", updater: updateWebsiteSection },
+                { presetId: "engagementDatePreset", refreshId: "engagementRefreshBtn", labelId: "engagementDateRange", updater: updateEngagementSection },
+            ];
+
+            sections.forEach(({ presetId, refreshId, labelId, updater }) => {
+                const presetEl = document.getElementById(presetId);
+                if (!presetEl) return;
+                const refreshEl = document.getElementById(refreshId);
+
+                const run = () => {
+                    const preset = presetEl.value;
+                    const range = calculateDateRange(preset);
+                    updateRangeLabel({ start: range.start, end: range.end, preset, targetId: labelId });
+                    updater({ range, preset });
+                };
+
+                presetEl.addEventListener("change", run);
+                if (refreshEl) {
+                    refreshEl.addEventListener("click", (event) => {
+                        event.preventDefault();
+                        run();
+                    });
+                }
+
+                run();
+            });
+        }
+
         // Fetch real data from APIs
         async function fetchDashboardData() {
             try {
@@ -1852,39 +2020,52 @@
             };
         }
 
-        function updateDateRangeDisplay(start, end) {
+        const PRESET_LABELS = {
+            last_7_days: "Last 7 days",
+            last_30_days: "Last 30 days",
+            month_to_date: "Month to date",
+            quarter_to_date: "Quarter to date",
+            year_to_date: "Year to date",
+            last_12_months: "Last 12 months",
+        };
+
+        function formatShortDate(date) {
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            return `${months[date.getMonth()]} ${date.getDate()}`;
+        }
+
+        function getDaySpan(start, end) {
             const startDate = new Date(start);
             const endDate = new Date(end);
-            const preset = document.getElementById('datePreset').value;
-            
-            const formatDate = (date) => {
-                const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-                return `${months[date.getMonth()]} ${date.getDate()}`;
-            };
-            
-            // Calculate days difference
-            const daysDiff = Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-            
-            // Get preset label
-            const presetLabels = {
-                'last_7_days': 'Last 7 days',
-                'last_30_days': 'Last 30 days',
-                'month_to_date': 'Month to date',
-                'quarter_to_date': 'Quarter to date',
-                'year_to_date': 'Year to date',
-                'last_12_months': 'Last 12 months'
-            };
-            
-            const label = presetLabels[preset] || `Last ${daysDiff} days`;
-            const displayText = `${label} (${formatDate(startDate)} - ${formatDate(endDate)})`;
-            document.getElementById('dateRangeDisplay').textContent = displayText;
-            
-            // Update all card labels
-            document.querySelectorAll('.card-label').forEach(el => {
-                if (el.textContent.includes('Last') || el.textContent.includes('days')) {
-                    el.textContent = label;
-                }
-            });
+            return Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
+        }
+
+        function updateRangeLabel({ start, end, preset, targetId = "dateRangeDisplay", updateCardLabels = false }) {
+            const startDate = new Date(start);
+            const endDate = new Date(end);
+            const daysDiff = getDaySpan(start, end);
+            const label = PRESET_LABELS[preset] || `Last ${daysDiff} days`;
+            const displayText = `${label} (${formatShortDate(startDate)} - ${formatShortDate(endDate)})`;
+
+            const target = document.getElementById(targetId);
+            if (target) {
+                target.textContent = displayText;
+            }
+
+            if (updateCardLabels) {
+                document.querySelectorAll(".card-label").forEach((el) => {
+                    if (el.textContent.includes("Last") || el.textContent.includes("days")) {
+                        el.textContent = label;
+                    }
+                });
+            }
+
+            return label;
+        }
+
+        function updateDateRangeDisplay(start, end) {
+            const preset = document.getElementById("datePreset").value;
+            updateRangeLabel({ start, end, preset, targetId: "dateRangeDisplay", updateCardLabels: true });
         }
 
         function updateDashboard(adsData, socialData, websiteData) {
@@ -2044,6 +2225,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log('Page loaded, initializing...');
             initCharts();
+            setupSectionFilters();
             fetchDashboardData();
         });
     </script>
