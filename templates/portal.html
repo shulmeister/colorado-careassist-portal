@@ -1362,7 +1362,7 @@
                 // Regular tool card
                 const isClientSatisfaction = tool.name === "Client Satisfaction";
                 const linkHref = isClientSatisfaction ? "/client-satisfaction" : tool.url;
-                const isLargeLogo = ['RingCentral', 'Predis.ai', 'QuickBooks', 'Google Ads', 'Adams Keegan Efficenter'].includes(tool.name);
+                const isLargeLogo = ['RingCentral', 'QuickBooks', 'Google Ads', 'Adams Keegan Efficenter'].includes(tool.name);
                 const logoClass = isLargeLogo ? 'large-logo' : '';
                 
                 const iconHtml = tool.icon && tool.icon.startsWith('http') 
