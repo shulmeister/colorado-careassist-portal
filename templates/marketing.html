@@ -1372,11 +1372,19 @@
                 return true;
             };
 
+            const handleTabChange = (targetId) => {
+                if (!targetId) return;
+                const linkForTab = sidebarLinks.find(
+                    (link) => normalizeId(link.getAttribute('data-tab-target') || link.getAttribute('data-tab')) === targetId,
+                );
+                if (setActiveTab(targetId) && linkForTab) {
+                    setActiveLink(linkForTab);
+                }
+            };
+
             sidebarLinks.forEach((link) => {
                 link.addEventListener('click', (event) => {
                     if (link.classList.contains('disabled')) return;
-
-                    event.preventDefault();
 
                     const rawTarget = link.getAttribute('data-tab-target') || link.getAttribute('data-tab');
                     const targetId = normalizeId(rawTarget);
@@ -1386,13 +1394,21 @@
                         return;
                     }
 
-                    if (setActiveTab(targetId)) {
-                        setActiveLink(link);
-                        if (window.location.hash !== `#${targetId}`) {
-                            history.replaceState(null, '', `#${targetId}`);
-                        }
+                    handleTabChange(targetId);
+                    if (window.location.hash !== `#${targetId}`) {
+                        window.location.hash = targetId;
                     }
+
+                    event.preventDefault();
                 });
+            });
+
+            window.addEventListener('hashchange', () => {
+                const newHash = window.location.hash.replace('#', '');
+                const normalized = normalizeId(newHash);
+                if (normalized) {
+                    handleTabChange(normalized);
+                }
             });
 
             const initialHash = window.location.hash.replace('#', '');
@@ -1401,12 +1417,9 @@
                 sidebarLinks.find((link) => normalizeId(link.getAttribute('data-tab-target') || link.getAttribute('data-tab')) === initialTabId) ||
                 sidebarLinks.find((link) => link.classList.contains('active'));
 
-            setActiveTab(initialTabId);
-            if (initialLink) {
-                setActiveLink(initialLink);
-            }
-            if (initialTabId && window.location.hash !== `#${initialTabId}`) {
-                history.replaceState(null, '', `#${initialTabId}`);
+            handleTabChange(initialTabId);
+            if (!window.location.hash && initialTabId) {
+                window.location.hash = initialTabId;
             }
         })();
     </script>
