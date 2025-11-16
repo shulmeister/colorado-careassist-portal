@@ -1384,22 +1384,13 @@
 
             sidebarLinks.forEach((link) => {
                 link.addEventListener('click', (event) => {
-                    if (link.classList.contains('disabled')) return;
-
-                    const rawTarget = link.getAttribute('data-tab-target') || link.getAttribute('data-tab');
-                    const targetId = normalizeId(rawTarget);
-
-                    if (!targetId) {
-                        console.warn('No tab target defined for link:', link);
+                    if (link.classList.contains('disabled')) {
+                        event.preventDefault();
                         return;
                     }
-
+                    const rawTarget = link.getAttribute('data-tab-target') || link.getAttribute('data-tab');
+                    const targetId = normalizeId(rawTarget);
                     handleTabChange(targetId);
-                    if (window.location.hash !== `#${targetId}`) {
-                        window.location.hash = targetId;
-                    }
-
-                    event.preventDefault();
                 });
             });
 
@@ -1418,9 +1409,6 @@
                 sidebarLinks.find((link) => link.classList.contains('active'));
 
             handleTabChange(initialTabId);
-            if (!window.location.hash && initialTabId) {
-                window.location.hash = initialTabId;
-            }
         })();
     </script>
     
