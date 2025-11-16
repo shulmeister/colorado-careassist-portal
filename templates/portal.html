@@ -1272,6 +1272,8 @@
                 }
                 
                 // Regular tool card
+                const isClientSatisfaction = tool.name === "Client Satisfaction";
+                const linkHref = isClientSatisfaction ? "/client-satisfaction" : tool.url;
                 const isLargeLogo = ['RingCentral', 'Predis.ai', 'QuickBooks', 'Google Ads', 'Adams Keegan Efficenter'].includes(tool.name);
                 const logoClass = isLargeLogo ? 'large-logo' : '';
                 
@@ -1282,11 +1284,11 @@
                     : `<div class="tool-icon"><span>${tool.icon || '🔗'}</span></div>`;
                 
                 // Internal routes (start with /) should open in same window, external URLs in new tab
-                const isInternalRoute = tool.url.startsWith('/');
+                const isInternalRoute = linkHref.startsWith('/');
                 const targetAttr = isInternalRoute ? '' : 'target="_blank"';
                 
                 return `
-                    <a href="${tool.url}" ${targetAttr} class="tool-card" onclick="trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return true;">
+                    <a href="${linkHref}" ${targetAttr} class="tool-card" onclick="trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return true;">
                         ${iconHtml}
                         <div class="tool-name">${tool.name}</div>
                         ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}

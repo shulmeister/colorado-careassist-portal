@@ -10,7 +10,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date as date_cls
 import httpx
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote_plus
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
 from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher
@@ -40,6 +40,11 @@ RINGCENTRAL_EMBED_DEFAULT_TAB = os.getenv("RINGCENTRAL_EMBED_DEFAULT_TAB", "mess
 RINGCENTRAL_EMBED_REDIRECT_URI = os.getenv(
     "RINGCENTRAL_EMBED_REDIRECT_URI",
     "https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html"
+)
+
+CLIENT_SATISFACTION_APP_URL = os.getenv(
+    "CLIENT_SATISFACTION_URL",
+    "https://client-satisfaction-15d412babc2f.herokuapp.com/",
 )
 
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
@@ -832,7 +837,6 @@ async def recruitment_dashboard_embedded(
     session_token = request.cookies.get("session_token", "")
     
     # Append session token as query parameter (Recruiter Dashboard needs to accept this)
-    from urllib.parse import urlencode, quote_plus
     if session_token:
         separator = "&" if "?" in recruitment_dashboard_url else "?"
         # URL encode the token to handle special characters
@@ -849,6 +853,40 @@ async def recruitment_dashboard_embedded(
         "user": current_user,
         "recruitment_url": recruitment_url_with_auth
     })
+
+
+@app.get("/client-satisfaction", response_class=HTMLResponse)
+async def client_satisfaction_embedded(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Embedded Client Satisfaction tracker (iframe)"""
+    tracker_url = CLIENT_SATISFACTION_APP_URL
+
+    session_token = request.cookies.get("session_token", "")
+    if session_token:
+        separator = "&" if "?" in tracker_url else "?"
+        encoded_token = quote_plus(session_token)
+        encoded_email = quote_plus(current_user.get("email", ""))
+        tracker_url_with_auth = (
+            f"{tracker_url}{separator}portal_token={encoded_token}&portal_user_email={encoded_email}"
+        )
+        logger.info(
+            "Passing portal token to Client Satisfaction tracker for user: %s",
+            current_user.get("email"),
+        )
+    else:
+        logger.warning("No session token found - Client Satisfaction tracker will require login")
+        tracker_url_with_auth = tracker_url
+
+    return templates.TemplateResponse(
+        "client_satisfaction_embedded.html",
+        {
+            "request": request,
+            "user": current_user,
+            "tracker_url": tracker_url_with_auth,
+        },
+    )
 
 
 @app.get("/connections", response_class=HTMLResponse)
