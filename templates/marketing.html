@@ -1346,47 +1346,64 @@
 
     <script>
         // Tab switching functionality
-        document.querySelectorAll('.sidebar-link').forEach(link => {
-            link.addEventListener('click', function(e) {
-                if (this.classList.contains('disabled')) return;
-                
-                e.preventDefault();
-                const tab = this.getAttribute('data-tab');
-                console.log('Switching to tab:', tab);
-                
-                // Update active link
-                document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Update active tab
-                document.querySelectorAll('.tab-content').forEach(t => {
-                    t.classList.remove('active');
-                    console.log('Hiding tab:', t.id);
-                });
-                
-                const targetTab = document.getElementById('tab-' + tab);
-                if (targetTab) {
-                    targetTab.classList.add('active');
-                    console.log('Showing tab:', targetTab.id);
-                    console.log('Tab element:', targetTab);
-                    console.log('Tab display style:', window.getComputedStyle(targetTab).display);
-                    console.log('Tab visibility:', window.getComputedStyle(targetTab).visibility);
-                    console.log('Tab height:', targetTab.offsetHeight);
-                    console.log('Tab scrollHeight:', targetTab.scrollHeight);
-                    console.log('Tab has children:', targetTab.children.length);
-                    
-                    // Check children
-                    Array.from(targetTab.children).forEach((child, idx) => {
-                        console.log(`  Child ${idx}:`, child.className, 'height:', child.offsetHeight, 'display:', window.getComputedStyle(child).display);
-                    });
-                } else {
-                    console.error('Tab not found: tab-' + tab);
+        (function () {
+            const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-link'));
+            const tabSections = Array.from(document.querySelectorAll('.tab-content'));
+            const normalizeId = (value) => {
+                if (!value) return null;
+                return value.startsWith('tab-') ? value : `tab-${value}`;
+            };
+
+            let currentTabId = tabSections.find((section) => section.classList.contains('active'))?.id || 'tab-overview';
+
+            const setActiveLink = (link) => {
+                sidebarLinks.forEach((item) => item.classList.toggle('active', item === link));
+            };
+
+            const setActiveTab = (tabId) => {
+                const target = document.getElementById(tabId);
+                if (!target) {
+                    console.warn('Tab not found:', tabId);
+                    return false;
                 }
+                tabSections.forEach((section) => section.classList.toggle('active', section === target));
+                currentTabId = tabId;
+                return true;
+            };
+
+            sidebarLinks.forEach((link) => {
+                link.addEventListener('click', (event) => {
+                    if (link.classList.contains('disabled')) return;
+
+                    event.preventDefault();
+
+                    const rawTarget = link.getAttribute('data-tab-target') || link.getAttribute('data-tab');
+                    const targetId = normalizeId(rawTarget);
+
+                    if (!targetId) {
+                        console.warn('No tab target defined for link:', link);
+                        return;
+                    }
+
+                    if (setActiveTab(targetId)) {
+                        setActiveLink(link);
+                        const hashValue = targetId.replace(/^tab-/, '');
+                        history.replaceState(null, '', `#${hashValue}`);
+                    }
+                });
             });
-        });
-        
-        console.log('Tab switching initialized. Available tabs:', 
-            Array.from(document.querySelectorAll('.tab-content')).map(t => t.id));
+
+            const initialHash = window.location.hash.replace('#', '');
+            const initialTabId = normalizeId(initialHash) || currentTabId;
+            const initialLink =
+                sidebarLinks.find((link) => normalizeId(link.getAttribute('data-tab-target') || link.getAttribute('data-tab')) === initialTabId) ||
+                sidebarLinks.find((link) => link.classList.contains('active'));
+
+            setActiveTab(initialTabId);
+            if (initialLink) {
+                setActiveLink(initialLink);
+            }
+        })();
     </script>
     
     <script>
