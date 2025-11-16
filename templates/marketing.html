@@ -133,7 +133,8 @@
             width: 100%;
         }
 
-        .tab-content.active {
+        .tab-content.active,
+        .tab-content:target {
             display: flex !important;
             flex-direction: column !important;
             visibility: visible !important;
@@ -497,13 +498,13 @@
             </div>
             
             <nav class="sidebar-nav">
-                <a class="sidebar-link active" data-tab="overview"><span class="icon">📊</span> Overview</a>
-                <a class="sidebar-link" data-tab="social"><span class="icon">📱</span> Social Performance</a>
-                <a class="sidebar-link" data-tab="paid-media"><span class="icon">🎯</span> Paid Media</a>
-                <a class="sidebar-link" data-tab="email"><span class="icon">📧</span> Email Marketing</a>
-                <a class="sidebar-link" data-tab="website"><span class="icon">🌐</span> Website & GBP</a>
-                <a class="sidebar-link" data-tab="engagement"><span class="icon">💬</span> Engagement</a>
-                <a class="sidebar-link disabled" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
+                <a class="sidebar-link active" href="#tab-overview" data-tab="overview"><span class="icon">📊</span> Overview</a>
+                <a class="sidebar-link" href="#tab-social" data-tab="social"><span class="icon">📱</span> Social Performance</a>
+                <a class="sidebar-link" href="#tab-paid-media" data-tab="paid-media"><span class="icon">🎯</span> Paid Media</a>
+                <a class="sidebar-link" href="#tab-email" data-tab="email"><span class="icon">📧</span> Email Marketing</a>
+                <a class="sidebar-link" href="#tab-website" data-tab="website"><span class="icon">🌐</span> Website & GBP</a>
+                <a class="sidebar-link" href="#tab-engagement" data-tab="engagement"><span class="icon">💬</span> Engagement</a>
+                <a class="sidebar-link disabled" href="#tab-settings" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
             </nav>
         </aside>
         
