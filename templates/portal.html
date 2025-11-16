@@ -860,6 +860,34 @@
             var firstScript = document.getElementsByTagName("script")[0];
             firstScript.parentNode.insertBefore(rcs, firstScript);
         })();
+
+        (function setupRingCentralAutoMinimize() {
+            var minimizeRequested = false;
+            function requestMinimize() {
+                if (minimizeRequested) {
+                    return;
+                }
+                minimizeRequested = true;
+                window.postMessage({
+                    type: "rc-adapter-syncMinimized",
+                    minimized: true
+                }, "*");
+            }
+
+            window.addEventListener("message", function(event) {
+                if (!event || !event.data || minimizeRequested) {
+                    return;
+                }
+                var evtType = event.data.type || "";
+                if (evtType === "rc-adapter-pushAdapterState" || evtType === "rc-login-status-notify") {
+                    requestMinimize();
+                }
+            });
+
+            window.addEventListener("load", function() {
+                setTimeout(requestMinimize, 3000);
+            });
+        })();
     </script>
     {% endif %}
 </head>
