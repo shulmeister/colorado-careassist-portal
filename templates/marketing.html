@@ -135,21 +135,6 @@
             height: auto;
             min-height: 600px;
         }
-
-        .has-tabs .tab-content {
-            display: none;
-        }
-
-        .has-tabs .tab-content.active,
-        .tab-content:target {
-            display: flex !important;
-            flex-direction: column !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            width: 100%;
-            height: auto;
-            min-height: 600px;
-        }
         
         /* Main Content */
         .content {
@@ -1363,9 +1348,6 @@
             };
 
             let currentTabId = tabSections.find((section) => section.classList.contains('active'))?.id || 'tab-overview';
-            if (tabSections.length) {
-                document.body.classList.add('has-tabs');
-            }
 
             const setActiveLink = (link) => {
                 sidebarLinks.forEach((item) => item.classList.toggle('active', item === link));
@@ -1398,9 +1380,18 @@
                         event.preventDefault();
                         return;
                     }
+
+                    const hrefTarget = link.getAttribute('href');
                     const rawTarget = link.getAttribute('data-tab-target') || link.getAttribute('data-tab');
                     const targetId = normalizeId(rawTarget);
-                    handleTabChange(targetId);
+
+                    if (targetId && hrefTarget !== `#${targetId}`) {
+                        link.setAttribute('href', `#${targetId}`);
+                    }
+
+                    if (targetId) {
+                        handleTabChange(targetId);
+                    }
                 });
             });
 
