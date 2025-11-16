@@ -1388,8 +1388,9 @@
 
                     if (setActiveTab(targetId)) {
                         setActiveLink(link);
-                        const hashValue = targetId.replace(/^tab-/, '');
-                        history.replaceState(null, '', `#${hashValue}`);
+                        if (window.location.hash !== `#${targetId}`) {
+                            history.replaceState(null, '', `#${targetId}`);
+                        }
                     }
                 });
             });
@@ -1403,6 +1404,9 @@
             setActiveTab(initialTabId);
             if (initialLink) {
                 setActiveLink(initialLink);
+            }
+            if (initialTabId && window.location.hash !== `#${initialTabId}`) {
+                history.replaceState(null, '', `#${initialTabId}`);
             }
         })();
     </script>
