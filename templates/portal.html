@@ -481,52 +481,79 @@
             margin-top: 12px;
         }
 
-        /* AI Tools Dropdown Styles */
+        /* AI Tools tile */
         .ai-tools-card {
-            position: relative;
             cursor: pointer;
+            position: relative;
+            overflow: hidden;
         }
 
-        .ai-tools-dropdown {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 8px;
-            margin-top: 8px;
-            padding: 8px;
-            display: none;
-            z-index: 100;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        .ai-tools-preview {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            margin-top: 12px;
         }
 
-        .ai-tools-card.active .ai-tools-dropdown {
-            display: block;
+        .ai-tool-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            color: #cbd5f5;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            backdrop-filter: blur(6px);
         }
 
-        .ai-tools-option {
-            display: block;
-            padding: 10px 12px;
-            color: #f1f5f9;
+        .ai-tools-hint {
+            margin-top: 14px;
+            font-size: 12px;
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0.85;
+        }
+
+        .ai-tools-hint span {
+            font-size: 14px;
+        }
+
+        /* AI Tools modal */
+        .ai-tools-modal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .ai-tools-modal-card {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 16px;
+            border-radius: 12px;
             text-decoration: none;
-            border-radius: 6px;
-            transition: background 0.2s ease;
-            font-size: 13px;
-            margin-bottom: 4px;
+            color: #f1f5f9;
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.85));
+            border: 1px solid rgba(96, 165, 250, 0.25);
+            transition: transform 0.2s ease, border-color 0.2s ease;
         }
 
-        .ai-tools-option:hover {
-            background: #334155;
+        .ai-tools-modal-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(96, 165, 250, 0.65);
         }
 
-        .ai-tools-option:last-child {
-            margin-bottom: 0;
+        .ai-tools-modal-card span {
+            font-size: 30px;
         }
 
-        .ai-tools-option-icon {
-            margin-right: 8px;
+        .ai-tools-modal-card small {
+            font-size: 12px;
+            color: #94a3b8;
         }
 
         /* Modal styles */
@@ -1161,6 +1188,46 @@
         </div>
     </div>
 
+    <!-- AI Tools Modal -->
+    <div id="aiToolsModal" class="modal">
+        <div class="modal-content" style="max-width: 640px;">
+            <div class="modal-header">
+                <h2>AI Toolbox</h2>
+                <button class="modal-close" onclick="closeAIToolsModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: #94a3b8; margin-bottom: 20px;">
+                    Pick an assistant to open in a new tab. Use the portal sidebar to jump back anytime.
+                </p>
+                <div class="ai-tools-modal-grid">
+                    <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" onclick="trackToolClick(0, 'ChatGPT', 'https://chatgpt.com/');">
+                        <span>💬</span>
+                        <strong>ChatGPT</strong>
+                        <small>OpenAI conversational assistant</small>
+                    </a>
+                    <a href="https://gemini.google.com/app" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" onclick="trackToolClick(0, 'Gemini', 'https://gemini.google.com/app');">
+                        <span>✨</span>
+                        <strong>Gemini</strong>
+                        <small>Google multimodal AI workspace</small>
+                    </a>
+                    <a href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" onclick="trackToolClick(0, 'Claude', 'https://claude.ai/new');">
+                        <span>🧠</span>
+                        <strong>Claude</strong>
+                        <small>Anthropic assistant for long docs</small>
+                    </a>
+                    <a href="https://grok.com/" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" onclick="trackToolClick(0, 'Grok', 'https://grok.com/');">
+                        <span>🚀</span>
+                        <strong>Grok</strong>
+                        <small>xAI real-time Grok answers</small>
+                    </a>
+                </div>
+            </div>
+            <div class="modal-actions" style="justify-content: center;">
+                <button class="btn btn-secondary" onclick="closeAIToolsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentTools = [];
         let isAdmin = false; // In production, check user role
@@ -1221,28 +1288,21 @@
             }
 
             grid.innerHTML = currentTools.map(tool => {
-                // Special handling for AI Tools dropdown
+                // Special handling for AI Tools quick launcher
                 if (tool.name === "AI Tools" && tool.url === "#ai-tools-dropdown") {
                     return `
-                        <div class="tool-card ai-tools-card" onclick="toggleAIToolsDropdown(event, this);">
-                            <span class="tool-icon">${tool.icon || '🤖'}</span>
+                        <div class="tool-card ai-tools-card" onclick="openAIToolsModal(); trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return false;">
+                            <div class="tool-icon"><span>${tool.icon || '🤖'}</span></div>
                             <div class="tool-name">${tool.name}</div>
                             ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
                             ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
-                            <div class="ai-tools-dropdown" onclick="event.stopPropagation();">
-                                <a href="https://chatgpt.com/" target="_blank" class="ai-tools-option" onclick="trackToolClick(0, 'ChatGPT', 'https://chatgpt.com/');">
-                                    <span class="ai-tools-option-icon">💬</span> ChatGPT
-                                </a>
-                                <a href="https://gemini.google.com/app" target="_blank" class="ai-tools-option" onclick="trackToolClick(0, 'Gemini', 'https://gemini.google.com/app');">
-                                    <span class="ai-tools-option-icon">✨</span> Gemini
-                                </a>
-                                <a href="https://grok.com/" target="_blank" class="ai-tools-option" onclick="trackToolClick(0, 'Grok', 'https://grok.com/');">
-                                    <span class="ai-tools-option-icon">🚀</span> Grok
-                                </a>
-                                <a href="https://claude.ai/new" target="_blank" class="ai-tools-option" onclick="trackToolClick(0, 'Claude', 'https://claude.ai/new');">
-                                    <span class="ai-tools-option-icon">🧠</span> Claude
-                                </a>
+                            <div class="ai-tools-preview">
+                                <div class="ai-tool-chip"><span>💬</span>ChatGPT</div>
+                                <div class="ai-tool-chip"><span>✨</span>Gemini</div>
+                                <div class="ai-tool-chip"><span>🧠</span>Claude</div>
+                                <div class="ai-tool-chip"><span>🚀</span>Grok</div>
                             </div>
+                            <div class="ai-tools-hint"><span>↗</span>Quick launcher</div>
                         </div>
                     `;
                 }
@@ -1492,6 +1552,14 @@
             document.getElementById('weatherModal').classList.remove('show');
         }
 
+        function openAIToolsModal() {
+            document.getElementById('aiToolsModal').classList.add('show');
+        }
+
+        function closeAIToolsModal() {
+            document.getElementById('aiToolsModal').classList.remove('show');
+        }
+
         async function getCurrentLocationWeather() {
             const weatherContent = document.getElementById('weatherContent');
             weatherContent.innerHTML = `
@@ -1672,6 +1740,13 @@
         document.getElementById('jokeModal')?.addEventListener('click', function(e) {
             if (e.target.id === 'jokeModal') {
                 closeJokeModal();
+            }
+        });
+
+        // Close AI tools modal on outside click
+        document.getElementById('aiToolsModal')?.addEventListener('click', function(e) {
+            if (e.target.id === 'aiToolsModal') {
+                closeAIToolsModal();
             }
         });
 
@@ -2093,31 +2168,6 @@
         window.addEventListener('beforeunload', () => {
             trackSessionEnd();
         });
-
-        // Close AI Tools dropdown when clicking outside
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.ai-tools-card')) {
-                document.querySelectorAll('.ai-tools-card').forEach(card => {
-                    card.classList.remove('active');
-                });
-            }
-        });
-
-        // Toggle AI Tools dropdown
-        function toggleAIToolsDropdown(event, element) {
-            event.stopPropagation();
-            const isActive = element.classList.contains('active');
-            
-            // Close all other dropdowns
-            document.querySelectorAll('.ai-tools-card').forEach(card => {
-                card.classList.remove('active');
-            });
-            
-            // Toggle this one
-            if (!isActive) {
-                element.classList.add('active');
-            }
-        }
 
         // Drag and drop functionality
         let draggedElement = null;
