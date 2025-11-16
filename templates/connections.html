@@ -549,8 +549,8 @@
 
         function connectMetaAds() {
             alert('Connecting to Meta Ads...\n\nThis will open a new window for OAuth authentication.');
-            // TODO: Implement OAuth flow
-            window.open('/auth/meta-ads', 'meta_ads_auth', 'width=600,height=700');
+            // Facebook/Meta OAuth flow uses the "facebook" service key on the backend
+            window.open('/auth/facebook', 'meta_ads_auth', 'width=600,height=700');
         }
 
         function connectMailchimp() {
