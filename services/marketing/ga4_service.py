@@ -120,6 +120,7 @@ class GA4Service:
                 "users_over_time": users_over_time,
                 "sessions_by_source": sessions_by_source,
                 "conversions_by_source": conversions_by_source,
+                "conversion_paths": self._build_conversion_paths(conversions_by_source),
                 "sessions_by_medium": sessions_by_medium,
                 "top_pages": top_pages,
             }
@@ -309,6 +310,22 @@ class GA4Service:
             logger.error(f"Error fetching top pages: {e}")
             return []
 
+    @staticmethod
+    def _build_conversion_paths(conversions_by_source: Dict[str, int]) -> List[Dict[str, Any]]:
+        """Build simple conversion-path snippets from source data."""
+        if not conversions_by_source:
+            return []
+        sorted_sources = sorted(
+            conversions_by_source.items(),
+            key=lambda item: item[1],
+            reverse=True,
+        )
+        paths = []
+        for source, value in sorted_sources[:5]:
+            path_label = f"{source} → conversion"
+            paths.append({"path": path_label, "conversions": value})
+        return paths
+
     def _get_mock_data(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """Return mock data for testing."""
         return {
@@ -341,6 +358,11 @@ class GA4Service:
                 "fb": 6,
                 "l.facebook.com": 1
             },
+            "conversion_paths": [
+                {"path": "google / cpc → direct", "conversions": 14},
+                {"path": "facebook / referral → direct", "conversions": 9},
+                {"path": "direct / none", "conversions": 6},
+            ],
             "sessions_by_medium": [
                 {"date": "2025-10-12", "none": 2, "cpc": 1, "paid": 0, "referral": 1, "organic": 0},
                 {"date": "2025-10-16", "none": 3, "cpc": 2, "paid": 1, "referral": 0, "organic": 1},

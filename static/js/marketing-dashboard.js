@@ -30,6 +30,11 @@
         'engagementRefreshBtn',
     ];
 
+    const BENCHMARKS = {
+        targetRoas: 3.5,
+        targetDailySpend: 450,
+    };
+
     const charts = {
         roas: null,
         costPerf: null,
@@ -56,6 +61,7 @@
         latestGa4Data: null,
         googleCampaigns: [],
         facebookCampaigns: [],
+        conversionPaths: [],
     };
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -540,7 +546,15 @@
         const labels = daily.map((entry) => formatChartLabel(entry.date));
 
         updateLineChart(charts.roas, labels, daily.map((entry) => roundNumber(entry.roas, 2)));
+        if (charts.roas?.data?.datasets?.[1]) {
+            charts.roas.data.datasets[1].data = labels.map(() => BENCHMARKS.targetRoas);
+            charts.roas.update();
+        }
         updateLineChart(charts.costPerf, labels, daily.map((entry) => roundNumber(entry.spend, 2)));
+        if (charts.costPerf?.data?.datasets?.[1]) {
+            charts.costPerf.data.datasets[1].data = labels.map(() => BENCHMARKS.targetDailySpend);
+            charts.costPerf.update();
+        }
         updateLineChart(charts.costConv, labels, daily.map((entry) => roundNumber(entry.cost_per_conversion, 2)));
         updateLineChart(charts.impressions, labels, daily.map((entry) => entry.impressions || 0));
         updateLineChart(charts.interactionsClicks, labels, daily.map((entry) => entry.clicks || 0));
@@ -586,15 +600,21 @@
     function updateCampaignEfficiencyChart(googleCampaigns, facebookCampaigns) {
         if (!charts.campaignEfficiency) return;
 
-        const normalize = (campaign) => ({
+        const normalize = (campaign, index, source) => ({
             x: campaign.spend || 0,
             y: campaign.conversions || 0,
             r: Math.max(4, Math.sqrt(Math.max(campaign.clicks || 0, 0))),
             campaign: campaign.name || 'Campaign',
+            source,
+            campaignIndex: index,
         });
 
-        charts.campaignEfficiency.data.datasets[0].data = (googleCampaigns || []).map(normalize);
-        charts.campaignEfficiency.data.datasets[1].data = (facebookCampaigns || []).map(normalize);
+        charts.campaignEfficiency.data.datasets[0].data = (googleCampaigns || []).map((campaign, index) =>
+            normalize(campaign, index, 'google'),
+        );
+        charts.campaignEfficiency.data.datasets[1].data = (facebookCampaigns || []).map((campaign, index) =>
+            normalize(campaign, index, 'facebook'),
+        );
         charts.campaignEfficiency.update();
     }
 
@@ -688,6 +708,7 @@
 
         updateWebsiteCharts(ga4, gbp);
         state.latestGa4Data = ga4;
+        state.conversionPaths = Array.isArray(ga4.conversion_paths) ? ga4.conversion_paths : [];
         updateAttributionChart();
     }
 
@@ -816,7 +837,25 @@
         }
 
         charts.roas = createLineChart('roasChart', '#34d399', 'ROAS');
+        charts.roas.data.datasets.push({
+            label: 'Target ROAS',
+            data: [],
+            borderColor: 'rgba(248, 250, 252, 0.5)',
+            borderDash: [6, 4],
+            borderWidth: 1,
+            pointRadius: 0,
+        });
+        charts.roas.update();
         charts.costPerf = createLineChart('costPerfChart', '#22c55e', 'Spend');
+        charts.costPerf.data.datasets.push({
+            label: 'Target Spend',
+            data: [],
+            borderColor: 'rgba(148, 163, 184, 0.6)',
+            borderDash: [6, 4],
+            borderWidth: 1,
+            pointRadius: 0,
+        });
+        charts.costPerf.update();
         charts.costConv = createLineChart('costConvChart', '#bef264', 'Cost/Conv.');
         charts.impressions = createLineChart('impressionsChart', '#38bdf8', 'Impressions');
         charts.sessions = createLineChart('sessionsChart', '#818cf8', 'Sessions');
@@ -1095,6 +1134,24 @@
                         },
                     },
                 },
+                onClick(event, elements) {
+                    if (!elements.length) return;
+                    const element = elements[0];
+                    const dataset = this.data.datasets[element.datasetIndex];
+                    const point = dataset.data[element.index];
+                    if (!point) return;
+                    if (point.source === 'google') {
+                        const campaign = state.googleCampaigns[point.campaignIndex];
+                        if (campaign) {
+                            openCampaignDrilldown('Google Ads', campaign);
+                        }
+                    } else if (point.source === 'facebook') {
+                        const campaign = state.facebookCampaigns[point.campaignIndex];
+                        if (campaign) {
+                            openCampaignDrilldown('Facebook Ads', campaign);
+                        }
+                    }
+                },
             },
         });
     }
@@ -1126,16 +1183,36 @@
             { label: 'CTR', value: campaign.ctr ? `${campaign.ctr.toFixed(2)}%` : '—' },
         ];
 
-        body.innerHTML = fields
+        let html = fields
             .map(
                 (field) => `
-                <div class="stats-row">
-                    <div class="stats-label">${field.label}</div>
-                    <div class="stats-value">${field.value}</div>
-                </div>
-            `,
+                    <div class="stats-row">
+                        <div class="stats-label">${field.label}</div>
+                        <div class="stats-value">${field.value}</div>
+                    </div>
+                `,
             )
             .join('');
+
+        if (state.conversionPaths?.length) {
+            html += `
+                <div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px;"></div>
+                <div class="stats-label" style="margin-top:6px;">GA4 Conversion Paths</div>
+            `;
+            html += state.conversionPaths
+                .slice(0, 3)
+                .map(
+                    (entry) => `
+                        <div class="stats-row">
+                            <div class="stats-label">${entry.path}</div>
+                            <div class="stats-value">${formatNumber(entry.conversions)}</div>
+                        </div>
+                    `,
+                )
+                .join('');
+        }
+
+        body.innerHTML = html;
 
         panel.classList.add('active');
     }
