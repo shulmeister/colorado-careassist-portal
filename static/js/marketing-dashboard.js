@@ -33,6 +33,10 @@
     const BENCHMARKS = {
         targetRoas: 3.5,
         targetDailySpend: 450,
+        targetConversions: 50,
+        targetEmailOpen: 35,
+        targetEmailClick: 5,
+        targetSessions: 2000,
     };
 
     const charts = {
@@ -397,6 +401,7 @@
         const totalConversions = googleConversions + facebookConversions;
 
         setText('paidTotalSpend', formatCurrency(totalSpend, 2));
+        setTargetBadge('paidTotalSpend', totalSpend, BENCHMARKS.targetDailySpend * ((range?.days || 30) / 30));
         setText('paidGoogleSpend', formatCurrency(googleSpend, 2));
         setText('paidFacebookSpend', formatCurrency(facebookSpend, 2));
         setText('paidClicks', formatNumber(totalClicks));
@@ -404,6 +409,7 @@
         const blendedCpc = totalClicks ? totalSpend / totalClicks : null;
         setText('paidCPC', blendedCpc !== null ? formatCurrency(blendedCpc, 2) : '—');
         setText('paidConversions', formatNumber(totalConversions));
+        setTargetBadge('paidConversions', totalConversions, BENCHMARKS.targetConversions);
 
         const googleImpressions = safeNumber(google?.performance?.impressions) ?? 0;
         const facebookImpressions = safeNumber(facebookAccount?.impressions) ?? 0;
@@ -411,6 +417,7 @@
 
         const roasValue = safeNumber(google?.efficiency?.roas);
         setText('paidRoas', roasValue !== null ? `${roasValue.toFixed(2)}x` : '—');
+        setTargetBadge('paidRoas', roasValue, BENCHMARKS.targetRoas, true);
 
         const blendedCostPerConv = totalConversions ? totalSpend / totalConversions : null;
         setText('paidCostPerConv', blendedCostPerConv !== null ? formatCurrency(blendedCostPerConv, 2) : '—');
@@ -695,6 +702,7 @@
 
         if (ga4.sessions !== undefined) {
             setText('totalSessions', formatNumber(ga4.sessions));
+            setTargetBadge('totalSessions', ga4.sessions, BENCHMARKS.targetSessions);
         }
 
         setText('websiteSessions', formatNumber(ga4.sessions));
@@ -727,7 +735,9 @@
         setText('emailCampaigns', formatNumber(summary.campaigns_sent));
         setText('emailSubscribers', formatNumber(summary.total_contacts));
         setText('emailOpenRate', formatPercent(summary.open_rate));
+        setTargetBadge('emailOpenRate', summary.open_rate, BENCHMARKS.targetEmailOpen, true);
         setText('emailClickRate', formatPercent(summary.click_rate));
+        setTargetBadge('emailClickRate', summary.click_rate, BENCHMARKS.targetEmailClick, true);
         setText('emailDeliveryRate', formatPercent(summary.delivery_rate));
         setText('emailConversions', formatNumber(summary.conversions));
 
@@ -1358,6 +1368,24 @@
         const element = document.getElementById(id);
         if (!element) return;
         element.textContent = value ?? '—';
+    }
+
+    function setTargetBadge(id, metricValue, targetValue, isPercent = false) {
+        const element = document.getElementById(id);
+        if (!element || targetValue === undefined || metricValue === null || metricValue === undefined) return;
+
+        const diff = metricValue - targetValue;
+        const badge = document.createElement('span');
+        badge.className = 'target-badge';
+        const formattedDiff = isPercent ? `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}% vs target` : `${diff >= 0 ? '+' : ''}${formatCurrency(diff, 0)}`;
+        badge.textContent = formattedDiff;
+
+        const existingBadge = element.querySelector('.target-badge');
+        if (existingBadge) {
+            existingBadge.textContent = formattedDiff;
+        } else {
+            element.appendChild(badge);
+        }
     }
 
     function updatePill(id, text = '—') {
