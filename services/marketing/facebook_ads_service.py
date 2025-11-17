@@ -100,7 +100,7 @@ class FacebookAdsService:
                     if action.get("action_type") in ["purchase", "complete_registration", "lead", "submit_application"]:
                         total_conversions += int(action.get("value", 0))
             
-            return {
+            metrics = {
                 "spend": total_spend,
                 "impressions": total_impressions,
                 "clicks": total_clicks,
@@ -119,6 +119,8 @@ class FacebookAdsService:
                     for i in insights
                 ]
             }
+            metrics["daily"] = metrics["daily_breakdown"]
+            return metrics
             
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching Facebook Ads metrics: {e}")
@@ -194,11 +196,15 @@ class FacebookAdsService:
             logger.error(f"Unexpected error fetching campaigns: {e}")
             return []
     
+    def get_placeholder_account_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
+        """Public helper to expose placeholder metrics."""
+        return self._get_placeholder_metrics(start_date, end_date)
+
     def _get_placeholder_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """Return placeholder Facebook Ads metrics matching screenshot data"""
         days = (end_date - start_date).days + 1
         
-        return {
+        data = {
             "spend": 334.88,
             "impressions": 8930,
             "clicks": 529,
@@ -217,6 +223,8 @@ class FacebookAdsService:
                 for i in range(min(days, 30))
             ]
         }
+        data["daily"] = data["daily_breakdown"]
+        return data
 
 
 # Singleton instance
