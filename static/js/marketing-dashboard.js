@@ -65,6 +65,7 @@
         latestGa4Data: null,
         googleCampaigns: [],
         facebookCampaigns: [],
+        recentCampaigns: [],
         conversionPaths: [],
     };
 
@@ -1225,6 +1226,36 @@
         body.innerHTML = html;
 
         panel.classList.add('active');
+        recordRecentCampaign(sourceLabel, campaign);
+    }
+
+    function recordRecentCampaign(sourceLabel, campaign) {
+        const entry = {
+            source: sourceLabel,
+            name: campaign.name || 'Campaign',
+            timestamp: Date.now(),
+        };
+        state.recentCampaigns = [entry, ...state.recentCampaigns.filter((item) => item.name !== entry.name)].slice(0, 5);
+        renderRecentCampaigns();
+    }
+
+    function renderRecentCampaigns() {
+        const container = document.getElementById('recentCampaigns');
+        if (!container) return;
+        if (!state.recentCampaigns.length) {
+            container.innerHTML = `<div class="stats-row"><div class="stats-label">No recent campaigns</div></div>`;
+            return;
+        }
+        container.innerHTML = state.recentCampaigns
+            .map(
+                (entry) => `
+                    <div class="stats-row">
+                        <div class="stats-label">${entry.source}</div>
+                        <div class="stats-value">${entry.name}</div>
+                    </div>
+                `,
+            )
+            .join('');
     }
 
     function buildChartOptions({ stacked = false, legend = false } = {}) {
