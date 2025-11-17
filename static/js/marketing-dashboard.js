@@ -51,11 +51,17 @@
 
     const state = {
         preset: 'last_30_days',
+        selectedCampaign: null,
+        latestGoogleData: null,
+        latestGa4Data: null,
+        googleCampaigns: [],
+        facebookCampaigns: [],
     };
 
     document.addEventListener('DOMContentLoaded', () => {
         initTabNavigation();
         initCharts();
+        initDrilldownPanel();
         attachEventHandlers();
         const initialPreset = document.getElementById('datePreset')?.value || state.preset;
         state.preset = initialPreset;
@@ -145,6 +151,27 @@
             button.addEventListener('click', (event) => {
                 event.preventDefault();
                 fetchDashboardData(state.preset);
+            });
+        });
+    }
+
+    function attachCampaignRowHandlers() {
+        const rows = document.querySelectorAll('.campaign-row');
+        rows.forEach((row) => {
+            row.addEventListener('click', () => {
+                const source = row.getAttribute('data-source');
+                const index = Number(row.getAttribute('data-index'));
+                if (source === 'google') {
+                    const campaign = state.googleCampaigns[index];
+                    if (campaign) {
+                        openCampaignDrilldown('Google Ads', campaign);
+                    }
+                } else if (source === 'facebook') {
+                    const campaign = state.facebookCampaigns[index];
+                    if (campaign) {
+                        openCampaignDrilldown('Facebook Ads', campaign);
+                    }
+                }
             });
         });
     }
@@ -242,6 +269,7 @@
         updateAdsCharts(google);
         updatePaidDailyChart(google, facebookAccount);
         updateCampaignEfficiencyChart(google?.campaigns || [], facebookCampaigns);
+        state.latestGoogleData = google;
     }
 
     function renderGoogleOverview(google) {
@@ -303,6 +331,8 @@
     }
 
     function renderCampaignTables(googleCampaigns, facebookCampaigns) {
+        state.googleCampaigns = googleCampaigns;
+        state.facebookCampaigns = facebookCampaigns;
         const googleBody = document.getElementById('googleCampaignsTable');
         if (googleBody) {
             if (!googleCampaigns.length) {
@@ -311,7 +341,7 @@
                 googleBody.innerHTML = googleCampaigns.slice(0, 6).map((campaign, index) => {
                     const roasText = campaign.roas ? `${campaign.roas.toFixed(2)}x` : '—';
                     return `
-                        <tr>
+                        <tr class="campaign-row" data-source="google" data-index="${index}">
                             <td>${index + 1}</td>
                             <td>
                                 <span class="campaign-name">${campaign.name}</span>
@@ -333,7 +363,7 @@
                 facebookBody.innerHTML = `<tr><td colspan="5" class="empty-state-text">No Facebook campaigns found</td></tr>`;
             } else {
                 facebookBody.innerHTML = facebookCampaigns.slice(0, 6).map((campaign, index) => `
-                    <tr>
+                    <tr class="campaign-row" data-source="facebook" data-index="${index}">
                         <td>${index + 1}</td>
                         <td class="campaign-name">${campaign.name}</td>
                         <td>${formatCurrency(campaign.spend, 2)}</td>
@@ -343,6 +373,8 @@
                 `).join('');
             }
         }
+
+        attachCampaignRowHandlers();
     }
 
     function renderPaidSummary(google, facebookAccount, range, preset) {
@@ -392,6 +424,72 @@
 
         updatePaidCampaignStats(google?.campaigns || []);
         updatePaidSpendChart(googleSpend, facebookSpend);
+        renderPaidAlerts(evaluatePaidAlerts({
+            roasValue,
+            conversionRate,
+            blendedCpc,
+            blendedCostPerConv,
+            blendedCpm,
+            facebookDelivery: facebookAccount?.delivery_rate,
+            facebookCtr: facebookAccount?.ctr,
+        }));
+    }
+
+    function evaluatePaidAlerts(metrics) {
+        const alerts = [];
+        if (metrics.roasValue !== null && metrics.roasValue < 2) {
+            alerts.push({ level: 'warning', message: `ROAS trending low at ${metrics.roasValue.toFixed(2)}x` });
+        }
+        if (metrics.blendedCostPerConv !== null && metrics.blendedCostPerConv > 300) {
+            alerts.push({ level: 'critical', message: `Cost per conversion spiked to ${formatCurrency(metrics.blendedCostPerConv, 2)}` });
+        }
+        if (metrics.conversionRate !== null && metrics.conversionRate < 2) {
+            alerts.push({ level: 'warning', message: `Conversion rate fell to ${metrics.conversionRate.toFixed(1)}%` });
+        }
+        if (metrics.blendedCpm !== null && metrics.blendedCpm > 45) {
+            alerts.push({ level: 'info', message: `CPM is elevated at ${formatCurrency(metrics.blendedCpm, 2)}` });
+        }
+        if (metrics.facebookDelivery && metrics.facebookDelivery < 80) {
+            alerts.push({ level: 'warning', message: `Facebook delivery rate down to ${metrics.facebookDelivery.toFixed(1)}%` });
+        }
+        if (metrics.facebookCtr && metrics.facebookCtr < 0.5) {
+            alerts.push({ level: 'info', message: `Facebook CTR is just ${metrics.facebookCtr.toFixed(2)}%` });
+        }
+        return alerts;
+    }
+
+    function renderPaidAlerts(alerts) {
+        const container = document.getElementById('paidAlerts');
+        if (!container) return;
+        if (!alerts.length) {
+            container.innerHTML = `
+                <div class="stats-row">
+                    <div class="stats-label">All systems nominal</div>
+                    <div class="stats-value">No alerts</div>
+                </div>
+            `;
+            return;
+        }
+        const badge = (level) => {
+            switch (level) {
+                case 'critical':
+                    return '🔴';
+                case 'warning':
+                    return '🟠';
+                default:
+                    return '🟡';
+            }
+        };
+        container.innerHTML = alerts
+            .map(
+                (alert) => `
+                <div class="stats-row">
+                    <div class="stats-label">${badge(alert.level)} ${alert.message}</div>
+                    <div class="stats-value">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+            `,
+            )
+            .join('');
     }
 
     function updatePaidCampaignStats(campaigns) {
@@ -589,6 +687,8 @@
         setText('gbpActions', formatNumber(gbpActions));
 
         updateWebsiteCharts(ga4, gbp);
+        state.latestGa4Data = ga4;
+        updateAttributionChart();
     }
 
     function renderEmailSection(payload, preset) {
@@ -683,6 +783,32 @@
         }
     }
 
+    function updateAttributionChart() {
+        if (!charts.attribution) return;
+        const google = state.latestGoogleData;
+        const ga4 = state.latestGa4Data;
+        if (!google?.spend?.daily || !Array.isArray(ga4?.sessions_by_medium)) {
+            charts.attribution.data.labels = [];
+            charts.attribution.update();
+            return;
+        }
+
+        const ga4Map = {};
+        ga4.sessions_by_medium.forEach((entry) => {
+            if (!entry.date) return;
+            ga4Map[entry.date] = entry.cpc || 0;
+        });
+
+        const labels = google.spend.daily.map((entry) => entry.date);
+        const adConversions = google.spend.daily.map((entry) => entry.conversions || 0);
+        const ga4Sessions = labels.map((date) => ga4Map[date] || 0);
+
+        charts.attribution.data.labels = labels.map((date) => formatChartLabel(date));
+        charts.attribution.data.datasets[0].data = adConversions;
+        charts.attribution.data.datasets[1].data = ga4Sessions;
+        charts.attribution.update();
+    }
+
     function initCharts() {
         if (typeof Chart === 'undefined') {
             console.warn('Chart.js failed to load');
@@ -717,6 +843,7 @@
             { stacked: false, legend: true, fillOpacity: 0.2 },
         );
         charts.emailGrowth = createLineChart('emailGrowthChart', '#22c55e', 'Subscribers');
+        charts.attribution = createAttributionChart('attributionChart');
         charts.websiteSessions = createMultiDatasetChart(
             'websiteSessionsChart',
             [
@@ -737,6 +864,39 @@
             ],
             { stacked: false, legend: true, fillOpacity: 0.18 },
         );
+    }
+
+    function createAttributionChart(canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return null;
+
+        return new Chart(canvas.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Ad Conversions',
+                        data: [],
+                        borderColor: '#fbbf24',
+                        backgroundColor: withAlpha('#fbbf24', 0.15),
+                        borderWidth: 2,
+                        tension: 0.35,
+                        pointRadius: 0,
+                    },
+                    {
+                        label: 'GA4 CPC Sessions',
+                        data: [],
+                        borderColor: '#22d3ee',
+                        backgroundColor: withAlpha('#22d3ee', 0.15),
+                        borderWidth: 2,
+                        tension: 0.35,
+                        pointRadius: 0,
+                    },
+                ],
+            },
+            options: buildChartOptions({ legend: true }),
+        });
     }
 
     function createLineChart(canvasId, color, label) {
@@ -937,6 +1097,47 @@
                 },
             },
         });
+    }
+
+    function initDrilldownPanel() {
+        const panel = document.getElementById('campaignDrilldown');
+        const closeBtn = document.getElementById('drilldownClose');
+        if (!panel || !closeBtn) return;
+        closeBtn.addEventListener('click', () => {
+            panel.classList.remove('active');
+            state.selectedCampaign = null;
+        });
+    }
+
+    function openCampaignDrilldown(sourceLabel, campaign) {
+        const panel = document.getElementById('campaignDrilldown');
+        const title = document.getElementById('drilldownTitle');
+        const body = document.getElementById('drilldownBody');
+        if (!panel || !title || !body) return;
+        title.textContent = `${sourceLabel}: ${campaign.name || 'Campaign'}`;
+
+        const fields = [
+            { label: 'Spend', value: formatCurrency(campaign.spend, 2) },
+            { label: 'Clicks', value: formatNumber(campaign.clicks) },
+            { label: 'Impressions', value: formatNumber(campaign.impressions) },
+            { label: 'Conversions', value: formatNumber(campaign.conversions) },
+            { label: 'Cost / Conv.', value: campaign.cost_per_conversion ? formatCurrency(campaign.cost_per_conversion, 2) : '—' },
+            { label: 'ROAS', value: campaign.roas ? `${campaign.roas.toFixed(2)}x` : '—' },
+            { label: 'CTR', value: campaign.ctr ? `${campaign.ctr.toFixed(2)}%` : '—' },
+        ];
+
+        body.innerHTML = fields
+            .map(
+                (field) => `
+                <div class="stats-row">
+                    <div class="stats-label">${field.label}</div>
+                    <div class="stats-value">${field.value}</div>
+                </div>
+            `,
+            )
+            .join('');
+
+        panel.classList.add('active');
     }
 
     function buildChartOptions({ stacked = false, legend = false } = {}) {

@@ -375,6 +375,47 @@
             flex: 1;
         }
 
+        .drilldown-panel {
+            margin-top: 8px;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(15,23,42,0.75));
+            padding: 12px;
+            display: none;
+        }
+
+        .drilldown-panel.active {
+            display: block;
+        }
+
+        .drilldown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .drilldown-label {
+            font-size: 10px;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+
+        .drilldown-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .drilldown-close {
+            border: none;
+            background: rgba(148, 163, 184, 0.15);
+            color: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
         /* Stats Table */
         .stats-table {
             width: 100%;
@@ -1022,6 +1063,21 @@
                     </div>
                 </div>
                 
+                <div class="grid grid-2">
+                    <div class="card card-compact" style="grid-column: span 2;">
+                        <div class="card-header">
+                            <div class="card-label">MONITOR</div>
+                            <div class="card-title">Flight Deck Alerts</div>
+                        </div>
+                        <div id="paidAlerts" class="stats-table">
+                            <div class="stats-row">
+                                <div class="stats-label">All systems nominal</div>
+                                <div class="stats-value">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- Paid Media Charts -->
                 <div class="grid grid-2">
                     <div class="card card-compact">
@@ -1062,6 +1118,27 @@
                         </div>
                         <div class="chart-container-large">
                             <canvas id="campaignEfficiencyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campaign Drilldown Panel -->
+                <div class="drilldown-panel" id="campaignDrilldown">
+                    <div class="drilldown-header">
+                        <div>
+                            <div class="drilldown-label">Campaign Detail</div>
+                            <div class="drilldown-title" id="drilldownTitle">Select a campaign</div>
+                        </div>
+                        <button class="drilldown-close" id="drilldownClose">✕</button>
+                    </div>
+                    <div class="drilldown-body" id="drilldownBody">
+                        <div class="stats-row">
+                            <div class="stats-label">Spend</div>
+                            <div class="stats-value">—</div>
+                        </div>
+                        <div class="stats-row">
+                            <div class="stats-label">Conversions</div>
+                            <div class="stats-value">—</div>
                         </div>
                     </div>
                 </div>
@@ -1163,6 +1240,18 @@
                         </div>
                         <div class="chart-container-large">
                             <canvas id="emailGrowthChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-2">
+                    <div class="card card-compact" style="grid-column: span 2;">
+                        <div class="card-header">
+                            <div class="card-label">ATTRIBUTION OVERLAY</div>
+                            <div class="card-title">Ad Conversions vs GA4 Sessions</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="attributionChart"></canvas>
                         </div>
                     </div>
                 </div>
