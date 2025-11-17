@@ -12,6 +12,17 @@
         last_12_months: 'Last 12 months',
     };
 
+    const SEGMENT_FILTERS = [
+        { id: 'all', label: 'All Campaigns' },
+        { id: 'recruiting', label: 'Recruiting' },
+        { id: 'client', label: 'Client Acquisition' },
+    ];
+
+    const SEGMENT_KEYWORDS = {
+        recruiting: ['recruit', 'caregiver', 'talent', 'hiring', 'applicant'],
+        client: ['client', 'family', 'service', 'private pay', 'care'],
+    };
+
     const presetSelectIds = [
         'datePreset',
         'socialDatePreset',
@@ -67,12 +78,18 @@
         facebookCampaigns: [],
         recentCampaigns: [],
         conversionPaths: [],
+        segment: 'all',
+        alertLog: [],
+        lastAlertCount: 0,
     };
 
     document.addEventListener('DOMContentLoaded', () => {
         initTabNavigation();
         initCharts();
         initDrilldownPanel();
+        initSegmentFilters();
+        renderRecentCampaigns();
+        renderAlertTimeline();
         attachEventHandlers();
         const initialPreset = document.getElementById('datePreset')?.value || state.preset;
         state.preset = initialPreset;
@@ -164,6 +181,42 @@
                 fetchDashboardData(state.preset);
             });
         });
+    }
+
+    function initSegmentFilters() {
+        const container = document.getElementById('segmentFilters');
+        if (!container) return;
+        container.innerHTML = SEGMENT_FILTERS.map(
+            (filter) => `
+                <button class="segment-chip ${filter.id === state.segment ? 'active' : ''}" data-segment="${filter.id}">
+                    ${filter.label}
+                </button>
+            `,
+        ).join('');
+        container.querySelectorAll('.segment-chip').forEach((chip) => {
+            chip.addEventListener('click', () => {
+                const targetSegment = chip.getAttribute('data-segment');
+                handleSegmentChange(targetSegment);
+            });
+        });
+    }
+
+    function setActiveSegmentChip(segmentId) {
+        const container = document.getElementById('segmentFilters');
+        if (!container) return;
+        container.querySelectorAll('.segment-chip').forEach((chip) => {
+            const isActive = chip.getAttribute('data-segment') === segmentId;
+            chip.classList.toggle('active', isActive);
+        });
+    }
+
+    function handleSegmentChange(segmentId) {
+        if (!segmentId || segmentId === state.segment) return;
+        state.segment = segmentId;
+        setActiveSegmentChip(segmentId);
+        state.recentCampaigns = [];
+        renderRecentCampaigns();
+        fetchDashboardData(state.preset);
     }
 
     function attachCampaignRowHandlers() {
@@ -272,14 +325,28 @@
         const google = payload.data.google_ads;
         const facebookAccount = payload.data.facebook_ads?.account;
         const facebookCampaigns = payload.data.facebook_ads?.campaigns || [];
+        const googleCampaigns = google?.campaigns || [];
+        const days = payload.range?.days || 30;
 
-        renderGoogleOverview(google);
-        renderFacebookOverview(facebookAccount);
-        renderCampaignTables(google?.campaigns || [], facebookCampaigns);
-        renderPaidSummary(google, facebookAccount, payload.range, preset);
+        const filteredGoogleCampaigns = filterCampaignsBySegment(googleCampaigns);
+        const filteredFacebookCampaigns = filterCampaignsBySegment(facebookCampaigns);
+
+        const googleSummary =
+            state.segment === 'all'
+                ? google
+                : buildGoogleMetricsFromCampaigns(filteredGoogleCampaigns, days, google);
+        const facebookSummary =
+            state.segment === 'all'
+                ? facebookAccount
+                : buildFacebookMetricsFromCampaigns(filteredFacebookCampaigns);
+
+        renderGoogleOverview(googleSummary);
+        renderFacebookOverview(facebookSummary);
+        renderCampaignTables(filteredGoogleCampaigns, filteredFacebookCampaigns);
+        renderPaidSummary(googleSummary, facebookSummary, payload.range, preset);
         updateAdsCharts(google);
         updatePaidDailyChart(google, facebookAccount);
-        updateCampaignEfficiencyChart(google?.campaigns || [], facebookCampaigns);
+        updateCampaignEfficiencyChart(filteredGoogleCampaigns, filteredFacebookCampaigns);
         state.latestGoogleData = google;
     }
 
@@ -438,7 +505,7 @@
 
         updatePaidCampaignStats(google?.campaigns || []);
         updatePaidSpendChart(googleSpend, facebookSpend);
-        renderPaidAlerts(evaluatePaidAlerts({
+        const alerts = evaluatePaidAlerts({
             roasValue,
             conversionRate,
             blendedCpc,
@@ -446,7 +513,9 @@
             blendedCpm,
             facebookDelivery: facebookAccount?.delivery_rate,
             facebookCtr: facebookAccount?.ctr,
-        }));
+        });
+        logAlerts(alerts);
+        renderPaidAlerts(alerts);
     }
 
     function evaluatePaidAlerts(metrics) {
@@ -502,6 +571,47 @@
                     <div class="stats-value">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                 </div>
             `,
+            )
+            .join('');
+    }
+
+    function logAlerts(alerts) {
+        const timestamp = new Date().toISOString();
+        if (alerts.length) {
+            alerts.forEach((alert) => {
+                state.alertLog.unshift({
+                    level: alert.level,
+                    message: alert.message,
+                    timestamp,
+                });
+            });
+        } else if (state.lastAlertCount > 0) {
+            state.alertLog.unshift({
+                level: 'clear',
+                message: 'Alerts cleared',
+                timestamp,
+            });
+        }
+        state.alertLog = state.alertLog.slice(0, 10);
+        state.lastAlertCount = alerts.length;
+        renderAlertTimeline();
+    }
+
+    function renderAlertTimeline() {
+        const container = document.getElementById('alertTimeline');
+        if (!container) return;
+        if (!state.alertLog.length) {
+            container.innerHTML = `<div class="timeline-entry">No alert events</div>`;
+            return;
+        }
+        container.innerHTML = state.alertLog
+            .map(
+                (entry) => `
+                    <div class="timeline-entry ${entry.level}">
+                        <span>${formatTimelineTime(entry.timestamp)}</span>
+                        <span>${entry.message}</span>
+                    </div>
+                `,
             )
             .join('');
     }
@@ -1258,6 +1368,84 @@
             .join('');
     }
 
+    function filterCampaignsBySegment(campaigns = []) {
+        if (state.segment === 'all') return campaigns;
+        return campaigns.filter((campaign) => {
+            const segment = campaign.segment || determineSegment(campaign.name || '');
+            campaign.segment = segment;
+            return segment === state.segment;
+        });
+    }
+
+    function determineSegment(name = '') {
+        const lower = name.toLowerCase();
+        if (SEGMENT_KEYWORDS.recruiting.some((keyword) => lower.includes(keyword))) {
+            return 'recruiting';
+        }
+        if (SEGMENT_KEYWORDS.client.some((keyword) => lower.includes(keyword))) {
+            return 'client';
+        }
+        return 'client';
+    }
+
+    function buildGoogleMetricsFromCampaigns(campaigns, days = 30, base) {
+        const totals = aggregateCampaigns(campaigns);
+        const perDay = days ? totals.spend / days : totals.spend;
+        return {
+            currency_code: base?.currency_code || 'USD',
+            spend: {
+                total: roundNumber(totals.spend, 2),
+                per_day: roundNumber(perDay, 2),
+                daily: [],
+            },
+            performance: {
+                clicks: Math.round(totals.clicks),
+                impressions: Math.round(totals.impressions),
+                conversions: roundNumber(totals.conversions, 2),
+                conversion_value: roundNumber(totals.conversion_value, 2),
+            },
+            efficiency: {
+                ctr: roundNumber(totals.impressions ? (totals.clicks / totals.impressions) * 100 : 0, 2),
+                cpc: roundNumber(totals.clicks ? totals.spend / totals.clicks : 0, 2),
+                cpm: roundNumber(totals.impressions ? (totals.spend / totals.impressions) * 1000 : 0, 2),
+                cost_per_conversion: roundNumber(totals.conversions ? totals.spend / totals.conversions : 0, 2),
+                roas: roundNumber(totals.spend ? totals.conversion_value / totals.spend : 0, 2),
+                conversion_rate: roundNumber(totals.clicks ? (totals.conversions / totals.clicks) * 100 : 0, 2),
+            },
+            campaigns,
+        };
+    }
+
+    function buildFacebookMetricsFromCampaigns(campaigns) {
+        const totals = aggregateCampaigns(campaigns);
+        return {
+            spend: roundNumber(totals.spend, 2),
+            impressions: Math.round(totals.impressions),
+            clicks: Math.round(totals.clicks),
+            reach: Math.round(totals.impressions),
+            cpc: roundNumber(totals.clicks ? totals.spend / totals.clicks : 0, 2),
+            cpm: roundNumber(totals.impressions ? (totals.spend / totals.impressions) * 1000 : 0, 2),
+            ctr: roundNumber(totals.impressions ? (totals.clicks / totals.impressions) * 100 : 0, 2),
+            conversions: Math.round(totals.conversions),
+            daily: [],
+            delivery_rate: null,
+        };
+    }
+
+    function aggregateCampaigns(campaigns = []) {
+        return campaigns.reduce(
+            (acc, campaign) => {
+                acc.spend += safeNumber(campaign.spend) ?? 0;
+                acc.clicks += safeNumber(campaign.clicks) ?? 0;
+                acc.impressions += safeNumber(campaign.impressions) ?? 0;
+                acc.conversions += safeNumber(campaign.conversions) ?? 0;
+                acc.conversion_value += safeNumber(campaign.conversion_value) ?? 0;
+                return acc;
+            },
+            { spend: 0, clicks: 0, impressions: 0, conversions: 0, conversion_value: 0 },
+        );
+    }
+
     function buildChartOptions({ stacked = false, legend = false } = {}) {
         return {
             maintainAspectRatio: false,
@@ -1463,6 +1651,14 @@
 
     function formatShortDate(date) {
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function formatTimelineTime(timestamp) {
+        const date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
     function formatChartLabel(date) {
