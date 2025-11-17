@@ -14,7 +14,11 @@ from urllib.parse import urlencode, quote_plus
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
 from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher
-from services.marketing.metrics_service import get_social_metrics, get_ads_metrics
+from services.marketing.metrics_service import (
+    get_social_metrics,
+    get_ads_metrics,
+    get_email_metrics,
+)
 from dotenv import load_dotenv
 from datetime import date
 
@@ -1256,6 +1260,34 @@ async def api_marketing_ads(
             "days": (end - start).days + 1
         },
         "compare": compare,
+        "data": data
+    })
+
+
+@app.get("/api/marketing/email")
+async def api_marketing_email(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    """Return email marketing metrics (Mailchimp)."""
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+
+    data = get_email_metrics(start, end)
+
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": (end - start).days + 1
+        },
         "data": data
     })
 

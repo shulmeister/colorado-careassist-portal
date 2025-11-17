@@ -14,6 +14,7 @@ from typing import Dict, Any, Optional
 from .facebook_service import facebook_service
 from .facebook_ads_service import facebook_ads_service
 from .google_ads_service import google_ads_service
+from .mailchimp_service import mailchimp_marketing_service
 
 logger = logging.getLogger(__name__)
 
@@ -124,25 +125,36 @@ def get_ads_metrics(start: date, end: date, compare: Optional[str] = None) -> Di
         return _get_placeholder_ads_metrics(start, end)
     
     try:
-        # Fetch Google Ads data
-        google_metrics = google_ads_service.get_campaign_metrics(start, end)
-        
-        # Fetch Facebook Ads data
-        facebook_metrics = facebook_ads_service.get_account_metrics(start, end)
+        google_metrics = google_ads_service.get_metrics(start, end)
+        facebook_account = facebook_ads_service.get_account_metrics(start, end)
         facebook_campaigns = facebook_ads_service.get_campaign_metrics(start, end)
-        
-        # Combine both platforms
+
         return {
             "google_ads": google_metrics,
             "facebook_ads": {
-                "account": facebook_metrics,
-                "campaigns": facebook_campaigns
-            }
+                "account": facebook_account,
+                "campaigns": facebook_campaigns,
+            },
         }
         
     except Exception as e:
         logger.error(f"Error fetching real ads metrics, falling back to placeholder: {e}")
         return _get_placeholder_ads_metrics(start, end)
+
+
+def get_email_metrics(start: date, end: date) -> Dict[str, Any]:
+    """
+    Fetch email marketing metrics from Mailchimp.
+    """
+    if not USE_REAL_DATA:
+        logger.info("Using placeholder email metrics (real data disabled)")
+        return mailchimp_marketing_service.get_placeholder_metrics(start, end)
+
+    try:
+        return mailchimp_marketing_service.get_email_metrics(start, end)
+    except Exception as exc:
+        logger.error("Error fetching email metrics: %s", exc)
+        return mailchimp_marketing_service.get_placeholder_metrics(start, end)
 
 
 def _calculate_comparison(current: Dict, previous: Dict) -> Dict[str, float]:
@@ -211,64 +223,14 @@ def _get_placeholder_social_metrics(start: date, end: date) -> Dict[str, Any]:
 
 def _get_placeholder_ads_metrics(start: date, end: date) -> Dict[str, Any]:
     """Return placeholder ads metrics for both Google and Facebook"""
-    total_days = (end - start).days + 1
-    
     return {
-        "google_ads": {
-            "spend": {
-                "total": 2385.92,
-                "change": 38.0,
-                "trend": "up",
-                "daily": [
-                    {"date": (start + timedelta(days=idx)).isoformat(), "spend": 70 + idx * 5}
-                    for idx in range(min(total_days, 30))
-                ],
-            },
-            "efficiency": {
-                "cpc": 0.22,
-                "cpm": 12.5,
-                "ctr": 7.54,
-                "conversion_rate": 4.6,
-            },
-            "performance": {
-                "clicks": 1522,
-                "impressions": 20174,
-                "conversion_value": 2550,
-                "conversions": 0,
-                "purchases": 0,
-            },
+        "google_ads": google_ads_service.get_placeholder_metrics(start, end),
+        "facebook_ads": {
+            "account": facebook_ads_service.get_placeholder_account_metrics(start, end),
             "campaigns": [
-                {"name": "Caregiver Recruitment - Denver", "id": "1202322604584110573", "spend": 177.70, "clicks": 850, "impressions": 13103, "conversions": 32},
-                {"name": "Caregiver Recruitment - Denver - Copy", "id": "1202337037746708575", "spend": 66.91, "clicks": 380, "impressions": 4541, "conversions": 27},
-                {"name": "Caregiver Recruitment - Colorado Springs/Pueblo", "id": "1202257411495570575", "spend": 90.27, "clicks": 292, "impressions": 2530, "conversions": 24},
-            ],
-            "ad_sets": [
-                {"name": "Lookalike caregivers", "impressions": 11562, "spend": 870.0, "conversions": 28},
-                {"name": "Warm audience retargeting", "impressions": 8920, "spend": 640.0, "conversions": 21},
-                {"name": "Cold outreach - seniors", "impressions": 7560, "spend": 520.0, "conversions": 17},
+                {"name": "October 2025 PMax Lead Gen Denver", "spend": 1190.78, "clicks": 280, "impressions": 8930, "conversions": 35},
+                {"name": "October 2025 PMax Lead Gen - Springs", "spend": 1195.14, "clicks": 249, "impressions": 7530, "conversions": 25},
             ],
         },
-        "facebook_ads": {
-            "account": {
-                "spend": 334.88,
-                "spend_change": 172.0,
-                "spend_previous": 122.90,
-                "impressions": 8930,
-                "clicks": 529,
-                "reach": 7800,
-                "cpc": 4.51,
-                "cpm": 37.50,
-                "ctr": 0.03,
-                "conversions": 60,
-                "daily": [
-                    {"date": (start + timedelta(days=idx)).isoformat(), "spend": 10 + idx * 0.5}
-                    for idx in range(min(total_days, 30))
-                ],
-            },
-            "campaigns": [
-                {"name": "October 2025 PMax Lead Gen Denver", "spend": 1190.78, "clicks": 280, "impressions": 8930, "conversions": 35, "cost": 1190.78},
-                {"name": "October 2025 PMax Lead Gen - Springs", "spend": 1195.14, "clicks": 249, "impressions": 7530, "conversions": 25, "cost": 1195.14},
-            ],
-        }
     }
 

@@ -43,6 +43,8 @@
         socialEngagement: null,
         websiteSessions: null,
         gbpSearches: null,
+        emailEngagement: null,
+        emailGrowth: null,
     };
 
     const state = {
@@ -158,15 +160,17 @@
     async function fetchDashboardData(preset) {
         const { start, end } = calculateDateRange(preset);
         try {
-            const [adsResult, socialResult, websiteResult] = await Promise.allSettled([
+            const [adsResult, socialResult, websiteResult, emailResult] = await Promise.allSettled([
                 fetchJson(`${API_BASE}/ads?from=${start}&to=${end}`),
                 fetchJson(`${API_BASE}/social?from=${start}&to=${end}`),
                 fetchJson(`${API_BASE}/website?from=${start}&to=${end}`),
+                fetchJson(`${API_BASE}/email?from=${start}&to=${end}`),
             ]);
 
             const ads = adsResult.status === 'fulfilled' ? adsResult.value : null;
             const social = socialResult.status === 'fulfilled' ? socialResult.value : null;
             const website = websiteResult.status === 'fulfilled' ? websiteResult.value : null;
+            const email = emailResult.status === 'fulfilled' ? emailResult.value : null;
 
             if (adsResult.status === 'rejected') {
                 console.error('Ads metrics request failed', adsResult.reason);
@@ -177,11 +181,15 @@
             if (websiteResult.status === 'rejected') {
                 console.error('Website metrics request failed', websiteResult.reason);
             }
+            if (emailResult.status === 'rejected') {
+                console.error('Email metrics request failed', emailResult.reason);
+            }
 
             renderDashboard({
                 ads,
                 social,
                 website,
+                email,
                 preset,
                 fallbackRange: { start, end },
             });
@@ -198,7 +206,7 @@
         return response.json();
     }
 
-    function renderDashboard({ ads, social, website, preset, fallbackRange }) {
+    function renderDashboard({ ads, social, website, email, preset, fallbackRange }) {
         const adsRange = ads?.range || fallbackRange;
         if (adsRange) {
             updateDateRangeDisplay(adsRange.start, adsRange.end, preset);
@@ -212,6 +220,9 @@
         }
         if (website?.success) {
             renderWebsiteSection(website, preset);
+        }
+        if (email?.success) {
+            renderEmailSection(email, preset);
         }
     }
 
@@ -509,6 +520,73 @@
         updateWebsiteCharts(ga4, gbp);
     }
 
+    function renderEmailSection(payload, preset) {
+        if (!payload?.data) return;
+
+        const { range, data } = payload;
+        updateRangeLabel({
+            start: range?.start,
+            end: range?.end,
+            preset,
+            targetId: 'emailDateRange',
+        });
+
+        const summary = data.summary || {};
+        setText('emailCampaigns', formatNumber(summary.campaigns_sent));
+        setText('emailSubscribers', formatNumber(summary.total_contacts));
+        setText('emailOpenRate', formatPercent(summary.open_rate));
+        setText('emailClickRate', formatPercent(summary.click_rate));
+        setText('emailDeliveryRate', formatPercent(summary.delivery_rate));
+        setText('emailConversions', formatNumber(summary.conversions));
+
+        renderEmailTopCampaigns(data.top_campaigns || []);
+        updateEmailCharts(data.trend || [], data.subscriber_growth || []);
+    }
+
+    function renderEmailTopCampaigns(campaigns) {
+        const container = document.getElementById('emailTopCampaigns');
+        if (!container) return;
+
+        if (!campaigns.length) {
+            container.innerHTML = `
+                <div class="stats-row">
+                    <div class="stats-label">No campaigns sent in this range</div>
+                    <div class="stats-value">—</div>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = campaigns
+            .map(
+                (campaign) => `
+                <div class="stats-row">
+                    <div class="stats-label">${campaign.title}</div>
+                    <div class="stats-value">
+                        ${formatPercent(campaign.open_rate, 1)}
+                        <span class="stats-change">${formatPercent(campaign.click_rate, 1)} CTR</span>
+                    </div>
+                </div>
+            `,
+            )
+            .join('');
+    }
+
+    function updateEmailCharts(trend, growth) {
+        if (charts.emailEngagement && trend.length) {
+            const labels = trend.map((entry) => formatChartLabel(entry.date));
+            const opens = trend.map((entry) => entry.opens || 0);
+            const clicks = trend.map((entry) => entry.clicks || 0);
+            updateMultiDatasetChart(charts.emailEngagement, labels, [opens, clicks]);
+        }
+
+        if (charts.emailGrowth && growth.length) {
+            const labels = growth.map((entry) => formatChartLabel(entry.date));
+            const counts = growth.map((entry) => entry.subscribers || 0);
+            updateLineChart(charts.emailGrowth, labels, counts);
+        }
+    }
+
     function updateWebsiteCharts(ga4, gbp) {
         if (Array.isArray(ga4?.users_over_time) && ga4.users_over_time.length) {
             const labels = ga4.users_over_time.map((entry) => formatChartLabel(entry.date));
@@ -557,6 +635,15 @@
             { stacked: true, fillOpacity: 0.25 },
         );
         charts.socialEngagement = createLineChart('socialEngagementChart', '#fb923c', 'Engagement');
+        charts.emailEngagement = createMultiDatasetChart(
+            'emailEngagementChart',
+            [
+                { label: 'Opens', color: '#38bdf8', key: 'opens' },
+                { label: 'Clicks', color: '#f97316', key: 'clicks' },
+            ],
+            { stacked: false, legend: true, fillOpacity: 0.2 },
+        );
+        charts.emailGrowth = createLineChart('emailGrowthChart', '#22c55e', 'Subscribers');
         charts.websiteSessions = createMultiDatasetChart(
             'websiteSessionsChart',
             [
