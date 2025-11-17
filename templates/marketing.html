@@ -249,12 +249,57 @@
             min-height: 80px;
         }
         
+        .card.google-card {
+            border-color: rgba(34, 197, 94, 0.35);
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.75));
+        }
+
+        .card.facebook-card {
+            border-color: rgba(59, 130, 246, 0.35);
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.78));
+        }
+        
         .card-compact {
             padding: 8px;
         }
 
         .card-header {
             margin-bottom: 4px;
+        }
+
+        .metric-subtext {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .metric-pill {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: #e5e7eb;
+            background: rgba(148, 163, 184, 0.2);
+        }
+
+        .metric-pill.google {
+            border-color: rgba(34, 197, 94, 0.45);
+            background: rgba(34, 197, 94, 0.2);
+            color: #bbf7d0;
+        }
+
+        .metric-pill.facebook {
+            border-color: rgba(59, 130, 246, 0.45);
+            background: rgba(59, 130, 246, 0.18);
+            color: #bfdbfe;
+        }
+
+        .metric-pill.ghost {
+            border-color: rgba(148, 163, 184, 0.2);
+            background: rgba(148, 163, 184, 0.12);
+            color: #cbd5f5;
         }
 
         .card-label {
@@ -529,7 +574,7 @@
     <!-- Compact 6-column grid -->
     <div class="grid grid-6">
         <!-- ROAS Chart -->
-        <div class="card card-compact">
+        <div class="card card-compact google-card">
             <div class="card-header">
                 <div class="card-label">Last 30 days</div>
                 <div class="card-title">ROAS (Performance Max)</div>
@@ -540,7 +585,7 @@
         </div>
 
         <!-- Cost Chart -->
-        <div class="card card-compact">
+        <div class="card card-compact google-card">
             <div class="card-header">
                 <div class="card-label">Last 30 days</div>
                 <div class="card-title">Cost (Performance Max)</div>
@@ -551,7 +596,7 @@
         </div>
 
         <!-- Cost/Conv Chart -->
-        <div class="card card-compact">
+        <div class="card card-compact google-card">
             <div class="card-header">
                 <div class="card-label">Last 30 days</div>
                 <div class="card-title">Cost / conv. (Perf Max)</div>
@@ -562,24 +607,30 @@
         </div>
         
         <!-- Google Ads Spend -->
-        <div class="card card-compact">
+        <div class="card card-compact google-card">
             <div class="card-header">
                 <div class="card-label">Google Ads Spent</div>
                 <div class="card-title">Amount Spent</div>
             </div>
-            <div class="metric-value metric-value-small" id="googleAdsSpend">$ 2,385.92</div>
+            <div class="metric-value metric-value-small" id="googleAdsSpend">--</div>
+            <div class="metric-subtext">
+                <span class="metric-pill google" id="googleRoasSummary">ROAS --</span>
+                <span class="metric-pill ghost" id="googleCostPerConvPill">Cost/Conv --</span>
+            </div>
         </div>
 
         <!-- Facebook Ads Spend -->
-        <div class="card card-compact">
+        <div class="card card-compact facebook-card">
             <div class="card-header">
                 <div class="card-label">Facebook Ads Spent</div>
                 <div class="card-title">Amount Spent</div>
             </div>
-            <div class="metric-value metric-value-small" id="facebookAdsSpend">$ 334.88</div>
-            <div class="metric-change positive" id="facebookAdsChange">
-                <span>▲ 172%</span>
+            <div class="metric-value metric-value-small" id="facebookAdsSpend">--</div>
+            <div class="metric-subtext">
+                <span class="metric-pill facebook" id="facebookCtrPill">CTR --</span>
+                <span class="metric-pill ghost" id="facebookCpcPill">CPC --</span>
             </div>
+            <div class="metric-change positive" id="facebookAdsChange"></div>
         </div>
         
         <!-- Sessions -->
@@ -602,31 +653,36 @@
             </div>
             <div class="stats-table">
                 <div class="stats-row">
+                    <div class="stats-label">Spend</div>
+                    <div class="stats-value" id="googleAccountSpend">--</div>
+                </div>
+                <div class="stats-row">
                     <div class="stats-label">Clicks</div>
-                    <div>
-                        <span class="stats-value" id="googleClicks">1,522</span>
-                        <span class="stats-change positive">▲ 483%</span>
-                    </div>
+                    <div class="stats-value" id="googleClicks">--</div>
                 </div>
                 <div class="stats-row">
-                    <div class="stats-label">CTR (All)</div>
-                    <div>
-                        <span class="stats-value" id="googleCTR">7.54%</span>
-                        <span class="stats-change positive">▲ 1.1%</span>
-                    </div>
+                    <div class="stats-label">Impressions</div>
+                    <div class="stats-value" id="googleImpressions">--</div>
                 </div>
                 <div class="stats-row">
-                    <div class="stats-label">CPC</div>
-                    <div>
-                        <span class="stats-value" id="googleCPC">$ 0.22</span>
-                        <span class="stats-change positive">▼ 53%</span>
-                    </div>
+                    <div class="stats-label">CTR</div>
+                    <div class="stats-value" id="googleCTR">--</div>
                 </div>
                 <div class="stats-row">
-                    <div class="stats-label">Purchases</div>
-                    <div>
-                        <span class="stats-value" id="googlePurchases">0</span>
-                    </div>
+                    <div class="stats-label">Avg. CPC</div>
+                    <div class="stats-value" id="googleCPC">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Conversions</div>
+                    <div class="stats-value" id="googleConversions">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Conv. Value</div>
+                    <div class="stats-value" id="googleConvValue">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">ROAS</div>
+                    <div class="stats-value" id="googleRoasMetric">--</div>
                 </div>
             </div>
         </div>
@@ -655,12 +711,16 @@
         </div>
 
         <!-- Facebook Account Overview -->
-        <div class="card card-compact">
+        <div class="card card-compact facebook-card">
             <div class="card-header">
                 <div class="card-label">Last 30 days</div>
                 <div class="card-title">Account Overview</div>
             </div>
             <div class="stats-table">
+                <div class="stats-row">
+                    <div class="stats-label">Spend</div>
+                    <div class="stats-value" id="facebookAccountSpend">--</div>
+                </div>
                 <div class="stats-row">
                     <div class="stats-label">Clicks</div>
                     <div class="stats-value" id="facebookClicks">529</div>
@@ -693,38 +753,16 @@
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Dimension</th>
-                        <th>Impr.</th>
-                        <th>Spent</th>
+                        <th>Campaign</th>
+                        <th>Spend</th>
+                        <th>Clicks</th>
+                        <th>Conv.</th>
+                        <th>ROAS</th>
                     </tr>
                 </thead>
                 <tbody id="googleCampaignsTable">
                     <tr>
-                        <td>1</td>
-                        <td>
-                            <span class="campaign-name">Caregiver Recruitment - Denver</span>
-                            <span class="campaign-id">(1202322604584110573)</span>
-                        </td>
-                        <td>13,103</td>
-                        <td>$ 177.70</td>
-                    </tr>
-                    <tr>
-                        <td>2</td>
-                        <td>
-                            <span class="campaign-name">Caregiver Recruitment - Denver - Copy</span>
-                            <span class="campaign-id">(1202337037746708575)</span>
-                        </td>
-                        <td>4,541</td>
-                        <td>$ 66.91</td>
-                    </tr>
-                    <tr>
-                        <td>3</td>
-                        <td>
-                            <span class="campaign-name">Caregiver Recruitment - CO Springs/Pueblo</span>
-                            <span class="campaign-id">(1202257411495570575)</span>
-                        </td>
-                        <td>2,530</td>
-                        <td>$ 90.27</td>
+                        <td colspan="6" class="empty-state-text">Loading campaigns...</td>
                     </tr>
                 </tbody>
             </table>
@@ -751,23 +789,15 @@
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Dimension</th>
-                        <th>Cost</th>
+                        <th>Campaign</th>
+                        <th>Spend</th>
                         <th>Impr.</th>
+                        <th>Clicks</th>
                     </tr>
                 </thead>
                 <tbody id="facebookCampaignsTable">
                     <tr>
-                        <td>1</td>
-                        <td><span class="campaign-name">October 2025 PMax Lead Gen Denver</span></td>
-                        <td>$ 1,190.78</td>
-                        <td>8,930</td>
-                    </tr>
-                    <tr>
-                        <td>2</td>
-                        <td><span class="campaign-name">October 2025 PMax Lead Gen - Springs</span></td>
-                        <td>$ 1,195.14</td>
-                        <td>7,530</td>
+                        <td colspan="5" class="empty-state-text">Loading campaigns...</td>
                     </tr>
                 </tbody>
             </table>
@@ -810,7 +840,7 @@
                             <div class="card-title">Page Likes</div>
                         </div>
                         <div class="metric-value" id="socialPageLikes">2,785</div>
-                        <div class="metric-change positive">▲ 4.6%</div>
+                    <div class="metric-change positive" id="socialLikesChange">▲ 4.6%</div>
                     </div>
                     
                     <div class="card card-compact">
@@ -819,7 +849,7 @@
                             <div class="card-title">Total Reach</div>
                         </div>
                         <div class="metric-value" id="socialReach">26,980</div>
-                        <div class="metric-change negative">▼ 2.1%</div>
+                    <div class="metric-change negative" id="socialReachChange">▼ 2.1%</div>
                     </div>
                     
                     <div class="card card-compact">
@@ -882,20 +912,7 @@
                             <div class="card-label">TOP POSTS</div>
                             <div class="card-title">Best Performing Content</div>
                         </div>
-                        <div class="stats-table">
-                            <div class="stats-row">
-                                <div class="stats-label">Fall caregiver event</div>
-                                <div class="stats-value">1,250</div>
-                            </div>
-                            <div class="stats-row">
-                                <div class="stats-label">Team spotlight</div>
-                                <div class="stats-value">980</div>
-                            </div>
-                            <div class="stats-row">
-                                <div class="stats-label">Client success story</div>
-                                <div class="stats-value">860</div>
-                            </div>
-                        </div>
+                    <div class="stats-table" id="socialTopPosts"></div>
                     </div>
                 </div>
             </div>
@@ -977,24 +994,7 @@
                             <div class="card-label">CAMPAIGN PERFORMANCE</div>
                             <div class="card-title">Top Campaigns by ROAS</div>
                         </div>
-                        <div class="stats-table">
-                            <div class="stats-row">
-                                <div class="stats-label">Search - Colorado Caregiving</div>
-                                <div class="stats-value">4.8x <span class="stats-change positive">▲ 12%</span></div>
-                            </div>
-                            <div class="stats-row">
-                                <div class="stats-label">Display - Denver Metro</div>
-                                <div class="stats-value">3.2x <span class="stats-change negative">▼ 3%</span></div>
-                            </div>
-                            <div class="stats-row">
-                                <div class="stats-label">Facebook - Lead Gen</div>
-                                <div class="stats-value">2.9x <span class="stats-change positive">▲ 8%</span></div>
-                            </div>
-                            <div class="stats-row">
-                                <div class="stats-label">Search - Senior Care Services</div>
-                                <div class="stats-value">2.4x</div>
-                            </div>
-                        </div>
+                    <div class="stats-table" id="paidCampaignStats"></div>
                     </div>
                     
                     <div class="card card-compact">
@@ -1337,898 +1337,7 @@
         </main>
     </div>
 
-    <script>
-        // Tab switching functionality
-        (function () {
-            const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-link'));
-            const tabSections = Array.from(document.querySelectorAll('.tab-content'));
-            const normalizeId = (value) => {
-                if (!value) return null;
-                return value.startsWith('tab-') ? value : `tab-${value}`;
-            };
-
-            let currentTabId = tabSections.find((section) => section.classList.contains('active'))?.id || 'tab-overview';
-
-            const setActiveLink = (link) => {
-                sidebarLinks.forEach((item) => item.classList.toggle('active', item === link));
-            };
-
-            const setActiveTab = (tabId) => {
-                const target = document.getElementById(tabId);
-                if (!target) {
-                    console.warn('Tab not found:', tabId);
-                    return false;
-                }
-                tabSections.forEach((section) => section.classList.toggle('active', section === target));
-                currentTabId = tabId;
-                return true;
-            };
-
-            const handleTabChange = (targetId) => {
-                if (!targetId) return;
-                const linkForTab = sidebarLinks.find(
-                    (link) => normalizeId(link.getAttribute('data-tab-target') || link.getAttribute('data-tab')) === targetId,
-                );
-                if (setActiveTab(targetId) && linkForTab) {
-                    setActiveLink(linkForTab);
-                }
-            };
-
-            sidebarLinks.forEach((link) => {
-                link.addEventListener('click', (event) => {
-                    if (link.classList.contains('disabled')) {
-                        event.preventDefault();
-                        return;
-                    }
-
-                    const hrefTarget = link.getAttribute('href');
-                    const rawTarget = link.getAttribute('data-tab-target') || link.getAttribute('data-tab');
-                    const targetId = normalizeId(rawTarget);
-
-                    if (targetId && hrefTarget !== `#${targetId}`) {
-                        link.setAttribute('href', `#${targetId}`);
-                    }
-
-                    if (targetId) {
-                        handleTabChange(targetId);
-                    }
-                });
-            });
-
-            window.addEventListener('hashchange', () => {
-                const newHash = window.location.hash.replace('#', '');
-                const normalized = normalizeId(newHash);
-                if (normalized) {
-                    handleTabChange(normalized);
-                }
-            });
-
-            const initialHash = window.location.hash.replace('#', '');
-            const initialTabId = normalizeId(initialHash) || currentTabId;
-            const initialLink =
-                sidebarLinks.find((link) => normalizeId(link.getAttribute('data-tab-target') || link.getAttribute('data-tab')) === initialTabId) ||
-                sidebarLinks.find((link) => link.classList.contains('active'));
-
-            handleTabChange(initialTabId);
-        })();
-    </script>
-    
-    <script>
-        // Configuration
-        const API_BASE = '/api/marketing';
-        let currentDateRange = { start: null, end: null };
-
-        // Chart configurations
-        const chartDefaults = {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: '#1f2937',
-                    titleColor: '#f9fafb',
-                    bodyColor: '#e5e7eb',
-                    borderColor: '#374151',
-                    borderWidth: 1,
-                    padding: 12,
-                    displayColors: false
-                }
-            },
-            scales: {
-                x: {
-                    display: true,
-                    grid: { display: false, color: '#374151' },
-                    ticks: { color: '#9ca3af', font: { size: 10 } }
-                },
-                y: {
-                    display: true,
-                    grid: { color: '#374151', drawBorder: false },
-                    ticks: { color: '#9ca3af', font: { size: 10 } }
-                }
-            }
-        };
-
-        // Initialize charts
-        let charts = {};
-
-        function initCharts() {
-            // ROAS Chart
-            charts.roas = new Chart(document.getElementById('roasChart'), {
-                type: 'bar',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateRandomData(30, 0, 5),
-                        backgroundColor: '#3b82f6',
-                        borderRadius: 4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            // Cost Performance Chart
-            charts.costPerf = new Chart(document.getElementById('costPerfChart'), {
-                type: 'bar',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateRandomData(30, 50, 150),
-                        backgroundColor: '#06b6d4',
-                        borderRadius: 4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            // Cost per Conversion Chart
-            charts.costConv = new Chart(document.getElementById('costConvChart'), {
-                type: 'bar',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateRandomData(30, 10, 60),
-                        backgroundColor: '#8b5cf6',
-                        borderRadius: 4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            // Impressions Chart
-            charts.impressions = new Chart(document.getElementById('impressionsChart'), {
-                type: 'line',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateImpressionData(30),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        fill: true,
-                        tension: 0.4,
-                        borderWidth: 2,
-                        pointRadius: 0
-                    }, {
-                        data: generateImpressionData(30, -5),
-                        borderColor: '#6b7280',
-                        backgroundColor: 'transparent',
-                        borderDash: [5, 5],
-                        tension: 0.4,
-                        borderWidth: 1,
-                        pointRadius: 0
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            // Sessions Chart
-            charts.sessions = new Chart(document.getElementById('sessionsChart'), {
-                type: 'line',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateSessionData(30),
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        fill: true,
-                        tension: 0.4,
-                        borderWidth: 2,
-                        pointRadius: 0
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            // Interactions Charts
-            const interactionsData = generateInteractionData(30);
-            
-            charts.interactions1 = new Chart(document.getElementById('interactionsChart1'), {
-                type: 'bar',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: interactionsData,
-                        backgroundColor: '#06b6d4',
-                        borderRadius: 4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            charts.interactions2 = new Chart(document.getElementById('interactionsChart2'), {
-                type: 'bar',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: interactionsData,
-                        backgroundColor: '#06b6d4',
-                        borderRadius: 4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            // Social Performance Tab Charts
-            charts.socialReach = new Chart(document.getElementById('socialReachChart'), {
-                type: 'line',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [
-                        {
-                            label: 'Organic',
-                            data: generateRandomData(30, 500, 1200),
-                            borderColor: '#3b82f6',
-                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                            fill: true,
-                            tension: 0.4
-                        },
-                        {
-                            label: 'Paid',
-                            data: generateRandomData(30, 200, 600),
-                            borderColor: '#8b5cf6',
-                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                            fill: true,
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: true, labels: { color: '#9ca3af', font: { size: 10 } } } } }
-            });
-
-            charts.socialEngagement = new Chart(document.getElementById('socialEngagementChart'), {
-                type: 'line',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateRandomData(30, 20, 80),
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            // Paid Media Tab Charts
-            charts.paidSpend = new Chart(document.getElementById('paidSpendChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['Google Ads', 'Facebook Ads', 'Other'],
-                    datasets: [{
-                        data: [4183, 335, 0],
-                        backgroundColor: ['#3b82f6', '#8b5cf6', '#06b6d4'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, padding: 10 } },
-                        tooltip: {
-                            backgroundColor: '#1f2937',
-                            titleColor: '#f9fafb',
-                            bodyColor: '#e5e7eb',
-                            borderColor: '#374151',
-                            borderWidth: 1
-                        }
-                    }
-                }
-            });
-
-            // Email Marketing Tab Charts
-            charts.emailEngagement = new Chart(document.getElementById('emailEngagementChart'), {
-                type: 'line',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [
-                        {
-                            label: 'Opens',
-                            data: generateRandomData(30, 100, 400),
-                            borderColor: '#3b82f6',
-                            tension: 0.4
-                        },
-                        {
-                            label: 'Clicks',
-                            data: generateRandomData(30, 20, 100),
-                            borderColor: '#10b981',
-                            tension: 0.4
-                        }
-                    ]
-                },
-                options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: true, labels: { color: '#9ca3af', font: { size: 10 } } } } }
-            });
-
-            charts.emailGrowth = new Chart(document.getElementById('emailGrowthChart'), {
-                type: 'line',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: [3200, 3210, 3225, 3240, 3255, 3270, 3280, 3290, 3305, 3315, 
-                               3330, 3340, 3352, 3360, 3370, 3380, 3390, 3398, 3405, 3412,
-                               3418, 3422, 3426, 3428, 3428, 3428, 3428, 3428, 3428, 3428],
-                        borderColor: '#8b5cf6',
-                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            // Website & GBP Tab Charts
-            charts.websiteSessions = new Chart(document.getElementById('websiteSessionsChart'), {
-                type: 'line',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateSessionData(30),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-            charts.gbpSearches = new Chart(document.getElementById('gbpSearchesChart'), {
-                type: 'bar',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [
-                        {
-                            label: 'Discovery',
-                            data: generateRandomData(30, 50, 150),
-                            backgroundColor: '#3b82f6'
-                        },
-                        {
-                            label: 'Direct',
-                            data: generateRandomData(30, 30, 80),
-                            backgroundColor: '#8b5cf6'
-                        }
-                    ]
-                },
-                options: { ...chartDefaults, plugins: { ...chartDefaults.plugins, legend: { display: true, labels: { color: '#9ca3af', font: { size: 10 } } } } }
-            });
-
-            // Engagement Tab Charts
-            charts.engagementType = new Chart(document.getElementById('engagementTypeChart'), {
-                type: 'doughnut',
-                data: {
-                    labels: ['Likes', 'Comments', 'Shares', 'Saves', 'Messages'],
-                    datasets: [{
-                        data: [2456, 689, 328, 204, 143],
-                        backgroundColor: ['#3b82f6', '#10b981', '#8b5cf6', '#f59e0b', '#06b6d4'],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: true, position: 'bottom', labels: { color: '#9ca3af', font: { size: 10 }, padding: 10 } },
-                        tooltip: {
-                            backgroundColor: '#1f2937',
-                            titleColor: '#f9fafb',
-                            bodyColor: '#e5e7eb',
-                            borderColor: '#374151',
-                            borderWidth: 1
-                        }
-                    }
-                }
-            });
-
-            charts.engagementTrend = new Chart(document.getElementById('engagementTrendChart'), {
-                type: 'line',
-                data: {
-                    labels: generateDateLabels(30),
-                    datasets: [{
-                        data: generateRandomData(30, 100, 250),
-                        borderColor: '#10b981',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: chartDefaults
-            });
-
-        }
-
-        // Helper functions
-        function generateDateLabels(days) {
-            const labels = [];
-            for (let i = days - 1; i >= 0; i--) {
-                const date = new Date();
-                date.setDate(date.getDate() - i);
-                labels.push(date.getMonth() + 1 + '/' + date.getDate());
-            }
-            return labels;
-        }
-
-        function generateRandomData(days, min, max) {
-            return Array.from({ length: days }, () => 
-                Math.floor(Math.random() * (max - min + 1)) + min
-            );
-        }
-
-        function generateImpressionData(days, offset = 0) {
-            const base = [400, 800, 1200, 600, 500, 450, 350, 300, 500, 700, 900, 800, 
-                         700, 650, 600, 550, 900, 1100, 1000, 800, 700, 900, 1100, 
-                         950, 850, 800, 750, 900, 800, 600];
-            return base.slice(0, days).map(v => v + offset * 50);
-        }
-
-        function generateSessionData(days) {
-            return [300, 500, 800, 900, 1100, 950, 800, 700, 650, 900, 1200, 1100, 
-                   950, 850, 800, 750, 950, 1050, 900, 800, 1000, 1100, 1150, 
-                   1000, 900, 950, 1000, 1050, 1100, 900].slice(0, days);
-        }
-
-        function generateInteractionData(days) {
-            return [2, 3, 6, 8, 5, 4, 2, 1, 3, 7, 10, 8, 6, 5, 4, 3, 5, 9, 
-                   11, 8, 6, 4, 7, 9, 10, 8, 6, 5, 7, 4].slice(0, days);
-        }
-
-        const randomInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-        const randomFloat = (min, max, dec = 1) => (min + Math.random() * (max - min)).toFixed(dec);
-        const formatDuration = (seconds) => {
-            const mins = Math.floor(seconds / 60);
-            const secs = String(seconds % 60).padStart(2, "0");
-            return `${mins}:${secs}`;
-        };
-
-        function updateSocialSection({ range }) {
-            document.getElementById("socialPageLikes").textContent = randomInt(2600, 3300).toLocaleString();
-            document.getElementById("socialReach").textContent = randomInt(22000, 36000).toLocaleString();
-            document.getElementById("socialEngagement").textContent = randomInt(1200, 2200).toLocaleString();
-            document.getElementById("socialPosts").textContent = randomInt(12, 24).toLocaleString();
-            document.getElementById("socialImpressions").textContent = randomInt(32000, 46000).toLocaleString();
-            document.getElementById("socialVideoViews").textContent = randomInt(3800, 6200).toLocaleString();
-
-            const days = Math.min(getDaySpan(range.start, range.end), 30);
-            const labels = generateDateLabels(days);
-
-            if (charts.socialReach) {
-                charts.socialReach.data.labels = labels;
-                charts.socialReach.data.datasets[0].data = generateRandomData(days, 400, 1200);
-                charts.socialReach.data.datasets[1].data = generateRandomData(days, 150, 600);
-                charts.socialReach.update();
-            }
-
-            if (charts.socialEngagement) {
-                charts.socialEngagement.data.labels = labels;
-                charts.socialEngagement.data.datasets[0].data = generateRandomData(days, 30, 90);
-                charts.socialEngagement.update();
-            }
-        }
-
-        function updatePaidSection({ range }) {
-            const totalSpend = randomInt(3000, 6000);
-            const googleSpend = randomInt(2500, totalSpend - 200);
-            const facebookSpend = totalSpend - googleSpend;
-
-            document.getElementById("paidTotalSpend").textContent = `$${totalSpend.toLocaleString()}`;
-            document.getElementById("paidGoogleSpend").textContent = `$${googleSpend.toLocaleString()}`;
-            document.getElementById("paidFacebookSpend").textContent = `$${facebookSpend.toLocaleString()}`;
-            document.getElementById("paidClicks").textContent = randomInt(600, 1200).toLocaleString();
-            document.getElementById("paidCPC").textContent = `$${randomFloat(2.5, 6.5, 2)}`;
-            document.getElementById("paidConversions").textContent = randomInt(25, 60).toLocaleString();
-
-            if (charts.paidSpend) {
-                charts.paidSpend.data.datasets[0].data = [googleSpend, facebookSpend, randomInt(0, 300)];
-                charts.paidSpend.update();
-            }
-        }
-
-        function updateEmailSection({ range }) {
-            document.getElementById("emailCampaigns").textContent = randomInt(6, 16).toLocaleString();
-            document.getElementById("emailSubscribers").textContent = randomInt(3200, 3600).toLocaleString();
-            document.getElementById("emailOpenRate").textContent = `${randomFloat(24, 42, 1)}%`;
-            document.getElementById("emailClickRate").textContent = `${randomFloat(3, 8, 1)}%`;
-            document.getElementById("emailDeliveryRate").textContent = `${randomFloat(97, 99.5, 1)}%`;
-            document.getElementById("emailConversions").textContent = randomInt(40, 80).toLocaleString();
-
-            const days = Math.min(getDaySpan(range.start, range.end), 30);
-            const labels = generateDateLabels(days);
-
-            if (charts.emailEngagement) {
-                charts.emailEngagement.data.labels = labels;
-                charts.emailEngagement.data.datasets[0].data = generateRandomData(days, 120, 380);
-                charts.emailEngagement.data.datasets[1].data = generateRandomData(days, 20, 110);
-                charts.emailEngagement.update();
-            }
-
-            if (charts.emailGrowth) {
-                let current = randomInt(3200, 3300);
-                const growth = [];
-                for (let i = 0; i < days; i += 1) {
-                    current += randomInt(0, 12);
-                    growth.push(current);
-                }
-                charts.emailGrowth.data.labels = labels;
-                charts.emailGrowth.data.datasets[0].data = growth;
-                charts.emailGrowth.update();
-            }
-        }
-
-        function updateWebsiteSection({ range }) {
-            document.getElementById("websiteSessions").textContent = randomInt(1500, 2300).toLocaleString();
-            document.getElementById("websiteUsers").textContent = randomInt(1100, 1900).toLocaleString();
-            document.getElementById("websiteBounceRate").textContent = `${randomFloat(38, 50, 1)}%`;
-            document.getElementById("websiteAvgSession").textContent = formatDuration(randomInt(120, 240));
-            document.getElementById("gbpViews").textContent = randomInt(2800, 4200).toLocaleString();
-            document.getElementById("gbpActions").textContent = randomInt(360, 620).toLocaleString();
-
-            const days = Math.min(getDaySpan(range.start, range.end), 30);
-            const labels = generateDateLabels(days);
-
-            if (charts.websiteSessions) {
-                charts.websiteSessions.data.labels = labels;
-                charts.websiteSessions.data.datasets[0].data = generateSessionData(days);
-                charts.websiteSessions.update();
-            }
-
-            if (charts.gbpSearches) {
-                charts.gbpSearches.data.labels = labels;
-                charts.gbpSearches.data.datasets[0].data = generateRandomData(days, 60, 160);
-                charts.gbpSearches.data.datasets[1].data = generateRandomData(days, 30, 90);
-                charts.gbpSearches.update();
-            }
-        }
-
-        function updateEngagementSection({ range }) {
-            document.getElementById("engagementTotal").textContent = randomInt(3800, 5200).toLocaleString();
-            document.getElementById("engagementSocial").textContent = randomInt(1900, 2800).toLocaleString();
-            document.getElementById("engagementShares").textContent = randomInt(250, 420).toLocaleString();
-            document.getElementById("engagementComments").textContent = randomInt(520, 820).toLocaleString();
-            document.getElementById("engagementMessages").textContent = randomInt(110, 220).toLocaleString();
-            document.getElementById("engagementSaves").textContent = randomInt(160, 260).toLocaleString();
-
-            if (charts.engagementType) {
-                charts.engagementType.data.datasets[0].data = [
-                    randomInt(1800, 2600),
-                    randomInt(500, 900),
-                    randomInt(240, 420),
-                    randomInt(150, 260),
-                    randomInt(120, 200),
-                ];
-                charts.engagementType.update();
-            }
-
-            if (charts.engagementTrend) {
-                const days = Math.min(getDaySpan(range.start, range.end), 30);
-                const labels = generateDateLabels(days);
-                charts.engagementTrend.data.labels = labels;
-                charts.engagementTrend.data.datasets[0].data = generateRandomData(days, 120, 260);
-                charts.engagementTrend.update();
-            }
-        }
-
-        function setupSectionFilters() {
-            const sections = [
-                { presetId: "socialDatePreset", refreshId: "socialRefreshBtn", labelId: "socialDateRange", updater: updateSocialSection },
-                { presetId: "paidDatePreset", refreshId: "paidRefreshBtn", labelId: "paidDateRange", updater: updatePaidSection },
-                { presetId: "emailDatePreset", refreshId: "emailRefreshBtn", labelId: "emailDateRange", updater: updateEmailSection },
-                { presetId: "websiteDatePreset", refreshId: "websiteRefreshBtn", labelId: "websiteDateRange", updater: updateWebsiteSection },
-                { presetId: "engagementDatePreset", refreshId: "engagementRefreshBtn", labelId: "engagementDateRange", updater: updateEngagementSection },
-            ];
-
-            sections.forEach(({ presetId, refreshId, labelId, updater }) => {
-                const presetEl = document.getElementById(presetId);
-                if (!presetEl) return;
-                const refreshEl = document.getElementById(refreshId);
-
-                const run = () => {
-                    const preset = presetEl.value;
-                    const range = calculateDateRange(preset);
-                    updateRangeLabel({ start: range.start, end: range.end, preset, targetId: labelId });
-                    updater({ range, preset });
-                };
-
-                presetEl.addEventListener("change", run);
-                if (refreshEl) {
-                    refreshEl.addEventListener("click", (event) => {
-                        event.preventDefault();
-                        run();
-                    });
-                }
-
-                run();
-            });
-        }
-
-        // Fetch real data from APIs
-        async function fetchDashboardData() {
-            try {
-                const preset = document.getElementById('datePreset').value;
-                
-                // Calculate date range based on preset
-                const { start, end } = calculateDateRange(preset);
-                updateDateRangeDisplay(start, end);
-                
-                // Fetch ads data
-                const adsResponse = await fetch(`${API_BASE}/ads?from=${start}&to=${end}`);
-                const adsData = await adsResponse.json();
-                
-                // Fetch social data  
-                const socialResponse = await fetch(`${API_BASE}/social?from=${start}&to=${end}`);
-                const socialData = await socialResponse.json();
-
-                // Fetch website data
-                const websiteResponse = await fetch(`${API_BASE}/website?from=${start}&to=${end}`);
-                const websiteData = await websiteResponse.json();
-
-                updateDashboard(adsData, socialData, websiteData);
-            } catch (error) {
-                console.error('Error fetching dashboard data:', error);
-            }
-        }
-
-        function calculateDateRange(preset) {
-            const end = new Date();
-            let start = new Date();
-            
-            switch (preset) {
-                case 'last_7_days':
-                    start.setDate(end.getDate() - 7);
-                    break;
-                case 'last_30_days':
-                    start.setDate(end.getDate() - 30);
-                    break;
-                case 'month_to_date':
-                    start = new Date(end.getFullYear(), end.getMonth(), 1);
-                    break;
-                case 'quarter_to_date':
-                    const quarter = Math.floor(end.getMonth() / 3);
-                    start = new Date(end.getFullYear(), quarter * 3, 1);
-                    break;
-                case 'year_to_date':
-                    start = new Date(end.getFullYear(), 0, 1);
-                    break;
-                case 'last_12_months':
-                    start.setMonth(end.getMonth() - 12);
-                    break;
-                default:
-                    start.setDate(end.getDate() - 30);
-            }
-            
-            return {
-                start: start.toISOString().split('T')[0],
-                end: end.toISOString().split('T')[0]
-            };
-        }
-
-        const PRESET_LABELS = {
-            last_7_days: "Last 7 days",
-            last_30_days: "Last 30 days",
-            month_to_date: "Month to date",
-            quarter_to_date: "Quarter to date",
-            year_to_date: "Year to date",
-            last_12_months: "Last 12 months",
-        };
-
-        function formatShortDate(date) {
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            return `${months[date.getMonth()]} ${date.getDate()}`;
-        }
-
-        function getDaySpan(start, end) {
-            const startDate = new Date(start);
-            const endDate = new Date(end);
-            return Math.max(1, Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1);
-        }
-
-        function updateRangeLabel({ start, end, preset, targetId = "dateRangeDisplay", updateCardLabels = false }) {
-            const startDate = new Date(start);
-            const endDate = new Date(end);
-            const daysDiff = getDaySpan(start, end);
-            const label = PRESET_LABELS[preset] || `Last ${daysDiff} days`;
-            const displayText = `${label} (${formatShortDate(startDate)} - ${formatShortDate(endDate)})`;
-
-            const target = document.getElementById(targetId);
-            if (target) {
-                target.textContent = displayText;
-            }
-
-            if (updateCardLabels) {
-                document.querySelectorAll(".card-label").forEach((el) => {
-                    if (el.textContent.includes("Last") || el.textContent.includes("days")) {
-                        el.textContent = label;
-                    }
-                });
-            }
-
-            return label;
-        }
-
-        function updateDateRangeDisplay(start, end) {
-            const preset = document.getElementById("datePreset").value;
-            updateRangeLabel({ start, end, preset, targetId: "dateRangeDisplay", updateCardLabels: true });
-        }
-
-        function updateDashboard(adsData, socialData, websiteData) {
-            console.log('Updating dashboard with new data...', { adsData, socialData, websiteData });
-            
-            // Update metrics from real API data
-            if (adsData.success && adsData.data) {
-                const data = adsData.data;
-                
-                // Update Google Ads metrics
-                if (data.google_ads) {
-                    const google = data.google_ads;
-                    
-                    if (google.spend) {
-                        document.getElementById('googleAdsSpend').textContent = 
-                            `$ ${google.spend.total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                    }
-                    
-                    if (google.performance) {
-                        document.getElementById('googleClicks').textContent = 
-                            google.performance.clicks.toLocaleString();
-                        document.getElementById('googlePurchases').textContent = 
-                            google.performance.purchases || 0;
-                        document.getElementById('totalImpressions').textContent = 
-                            google.performance.impressions.toLocaleString();
-                    }
-                    
-                    if (google.efficiency) {
-                        document.getElementById('googleCPC').textContent = 
-                            `$ ${google.efficiency.cpc.toFixed(2)}`;
-                        document.getElementById('googleCTR').textContent = 
-                            `${google.efficiency.ctr.toFixed(2)}%`;
-                    }
-
-                    // Update Google campaigns table
-                    if (google.campaigns && google.campaigns.length > 0) {
-                        const tableBody = document.getElementById('googleCampaignsTable');
-                        tableBody.innerHTML = google.campaigns.slice(0, 3).map((campaign, index) => `
-                            <tr>
-                                <td>${index + 1}</td>
-                                <td>
-                                    <span class="campaign-name">${campaign.name}</span>
-                                    <span class="campaign-id">${campaign.id ? `(${campaign.id})` : ''}</span>
-                                </td>
-                                <td>${campaign.impressions ? campaign.impressions.toLocaleString() : 'N/A'}</td>
-                                <td>$ ${campaign.spend.toFixed(2)}</td>
-                            </tr>
-                        `).join('');
-                    }
-                    
-                    // Update charts with new data if available
-                    if (google.spend && google.spend.daily) {
-                        updateChartsWithData(google);
-                    }
-                }
-
-                // Update Facebook Ads metrics
-                if (data.facebook_ads && data.facebook_ads.account) {
-                    const fb = data.facebook_ads.account;
-                    
-                    document.getElementById('facebookAdsSpend').textContent = 
-                        `$ ${fb.spend.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                    
-                    if (fb.spend_change !== undefined) {
-                        const changeEl = document.getElementById('facebookAdsChange');
-                        const isPositive = fb.spend_change > 0;
-                        changeEl.className = `metric-change ${isPositive ? 'positive' : 'negative'}`;
-                        changeEl.innerHTML = `
-                            <span>${isPositive ? '▲' : '▼'} ${Math.abs(fb.spend_change).toFixed(0)}%</span>
-                            <span class="metric-change-detail">vs previous period ($ ${fb.spend_previous.toFixed(2)})</span>
-                        `;
-                    }
-                    
-                    document.getElementById('facebookClicks').textContent = 
-                        fb.clicks.toLocaleString();
-                    document.getElementById('facebookCTR').textContent = 
-                        `${fb.ctr.toFixed(2)}%`;
-                    document.getElementById('facebookCPC').textContent = 
-                        `$ ${fb.cpc.toFixed(2)}`;
-                    document.getElementById('facebookConversions').textContent = 
-                        fb.conversions.toLocaleString();
-
-                    // Update Facebook campaigns table
-                    if (data.facebook_ads.campaigns && data.facebook_ads.campaigns.length > 0) {
-                        const tableBody = document.getElementById('facebookCampaignsTable');
-                        tableBody.innerHTML = data.facebook_ads.campaigns.slice(0, 2).map((campaign, index) => `
-                            <tr>
-                                <td>${index + 1}</td>
-                                <td class="campaign-name">${campaign.name}</td>
-                                <td>$ ${campaign.cost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                <td>${campaign.impressions.toLocaleString()}</td>
-                            </tr>
-                        `).join('');
-                    }
-                }
-            }
-
-            // Update website metrics (sessions from GA4)
-            if (websiteData.success && websiteData.data && websiteData.data.ga4) {
-                const ga4 = websiteData.data.ga4;
-                
-                if (ga4.sessions !== undefined) {
-                    document.getElementById('totalSessions').textContent = 
-                        ga4.sessions.toLocaleString();
-                }
-            }
-            
-            console.log('Dashboard update complete');
-        }
-        
-        function updateChartsWithData(googleData) {
-            // Update chart data if we have daily data
-            if (!googleData.spend || !googleData.spend.daily) return;
-            
-            const dailyData = googleData.spend.daily;
-            const labels = dailyData.map(d => {
-                const date = new Date(d.date);
-                return `${date.getMonth() + 1}/${date.getDate()}`;
-            });
-            
-            // Update ROAS chart (example with random data based on spend)
-            if (charts.roas) {
-                charts.roas.data.labels = labels;
-                charts.roas.data.datasets[0].data = dailyData.map(d => (Math.random() * 5).toFixed(2));
-                charts.roas.update();
-            }
-            
-            // Update Cost Performance chart
-            if (charts.costPerf) {
-                charts.costPerf.data.labels = labels;
-                charts.costPerf.data.datasets[0].data = dailyData.map(d => d.spend);
-                charts.costPerf.update();
-            }
-            
-            // Update Cost per Conversion chart
-            if (charts.costConv) {
-                charts.costConv.data.labels = labels;
-                charts.costConv.data.datasets[0].data = dailyData.map(d => (d.spend / Math.max(1, Math.random() * 10)).toFixed(2));
-                charts.costConv.update();
-            }
-            
-            console.log('Charts updated with real data');
-        }
-
-        // Event listeners
-        document.getElementById('datePreset').addEventListener('change', () => {
-            console.log('Date preset changed, fetching new data...');
-            fetchDashboardData();
-        });
-        
-        document.getElementById('refreshBtn').addEventListener('click', () => {
-            console.log('Refresh clicked, fetching data...');
-            fetchDashboardData();
-        });
-
-        // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
-            console.log('Page loaded, initializing...');
-            initCharts();
-            setupSectionFilters();
-            fetchDashboardData();
-        });
-    </script>
+    <script src="/static/js/marketing-dashboard.js" defer></script>
 </body>
 </html>
 
