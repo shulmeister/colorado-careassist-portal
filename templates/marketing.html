@@ -986,6 +986,41 @@
                         <div class="metric-value" id="paidConversions">43</div>
                     </div>
                 </div>
+
+                <!-- Advanced Paid KPIs -->
+                <div class="grid grid-4">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ROAS</div>
+                            <div class="card-title">Return on Ad Spend</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidRoas">3.6x</div>
+                    </div>
+
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">COST / CONV</div>
+                            <div class="card-title">Blended</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidCostPerConv">$243</div>
+                    </div>
+
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CONV RATE</div>
+                            <div class="card-title">Clicks → Leads</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidConversionRate">5.3%</div>
+                    </div>
+
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">AVG CPM</div>
+                            <div class="card-title">All Platforms</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidCpm">$32.40</div>
+                    </div>
+                </div>
                 
                 <!-- Paid Media Charts -->
                 <div class="grid grid-2">
@@ -1004,6 +1039,29 @@
                         </div>
                         <div class="chart-container-large">
                             <canvas id="paidSpendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paid Media Advanced Charts -->
+                <div class="grid grid-2">
+                    <div class="card card-compact" style="grid-column: span 1;">
+                        <div class="card-header">
+                            <div class="card-label">DAILY TREND</div>
+                            <div class="card-title">Spend vs Conversions</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="paidDailyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card card-compact" style="grid-column: span 1;">
+                        <div class="card-header">
+                            <div class="card-label">EFFICIENCY MAP</div>
+                            <div class="card-title">Campaign Bubble Chart</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="campaignEfficiencyChart"></canvas>
                         </div>
                     </div>
                 </div>

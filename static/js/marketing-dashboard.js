@@ -41,6 +41,8 @@
         paidSpend: null,
         socialReach: null,
         socialEngagement: null,
+        paidDaily: null,
+        campaignEfficiency: null,
         websiteSessions: null,
         gbpSearches: null,
         emailEngagement: null,
@@ -238,6 +240,8 @@
         renderCampaignTables(google?.campaigns || [], facebookCampaigns);
         renderPaidSummary(google, facebookAccount, payload.range, preset);
         updateAdsCharts(google);
+        updatePaidDailyChart(google, facebookAccount);
+        updateCampaignEfficiencyChart(google?.campaigns || [], facebookCampaigns);
     }
 
     function renderGoogleOverview(google) {
@@ -363,6 +367,22 @@
         setText('paidCPC', blendedCpc !== null ? formatCurrency(blendedCpc, 2) : '—');
         setText('paidConversions', formatNumber(totalConversions));
 
+        const googleImpressions = safeNumber(google?.performance?.impressions) ?? 0;
+        const facebookImpressions = safeNumber(facebookAccount?.impressions) ?? 0;
+        const totalImpressions = googleImpressions + facebookImpressions;
+
+        const roasValue = safeNumber(google?.efficiency?.roas);
+        setText('paidRoas', roasValue !== null ? `${roasValue.toFixed(2)}x` : '—');
+
+        const blendedCostPerConv = totalConversions ? totalSpend / totalConversions : null;
+        setText('paidCostPerConv', blendedCostPerConv !== null ? formatCurrency(blendedCostPerConv, 2) : '—');
+
+        const conversionRate = totalClicks ? (totalConversions / totalClicks) * 100 : null;
+        setText('paidConversionRate', conversionRate !== null ? `${conversionRate.toFixed(1)}%` : '—');
+
+        const blendedCpm = totalImpressions ? (totalSpend / totalImpressions) * 1000 : null;
+        setText('paidCpm', blendedCpm !== null ? formatCurrency(blendedCpm, 2) : '—');
+
         updateRangeLabel({
             start: range?.start,
             end: range?.end,
@@ -427,6 +447,57 @@
         updateLineChart(charts.impressions, labels, daily.map((entry) => entry.impressions || 0));
         updateLineChart(charts.interactionsClicks, labels, daily.map((entry) => entry.clicks || 0));
         updateLineChart(charts.interactionsConv, labels, daily.map((entry) => entry.conversions || 0));
+    }
+
+    function updatePaidDailyChart(google, facebook) {
+        if (!charts.paidDaily) return;
+
+        const googleDaily = Array.isArray(google?.spend?.daily) ? google.spend.daily : [];
+        const facebookDaily = Array.isArray(facebook?.daily) ? facebook.daily : [];
+        const combined = {};
+
+        googleDaily.forEach((entry) => {
+            combined[entry.date] = {
+                googleSpend: entry.spend || 0,
+                googleConversions: entry.conversions || 0,
+                facebookSpend: 0,
+            };
+        });
+
+        facebookDaily.forEach((entry) => {
+            if (!combined[entry.date]) {
+                combined[entry.date] = { googleSpend: 0, googleConversions: 0, facebookSpend: 0 };
+            }
+            combined[entry.date].facebookSpend = entry.spend || 0;
+        });
+
+        const dates = Object.keys(combined).sort();
+        if (!dates.length) {
+            charts.paidDaily.data.labels = [];
+            charts.paidDaily.update();
+            return;
+        }
+
+        charts.paidDaily.data.labels = dates.map((date) => formatChartLabel(date));
+        charts.paidDaily.data.datasets[0].data = dates.map((date) => combined[date].googleSpend);
+        charts.paidDaily.data.datasets[1].data = dates.map((date) => combined[date].facebookSpend);
+        charts.paidDaily.data.datasets[2].data = dates.map((date) => combined[date].googleConversions);
+        charts.paidDaily.update();
+    }
+
+    function updateCampaignEfficiencyChart(googleCampaigns, facebookCampaigns) {
+        if (!charts.campaignEfficiency) return;
+
+        const normalize = (campaign) => ({
+            x: campaign.spend || 0,
+            y: campaign.conversions || 0,
+            r: Math.max(4, Math.sqrt(Math.max(campaign.clicks || 0, 0))),
+            campaign: campaign.name || 'Campaign',
+        });
+
+        charts.campaignEfficiency.data.datasets[0].data = (googleCampaigns || []).map(normalize);
+        charts.campaignEfficiency.data.datasets[1].data = (facebookCampaigns || []).map(normalize);
+        charts.campaignEfficiency.update();
     }
 
     function renderSocialSection(payload, preset) {
@@ -635,6 +706,8 @@
             { stacked: true, fillOpacity: 0.25 },
         );
         charts.socialEngagement = createLineChart('socialEngagementChart', '#fb923c', 'Engagement');
+        charts.paidDaily = createPaidDailyChart('paidDailyChart');
+        charts.campaignEfficiency = createCampaignEfficiencyChart('campaignEfficiencyChart');
         charts.emailEngagement = createMultiDatasetChart(
             'emailEngagementChart',
             [
@@ -746,6 +819,124 @@
 
         chart.__datasetKeys = datasetConfigs.map((dataset) => dataset.key || dataset.label);
         return chart;
+    }
+
+    function createPaidDailyChart(canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return null;
+
+        return new Chart(canvas.getContext('2d'), {
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        type: 'bar',
+                        label: 'Google Spend',
+                        backgroundColor: 'rgba(34, 197, 94, 0.55)',
+                        borderRadius: 4,
+                        data: [],
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Facebook Spend',
+                        backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                        borderRadius: 4,
+                        data: [],
+                    },
+                    {
+                        type: 'line',
+                        label: 'Google Conversions',
+                        borderColor: '#fbbf24',
+                        backgroundColor: 'transparent',
+                        yAxisID: 'y1',
+                        tension: 0.35,
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        data: [],
+                    },
+                ],
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        stacked: true,
+                        ticks: { color: '#94a3b8' },
+                        grid: { display: false },
+                    },
+                    y: {
+                        stacked: true,
+                        ticks: { color: '#94a3b8', callback: (value) => `$${value}` },
+                        grid: { color: 'rgba(148, 163, 184, 0.12)' },
+                    },
+                    y1: {
+                        position: 'right',
+                        ticks: { color: '#fbbf24' },
+                        grid: { drawOnChartArea: false },
+                    },
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: '#cbd5f5', font: { size: 10 } },
+                    },
+                },
+            },
+        });
+    }
+
+    function createCampaignEfficiencyChart(canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return null;
+
+        return new Chart(canvas.getContext('2d'), {
+            type: 'bubble',
+            data: {
+                datasets: [
+                    {
+                        label: 'Google Campaigns',
+                        backgroundColor: 'rgba(34, 197, 94, 0.6)',
+                        borderColor: '#22c55e',
+                        data: [],
+                    },
+                    {
+                        label: 'Facebook Campaigns',
+                        backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                        borderColor: '#3b82f6',
+                        data: [],
+                    },
+                ],
+            },
+            options: {
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Spend ($)', color: '#94a3b8', font: { size: 11 } },
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: 'rgba(148, 163, 184, 0.12)' },
+                    },
+                    y: {
+                        title: { display: true, text: 'Conversions', color: '#94a3b8', font: { size: 11 } },
+                        ticks: { color: '#94a3b8' },
+                        grid: { color: 'rgba(148, 163, 184, 0.12)' },
+                    },
+                },
+                plugins: {
+                    legend: {
+                        labels: { color: '#cbd5f5', font: { size: 10 } },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                const { raw } = context;
+                                const spend = formatCurrency(raw.x, 2);
+                                const conversions = raw.y.toFixed(2);
+                                return `${raw.campaign}: Spend ${spend}, Conversions ${conversions}, Clicks ~ ${Math.round(raw.r ** 2)}`;
+                            },
+                        },
+                    },
+                },
+            },
+        });
     }
 
     function buildChartOptions({ stacked = false, legend = false } = {}) {
