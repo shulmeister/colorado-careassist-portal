@@ -17,11 +17,12 @@
 #### 1. Sales Dashboard
 - **Repository**: `sales-dashboard` (SEPARATE GitHub repo)
 - **GitHub**: https://github.com/shulmeister/sales-dashboard
-- **Heroku**: `careassist-tracker` → `careassist-tracker-0fcf2cecdb22.herokuapp.com`
+- **Heroku**: `cca-crm` → `https://cca-crm-cd555628f933.herokuapp.com` (**canonical target**)
 - **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales/`
 - **Tech**: Python FastAPI, Jinja2, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
-- **Portal Route**: `/sales` (redirects to Heroku URL)
+- **Portal Route**: `/sales` (redirects via `/portal-auth` into the CCA CRM app)
+- **Env Var**: `SALES_DASHBOARD_URL` **must** stay set to `https://cca-crm-cd555628f933.herokuapp.com`
 - **Features**: Visits tracking, business cards, closed sales, contacts, Lead Tracker, activity logs
 
 #### 2. Recruiter Dashboard
