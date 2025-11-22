@@ -80,20 +80,23 @@ heroku logs --tail --app portal-coloradocareassist
 
 ---
 
-## 📝 Next Steps
+## 📝 Current Status (Nov 22, 2025)
 
-### For Other Dashboards:
+| Tile | GitHub Repo | Heroku App(s) | Status | Notes |
+|------|-------------|---------------|--------|-------|
+| Portal | `shulmeister/colorado-careassist-portal` | `portal-coloradocareassist` | ✅ Auto deploys from `main` | Verified again after rollback. |
+| Sales Dashboard | `shulmeister/sales-dashboard` | `careassist-tracker` + `cca-crm` | ✅ Code + dist synced | Repo rebuilt from the good slug, `.python-version` added, both Heroku apps now on the same commit (`v388` / `v24`). Toggle “Enable Automatic Deploys” when ready. |
+| Recruiter Dashboard | `shulmeister/recruiter-dashboard` | `caregiver-lead-tracker` | ⚙️ Pipeline linked | Created pipeline `recruiter-dashboard` and connected it to the GitHub repo. Open **Heroku → Pipelines → recruiter-dashboard → Configure automatic deploys** to finish the last step (pick branch `main`, leave “wait for CI” off). |
+| Activity Tracker | `shulmeister/Colorado-CareAssist-Route-Tracker` | `cca-activity-tracker` | ⚙️ Pipeline linked | Pipeline `activity-tracker` now wired to GitHub. Same finishing step: Pipeline → Configure Automatic Deploys → select `main`. |
 
-Consider setting up GitHub integration for:
-- **Sales Dashboard** (`careassist-tracker`)
-- **Recruiter Dashboard** (`caregiver-lead-tracker`)
-- **Activity Tracker** (`cca-activity-tracker`)
+### To finish auto-deploy setup (Recruiter + Activity)
+1. Open the Heroku dashboard → **Pipelines**.
+2. Select `recruiter-dashboard` or `activity-tracker`.
+3. Under the connected GitHub repo, click **Configure Automatic Deploys**.
+4. Choose branch `main`, decide whether to wait for CI (currently off), and save.
+5. Repeat for the other pipeline.
 
-Same process:
-1. Heroku Dashboard → Deploy tab
-2. Connect to GitHub
-3. Select repository
-4. Enable automatic deploys from `main`
+That’s it—after this, pushing to GitHub will rebuild and deploy the dashboard automatically, just like the portal.
 
 ---
 

@@ -1,6 +1,6 @@
 # 📍 Codebase Locations - Quick Reference
 
-**Last Updated**: November 21, 2025
+**Last Updated**: November 22, 2025
 
 ## 🚀 Desktop Quick Launch
 
@@ -14,7 +14,7 @@ Inside `~/Documents/GitHub` there’s exactly one folder per tile. Each is a sym
 | `recruiter-dashboard` | `dashboards/recruitment/` | Flask recruiter app |
 | `marketing-dashboard` | `dashboards/marketing/` | Marketing services/templates (deployed with portal) |
 
-This document provides EXACT file paths and git remotes for all components of the Colorado CareAssist Portal system.
+This document provides EXACT file paths and git remotes for all components of the Colorado CareAssist Portal system. Every spoke is its own git repository (with its own `.git` directory), so keep committing inside the tile folder you’re working on—the portal repo just ignores those directories now.
 
 ## 🎯 The Hub: Portal
 

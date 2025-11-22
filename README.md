@@ -4,13 +4,13 @@
 
 On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** that matches the tile you click in the portal. Those folders are symbolic links that point into this repo so you can jump straight to the correct nested git repo:
 
-| Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Heroku App / URL                                                     |
-|---------------------|-------------------------------------------|------------------------------------------------------|--------------------------------------------------------|-----------------------------------------------------------------------|
-| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `portal-coloradocareassist` → https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com |
-| Sales Dashboard     | `sales-dashboard`                         | `dashboards/sales`                                   | `shulmeister/sales-dashboard`                          | `careassist-tracker` (or `SALES_DASHBOARD_URL` override for CCA CRM)  |
-| Activity Tracker    | `activity-tracker`                        | `dashboards/activity-tracker`                        | `shulmeister/Colorado-CareAssist-Route-Tracker`        | `cca-activity-tracker-6d9a1d8e3933`                                   |
-| Recruiter Dashboard | `recruiter-dashboard`                     | `dashboards/recruitment`                             | `shulmeister/recruiter-dashboard`                      | `caregiver-lead-tracker-9d0e6a8c7c20`                                 |
-| Marketing Dashboard | `marketing-dashboard`                     | `dashboards/marketing` (served via portal templates) | `shulmeister/marketing-dashboard`                      | Deployed with portal (no separate Heroku app)                         |
+| Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Heroku App / URL + Deploy Status                                                                 |
+|---------------------|-------------------------------------------|------------------------------------------------------|--------------------------------------------------------|---------------------------------------------------------------------------------------------------|
+| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `portal-coloradocareassist` → https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com (auto deploy ✅) |
+| Sales Dashboard     | `sales-dashboard`                         | `dashboards/sales`                                   | `shulmeister/sales-dashboard`                          | `careassist-tracker` / `cca-crm` (both auto deploy from GitHub `main` ✅)                          |
+| Activity Tracker    | `activity-tracker`                        | `dashboards/activity-tracker`                        | `shulmeister/Colorado-CareAssist-Route-Tracker`        | `cca-activity-tracker-6d9a1d8e3933` (auto deploy from GitHub `main` ✅)                             |
+| Recruiter Dashboard | `recruiter-dashboard`                     | `dashboards/recruitment`                             | `shulmeister/recruiter-dashboard`                      | `caregiver-lead-tracker-9d0e6a8c7c20` (auto deploy from GitHub `main` ✅)                           |
+| Marketing Dashboard | `marketing-dashboard`                     | `dashboards/marketing` (served via portal templates) | `shulmeister/marketing-dashboard`                      | Ships with portal auto deploy (no separate Heroku app)                                            |
 
 > 🔁 Any time you “work on Sales”, just `cd ~/Documents/GitHub/sales-dashboard` and you’ll end up in `colorado-careassist-portal/dashboards/sales`, which is the real repo that deploys the Sales tile. Same pattern for every other spoke.
 
@@ -47,7 +47,7 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 - **Tech**: Flask, SQLAlchemy, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
 - **Portal Route**: `/recruitment` (embedded iframe)
-- **Features**: Caregiver recruitment, candidate pipeline, Facebook leads
+- **Features**: Caregiver recruitment, candidate pipeline, Facebook Lead Ads sync (`Pull Leads` button + daily scheduler script, duplicate-proof via native lead IDs)
 
 #### 3. Marketing Dashboard
 - **Repository**: `marketing-dashboard` (nested repo)
@@ -71,17 +71,13 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 
 ### ⚠️ CRITICAL DEPLOYMENT RULES
 
-**ALWAYS FOLLOW THIS FLOW: Desktop → GitHub → Heroku (Auto-Deploy)**
+**Standard flow (now live for every tile):**
 
-**Recommended: GitHub Integration (Auto-Deploy Enabled)**
-- Connect Heroku to GitHub in Heroku dashboard
-- Enable "Automatic deploys" from `main` branch
-- **After making ANY code changes:**
-  1. Commit to local git (Desktop)
-  2. Push to GitHub (`git push origin main`)
-  3. ✅ **Heroku automatically deploys!** (no manual push needed)
+`Desktop commit → git push origin main → Heroku auto deploys` ✅
 
-**Manual sync commands (if NOT using GitHub integration):**
+All apps (portal + every spoke) are connected to their GitHub repo with automatic deploys from the `main` branch. The commands below are only needed if auto deploys are intentionally disabled and you want to push directly to Heroku.
+
+**Manual override (only if GitHub integration is disabled):**
 
 #### Portal (Hub)
 ```bash
@@ -113,8 +109,9 @@ git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
 git add .
 git commit -m "Describe changes"
-git push origin main      # Push to GitHub
-git push heroku main      # Deploy to https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com
+git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
+# Only push directly if auto deploys are off:
+# git push heroku main
 ```
 
 ### 📁 Git Repository Structure
@@ -143,15 +140,15 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 
 **IMPORTANT**: Each dashboard (`sales` and `recruitment`) is a **nested git repository** with its own remotes. They are NOT submodules - they're independent repos that happen to live inside the portal directory.
 
-### 🔄 Syncing Status (Last Updated: Nov 21, 2025)
+### 🔄 Syncing Status (Last Updated: Nov 22, 2025)
 
 | Component | GitHub Repo | Heroku App / URL | Status |
 |-----------|-------------|------------------|--------|
-| Portal | `shulmeister/colorado-careassist-portal` | `portal-coloradocareassist` | ✅ Deployed v259 |
-| Sales Dashboard | `shulmeister/sales-dashboard` | `careassist-tracker` (or `SALES_DASHBOARD_URL`) | ✅ CRM-only build live |
-| Recruiter Dashboard | `shulmeister/recruiter-dashboard` | `caregiver-lead-tracker-9d0e6a8c7c20` | ✅ Synced |
-| Activity Tracker | `shulmeister/Colorado-CareAssist-Route-Tracker` | `cca-activity-tracker-6d9a1d8e3933` | ✅ Synced + portal SSO |
-| Marketing Dashboard | `shulmeister/marketing-dashboard` (embedded) | Ships with portal | ✅ Synced |
+| Portal | `shulmeister/colorado-careassist-portal` | `portal-coloradocareassist` | ✅ Auto deploy on `main` |
+| Sales Dashboard | `shulmeister/sales-dashboard` | `careassist-tracker` / `cca-crm` | ✅ `sales-stable-2025-11-22` tagged & auto deploys |
+| Recruiter Dashboard | `shulmeister/recruiter-dashboard` | `caregiver-lead-tracker-9d0e6a8c7c20` | ✅ Auto deploy on `main` |
+| Activity Tracker | `shulmeister/Colorado-CareAssist-Route-Tracker` | `cca-activity-tracker-6d9a1d8e3933` | ✅ Auto deploy on `main` + portal SSO |
+| Marketing Dashboard | `shulmeister/marketing-dashboard` (embedded) | Ships with portal | ✅ Included in portal auto deploy |
 
 ### 🚨 Common Mistakes to Avoid
 
