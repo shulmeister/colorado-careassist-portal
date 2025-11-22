@@ -21,6 +21,7 @@ from services.marketing.metrics_service import (
 )
 from dotenv import load_dotenv
 from datetime import date
+from itsdangerous import URLSafeTimedSerializer
 
 # Load environment variables
 load_dotenv()
@@ -57,6 +58,8 @@ ACTIVITY_TRACKER_URL = os.getenv(
 )
 
 PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
+PORTAL_SSO_SERIALIZER = URLSafeTimedSerializer(PORTAL_SECRET)
+PORTAL_SSO_TOKEN_TTL = int(os.getenv("PORTAL_SSO_TOKEN_TTL", "300"))
 
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
 
@@ -840,7 +843,7 @@ async def sales_dashboard_redirect(
         "login_time": datetime.utcnow().isoformat()
     }
     
-    portal_token = oauth_manager.serializer.dumps(token_payload)
+    portal_token = PORTAL_SSO_SERIALIZER.dumps(token_payload)
     sales_portal_auth = sales_dashboard_url.rstrip("/") + "/portal-auth"
     
     query = urlencode({
@@ -869,7 +872,7 @@ async def activity_tracker_redirect(
         "login_time": datetime.utcnow().isoformat()
     }
 
-    portal_token = oauth_manager.serializer.dumps(token_payload)
+    portal_token = PORTAL_SSO_SERIALIZER.dumps(token_payload)
     tracker_portal_auth = tracker_url + "/portal-auth"
 
     query = urlencode({
