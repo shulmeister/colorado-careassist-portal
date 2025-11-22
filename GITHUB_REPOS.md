@@ -101,6 +101,28 @@ cd marketing-dashboard
 
 ---
 
+### 4. Activity Tracker
+
+**Repository**: `Colorado-CareAssist-Route-Tracker`  
+**GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker  
+**Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker/`  
+**Heroku**: `cca-activity-tracker` → `https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com`
+
+**Contains**:
+- Original Visits/Activity Tracker (FastAPI)
+- Business card scanner + CSV ingestion + Google Sheets sync
+- Summary, Visits, Uploads, Activity Log views
+
+**To clone on new computer**:
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards
+git clone https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git activity-tracker
+cd activity-tracker
+heroku git:remote -a cca-activity-tracker
+```
+
+---
+
 ## 🔄 Complete Setup on New Computer
 
 ### Step 1: Clone Portal (Hub)
@@ -126,6 +148,12 @@ cd ..
 
 # Marketing Dashboard
 git clone https://github.com/shulmeister/marketing-dashboard.git marketing
+cd ..
+
+# Activity Tracker
+git clone https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git activity-tracker
+cd activity-tracker
+heroku git:remote -a cca-activity-tracker
 cd ..
 ```
 
@@ -155,6 +183,7 @@ cd ../marketing && git remote -v
 2. **Sales Dashboard**: https://github.com/shulmeister/sales-dashboard
 3. **Recruiter Dashboard**: https://github.com/shulmeister/recruiter-dashboard
 4. **Marketing Dashboard**: https://github.com/shulmeister/marketing-dashboard
+5. **Activity Tracker**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
 
 ---
 

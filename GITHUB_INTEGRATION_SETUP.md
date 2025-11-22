@@ -87,6 +87,7 @@ heroku logs --tail --app portal-coloradocareassist
 Consider setting up GitHub integration for:
 - **Sales Dashboard** (`careassist-tracker`)
 - **Recruiter Dashboard** (`caregiver-lead-tracker`)
+- **Activity Tracker** (`cca-activity-tracker`)
 
 Same process:
 1. Heroku Dashboard → Deploy tab
@@ -104,4 +105,5 @@ Desktop → GitHub → Heroku (Auto-Deploy)
 ```
 
 **No more manual Heroku pushes needed!** 🎉
+
 

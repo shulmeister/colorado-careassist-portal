@@ -9,6 +9,7 @@
 | **Portal** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
 | **Sales Dashboard** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
 | **Recruiter Dashboard** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
+| **Activity Tracker** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
 | **Marketing Dashboard** | ✅ | ✅ | ✅ (part of portal) | ✅ **FULLY SYNCED** |
 
 ## ✅ All Repos Synced!
@@ -17,6 +18,7 @@
 - **Sales Dashboard**: https://github.com/shulmeister/sales-dashboard
 - **Recruiter Dashboard**: https://github.com/shulmeister/recruiter-dashboard
 - **Marketing Dashboard**: https://github.com/shulmeister/marketing-dashboard
+- **Activity Tracker**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
 
 ## Standard Workflow (Desktop → GitHub → Heroku)
 
@@ -56,6 +58,15 @@ cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/re
 git add .
 git commit -m "Your message"
 git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
+```
+
+**For Activity Tracker**:
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
+git add .
+git commit -m "Your message"
+git push origin main
+git push heroku main
 ```
 
 **Or use the sync script**:

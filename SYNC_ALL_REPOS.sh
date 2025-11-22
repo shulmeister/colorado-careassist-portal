@@ -86,6 +86,13 @@ sync_repo \
     "shulmeister/recruiter-dashboard" \
     "caregiver-lead-tracker"
 
+# Sync Activity Tracker
+sync_repo \
+    "Activity Tracker" \
+    "$BASE_DIR/dashboards/activity-tracker" \
+    "shulmeister/Colorado-CareAssist-Route-Tracker" \
+    "cca-activity-tracker"
+
 echo -e "${GREEN}✅ All repos synced!${NC}"
 echo ""
 echo "Desktop → GitHub → Heroku flow complete!"

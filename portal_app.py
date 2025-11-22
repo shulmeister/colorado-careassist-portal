@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, Depends, status, Query
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +10,7 @@ import logging
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date as date_cls
 import httpx
-from urllib.parse import urlencode, quote_plus
+from urllib.parse import urlencode, quote_plus, urljoin
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
 from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher
@@ -50,6 +50,13 @@ CLIENT_SATISFACTION_APP_URL = os.getenv(
     "CLIENT_SATISFACTION_URL",
     "https://client-satisfaction-15d412babc2f.herokuapp.com/",
 )
+
+ACTIVITY_TRACKER_URL = os.getenv(
+    "ACTIVITY_TRACKER_URL",
+    "https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com/",
+)
+
+PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
 
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
 
@@ -844,6 +851,34 @@ async def sales_dashboard_redirect(
     redirect_url = f"{sales_portal_auth}?{query}"
     
     logger.info(f"Redirecting {current_user.get('email')} to Sales Dashboard with portal token")
+    return RedirectResponse(url=redirect_url, status_code=302)
+
+
+@app.get("/activity-tracker")
+async def activity_tracker_redirect(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Redirect to Activity Tracker using portal-issued SSO token"""
+    tracker_url = ACTIVITY_TRACKER_URL.rstrip("/")
+    token_payload = {
+        "user_id": current_user.get("email"),
+        "email": current_user.get("email"),
+        "name": current_user.get("name"),
+        "domain": current_user.get("email", "").split("@")[-1] if current_user.get("email") else "",
+        "via_portal": True,
+        "login_time": datetime.utcnow().isoformat()
+    }
+
+    portal_token = oauth_manager.serializer.dumps(token_payload)
+    tracker_portal_auth = tracker_url + "/portal-auth"
+
+    query = urlencode({
+        "portal_token": portal_token,
+        "portal_user_email": current_user.get("email", "")
+    })
+
+    redirect_url = f"{tracker_portal_auth}?{query}"
+    logger.info(f"Redirecting {current_user.get('email')} to Activity Tracker with portal token")
     return RedirectResponse(url=redirect_url, status_code=302)
 
 @app.get("/recruitment", response_class=HTMLResponse)

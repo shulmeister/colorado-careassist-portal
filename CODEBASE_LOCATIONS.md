@@ -89,6 +89,30 @@ git push heroku main    # Heroku
 
 ---
 
+## 🧭 Spoke 4: Activity Tracker
+
+**Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker/`
+
+**Git Remotes**:
+- GitHub: `https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git`
+- Heroku: `https://git.heroku.com/cca-activity-tracker.git`
+
+**Deploy Commands**:
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
+git push origin main    # GitHub
+git push heroku main    # Heroku
+```
+
+**Key Files**:
+- `app.py` - Legacy Visits/Activity tracker FastAPI app
+- `templates/dashboard.html` - UI
+- `business_card_scanner.py`, `parser.py`, CSV import scripts
+
+**IMPORTANT**: This is a **nested git repository** - it has its own `.git` folder!
+
+---
+
 ## 🔍 How to Check Which Repo You're In
 
 ```bash
@@ -160,7 +184,9 @@ Before starting work, verify:
 - **Portal GitHub**: https://github.com/shulmeister/colorado-careassist-portal
 - **Sales Dashboard GitHub**: https://github.com/shulmeister/sales-dashboard
 - **Recruiter Dashboard GitHub**: ⚠️ Needs creation
+- **Activity Tracker GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
 - **Portal Heroku**: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
 - **Sales Dashboard Heroku**: https://careassist-tracker-0fcf2cecdb22.herokuapp.com
 - **Recruiter Dashboard Heroku**: https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com
+- **Activity Tracker Heroku**: https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com
 
