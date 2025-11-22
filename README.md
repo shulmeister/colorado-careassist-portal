@@ -269,6 +269,28 @@ The app is configured for Heroku deployment:
    heroku run python portal_setup.py
    ```
 
+## Smoke Tests (Tiles + Health Checks)
+
+Before handing the portal back to stakeholders, run the canned smoke script to make sure each tile URL and health endpoint is responding:
+
+```bash
+./scripts/smoke.sh
+```
+
+The script hits:
+
+| Check | Endpoint | Expected |
+|-------|----------|----------|
+| Portal health | `$PORTAL_URL/health` | 200 |
+| Marketing shell | `$PORTAL_URL/marketing` | 200 (authed) / 302 or 401 (unauth) |
+| Portal → Sales redirect | `$PORTAL_URL/sales` | 302/307/401 (unauth redirect) |
+| Sales health | `$SALES_DASHBOARD_URL/health` | 200 |
+| Portal → Activity redirect | `$PORTAL_URL/activity-tracker` | 302/307/401 |
+| Activity health | `$ACTIVITY_TRACKER_URL/health` | 200 |
+| Recruiter landing | `$RECRUITER_DASHBOARD_URL/` | 200/302/307/401/404 |
+
+Override the URLs via environment variables (`PORTAL_URL`, `SALES_DASHBOARD_URL`, etc.) if you need to test staging environments.
+
 ## Project Structure
 
 ```
