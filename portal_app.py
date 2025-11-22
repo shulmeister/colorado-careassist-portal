@@ -831,7 +831,7 @@ async def sales_dashboard_redirect(
     """Redirect to Sales Dashboard using portal-issued SSO token"""
     sales_dashboard_url = os.getenv(
         "SALES_DASHBOARD_URL",
-        "https://cca-crm-cd555628f933.herokuapp.com"
+        "https://careassist-tracker-0fcf2cecdb22.herokuapp.com"
     )
     
     token_payload = {
