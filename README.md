@@ -1,8 +1,22 @@
 # Colorado CareAssist Portal
 
+## 🗺️ Quick Map (Desktop → Repos → Heroku)
+
+On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** that matches the tile you click in the portal. Those folders are symbolic links that point into this repo so you can jump straight to the correct nested git repo:
+
+| Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Heroku App / URL                                                     |
+|---------------------|-------------------------------------------|------------------------------------------------------|--------------------------------------------------------|-----------------------------------------------------------------------|
+| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `portal-coloradocareassist` → https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com |
+| Sales Dashboard     | `sales-dashboard`                         | `dashboards/sales`                                   | `shulmeister/sales-dashboard`                          | `careassist-tracker` (or `SALES_DASHBOARD_URL` override for CCA CRM)  |
+| Activity Tracker    | `activity-tracker`                        | `dashboards/activity-tracker`                        | `shulmeister/Colorado-CareAssist-Route-Tracker`        | `cca-activity-tracker-6d9a1d8e3933`                                   |
+| Recruiter Dashboard | `recruiter-dashboard`                     | `dashboards/recruitment`                             | `shulmeister/recruiter-dashboard`                      | `caregiver-lead-tracker-9d0e6a8c7c20`                                 |
+| Marketing Dashboard | `marketing-dashboard`                     | `dashboards/marketing` (served via portal templates) | `shulmeister/marketing-dashboard`                      | Deployed with portal (no separate Heroku app)                         |
+
+> 🔁 Any time you “work on Sales”, just `cd ~/Documents/GitHub/sales-dashboard` and you’ll end up in `colorado-careassist-portal/dashboards/sales`, which is the real repo that deploys the Sales tile. Same pattern for every other spoke.
+
 ## 🎯 CRITICAL: HUB-AND-SPOKE ARCHITECTURE
 
-**READ THIS FIRST - THIS IS A HUB-AND-SPOKE SYSTEM:**
+**READ THIS FIRST – THIS IS A HUB-AND-SPOKE SYSTEM:**
 
 ### THE HUB (Main Portal)
 - **Repository**: `colorado-careassist-portal`
@@ -15,34 +29,45 @@
 ### SPOKES (Individual Apps)
 
 #### 1. Sales Dashboard
-- **Repository**: `sales-dashboard` (SEPARATE GitHub repo)
+- **Repository**: `sales-dashboard` (nested repo)
 - **GitHub**: https://github.com/shulmeister/sales-dashboard
-- **Heroku**: `cca-crm` → `https://cca-crm-cd555628f933.herokuapp.com` (**canonical target**)
-- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales/`
+- **Heroku**: `careassist-tracker` → `https://careassist-tracker-0fcf2cecdb22.herokuapp.com/`  
+  (Portal env `SALES_DASHBOARD_URL` can override with `https://cca-crm-cd555628f933.herokuapp.com` when needed.)
+- **Local Path**: `~/Documents/GitHub/sales-dashboard` (symlink) → `dashboards/sales/`
 - **Tech**: Python FastAPI, Jinja2, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
 - **Portal Route**: `/sales` (redirects via `/portal-auth` into the CCA CRM app)
-- **Env Var**: `SALES_DASHBOARD_URL` **must** stay set to `https://cca-crm-cd555628f933.herokuapp.com`
 - **Features**: Visits tracking, business cards, closed sales, contacts, Lead Tracker, activity logs
 
 #### 2. Recruiter Dashboard
-- **Repository**: `recruiter-dashboard` (SEPARATE GitHub repo - needs to be created)
-- **GitHub**: https://github.com/shulmeister/recruiter-dashboard (TO BE CREATED)
+- **Repository**: `recruiter-dashboard` (nested repo)
+- **GitHub**: https://github.com/shulmeister/recruiter-dashboard
 - **Heroku**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com`
-- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment/`
+- **Local Path**: `~/Documents/GitHub/recruiter-dashboard` (symlink) → `dashboards/recruitment/`
 - **Tech**: Flask, SQLAlchemy, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
 - **Portal Route**: `/recruitment` (embedded iframe)
 - **Features**: Caregiver recruitment, candidate pipeline, Facebook leads
 
 #### 3. Marketing Dashboard
-- **Repository**: `marketing-dashboard` (SEPARATE GitHub repo)
+- **Repository**: `marketing-dashboard` (nested repo)
 - **GitHub**: https://github.com/shulmeister/marketing-dashboard
-- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/marketing/`
+- **Local Path**: `~/Documents/GitHub/marketing-dashboard` (symlink) → `dashboards/marketing/`
 - **Tech**: Jinja2 template, Chart.js, FastAPI routes (integrated into portal)
 - **Git Structure**: Nested git repo (has its own `.git` folder)
 - **Portal Route**: `/marketing` (built-in route in portal_app.py)
 - **Features**: Social media metrics, Google Ads, GA4, GBP analytics
+
+#### 4. Activity Tracker
+- **Repository**: `Colorado-CareAssist-Route-Tracker` (nested repo)
+- **GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
+- **Heroku**: `cca-activity-tracker-6d9a1d8e3933` → https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com/
+- **Local Path**: `~/Documents/GitHub/activity-tracker` (symlink) → `dashboards/activity-tracker/`
+- **Tech**: FastAPI, SQLAlchemy, PDF parser, Tesseract OCR
+- **Git Structure**: Nested git repo (has its own `.git` folder)
+- **Portal Route**: `/activity-tracker` (portal redirects with SSO token)
+- **Features**: PDF route import, time tracking, business-card OCR, Google Sheets sync
+- **Helper Script**: Run `python add_activity_tracker_tile.py` from portal root (or `heroku run` equivalent) to keep the portal tile pointing at `/activity-tracker`.
 
 ### ⚠️ CRITICAL DEPLOYMENT RULES
 
@@ -83,6 +108,15 @@ git commit -m "Describe changes"
 git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
 ```
 
+#### Activity Tracker (Spoke)
+```bash
+cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
+git add .
+git commit -m "Describe changes"
+git push origin main      # Push to GitHub
+git push heroku main      # Deploy to https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com
+```
+
 ### 📁 Git Repository Structure
 
 ```
@@ -93,10 +127,14 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 │   │   ├── .git/                    # Sales Dashboard's OWN git repo
 │   │   ├── app.py
 │   │   └── ...
-│   └── recruitment/
-│       ├── .git/                    # Recruiter Dashboard's OWN git repo
-│       ├── app.py
-│       └── ...
+│   ├── recruitment/
+│   │   ├── .git/                    # Recruiter Dashboard's OWN git repo
+│   │   ├── app.py
+│   │   └── ...
+│   └── activity-tracker/
+│       ├── .git/                    # Activity Tracker's OWN git repo
+│       ├── app.py                   # FastAPI + PDF/HEIC/OCR pipelines
+│       └── business_card_scanner.py, parser.py, etc.
 ├── templates/
 │   ├── marketing.html               # Marketing Dashboard (built into portal)
 │   └── ...
@@ -105,16 +143,15 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 
 **IMPORTANT**: Each dashboard (`sales` and `recruitment`) is a **nested git repository** with its own remotes. They are NOT submodules - they're independent repos that happen to live inside the portal directory.
 
-### 🔄 Syncing Status (Last Updated: Nov 13, 2025)
+### 🔄 Syncing Status (Last Updated: Nov 21, 2025)
 
-| Component | GitHub | Heroku | Status |
-|-----------|--------|--------|--------|
-| Portal | ✅ https://github.com/shulmeister/colorado-careassist-portal | ✅ portal-coloradocareassist | ✅ Synced |
-| Sales Dashboard | ✅ https://github.com/shulmeister/sales-dashboard | ✅ careassist-tracker | ✅ Synced |
-| Recruiter Dashboard | ❌ **NEEDS CREATION** | ✅ caregiver-lead-tracker | ⚠️ Heroku only |
-| Marketing Dashboard | ✅ (part of portal repo) | ✅ (part of portal) | ✅ Synced |
-
-**TODO**: Create GitHub repo `recruiter-dashboard` and push code from `/dashboards/recruitment/`
+| Component | GitHub Repo | Heroku App / URL | Status |
+|-----------|-------------|------------------|--------|
+| Portal | `shulmeister/colorado-careassist-portal` | `portal-coloradocareassist` | ✅ Deployed v259 |
+| Sales Dashboard | `shulmeister/sales-dashboard` | `careassist-tracker` (or `SALES_DASHBOARD_URL`) | ✅ CRM-only build live |
+| Recruiter Dashboard | `shulmeister/recruiter-dashboard` | `caregiver-lead-tracker-9d0e6a8c7c20` | ✅ Synced |
+| Activity Tracker | `shulmeister/Colorado-CareAssist-Route-Tracker` | `cca-activity-tracker-6d9a1d8e3933` | ✅ Synced + portal SSO |
+| Marketing Dashboard | `shulmeister/marketing-dashboard` (embedded) | Ships with portal | ✅ Synced |
 
 ### 🚨 Common Mistakes to Avoid
 
@@ -270,11 +307,25 @@ The app is configured for Heroku deployment:
 3. Click "+ Add Tool"
 4. Fill in the form:
    - **Name**: Tool name (e.g., "Sales Dashboard")
-   - **URL**: Full URL to the tool
+   - **URL**: Internal route (`/sales`, `/activity-tracker`, etc.) or full URL
    - **Icon**: Emoji icon (e.g., "📊")
    - **Description**: Brief description (optional)
    - **Category**: Category name (optional)
    - **Display Order**: Order in grid (lower numbers first)
+
+### Activity Tracker helper script
+
+To guarantee the “Activity Tracker” tile always points at `/activity-tracker` with the right metadata, run the helper script:
+
+```bash
+# Update local portal.db
+python add_activity_tracker_tile.py
+
+# Update production portal
+heroku run python add_activity_tracker_tile.py -a portal-coloradocareassist
+```
+
+This script will upsert the tile (icon 📋, Field Ops category, display order 4) without disturbing other tiles.
 
 ## Security
 

@@ -1,6 +1,18 @@
 # 📍 Codebase Locations - Quick Reference
 
-**Last Updated**: November 13, 2025
+**Last Updated**: November 21, 2025
+
+## 🚀 Desktop Quick Launch
+
+Inside `~/Documents/GitHub` there’s exactly one folder per tile. Each is a symlink that points into this repo:
+
+| Desktop Folder | Actual Path (inside repo) | Notes |
+|----------------|---------------------------|-------|
+| `colorado-careassist-portal` | `.` | Portal hub (FastAPI + marketing dashboard) |
+| `sales-dashboard` | `dashboards/sales/` | Atomic CRM based Sales app |
+| `activity-tracker` | `dashboards/activity-tracker/` | Legacy Visits/Activity tracker (PDF + OCR) |
+| `recruiter-dashboard` | `dashboards/recruitment/` | Flask recruiter app |
+| `marketing-dashboard` | `dashboards/marketing/` | Marketing services/templates (deployed with portal) |
 
 This document provides EXACT file paths and git remotes for all components of the Colorado CareAssist Portal system.
 
@@ -29,7 +41,7 @@ git push heroku main    # Heroku
 
 ## 📊 Spoke 1: Sales Dashboard
 
-**Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales/`
+**Local Path**: `~/Documents/GitHub/sales-dashboard` → `colorado-careassist-portal/dashboards/sales/`
 
 **Git Remotes**:
 - GitHub: `https://github.com/shulmeister/sales-dashboard.git`
@@ -53,16 +65,16 @@ git push heroku main    # Heroku
 
 ## 👥 Spoke 2: Recruiter Dashboard
 
-**Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment/`
+**Local Path**: `~/Documents/GitHub/recruiter-dashboard` → `colorado-careassist-portal/dashboards/recruitment/`
 
 **Git Remotes**:
-- GitHub: `https://github.com/shulmeister/recruiter-dashboard.git` ⚠️ **NEEDS CREATION**
+- GitHub: `https://github.com/shulmeister/recruiter-dashboard.git`
 - Heroku: `https://git.heroku.com/caregiver-lead-tracker.git`
 
 **Deploy Commands**:
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
-git push origin main    # GitHub (once repo is created)
+git push origin main    # GitHub
 git push heroku main    # Heroku
 ```
 
@@ -72,8 +84,6 @@ git push heroku main    # Heroku
 - `templates/index.html` - Dashboard UI
 
 **IMPORTANT**: This is a **nested git repository** - it has its own `.git` folder!
-
-**TODO**: Create GitHub repo `recruiter-dashboard` at https://github.com/shulmeister/recruiter-dashboard
 
 ---
 
@@ -91,7 +101,7 @@ git push heroku main    # Heroku
 
 ## 🧭 Spoke 4: Activity Tracker
 
-**Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker/`
+**Local Path**: `~/Documents/GitHub/activity-tracker` → `colorado-careassist-portal/dashboards/activity-tracker/`
 
 **Git Remotes**:
 - GitHub: `https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git`
@@ -183,7 +193,7 @@ Before starting work, verify:
 
 - **Portal GitHub**: https://github.com/shulmeister/colorado-careassist-portal
 - **Sales Dashboard GitHub**: https://github.com/shulmeister/sales-dashboard
-- **Recruiter Dashboard GitHub**: ⚠️ Needs creation
+- **Recruiter Dashboard GitHub**: https://github.com/shulmeister/recruiter-dashboard
 - **Activity Tracker GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
 - **Portal Heroku**: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
 - **Sales Dashboard Heroku**: https://careassist-tracker-0fcf2cecdb22.herokuapp.com
