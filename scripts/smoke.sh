@@ -13,6 +13,16 @@ function resolve_sales_bundle() {
     return 0
   fi
 
+  # Prefer live index (handles hashed bundle updates)
+  if command -v curl >/dev/null 2>&1; then
+    local remote_bundle
+    remote_bundle=$(curl -s "${SALES_URL:-""}/" | grep -o 'assets/index-[^"]*\.js' | head -n 1 || true)
+    if [[ -n "$remote_bundle" ]]; then
+      echo "$remote_bundle"
+      return 0
+    fi
+  fi
+
   local manifest="dashboards/sales/frontend/dist/index.html"
   if [[ -f "$manifest" ]]; then
     local bundle
