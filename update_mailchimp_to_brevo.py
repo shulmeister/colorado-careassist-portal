@@ -9,12 +9,12 @@ import sys
 # Add the parent directory to the path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from portal_database import SessionLocal
+from portal_database import db_manager
 from portal_models import PortalTool
 
 def update_mailchimp_to_brevo():
     """Update Mailchimp tile to Brevo."""
-    db = SessionLocal()
+    db = db_manager.get_session()
     
     try:
         # Find the Mailchimp tile
