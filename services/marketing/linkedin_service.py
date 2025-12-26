@@ -57,8 +57,8 @@ class LinkedInService:
         Note: Organization scopes (r_organization_social, rw_organization_admin) require
         Marketing Developer Platform access which must be applied for separately.
         """
-        # Basic scopes available to all apps
-        scopes = "openid profile email w_member_social"
+        # Most basic scopes - Sign In with LinkedIn
+        scopes = "openid profile email"
         return (
             f"{LINKEDIN_OAUTH_URL}/authorization?"
             f"response_type=code&"
