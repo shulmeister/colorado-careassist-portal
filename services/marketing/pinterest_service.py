@@ -167,35 +167,45 @@ class PinterestService:
             daily_metrics = all_data.get("daily_metrics", []) if all_data else []
             
             for day in daily_metrics:
-                metrics = day.get("data_status") == "READY"
-                if metrics:
-                    total_impressions += day.get("metrics", {}).get("IMPRESSION", 0)
-                    total_engagements += day.get("metrics", {}).get("ENGAGEMENT", 0)
-                    total_saves += day.get("metrics", {}).get("SAVE", 0)
-                    total_clicks += day.get("metrics", {}).get("PIN_CLICK", 0)
-                    total_outbound_clicks += day.get("metrics", {}).get("OUTBOUND_CLICK", 0)
+                if not day or not isinstance(day, dict):
+                    continue
+                is_ready = day.get("data_status") == "READY"
+                if is_ready:
+                    day_metrics = day.get("metrics") or {}
+                    total_impressions += day_metrics.get("IMPRESSION", 0) or 0
+                    total_engagements += day_metrics.get("ENGAGEMENT", 0) or 0
+                    total_saves += day_metrics.get("SAVE", 0) or 0
+                    total_clicks += day_metrics.get("PIN_CLICK", 0) or 0
+                    total_outbound_clicks += day_metrics.get("OUTBOUND_CLICK", 0) or 0
             
             # If no analytics available, estimate from pins
             if total_impressions == 0 and pins:
                 # Sum up pin-level stats if available
                 for pin in pins:
-                    pin_stats = pin.get("pin_metrics", {})
-                    total_impressions += pin_stats.get("lifetime", {}).get("impression", 0)
-                    total_saves += pin_stats.get("lifetime", {}).get("save", 0)
-                    total_clicks += pin_stats.get("lifetime", {}).get("pin_click", 0)
-                    total_outbound_clicks += pin_stats.get("lifetime", {}).get("outbound_click", 0)
+                    if not pin or not isinstance(pin, dict):
+                        continue
+                    pin_stats = pin.get("pin_metrics") or {}
+                    lifetime = pin_stats.get("lifetime") or {}
+                    total_impressions += lifetime.get("impression", 0) or 0
+                    total_saves += lifetime.get("save", 0) or 0
+                    total_clicks += lifetime.get("pin_click", 0) or 0
+                    total_outbound_clicks += lifetime.get("outbound_click", 0) or 0
             
             # Build top pins list
             top_pins = []
             for pin in pins[:10]:
-                pin_metrics = pin.get("pin_metrics", {}).get("lifetime", {})
+                if not pin or not isinstance(pin, dict):
+                    continue
+                pin_stats = pin.get("pin_metrics") or {}
+                pin_metrics = pin_stats.get("lifetime") or {}
+                description = pin.get("description") or ""
                 top_pins.append({
                     "id": pin.get("id"),
-                    "title": pin.get("title") or pin.get("description", "")[:50] or "Untitled Pin",
-                    "impressions": pin_metrics.get("impression", 0),
-                    "saves": pin_metrics.get("save", 0),
-                    "clicks": pin_metrics.get("pin_click", 0),
-                    "outbound_clicks": pin_metrics.get("outbound_click", 0),
+                    "title": pin.get("title") or description[:50] or "Untitled Pin",
+                    "impressions": pin_metrics.get("impression", 0) or 0,
+                    "saves": pin_metrics.get("save", 0) or 0,
+                    "clicks": pin_metrics.get("pin_click", 0) or 0,
+                    "outbound_clicks": pin_metrics.get("outbound_click", 0) or 0,
                     "link": pin.get("link"),
                     "created_at": pin.get("created_at"),
                 })
@@ -224,9 +234,10 @@ class PinterestService:
                     {
                         "id": board.get("id"),
                         "name": board.get("name"),
-                        "pin_count": board.get("pin_count", 0),
+                        "pin_count": board.get("pin_count", 0) or 0,
                     }
                     for board in boards[:10]
+                    if board and isinstance(board, dict)
                 ],
                 "is_placeholder": False,
                 "source": "pinterest_api",
