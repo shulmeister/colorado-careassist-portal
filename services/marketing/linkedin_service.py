@@ -53,8 +53,12 @@ class LinkedInService:
         Generate the OAuth authorization URL for LinkedIn.
         
         User must visit this URL to authorize the app and get an auth code.
+        
+        Note: Organization scopes (r_organization_social, rw_organization_admin) require
+        Marketing Developer Platform access which must be applied for separately.
         """
-        scopes = "openid profile email w_member_social r_organization_social rw_organization_admin"
+        # Basic scopes available to all apps
+        scopes = "openid profile email w_member_social"
         return (
             f"{LINKEDIN_OAUTH_URL}/authorization?"
             f"response_type=code&"
