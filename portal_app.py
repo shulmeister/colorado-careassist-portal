@@ -1449,6 +1449,77 @@ async def test_gbp_connection():
     return JSONResponse(status)
 
 
+@app.get("/api/marketing/pinterest")
+async def api_marketing_pinterest(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    """
+    Fetch Pinterest analytics and engagement metrics.
+    
+    Returns pin performance, saves, clicks, and engagement data.
+    """
+    from services.marketing.pinterest_service import pinterest_service
+    from datetime import date, timedelta
+    
+    # Default to last 30 days
+    if to_date:
+        end = date.fromisoformat(to_date)
+    else:
+        end = date.today()
+    
+    if from_date:
+        start = date.fromisoformat(from_date)
+    else:
+        start = end - timedelta(days=30)
+    
+    try:
+        data = pinterest_service.get_metrics(start, end)
+        return JSONResponse({
+            "success": True,
+            "date_range": {
+                "from": start.isoformat(),
+                "to": end.isoformat(),
+            },
+            "data": data
+        })
+    except Exception as e:
+        logger.error(f"Error fetching Pinterest metrics: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "data": pinterest_service._get_placeholder_metrics(start, end)
+        })
+
+
+@app.get("/api/marketing/test-pinterest")
+async def test_pinterest_connection():
+    """Test Pinterest connection and return status."""
+    from services.marketing.pinterest_service import pinterest_service
+    import os
+    
+    status = {
+        "access_token_configured": bool(os.getenv("PINTEREST_ACCESS_TOKEN")),
+        "app_id": os.getenv("PINTEREST_APP_ID"),
+    }
+    
+    if pinterest_service._is_configured():
+        try:
+            user = pinterest_service.get_user_account()
+            status["connection_successful"] = True
+            status["username"] = user.get("username")
+            status["followers"] = user.get("follower_count", 0)
+            status["account_type"] = user.get("account_type")
+        except Exception as e:
+            status["connection_successful"] = False
+            status["error"] = str(e)
+    else:
+        status["connection_successful"] = False
+        status["error"] = "Pinterest not configured"
+    
+    return JSONResponse(status)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
