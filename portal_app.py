@@ -1520,6 +1520,137 @@ async def test_pinterest_connection():
     return JSONResponse(status)
 
 
+@app.get("/api/marketing/linkedin")
+async def api_marketing_linkedin(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    """
+    Fetch LinkedIn analytics and engagement metrics.
+    
+    Returns post performance, impressions, clicks, and engagement data.
+    """
+    from services.marketing.linkedin_service import linkedin_service
+    from datetime import date, timedelta
+    
+    # Default to last 30 days
+    if to_date:
+        end = date.fromisoformat(to_date)
+    else:
+        end = date.today()
+    
+    if from_date:
+        start = date.fromisoformat(from_date)
+    else:
+        start = end - timedelta(days=30)
+    
+    try:
+        data = linkedin_service.get_metrics(start, end)
+        return JSONResponse({
+            "success": True,
+            "date_range": {
+                "from": start.isoformat(),
+                "to": end.isoformat(),
+            },
+            "data": data
+        })
+    except Exception as e:
+        logger.error(f"Error fetching LinkedIn metrics: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "data": linkedin_service._get_placeholder_metrics(start, end)
+        })
+
+
+@app.get("/api/marketing/test-linkedin")
+async def test_linkedin_connection():
+    """Test LinkedIn connection and return status."""
+    from services.marketing.linkedin_service import linkedin_service
+    import os
+    
+    status = {
+        "client_id_configured": bool(os.getenv("LINKEDIN_CLIENT_ID")),
+        "access_token_configured": bool(os.getenv("LINKEDIN_ACCESS_TOKEN")),
+        "organization_id": os.getenv("LINKEDIN_ORGANIZATION_ID"),
+    }
+    
+    if linkedin_service._is_configured():
+        try:
+            profile = linkedin_service.get_profile()
+            if profile:
+                status["connection_successful"] = True
+                status["name"] = profile.get("name")
+                status["email"] = profile.get("email")
+            else:
+                status["connection_successful"] = False
+                status["error"] = "Could not fetch profile"
+        except Exception as e:
+            status["connection_successful"] = False
+            status["error"] = str(e)
+    elif linkedin_service._has_credentials():
+        status["connection_successful"] = False
+        status["needs_oauth"] = True
+        status["oauth_url"] = linkedin_service.get_oauth_url(
+            "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/linkedin/callback"
+        )
+        status["message"] = "Visit the oauth_url to authorize LinkedIn access"
+    else:
+        status["connection_successful"] = False
+        status["error"] = "LinkedIn credentials not configured"
+    
+    return JSONResponse(status)
+
+
+@app.get("/api/linkedin/callback")
+async def linkedin_oauth_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    error_description: Optional[str] = None,
+):
+    """
+    OAuth callback endpoint for LinkedIn authorization.
+    
+    After user authorizes, LinkedIn redirects here with an auth code.
+    We exchange it for an access token.
+    """
+    from services.marketing.linkedin_service import linkedin_service
+    
+    if error:
+        return JSONResponse({
+            "success": False,
+            "error": error,
+            "error_description": error_description,
+        })
+    
+    if not code:
+        return JSONResponse({
+            "success": False,
+            "error": "No authorization code received",
+        })
+    
+    # Exchange code for token
+    redirect_uri = "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/linkedin/callback"
+    token_data = linkedin_service.exchange_code_for_token(code, redirect_uri)
+    
+    if token_data and "access_token" in token_data:
+        # Return the token (user needs to set it as env var)
+        return JSONResponse({
+            "success": True,
+            "message": "LinkedIn authorized successfully!",
+            "access_token": token_data["access_token"],
+            "expires_in": token_data.get("expires_in"),
+            "instructions": "Set this access token as LINKEDIN_ACCESS_TOKEN environment variable on Heroku",
+        })
+    else:
+        return JSONResponse({
+            "success": False,
+            "error": "Failed to exchange code for token",
+            "details": token_data,
+        })
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
