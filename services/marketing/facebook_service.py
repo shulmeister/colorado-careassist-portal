@@ -46,8 +46,46 @@ class FacebookMetricsService:
         since = int(start_date.strftime("%s"))
         until = int(end_date.strftime("%s"))
         
+        metrics = {
+            "impressions": 0,
+            "unique_impressions": 0,
+            "engaged_users": 0,
+            "post_engagements": 0,
+            "total_page_likes": 0,
+            "page_visits": 0,
+            "video_views": 0,
+            "fan_adds": 0,
+            "fan_removes": 0,
+            "current_page_likes": 0,
+            "page_name": "Unknown Page",
+        }
+        
+        # First, always try to get basic page info (doesn't require read_insights permission)
         try:
-            # Fetch page insights
+            page_info_url = f"{GRAPH_API_BASE}/{page_id}"
+            page_info_params = {
+                "access_token": self.access_token,
+                "fields": "fan_count,followers_count,name,about,category,engagement"
+            }
+            page_info_response = requests.get(page_info_url, params=page_info_params, timeout=30)
+            page_info_response.raise_for_status()
+            page_info = page_info_response.json()
+            
+            metrics["current_page_likes"] = page_info.get("fan_count", 0)
+            metrics["total_page_likes"] = page_info.get("fan_count", 0)
+            metrics["page_name"] = page_info.get("name", "Unknown Page")
+            
+            # Engagement data if available
+            engagement = page_info.get("engagement", {})
+            if engagement:
+                metrics["engaged_users"] = engagement.get("count", 0)
+                
+            logger.info(f"Facebook page info: {page_info.get('name')} - {page_info.get('fan_count')} fans")
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching Facebook page info: {e}")
+        
+        # Try to get insights (requires read_insights permission, may fail)
+        try:
             url = f"{GRAPH_API_BASE}/{page_id}/insights"
             params = {
                 "access_token": self.access_token,
@@ -72,26 +110,14 @@ class FacebookMetricsService:
             data = response.json()
             
             # Process insights data
-            metrics = self._process_insights(data.get("data", []))
-            
-            # Fetch page info (current likes count)
-            page_info_url = f"{GRAPH_API_BASE}/{page_id}"
-            page_info_params = {
-                "access_token": self.access_token,
-                "fields": "fan_count,name"
-            }
-            page_info_response = requests.get(page_info_url, params=page_info_params, timeout=30)
-            page_info_response.raise_for_status()
-            page_info = page_info_response.json()
-            
-            metrics["current_page_likes"] = page_info.get("fan_count", 0)
-            metrics["page_name"] = page_info.get("name", "Unknown Page")
-            
-            return metrics
+            insights = self._process_insights(data.get("data", []))
+            metrics.update(insights)
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching Facebook page metrics: {e}")
-            return {}
+            # Insights may fail if token lacks read_insights permission - that's OK
+            logger.warning(f"Could not fetch page insights (may need read_insights permission): {e}")
+        
+        return metrics
     
     def get_posts_metrics(self, page_id: str, start_date: date, end_date: date, limit: int = 50) -> List[Dict[str, Any]]:
         """
@@ -210,11 +236,12 @@ class FacebookMetricsService:
             return actions
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching click actions: {e}")
+            # Click actions require insights permission - fail silently
+            logger.debug(f"Could not fetch click actions (may need read_insights permission): {e}")
             return {}
     
     def _get_post_insights(self, post_id: str) -> Dict[str, int]:
-        """Fetch insights for a specific post"""
+        """Fetch insights for a specific post (requires read_insights permission)"""
         try:
             url = f"{GRAPH_API_BASE}/{post_id}/insights"
             params = {
@@ -241,8 +268,8 @@ class FacebookMetricsService:
             
             return insights
             
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error fetching post insights for {post_id}: {e}")
+        except requests.exceptions.RequestException:
+            # This is expected to fail without read_insights permission - silently return empty
             return {}
     
     def _process_insights(self, insights_data: List[Dict]) -> Dict[str, Any]:
