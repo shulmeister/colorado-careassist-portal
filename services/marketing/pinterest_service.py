@@ -139,7 +139,7 @@ class PinterestService:
 
         try:
             # Get user account info
-            user = self.get_user_account()
+            user = self.get_user_account() or {}
             username = user.get("username", "unknown")
             followers = user.get("follower_count", 0)
             following = user.get("following_count", 0)
@@ -147,13 +147,13 @@ class PinterestService:
             logger.info(f"Pinterest user: {username}, followers: {followers}")
             
             # Get boards
-            boards = self.get_boards()
+            boards = self.get_boards() or []
             
             # Get pins
-            pins = self.get_pins(limit=50)
+            pins = self.get_pins(limit=50) or []
             
             # Try to get user analytics (requires business account)
-            analytics = self.get_user_analytics(start_date, end_date)
+            analytics = self.get_user_analytics(start_date, end_date) or {}
             
             # Process analytics data
             total_impressions = 0
@@ -162,9 +162,9 @@ class PinterestService:
             total_clicks = 0
             total_outbound_clicks = 0
             
-            # Pinterest analytics returns daily data
-            all_data = analytics.get("all", {})
-            daily_metrics = all_data.get("daily_metrics", [])
+            # Pinterest analytics returns daily data (if available)
+            all_data = analytics.get("all", {}) if analytics else {}
+            daily_metrics = all_data.get("daily_metrics", []) if all_data else []
             
             for day in daily_metrics:
                 metrics = day.get("data_status") == "READY"
