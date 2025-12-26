@@ -15,6 +15,7 @@ from .facebook_service import facebook_service
 from .facebook_ads_service import facebook_ads_service
 from .google_ads_service import google_ads_service
 from .mailchimp_service import mailchimp_marketing_service
+from .brevo_service import brevo_marketing_service
 
 logger = logging.getLogger(__name__)
 
@@ -144,17 +145,126 @@ def get_ads_metrics(start: date, end: date, compare: Optional[str] = None) -> Di
 
 def get_email_metrics(start: date, end: date) -> Dict[str, Any]:
     """
-    Fetch email marketing metrics from Mailchimp.
+    Fetch email marketing metrics from Brevo (primary) and Mailchimp (legacy).
+    
+    Strategy:
+    - Brevo: Used for new campaigns (Dec 2025+)
+    - Mailchimp: Used for historical campaigns (pre-Dec 2025)
+    - Results are merged, with Brevo metrics taking precedence for overlapping periods
     """
     if not USE_REAL_DATA:
         logger.info("Using placeholder email metrics (real data disabled)")
-        return mailchimp_marketing_service.get_placeholder_metrics(start, end)
+        return brevo_marketing_service.get_placeholder_metrics(start, end)
 
+    brevo_metrics = None
+    mailchimp_metrics = None
+    
+    # Try Brevo first (primary email service going forward)
     try:
-        return mailchimp_marketing_service.get_email_metrics(start, end)
+        brevo_metrics = brevo_marketing_service.get_email_metrics(start, end)
+        logger.info(f"Brevo: {brevo_metrics.get('summary', {}).get('campaigns_sent', 0)} campaigns")
     except Exception as exc:
-        logger.error("Error fetching email metrics: %s", exc)
-        return mailchimp_marketing_service.get_placeholder_metrics(start, end)
+        logger.warning("Error fetching Brevo metrics: %s", exc)
+    
+    # Also fetch Mailchimp for historical data
+    try:
+        mailchimp_metrics = mailchimp_marketing_service.get_email_metrics(start, end)
+        logger.info(f"Mailchimp: {mailchimp_metrics.get('summary', {}).get('campaigns_sent', 0)} campaigns")
+    except Exception as exc:
+        logger.warning("Error fetching Mailchimp metrics: %s", exc)
+    
+    # Merge the results
+    return _merge_email_metrics(brevo_metrics, mailchimp_metrics, start, end)
+
+
+def _merge_email_metrics(
+    brevo: Optional[Dict[str, Any]], 
+    mailchimp: Optional[Dict[str, Any]], 
+    start: date, 
+    end: date
+) -> Dict[str, Any]:
+    """
+    Merge Brevo and Mailchimp email metrics.
+    
+    - Combines campaign counts and totals
+    - Merges top campaigns list
+    - Calculates weighted averages for rates
+    """
+    from datetime import datetime
+    
+    # If only one service has data, return that
+    if brevo and not mailchimp:
+        return brevo
+    if mailchimp and not brevo:
+        return mailchimp
+    if not brevo and not mailchimp:
+        return brevo_marketing_service.get_placeholder_metrics(start, end)
+    
+    # Both have data - merge them
+    brevo_summary = brevo.get("summary", {})
+    mc_summary = mailchimp.get("summary", {})
+    
+    # Sum up totals
+    total_campaigns = brevo_summary.get("campaigns_sent", 0) + mc_summary.get("campaigns_sent", 0)
+    total_emails = brevo_summary.get("emails_sent", 0) + mc_summary.get("emails_sent", 0)
+    total_contacts = max(brevo_summary.get("total_contacts", 0), mc_summary.get("total_contacts", 0))
+    total_conversions = brevo_summary.get("conversions", 0) + mc_summary.get("conversions", 0)
+    
+    # Calculate weighted average rates
+    brevo_emails = brevo_summary.get("emails_sent", 0)
+    mc_emails = mc_summary.get("emails_sent", 0)
+    
+    if total_emails > 0:
+        avg_open_rate = (
+            (brevo_summary.get("open_rate", 0) * brevo_emails + 
+             mc_summary.get("open_rate", 0) * mc_emails) / total_emails
+        )
+        avg_click_rate = (
+            (brevo_summary.get("click_rate", 0) * brevo_emails + 
+             mc_summary.get("click_rate", 0) * mc_emails) / total_emails
+        )
+        avg_delivery_rate = (
+            (brevo_summary.get("delivery_rate", 0) * brevo_emails + 
+             mc_summary.get("delivery_rate", 0) * mc_emails) / total_emails
+        )
+    else:
+        avg_open_rate = 0
+        avg_click_rate = 0
+        avg_delivery_rate = 0
+    
+    # Merge top campaigns (take top 3 from combined list)
+    all_campaigns = brevo.get("top_campaigns", []) + mailchimp.get("top_campaigns", [])
+    top_campaigns = sorted(all_campaigns, key=lambda c: c.get("open_rate", 0), reverse=True)[:3]
+    
+    # Merge trends
+    all_trends = brevo.get("trend", []) + mailchimp.get("trend", [])
+    # Sort by date
+    all_trends.sort(key=lambda t: t.get("date", ""))
+    
+    # Merge subscriber growth (prefer Brevo if available, otherwise Mailchimp)
+    growth = brevo.get("subscriber_growth", []) or mailchimp.get("subscriber_growth", [])
+    
+    return {
+        "summary": {
+            "campaigns_sent": total_campaigns,
+            "emails_sent": total_emails,
+            "total_contacts": total_contacts,
+            "open_rate": round(avg_open_rate, 2),
+            "click_rate": round(avg_click_rate, 2),
+            "delivery_rate": round(avg_delivery_rate, 2),
+            "conversions": total_conversions,
+        },
+        "top_campaigns": top_campaigns,
+        "trend": all_trends,
+        "subscriber_growth": growth,
+        "is_placeholder": False,
+        "source": "brevo+mailchimp",
+        "sources": {
+            "brevo": brevo.get("source", "unknown") if brevo else None,
+            "mailchimp": mailchimp.get("source", "unknown") if mailchimp else None,
+        },
+        "fetched_at": datetime.utcnow().isoformat(),
+    }
 
 
 def _calculate_comparison(current: Dict, previous: Dict) -> Dict[str, float]:
