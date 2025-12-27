@@ -286,3 +286,4 @@ class BrevoMarketingService:
 # Singleton instance
 brevo_marketing_service = BrevoMarketingService()
 
+

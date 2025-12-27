@@ -1449,6 +1449,253 @@ async def test_gbp_connection():
     return JSONResponse(status)
 
 
+@app.get("/api/marketing/engagement")
+async def api_marketing_engagement(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    """
+    Aggregate engagement data from all marketing channels.
+    
+    Provides attribution insights showing where engagements, calls,
+    and conversions are coming from across:
+    - Facebook/Instagram (organic + paid)
+    - Google Ads (paid search/display)
+    - Google Analytics (organic, direct, referral)
+    - Pinterest
+    - LinkedIn
+    - Google Business Profile (calls, directions)
+    """
+    from services.marketing.ga4_service import ga4_service
+    from services.marketing.gbp_service import gbp_service
+    from services.marketing.pinterest_service import pinterest_service
+    from services.marketing.linkedin_service import linkedin_service
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Date range
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+    
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+    
+    days = (end - start).days + 1
+    
+    # Fetch data from all sources
+    try:
+        # GA4 data for traffic sources
+        ga4_data = ga4_service.get_website_metrics(start, end)
+        
+        # Get social metrics
+        social_data = get_social_metrics(start, end, None)
+        
+        # Get ads metrics  
+        ads_data = get_ads_metrics(start, end, None)
+        
+        # GBP for calls/directions
+        gbp_data = gbp_service.get_gbp_metrics(start, end)
+        
+        # Pinterest metrics
+        pinterest_data = pinterest_service.get_user_analytics(start, end)
+        
+        # LinkedIn metrics
+        linkedin_data = linkedin_service.get_metrics(start, end)
+        
+    except Exception as e:
+        logger.error(f"Error fetching engagement data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # Build attribution breakdown - where are engagements coming from?
+    attribution = {
+        "by_source": [],
+        "by_type": []
+    }
+    
+    # Calculate engagement by source
+    sources = []
+    
+    # Facebook/Instagram
+    fb_engagement = 0
+    if social_data and social_data.get("post_overview"):
+        fb_engagement = (
+            social_data["post_overview"].get("post_clicks", 0) +
+            social_data["summary"].get("unique_clicks", 0)
+        )
+    if social_data and social_data.get("summary"):
+        fb_likes = social_data["summary"].get("total_page_likes", {}).get("value", 0)
+        sources.append({
+            "source": "Facebook/Instagram",
+            "icon": "📘",
+            "engagements": fb_engagement,
+            "followers": fb_likes,
+            "type": "social"
+        })
+    
+    # Google Ads - conversions as engagement
+    google_conversions = 0
+    google_clicks = 0
+    if ads_data and ads_data.get("google_ads"):
+        google_ads = ads_data["google_ads"]
+        google_conversions = google_ads.get("performance", {}).get("conversions", 0)
+        google_clicks = google_ads.get("performance", {}).get("clicks", 0)
+        sources.append({
+            "source": "Google Ads",
+            "icon": "🔍",
+            "engagements": google_clicks,
+            "conversions": google_conversions,
+            "type": "paid"
+        })
+    
+    # GA4 - organic traffic
+    organic_sessions = 0
+    direct_sessions = 0
+    referral_sessions = 0
+    if ga4_data:
+        sessions_by_source = ga4_data.get("sessions_by_source", {})
+        organic_sessions = sessions_by_source.get("google", 0)
+        direct_sessions = sessions_by_source.get("direct", 0)
+        referral_sessions = sessions_by_source.get("fb", 0) + sessions_by_source.get("l.facebook.com", 0)
+        
+        sources.append({
+            "source": "Organic Search",
+            "icon": "🌐",
+            "engagements": organic_sessions,
+            "type": "organic"
+        })
+        sources.append({
+            "source": "Direct Traffic",
+            "icon": "🔗",
+            "engagements": direct_sessions,
+            "type": "direct"
+        })
+    
+    # GBP - calls and actions
+    gbp_calls = 0
+    gbp_directions = 0
+    gbp_website = 0
+    if gbp_data:
+        gbp_calls = gbp_data.get("phone_calls", 0)
+        gbp_directions = gbp_data.get("directions", 0)
+        gbp_website = gbp_data.get("website_clicks", 0)
+        if gbp_calls or gbp_directions or gbp_website:
+            sources.append({
+                "source": "Google Business Profile",
+                "icon": "📍",
+                "engagements": gbp_calls + gbp_directions + gbp_website,
+                "calls": gbp_calls,
+                "directions": gbp_directions,
+                "website_clicks": gbp_website,
+                "type": "local"
+            })
+    
+    # Pinterest
+    pinterest_engagement = 0
+    if pinterest_data and not pinterest_data.get("is_placeholder"):
+        pinterest_engagement = (
+            pinterest_data.get("clicks", 0) +
+            pinterest_data.get("saves", 0)
+        )
+        if pinterest_engagement:
+            sources.append({
+                "source": "Pinterest",
+                "icon": "📌",
+                "engagements": pinterest_engagement,
+                "saves": pinterest_data.get("saves", 0),
+                "clicks": pinterest_data.get("clicks", 0),
+                "type": "social"
+            })
+    
+    # LinkedIn
+    linkedin_engagement = 0
+    if linkedin_data and not linkedin_data.get("is_placeholder"):
+        linkedin_engagement = linkedin_data.get("summary", {}).get("engagement", 0)
+        if linkedin_engagement:
+            sources.append({
+                "source": "LinkedIn",
+                "icon": "💼",
+                "engagements": linkedin_engagement,
+                "type": "social"
+            })
+    
+    # Sort by engagement count
+    sources.sort(key=lambda x: x.get("engagements", 0), reverse=True)
+    attribution["by_source"] = sources
+    
+    # Build engagement by type
+    type_breakdown = [
+        {"type": "Paid Ads", "icon": "💰", "value": google_clicks + fb_engagement, "color": "#22c55e"},
+        {"type": "Organic Search", "icon": "🔍", "value": organic_sessions, "color": "#3b82f6"},
+        {"type": "Direct", "icon": "🔗", "value": direct_sessions, "color": "#8b5cf6"},
+        {"type": "Social", "icon": "📱", "value": pinterest_engagement + linkedin_engagement, "color": "#f97316"},
+        {"type": "Local (GBP)", "icon": "📍", "value": gbp_calls + gbp_directions + gbp_website, "color": "#ec4899"},
+    ]
+    attribution["by_type"] = [t for t in type_breakdown if t["value"] > 0]
+    
+    # Calculate totals
+    total_engagements = sum(s.get("engagements", 0) for s in sources)
+    total_conversions = google_conversions
+    total_calls = gbp_calls
+    
+    # Build daily trend from GA4 data
+    daily_trend = []
+    if ga4_data and ga4_data.get("users_over_time"):
+        for entry in ga4_data["users_over_time"]:
+            daily_trend.append({
+                "date": entry.get("date"),
+                "engagements": entry.get("users", 0),
+            })
+    
+    # Add social chart data if available
+    if social_data and social_data.get("post_overview", {}).get("chart"):
+        for i, entry in enumerate(social_data["post_overview"]["chart"]):
+            if i < len(daily_trend):
+                daily_trend[i]["social"] = entry.get("engagement", 0)
+                daily_trend[i]["engagements"] += entry.get("engagement", 0)
+    
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": days
+        },
+        "data": {
+            "summary": {
+                "total_engagements": total_engagements,
+                "total_conversions": total_conversions,
+                "total_calls": total_calls,
+                "top_source": sources[0]["source"] if sources else None,
+            },
+            "attribution": attribution,
+            "trend": daily_trend,
+            "sources": {
+                "social": {
+                    "facebook": fb_engagement,
+                    "pinterest": pinterest_engagement,
+                    "linkedin": linkedin_engagement,
+                },
+                "paid": {
+                    "google_ads": google_clicks,
+                },
+                "organic": {
+                    "search": organic_sessions,
+                    "direct": direct_sessions,
+                    "referral": referral_sessions,
+                },
+                "local": {
+                    "calls": gbp_calls,
+                    "directions": gbp_directions,
+                    "website": gbp_website,
+                }
+            }
+        }
+    })
+
+
 @app.get("/api/marketing/pinterest")
 async def api_marketing_pinterest(
     from_date: Optional[str] = Query(None, alias="from"),

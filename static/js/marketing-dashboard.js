@@ -67,6 +67,8 @@
         gbpSearches: null,
         emailEngagement: null,
         emailGrowth: null,
+        engagementType: null,
+        engagementTrend: null,
     };
 
     const state = {
@@ -253,17 +255,19 @@
     async function fetchDashboardData(preset) {
         const { start, end } = calculateDateRange(preset);
         try {
-            const [adsResult, socialResult, websiteResult, emailResult] = await Promise.allSettled([
+            const [adsResult, socialResult, websiteResult, emailResult, engagementResult] = await Promise.allSettled([
                 fetchJson(`${API_BASE}/ads?from=${start}&to=${end}`),
                 fetchJson(`${API_BASE}/social?from=${start}&to=${end}`),
                 fetchJson(`${API_BASE}/website?from=${start}&to=${end}`),
                 fetchJson(`${API_BASE}/email?from=${start}&to=${end}`),
+                fetchJson(`${API_BASE}/engagement?from=${start}&to=${end}`),
             ]);
 
             const ads = adsResult.status === 'fulfilled' ? adsResult.value : null;
             const social = socialResult.status === 'fulfilled' ? socialResult.value : null;
             const website = websiteResult.status === 'fulfilled' ? websiteResult.value : null;
             const email = emailResult.status === 'fulfilled' ? emailResult.value : null;
+            const engagement = engagementResult.status === 'fulfilled' ? engagementResult.value : null;
 
             if (adsResult.status === 'rejected') {
                 console.error('Ads metrics request failed', adsResult.reason);
@@ -277,12 +281,16 @@
             if (emailResult.status === 'rejected') {
                 console.error('Email metrics request failed', emailResult.reason);
             }
+            if (engagementResult.status === 'rejected') {
+                console.error('Engagement metrics request failed', engagementResult.reason);
+            }
 
             renderDashboard({
                 ads,
                 social,
                 website,
                 email,
+                engagement,
                 preset,
                 fallbackRange: { start, end },
             });
@@ -299,7 +307,7 @@
         return response.json();
     }
 
-    function renderDashboard({ ads, social, website, email, preset, fallbackRange }) {
+    function renderDashboard({ ads, social, website, email, engagement, preset, fallbackRange }) {
         const adsRange = ads?.range || fallbackRange;
         if (adsRange) {
             updateDateRangeDisplay(adsRange.start, adsRange.end, preset);
@@ -316,6 +324,9 @@
         }
         if (email?.success) {
             renderEmailSection(email, preset);
+        }
+        if (engagement?.success) {
+            renderEngagementSection(engagement, preset);
         }
     }
 
@@ -900,6 +911,114 @@
         }
     }
 
+    function renderEngagementSection(payload, preset) {
+        if (!payload?.data) return;
+
+        const { range, data } = payload;
+        updateRangeLabel({
+            start: range?.start,
+            end: range?.end,
+            preset,
+            targetId: 'engagementDateRange',
+        });
+
+        const summary = data.summary || {};
+        const attribution = data.attribution || {};
+        const sources = data.sources || {};
+
+        // Update KPI cards
+        setText('engagementTotal', formatNumber(summary.total_engagements));
+        
+        // Calculate social engagement (FB + Pinterest + LinkedIn)
+        const socialTotal = (sources.social?.facebook || 0) + 
+                           (sources.social?.pinterest || 0) + 
+                           (sources.social?.linkedin || 0);
+        setText('engagementSocial', formatNumber(socialTotal));
+        
+        // Shares - use referral as proxy
+        setText('engagementShares', formatNumber(sources.organic?.referral || 0));
+        
+        // Comments - placeholder (would need deeper social API access)
+        setText('engagementComments', formatNumber(sources.paid?.google_ads || 0));
+        
+        // Messages - use calls as primary metric
+        setText('engagementMessages', formatNumber(sources.local?.calls || 0));
+        
+        // Saves - directions + website clicks
+        setText('engagementSaves', formatNumber((sources.local?.directions || 0) + (sources.local?.website || 0)));
+
+        // Update the Engagement By Type chart (doughnut)
+        updateEngagementTypeChart(attribution.by_type || []);
+
+        // Update the Engagement Over Time chart (line)
+        updateEngagementTrendChart(data.trend || []);
+
+        // Render attribution breakdown
+        renderAttributionBreakdown(attribution.by_source || []);
+    }
+
+    function updateEngagementTypeChart(types) {
+        if (!charts.engagementType) return;
+        
+        if (!types.length) {
+            charts.engagementType.data.labels = ['No data'];
+            charts.engagementType.data.datasets[0].data = [1];
+            charts.engagementType.data.datasets[0].backgroundColor = ['#475569'];
+            charts.engagementType.update();
+            return;
+        }
+
+        charts.engagementType.data.labels = types.map((t) => t.type);
+        charts.engagementType.data.datasets[0].data = types.map((t) => t.value);
+        charts.engagementType.data.datasets[0].backgroundColor = types.map((t) => t.color);
+        charts.engagementType.update();
+    }
+
+    function updateEngagementTrendChart(trend) {
+        if (!charts.engagementTrend || !trend.length) return;
+
+        const labels = trend.map((entry) => formatChartLabel(entry.date));
+        const values = trend.map((entry) => entry.engagements || 0);
+
+        charts.engagementTrend.data.labels = labels;
+        charts.engagementTrend.data.datasets[0].data = values;
+        charts.engagementTrend.update();
+    }
+
+    function renderAttributionBreakdown(sources) {
+        const container = document.getElementById('attributionBreakdown');
+        if (!container) return;
+
+        if (!sources.length) {
+            container.innerHTML = `
+                <div class="stats-row">
+                    <div class="stats-label">No attribution data available</div>
+                    <div class="stats-value">—</div>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = sources.slice(0, 6).map((source) => {
+            const details = [];
+            if (source.calls) details.push(`${source.calls} calls`);
+            if (source.conversions) details.push(`${source.conversions} conv`);
+            if (source.saves) details.push(`${source.saves} saves`);
+            
+            const detailText = details.length ? `<span class="stats-change">${details.join(', ')}</span>` : '';
+            
+            return `
+                <div class="stats-row">
+                    <div class="stats-label">${source.icon} ${source.source}</div>
+                    <div class="stats-value">
+                        ${formatNumber(source.engagements)}
+                        ${detailText}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
     function updateWebsiteCharts(ga4, gbp) {
         if (Array.isArray(ga4?.users_over_time) && ga4.users_over_time.length) {
             const labels = ga4.users_over_time.map((entry) => formatChartLabel(entry.date));
@@ -1024,6 +1143,55 @@
             ],
             { stacked: false, legend: true, fillOpacity: 0.18 },
         );
+        
+        // Engagement tab charts
+        charts.engagementType = createEngagementTypeChart('engagementTypeChart');
+        charts.engagementTrend = createLineChart('engagementTrendChart', '#22c55e', 'Engagements');
+    }
+
+    function createEngagementTypeChart(canvasId) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return null;
+
+        return new Chart(canvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Loading...'],
+                datasets: [
+                    {
+                        data: [1],
+                        backgroundColor: ['#475569'],
+                        borderWidth: 0,
+                    },
+                ],
+            },
+            options: {
+                maintainAspectRatio: false,
+                cutout: '60%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: '#cbd5f5',
+                            font: { size: 11 },
+                            padding: 12,
+                            usePointStyle: true,
+                        },
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                const label = context.label || '';
+                                const value = context.raw || 0;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total ? ((value / total) * 100).toFixed(1) : 0;
+                                return `${label}: ${formatNumber(value)} (${percentage}%)`;
+                            },
+                        },
+                    },
+                },
+            },
+        });
     }
 
     function createAttributionChart(canvasId) {
