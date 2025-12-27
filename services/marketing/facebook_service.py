@@ -30,6 +30,9 @@ class FacebookMetricsService:
         """
         Fetch page-level metrics (likes, reach, impressions, etc.)
         
+        For New Page Experience pages, the old insights API is deprecated.
+        We get engagement from posts instead.
+        
         Args:
             page_id: Facebook Page ID
             start_date: Start date for metrics
@@ -41,10 +44,6 @@ class FacebookMetricsService:
         if not self.access_token:
             logger.error("Cannot fetch metrics: No access token")
             return {}
-        
-        # Format dates for API (Unix timestamp)
-        since = int(start_date.strftime("%s"))
-        until = int(end_date.strftime("%s"))
         
         metrics = {
             "impressions": 0,
@@ -58,14 +57,19 @@ class FacebookMetricsService:
             "fan_removes": 0,
             "current_page_likes": 0,
             "page_name": "Unknown Page",
+            "is_new_page_experience": False,
+            "posts_count": 0,
+            "total_reactions": 0,
+            "total_comments": 0,
+            "total_shares": 0,
         }
         
-        # First, always try to get basic page info (doesn't require read_insights permission)
+        # First, get basic page info (always works)
         try:
             page_info_url = f"{GRAPH_API_BASE}/{page_id}"
             page_info_params = {
                 "access_token": self.access_token,
-                "fields": "fan_count,followers_count,name,about,category,engagement"
+                "fields": "fan_count,followers_count,name,about,category,engagement,has_transitioned_to_new_page_experience"
             }
             page_info_response = requests.get(page_info_url, params=page_info_params, timeout=30)
             page_info_response.raise_for_status()
@@ -74,48 +78,90 @@ class FacebookMetricsService:
             metrics["current_page_likes"] = page_info.get("fan_count", 0)
             metrics["total_page_likes"] = page_info.get("fan_count", 0)
             metrics["page_name"] = page_info.get("name", "Unknown Page")
+            metrics["is_new_page_experience"] = page_info.get("has_transitioned_to_new_page_experience", False)
             
             # Engagement data if available
             engagement = page_info.get("engagement", {})
             if engagement:
                 metrics["engaged_users"] = engagement.get("count", 0)
                 
-            logger.info(f"Facebook page info: {page_info.get('name')} - {page_info.get('fan_count')} fans")
+            logger.info(f"Facebook page info: {page_info.get('name')} - {page_info.get('fan_count')} fans (NPE: {metrics['is_new_page_experience']})")
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching Facebook page info: {e}")
+            return metrics
         
-        # Try to get insights (requires read_insights permission, may fail)
-        try:
-            url = f"{GRAPH_API_BASE}/{page_id}/insights"
-            params = {
-                "access_token": self.access_token,
-                "metric": ",".join([
-                    "page_impressions",
-                    "page_impressions_unique",
-                    "page_engaged_users",
-                    "page_post_engagements",
-                    "page_fans",
-                    "page_views_total",
-                    "page_video_views",
-                    "page_fan_adds",
-                    "page_fan_removes",
-                ]),
-                "since": since,
-                "until": until,
-                "period": "day"
-            }
-            
-            response = requests.get(url, params=params, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-            
-            # Process insights data
-            insights = self._process_insights(data.get("data", []))
-            metrics.update(insights)
-            
-        except requests.exceptions.RequestException as e:
-            # Insights may fail if token lacks read_insights permission - that's OK
-            logger.warning(f"Could not fetch page insights (may need read_insights permission): {e}")
+        # For New Page Experience pages, skip insights API (deprecated) and aggregate from posts
+        if metrics["is_new_page_experience"]:
+            logger.info("New Page Experience detected - aggregating engagement from posts")
+            try:
+                # Get posts with engagement metrics
+                posts_url = f"{GRAPH_API_BASE}/{page_id}/posts"
+                posts_params = {
+                    "access_token": self.access_token,
+                    "fields": "id,message,created_time,shares,likes.summary(true),comments.summary(true),reactions.summary(true)",
+                    "since": start_date.isoformat(),
+                    "until": end_date.isoformat(),
+                    "limit": 100
+                }
+                posts_response = requests.get(posts_url, params=posts_params, timeout=30)
+                posts_response.raise_for_status()
+                posts_data = posts_response.json()
+                
+                total_reactions = 0
+                total_comments = 0
+                total_shares = 0
+                posts_count = 0
+                
+                for post in posts_data.get("data", []):
+                    posts_count += 1
+                    total_reactions += post.get("reactions", {}).get("summary", {}).get("total_count", 0)
+                    total_comments += post.get("comments", {}).get("summary", {}).get("total_count", 0)
+                    total_shares += post.get("shares", {}).get("count", 0)
+                
+                metrics["posts_count"] = posts_count
+                metrics["total_reactions"] = total_reactions
+                metrics["total_comments"] = total_comments
+                metrics["total_shares"] = total_shares
+                metrics["post_engagements"] = total_reactions + total_comments + total_shares
+                
+                logger.info(f"Aggregated from {posts_count} posts: {total_reactions} reactions, {total_comments} comments, {total_shares} shares")
+                
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Could not fetch posts for engagement aggregation: {e}")
+        else:
+            # Old Page - try insights API
+            since = int(start_date.strftime("%s"))
+            until = int(end_date.strftime("%s"))
+            try:
+                url = f"{GRAPH_API_BASE}/{page_id}/insights"
+                params = {
+                    "access_token": self.access_token,
+                    "metric": ",".join([
+                        "page_impressions",
+                        "page_impressions_unique",
+                        "page_engaged_users",
+                        "page_post_engagements",
+                        "page_fans",
+                        "page_views_total",
+                        "page_video_views",
+                        "page_fan_adds",
+                        "page_fan_removes",
+                    ]),
+                    "since": since,
+                    "until": until,
+                    "period": "day"
+                }
+                
+                response = requests.get(url, params=params, timeout=30)
+                response.raise_for_status()
+                data = response.json()
+                
+                # Process insights data
+                insights = self._process_insights(data.get("data", []))
+                metrics.update(insights)
+                
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"Could not fetch page insights: {e}")
         
         return metrics
     
