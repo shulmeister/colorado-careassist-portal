@@ -1916,6 +1916,124 @@ async def linkedin_oauth_callback(
         })
 
 
+# ========================================
+# Google Business Profile OAuth Endpoints
+# ========================================
+
+@app.get("/api/gbp/auth")
+async def gbp_oauth_start():
+    """
+    Start GBP OAuth flow. Returns URL to redirect user to.
+    """
+    from services.marketing.gbp_service import gbp_service
+    
+    oauth_url = gbp_service.get_oauth_url()
+    
+    if not oauth_url:
+        return JSONResponse({
+            "success": False,
+            "error": "GBP OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.",
+        })
+    
+    return JSONResponse({
+        "success": True,
+        "oauth_url": oauth_url,
+        "message": "Visit the oauth_url to authorize Google Business Profile access",
+    })
+
+
+@app.get("/api/gbp/callback")
+async def gbp_oauth_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    """
+    OAuth callback endpoint for GBP authorization.
+    
+    After user authorizes, Google redirects here with an auth code.
+    We exchange it for access and refresh tokens.
+    """
+    from services.marketing.gbp_service import gbp_service
+    
+    if error:
+        return JSONResponse({
+            "success": False,
+            "error": error,
+        })
+    
+    if not code:
+        return JSONResponse({
+            "success": False,
+            "error": "No authorization code received",
+        })
+    
+    # Exchange code for tokens
+    token_data = gbp_service.exchange_code_for_tokens(code)
+    
+    if token_data.get("success"):
+        # Return the tokens (user needs to set them as env vars)
+        return JSONResponse({
+            "success": True,
+            "message": "Google Business Profile authorized successfully!",
+            "access_token": token_data["access_token"],
+            "refresh_token": token_data.get("refresh_token"),
+            "expires_in": token_data.get("expires_in"),
+            "instructions": "Set these tokens as GBP_ACCESS_TOKEN and GBP_REFRESH_TOKEN environment variables on Heroku. The refresh token is used to automatically get new access tokens.",
+        })
+    else:
+        return JSONResponse({
+            "success": False,
+            "error": "Failed to exchange code for tokens",
+            "details": token_data.get("error"),
+        })
+
+
+@app.get("/api/gbp/status")
+async def gbp_status():
+    """
+    Check GBP connection status and available locations.
+    """
+    from services.marketing.gbp_service import gbp_service
+    
+    status = {
+        "oauth_configured": bool(gbp_service.client_id and gbp_service.client_secret),
+        "authenticated": bool(gbp_service.access_token),
+        "has_refresh_token": bool(gbp_service.refresh_token),
+        "configured_locations": gbp_service.location_ids,
+    }
+    
+    if not status["oauth_configured"]:
+        status["error"] = "Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET"
+        status["oauth_url"] = None
+    elif not status["authenticated"]:
+        status["oauth_url"] = gbp_service.get_oauth_url()
+        status["message"] = "Visit oauth_url to authorize access"
+    else:
+        # Try to fetch accounts to verify token works
+        try:
+            accounts = gbp_service.get_accounts()
+            status["accounts"] = len(accounts)
+            status["account_names"] = [a.get("accountName", a.get("name")) for a in accounts]
+            
+            # Try to get locations
+            all_locations = []
+            for account in accounts:
+                locations = gbp_service.get_locations(account.get("name"))
+                for loc in locations:
+                    all_locations.append({
+                        "name": loc.get("name"),
+                        "title": loc.get("title"),
+                        "address": loc.get("storefrontAddress", {}).get("addressLines", [])
+                    })
+            status["locations"] = all_locations
+            
+        except Exception as e:
+            status["error"] = f"Error fetching accounts: {str(e)}"
+    
+    return JSONResponse(status)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

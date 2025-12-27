@@ -1,138 +1,370 @@
+"""
+Google Business Profile Performance API integration.
+Uses OAuth 2.0 for user authentication to access GBP metrics.
+"""
 import os
+import json
 import logging
 from datetime import date, datetime, timedelta
-from typing import Dict, Any, List
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
+from typing import Dict, Any, List, Optional
+import requests
 
 logger = logging.getLogger(__name__)
 
+# OAuth 2.0 Configuration
+GBP_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
+GBP_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
+GBP_REDIRECT_URI = os.getenv("GBP_REDIRECT_URI", "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/gbp/callback")
+
+# Stored OAuth tokens (in production, store in database)
+GBP_ACCESS_TOKEN = os.getenv("GBP_ACCESS_TOKEN")
+GBP_REFRESH_TOKEN = os.getenv("GBP_REFRESH_TOKEN")
+
+# Location IDs
+GBP_LOCATION_IDS = os.getenv("GBP_LOCATION_IDS", "").split(",") if os.getenv("GBP_LOCATION_IDS") else []
+
+# API Base URLs
+OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token"
+OAUTH_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GBP_PERFORMANCE_API = "https://businessprofileperformance.googleapis.com/v1"
+GBP_ACCOUNT_MGMT_API = "https://mybusinessaccountmanagement.googleapis.com/v1"
+GBP_BUSINESS_INFO_API = "https://mybusinessbusinessinformation.googleapis.com/v1"
+
+# Required OAuth scopes
+OAUTH_SCOPES = [
+    "https://www.googleapis.com/auth/business.manage"
+]
+
 
 class GBPService:
+    """Google Business Profile service using OAuth 2.0"""
+    
     def __init__(self):
-        # Support multiple location IDs
-        location_ids_str = os.getenv("GBP_LOCATION_IDS", "2279972127373883206,15500135164371037339")
-        self.location_ids = [lid.strip() for lid in location_ids_str.split(",")]
-        self.service_account_json = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+        self.access_token = GBP_ACCESS_TOKEN
+        self.refresh_token = GBP_REFRESH_TOKEN
+        self.client_id = GBP_CLIENT_ID
+        self.client_secret = GBP_CLIENT_SECRET
+        self.location_ids = [lid.strip() for lid in GBP_LOCATION_IDS if lid.strip()]
         
-        if not self.service_account_json:
-            logger.warning("GOOGLE_SERVICE_ACCOUNT_JSON not set. GBP API calls will use mock data.")
-            self.service = None
+        if not self.client_id or not self.client_secret:
+            logger.warning("GBP OAuth not configured: Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET")
+        
+        if not self.access_token:
+            logger.warning("GBP not authenticated: No GBP_ACCESS_TOKEN. User needs to complete OAuth flow.")
+    
+    def get_oauth_url(self, state: str = "gbp_auth") -> str:
+        """
+        Generate OAuth authorization URL for user to authenticate.
+        
+        Args:
+            state: State parameter for CSRF protection
+            
+        Returns:
+            Authorization URL
+        """
+        if not self.client_id:
+            return ""
+        
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": GBP_REDIRECT_URI,
+            "response_type": "code",
+            "scope": " ".join(OAUTH_SCOPES),
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": state
+        }
+        
+        query_string = "&".join(f"{k}={requests.utils.quote(str(v))}" for k, v in params.items())
+        return f"{OAUTH_AUTH_URL}?{query_string}"
+    
+    def exchange_code_for_tokens(self, code: str) -> Dict[str, Any]:
+        """
+        Exchange authorization code for access and refresh tokens.
+        
+        Args:
+            code: Authorization code from OAuth callback
+            
+        Returns:
+            Token response with access_token, refresh_token, expires_in
+        """
+        data = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": GBP_REDIRECT_URI
+        }
+        
+        response = requests.post(OAUTH_TOKEN_URL, data=data, timeout=30)
+        
+        if response.status_code == 200:
+            tokens = response.json()
+            self.access_token = tokens.get("access_token")
+            self.refresh_token = tokens.get("refresh_token")
+            logger.info("GBP OAuth tokens obtained successfully")
+            return {
+                "success": True,
+                "access_token": self.access_token,
+                "refresh_token": self.refresh_token,
+                "expires_in": tokens.get("expires_in")
+            }
         else:
-            try:
-                import json
-                credentials_dict = json.loads(self.service_account_json)
-                credentials = service_account.Credentials.from_service_account_info(
-                    credentials_dict,
-                    scopes=[
-                        "https://www.googleapis.com/auth/business.manage"
-                    ]
-                )
-                # Use My Business Business Information API v1
-                self.service = build('mybusinessbusinessinformation', 'v1', credentials=credentials)
-                # Also initialize the Account Management API to get accounts
-                self.account_service = build('mybusinessaccountmanagement', 'v1', credentials=credentials)
-                logger.info("GBP service initialized successfully")
-            except Exception as e:
-                logger.error(f"Failed to initialize GBP client: {e}")
-                self.service = None
-                self.account_service = None
-
+            logger.error(f"Failed to exchange code for tokens: {response.text}")
+            return {"success": False, "error": response.text}
+    
+    def refresh_access_token(self) -> bool:
+        """
+        Refresh the access token using the refresh token.
+        
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.refresh_token:
+            logger.error("Cannot refresh: No refresh token available")
+            return False
+        
+        data = {
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "refresh_token": self.refresh_token,
+            "grant_type": "refresh_token"
+        }
+        
+        response = requests.post(OAUTH_TOKEN_URL, data=data, timeout=30)
+        
+        if response.status_code == 200:
+            tokens = response.json()
+            self.access_token = tokens.get("access_token")
+            logger.info("GBP access token refreshed successfully")
+            return True
+        else:
+            logger.error(f"Failed to refresh token: {response.text}")
+            return False
+    
+    def _make_api_request(self, url: str, method: str = "GET", retry: bool = True) -> Optional[Dict]:
+        """
+        Make an authenticated API request.
+        
+        Args:
+            url: API endpoint URL
+            method: HTTP method
+            retry: Whether to retry with token refresh on 401
+            
+        Returns:
+            Response JSON or None
+        """
+        if not self.access_token:
+            logger.error("No access token available")
+            return None
+        
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        try:
+            if method == "GET":
+                response = requests.get(url, headers=headers, timeout=30)
+            else:
+                response = requests.request(method, url, headers=headers, timeout=30)
+            
+            if response.status_code == 401 and retry:
+                # Token expired, try to refresh
+                if self.refresh_access_token():
+                    return self._make_api_request(url, method, retry=False)
+                return None
+            
+            response.raise_for_status()
+            return response.json()
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"API request failed: {e}")
+            return None
+    
+    def get_accounts(self) -> List[Dict[str, Any]]:
+        """
+        Get list of GBP accounts the user has access to.
+        
+        Returns:
+            List of account dictionaries
+        """
+        url = f"{GBP_ACCOUNT_MGMT_API}/accounts"
+        data = self._make_api_request(url)
+        
+        if data and "accounts" in data:
+            return data["accounts"]
+        return []
+    
+    def get_locations(self, account_name: str = None) -> List[Dict[str, Any]]:
+        """
+        Get list of locations for an account.
+        
+        Args:
+            account_name: Account resource name (e.g., "accounts/123456789")
+            
+        Returns:
+            List of location dictionaries
+        """
+        if not account_name:
+            # Try to get first account
+            accounts = self.get_accounts()
+            if accounts:
+                account_name = accounts[0].get("name")
+            else:
+                return []
+        
+        url = f"{GBP_BUSINESS_INFO_API}/{account_name}/locations"
+        data = self._make_api_request(url)
+        
+        if data and "locations" in data:
+            return data["locations"]
+        return []
+    
+    def get_daily_metrics(self, location_name: str, metric: str, start_date: date, end_date: date) -> Dict[str, Any]:
+        """
+        Get daily metrics for a location using Business Profile Performance API.
+        
+        Args:
+            location_name: Location resource name (e.g., "locations/123456789")
+            metric: Metric to fetch (e.g., "WEBSITE_CLICKS", "CALL_CLICKS", etc.)
+            start_date: Start date
+            end_date: End date
+            
+        Returns:
+            Metrics data
+        """
+        # Build the API URL
+        url = (
+            f"{GBP_PERFORMANCE_API}/{location_name}:getDailyMetricsTimeSeries"
+            f"?dailyMetric={metric}"
+            f"&dailyRange.startDate.year={start_date.year}"
+            f"&dailyRange.startDate.month={start_date.month}"
+            f"&dailyRange.startDate.day={start_date.day}"
+            f"&dailyRange.endDate.year={end_date.year}"
+            f"&dailyRange.endDate.month={end_date.month}"
+            f"&dailyRange.endDate.day={end_date.day}"
+        )
+        
+        return self._make_api_request(url) or {}
+    
     def get_gbp_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """
-        Fetch Google Business Profile metrics.
+        Fetch all GBP metrics for configured locations.
         
         Args:
             start_date: Start date
             end_date: End date
             
         Returns:
-            Dictionary containing GBP metrics
+            Aggregated GBP metrics
         """
-        if not self.service:
-            logger.warning("GBP service not configured, returning mock data")
-            return self._get_mock_data(start_date, end_date)
+        # Check if OAuth is configured
+        if not self.access_token:
+            return self._get_not_configured_data("GBP not authenticated. Complete OAuth flow to connect.")
         
-        logger.info(f"Fetching GBP metrics for locations {self.location_ids} from {start_date} to {end_date}")
+        if not self.client_id or not self.client_secret:
+            return self._get_not_configured_data("GBP OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.")
         
-        try:
-            # Aggregate metrics from all locations
-            total_searches = 0
-            total_views = 0
-            total_phone_calls = 0
-            total_directions = 0
-            total_website_clicks = 0
-            all_search_keywords = {}
-            actions_by_date = {}
-            
-            for location_id in self.location_ids:
+        logger.info(f"Fetching GBP metrics from {start_date} to {end_date}")
+        
+        # Get locations if not configured
+        location_names = []
+        if self.location_ids:
+            location_names = [f"locations/{lid}" for lid in self.location_ids]
+        else:
+            # Try to discover locations from accounts
+            accounts = self.get_accounts()
+            for account in accounts:
+                locations = self.get_locations(account.get("name"))
+                for loc in locations:
+                    location_names.append(loc.get("name"))
+        
+        if not location_names:
+            return self._get_not_configured_data("No GBP locations found. Check account permissions.")
+        
+        # Metrics to fetch
+        metrics_to_fetch = [
+            "WEBSITE_CLICKS",
+            "CALL_CLICKS", 
+            "BUSINESS_DIRECTION_REQUESTS",
+            "BUSINESS_IMPRESSIONS_DESKTOP_MAPS",
+            "BUSINESS_IMPRESSIONS_MOBILE_MAPS",
+            "BUSINESS_IMPRESSIONS_DESKTOP_SEARCH",
+            "BUSINESS_IMPRESSIONS_MOBILE_SEARCH"
+        ]
+        
+        # Aggregate metrics from all locations
+        totals = {
+            "website_clicks": 0,
+            "phone_calls": 0,
+            "directions": 0,
+            "views": 0,
+            "searches": 0
+        }
+        actions_over_time = {}
+        
+        for location_name in location_names:
+            for metric in metrics_to_fetch:
                 try:
-                    location_name = f"locations/{location_id}"
+                    data = self.get_daily_metrics(location_name, metric, start_date, end_date)
                     
-                    # Try to get location info first to verify access
-                    try:
-                        location_info = self.service.locations().get(name=location_name).execute()
-                        logger.info(f"Successfully accessed location: {location_info.get('title', location_id)}")
-                    except HttpError as e:
-                        if e.resp.status == 403:
-                            logger.error(f"Access denied to location {location_id}. Service account may not have permission.")
-                        elif e.resp.status == 404:
-                            logger.error(f"Location {location_id} not found. Check if the ID is correct.")
-                        else:
-                            logger.error(f"Error accessing location {location_id}: {e}")
-                        continue
-                    
-                    # Note: The Business Profile Performance API (for metrics like views, searches, actions)
-                    # requires a separate API and has limited availability. It's primarily available through
-                    # the Google Business Profile dashboard or requires special access.
-                    
-                    # For now, we'll use mock data with a note that real metrics require
-                    # either the Performance API (limited access) or Google Analytics integration
-                    logger.warning(f"GBP Performance metrics require special API access. Using mock data for location {location_id}.")
-                    
+                    if "timeSeries" in data:
+                        time_series = data["timeSeries"]
+                        daily_metrics = time_series.get("datedValues", [])
+                        
+                        for entry in daily_metrics:
+                            date_obj = entry.get("date", {})
+                            date_str = f"{date_obj.get('year')}-{date_obj.get('month'):02d}-{date_obj.get('day'):02d}"
+                            value = int(entry.get("value", 0))
+                            
+                            # Aggregate by metric type
+                            if metric == "WEBSITE_CLICKS":
+                                totals["website_clicks"] += value
+                            elif metric == "CALL_CLICKS":
+                                totals["phone_calls"] += value
+                            elif metric == "BUSINESS_DIRECTION_REQUESTS":
+                                totals["directions"] += value
+                            elif metric in ["BUSINESS_IMPRESSIONS_DESKTOP_MAPS", "BUSINESS_IMPRESSIONS_MOBILE_MAPS"]:
+                                totals["views"] += value
+                            elif metric in ["BUSINESS_IMPRESSIONS_DESKTOP_SEARCH", "BUSINESS_IMPRESSIONS_MOBILE_SEARCH"]:
+                                totals["searches"] += value
+                            
+                            # Track over time for charts
+                            if date_str not in actions_over_time:
+                                actions_over_time[date_str] = {"date": date_str, "website": 0, "calls": 0, "directions": 0}
+                            
+                            if metric == "WEBSITE_CLICKS":
+                                actions_over_time[date_str]["website"] += value
+                            elif metric == "CALL_CLICKS":
+                                actions_over_time[date_str]["calls"] += value
+                            elif metric == "BUSINESS_DIRECTION_REQUESTS":
+                                actions_over_time[date_str]["directions"] += value
+                                
                 except Exception as e:
-                    logger.error(f"Error fetching GBP metrics for location {location_id}: {e}")
+                    logger.warning(f"Error fetching {metric} for {location_name}: {e}")
                     continue
-            
-            # Return mock data with a note
-            logger.info("GBP API accessed successfully, but performance metrics require additional setup. Returning mock data.")
-            return self._get_mock_data(start_date, end_date)
-            
-        except Exception as e:
-            logger.error(f"Error fetching GBP metrics: {e}")
-            return self._get_mock_data(start_date, end_date)
-
-    def get_location_info(self) -> List[Dict[str, Any]]:
-        """
-        Get basic information about the configured locations.
         
-        Returns:
-            List of location information dictionaries
-        """
-        if not self.service:
-            return []
+        # Sort actions over time
+        sorted_actions = sorted(actions_over_time.values(), key=lambda x: x["date"])
         
-        locations = []
-        for location_id in self.location_ids:
-            try:
-                location_name = f"locations/{location_id}"
-                location_info = self.service.locations().get(name=location_name).execute()
-                locations.append({
-                    "id": location_id,
-                    "name": location_info.get("title", "Unknown"),
-                    "address": location_info.get("storefrontAddress", {}),
-                    "phone": location_info.get("phoneNumbers", {}).get("primaryPhone", ""),
-                    "website": location_info.get("websiteUri", "")
-                })
-            except Exception as e:
-                logger.error(f"Error getting info for location {location_id}: {e}")
-                continue
+        logger.info(f"GBP metrics: {totals['phone_calls']} calls, {totals['website_clicks']} clicks, {totals['directions']} directions")
         
-        return locations
-
-    def _get_mock_data(self, start_date: date, end_date: date) -> Dict[str, Any]:
-        """Return empty data when GBP is not configured - NO FAKE DATA."""
+        return {
+            "searches": totals["searches"],
+            "views": totals["views"],
+            "phone_calls": totals["phone_calls"],
+            "directions": totals["directions"],
+            "website_clicks": totals["website_clicks"],
+            "actions_over_time": sorted_actions,
+            "search_keywords": [],  # Keywords require separate API
+            "is_placeholder": False,
+            "source": "gbp_performance_api",
+            "locations_count": len(location_names)
+        }
+    
+    def _get_not_configured_data(self, message: str) -> Dict[str, Any]:
+        """Return zero data when GBP is not configured."""
         return {
             "searches": 0,
             "views": 0,
@@ -141,9 +373,12 @@ class GBPService:
             "website_clicks": 0,
             "search_keywords": [],
             "actions_over_time": [],
+            "is_placeholder": True,
             "not_configured": True,
-            "message": "Google Business Profile not connected. Add service account to your GBP location for real data."
+            "message": message,
+            "oauth_url": self.get_oauth_url() if self.client_id else None
         }
 
 
+# Singleton instance
 gbp_service = GBPService()
