@@ -1518,37 +1518,44 @@ async def api_marketing_engagement(
     # Calculate engagement by source
     sources = []
     
-    # Facebook/Instagram
+    # Facebook/Instagram (only if real data)
     fb_engagement = 0
-    if social_data and social_data.get("post_overview"):
+    fb_likes = 0
+    # Check if social data is real (not placeholder)
+    social_is_placeholder = social_data.get("is_placeholder", False) if social_data else True
+    if social_data and not social_is_placeholder and social_data.get("post_overview"):
         fb_engagement = (
             social_data["post_overview"].get("post_clicks", 0) +
             social_data["summary"].get("unique_clicks", 0)
         )
-    if social_data and social_data.get("summary"):
+    if social_data and not social_is_placeholder and social_data.get("summary"):
         fb_likes = social_data["summary"].get("total_page_likes", {}).get("value", 0)
-        sources.append({
-            "source": "Facebook/Instagram",
-            "icon": "📘",
-            "engagements": fb_engagement,
-            "followers": fb_likes,
-            "type": "social"
-        })
+        if fb_engagement > 0 or fb_likes > 0:
+            sources.append({
+                "source": "Facebook/Instagram",
+                "icon": "📘",
+                "engagements": fb_engagement,
+                "followers": fb_likes,
+                "type": "social"
+            })
     
-    # Google Ads - conversions as engagement
+    # Google Ads - conversions as engagement (only if real data, not placeholder)
     google_conversions = 0
     google_clicks = 0
     if ads_data and ads_data.get("google_ads"):
         google_ads = ads_data["google_ads"]
-        google_conversions = google_ads.get("performance", {}).get("conversions", 0)
-        google_clicks = google_ads.get("performance", {}).get("clicks", 0)
-        sources.append({
-            "source": "Google Ads",
-            "icon": "🔍",
-            "engagements": google_clicks,
-            "conversions": google_conversions,
-            "type": "paid"
-        })
+        # Skip placeholder data - don't show fake Google Ads metrics
+        if not google_ads.get("is_placeholder", False):
+            google_conversions = google_ads.get("performance", {}).get("conversions", 0)
+            google_clicks = google_ads.get("performance", {}).get("clicks", 0)
+            if google_clicks > 0:
+                sources.append({
+                    "source": "Google Ads",
+                    "icon": "🔍",
+                    "engagements": google_clicks,
+                    "conversions": google_conversions,
+                    "type": "paid"
+                })
     
     # GA4 - organic traffic
     organic_sessions = 0
@@ -1625,15 +1632,24 @@ async def api_marketing_engagement(
     sources.sort(key=lambda x: x.get("engagements", 0), reverse=True)
     attribution["by_source"] = sources
     
-    # Build engagement by type
+    # Build engagement by type (only real data)
     type_breakdown = [
-        {"type": "Paid Ads", "icon": "💰", "value": google_clicks + fb_engagement, "color": "#22c55e"},
         {"type": "Organic Search", "icon": "🔍", "value": organic_sessions, "color": "#3b82f6"},
         {"type": "Direct", "icon": "🔗", "value": direct_sessions, "color": "#8b5cf6"},
-        {"type": "Social", "icon": "📱", "value": pinterest_engagement + linkedin_engagement, "color": "#f97316"},
+        {"type": "Social", "icon": "📱", "value": fb_engagement + pinterest_engagement + linkedin_engagement, "color": "#f97316"},
         {"type": "Local (GBP)", "icon": "📍", "value": gbp_calls + gbp_directions + gbp_website, "color": "#ec4899"},
     ]
+    # Only add paid ads if we have real (non-placeholder) data
+    if google_clicks > 0:
+        type_breakdown.insert(0, {"type": "Paid Ads", "icon": "💰", "value": google_clicks, "color": "#22c55e"})
     attribution["by_type"] = [t for t in type_breakdown if t["value"] > 0]
+    
+    # Track which sources are using placeholder data
+    placeholder_sources = []
+    if ads_data and ads_data.get("google_ads", {}).get("is_placeholder"):
+        placeholder_sources.append("Google Ads")
+    if social_is_placeholder:
+        placeholder_sources.append("Facebook/Instagram")
     
     # Calculate totals
     total_engagements = sum(s.get("engagements", 0) for s in sources)
@@ -1691,7 +1707,9 @@ async def api_marketing_engagement(
                     "directions": gbp_directions,
                     "website": gbp_website,
                 }
-            }
+            },
+            "placeholder_sources": placeholder_sources,
+            "note": "Google Ads data excluded (account suspended)" if "Google Ads" in placeholder_sources else None
         }
     })
 
