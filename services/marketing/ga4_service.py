@@ -327,59 +327,23 @@ class GA4Service:
         return paths
 
     def _get_mock_data(self, start_date: date, end_date: date) -> Dict[str, Any]:
-        """Return mock data for testing."""
+        """Return empty data when GA4 is not configured - NO FAKE DATA."""
         return {
-            "total_users": 188,
-            "sessions": 245,
-            "conversions": 32,
-            "conversion_rate": 10.75,
-            "avg_session_duration": "2:34",
-            "engagement_rate": 68.5,
-            "bounce_rate": 31.5,
-            "users_over_time": [
-                {"date": "2025-10-12", "users": 4},
-                {"date": "2025-10-16", "users": 6},
-                {"date": "2025-10-20", "users": 22},
-                {"date": "2025-10-24", "users": 12},
-                {"date": "2025-10-28", "users": 18},
-                {"date": "2025-11-01", "users": 22},
-                {"date": "2025-11-05", "users": 18},
-                {"date": "2025-11-09", "users": 10}
-            ],
-            "sessions_by_source": {
-                "direct": 10,
-                "google": 5,
-                "fb": 5,
-                "l.facebook.com": 1
-            },
-            "conversions_by_source": {
-                "direct": 13,
-                "google": 12,
-                "fb": 6,
-                "l.facebook.com": 1
-            },
-            "conversion_paths": [
-                {"path": "google / cpc → direct", "conversions": 14},
-                {"path": "facebook / referral → direct", "conversions": 9},
-                {"path": "direct / none", "conversions": 6},
-            ],
-            "sessions_by_medium": [
-                {"date": "2025-10-12", "none": 2, "cpc": 1, "paid": 0, "referral": 1, "organic": 0},
-                {"date": "2025-10-16", "none": 3, "cpc": 2, "paid": 1, "referral": 0, "organic": 1},
-                {"date": "2025-10-20", "none": 8, "cpc": 5, "paid": 3, "referral": 4, "organic": 2},
-                {"date": "2025-10-24", "none": 5, "cpc": 3, "paid": 1, "referral": 2, "organic": 1},
-                {"date": "2025-10-28", "none": 7, "cpc": 4, "paid": 2, "referral": 3, "organic": 2},
-                {"date": "2025-11-01", "none": 9, "cpc": 5, "paid": 3, "referral": 3, "organic": 2},
-                {"date": "2025-11-05", "none": 7, "cpc": 4, "paid": 2, "referral": 3, "organic": 2},
-                {"date": "2025-11-09", "none": 4, "cpc": 2, "paid": 1, "referral": 2, "organic": 1}
-            ],
-            "top_pages": [
-                {"path": "/", "views": 145, "engagement_rate": 72.3},
-                {"path": "/services", "views": 98, "engagement_rate": 68.1},
-                {"path": "/about", "views": 67, "engagement_rate": 65.4},
-                {"path": "/contact", "views": 54, "engagement_rate": 71.2},
-                {"path": "/careers", "views": 42, "engagement_rate": 59.8}
-            ]
+            "total_users": 0,
+            "sessions": 0,
+            "conversions": 0,
+            "conversion_rate": 0,
+            "avg_session_duration": "0:00",
+            "engagement_rate": 0,
+            "bounce_rate": 0,
+            "users_over_time": [],
+            "sessions_by_source": {},
+            "conversions_by_source": {},
+            "conversion_paths": [],
+            "sessions_by_medium": [],
+            "top_pages": [],
+            "not_configured": True,
+            "message": "GA4 not configured. Add service account to your GA4 property."
         }
 
 

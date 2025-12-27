@@ -132,36 +132,17 @@ class GBPService:
         return locations
 
     def _get_mock_data(self, start_date: date, end_date: date) -> Dict[str, Any]:
-        """Return mock data for testing."""
-        # Calculate days for more realistic mock data
-        days = (end_date - start_date).days + 1
-        
-        # Scale mock data based on time period
-        scale = days / 30.0
-        
+        """Return empty data when GBP is not configured - NO FAKE DATA."""
         return {
-            "searches": int(156 * scale),
-            "views": int(234 * scale),
-            "phone_calls": int(45 * scale),
-            "directions": int(38 * scale),
-            "website_clicks": int(67 * scale),
-            "search_keywords": [
-                {"keyword": "home care services", "count": int(42 * scale)},
-                {"keyword": "senior care colorado", "count": int(38 * scale)},
-                {"keyword": "caregiver jobs", "count": int(28 * scale)},
-                {"keyword": "elderly care", "count": int(24 * scale)},
-                {"keyword": "respite care", "count": int(24 * scale)}
-            ],
-            "actions_over_time": [
-                {
-                    "date": (start_date + timedelta(days=i)).isoformat(),
-                    "calls": 2 + (i % 4),
-                    "directions": 1 + (i % 3),
-                    "website": 3 + (i % 5)
-                }
-                for i in range(0, min(days, 30), max(1, days // 8))
-            ],
-            "note": "GBP Performance metrics require Google Business Profile Performance API access. Contact Google for API access or use Google Analytics for website traffic data."
+            "searches": 0,
+            "views": 0,
+            "phone_calls": 0,
+            "directions": 0,
+            "website_clicks": 0,
+            "search_keywords": [],
+            "actions_over_time": [],
+            "not_configured": True,
+            "message": "Google Business Profile not connected. Add service account to your GBP location for real data."
         }
 
 

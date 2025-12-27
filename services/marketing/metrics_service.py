@@ -285,62 +285,44 @@ def _calculate_comparison(current: Dict, previous: Dict) -> Dict[str, float]:
 
 
 def _get_placeholder_social_metrics(start: date, end: date) -> Dict[str, Any]:
-    """Return placeholder social metrics"""
-    total_days = (end - start).days + 1
-    
+    """Return empty social metrics - NO FAKE DATA."""
     return {
         "summary": {
-            "total_page_likes": {
-                "value": 2785,
-                "change": 4.6,
-                "trend": "up",
-            },
-            "reach": {
-                "organic": 18340,
-                "paid": 8640,
-                "total": 26980,
-                "change": -2.1,
-                "trend": "down",
-            },
-            "impressions": 38950,
-            "page_visits": 2946,
-            "unique_clicks": 4834,
-            "video_views_3s": 5190,
+            "total_page_likes": {"value": 0, "change": 0, "trend": "down"},
+            "reach": {"organic": 0, "paid": 0, "total": 0, "change": 0, "trend": "down"},
+            "impressions": 0,
+            "page_visits": 0,
+            "unique_clicks": 0,
+            "video_views_3s": 0,
         },
         "click_actions": {
-            "get_directions": 37,
-            "phone_clicks": 34,
-            "website_clicks": 91,
-            "action_button": 99,
+            "get_directions": 0,
+            "phone_clicks": 0,
+            "website_clicks": 0,
+            "action_button": 0,
         },
         "post_overview": {
-            "posts_published": 18,
-            "post_reach": 8735,
-            "post_clicks": 3690,
-            "engagement_by_post": 1468,
-            "chart": [
-                {"date": (start + timedelta(days=idx)).isoformat(), "reach": 420 + idx * 15, "engagement": 180 + idx * 7}
-                for idx in range(total_days)
-            ],
+            "posts_published": 0,
+            "post_reach": 0,
+            "post_clicks": 0,
+            "engagement_by_post": 0,
+            "chart": [],
         },
-        "top_posts": [
-            {"title": "Announcing fall caregiver event", "reach": 1250, "clicks": 210, "platform": "Facebook"},
-            {"title": "Meet the team: spotlight", "reach": 980, "clicks": 162, "platform": "Instagram"},
-            {"title": "Client success story", "reach": 860, "clicks": 131, "platform": "LinkedIn"},
-        ],
+        "top_posts": [],
+        "is_placeholder": True,
+        "not_configured": True,
+        "message": "Facebook/Instagram not configured or missing read_insights permission",
     }
 
 
 def _get_placeholder_ads_metrics(start: date, end: date) -> Dict[str, Any]:
-    """Return placeholder ads metrics for both Google and Facebook"""
+    """Return empty ads metrics - NO FAKE DATA."""
     return {
         "google_ads": google_ads_service.get_placeholder_metrics(start, end),
         "facebook_ads": {
             "account": facebook_ads_service.get_placeholder_account_metrics(start, end),
-            "campaigns": [
-                {"name": "October 2025 PMax Lead Gen Denver", "spend": 1190.78, "clicks": 280, "impressions": 8930, "conversions": 35},
-                {"name": "October 2025 PMax Lead Gen - Springs", "spend": 1195.14, "clicks": 249, "impressions": 7530, "conversions": 25},
-            ],
+            "campaigns": [],
+            "not_configured": True,
         },
     }
 

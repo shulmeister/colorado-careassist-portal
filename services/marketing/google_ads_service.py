@@ -310,105 +310,35 @@ class GoogleAdsService:
         }
 
     def _get_placeholder_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
-        days = (end_date - start_date).days + 1
-        base_spend = 2385.92
-        daily_spend = base_spend / max(days, 1)
-
-        daily = []
-        for i in range(min(days, 30)):
-            current_date = (start_date + timedelta(days=i)).isoformat()
-            spend = round(daily_spend * (0.9 + (i % 6) * 0.02), 2)
-            clicks = 40 + (i % 7) * 3
-            impressions = 600 + (i % 5) * 120
-            conversions = max(1, int(clicks * 0.05))
-            conversion_value = round(conversions * 85.0, 2)
-            daily.append(
-                {
-                    "date": current_date,
-                    "spend": spend,
-                    "clicks": clicks,
-                    "impressions": impressions,
-                    "conversions": conversions,
-                    "conversion_value": conversion_value,
-                    "roas": round(self._safe_divide(conversion_value, spend), 2),
-                    "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
-                }
-            )
-
-        placeholder = {
+        """Return empty metrics when Google Ads is not configured - NO FAKE DATA."""
+        return {
             "currency_code": self.currency_code,
             "spend": {
-                "total": round(sum(entry["spend"] for entry in daily), 2) if daily else base_spend,
-                "per_day": round(base_spend / max(days, 1), 2),
-                "daily": daily,
+                "total": 0,
+                "per_day": 0,
+                "daily": [],
             },
             "performance": {
-                "clicks": sum(entry["clicks"] for entry in daily),
-                "impressions": sum(entry["impressions"] for entry in daily),
-                "conversions": sum(entry["conversions"] for entry in daily),
-                "conversion_value": round(sum(entry["conversion_value"] for entry in daily), 2),
+                "clicks": 0,
+                "impressions": 0,
+                "conversions": 0,
+                "conversion_value": 0,
             },
             "efficiency": {
-                "ctr": 7.54,
-                "cpc": 0.22,
-                "cpm": 12.5,
-                "cost_per_conversion": 52.0,
-                "roas": 3.2,
-                "conversion_rate": 4.6,
+                "ctr": 0,
+                "cpc": 0,
+                "cpm": 0,
+                "cost_per_conversion": 0,
+                "roas": 0,
+                "conversion_rate": 0,
             },
-            "campaigns": [
-                {
-                    "id": "1202322604584110573",
-                    "name": "Caregiver Recruitment - Denver",
-                    "status": "ENABLED",
-                    "channel": "PERFORMANCE_MAX",
-                    "spend": 177.70,
-                    "clicks": 850,
-                    "impressions": 13103,
-                    "conversions": 32,
-                    "conversion_value": 2720.00,
-                    "ctr": 6.49,
-                    "cpc": 0.21,
-                    "roas": 15.31,
-                    "cost_per_conversion": 5.55,
-                },
-                {
-                    "id": "1202337037746708575",
-                    "name": "Caregiver Recruitment - Denver - Copy",
-                    "status": "ENABLED",
-                    "channel": "PERFORMANCE_MAX",
-                    "spend": 66.91,
-                    "clicks": 380,
-                    "impressions": 4541,
-                    "conversions": 27,
-                    "conversion_value": 1890.00,
-                    "ctr": 8.37,
-                    "cpc": 0.18,
-                    "roas": 28.26,
-                    "cost_per_conversion": 2.48,
-                },
-                {
-                    "id": "1202257411495570575",
-                    "name": "Caregiver Recruitment - CO Springs/Pueblo",
-                    "status": "PAUSED",
-                    "channel": "PERFORMANCE_MAX",
-                    "spend": 90.27,
-                    "clicks": 292,
-                    "impressions": 2530,
-                    "conversions": 24,
-                    "conversion_value": 1650.00,
-                    "ctr": 11.54,
-                    "cpc": 0.31,
-                    "roas": 18.28,
-                    "cost_per_conversion": 3.76,
-                },
-            ],
+            "campaigns": [],
             "is_placeholder": True,
-            "source": "placeholder",
+            "not_configured": True,
+            "message": "Google Ads API not configured or account suspended",
+            "source": "not_connected",
             "fetched_at": datetime.utcnow().isoformat(),
         }
-
-        return placeholder
 
     @staticmethod
     def _normalize_customer_id(value: Optional[str]) -> Optional[str]:

@@ -201,30 +201,21 @@ class FacebookAdsService:
         return self._get_placeholder_metrics(start_date, end_date)
 
     def _get_placeholder_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
-        """Return placeholder Facebook Ads metrics matching screenshot data"""
-        days = (end_date - start_date).days + 1
-        
-        data = {
-            "spend": 334.88,
-            "impressions": 8930,
-            "clicks": 529,
-            "reach": 7800,
-            "cpc": 4.51,
-            "cpm": 37.50,
-            "ctr": 0.03,
-            "conversions": 60,
-            "daily_breakdown": [
-                {
-                    "date": (start_date + timedelta(days=i)).isoformat(),
-                    "spend": 10 + (i % 15),
-                    "impressions": 250 + (i % 50),
-                    "clicks": 15 + (i % 10)
-                }
-                for i in range(min(days, 30))
-            ]
+        """Return empty metrics when Facebook Ads is not configured - NO FAKE DATA."""
+        return {
+            "spend": 0,
+            "impressions": 0,
+            "clicks": 0,
+            "reach": 0,
+            "cpc": 0,
+            "cpm": 0,
+            "ctr": 0,
+            "conversions": 0,
+            "daily_breakdown": [],
+            "daily": [],
+            "not_configured": True,
+            "message": "Facebook Ads not configured or no active campaigns"
         }
-        data["daily"] = data["daily_breakdown"]
-        return data
 
 
 # Singleton instance
