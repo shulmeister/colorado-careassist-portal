@@ -57,7 +57,7 @@ class OAuthManager:
                 "token_url": "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
                 "scopes": ["com.intuit.quickbooks.accounting"],
                 "redirect_uri": f"{self.base_url}/auth/quickbooks/callback"
-            }
+            },
         }
     
     def get_authorization_url(self, service: str, state: str) -> Optional[str]:
