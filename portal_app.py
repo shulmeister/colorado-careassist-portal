@@ -1529,7 +1529,7 @@ async def tiktok_oauth_callback(
     """
     TikTok OAuth callback endpoint.
     Handles the authorization code exchange for access token.
-    Callback URL: https://coloradocareassist.com/api/tiktok/callback
+    Callback URL: https://portal.coloradocareassist.com/api/tiktok/callback
     """
     import httpx
     import os
@@ -1550,7 +1550,7 @@ async def tiktok_oauth_callback(
     # Get TikTok credentials from environment
     client_key = os.getenv("TIKTOK_CLIENT_KEY")
     client_secret = os.getenv("TIKTOK_CLIENT_SECRET")
-    redirect_uri = "https://coloradocareassist.com/api/tiktok/callback"
+    redirect_uri = "https://portal.coloradocareassist.com/api/tiktok/callback"
     
     if not client_key or not client_secret:
         return JSONResponse({
@@ -1690,7 +1690,7 @@ async def tiktok_oauth_start():
     
     params = {
         "client_key": client_key,
-        "redirect_uri": "https://coloradocareassist.com/api/tiktok/callback",
+        "redirect_uri": "https://portal.coloradocareassist.com/api/tiktok/callback",
         "scope": "user.info.basic,video.list,video.publish",  # Adjust scopes as needed
         "response_type": "code",
         "state": "marketing_dashboard"  # You can use this for CSRF protection
