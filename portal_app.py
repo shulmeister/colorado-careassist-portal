@@ -1917,6 +1917,100 @@ async def linkedin_oauth_callback(
 
 
 # ========================================
+
+# ========================================
+# Instagram, TikTok, All-Social Endpoints
+# ========================================
+
+@app.get("/api/marketing/instagram")
+async def api_marketing_instagram(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to")
+):
+    """Return Instagram metrics from Graph API."""
+    from services.marketing.metrics_service import get_instagram_metrics
+    
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+    
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+    
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+    
+    data = get_instagram_metrics(start, end)
+    
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": (end - start).days + 1
+        },
+        "data": data
+    })
+
+
+@app.get("/api/marketing/tiktok")
+async def api_marketing_tiktok(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to")
+):
+    """Return TikTok metrics from TikTok Marketing API."""
+    from services.marketing.metrics_service import get_tiktok_metrics
+    
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+    
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+    
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+    
+    data = get_tiktok_metrics(start, end)
+    
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": (end - start).days + 1
+        },
+        "data": data
+    })
+
+
+@app.get("/api/marketing/all-social")
+async def api_marketing_all_social(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to")
+):
+    """Return all social platform metrics in one call."""
+    from services.marketing.metrics_service import get_all_social_metrics
+    
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+    
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+    
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+    
+    data = get_all_social_metrics(start, end)
+    
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": (end - start).days + 1
+        },
+        "data": data
+    })
+
 # Google Business Profile OAuth Endpoints
 # ========================================
 

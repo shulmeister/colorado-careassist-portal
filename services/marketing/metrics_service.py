@@ -326,3 +326,138 @@ def _get_placeholder_ads_metrics(start: date, end: date) -> Dict[str, Any]:
         },
     }
 
+
+def get_instagram_metrics(start: date, end: date) -> Dict[str, Any]:
+    """
+    Fetch Instagram Business account metrics.
+    
+    Args:
+        start: Start date
+        end: End date
+    
+    Returns:
+        Dictionary containing Instagram metrics
+    """
+    if not USE_REAL_DATA:
+        logger.info("Using placeholder Instagram metrics (real data disabled)")
+        return instagram_service._get_placeholder_metrics(start, end)
+    
+    try:
+        return instagram_service.get_account_metrics(start, end)
+    except Exception as e:
+        logger.error(f"Error fetching Instagram metrics: {e}")
+        return instagram_service._get_placeholder_metrics(start, end)
+
+
+def get_linkedin_metrics(start: date, end: date) -> Dict[str, Any]:
+    """
+    Fetch LinkedIn company page and ads metrics.
+    
+    Args:
+        start: Start date
+        end: End date
+    
+    Returns:
+        Dictionary containing LinkedIn organic and ads metrics
+    """
+    if not USE_REAL_DATA:
+        logger.info("Using placeholder LinkedIn metrics (real data disabled)")
+        return linkedin_service._get_placeholder_metrics(start, end)
+    
+    try:
+        organic = linkedin_service.get_organization_metrics(start, end)
+        ads = linkedin_service.get_ad_metrics(start, end)
+        return {
+            "organic": organic,
+            "ads": ads,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching LinkedIn metrics: {e}")
+        return {
+            "organic": linkedin_service._get_placeholder_metrics(start, end),
+            "ads": linkedin_service._get_placeholder_ad_metrics(start, end),
+        }
+
+
+def get_pinterest_metrics(start: date, end: date) -> Dict[str, Any]:
+    """
+    Fetch Pinterest user account and ads metrics.
+    
+    Args:
+        start: Start date
+        end: End date
+    
+    Returns:
+        Dictionary containing Pinterest organic and ads metrics
+    """
+    if not USE_REAL_DATA:
+        logger.info("Using placeholder Pinterest metrics (real data disabled)")
+        return pinterest_service._get_placeholder_metrics(start, end)
+    
+    try:
+        organic = pinterest_service.get_user_metrics(start, end)
+        ads = pinterest_service.get_ad_metrics(start, end)
+        return {
+            "organic": organic,
+            "ads": ads,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching Pinterest metrics: {e}")
+        return {
+            "organic": pinterest_service._get_placeholder_metrics(start, end),
+            "ads": pinterest_service._get_placeholder_ad_metrics(start, end),
+        }
+
+
+def get_tiktok_metrics(start: date, end: date) -> Dict[str, Any]:
+    """
+    Fetch TikTok ads and engagement metrics.
+    
+    Args:
+        start: Start date
+        end: End date
+    
+    Returns:
+        Dictionary containing TikTok ads and engagement metrics
+    """
+    if not USE_REAL_DATA:
+        logger.info("Using placeholder TikTok metrics (real data disabled)")
+        return tiktok_service._get_placeholder_metrics(start, end)
+    
+    try:
+        ads = tiktok_service.get_ad_metrics(start, end)
+        campaigns = tiktok_service.get_campaign_metrics(start, end)
+        engagement = tiktok_service.get_engagement_metrics(start, end)
+        return {
+            "ads": ads,
+            "campaigns": campaigns,
+            "engagement": engagement,
+        }
+    except Exception as e:
+        logger.error(f"Error fetching TikTok metrics: {e}")
+        return {
+            "ads": tiktok_service._get_placeholder_metrics(start, end),
+            "campaigns": [],
+            "engagement": tiktok_service._get_placeholder_engagement(start, end),
+        }
+
+
+def get_all_social_metrics(start: date, end: date) -> Dict[str, Any]:
+    """
+    Fetch social media metrics from ALL platforms.
+    
+    Args:
+        start: Start date
+        end: End date
+    
+    Returns:
+        Dictionary containing metrics from Facebook, Instagram, LinkedIn, Pinterest, TikTok
+    """
+    return {
+        "facebook": get_social_metrics(start, end),
+        "instagram": get_instagram_metrics(start, end),
+        "linkedin": get_linkedin_metrics(start, end),
+        "pinterest": get_pinterest_metrics(start, end),
+        "tiktok": get_tiktok_metrics(start, end),
+        "fetched_at": date.today().isoformat(),
+    }
