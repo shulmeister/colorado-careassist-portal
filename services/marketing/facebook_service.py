@@ -163,6 +163,10 @@ class FacebookMetricsService:
             except requests.exceptions.RequestException as e:
                 logger.warning(f"Could not fetch page insights: {e}")
         
+        # Get audience demographics
+        demographics = self.get_audience_demographics(page_id)
+        metrics["audience_demographics"] = demographics
+        
         return metrics
     
     def get_posts_metrics(self, page_id: str, start_date: date, end_date: date, limit: int = 50) -> List[Dict[str, Any]]:
@@ -223,6 +227,102 @@ class FacebookMetricsService:
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching Facebook posts: {e}")
             return []
+    
+    def get_audience_demographics(self, page_id: str) -> Dict[str, Any]:
+        """
+        Fetch audience demographics (age, gender, location, device)
+        
+        Args:
+            page_id: Facebook Page ID
+        
+        Returns:
+            Dictionary containing audience demographics
+        """
+        if not self.access_token:
+            logger.error("Cannot fetch demographics: No access token")
+            return {}
+        
+        demographics = {
+            "age_gender": {},
+            "countries": [],
+            "cities": [],
+            "devices": {},
+        }
+        
+        try:
+            # Get age and gender breakdown
+            url = f"{GRAPH_API_BASE}/{page_id}/insights"
+            params = {
+                "access_token": self.access_token,
+                "metric": "page_fans_by_age_gender,page_fans_by_country,page_fans_by_city",
+                "period": "lifetime"
+            }
+            
+            response = requests.get(url, params=params, timeout=30)
+            if response.status_code == 200:
+                data = response.json()
+                
+                for metric in data.get("data", []):
+                    metric_name = metric.get("name", "")
+                    values = metric.get("values", [])
+                    
+                    if values:
+                        latest = values[-1].get("value", {})
+                        
+                        if metric_name == "page_fans_by_age_gender":
+                            # Parse age/gender breakdown (e.g., "F.25-34": 1234)
+                            demographics["age_gender"] = latest
+                        elif metric_name == "page_fans_by_country":
+                            # Sort by count, get top 10
+                            countries = sorted(
+                                latest.items(),
+                                key=lambda x: x[1],
+                                reverse=True
+                            )[:10]
+                            demographics["countries"] = [
+                                {"country": country, "count": count}
+                                for country, count in countries
+                            ]
+                        elif metric_name == "page_fans_by_city":
+                            # Sort by count, get top 10
+                            cities = sorted(
+                                latest.items(),
+                                key=lambda x: x[1],
+                                reverse=True
+                            )[:10]
+                            demographics["cities"] = [
+                                {"city": city, "count": count}
+                                for city, count in cities
+                            ]
+            
+            # Get device breakdown (requires different endpoint)
+            try:
+                device_url = f"{GRAPH_API_BASE}/{page_id}/insights"
+                device_params = {
+                    "access_token": self.access_token,
+                    "metric": "page_impressions_by_device",
+                    "period": "day",
+                    "since": int((date.today() - timedelta(days=30)).strftime("%s")),
+                    "until": int(date.today().strftime("%s"))
+                }
+                
+                device_response = requests.get(device_url, params=device_params, timeout=30)
+                if device_response.status_code == 200:
+                    device_data = device_response.json()
+                    for metric in device_data.get("data", []):
+                        if metric.get("name") == "page_impressions_by_device":
+                            values = metric.get("values", [])
+                            if values:
+                                latest = values[-1].get("value", {})
+                                demographics["devices"] = latest
+            except Exception as e:
+                logger.debug(f"Could not fetch device breakdown: {e}")
+            
+            return demographics
+            
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Could not fetch audience demographics: {e}")
+            return demographics
     
     def get_click_actions(self, page_id: str, start_date: date, end_date: date) -> Dict[str, int]:
         """

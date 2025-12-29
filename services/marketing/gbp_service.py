@@ -248,6 +248,105 @@ class GBPService:
         
         return self._make_api_request(url) or {}
     
+    def get_reviews(self, location_name: str) -> Dict[str, Any]:
+        """
+        Get reviews for a location.
+        
+        Args:
+            location_name: Location resource name (e.g., "locations/123456789")
+            
+        Returns:
+            Review metrics including count, average rating, and recent reviews
+        """
+        url = f"{GBP_BUSINESS_INFO_API}/{location_name}/reviews"
+        data = self._make_api_request(url)
+        
+        if not data:
+            return {
+                "total_reviews": 0,
+                "average_rating": 0,
+                "rating_distribution": {},
+                "recent_reviews": []
+            }
+        
+        reviews = data.get("reviews", [])
+        total_reviews = len(reviews)
+        
+        if total_reviews == 0:
+            return {
+                "total_reviews": 0,
+                "average_rating": 0,
+                "rating_distribution": {},
+                "recent_reviews": []
+            }
+        
+        # Calculate average rating
+        ratings = [review.get("starRating", {}).get("rating", 0) for review in reviews if review.get("starRating")]
+        average_rating = sum(ratings) / len(ratings) if ratings else 0
+        
+        # Rating distribution
+        rating_distribution = {}
+        for rating in ratings:
+            rating_distribution[rating] = rating_distribution.get(rating, 0) + 1
+        
+        # Get recent reviews (last 10)
+        recent_reviews = []
+        for review in reviews[:10]:
+            recent_reviews.append({
+                "author": review.get("reviewer", {}).get("displayName", "Anonymous"),
+                "rating": review.get("starRating", {}).get("rating", 0),
+                "comment": review.get("comment", ""),
+                "create_time": review.get("createTime", ""),
+            })
+        
+        return {
+            "total_reviews": total_reviews,
+            "average_rating": round(average_rating, 1),
+            "rating_distribution": rating_distribution,
+            "recent_reviews": recent_reviews
+        }
+    
+    def get_search_keywords(self, location_name: str, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+        """
+        Get search keywords that led to business discovery.
+        
+        Note: This may require additional API permissions or may not be available
+        in all GBP API versions. Returns empty list if not available.
+        
+        Args:
+            location_name: Location resource name
+            start_date: Start date
+            end_date: End date
+            
+        Returns:
+            List of search keywords with impression counts
+        """
+        # Note: Search keywords may not be directly available in GBP Performance API
+        # This is a placeholder implementation - actual endpoint may differ
+        url = (
+            f"{GBP_PERFORMANCE_API}/{location_name}:getSearchKeywordImpressions"
+            f"?startDate.year={start_date.year}"
+            f"&startDate.month={start_date.month}"
+            f"&startDate.day={start_date.day}"
+            f"&endDate.year={end_date.year}"
+            f"&endDate.month={end_date.month}"
+            f"&endDate.day={end_date.day}"
+        )
+        
+        data = self._make_api_request(url)
+        
+        if data and "searchKeywordImpressions" in data:
+            keywords = []
+            for keyword_data in data.get("searchKeywordImpressions", []):
+                keywords.append({
+                    "keyword": keyword_data.get("keyword", ""),
+                    "impressions": keyword_data.get("impressions", 0),
+                })
+            return sorted(keywords, key=lambda x: x["impressions"], reverse=True)
+        
+        # If endpoint not available, return empty list
+        return []
+
     def get_gbp_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """
         Fetch all GBP metrics for configured locations.
@@ -348,6 +447,32 @@ class GBPService:
         # Sort actions over time
         sorted_actions = sorted(actions_over_time.values(), key=lambda x: x["date"])
         
+        # Get reviews and search keywords from first location (or aggregate if multiple)
+        reviews_data = {}
+        all_search_keywords = []
+        
+        if location_names:
+            # Get reviews from first location (or aggregate if needed)
+            reviews_data = self.get_reviews(location_names[0])
+            
+            # Aggregate search keywords from all locations
+            for location_name in location_names:
+                keywords = self.get_search_keywords(location_name, start_date, end_date)
+                all_search_keywords.extend(keywords)
+            
+            # Deduplicate and aggregate keywords
+            keyword_dict = {}
+            for kw in all_search_keywords:
+                keyword = kw.get("keyword", "")
+                if keyword:
+                    keyword_dict[keyword] = keyword_dict.get(keyword, 0) + kw.get("impressions", 0)
+            
+            # Convert back to list and sort
+            all_search_keywords = [
+                {"keyword": k, "impressions": v}
+                for k, v in sorted(keyword_dict.items(), key=lambda x: x[1], reverse=True)
+            ][:20]  # Top 20 keywords
+        
         logger.info(f"GBP metrics: {totals['phone_calls']} calls, {totals['website_clicks']} clicks, {totals['directions']} directions")
         
         return {
@@ -357,7 +482,8 @@ class GBPService:
             "directions": totals["directions"],
             "website_clicks": totals["website_clicks"],
             "actions_over_time": sorted_actions,
-            "search_keywords": [],  # Keywords require separate API
+            "reviews": reviews_data,
+            "search_keywords": all_search_keywords,
             "is_placeholder": False,
             "source": "gbp_performance_api",
             "locations_count": len(location_names)
@@ -371,6 +497,12 @@ class GBPService:
             "phone_calls": 0,
             "directions": 0,
             "website_clicks": 0,
+            "reviews": {
+                "total_reviews": 0,
+                "average_rating": 0,
+                "rating_distribution": {},
+                "recent_reviews": []
+            },
             "search_keywords": [],
             "actions_over_time": [],
             "is_placeholder": True,

@@ -389,6 +389,88 @@
         );
 
         setText('totalImpressions', formatNumber(google.performance?.impressions));
+        
+        // Render new metrics: Quality Scores, Search Terms, Device Performance
+        renderGoogleQualityScores(google.quality_scores);
+        renderGoogleSearchTerms(google.search_terms);
+        renderGoogleDevicePerformance(google.device_performance);
+    }
+    
+    function renderGoogleQualityScores(qualityScores) {
+        if (!qualityScores || !qualityScores.average_quality_score) return;
+        
+        const container = document.getElementById('googleQualityScores');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="stats-row">
+                <div class="stats-label">Avg Quality Score</div>
+                <div class="stats-value">${qualityScores.average_quality_score}/10</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Creative Score</div>
+                <div class="stats-value">${qualityScores.average_creative_score || '—'}/10</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Landing Page Score</div>
+                <div class="stats-value">${qualityScores.average_landing_page_score || '—'}/10</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Predicted CTR</div>
+                <div class="stats-value">${qualityScores.average_predicted_ctr || '—'}/10</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Keywords Analyzed</div>
+                <div class="stats-value">${formatNumber(qualityScores.keywords_analyzed || 0)}</div>
+            </div>
+        `;
+    }
+    
+    function renderGoogleSearchTerms(searchTerms) {
+        if (!searchTerms || !searchTerms.length) return;
+        
+        const container = document.getElementById('googleSearchTerms');
+        if (!container) return;
+        
+        container.innerHTML = searchTerms.slice(0, 10).map((term) => {
+            const cpc = term.cpc ? formatCurrency(term.cpc, 2) : '—';
+            const conversions = term.conversions || 0;
+            return `
+                <div class="stats-row">
+                    <div class="stats-label" title="${term.search_term}">${term.search_term.length > 40 ? term.search_term.substring(0, 40) + '...' : term.search_term}</div>
+                    <div class="stats-value">
+                        ${formatNumber(term.clicks)}
+                        <span class="stats-change">${cpc} | ${conversions} conv</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    function renderGoogleDevicePerformance(devicePerf) {
+        if (!devicePerf || !Object.keys(devicePerf).length) return;
+        
+        const container = document.getElementById('googleDevicePerformance');
+        if (!container) return;
+        
+        const devices = Object.entries(devicePerf).map(([device, stats]) => ({
+            device: device.charAt(0).toUpperCase() + device.slice(1),
+            ...stats
+        }));
+        
+        container.innerHTML = devices.map((device) => {
+            const ctr = device.ctr ? formatPercent(device.ctr) : '—';
+            const convRate = device.conversion_rate ? formatPercent(device.conversion_rate) : '—';
+            return `
+                <div class="stats-row">
+                    <div class="stats-label">${device.device}</div>
+                    <div class="stats-value">
+                        ${formatCurrency(device.spend, 2)}
+                        <span class="stats-change">${formatNumber(device.clicks)} clicks | ${ctr} CTR | ${convRate} Conv</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 
     function renderFacebookOverview(account) {
@@ -774,6 +856,93 @@
 
         renderSocialTopPosts(data.top_posts || []);
         updateSocialCharts(postOverview.chart || []);
+        
+        // Render new metrics: Facebook Audience Demographics
+        renderFacebookDemographics(data.audience_demographics || summary.audience_demographics);
+        
+        // Render new metrics: LinkedIn follower growth (if available in data)
+        if (data.linkedin) {
+            renderLinkedInFollowerGrowth(data.linkedin);
+        }
+    }
+    
+    function renderLinkedInFollowerGrowth(linkedin) {
+        if (!linkedin || !linkedin.follower_growth) return;
+        
+        const container = document.getElementById('linkedinFollowerGrowth');
+        if (!container) return;
+        
+        const growth = linkedin.follower_growth;
+        container.innerHTML = `
+            <div class="stats-row">
+                <div class="stats-label">Current Followers</div>
+                <div class="stats-value">${formatNumber(growth.current_followers)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Growth Rate</div>
+                <div class="stats-value">${formatPercent(growth.growth_rate)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Followers Added</div>
+                <div class="stats-value">${formatNumber(growth.followers_added)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Growth Trend</div>
+                <div class="stats-value">${growth.trend === 'up' ? '↑ Increasing' : growth.trend === 'down' ? '↓ Decreasing' : '→ Stable'}</div>
+            </div>
+        `;
+    }
+    
+    function renderFacebookDemographics(demographics) {
+        if (!demographics || !Object.keys(demographics).length) return;
+        
+        const container = document.getElementById('facebookDemographics');
+        if (!container) return;
+        
+        let html = '';
+        
+        // Top Countries
+        if (demographics.countries && demographics.countries.length) {
+            html += '<div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px; padding-top: 8px;"><div class="stats-label" style="font-weight: 600;">Top Countries</div></div>';
+            demographics.countries.slice(0, 5).forEach(country => {
+                html += `
+                    <div class="stats-row">
+                        <div class="stats-label">${country.country}</div>
+                        <div class="stats-value">${formatNumber(country.count)}</div>
+                    </div>
+                `;
+            });
+        }
+        
+        // Top Cities
+        if (demographics.cities && demographics.cities.length) {
+            html += '<div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px; padding-top: 8px;"><div class="stats-label" style="font-weight: 600;">Top Cities</div></div>';
+            demographics.cities.slice(0, 5).forEach(city => {
+                html += `
+                    <div class="stats-row">
+                        <div class="stats-label">${city.city}</div>
+                        <div class="stats-value">${formatNumber(city.count)}</div>
+                    </div>
+                `;
+            });
+        }
+        
+        // Devices
+        if (demographics.devices && Object.keys(demographics.devices).length) {
+            html += '<div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px; padding-top: 8px;"><div class="stats-label" style="font-weight: 600;">Devices</div></div>';
+            Object.entries(demographics.devices).slice(0, 3).forEach(([device, count]) => {
+                html += `
+                    <div class="stats-row">
+                        <div class="stats-label">${device}</div>
+                        <div class="stats-value">${formatNumber(count)}</div>
+                    </div>
+                `;
+            });
+        }
+        
+        if (html) {
+            container.innerHTML = html;
+        }
     }
 
     function renderSocialTopPosts(posts) {
@@ -840,6 +1009,151 @@
         state.latestGa4Data = ga4;
         state.conversionPaths = Array.isArray(ga4.conversion_paths) ? ga4.conversion_paths : [];
         updateAttributionChart();
+        
+        // Render new metrics: GA4 User Retention, Geographic Performance
+        renderGA4UserRetention(ga4.user_retention);
+        renderGA4Geographic(ga4.geographic_performance);
+        
+        // Render new metrics: GBP Reviews, Search Keywords
+        renderGBPReviews(gbp.reviews);
+        renderGBPSearchKeywords(gbp.search_keywords);
+    }
+    
+    function renderGA4UserRetention(retention) {
+        if (!retention) return;
+        
+        const container = document.getElementById('ga4UserRetention');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="stats-row">
+                <div class="stats-label">New Users</div>
+                <div class="stats-value">${formatNumber(retention.new_users)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Returning Users</div>
+                <div class="stats-value">${formatNumber(retention.returning_users)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Retention Rate</div>
+                <div class="stats-value">${formatPercent(retention.retention_rate)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">New Engagement Rate</div>
+                <div class="stats-value">${formatPercent(retention.new_engagement_rate)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Returning Engagement Rate</div>
+                <div class="stats-value">${formatPercent(retention.returning_engagement_rate)}</div>
+            </div>
+        `;
+    }
+    
+    function renderGA4Geographic(geo) {
+        if (!geo) return;
+        
+        const container = document.getElementById('ga4Geographic');
+        if (!container) return;
+        
+        let html = '';
+        
+        // Top Countries
+        if (geo.top_countries && geo.top_countries.length) {
+            html += '<div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px; padding-top: 8px;"><div class="stats-label" style="font-weight: 600;">Top Countries</div></div>';
+            geo.top_countries.slice(0, 5).forEach(country => {
+                html += `
+                    <div class="stats-row">
+                        <div class="stats-label">${country.country}</div>
+                        <div class="stats-value">
+                            ${formatNumber(country.users)}
+                            <span class="stats-change">${formatPercent(country.conversion_rate)} conv</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        
+        // Top Cities
+        if (geo.top_cities && geo.top_cities.length) {
+            html += '<div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px; padding-top: 8px;"><div class="stats-label" style="font-weight: 600;">Top Cities</div></div>';
+            geo.top_cities.slice(0, 5).forEach(city => {
+                html += `
+                    <div class="stats-row">
+                        <div class="stats-label">${city.city}</div>
+                        <div class="stats-value">${formatNumber(city.users)}</div>
+                    </div>
+                `;
+            });
+        }
+        
+        if (html) {
+            container.innerHTML = html;
+        }
+    }
+    
+    function renderGBPReviews(reviews) {
+        if (!reviews || !reviews.total_reviews) return;
+        
+        const container = document.getElementById('gbpReviews');
+        if (!container) return;
+        
+        let html = `
+            <div class="stats-row">
+                <div class="stats-label">Total Reviews</div>
+                <div class="stats-value">${formatNumber(reviews.total_reviews)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Average Rating</div>
+                <div class="stats-value">${reviews.average_rating || '—'}/5.0</div>
+            </div>
+        `;
+        
+        // Rating Distribution
+        if (reviews.rating_distribution && Object.keys(reviews.rating_distribution).length) {
+            html += '<div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px; padding-top: 8px;"><div class="stats-label" style="font-weight: 600;">Rating Distribution</div></div>';
+            Object.entries(reviews.rating_distribution)
+                .sort((a, b) => Number(b[0]) - Number(a[0]))
+                .forEach(([rating, count]) => {
+                    html += `
+                        <div class="stats-row">
+                            <div class="stats-label">${rating} ⭐</div>
+                            <div class="stats-value">${formatNumber(count)}</div>
+                        </div>
+                    `;
+                });
+        }
+        
+        // Recent Reviews
+        if (reviews.recent_reviews && reviews.recent_reviews.length) {
+            html += '<div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px; padding-top: 8px;"><div class="stats-label" style="font-weight: 600;">Recent Reviews</div></div>';
+            reviews.recent_reviews.slice(0, 3).forEach(review => {
+                const comment = review.comment ? (review.comment.length > 50 ? review.comment.substring(0, 50) + '...' : review.comment) : 'No comment';
+                html += `
+                    <div class="stats-row">
+                        <div class="stats-label">${review.author} (${review.rating}⭐)</div>
+                        <div class="stats-value" style="font-size: 11px; color: #94a3b8;">${comment}</div>
+                    </div>
+                `;
+            });
+        }
+        
+        container.innerHTML = html;
+    }
+    
+    function renderGBPSearchKeywords(keywords) {
+        if (!keywords || !keywords.length) return;
+        
+        const container = document.getElementById('gbpSearchKeywords');
+        if (!container) return;
+        
+        container.innerHTML = keywords.slice(0, 10).map((kw) => {
+            return `
+                <div class="stats-row">
+                    <div class="stats-label" title="${kw.keyword}">${kw.keyword.length > 40 ? kw.keyword.substring(0, 40) + '...' : kw.keyword}</div>
+                    <div class="stats-value">${formatNumber(kw.impressions)} impressions</div>
+                </div>
+            `;
+        }).join('');
     }
 
     function renderEmailSection(payload, preset) {

@@ -264,32 +264,26 @@ def get_instagram_metrics(start: date, end: date) -> Dict[str, Any]:
 
 def get_linkedin_metrics(start: date, end: date) -> Dict[str, Any]:
     """
-    Fetch LinkedIn company page and ads metrics.
+    Fetch LinkedIn company page metrics including reactions and audience demographics.
     
     Args:
         start: Start date
         end: End date
     
     Returns:
-        Dictionary containing LinkedIn organic and ads metrics
+        Dictionary containing LinkedIn metrics with reactions and audience insights
     """
     if not USE_REAL_DATA:
         logger.info("Using placeholder LinkedIn metrics (real data disabled)")
         return linkedin_service._get_placeholder_metrics(start, end)
     
     try:
-        organic = linkedin_service.get_organization_metrics(start, end)
-        ads = linkedin_service.get_ad_metrics(start, end)
-        return {
-            "organic": organic,
-            "ads": ads,
-        }
+        # Use get_metrics which includes reactions and audience demographics
+        metrics = linkedin_service.get_metrics(start, end)
+        return metrics
     except Exception as e:
         logger.error(f"Error fetching LinkedIn metrics: {e}")
-        return {
-            "organic": linkedin_service._get_placeholder_metrics(start, end),
-            "ads": linkedin_service._get_placeholder_ad_metrics(start, end),
-        }
+        return linkedin_service._get_placeholder_metrics(start, end)
 
 
 def get_pinterest_metrics(start: date, end: date) -> Dict[str, Any]:
