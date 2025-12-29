@@ -1,202 +1,165 @@
 # 📍 Codebase Locations - Quick Reference
 
-**Last Updated**: November 22, 2025
-
-## 🚀 Desktop Quick Launch
-
-Inside `~/Documents/GitHub` there’s exactly one folder per tile. Each is a symlink that points into this repo:
-
-| Desktop Folder | Actual Path (inside repo) | Notes |
-|----------------|---------------------------|-------|
-| `colorado-careassist-portal` | `.` | Portal hub (FastAPI + marketing dashboard) |
-| `sales-dashboard` | `dashboards/sales/` | Atomic CRM based Sales app |
-| `activity-tracker` | `dashboards/activity-tracker/` | Legacy Visits/Activity tracker (PDF + OCR) |
-| `recruiter-dashboard` | `dashboards/recruitment/` | Flask recruiter app |
-| `marketing-dashboard` | `dashboards/marketing/` | Marketing services/templates (deployed with portal) |
-
-This document provides EXACT file paths and git remotes for all components of the Colorado CareAssist Portal system. Every spoke is its own git repository (with its own `.git` directory), so keep committing inside the tile folder you’re working on—the portal repo just ignores those directories now.
-
-## 🎯 The Hub: Portal
-
-**Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal`
-
-**Git Remotes**:
-- GitHub: `https://github.com/shulmeister/colorado-careassist-portal.git`
-- Heroku: `https://git.heroku.com/portal-coloradocareassist.git`
-
-**Deploy Commands**:
-```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
-git push origin main    # GitHub
-git push heroku main    # Heroku
-```
-
-**Key Files**:
-- `portal_app.py` - Main FastAPI app
-- `templates/portal.html` - Portal UI
-- `templates/marketing.html` - Marketing Dashboard (built-in)
-- `templates/recruitment_embedded.html` - Recruiter Dashboard wrapper
+**Last Updated**: December 29, 2025
 
 ---
 
-## 📊 Spoke 1: Sales Dashboard
+## 🎯 THE CANONICAL SOURCE OF TRUTH
 
-**Local Path**: `~/Documents/GitHub/sales-dashboard` → `colorado-careassist-portal/dashboards/sales/`
+All development should happen in **ONE location**:
 
-**Git Remotes**:
-- GitHub: `https://github.com/shulmeister/sales-dashboard.git`
-- Heroku: `https://git.heroku.com/careassist-tracker.git`
-
-**Deploy Commands**:
-```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
-git push origin main    # GitHub
-git push heroku main    # Heroku
+```
+/Users/shulmeister/Documents/GitHub/colorado-careassist-portal/
 ```
 
-**Key Files**:
-- `app.py` - Main Flask/FastAPI app
-- `templates/dashboard.html` - Dashboard UI
-- `portal_auth_middleware.py` - Portal authentication
-
-**IMPORTANT**: This is a **nested git repository** - it has its own `.git` folder!
+This folder contains the Portal AND all dashboard spokes as nested git repos.
 
 ---
 
-## 👥 Spoke 2: Recruiter Dashboard
+## 📁 Folder Structure
 
-**Local Path**: `~/Documents/GitHub/recruiter-dashboard` → `colorado-careassist-portal/dashboards/recruitment/`
-
-**Git Remotes**:
-- GitHub: `https://github.com/shulmeister/recruiter-dashboard.git`
-- Heroku: `https://git.heroku.com/caregiver-lead-tracker.git`
-
-**Deploy Commands**:
-```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
-git push origin main    # GitHub
-git push heroku main    # Heroku
 ```
-
-**Key Files**:
-- `app.py` - Main Flask app
-- `portal_auth_middleware.py` - Portal authentication
-- `templates/index.html` - Dashboard UI
-
-**IMPORTANT**: This is a **nested git repository** - it has its own `.git` folder!
+/Users/shulmeister/Documents/GitHub/colorado-careassist-portal/
+├── portal_app.py                    # Main Portal FastAPI app
+├── templates/
+│   ├── portal.html                  # Portal homepage
+│   └── marketing.html               # Marketing Dashboard
+├── services/marketing/              # Marketing API services
+├── dashboards/
+│   ├── sales/                       # ← NESTED GIT REPO (Sales Dashboard)
+│   │   ├── .git/
+│   │   ├── app.py
+│   │   └── frontend/
+│   ├── recruitment/                 # ← NESTED GIT REPO (Recruiter Dashboard)
+│   │   ├── .git/
+│   │   └── app.py
+│   └── activity-tracker/            # ← NESTED GIT REPO (Activity Tracker)
+│       ├── .git/
+│       └── app.py
+├── README.md
+├── AGENTS.md
+└── CODEBASE_LOCATIONS.md            # This file
+```
 
 ---
 
-## 📈 Spoke 3: Marketing Dashboard
+## 🚀 Quick Commands
 
-**NOT A SEPARATE REPO** - Built into the portal!
+### Portal (Hub)
+```bash
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal
+git add -A && git commit -m "message" && git push origin main && git push heroku main
+```
 
-**Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/templates/marketing.html`
+### Sales Dashboard
+```bash
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/sales
+git add -A && git commit -m "message" && git push origin main && git push heroku main
+```
 
-**Routes**: `/marketing` (handled by `portal_app.py`)
+### Recruiter Dashboard
+```bash
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
+git add -A && git commit -m "message" && git push origin main && git push heroku main
+```
 
-**Deploy**: Same as portal - deploy from portal root
+### Activity Tracker
+```bash
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
+git add -A && git commit -m "message" && git push origin main && git push heroku main
+```
 
 ---
 
-## 🧭 Spoke 4: Activity Tracker
+## 🔗 Git Remotes Reference
 
-**Local Path**: `~/Documents/GitHub/activity-tracker` → `colorado-careassist-portal/dashboards/activity-tracker/`
-
-**Git Remotes**:
-- GitHub: `https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git`
-- Heroku: `https://git.heroku.com/cca-activity-tracker.git`
-
-**Deploy Commands**:
-```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
-git push origin main    # GitHub
-git push heroku main    # Heroku
-```
-
-**Key Files**:
-- `app.py` - Legacy Visits/Activity tracker FastAPI app
-- `templates/dashboard.html` - UI
-- `business_card_scanner.py`, `parser.py`, CSV import scripts
-
-**IMPORTANT**: This is a **nested git repository** - it has its own `.git` folder!
-
----
-
-## 🔍 How to Check Which Repo You're In
-
-```bash
-# Check current directory
-pwd
-
-# Check git remotes
-git remote -v
-
-# Check git status
-git status
-```
-
-**Expected Outputs**:
-
-**Portal**:
+### Portal
 ```
 origin    https://github.com/shulmeister/colorado-careassist-portal.git
 heroku    https://git.heroku.com/portal-coloradocareassist.git
 ```
 
-**Sales Dashboard**:
+### Sales Dashboard (from dashboards/sales/)
 ```
 origin    https://github.com/shulmeister/sales-dashboard.git
 heroku    https://git.heroku.com/careassist-tracker.git
 ```
 
-**Recruiter Dashboard**:
+### Recruiter Dashboard (from dashboards/recruitment/)
 ```
-origin    https://github.com/shulmeister/recruiter-dashboard.git (once created)
+origin    https://github.com/shulmeister/recruiter-dashboard.git
 heroku    https://git.heroku.com/caregiver-lead-tracker.git
 ```
 
----
-
-## ✅ Verification Checklist
-
-Before starting work, verify:
-
-- [ ] You know which component you're working on (Portal, Sales, Recruiter, or Marketing)
-- [ ] You're in the correct directory (`pwd` shows the right path)
-- [ ] Git remotes are correct (`git remote -v`)
-- [ ] You push to BOTH GitHub AND Heroku after changes
-- [ ] You're committing in the right git repo (not accidentally committing from parent directory)
+### Activity Tracker (from dashboards/activity-tracker/)
+```
+origin    https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git
+heroku    https://git.heroku.com/cca-activity-tracker.git
+```
 
 ---
 
-## 🚨 Common Mistakes
+## 🌐 Live URLs
 
-1. **Committing from portal root when working on dashboards**
-   - ❌ Wrong: `cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal && git commit`
-   - ✅ Right: `cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales && git commit`
-
-2. **Assuming all code is in one repo**
-   - Each dashboard has its own git repository
-   - Check `git remote -v` to see which repo you're in
-
-3. **Forgetting to push to both remotes**
-   - Always: `git push origin main && git push heroku main`
-
-4. **Thinking Marketing Dashboard is separate**
-   - It's in `templates/marketing.html` in the portal repo
-   - Deploy from portal root, not a separate directory
+| App | Production URL |
+|-----|----------------|
+| Portal | https://portal.coloradocareassist.com |
+| Sales Dashboard | https://careassist-tracker-0fcf2cecdb22.herokuapp.com |
+| Recruiter Dashboard | https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com |
+| Activity Tracker | https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com |
+| Marketing Dashboard | https://portal.coloradocareassist.com/marketing |
 
 ---
 
-## 📞 Quick Links
+## ⚠️ Folders to IGNORE (Outdated/Duplicate)
 
-- **Portal GitHub**: https://github.com/shulmeister/colorado-careassist-portal
-- **Sales Dashboard GitHub**: https://github.com/shulmeister/sales-dashboard
-- **Recruiter Dashboard GitHub**: https://github.com/shulmeister/recruiter-dashboard
-- **Activity Tracker GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
-- **Portal Heroku**: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
-- **Sales Dashboard Heroku**: https://careassist-tracker-0fcf2cecdb22.herokuapp.com
-- **Recruiter Dashboard Heroku**: https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com
-- **Activity Tracker Heroku**: https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com
+These folders exist but are **NOT the source of truth**:
 
+| Folder | Status | Action |
+|--------|--------|--------|
+| `/Users/shulmeister/Documents/GitHub/sales-dashboard/` | Outdated clone | Can be deleted |
+| `/Users/shulmeister/Documents/GitHub/marketing-dashboard/` | Outdated | Can be deleted |
+| `/Users/shulmeister/Documents/GitHub/recruiter-dashboard/` | Outdated clone | Can be deleted |
+| `/Users/shulmeister/Documents/GitHub/client-satisfaction/` | Minimal/unused | Review before deleting |
+| `/Users/shulmeister/Library/Mobile Documents/.../sales-dashboard/` | iCloud duplicate | Can be deleted |
+
+**DO NOT** work in these folders - they will not deploy correctly.
+
+---
+
+## ✅ Before Starting Work
+
+1. **Verify you're in the right directory**:
+   ```bash
+   pwd
+   git remote -v
+   ```
+
+2. **Pull latest changes**:
+   ```bash
+   git pull origin main
+   ```
+
+3. **Check which component you're editing** (Portal vs Sales vs Recruiter vs Activity Tracker)
+
+4. **After making changes, push to BOTH remotes**:
+   ```bash
+   git push origin main && git push heroku main
+   ```
+
+---
+
+## 📞 Heroku Apps
+
+| App Name | Purpose |
+|----------|---------|
+| `portal-coloradocareassist` | Main Portal + Marketing Dashboard |
+| `careassist-tracker` | Sales Dashboard |
+| `careassist-tracker-staging` | Sales Dashboard (Staging) |
+| `caregiver-lead-tracker` | Recruiter Dashboard |
+| `cca-activity-tracker` | Activity Tracker |
+| `client-satisfaction` | Client Satisfaction (minimal) |
+
+---
+
+*For detailed agent instructions, see `AGENTS.md`*

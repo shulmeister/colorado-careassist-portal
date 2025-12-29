@@ -22,7 +22,7 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 - **Repository**: `colorado-careassist-portal`
 - **GitHub**: https://github.com/shulmeister/colorado-careassist-portal
 - **Heroku**: `portal-coloradocareassist` → `portal-coloradocareassist-3e1a4bb34793.herokuapp.com`
-- **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal`
+- **Local Path**: `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal`
 - **Tech**: FastAPI, Jinja2, PostgreSQL
 - **Purpose**: Central launchpad with tiles that link to other apps
 
@@ -81,7 +81,7 @@ All apps (portal + every spoke) are connected to their GitHub repo with automati
 
 #### Portal (Hub)
 ```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub
@@ -90,7 +90,7 @@ git push heroku main      # Push to Heroku (only if NOT using GitHub integration
 
 #### Sales Dashboard (Spoke)
 ```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/sales
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
@@ -98,7 +98,7 @@ git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
 
 #### Recruiter Dashboard (Spoke)
 ```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
@@ -106,7 +106,7 @@ git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
 
 #### Activity Tracker (Spoke)
 ```bash
-cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
@@ -140,7 +140,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 
 **IMPORTANT**: Each dashboard (`sales` and `recruitment`) is a **nested git repository** with its own remotes. They are NOT submodules - they're independent repos that happen to live inside the portal directory.
 
-### 🔄 Syncing Status (Last Updated: Nov 22, 2025)
+### 🔄 Syncing Status (Last Updated: December 29, 2025)
 
 | Component | GitHub Repo | Heroku App / URL | Status |
 |-----------|-------------|------------------|--------|
