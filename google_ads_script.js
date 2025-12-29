@@ -16,7 +16,8 @@ const WEBHOOK_URL = 'https://portal-coloradocareassist-3e1a4bb34793.herokuapp.co
 
 // Secret key for authentication (optional but recommended)
 // Set this in both the script and your backend WEBHOOK_SECRET env var
-const WEBHOOK_SECRET = 'your-secret-key-here';
+// ⚠️ UPDATE THIS with the secret from Heroku: heroku config:get GOOGLE_ADS_WEBHOOK_SECRET --app portal-coloradocareassist
+const WEBHOOK_SECRET = '36d65febabc5df0d2a67d6e604ff652de681b8923590425c298f1cd7ed6c80ff';
 
 /**
  * Main function - runs when script executes
