@@ -94,7 +94,8 @@ heroku    https://git.heroku.com/caregiver-lead-tracker.git
 ### Activity Tracker (from dashboards/activity-tracker/)
 ```
 origin    https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git
-heroku    https://git.heroku.com/cca-activity-tracker.git
+# Note: Activity Tracker functionality is built into Sales Dashboard
+# No separate Heroku app - uses careassist-tracker
 ```
 
 ---
@@ -104,26 +105,28 @@ heroku    https://git.heroku.com/cca-activity-tracker.git
 | App | Production URL |
 |-----|----------------|
 | Portal | https://portal.coloradocareassist.com |
-| Sales Dashboard | https://careassist-tracker-0fcf2cecdb22.herokuapp.com |
-| Recruiter Dashboard | https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com |
-| Activity Tracker | https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com |
 | Marketing Dashboard | https://portal.coloradocareassist.com/marketing |
+| Sales Dashboard | https://careassist-tracker-0fcf2cecdb22.herokuapp.com |
+| Recruiter Dashboard | https://caregiver-lead-tracker-8ad45742fa9c.herokuapp.com |
+| Client Satisfaction | https://client-satisfaction-15d412babc2f.herokuapp.com |
 
 ---
 
-## ⚠️ Folders to IGNORE (Outdated/Duplicate)
+## ✅ Cleanup Completed (December 29, 2025)
 
-These folders exist but are **NOT the source of truth**:
+**Archived local folders** (moved to `_archived/`):
+- `sales-dashboard/` → Use `dashboards/sales/` instead
+- `marketing-dashboard/` → Built into Portal
+- `recruiter-dashboard/` → Use `dashboards/recruitment/` instead
+- `client-satisfaction/` → Use Heroku app directly
+- `ccascanner/` → Superseded by Sales Dashboard
 
-| Folder | Status | Action |
-|--------|--------|--------|
-| `/Users/shulmeister/Documents/GitHub/sales-dashboard/` | Outdated clone | Can be deleted |
-| `/Users/shulmeister/Documents/GitHub/marketing-dashboard/` | Outdated | Can be deleted |
-| `/Users/shulmeister/Documents/GitHub/recruiter-dashboard/` | Outdated clone | Can be deleted |
-| `/Users/shulmeister/Documents/GitHub/client-satisfaction/` | Minimal/unused | Review before deleting |
-| `/Users/shulmeister/Library/Mobile Documents/.../sales-dashboard/` | iCloud duplicate | Can be deleted |
+**Archived GitHub repos**: marketing-dashboard, hls-streaming-site, mytube, business-dashboard, marketing-dashboard-material, nextjs-boilerplate, cca-communications-dashboard
 
-**DO NOT** work in these folders - they will not deploy correctly.
+**Deleted Heroku apps** (redundant):
+- `bizcard` → Functionality in Sales Dashboard
+- `cca-activity-tracker` → Functionality in Sales Dashboard
+- `cca-crm` → Replaced by Sales Dashboard
 
 ---
 
@@ -149,16 +152,18 @@ These folders exist but are **NOT the source of truth**:
 
 ---
 
-## 📞 Heroku Apps
+## 📞 Heroku Apps (Clean as of Dec 29, 2025)
 
-| App Name | Purpose |
-|----------|---------|
-| `portal-coloradocareassist` | Main Portal + Marketing Dashboard |
-| `careassist-tracker` | Sales Dashboard |
-| `careassist-tracker-staging` | Sales Dashboard (Staging) |
-| `caregiver-lead-tracker` | Recruiter Dashboard |
-| `cca-activity-tracker` | Activity Tracker |
-| `client-satisfaction` | Client Satisfaction (minimal) |
+| App Name | Purpose | Dyno |
+|----------|---------|------|
+| `portal-coloradocareassist` | Main Portal + Marketing Dashboard | Basic |
+| `careassist-tracker` | Sales Dashboard (includes Activity Tracker) | Basic |
+| `careassist-tracker-staging` | Sales Dashboard Staging | Pipeline |
+| `caregiver-lead-tracker` | Recruiter Dashboard | Running |
+| `client-satisfaction` | Client Satisfaction Dashboard | Eco (sleeps) |
+| `goformz-automation` | GoFormz webhook automation | Running |
+| `wellsky-converter-shulmeister` | WellSky payroll file converter | Running |
+| `hls-mytube` | HLS video streaming (separate project) | Eco (sleeps) |
 
 ---
 
