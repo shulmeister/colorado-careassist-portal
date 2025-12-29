@@ -18,11 +18,6 @@ from services.marketing.metrics_service import (
     get_social_metrics,
     get_ads_metrics,
     get_email_metrics,
-    get_instagram_metrics,
-    get_linkedin_metrics,
-    get_pinterest_metrics,
-    get_tiktok_metrics,
-    get_all_social_metrics,
 )
 from dotenv import load_dotenv
 from datetime import date
@@ -1297,13 +1292,52 @@ async def api_marketing_social(
     })
 
 
+@app.post("/api/marketing/google-ads/webhook")
+async def google_ads_webhook(request: Request):
+    """
+    Webhook endpoint to receive Google Ads metrics from Google Ads Scripts.
+    
+    The script runs in Google Ads and POSTs data here periodically.
+    """
+    import os
+    import json
+    from datetime import datetime
+    
+    # Optional: Verify webhook secret for security
+    webhook_secret = os.getenv("GOOGLE_ADS_WEBHOOK_SECRET")
+    if webhook_secret:
+        received_secret = request.headers.get("X-Webhook-Secret")
+        if received_secret != webhook_secret:
+            logger.warning("Google Ads webhook: Invalid secret")
+            raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    
+    try:
+        data = await request.json()
+        logger.info(f"Google Ads webhook received data from customer {data.get('customer_id')}")
+        
+        # Store the data (simple in-memory cache for now)
+        # In production, you might want to store in database or Redis
+        from services.marketing.google_ads_service import google_ads_service
+        google_ads_service.cache_script_data(data)
+        
+        return JSONResponse({
+            "status": "success",
+            "message": "Data received and cached",
+            "customer_id": data.get("customer_id"),
+            "received_at": datetime.utcnow().isoformat()
+        })
+    except Exception as e:
+        logger.error(f"Error processing Google Ads webhook: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing webhook: {str(e)}")
+
+
 @app.get("/api/marketing/ads")
 async def api_marketing_ads(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
     compare: Optional[str] = Query(None)
 ):
-    """Return ads performance metrics (placeholder until APIs wired)."""
+    """Return ads performance metrics from Google Ads Scripts or API."""
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
     
@@ -1313,7 +1347,16 @@ async def api_marketing_ads(
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
     
-    data = get_ads_metrics(start, end, compare)
+    # Try to get data from script cache first, fall back to API
+    from services.marketing.google_ads_service import google_ads_service
+    script_data = google_ads_service.get_cached_script_data(start, end)
+    
+    if script_data:
+        logger.info("Using Google Ads Script data")
+        data = script_data
+    else:
+        logger.info("No script data available, trying API")
+        data = get_ads_metrics(start, end, compare)
     
     return JSONResponse({
         "success": True,
@@ -1401,338 +1444,6 @@ async def api_marketing_website(
     })
 
 
-@app.get("/api/marketing/instagram")
-async def api_marketing_instagram(
-    from_date: Optional[str] = Query(None, alias="from"),
-    to_date: Optional[str] = Query(None, alias="to")
-):
-    """Return Instagram metrics from Graph API."""
-    end_default = datetime.utcnow().date()
-    start_default = end_default - timedelta(days=29)
-    
-    start = _parse_date_param(from_date, start_default)
-    end = _parse_date_param(to_date, end_default)
-    
-    if start > end:
-        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
-    data = get_instagram_metrics(start, end)
-    
-    return JSONResponse({
-        "success": True,
-        "range": {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "days": (end - start).days + 1
-        },
-        "data": data
-    })
-
-
-@app.get("/api/marketing/linkedin")
-async def api_marketing_linkedin(
-    from_date: Optional[str] = Query(None, alias="from"),
-    to_date: Optional[str] = Query(None, alias="to")
-):
-    """Return LinkedIn metrics from Marketing API."""
-    end_default = datetime.utcnow().date()
-    start_default = end_default - timedelta(days=29)
-    
-    start = _parse_date_param(from_date, start_default)
-    end = _parse_date_param(to_date, end_default)
-    
-    if start > end:
-        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
-    data = get_linkedin_metrics(start, end)
-    
-    return JSONResponse({
-        "success": True,
-        "range": {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "days": (end - start).days + 1
-        },
-        "data": data
-    })
-
-
-@app.get("/api/marketing/pinterest")
-async def api_marketing_pinterest(
-    from_date: Optional[str] = Query(None, alias="from"),
-    to_date: Optional[str] = Query(None, alias="to")
-):
-    """Return Pinterest metrics from Pinterest API."""
-    end_default = datetime.utcnow().date()
-    start_default = end_default - timedelta(days=29)
-    
-    start = _parse_date_param(from_date, start_default)
-    end = _parse_date_param(to_date, end_default)
-    
-    if start > end:
-        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
-    data = get_pinterest_metrics(start, end)
-    
-    return JSONResponse({
-        "success": True,
-        "range": {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "days": (end - start).days + 1
-        },
-        "data": data
-    })
-
-
-@app.get("/api/marketing/tiktok")
-async def api_marketing_tiktok(
-    from_date: Optional[str] = Query(None, alias="from"),
-    to_date: Optional[str] = Query(None, alias="to")
-):
-    """Return TikTok metrics from TikTok Marketing API."""
-    end_default = datetime.utcnow().date()
-    start_default = end_default - timedelta(days=29)
-    
-    start = _parse_date_param(from_date, start_default)
-    end = _parse_date_param(to_date, end_default)
-    
-    if start > end:
-        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
-    data = get_tiktok_metrics(start, end)
-    
-    return JSONResponse({
-        "success": True,
-        "range": {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "days": (end - start).days + 1
-        },
-        "data": data
-    })
-
-
-
-# ========================================
-# TikTok OAuth & Webhook Endpoints
-# ========================================
-
-@app.get("/api/tiktok/callback")
-async def tiktok_oauth_callback(
-    request: Request,
-    code: Optional[str] = Query(None),
-    state: Optional[str] = Query(None),
-    error: Optional[str] = Query(None),
-    error_description: Optional[str] = Query(None)
-):
-    """
-    TikTok OAuth callback endpoint.
-    Handles the authorization code exchange for access token.
-    Callback URL: https://portal.coloradocareassist.com/api/tiktok/callback
-    """
-    import httpx
-    import os
-    
-    if error:
-        return JSONResponse({
-            "success": False,
-            "error": error,
-            "error_description": error_description
-        }, status_code=400)
-    
-    if not code:
-        return JSONResponse({
-            "success": False,
-            "error": "No authorization code received"
-        }, status_code=400)
-    
-    # Get TikTok credentials from environment
-    client_key = os.getenv("TIKTOK_CLIENT_KEY")
-    client_secret = os.getenv("TIKTOK_CLIENT_SECRET")
-    redirect_uri = "https://portal.coloradocareassist.com/api/tiktok/callback"
-    
-    if not client_key or not client_secret:
-        return JSONResponse({
-            "success": False,
-            "error": "TikTok credentials not configured"
-        }, status_code=500)
-    
-    # Exchange code for access token
-    token_url = "https://open.tiktokapis.com/v2/oauth/token/"
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                token_url,
-                data={
-                    "client_key": client_key,
-                    "client_secret": client_secret,
-                    "code": code,
-                    "grant_type": "authorization_code",
-                    "redirect_uri": redirect_uri
-                },
-                headers={"Content-Type": "application/x-www-form-urlencoded"}
-            )
-            
-            token_data = response.json()
-            
-            if response.status_code == 200 and "access_token" in token_data:
-                # Store the access token (you may want to save this to DB)
-                access_token = token_data.get("access_token")
-                refresh_token = token_data.get("refresh_token")
-                expires_in = token_data.get("expires_in")
-                open_id = token_data.get("open_id")
-                
-                # Log successful auth
-                print(f"TikTok OAuth successful. Open ID: {open_id}")
-                
-                # Return success page or redirect
-                return HTMLResponse(f"""
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>TikTok Connected</title>
-                    <style>
-                        body {{ font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }}
-                        .success {{ background: #4caf50; color: white; padding: 20px; border-radius: 8px; max-width: 500px; margin: 0 auto; }}
-                        h1 {{ margin-bottom: 10px; }}
-                        p {{ margin: 5px 0; }}
-                        .token-info {{ background: #fff; padding: 15px; border-radius: 4px; margin-top: 15px; text-align: left; font-size: 12px; }}
-                    </style>
-                </head>
-                <body>
-                    <div class="success">
-                        <h1>✅ TikTok Connected!</h1>
-                        <p>Your TikTok account has been successfully linked.</p>
-                        <div class="token-info">
-                            <p><strong>Open ID:</strong> {open_id}</p>
-                            <p><strong>Expires In:</strong> {expires_in} seconds</p>
-                            <p><strong>Access Token:</strong> {access_token[:20]}...</p>
-                            <p><strong>Refresh Token:</strong> {refresh_token[:20] if refresh_token else 'N/A'}...</p>
-                        </div>
-                        <p style="margin-top: 20px;"><a href="/marketing" style="color: white;">Return to Marketing Dashboard</a></p>
-                    </div>
-                </body>
-                </html>
-                """)
-            else:
-                return JSONResponse({
-                    "success": False,
-                    "error": "Failed to exchange code for token",
-                    "details": token_data
-                }, status_code=400)
-                
-    except Exception as e:
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
-
-
-@app.post("/api/tiktok/callback")
-async def tiktok_webhook_callback(request: Request):
-    """
-    TikTok webhook callback for event notifications.
-    Handles POST requests from TikTok's webhook system.
-    """
-    import json
-    
-    try:
-        body = await request.body()
-        
-        # TikTok sends a challenge for webhook verification
-        if request.headers.get("content-type") == "application/json":
-            data = json.loads(body)
-            
-            # Handle webhook verification challenge
-            if "challenge" in data:
-                return JSONResponse({"challenge": data["challenge"]})
-            
-            # Log webhook event
-            event_type = data.get("event", "unknown")
-            print(f"TikTok webhook received: {event_type}")
-            print(f"Webhook data: {json.dumps(data, indent=2)}")
-            
-            # Process different event types
-            # Add your event handling logic here
-            
-            return JSONResponse({"success": True, "message": "Webhook received"})
-        
-        return JSONResponse({"success": True, "message": "Webhook acknowledged"})
-        
-    except Exception as e:
-        print(f"TikTok webhook error: {str(e)}")
-        return JSONResponse({
-            "success": False,
-            "error": str(e)
-        }, status_code=500)
-
-
-@app.get("/api/tiktok/auth")
-async def tiktok_oauth_start():
-    """
-    Start TikTok OAuth flow. Returns URL to redirect user to.
-    """
-    import os
-    from urllib.parse import urlencode
-    
-    client_key = os.getenv("TIKTOK_CLIENT_KEY")
-    
-    if not client_key:
-        return JSONResponse({
-            "success": False,
-            "error": "TikTok credentials not configured. Set TIKTOK_CLIENT_KEY."
-        }, status_code=500)
-    
-    # TikTok OAuth authorization URL
-    auth_url = "https://www.tiktok.com/v2/auth/authorize/"
-    
-    params = {
-        "client_key": client_key,
-        "redirect_uri": "https://portal.coloradocareassist.com/api/tiktok/callback",
-        "scope": "user.info.basic,video.list,video.publish",  # Adjust scopes as needed
-        "response_type": "code",
-        "state": "marketing_dashboard"  # You can use this for CSRF protection
-    }
-    
-    oauth_url = f"{auth_url}?{urlencode(params)}"
-    
-    return JSONResponse({
-        "success": True,
-        "oauth_url": oauth_url,
-        "message": "Redirect user to oauth_url to start TikTok authorization"
-    })
-
-
-@app.get("/api/marketing/all-social")
-async def api_marketing_all_social(
-    from_date: Optional[str] = Query(None, alias="from"),
-    to_date: Optional[str] = Query(None, alias="to")
-):
-    """Return all social platform metrics in one call."""
-    end_default = datetime.utcnow().date()
-    start_default = end_default - timedelta(days=29)
-    
-    start = _parse_date_param(from_date, start_default)
-    end = _parse_date_param(to_date, end_default)
-    
-    if start > end:
-        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
-    data = get_all_social_metrics(start, end)
-    
-    return JSONResponse({
-        "success": True,
-        "range": {
-            "start": start.isoformat(),
-            "end": end.isoformat(),
-            "days": (end - start).days + 1
-        },
-        "data": data
-    })
-
-
 @app.get("/api/marketing/test-ga4")
 async def test_ga4_connection():
     """Test GA4 connection and return status."""
@@ -1782,6 +1493,591 @@ async def test_gbp_connection():
         except Exception as e:
             status["locations_accessible"] = 0
             status["error"] = str(e)
+    
+    return JSONResponse(status)
+
+
+@app.get("/api/marketing/engagement")
+async def api_marketing_engagement(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    """
+    Aggregate engagement data from all marketing channels.
+    
+    Provides attribution insights showing where engagements, calls,
+    and conversions are coming from across:
+    - Facebook/Instagram (organic + paid)
+    - Google Ads (paid search/display)
+    - Google Analytics (organic, direct, referral)
+    - Pinterest
+    - LinkedIn
+    - Google Business Profile (calls, directions)
+    """
+    from services.marketing.ga4_service import ga4_service
+    from services.marketing.gbp_service import gbp_service
+    from services.marketing.pinterest_service import pinterest_service
+    from services.marketing.linkedin_service import linkedin_service
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Date range
+    end_default = datetime.utcnow().date()
+    start_default = end_default - timedelta(days=29)
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+    
+    if start > end:
+        raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
+    
+    days = (end - start).days + 1
+    
+    # Fetch data from all sources
+    try:
+        # GA4 data for traffic sources
+        ga4_data = ga4_service.get_website_metrics(start, end)
+        
+        # Get social metrics
+        social_data = get_social_metrics(start, end, None)
+        
+        # Get ads metrics  
+        ads_data = get_ads_metrics(start, end, None)
+        
+        # GBP for calls/directions
+        gbp_data = gbp_service.get_gbp_metrics(start, end)
+        
+        # Pinterest metrics
+        pinterest_data = pinterest_service.get_user_analytics(start, end)
+        
+        # LinkedIn metrics
+        linkedin_data = linkedin_service.get_metrics(start, end)
+        
+    except Exception as e:
+        logger.error(f"Error fetching engagement data: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    # Build attribution breakdown - where are engagements coming from?
+    attribution = {
+        "by_source": [],
+        "by_type": []
+    }
+    
+    # Calculate engagement by source
+    sources = []
+    
+    # Facebook/Instagram (only if real data)
+    fb_engagement = 0
+    fb_likes = 0
+    # Check if social data is real (not placeholder)
+    social_is_placeholder = social_data.get("is_placeholder", False) if social_data else True
+    if social_data and not social_is_placeholder and social_data.get("post_overview"):
+        fb_engagement = (
+            social_data["post_overview"].get("post_clicks", 0) +
+            social_data["summary"].get("unique_clicks", 0)
+        )
+    if social_data and not social_is_placeholder and social_data.get("summary"):
+        fb_likes = social_data["summary"].get("total_page_likes", {}).get("value", 0)
+        if fb_engagement > 0 or fb_likes > 0:
+            sources.append({
+                "source": "Facebook/Instagram",
+                "icon": "📘",
+                "engagements": fb_engagement,
+                "followers": fb_likes,
+                "type": "social"
+            })
+    
+    # Google Ads - conversions as engagement (only if real data, not placeholder)
+    google_conversions = 0
+    google_clicks = 0
+    if ads_data and ads_data.get("google_ads"):
+        google_ads = ads_data["google_ads"]
+        # Skip placeholder data - don't show fake Google Ads metrics
+        if not google_ads.get("is_placeholder", False):
+            google_conversions = google_ads.get("performance", {}).get("conversions", 0)
+            google_clicks = google_ads.get("performance", {}).get("clicks", 0)
+            if google_clicks > 0:
+                sources.append({
+                    "source": "Google Ads",
+                    "icon": "🔍",
+                    "engagements": google_clicks,
+                    "conversions": google_conversions,
+                    "type": "paid"
+                })
+    
+    # GA4 - organic traffic
+    organic_sessions = 0
+    direct_sessions = 0
+    referral_sessions = 0
+    if ga4_data:
+        sessions_by_source = ga4_data.get("sessions_by_source", {})
+        organic_sessions = sessions_by_source.get("google", 0)
+        direct_sessions = sessions_by_source.get("direct", 0)
+        referral_sessions = sessions_by_source.get("fb", 0) + sessions_by_source.get("l.facebook.com", 0)
+        
+        sources.append({
+            "source": "Organic Search",
+            "icon": "🌐",
+            "engagements": organic_sessions,
+            "type": "organic"
+        })
+        sources.append({
+            "source": "Direct Traffic",
+            "icon": "🔗",
+            "engagements": direct_sessions,
+            "type": "direct"
+        })
+    
+    # GBP - calls and actions
+    gbp_calls = 0
+    gbp_directions = 0
+    gbp_website = 0
+    if gbp_data:
+        gbp_calls = gbp_data.get("phone_calls", 0)
+        gbp_directions = gbp_data.get("directions", 0)
+        gbp_website = gbp_data.get("website_clicks", 0)
+        if gbp_calls or gbp_directions or gbp_website:
+            sources.append({
+                "source": "Google Business Profile",
+                "icon": "📍",
+                "engagements": gbp_calls + gbp_directions + gbp_website,
+                "calls": gbp_calls,
+                "directions": gbp_directions,
+                "website_clicks": gbp_website,
+                "type": "local"
+            })
+    
+    # Pinterest
+    pinterest_engagement = 0
+    if pinterest_data and not pinterest_data.get("is_placeholder"):
+        pinterest_engagement = (
+            pinterest_data.get("clicks", 0) +
+            pinterest_data.get("saves", 0)
+        )
+        if pinterest_engagement:
+            sources.append({
+                "source": "Pinterest",
+                "icon": "📌",
+                "engagements": pinterest_engagement,
+                "saves": pinterest_data.get("saves", 0),
+                "clicks": pinterest_data.get("clicks", 0),
+                "type": "social"
+            })
+    
+    # LinkedIn
+    linkedin_engagement = 0
+    if linkedin_data and not linkedin_data.get("is_placeholder"):
+        linkedin_engagement = linkedin_data.get("summary", {}).get("engagement", 0)
+        if linkedin_engagement:
+            sources.append({
+                "source": "LinkedIn",
+                "icon": "💼",
+                "engagements": linkedin_engagement,
+                "type": "social"
+            })
+    
+    # Sort by engagement count
+    sources.sort(key=lambda x: x.get("engagements", 0), reverse=True)
+    attribution["by_source"] = sources
+    
+    # Build engagement by type (only real data)
+    type_breakdown = [
+        {"type": "Organic Search", "icon": "🔍", "value": organic_sessions, "color": "#3b82f6"},
+        {"type": "Direct", "icon": "🔗", "value": direct_sessions, "color": "#8b5cf6"},
+        {"type": "Social", "icon": "📱", "value": fb_engagement + pinterest_engagement + linkedin_engagement, "color": "#f97316"},
+        {"type": "Local (GBP)", "icon": "📍", "value": gbp_calls + gbp_directions + gbp_website, "color": "#ec4899"},
+    ]
+    # Only add paid ads if we have real (non-placeholder) data
+    if google_clicks > 0:
+        type_breakdown.insert(0, {"type": "Paid Ads", "icon": "💰", "value": google_clicks, "color": "#22c55e"})
+    attribution["by_type"] = [t for t in type_breakdown if t["value"] > 0]
+    
+    # Track which sources are using placeholder data
+    placeholder_sources = []
+    if ads_data and ads_data.get("google_ads", {}).get("is_placeholder"):
+        placeholder_sources.append("Google Ads")
+    if social_is_placeholder:
+        placeholder_sources.append("Facebook/Instagram")
+    
+    # Calculate totals
+    total_engagements = sum(s.get("engagements", 0) for s in sources)
+    total_conversions = google_conversions
+    total_calls = gbp_calls
+    
+    # Build daily trend from GA4 data
+    daily_trend = []
+    if ga4_data and ga4_data.get("users_over_time"):
+        for entry in ga4_data["users_over_time"]:
+            daily_trend.append({
+                "date": entry.get("date"),
+                "engagements": entry.get("users", 0),
+            })
+    
+    # Add social chart data if available
+    if social_data and social_data.get("post_overview", {}).get("chart"):
+        for i, entry in enumerate(social_data["post_overview"]["chart"]):
+            if i < len(daily_trend):
+                daily_trend[i]["social"] = entry.get("engagement", 0)
+                daily_trend[i]["engagements"] += entry.get("engagement", 0)
+    
+    return JSONResponse({
+        "success": True,
+        "range": {
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "days": days
+        },
+        "data": {
+            "summary": {
+                "total_engagements": total_engagements,
+                "total_conversions": total_conversions,
+                "total_calls": total_calls,
+                "top_source": sources[0]["source"] if sources else None,
+            },
+            "attribution": attribution,
+            "trend": daily_trend,
+            "sources": {
+                "social": {
+                    "facebook": fb_engagement,
+                    "pinterest": pinterest_engagement,
+                    "linkedin": linkedin_engagement,
+                },
+                "paid": {
+                    "google_ads": google_clicks,
+                },
+                "organic": {
+                    "search": organic_sessions,
+                    "direct": direct_sessions,
+                    "referral": referral_sessions,
+                },
+                "local": {
+                    "calls": gbp_calls,
+                    "directions": gbp_directions,
+                    "website": gbp_website,
+                }
+            },
+            "placeholder_sources": placeholder_sources,
+            "note": "Google Ads data excluded (account suspended)" if "Google Ads" in placeholder_sources else None
+        }
+    })
+
+
+@app.get("/api/marketing/pinterest")
+async def api_marketing_pinterest(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    """
+    Fetch Pinterest analytics and engagement metrics.
+    
+    Returns pin performance, saves, clicks, and engagement data.
+    """
+    from services.marketing.pinterest_service import pinterest_service
+    from datetime import date, timedelta
+    
+    # Default to last 30 days
+    if to_date:
+        end = date.fromisoformat(to_date)
+    else:
+        end = date.today()
+    
+    if from_date:
+        start = date.fromisoformat(from_date)
+    else:
+        start = end - timedelta(days=30)
+    
+    try:
+        data = pinterest_service.get_metrics(start, end)
+        return JSONResponse({
+            "success": True,
+            "date_range": {
+                "from": start.isoformat(),
+                "to": end.isoformat(),
+            },
+            "data": data
+        })
+    except Exception as e:
+        logger.error(f"Error fetching Pinterest metrics: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "data": pinterest_service._get_placeholder_metrics(start, end)
+        })
+
+
+@app.get("/api/marketing/test-pinterest")
+async def test_pinterest_connection():
+    """Test Pinterest connection and return status."""
+    from services.marketing.pinterest_service import pinterest_service
+    import os
+    
+    status = {
+        "access_token_configured": bool(os.getenv("PINTEREST_ACCESS_TOKEN")),
+        "app_id": os.getenv("PINTEREST_APP_ID"),
+    }
+    
+    if pinterest_service._is_configured():
+        try:
+            user = pinterest_service.get_user_account()
+            status["connection_successful"] = True
+            status["username"] = user.get("username")
+            status["followers"] = user.get("follower_count", 0)
+            status["account_type"] = user.get("account_type")
+        except Exception as e:
+            status["connection_successful"] = False
+            status["error"] = str(e)
+    else:
+        status["connection_successful"] = False
+        status["error"] = "Pinterest not configured"
+    
+    return JSONResponse(status)
+
+
+@app.get("/api/marketing/linkedin")
+async def api_marketing_linkedin(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    """
+    Fetch LinkedIn analytics and engagement metrics.
+    
+    Returns post performance, impressions, clicks, and engagement data.
+    """
+    from services.marketing.linkedin_service import linkedin_service
+    from datetime import date, timedelta
+    
+    # Default to last 30 days
+    if to_date:
+        end = date.fromisoformat(to_date)
+    else:
+        end = date.today()
+    
+    if from_date:
+        start = date.fromisoformat(from_date)
+    else:
+        start = end - timedelta(days=30)
+    
+    try:
+        data = linkedin_service.get_metrics(start, end)
+        return JSONResponse({
+            "success": True,
+            "date_range": {
+                "from": start.isoformat(),
+                "to": end.isoformat(),
+            },
+            "data": data
+        })
+    except Exception as e:
+        logger.error(f"Error fetching LinkedIn metrics: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "data": linkedin_service._get_placeholder_metrics(start, end)
+        })
+
+
+@app.get("/api/marketing/test-linkedin")
+async def test_linkedin_connection():
+    """Test LinkedIn connection and return status."""
+    from services.marketing.linkedin_service import linkedin_service
+    import os
+    
+    status = {
+        "client_id_configured": bool(os.getenv("LINKEDIN_CLIENT_ID")),
+        "access_token_configured": bool(os.getenv("LINKEDIN_ACCESS_TOKEN")),
+        "organization_id": os.getenv("LINKEDIN_ORGANIZATION_ID"),
+    }
+    
+    if linkedin_service._is_configured():
+        try:
+            profile = linkedin_service.get_profile()
+            if profile:
+                status["connection_successful"] = True
+                status["name"] = profile.get("name")
+                status["email"] = profile.get("email")
+            else:
+                status["connection_successful"] = False
+                status["error"] = "Could not fetch profile"
+        except Exception as e:
+            status["connection_successful"] = False
+            status["error"] = str(e)
+    elif linkedin_service._has_credentials():
+        status["connection_successful"] = False
+        status["needs_oauth"] = True
+        status["oauth_url"] = linkedin_service.get_oauth_url(
+            "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/linkedin/callback"
+        )
+        status["message"] = "Visit the oauth_url to authorize LinkedIn access"
+    else:
+        status["connection_successful"] = False
+        status["error"] = "LinkedIn credentials not configured"
+    
+    return JSONResponse(status)
+
+
+@app.get("/api/linkedin/callback")
+async def linkedin_oauth_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+    error_description: Optional[str] = None,
+):
+    """
+    OAuth callback endpoint for LinkedIn authorization.
+    
+    After user authorizes, LinkedIn redirects here with an auth code.
+    We exchange it for an access token.
+    """
+    from services.marketing.linkedin_service import linkedin_service
+    
+    if error:
+        return JSONResponse({
+            "success": False,
+            "error": error,
+            "error_description": error_description,
+        })
+    
+    if not code:
+        return JSONResponse({
+            "success": False,
+            "error": "No authorization code received",
+        })
+    
+    # Exchange code for token
+    redirect_uri = "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/linkedin/callback"
+    token_data = linkedin_service.exchange_code_for_token(code, redirect_uri)
+    
+    if token_data and "access_token" in token_data:
+        # Return the token (user needs to set it as env var)
+        return JSONResponse({
+            "success": True,
+            "message": "LinkedIn authorized successfully!",
+            "access_token": token_data["access_token"],
+            "expires_in": token_data.get("expires_in"),
+            "instructions": "Set this access token as LINKEDIN_ACCESS_TOKEN environment variable on Heroku",
+        })
+    else:
+        return JSONResponse({
+            "success": False,
+            "error": "Failed to exchange code for token",
+            "details": token_data,
+        })
+
+
+# ========================================
+# Google Business Profile OAuth Endpoints
+# ========================================
+
+@app.get("/api/gbp/auth")
+async def gbp_oauth_start():
+    """
+    Start GBP OAuth flow. Returns URL to redirect user to.
+    """
+    from services.marketing.gbp_service import gbp_service
+    
+    oauth_url = gbp_service.get_oauth_url()
+    
+    if not oauth_url:
+        return JSONResponse({
+            "success": False,
+            "error": "GBP OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.",
+        })
+    
+    return JSONResponse({
+        "success": True,
+        "oauth_url": oauth_url,
+        "message": "Visit the oauth_url to authorize Google Business Profile access",
+    })
+
+
+@app.get("/api/gbp/callback")
+async def gbp_oauth_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    """
+    OAuth callback endpoint for GBP authorization.
+    
+    After user authorizes, Google redirects here with an auth code.
+    We exchange it for access and refresh tokens.
+    """
+    from services.marketing.gbp_service import gbp_service
+    
+    if error:
+        return JSONResponse({
+            "success": False,
+            "error": error,
+        })
+    
+    if not code:
+        return JSONResponse({
+            "success": False,
+            "error": "No authorization code received",
+        })
+    
+    # Exchange code for tokens
+    token_data = gbp_service.exchange_code_for_tokens(code)
+    
+    if token_data.get("success"):
+        # Return the tokens (user needs to set them as env vars)
+        return JSONResponse({
+            "success": True,
+            "message": "Google Business Profile authorized successfully!",
+            "access_token": token_data["access_token"],
+            "refresh_token": token_data.get("refresh_token"),
+            "expires_in": token_data.get("expires_in"),
+            "instructions": "Set these tokens as GBP_ACCESS_TOKEN and GBP_REFRESH_TOKEN environment variables on Heroku. The refresh token is used to automatically get new access tokens.",
+        })
+    else:
+        return JSONResponse({
+            "success": False,
+            "error": "Failed to exchange code for tokens",
+            "details": token_data.get("error"),
+        })
+
+
+@app.get("/api/gbp/status")
+async def gbp_status():
+    """
+    Check GBP connection status and available locations.
+    """
+    from services.marketing.gbp_service import gbp_service
+    
+    status = {
+        "oauth_configured": bool(gbp_service.client_id and gbp_service.client_secret),
+        "authenticated": bool(gbp_service.access_token),
+        "has_refresh_token": bool(gbp_service.refresh_token),
+        "configured_locations": gbp_service.location_ids,
+    }
+    
+    if not status["oauth_configured"]:
+        status["error"] = "Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET"
+        status["oauth_url"] = None
+    elif not status["authenticated"]:
+        status["oauth_url"] = gbp_service.get_oauth_url()
+        status["message"] = "Visit oauth_url to authorize access"
+    else:
+        # Try to fetch accounts to verify token works
+        try:
+            accounts = gbp_service.get_accounts()
+            status["accounts"] = len(accounts)
+            status["account_names"] = [a.get("accountName", a.get("name")) for a in accounts]
+            
+            # Try to get locations
+            all_locations = []
+            for account in accounts:
+                locations = gbp_service.get_locations(account.get("name"))
+                for loc in locations:
+                    all_locations.append({
+                        "name": loc.get("name"),
+                        "title": loc.get("title"),
+                        "address": loc.get("storefrontAddress", {}).get("addressLines", [])
+                    })
+            status["locations"] = all_locations
+            
+        except Exception as e:
+            status["error"] = f"Error fetching accounts: {str(e)}"
     
     return JSONResponse(status)
 

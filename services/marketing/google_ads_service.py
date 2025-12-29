@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 
 MICROS_IN_CURRENCY = 1_000_000
 
+# Simple in-memory cache for script data (in production, use Redis or database)
+_script_data_cache: Optional[Dict[str, Any]] = None
+_cache_timestamp: Optional[datetime] = None
+
+# Singleton instance
+_google_ads_service_instance: Optional['GoogleAdsService'] = None
+
 
 class GoogleAdsService:
     """Service wrapper for Google Ads metrics."""
@@ -99,6 +106,89 @@ class GoogleAdsService:
     def get_placeholder_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """Expose placeholder metrics for other modules (tests, fallbacks)."""
         return self._get_placeholder_metrics(start_date, end_date)
+    
+    def cache_script_data(self, data: Dict[str, Any]) -> None:
+        """Cache data received from Google Ads Script webhook."""
+        global _script_data_cache, _cache_timestamp
+        _script_data_cache = data
+        _cache_timestamp = datetime.utcnow()
+        logger.info("Google Ads Script data cached")
+    
+    def get_cached_script_data(self, start_date: date, end_date: date) -> Optional[Dict[str, Any]]:
+        """
+        Get cached data from Google Ads Script if available and recent (within 24 hours).
+        
+        Transforms script data format to match API format for compatibility.
+        """
+        global _script_data_cache, _cache_timestamp
+        
+        if not _script_data_cache or not _cache_timestamp:
+            return None
+        
+        # Check if cache is recent (within 24 hours)
+        cache_age = datetime.utcnow() - _cache_timestamp
+        if cache_age.total_seconds() > 24 * 3600:
+            logger.info("Google Ads Script cache expired")
+            return None
+        
+        try:
+            # Transform script data format to API format
+            script_data = _script_data_cache
+            
+            # Check if date range matches (roughly)
+            cache_range = script_data.get("date_range", {})
+            cache_start = datetime.fromisoformat(cache_range.get("start", "")).date() if cache_range.get("start") else None
+            cache_end = datetime.fromisoformat(cache_range.get("end", "")).date() if cache_range.get("end") else None
+            
+            # Use cached data if date range overlaps or is close
+            if cache_start and cache_end:
+                if start_date > cache_end or end_date < cache_start:
+                    logger.info("Google Ads Script cache date range doesn't match request")
+                    return None
+            
+            account = script_data.get("account", {})
+            campaigns = script_data.get("campaigns", [])
+            quality_scores = script_data.get("quality_scores", {})
+            search_terms = script_data.get("search_terms", [])
+            device_performance = script_data.get("device_performance", {})
+            daily = script_data.get("daily_breakdown", [])
+            
+            # Build overview in API format
+            overview = {
+                "spend": {
+                    "total": account.get("spend", 0),
+                    "per_day": account.get("spend", 0) / max((end_date - start_date).days, 1),
+                    "daily": daily
+                },
+                "performance": {
+                    "clicks": account.get("clicks", 0),
+                    "impressions": account.get("impressions", 0),
+                    "conversions": account.get("conversions", 0),
+                    "conversion_value": account.get("conversion_value", 0)
+                },
+                "efficiency": {
+                    "ctr": account.get("ctr", 0),
+                    "cpc": account.get("cpc", 0),
+                    "roas": account.get("roas", 0),
+                    "cost_per_conversion": account.get("cost_per_conversion", 0),
+                    "conversion_rate": account.get("conversion_rate", 0)
+                },
+                "campaigns": campaigns,
+                "quality_scores": quality_scores,
+                "search_terms": search_terms,
+                "device_performance": device_performance,
+                "currency_code": script_data.get("currency_code", "USD"),
+                "is_placeholder": False,
+                "source": "google_ads_script",
+                "fetched_at": script_data.get("fetched_at", datetime.utcnow().isoformat())
+            }
+            
+            logger.info("Returning cached Google Ads Script data")
+            return overview
+            
+        except Exception as e:
+            logger.error(f"Error processing cached script data: {e}")
+            return None
 
     # ------------------------------------------------------------------ #
     # Internal helpers
