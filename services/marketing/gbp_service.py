@@ -218,7 +218,13 @@ class GBPService:
         data = self._make_api_request(url)
         
         if data and "locations" in data:
-            return data["locations"]
+            locations = data["locations"]
+            logger.info(f"Found {len(locations)} locations for account {account_name}")
+            return locations
+        elif data:
+            logger.warning(f"Unexpected response format from locations API: {data}")
+        else:
+            logger.warning(f"No data returned from locations API for {account_name}")
         return []
     
     def get_daily_metrics(self, location_name: str, metric: str, start_date: date, end_date: date) -> Dict[str, Any]:

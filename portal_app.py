@@ -2067,14 +2067,22 @@ async def gbp_status():
             # Try to get locations
             all_locations = []
             for account in accounts:
-                locations = gbp_service.get_locations(account.get("name"))
+                account_name = account.get("name")
+                locations = gbp_service.get_locations(account_name)
                 for loc in locations:
                     all_locations.append({
                         "name": loc.get("name"),
-                        "title": loc.get("title"),
-                        "address": loc.get("storefrontAddress", {}).get("addressLines", [])
+                        "title": loc.get("title") or loc.get("storefrontAddress", {}).get("addressLines", [0]) if loc.get("storefrontAddress") else "Unknown",
+                        "address": loc.get("storefrontAddress", {}).get("addressLines", []) if loc.get("storefrontAddress") else []
                     })
+            
+            # Also show configured location IDs
+            if gbp_service.location_ids:
+                status["configured_location_ids"] = gbp_service.location_ids
+                status["using_configured_locations"] = True
+            
             status["locations"] = all_locations
+            status["total_locations_found"] = len(all_locations)
             
         except Exception as e:
             status["error"] = f"Error fetching accounts: {str(e)}"
