@@ -1017,6 +1017,12 @@
         // Render new metrics: GBP Reviews, Search Keywords
         renderGBPReviews(gbp.reviews);
         renderGBPSearchKeywords(gbp.search_keywords);
+        
+        // Render new GBP insights: Search Query Types, Photo Engagement, Post Engagement
+        renderGBPSearchQueryTypes(gbp.search_query_types);
+        renderGBPPhotoEngagement(gbp.photo_engagement);
+        renderGBPPostEngagement(gbp.post_engagement);
+        renderGBPViewsBreakdown(gbp);
     }
     
     function renderGA4UserRetention(retention) {
@@ -1154,6 +1160,100 @@
                 </div>
             `;
         }).join('');
+    }
+    
+    function renderGBPSearchQueryTypes(queryTypes) {
+        if (!queryTypes) return;
+        
+        const container = document.getElementById('gbpSearchQueryTypes');
+        if (!container) return;
+        
+        const total = queryTypes.direct + queryTypes.indirect + queryTypes.chain;
+        if (total === 0) return;
+        
+        container.innerHTML = `
+            <div class="stats-row">
+                <div class="stats-label">Direct Searches</div>
+                <div class="stats-value">${formatNumber(queryTypes.direct)} <span class="stats-change">(${formatPercent(queryTypes.direct_percentage)})</span></div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Indirect Searches</div>
+                <div class="stats-value">${formatNumber(queryTypes.indirect)} <span class="stats-change">(${formatPercent(queryTypes.indirect_percentage)})</span></div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Chain Searches</div>
+                <div class="stats-value">${formatNumber(queryTypes.chain)}</div>
+            </div>
+            <div class="stats-row" style="border-top: 1px solid #334155; margin-top: 6px; padding-top: 8px;">
+                <div class="stats-label" style="font-size: 11px; color: #94a3b8;">Direct = searching your name<br>Indirect = discovering you</div>
+            </div>
+        `;
+    }
+    
+    function renderGBPPhotoEngagement(photos) {
+        if (!photos || photos.total_views === 0) return;
+        
+        const container = document.getElementById('gbpPhotoEngagement');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="stats-row">
+                <div class="stats-label">Total Photo Views</div>
+                <div class="stats-value">${formatNumber(photos.total_views)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Your Photos</div>
+                <div class="stats-value">${formatNumber(photos.merchant_views)} views (${photos.merchant_photo_count} photos)</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Customer Photos</div>
+                <div class="stats-value">${formatNumber(photos.customer_views)} views (${photos.customer_photo_count} photos)</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Avg Views/Photo</div>
+                <div class="stats-value">${formatNumber(Math.round(photos.views_per_photo))}</div>
+            </div>
+        `;
+    }
+    
+    function renderGBPPostEngagement(posts) {
+        if (!posts || (posts.post_views === 0 && posts.post_engagement === 0)) return;
+        
+        const container = document.getElementById('gbpPostEngagement');
+        if (!container) return;
+        
+        container.innerHTML = `
+            <div class="stats-row">
+                <div class="stats-label">Post Views</div>
+                <div class="stats-value">${formatNumber(posts.post_views)}</div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Post Engagement</div>
+                <div class="stats-value">${formatNumber(posts.post_engagement)}</div>
+            </div>
+        `;
+    }
+    
+    function renderGBPViewsBreakdown(gbp) {
+        if (!gbp.views_search && !gbp.views_maps) return;
+        
+        const container = document.getElementById('gbpViewsBreakdown');
+        if (!container) return;
+        
+        const total = (gbp.views_search || 0) + (gbp.views_maps || 0);
+        const searchPct = total > 0 ? ((gbp.views_search || 0) / total * 100).toFixed(1) : 0;
+        const mapsPct = total > 0 ? ((gbp.views_maps || 0) / total * 100).toFixed(1) : 0;
+        
+        container.innerHTML = `
+            <div class="stats-row">
+                <div class="stats-label">Google Search</div>
+                <div class="stats-value">${formatNumber(gbp.views_search || 0)} <span class="stats-change">(${searchPct}%)</span></div>
+            </div>
+            <div class="stats-row">
+                <div class="stats-label">Google Maps</div>
+                <div class="stats-value">${formatNumber(gbp.views_maps || 0)} <span class="stats-change">(${mapsPct}%)</span></div>
+            </div>
+        `;
     }
 
     function renderEmailSection(payload, preset) {
