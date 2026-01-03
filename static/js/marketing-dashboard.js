@@ -27,20 +27,18 @@
 
     const presetSelectIds = [
         'datePreset',
-        'socialDatePreset',
+        'organicDatePreset',
         'paidDatePreset',
         'emailDatePreset',
         'websiteDatePreset',
-        'engagementDatePreset',
     ];
 
     const refreshButtonIds = [
         'refreshBtn',
-        'socialRefreshBtn',
+        'organicRefreshBtn',
         'paidRefreshBtn',
         'emailRefreshBtn',
         'websiteRefreshBtn',
-        'engagementRefreshBtn',
     ];
 
     const BENCHMARKS = {
@@ -319,17 +317,14 @@
         if (ads?.success) {
             renderAdsSection(ads, preset);
         }
-        if (social?.success) {
-            renderSocialSection(social, preset);
+        if (social?.success || engagement?.success) {
+            renderOrganicSection(social, engagement, preset);
         }
         if (website?.success) {
             renderWebsiteSection(website, preset);
         }
         if (email?.success) {
             renderEmailSection(email, preset);
-        }
-        if (engagement?.success) {
-            renderEngagementSection(engagement, preset);
         }
     }
 
@@ -849,16 +844,16 @@
         charts.campaignEfficiency.update();
     }
 
-    function renderSocialSection(payload, preset) {
-        if (!payload?.data) return;
-
-        const { range, data } = payload;
-        updateRangeLabel({
-            start: range?.start,
-            end: range?.end,
-            preset,
-            targetId: 'socialDateRange',
-        });
+    function renderOrganicSection(socialPayload, engagementPayload, preset) {
+        // Merge social and engagement data into one Organic section
+        if (socialPayload?.data) {
+            const { range, data } = socialPayload;
+            updateRangeLabel({
+                start: range?.start,
+                end: range?.end,
+                preset,
+                targetId: 'organicDateRange',
+            });
 
         const summary = data.summary || {};
         const postOverview = data.post_overview || {};
@@ -884,6 +879,17 @@
         if (data.linkedin) {
             renderLinkedInFollowerGrowth(data.linkedin);
         }
+        }
+        
+        // Also render engagement data if available
+        if (engagementPayload?.data) {
+            renderEngagementSection(engagementPayload, preset);
+        }
+    }
+
+    // Keep renderSocialSection as alias for backward compatibility (can remove later)
+    function renderSocialSection(payload, preset) {
+        renderOrganicSection(payload, null, preset);
     }
     
     function renderLinkedInFollowerGrowth(linkedin) {

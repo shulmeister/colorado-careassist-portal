@@ -646,11 +646,10 @@
             
             <nav class="sidebar-nav">
                 <a class="sidebar-link active" href="#tab-overview" data-tab="overview"><span class="icon">📊</span> Overview</a>
-                <a class="sidebar-link" href="#tab-social" data-tab="social"><span class="icon">📱</span> Social Performance</a>
-                <a class="sidebar-link" href="#tab-paid-media" data-tab="paid-media"><span class="icon">🎯</span> Paid Media</a>
-                <a class="sidebar-link" href="#tab-email" data-tab="email"><span class="icon">📧</span> Email Marketing</a>
+                <a class="sidebar-link" href="#tab-organic" data-tab="organic"><span class="icon">🌱</span> Organic</a>
+                <a class="sidebar-link" href="#tab-paid" data-tab="paid"><span class="icon">🎯</span> Paid</a>
+                <a class="sidebar-link" href="#tab-email" data-tab="email"><span class="icon">📧</span> Email</a>
                 <a class="sidebar-link" href="#tab-website" data-tab="website"><span class="icon">🌐</span> Website & GBP</a>
-                <a class="sidebar-link" href="#tab-engagement" data-tab="engagement"><span class="icon">💬</span> Engagement</a>
                 <a class="sidebar-link disabled" href="#tab-settings" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
             </nav>
         </aside>
@@ -977,22 +976,22 @@
         </div>
             </div>
             
-            <!-- Social Performance Tab -->
-            <div class="tab-content" id="tab-social">
+            <!-- Organic Tab (merged Social + Engagement) -->
+            <div class="tab-content" id="tab-organic">
                 <div class="content-header">
                     <div class="header-left">
-                        <h1 class="page-title">Social Performance</h1>
-                        <div class="page-subtitle" id="socialDateRange">Last 30 days</div>
+                        <h1 class="page-title">Organic</h1>
+                        <div class="page-subtitle" id="organicDateRange">Last 30 days</div>
                     </div>
                     <div class="filters">
-                        <select class="filter-select" id="socialDatePreset">
+                        <select class="filter-select" id="organicDatePreset">
                             <option value="today">Today</option>
                             <option value="yesterday">Yesterday</option>
                             <option value="last_7_days">Last 7 Days</option>
                             <option value="last_30_days" selected>Last 30 Days</option>
                             <option value="month_to_date">Month to Date</option>
                         </select>
-                        <button class="refresh-btn" id="socialRefreshBtn">↻ Refresh</button>
+                        <button class="refresh-btn" id="organicRefreshBtn">↻ Refresh</button>
                     </div>
                 </div>
                 
@@ -1097,13 +1096,52 @@
                         <div class="stats-table" id="linkedinFollowerGrowth"></div>
                     </div>
                 </div>
+                
+                <!-- Engagement Analysis (merged from Engagement tab) -->
+                <div class="grid grid-2">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT BREAKDOWN</div>
+                            <div class="card-title">By Type</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="engagementTypeChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">DAILY TREND</div>
+                            <div class="card-title">Engagement Over Time</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="engagementTrendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Attribution Insights -->
+                <div class="grid grid-1">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ATTRIBUTION INSIGHTS</div>
+                            <div class="card-title">Where Are Your Engagements Coming From?</div>
+                        </div>
+                        <div class="stats-container" id="attributionBreakdown">
+                            <div class="stats-row">
+                                <div class="stats-label">Loading attribution data...</div>
+                                <div class="stats-value">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             
-            <!-- Paid Media Tab -->
-            <div class="tab-content" id="tab-paid-media">
+            <!-- Paid Tab -->
+            <div class="tab-content" id="tab-paid">
                 <div class="content-header">
                     <div class="header-left">
-                        <h1 class="page-title">Paid Media</h1>
+                        <h1 class="page-title">Paid</h1>
                         <div class="page-subtitle" id="paidDateRange">Last 30 days</div>
                     </div>
                     <div class="filters">
@@ -1610,115 +1648,6 @@
                 </div>
             </div>
             
-            <!-- Engagement Tab -->
-            <div class="tab-content" id="tab-engagement">
-                <div class="content-header">
-                    <div class="header-left">
-                        <h1 class="page-title">Engagement</h1>
-                        <div class="page-subtitle" id="engagementDateRange">Last 30 days</div>
-                    </div>
-                    <div class="filters">
-                        <select class="filter-select" id="engagementDatePreset">
-                            <option value="today">Today</option>
-                            <option value="yesterday">Yesterday</option>
-                            <option value="last_7_days">Last 7 Days</option>
-                            <option value="last_30_days" selected>Last 30 Days</option>
-                            <option value="month_to_date">Month to Date</option>
-                        </select>
-                        <button class="refresh-btn" id="engagementRefreshBtn">↻ Refresh</button>
-                    </div>
-                </div>
-                
-                <!-- Engagement KPIs -->
-                <div class="grid grid-6">
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">TOTAL</div>
-                            <div class="card-title">All Engagements</div>
-                        </div>
-                        <div class="metric-value" id="engagementTotal">—</div>
-                    </div>
-                    
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">SOCIAL</div>
-                            <div class="card-title">FB + Pinterest + LinkedIn</div>
-                        </div>
-                        <div class="metric-value" id="engagementSocial">—</div>
-                    </div>
-                    
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">REFERRALS</div>
-                            <div class="card-title">Shared Traffic</div>
-                        </div>
-                        <div class="metric-value" id="engagementShares">—</div>
-                    </div>
-                    
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">PAID</div>
-                            <div class="card-title">Google Ads Clicks</div>
-                        </div>
-                        <div class="metric-value" id="engagementComments">—</div>
-                    </div>
-                    
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">CALLS</div>
-                            <div class="card-title">Phone Calls (GBP)</div>
-                        </div>
-                        <div class="metric-value" id="engagementMessages">—</div>
-                    </div>
-                    
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">LOCAL</div>
-                            <div class="card-title">Directions + Website</div>
-                        </div>
-                        <div class="metric-value" id="engagementSaves">—</div>
-                    </div>
-                </div>
-                
-                <!-- Engagement Analysis -->
-                <div class="grid grid-2">
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">ENGAGEMENT BREAKDOWN</div>
-                            <div class="card-title">By Type</div>
-                        </div>
-                        <div class="chart-container-large">
-                            <canvas id="engagementTypeChart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">DAILY TREND</div>
-                            <div class="card-title">Engagement Over Time</div>
-                        </div>
-                        <div class="chart-container-large">
-                            <canvas id="engagementTrendChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Attribution Insights -->
-                <div class="grid grid-1">
-                    <div class="card card-compact">
-                        <div class="card-header">
-                            <div class="card-label">ATTRIBUTION INSIGHTS</div>
-                            <div class="card-title">Where Are Your Engagements Coming From?</div>
-                        </div>
-                        <div class="stats-container" id="attributionBreakdown">
-                            <div class="stats-row">
-                                <div class="stats-label">Loading attribution data...</div>
-                                <div class="stats-value">—</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </main>
     </div>
 
