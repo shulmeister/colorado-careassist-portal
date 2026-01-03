@@ -149,6 +149,7 @@ class BrevoMarketingService:
 
             # Brevo API: List endpoint doesn't include full statistics
             # Need to fetch individual campaign details to get statistics
+            campaign_detail = None
             try:
                 campaign_detail = self._request("GET", f"/emailCampaigns/{campaign_id}")
                 # Check entire response structure for statistics
@@ -173,11 +174,17 @@ class BrevoMarketingService:
             
             # If statistics are zero, try to get recipient count from campaign object
             if emails_sent == 0:
-                recipients = campaign_detail.get("recipients", {}) if 'campaign_detail' in locals() else campaign.get("recipients", {})
-                if isinstance(recipients, dict):
-                    emails_sent = recipients.get("totalRecipients", 0) or recipients.get("total", 0)
-                elif isinstance(recipients, (int, float)):
-                    emails_sent = int(recipients)
+                # Try from campaign_detail first (more complete), then fallback to campaign list data
+                recipients_data = None
+                if campaign_detail:
+                    recipients_data = campaign_detail.get("recipients", {})
+                if not recipients_data:
+                    recipients_data = campaign.get("recipients", {})
+                
+                if isinstance(recipients_data, dict):
+                    emails_sent = recipients_data.get("totalRecipients", 0) or recipients_data.get("total", 0)
+                elif isinstance(recipients_data, (int, float)):
+                    emails_sent = int(recipients_data)
             opens = global_stats.get("uniqueViews", 0) or global_stats.get("viewed", 0)
             clicks = global_stats.get("uniqueClicks", 0) or global_stats.get("clickers", 0)
             bounces = (
