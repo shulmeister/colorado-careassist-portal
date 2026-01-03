@@ -2108,58 +2108,60 @@
     }
 
     function calculateDateRange(preset) {
-        const end = new Date();
-        // Set end to end of today (23:59:59) so today's data is included
-        end.setHours(23, 59, 59, 999);
-        const start = new Date(end);
-
-        const shiftDays = (days) => {
-            start.setDate(end.getDate() - (days - 1));
-            start.setHours(0, 0, 0, 0);
-        };
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        const end = new Date(today);
+        const start = new Date(today);
 
         switch (preset) {
             case 'today':
-                start.setHours(0, 0, 0, 0);
-                end.setHours(23, 59, 59, 999);
+                // Today only
+                start.setTime(today.getTime());
+                end.setTime(today.getTime());
                 break;
             case 'yesterday': {
-                start.setDate(end.getDate() - 1);
-                start.setHours(0, 0, 0, 0);
-                end.setDate(end.getDate() - 1);
-                end.setHours(23, 59, 59, 999);
+                // Yesterday only
+                start.setDate(today.getDate() - 1);
+                end.setDate(today.getDate() - 1);
                 break;
             }
             case 'last_7_days':
-                shiftDays(7);
+                // Last 7 days including today
+                start.setDate(today.getDate() - 6);
+                end.setTime(today.getTime());
                 break;
             case 'last_30_days':
-                shiftDays(30);
+                // Last 30 days including today
+                start.setDate(today.getDate() - 29);
+                end.setTime(today.getTime());
                 break;
             case 'month_to_date':
+                // From first day of current month to today
                 start.setDate(1);
-                start.setHours(0, 0, 0, 0);
-                end.setHours(23, 59, 59, 999);
+                end.setTime(today.getTime());
                 break;
             case 'quarter_to_date': {
-                const quarter = Math.floor(end.getMonth() / 3);
+                // From first day of current quarter to today
+                const quarter = Math.floor(today.getMonth() / 3);
                 start.setMonth(quarter * 3, 1);
-                start.setHours(0, 0, 0, 0);
-                end.setHours(23, 59, 59, 999);
+                end.setTime(today.getTime());
                 break;
             }
             case 'year_to_date':
+                // From first day of current year to today
                 start.setMonth(0, 1);
-                start.setHours(0, 0, 0, 0);
-                end.setHours(23, 59, 59, 999);
+                end.setTime(today.getTime());
                 break;
             case 'last_12_months':
-                start.setMonth(end.getMonth() - 11, 1);
-                start.setHours(0, 0, 0, 0);
-                end.setHours(23, 59, 59, 999);
+                // Last 12 months including current month
+                start.setMonth(today.getMonth() - 11, 1);
+                end.setTime(today.getTime());
                 break;
             default:
-                shiftDays(30);
+                // Default to last 30 days
+                start.setDate(today.getDate() - 29);
+                end.setTime(today.getTime());
         }
 
         return {
