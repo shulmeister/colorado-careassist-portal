@@ -2122,8 +2122,10 @@
                 break;
             case 'yesterday': {
                 // Yesterday only
-                start.setDate(today.getDate() - 1);
-                end.setDate(today.getDate() - 1);
+                const yesterday = new Date(today);
+                yesterday.setDate(today.getDate() - 1);
+                start.setTime(yesterday.getTime());
+                end.setTime(yesterday.getTime());
                 break;
             }
             case 'last_7_days':
