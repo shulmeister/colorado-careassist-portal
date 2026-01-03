@@ -151,9 +151,13 @@ class BrevoMarketingService:
             # Need to fetch individual campaign details to get statistics
             try:
                 campaign_detail = self._request("GET", f"/emailCampaigns/{campaign_id}")
+                # Check entire response structure for statistics
                 stats = campaign_detail.get("statistics", {})
                 global_stats = stats.get("globalStats", {}) if stats else {}
-                logger.info(f"Campaign {campaign_id} detail: globalStats keys={list(global_stats.keys())}, sent={global_stats.get('sent')}, delivered={global_stats.get('delivered')}, uniqueViews={global_stats.get('uniqueViews')}")
+                # Also check if stats are at top level of response
+                if not global_stats or global_stats.get("sent", 0) == 0:
+                    # Maybe statistics are nested differently or at campaign level
+                    logger.warning(f"Campaign {campaign_id}: globalStats empty or zero, checking full response structure. Top-level keys: {list(campaign_detail.keys())}")
             except (requests.HTTPError, KeyError, Exception) as exc:
                 logger.warning(f"Could not fetch details for campaign {campaign_id}: {exc}")
                 # Fallback to list endpoint data (may be incomplete)
