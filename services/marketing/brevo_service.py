@@ -147,13 +147,21 @@ class BrevoMarketingService:
                     # If we can't parse the date, include it (better to show data than hide it)
                     pass
 
-            # Brevo includes stats in the campaign response
-            stats = campaign.get("statistics", {}).get("globalStats", {})
-            
-            emails_sent = stats.get("sent", 0) or campaign.get("recipients", {}).get("totalRecipients", 0)
-            opens = stats.get("uniqueOpens", 0)
-            clicks = stats.get("uniqueClicks", 0)
-            bounces = (stats.get("hardBounces", 0) or 0) + (stats.get("softBounces", 0) or 0)
+            # Fetch detailed stats for each campaign (Brevo requires separate API call)
+            try:
+                stats_resp = self._request("GET", f"/emailCampaigns/{campaign_id}/statistics")
+                stats = stats_resp.get("globalStats", {})
+                emails_sent = stats.get("sent", 0) or stats.get("delivered", 0)
+                opens = stats.get("uniqueOpens", 0) or stats.get("opens", 0)
+                clicks = stats.get("uniqueClicks", 0) or stats.get("clicks", 0)
+                bounces = (stats.get("hardBounces", 0) or 0) + (stats.get("softBounces", 0) or 0)
+            except (requests.HTTPError, KeyError) as exc:
+                logger.debug(f"Could not fetch stats for campaign {campaign_id}: {exc}")
+                # Fallback to basic campaign data
+                emails_sent = campaign.get("recipients", {}).get("totalRecipients", 0)
+                opens = 0
+                clicks = 0
+                bounces = 0
 
             report_entry = {
                 "id": str(campaign_id),
