@@ -332,7 +332,6 @@ class GoogleAdsService:
               metrics.conversions_value,
               metrics.ctr,
               metrics.average_cpc,
-              metrics.conversion_rate,
               metrics.search_impression_share,
               metrics.search_rank_lost_impression_share,
               metrics.search_budget_lost_impression_share
@@ -386,19 +385,22 @@ class GoogleAdsService:
                     spend = self._micros_to_currency(getattr(row.metrics, "cost_micros", 0))
                     clicks = self._safe_int(getattr(row.metrics, "clicks", 0))
                     impressions = self._safe_int(getattr(row.metrics, "impressions", 0))
-                    conversions = self._safe_float(getattr(row.metrics, "conversions", 0.0))
-                    conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
+                conversions = self._safe_float(getattr(row.metrics, "conversions", 0.0))
+                conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
+                # Calculate conversion_rate from conversions/clicks (not a queryable field)
+                conversion_rate = self._safe_divide(conversions, clicks) if clicks > 0 else 0.0
 
-                    breakdown.append({
-                        "date": row.segments.date,
-                        "spend": round(spend, 2),
-                        "clicks": clicks,
-                        "impressions": impressions,
-                        "conversions": conversions,
-                        "conversion_value": round(conversion_value, 2),
-                        "roas": round(self._safe_divide(conversion_value, spend), 2),
-                        "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
-                    })
+                breakdown.append({
+                    "date": row.segments.date,
+                    "spend": round(spend, 2),
+                    "clicks": clicks,
+                    "impressions": impressions,
+                    "conversions": conversions,
+                    "conversion_value": round(conversion_value, 2),
+                    "roas": round(self._safe_divide(conversion_value, spend), 2),
+                    "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
+                    "conversion_rate": round(conversion_rate * 100, 2),
+                })
         else:
             # search method returns results directly
             for row in response.results:
@@ -411,7 +413,8 @@ class GoogleAdsService:
                 conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
                 ctr = self._safe_float(getattr(row.metrics, "ctr", 0.0))
                 avg_cpc = self._safe_float(getattr(row.metrics, "average_cpc", 0.0))
-                conversion_rate = self._safe_float(getattr(row.metrics, "conversion_rate", 0.0))
+                # Calculate conversion_rate from conversions/clicks (not a queryable field)
+                conversion_rate = self._safe_divide(conversions, clicks) if clicks > 0 else 0.0
                 search_impression_share = self._safe_float(getattr(row.metrics, "search_impression_share", 0.0))
                 search_rank_lost_is = self._safe_float(getattr(row.metrics, "search_rank_lost_impression_share", 0.0))
                 search_budget_lost_is = self._safe_float(getattr(row.metrics, "search_budget_lost_impression_share", 0.0))
@@ -643,7 +646,6 @@ class GoogleAdsService:
               metrics.conversions_value,
               metrics.ctr,
               metrics.average_cpc,
-              metrics.conversion_rate,
               metrics.search_impression_share,
               metrics.search_rank_lost_impression_share,
               metrics.search_budget_lost_impression_share
@@ -654,7 +656,7 @@ class GoogleAdsService:
             LIMIT {limit}
         """
 
-        response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+        response = ga_service.search_stream(customer_id=customer_id, query=query)
         campaigns: List[Dict[str, Any]] = []
 
         for batch in response:
@@ -665,7 +667,8 @@ class GoogleAdsService:
                 conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
                 ctr = self._safe_float(getattr(row.metrics, "ctr", 0.0))
                 avg_cpc = self._safe_float(getattr(row.metrics, "average_cpc", 0.0))
-                conversion_rate = self._safe_float(getattr(row.metrics, "conversion_rate", 0.0))
+                # Calculate conversion_rate from conversions/clicks (not a queryable field)
+                conversion_rate = self._safe_divide(conversions, clicks) if clicks > 0 else 0.0
                 search_impression_share = self._safe_float(getattr(row.metrics, "search_impression_share", 0.0))
                 search_rank_lost_is = self._safe_float(getattr(row.metrics, "search_rank_lost_impression_share", 0.0))
                 search_budget_lost_is = self._safe_float(getattr(row.metrics, "search_budget_lost_impression_share", 0.0))
