@@ -280,38 +280,40 @@ class GoogleAdsService:
                     logger.info(f"Found accessible account from Manager Account: {account_id}")
                     return account_id
             except Exception as e:
-                logger.warning(f"Could not list accessible customers, using configured ID: {e}")
+                logger.warning(f"Could not list accessible customers: {e}")
         
-        # If no login_customer_id or listing failed, try the configured customer_id
-        # But if it's invalid, we might need to use it as login_customer_id instead
-        if self.customer_id:
-            # Check if customer_id looks like a Manager Account (16 digits) vs regular account (10 digits)
-            if len(self.customer_id) == 16:
-                logger.warning(f"Customer ID {self.customer_id} looks like a Manager Account ID. Setting as login_customer_id and listing accessible accounts.")
-                # Try using it as login_customer_id and listing accounts
-                try:
-                    # Temporarily set login_customer_id
-                    original_login = self.login_customer_id
-                    self.login_customer_id = self.customer_id
+        # If no login_customer_id, check if customer_id is actually a Manager Account ID
+        # Manager Account IDs are typically 16 digits, regular accounts are 10 digits
+        if self.customer_id and len(self.customer_id) == 16:
+            logger.info(f"Customer ID {self.customer_id} appears to be a Manager Account ID. Using it as login_customer_id and listing accessible accounts.")
+            # Use customer_id as login_customer_id and rebuild client
+            try:
+                original_login = self.login_customer_id
+                self.login_customer_id = self.customer_id
+                
+                # Rebuild client with login_customer_id
+                new_client = self._build_client()
+                if new_client:
+                    customer_service = new_client.get_service("CustomerService")
+                    accessible_customers = customer_service.list_accessible_customers()
                     
-                    # Rebuild client with login_customer_id
-                    client = self._build_client()
-                    if client:
-                        customer_service = client.get_service("CustomerService")
-                        accessible_customers = customer_service.list_accessible_customers()
-                        
-                        if accessible_customers.resource_names:
-                            first_account = accessible_customers.resource_names[0]
-                            account_id = first_account.replace('customers/', '').replace('-', '')
-                            logger.info(f"Found accessible account: {account_id}")
-                            # Update login_customer_id permanently
-                            self.login_customer_id = self.customer_id
-                            return account_id
-                    
+                    if accessible_customers.resource_names:
+                        first_account = accessible_customers.resource_names[0]
+                        account_id = first_account.replace('customers/', '').replace('-', '')
+                        logger.info(f"Found accessible account: {account_id}")
+                        # Keep login_customer_id set
+                        return account_id
+                    else:
+                        logger.warning("No accessible accounts found")
+                        self.login_customer_id = original_login
+                else:
                     self.login_customer_id = original_login
-                except Exception as e:
-                    logger.warning(f"Could not list accounts using customer_id as Manager Account: {e}")
+            except Exception as e:
+                logger.error(f"Could not list accounts using customer_id as Manager Account: {e}")
+                if 'original_login' in locals():
+                    self.login_customer_id = original_login
         
+        # Fallback to configured customer_id (might be a regular 10-digit account ID)
         return self.customer_id
     
     def _fetch_daily_breakdown(self, ga_service, start: str, end: str, customer_id: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[str]]:
