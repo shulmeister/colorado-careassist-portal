@@ -104,17 +104,19 @@ class BrevoMarketingService:
         """
         Fetch email campaigns sent within the date range.
         
-        Brevo API uses different date format and parameters than Mailchimp.
+        Brevo API uses timestamp format (Unix timestamp in milliseconds).
         """
-        # Format dates for Brevo API (YYYY-MM-DD)
-        start_str = start_date.isoformat()
-        end_str = end_date.isoformat()
+        # Convert dates to Unix timestamps in milliseconds
+        start_dt = datetime.combine(start_date, datetime.min.time())
+        end_dt = datetime.combine(end_date, datetime.max.time())
+        start_timestamp = int(start_dt.timestamp() * 1000)
+        end_timestamp = int(end_dt.timestamp() * 1000)
 
         params = {
             "type": "classic",  # Regular email campaigns
             "status": "sent",
-            "startDate": start_str,
-            "endDate": end_str,
+            "startDate": start_timestamp,
+            "endDate": end_timestamp,
             "limit": 100,
             "offset": 0,
             "sort": "desc",
