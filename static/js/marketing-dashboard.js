@@ -4,6 +4,8 @@
 
     const API_BASE = '/api/marketing';
     const PRESET_LABELS = {
+        today: 'Today',
+        yesterday: 'Yesterday',
         last_7_days: 'Last 7 days',
         last_30_days: 'Last 30 days',
         month_to_date: 'Month to date',
@@ -2107,14 +2109,27 @@
 
     function calculateDateRange(preset) {
         const end = new Date();
-        end.setHours(0, 0, 0, 0);
+        // Set end to end of today (23:59:59) so today's data is included
+        end.setHours(23, 59, 59, 999);
         const start = new Date(end);
 
         const shiftDays = (days) => {
             start.setDate(end.getDate() - (days - 1));
+            start.setHours(0, 0, 0, 0);
         };
 
         switch (preset) {
+            case 'today':
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
+                break;
+            case 'yesterday': {
+                start.setDate(end.getDate() - 1);
+                start.setHours(0, 0, 0, 0);
+                end.setDate(end.getDate() - 1);
+                end.setHours(23, 59, 59, 999);
+                break;
+            }
             case 'last_7_days':
                 shiftDays(7);
                 break;
@@ -2123,17 +2138,25 @@
                 break;
             case 'month_to_date':
                 start.setDate(1);
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
                 break;
             case 'quarter_to_date': {
                 const quarter = Math.floor(end.getMonth() / 3);
                 start.setMonth(quarter * 3, 1);
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
                 break;
             }
             case 'year_to_date':
                 start.setMonth(0, 1);
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
                 break;
             case 'last_12_months':
                 start.setMonth(end.getMonth() - 11, 1);
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
                 break;
             default:
                 shiftDays(30);
