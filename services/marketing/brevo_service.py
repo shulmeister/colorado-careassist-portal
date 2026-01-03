@@ -129,6 +129,24 @@ class BrevoMarketingService:
             if not campaign_id:
                 continue
 
+            # Filter by send date - Brevo API doesn't support date filtering
+            send_time_str = campaign.get("sentDate") or campaign.get("scheduledAt")
+            if send_time_str:
+                try:
+                    # Parse send time (ISO format or timestamp)
+                    if isinstance(send_time_str, (int, float)):
+                        send_dt = datetime.fromtimestamp(send_time_str / 1000 if send_time_str > 1e10 else send_time_str)
+                    else:
+                        send_dt = datetime.fromisoformat(send_time_str.replace("Z", "+00:00"))
+                    send_date = send_dt.date()
+                    
+                    # Only include campaigns within date range
+                    if send_date < start_date or send_date > end_date:
+                        continue
+                except (ValueError, TypeError):
+                    # If we can't parse the date, include it (better to show data than hide it)
+                    pass
+
             # Brevo includes stats in the campaign response
             stats = campaign.get("statistics", {}).get("globalStats", {})
             
@@ -140,7 +158,7 @@ class BrevoMarketingService:
             report_entry = {
                 "id": str(campaign_id),
                 "title": campaign.get("name") or campaign.get("subject") or f"Campaign {campaign_id}",
-                "send_time": campaign.get("sentDate") or campaign.get("scheduledAt"),
+                "send_time": send_time_str,
                 "emails_sent": emails_sent,
                 "opens_total": opens,
                 "open_rate": self._safe_percent(opens, emails_sent),
