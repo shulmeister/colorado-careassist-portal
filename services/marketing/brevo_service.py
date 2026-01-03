@@ -147,25 +147,26 @@ class BrevoMarketingService:
                     # If we can't parse the date, include it (better to show data than hide it)
                     pass
 
-            # Fetch detailed stats for each campaign (Brevo requires separate API call)
-            try:
-                stats_resp = self._request("GET", f"/emailCampaigns/{campaign_id}/statistics")
-                stats = stats_resp.get("globalStats", {})
-                
-                # Brevo API structure: globalStats contains sent, delivered, uniqueOpens, uniqueClicks, etc.
-                emails_sent = stats.get("sent", 0) or stats.get("delivered", 0)
-                opens = stats.get("uniqueOpens", 0)
-                clicks = stats.get("uniqueClicks", 0)
-                bounces = (stats.get("hardBounces", 0) or 0) + (stats.get("softBounces", 0) or 0)
-                
-                logger.info(f"Campaign {campaign_id} stats: sent={emails_sent}, opens={opens}, clicks={clicks}")
-            except (requests.HTTPError, KeyError, Exception) as exc:
-                logger.warning(f"Could not fetch stats for campaign {campaign_id}: {exc}")
-                # Fallback to basic campaign data
-                emails_sent = campaign.get("recipients", {}).get("totalRecipients", 0) or campaign.get("sent", 0)
-                opens = 0
-                clicks = 0
-                bounces = 0
+            # Brevo API includes statistics directly in the campaign response
+            # Check campaign object for statistics
+            stats = campaign.get("statistics", {})
+            global_stats = stats.get("globalStats", {}) if stats else {}
+            
+            # Extract metrics from globalStats or fallback to campaign-level fields
+            emails_sent = (
+                global_stats.get("sent", 0) 
+                or global_stats.get("delivered", 0)
+                or campaign.get("recipients", {}).get("totalRecipients", 0)
+                or campaign.get("sent", 0)
+            )
+            opens = global_stats.get("uniqueOpens", 0) or global_stats.get("opens", 0)
+            clicks = global_stats.get("uniqueClicks", 0) or global_stats.get("clicks", 0)
+            bounces = (
+                (global_stats.get("hardBounces", 0) or 0) + 
+                (global_stats.get("softBounces", 0) or 0)
+            )
+            
+            logger.info(f"Campaign {campaign_id}: sent={emails_sent}, opens={opens}, clicks={clicks}, stats_keys={list(stats.keys()) if stats else 'none'}")
 
             report_entry = {
                 "id": str(campaign_id),
