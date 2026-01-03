@@ -253,7 +253,7 @@ class GoogleAdsService:
         return None
 
     def _fetch_daily_breakdown(self, ga_service, start: str, end: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-        # Query from campaign to get date-segmented metrics
+        # Query from customer_performance_view to get date-segmented metrics at account level
         query = f"""
             SELECT
               customer.currency_code,
@@ -263,14 +263,37 @@ class GoogleAdsService:
               metrics.impressions,
               metrics.conversions,
               metrics.conversions_value
-            FROM campaign
+            FROM customer_performance_view
             WHERE segments.date BETWEEN '{start}' AND '{end}'
             ORDER BY segments.date
         """
 
         breakdown: List[Dict[str, Any]] = []
         currency_code: Optional[str] = None
-        response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+        
+        try:
+            response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+        except Exception as e:
+            logger.error(f"Google Ads API query error: {e}")
+            # Try alternative query from campaign if customer_performance_view fails
+            query_alt = f"""
+                SELECT
+                  customer.currency_code,
+                  segments.date,
+                  metrics.cost_micros,
+                  metrics.clicks,
+                  metrics.impressions,
+                  metrics.conversions,
+                  metrics.conversions_value
+                FROM campaign
+                WHERE segments.date BETWEEN '{start}' AND '{end}'
+                ORDER BY segments.date
+            """
+            try:
+                response = ga_service.search_stream(customer_id=self.customer_id, query=query_alt)
+            except Exception as e2:
+                logger.error(f"Alternative Google Ads query also failed: {e2}")
+                return [], None
 
         for batch in response:
             for row in batch.results:
