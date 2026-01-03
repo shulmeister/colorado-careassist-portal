@@ -71,13 +71,15 @@ class GoogleAdsService:
         end_str = end_date.isoformat()
 
         try:
-            ga_service = client.get_service("GoogleAdsService")
-            
             # First, try to get the correct customer ID if we're using a Manager Account
-            actual_customer_id = self._get_actual_customer_id(client, ga_service)
+            actual_customer_id = self._get_actual_customer_id(client)
             if not actual_customer_id:
                 logger.warning("Could not determine actual customer ID, using configured ID")
                 actual_customer_id = self.customer_id
+            else:
+                logger.info(f"Using customer ID: {actual_customer_id}")
+            
+            ga_service = client.get_service("GoogleAdsService")
 
             daily, currency_code = self._fetch_daily_breakdown(ga_service, start_str, end_str, actual_customer_id)
             if not daily:
@@ -258,28 +260,57 @@ class GoogleAdsService:
 
         return None
 
-    def _get_actual_customer_id(self, client, ga_service) -> Optional[str]:
+    def _get_actual_customer_id(self, client) -> Optional[str]:
         """
         If using a Manager Account, list accessible accounts and use the first one.
         Otherwise, return the configured customer_id.
         """
-        if not self.login_customer_id:
-            # Not using Manager Account, return configured ID
-            return self.customer_id
+        # If we have a login_customer_id, we're using a Manager Account
+        # In that case, we need to list accessible customers to get the actual account ID
+        if self.login_customer_id:
+            try:
+                # List accessible accounts from Manager Account
+                customer_service = client.get_service("CustomerService")
+                accessible_customers = customer_service.list_accessible_customers()
+                
+                if accessible_customers.resource_names:
+                    # Get the first accessible account ID (remove 'customers/' prefix and dashes)
+                    first_account = accessible_customers.resource_names[0]
+                    account_id = first_account.replace('customers/', '').replace('-', '')
+                    logger.info(f"Found accessible account from Manager Account: {account_id}")
+                    return account_id
+            except Exception as e:
+                logger.warning(f"Could not list accessible customers, using configured ID: {e}")
         
-        try:
-            # List accessible accounts from Manager Account
-            customer_service = client.get_service("CustomerService")
-            accessible_customers = customer_service.list_accessible_customers()
-            
-            if accessible_customers.resource_names:
-                # Get the first accessible account ID (remove 'customers/' prefix)
-                first_account = accessible_customers.resource_names[0]
-                account_id = first_account.replace('customers/', '').replace('-', '')
-                logger.info(f"Found accessible account: {account_id}")
-                return account_id
-        except Exception as e:
-            logger.warning(f"Could not list accessible customers, using configured ID: {e}")
+        # If no login_customer_id or listing failed, try the configured customer_id
+        # But if it's invalid, we might need to use it as login_customer_id instead
+        if self.customer_id:
+            # Check if customer_id looks like a Manager Account (16 digits) vs regular account (10 digits)
+            if len(self.customer_id) == 16:
+                logger.warning(f"Customer ID {self.customer_id} looks like a Manager Account ID. Setting as login_customer_id and listing accessible accounts.")
+                # Try using it as login_customer_id and listing accounts
+                try:
+                    # Temporarily set login_customer_id
+                    original_login = self.login_customer_id
+                    self.login_customer_id = self.customer_id
+                    
+                    # Rebuild client with login_customer_id
+                    client = self._build_client()
+                    if client:
+                        customer_service = client.get_service("CustomerService")
+                        accessible_customers = customer_service.list_accessible_customers()
+                        
+                        if accessible_customers.resource_names:
+                            first_account = accessible_customers.resource_names[0]
+                            account_id = first_account.replace('customers/', '').replace('-', '')
+                            logger.info(f"Found accessible account: {account_id}")
+                            # Update login_customer_id permanently
+                            self.login_customer_id = self.customer_id
+                            return account_id
+                    
+                    self.login_customer_id = original_login
+                except Exception as e:
+                    logger.warning(f"Could not list accounts using customer_id as Manager Account: {e}")
         
         return self.customer_id
     
