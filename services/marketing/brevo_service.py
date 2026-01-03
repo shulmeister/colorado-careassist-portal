@@ -151,14 +151,18 @@ class BrevoMarketingService:
             try:
                 stats_resp = self._request("GET", f"/emailCampaigns/{campaign_id}/statistics")
                 stats = stats_resp.get("globalStats", {})
+                
+                # Brevo API structure: globalStats contains sent, delivered, uniqueOpens, uniqueClicks, etc.
                 emails_sent = stats.get("sent", 0) or stats.get("delivered", 0)
-                opens = stats.get("uniqueOpens", 0) or stats.get("opens", 0)
-                clicks = stats.get("uniqueClicks", 0) or stats.get("clicks", 0)
+                opens = stats.get("uniqueOpens", 0)
+                clicks = stats.get("uniqueClicks", 0)
                 bounces = (stats.get("hardBounces", 0) or 0) + (stats.get("softBounces", 0) or 0)
-            except (requests.HTTPError, KeyError) as exc:
-                logger.debug(f"Could not fetch stats for campaign {campaign_id}: {exc}")
+                
+                logger.info(f"Campaign {campaign_id} stats: sent={emails_sent}, opens={opens}, clicks={clicks}")
+            except (requests.HTTPError, KeyError, Exception) as exc:
+                logger.warning(f"Could not fetch stats for campaign {campaign_id}: {exc}")
                 # Fallback to basic campaign data
-                emails_sent = campaign.get("recipients", {}).get("totalRecipients", 0)
+                emails_sent = campaign.get("recipients", {}).get("totalRecipients", 0) or campaign.get("sent", 0)
                 opens = 0
                 clicks = 0
                 bounces = 0
