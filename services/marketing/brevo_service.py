@@ -104,19 +104,12 @@ class BrevoMarketingService:
         """
         Fetch email campaigns sent within the date range.
         
-        Brevo API uses timestamp format (Unix timestamp in milliseconds).
+        Brevo API doesn't support date filtering on /emailCampaigns endpoint.
+        We fetch all campaigns and filter by send date client-side.
         """
-        # Convert dates to Unix timestamps in milliseconds
-        start_dt = datetime.combine(start_date, datetime.min.time())
-        end_dt = datetime.combine(end_date, datetime.max.time())
-        start_timestamp = int(start_dt.timestamp() * 1000)
-        end_timestamp = int(end_dt.timestamp() * 1000)
-
         params = {
             "type": "classic",  # Regular email campaigns
             "status": "sent",
-            "startDate": start_timestamp,
-            "endDate": end_timestamp,
             "limit": 100,
             "offset": 0,
             "sort": "desc",
