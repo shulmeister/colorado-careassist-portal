@@ -218,7 +218,13 @@ class GBPService:
         data = self._make_api_request(url)
         
         if data and "locations" in data:
-            return data["locations"]
+            locations = data["locations"]
+            logger.info(f"Found {len(locations)} locations for account {account_name}")
+            return locations
+        elif data:
+            logger.warning(f"Unexpected response format from locations API: {data}")
+        else:
+            logger.warning(f"No data returned from locations API for {account_name}")
         return []
     
     def get_daily_metrics(self, location_name: str, metric: str, start_date: date, end_date: date) -> Dict[str, Any]:
@@ -248,6 +254,105 @@ class GBPService:
         
         return self._make_api_request(url) or {}
     
+    def get_reviews(self, location_name: str) -> Dict[str, Any]:
+        """
+        Get reviews for a location.
+        
+        Args:
+            location_name: Location resource name (e.g., "locations/123456789")
+            
+        Returns:
+            Review metrics including count, average rating, and recent reviews
+        """
+        url = f"{GBP_BUSINESS_INFO_API}/{location_name}/reviews"
+        data = self._make_api_request(url)
+        
+        if not data:
+            return {
+                "total_reviews": 0,
+                "average_rating": 0,
+                "rating_distribution": {},
+                "recent_reviews": []
+            }
+        
+        reviews = data.get("reviews", [])
+        total_reviews = len(reviews)
+        
+        if total_reviews == 0:
+            return {
+                "total_reviews": 0,
+                "average_rating": 0,
+                "rating_distribution": {},
+                "recent_reviews": []
+            }
+        
+        # Calculate average rating
+        ratings = [review.get("starRating", {}).get("rating", 0) for review in reviews if review.get("starRating")]
+        average_rating = sum(ratings) / len(ratings) if ratings else 0
+        
+        # Rating distribution
+        rating_distribution = {}
+        for rating in ratings:
+            rating_distribution[rating] = rating_distribution.get(rating, 0) + 1
+        
+        # Get recent reviews (last 10)
+        recent_reviews = []
+        for review in reviews[:10]:
+            recent_reviews.append({
+                "author": review.get("reviewer", {}).get("displayName", "Anonymous"),
+                "rating": review.get("starRating", {}).get("rating", 0),
+                "comment": review.get("comment", ""),
+                "create_time": review.get("createTime", ""),
+            })
+        
+        return {
+            "total_reviews": total_reviews,
+            "average_rating": round(average_rating, 1),
+            "rating_distribution": rating_distribution,
+            "recent_reviews": recent_reviews
+        }
+    
+    def get_search_keywords(self, location_name: str, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+        """
+        Get search keywords that led to business discovery.
+        
+        Note: This may require additional API permissions or may not be available
+        in all GBP API versions. Returns empty list if not available.
+        
+        Args:
+            location_name: Location resource name
+            start_date: Start date
+            end_date: End date
+            
+        Returns:
+            List of search keywords with impression counts
+        """
+        # Note: Search keywords may not be directly available in GBP Performance API
+        # This is a placeholder implementation - actual endpoint may differ
+        url = (
+            f"{GBP_PERFORMANCE_API}/{location_name}:getSearchKeywordImpressions"
+            f"?startDate.year={start_date.year}"
+            f"&startDate.month={start_date.month}"
+            f"&startDate.day={start_date.day}"
+            f"&endDate.year={end_date.year}"
+            f"&endDate.month={end_date.month}"
+            f"&endDate.day={end_date.day}"
+        )
+        
+        data = self._make_api_request(url)
+        
+        if data and "searchKeywordImpressions" in data:
+            keywords = []
+            for keyword_data in data.get("searchKeywordImpressions", []):
+                keywords.append({
+                    "keyword": keyword_data.get("keyword", ""),
+                    "impressions": keyword_data.get("impressions", 0),
+                })
+            return sorted(keywords, key=lambda x: x["impressions"], reverse=True)
+        
+        # If endpoint not available, return empty list
+        return []
+
     def get_gbp_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """
         Fetch all GBP metrics for configured locations.
@@ -283,8 +388,8 @@ class GBPService:
         if not location_names:
             return self._get_not_configured_data("No GBP locations found. Check account permissions.")
         
-        # Metrics to fetch
-        metrics_to_fetch = [
+        # Metrics to fetch - Core actions (always available)
+        core_metrics = [
             "WEBSITE_CLICKS",
             "CALL_CLICKS", 
             "BUSINESS_DIRECTION_REQUESTS",
@@ -294,13 +399,47 @@ class GBPService:
             "BUSINESS_IMPRESSIONS_MOBILE_SEARCH"
         ]
         
+        # Additional insights (may not be available in all API versions)
+        # These will be tried but errors will be logged if unavailable
+        additional_metrics = [
+            # Search query types (direct vs indirect discovery)
+            "QUERIES_DIRECT",
+            "QUERIES_INDIRECT", 
+            "QUERIES_CHAIN",
+            # Photo engagement
+            "PHOTOS_VIEWS_MERCHANT",
+            "PHOTOS_VIEWS_CUSTOMER",
+            "PHOTOS_COUNT_MERCHANT",
+            "PHOTOS_COUNT_CUSTOMER",
+            # Post engagement (if using GBP posts)
+            "POST_VIEWS_SEARCH",
+            "POST_ENGAGEMENT"
+        ]
+        
+        metrics_to_fetch = core_metrics + additional_metrics
+        
         # Aggregate metrics from all locations
         totals = {
             "website_clicks": 0,
             "phone_calls": 0,
             "directions": 0,
             "views": 0,
-            "searches": 0
+            "searches": 0,
+            # Search query types
+            "queries_direct": 0,
+            "queries_indirect": 0,
+            "queries_chain": 0,
+            # Photo engagement
+            "photo_views_merchant": 0,
+            "photo_views_customer": 0,
+            "photo_count_merchant": 0,
+            "photo_count_customer": 0,
+            # Post engagement
+            "post_views": 0,
+            "post_engagement": 0,
+            # Platform breakdown
+            "views_search": 0,
+            "views_maps": 0
         }
         actions_over_time = {}
         
@@ -327,8 +466,31 @@ class GBPService:
                                 totals["directions"] += value
                             elif metric in ["BUSINESS_IMPRESSIONS_DESKTOP_MAPS", "BUSINESS_IMPRESSIONS_MOBILE_MAPS"]:
                                 totals["views"] += value
+                                totals["views_maps"] += value
                             elif metric in ["BUSINESS_IMPRESSIONS_DESKTOP_SEARCH", "BUSINESS_IMPRESSIONS_MOBILE_SEARCH"]:
                                 totals["searches"] += value
+                                totals["views_search"] += value
+                            # Search query types
+                            elif metric == "QUERIES_DIRECT":
+                                totals["queries_direct"] += value
+                            elif metric == "QUERIES_INDIRECT":
+                                totals["queries_indirect"] += value
+                            elif metric == "QUERIES_CHAIN":
+                                totals["queries_chain"] += value
+                            # Photo engagement
+                            elif metric == "PHOTOS_VIEWS_MERCHANT":
+                                totals["photo_views_merchant"] += value
+                            elif metric == "PHOTOS_VIEWS_CUSTOMER":
+                                totals["photo_views_customer"] += value
+                            elif metric == "PHOTOS_COUNT_MERCHANT":
+                                totals["photo_count_merchant"] = max(totals["photo_count_merchant"], value)  # Use max, not sum
+                            elif metric == "PHOTOS_COUNT_CUSTOMER":
+                                totals["photo_count_customer"] = max(totals["photo_count_customer"], value)  # Use max, not sum
+                            # Post engagement
+                            elif metric == "POST_VIEWS_SEARCH":
+                                totals["post_views"] += value
+                            elif metric == "POST_ENGAGEMENT":
+                                totals["post_engagement"] += value
                             
                             # Track over time for charts
                             if date_str not in actions_over_time:
@@ -348,16 +510,72 @@ class GBPService:
         # Sort actions over time
         sorted_actions = sorted(actions_over_time.values(), key=lambda x: x["date"])
         
-        logger.info(f"GBP metrics: {totals['phone_calls']} calls, {totals['website_clicks']} clicks, {totals['directions']} directions")
+        # Get reviews and search keywords from first location (or aggregate if multiple)
+        reviews_data = {}
+        all_search_keywords = []
+        
+        if location_names:
+            # Get reviews from first location (or aggregate if needed)
+            reviews_data = self.get_reviews(location_names[0])
+            
+            # Aggregate search keywords from all locations
+            for location_name in location_names:
+                keywords = self.get_search_keywords(location_name, start_date, end_date)
+                all_search_keywords.extend(keywords)
+            
+            # Deduplicate and aggregate keywords
+            keyword_dict = {}
+            for kw in all_search_keywords:
+                keyword = kw.get("keyword", "")
+                if keyword:
+                    keyword_dict[keyword] = keyword_dict.get(keyword, 0) + kw.get("impressions", 0)
+            
+            # Convert back to list and sort
+            all_search_keywords = [
+                {"keyword": k, "impressions": v}
+                for k, v in sorted(keyword_dict.items(), key=lambda x: x[1], reverse=True)
+            ][:20]  # Top 20 keywords
+        
+        # Calculate derived insights
+        total_queries = totals["queries_direct"] + totals["queries_indirect"] + totals["queries_chain"]
+        query_breakdown = {
+            "direct": totals["queries_direct"],
+            "indirect": totals["queries_indirect"],
+            "chain": totals["queries_chain"],
+            "direct_percentage": (totals["queries_direct"] / total_queries * 100) if total_queries > 0 else 0,
+            "indirect_percentage": (totals["queries_indirect"] / total_queries * 100) if total_queries > 0 else 0
+        }
+        
+        total_photo_views = totals["photo_views_merchant"] + totals["photo_views_customer"]
+        photo_engagement = {
+            "merchant_views": totals["photo_views_merchant"],
+            "customer_views": totals["photo_views_customer"],
+            "merchant_photo_count": totals["photo_count_merchant"],
+            "customer_photo_count": totals["photo_count_customer"],
+            "total_views": total_photo_views,
+            "views_per_photo": total_photo_views / max(totals["photo_count_merchant"] + totals["photo_count_customer"], 1)
+        }
+        
+        logger.info(f"GBP metrics: {totals['phone_calls']} calls, {totals['website_clicks']} clicks, {totals['directions']} directions, {total_queries} queries")
         
         return {
             "searches": totals["searches"],
             "views": totals["views"],
+            "views_search": totals["views_search"],
+            "views_maps": totals["views_maps"],
             "phone_calls": totals["phone_calls"],
             "directions": totals["directions"],
             "website_clicks": totals["website_clicks"],
             "actions_over_time": sorted_actions,
-            "search_keywords": [],  # Keywords require separate API
+            "reviews": reviews_data,
+            "search_keywords": all_search_keywords,
+            # New insights
+            "search_query_types": query_breakdown,
+            "photo_engagement": photo_engagement,
+            "post_engagement": {
+                "post_views": totals["post_views"],
+                "post_engagement": totals["post_engagement"]
+            },
             "is_placeholder": False,
             "source": "gbp_performance_api",
             "locations_count": len(location_names)
@@ -371,6 +589,12 @@ class GBPService:
             "phone_calls": 0,
             "directions": 0,
             "website_clicks": 0,
+            "reviews": {
+                "total_reviews": 0,
+                "average_rating": 0,
+                "rating_distribution": {},
+                "recent_reviews": []
+            },
             "search_keywords": [],
             "actions_over_time": [],
             "is_placeholder": True,

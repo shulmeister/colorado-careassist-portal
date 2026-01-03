@@ -925,6 +925,36 @@
                 <canvas id="interactionsChart2"></canvas>
             </div>
         </div>
+    </div>
+    
+    <!-- Google Ads Additional Metrics Row -->
+    <div class="grid grid-6">
+        <!-- Google Ads Quality Scores -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">QUALITY SCORES</div>
+                <div class="card-title">Ad Quality Metrics</div>
+            </div>
+            <div class="stats-table" id="googleQualityScores"></div>
+        </div>
+        
+        <!-- Google Ads Search Terms -->
+        <div class="card card-compact" style="grid-column: span 2;">
+            <div class="card-header">
+                <div class="card-label">SEARCH TERMS</div>
+                <div class="card-title">Top Performing Keywords</div>
+            </div>
+            <div class="stats-table" id="googleSearchTerms"></div>
+        </div>
+        
+        <!-- Google Ads Device Performance -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">DEVICE PERFORMANCE</div>
+                <div class="card-title">By Device Type</div>
+            </div>
+            <div class="stats-table" id="googleDevicePerformance"></div>
+        </div>
             </div>
             
             <!-- Social Performance Tab -->
@@ -1025,6 +1055,24 @@
                             <div class="card-title">Best Performing Content</div>
                         </div>
                     <div class="stats-table" id="socialTopPosts"></div>
+                    </div>
+                    
+                    <!-- Facebook Audience Demographics -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">AUDIENCE</div>
+                            <div class="card-title">Demographics</div>
+                        </div>
+                        <div class="stats-table" id="facebookDemographics"></div>
+                    </div>
+                    
+                    <!-- LinkedIn Follower Growth -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">LINKEDIN</div>
+                            <div class="card-title">Follower Growth</div>
+                        </div>
+                        <div class="stats-table" id="linkedinFollowerGrowth"></div>
                     </div>
                 </div>
             </div>
@@ -1449,6 +1497,87 @@
                         <div class="chart-container-large">
                             <canvas id="gbpSearchesChart"></canvas>
                         </div>
+                    </div>
+                </div>
+                
+                <!-- GA4 & GBP Additional Metrics -->
+                <div class="grid grid-3">
+                    <!-- GA4 User Retention -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">USER RETENTION</div>
+                            <div class="card-title">New vs Returning</div>
+                        </div>
+                        <div class="stats-table" id="ga4UserRetention"></div>
+                    </div>
+                    
+                    <!-- GA4 Geographic Performance -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GEOGRAPHIC</div>
+                            <div class="card-title">Top Locations</div>
+                        </div>
+                        <div class="stats-table" id="ga4Geographic"></div>
+                    </div>
+                    
+                    <!-- GBP Reviews -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">REVIEWS</div>
+                            <div class="card-title">Google Business Profile</div>
+                        </div>
+                        <div class="stats-table" id="gbpReviews"></div>
+                    </div>
+                </div>
+                
+                <!-- GBP Search Insights -->
+                <div class="grid grid-3">
+                    <!-- Search Query Types -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SEARCH TYPES</div>
+                            <div class="card-title">Direct vs Discovery</div>
+                        </div>
+                        <div class="stats-table" id="gbpSearchQueryTypes"></div>
+                    </div>
+                    
+                    <!-- Views Breakdown -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">VIEWS BREAKDOWN</div>
+                            <div class="card-title">Search vs Maps</div>
+                        </div>
+                        <div class="stats-table" id="gbpViewsBreakdown"></div>
+                    </div>
+                    
+                    <!-- Photo Engagement -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">PHOTO ENGAGEMENT</div>
+                            <div class="card-title">Visual Content Performance</div>
+                        </div>
+                        <div class="stats-table" id="gbpPhotoEngagement"></div>
+                    </div>
+                </div>
+                
+                <!-- GBP Post Engagement & Search Keywords -->
+                <div class="grid grid-2">
+                    <!-- Post Engagement -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">POST ENGAGEMENT</div>
+                            <div class="card-title">GBP Posts Performance</div>
+                        </div>
+                        <div class="stats-table" id="gbpPostEngagement"></div>
+                    </div>
+                    
+                    <!-- Search Keywords -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SEARCH KEYWORDS</div>
+                            <div class="card-title">Top Keywords Leading to Discovery</div>
+                        </div>
+                        <div class="stats-table" id="gbpSearchKeywords"></div>
                     </div>
                 </div>
             </div>

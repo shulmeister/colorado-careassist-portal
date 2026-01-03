@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 
 MICROS_IN_CURRENCY = 1_000_000
 
+# Simple in-memory cache for script data (in production, use Redis or database)
+_script_data_cache: Optional[Dict[str, Any]] = None
+_cache_timestamp: Optional[datetime] = None
+
+# Singleton instance
+_google_ads_service_instance: Optional['GoogleAdsService'] = None
+
 
 class GoogleAdsService:
     """Service wrapper for Google Ads metrics."""
@@ -73,9 +80,15 @@ class GoogleAdsService:
 
             overview = self._build_overview_from_daily(daily, start_date, end_date)
             campaigns = self._fetch_campaigns(ga_service, start_str, end_str)
+            quality_scores = self._fetch_quality_scores(ga_service, start_str, end_str)
+            search_terms = self._fetch_search_terms(ga_service, start_str, end_str)
+            device_performance = self._fetch_device_performance(ga_service, start_str, end_str)
 
             overview["spend"]["daily"] = daily
             overview["campaigns"] = campaigns
+            overview["quality_scores"] = quality_scores
+            overview["search_terms"] = search_terms
+            overview["device_performance"] = device_performance
             overview["currency_code"] = currency_code or overview.get("currency_code") or self.currency_code
             overview["is_placeholder"] = False
             overview["source"] = "google_ads_api"
@@ -93,6 +106,89 @@ class GoogleAdsService:
     def get_placeholder_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """Expose placeholder metrics for other modules (tests, fallbacks)."""
         return self._get_placeholder_metrics(start_date, end_date)
+    
+    def cache_script_data(self, data: Dict[str, Any]) -> None:
+        """Cache data received from Google Ads Script webhook."""
+        global _script_data_cache, _cache_timestamp
+        _script_data_cache = data
+        _cache_timestamp = datetime.utcnow()
+        logger.info("Google Ads Script data cached")
+    
+    def get_cached_script_data(self, start_date: date, end_date: date) -> Optional[Dict[str, Any]]:
+        """
+        Get cached data from Google Ads Script if available and recent (within 24 hours).
+        
+        Transforms script data format to match API format for compatibility.
+        """
+        global _script_data_cache, _cache_timestamp
+        
+        if not _script_data_cache or not _cache_timestamp:
+            return None
+        
+        # Check if cache is recent (within 24 hours)
+        cache_age = datetime.utcnow() - _cache_timestamp
+        if cache_age.total_seconds() > 24 * 3600:
+            logger.info("Google Ads Script cache expired")
+            return None
+        
+        try:
+            # Transform script data format to API format
+            script_data = _script_data_cache
+            
+            # Check if date range matches (roughly)
+            cache_range = script_data.get("date_range", {})
+            cache_start = datetime.fromisoformat(cache_range.get("start", "")).date() if cache_range.get("start") else None
+            cache_end = datetime.fromisoformat(cache_range.get("end", "")).date() if cache_range.get("end") else None
+            
+            # Use cached data if date range overlaps or is close
+            if cache_start and cache_end:
+                if start_date > cache_end or end_date < cache_start:
+                    logger.info("Google Ads Script cache date range doesn't match request")
+                    return None
+            
+            account = script_data.get("account", {})
+            campaigns = script_data.get("campaigns", [])
+            quality_scores = script_data.get("quality_scores", {})
+            search_terms = script_data.get("search_terms", [])
+            device_performance = script_data.get("device_performance", {})
+            daily = script_data.get("daily_breakdown", [])
+            
+            # Build overview in API format
+            overview = {
+                "spend": {
+                    "total": account.get("spend", 0),
+                    "per_day": account.get("spend", 0) / max((end_date - start_date).days, 1),
+                    "daily": daily
+                },
+                "performance": {
+                    "clicks": account.get("clicks", 0),
+                    "impressions": account.get("impressions", 0),
+                    "conversions": account.get("conversions", 0),
+                    "conversion_value": account.get("conversion_value", 0)
+                },
+                "efficiency": {
+                    "ctr": account.get("ctr", 0),
+                    "cpc": account.get("cpc", 0),
+                    "roas": account.get("roas", 0),
+                    "cost_per_conversion": account.get("cost_per_conversion", 0),
+                    "conversion_rate": account.get("conversion_rate", 0)
+                },
+                "campaigns": campaigns,
+                "quality_scores": quality_scores,
+                "search_terms": search_terms,
+                "device_performance": device_performance,
+                "currency_code": script_data.get("currency_code", "USD"),
+                "is_placeholder": False,
+                "source": "google_ads_script",
+                "fetched_at": script_data.get("fetched_at", datetime.utcnow().isoformat())
+            }
+            
+            logger.info("Returning cached Google Ads Script data")
+            return overview
+            
+        except Exception as e:
+            logger.error(f"Error processing cached script data: {e}")
+            return None
 
     # ------------------------------------------------------------------ #
     # Internal helpers
@@ -199,6 +295,191 @@ class GoogleAdsService:
                 )
 
         return breakdown, currency_code
+
+    def _fetch_quality_scores(self, ga_service, start: str, end: str) -> Dict[str, Any]:
+        """
+        Fetch Quality Score metrics for the account.
+        
+        Returns average quality score and breakdown by component.
+        """
+        query = f"""
+            SELECT
+              campaign.advertising_channel_type,
+              ad_group_criterion.quality_info.quality_score,
+              ad_group_criterion.quality_info.creative_quality_score,
+              ad_group_criterion.quality_info.post_click_quality_score,
+              ad_group_criterion.quality_info.search_predicted_ctr,
+              ad_group_criterion.quality_info.landing_page_experience_score
+            FROM keyword_view
+            WHERE segments.date BETWEEN '{start}' AND '{end}'
+              AND ad_group_criterion.quality_info.quality_score IS NOT NULL
+            LIMIT 1000
+        """
+        
+        quality_scores = []
+        creative_scores = []
+        landing_page_scores = []
+        ctr_scores = []
+        
+        try:
+            response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+            
+            for batch in response:
+                for row in batch.results:
+                    quality_info = getattr(row.ad_group_criterion, "quality_info", None)
+                    if quality_info:
+                        qs = getattr(quality_info, "quality_score", None)
+                        if qs:
+                            quality_scores.append(int(qs))
+                        
+                        creative = getattr(quality_info, "creative_quality_score", None)
+                        if creative:
+                            creative_scores.append(int(creative))
+                        
+                        landing = getattr(quality_info, "landing_page_experience_score", None)
+                        if landing:
+                            landing_page_scores.append(int(landing))
+                        
+                        ctr = getattr(quality_info, "search_predicted_ctr", None)
+                        if ctr:
+                            ctr_scores.append(int(ctr))
+        except Exception as e:
+            logger.warning(f"Could not fetch quality scores: {e}")
+            return {}
+        
+        def avg(lst):
+            return round(sum(lst) / len(lst), 2) if lst else 0
+        
+        return {
+            "average_quality_score": avg(quality_scores),
+            "average_creative_score": avg(creative_scores),
+            "average_landing_page_score": avg(landing_page_scores),
+            "average_predicted_ctr": avg(ctr_scores),
+            "keywords_analyzed": len(quality_scores)
+        }
+    
+    def _fetch_device_performance(self, ga_service, start: str, end: str) -> Dict[str, Any]:
+        """
+        Fetch performance metrics broken down by device type.
+        
+        Returns performance by Desktop, Mobile, Tablet.
+        """
+        query = f"""
+            SELECT
+              segments.device,
+              metrics.cost_micros,
+              metrics.clicks,
+              metrics.impressions,
+              metrics.conversions,
+              metrics.conversions_value
+            FROM campaign
+            WHERE segments.date BETWEEN '{start}' AND '{end}'
+            ORDER BY metrics.cost_micros DESC
+        """
+        
+        device_stats = {
+            "DESKTOP": {"spend": 0, "clicks": 0, "impressions": 0, "conversions": 0, "conversion_value": 0},
+            "MOBILE": {"spend": 0, "clicks": 0, "impressions": 0, "conversions": 0, "conversion_value": 0},
+            "TABLET": {"spend": 0, "clicks": 0, "impressions": 0, "conversions": 0, "conversion_value": 0},
+        }
+        
+        try:
+            response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+            
+            for batch in response:
+                for row in batch.results:
+                    device = getattr(row.segments, "device", None)
+                    device_name = getattr(device, "name", "UNKNOWN") if device else "UNKNOWN"
+                    
+                    if device_name in device_stats:
+                        spend = self._micros_to_currency(getattr(row.metrics, "cost_micros", 0))
+                        clicks = self._safe_int(getattr(row.metrics, "clicks", 0))
+                        impressions = self._safe_int(getattr(row.metrics, "impressions", 0))
+                        conversions = self._safe_float(getattr(row.metrics, "conversions", 0.0))
+                        conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
+                        
+                        device_stats[device_name]["spend"] += spend
+                        device_stats[device_name]["clicks"] += clicks
+                        device_stats[device_name]["impressions"] += impressions
+                        device_stats[device_name]["conversions"] += conversions
+                        device_stats[device_name]["conversion_value"] += conversion_value
+        except Exception as e:
+            logger.warning(f"Could not fetch device performance: {e}")
+            return {}
+        
+        # Calculate rates and format
+        result = {}
+        for device, stats in device_stats.items():
+            spend = stats["spend"]
+            clicks = stats["clicks"]
+            impressions = stats["impressions"]
+            conversions = stats["conversions"]
+            
+            result[device.lower()] = {
+                "spend": round(spend, 2),
+                "clicks": clicks,
+                "impressions": impressions,
+                "conversions": round(conversions, 2),
+                "conversion_value": round(stats["conversion_value"], 2),
+                "ctr": round(self._safe_divide(clicks, impressions) * 100, 2),
+                "cpc": round(self._safe_divide(spend, clicks), 2),
+                "conversion_rate": round(self._safe_divide(conversions, clicks) * 100, 2),
+            }
+        
+        return result
+
+    def _fetch_search_terms(self, ga_service, start: str, end: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """
+        Fetch search terms report showing what people actually searched for.
+        
+        Returns top search terms with spend, clicks, and conversions.
+        """
+        query = f"""
+            SELECT
+              search_term_view.search_term,
+              metrics.cost_micros,
+              metrics.clicks,
+              metrics.impressions,
+              metrics.conversions,
+              metrics.conversions_value
+            FROM search_term_view
+            WHERE segments.date BETWEEN '{start}' AND '{end}'
+              AND search_term_view.search_term IS NOT NULL
+            ORDER BY metrics.cost_micros DESC
+            LIMIT {limit}
+        """
+        
+        search_terms = []
+        
+        try:
+            response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+            
+            for batch in response:
+                for row in batch.results:
+                    search_term = getattr(row.search_term_view, "search_term", "")
+                    if search_term:
+                        spend = self._micros_to_currency(getattr(row.metrics, "cost_micros", 0))
+                        clicks = self._safe_int(getattr(row.metrics, "clicks", 0))
+                        impressions = self._safe_int(getattr(row.metrics, "impressions", 0))
+                        conversions = self._safe_float(getattr(row.metrics, "conversions", 0.0))
+                        conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
+                        
+                        search_terms.append({
+                            "search_term": search_term,
+                            "spend": round(spend, 2),
+                            "clicks": clicks,
+                            "impressions": impressions,
+                            "conversions": conversions,
+                            "conversion_value": round(conversion_value, 2),
+                            "cpc": round(self._safe_divide(spend, clicks), 2),
+                            "ctr": round(self._safe_divide(clicks, impressions) * 100, 2),
+                            "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
+                        })
+        except Exception as e:
+            logger.warning(f"Could not fetch search terms: {e}")
+            return []
+        
+        return search_terms
 
     def _fetch_campaigns(self, ga_service, start: str, end: str, limit: int = 12) -> List[Dict[str, Any]]:
         query = f"""
@@ -334,6 +615,9 @@ class GoogleAdsService:
                 "conversion_rate": 0,
             },
             "campaigns": [],
+            "quality_scores": {},
+            "search_terms": [],
+            "device_performance": {},
             "is_placeholder": True,
             "not_configured": True,
             "message": "Google Ads API not configured or account suspended",

@@ -1,8 +1,7 @@
 """
 Marketing metrics service layer.
 
-Integrates with Facebook, Instagram, LinkedIn, Pinterest, TikTok,
-Google Ads API, and more to fetch real marketing metrics.
+Integrates with Facebook Graph API and Google Ads API to fetch real metrics.
 Falls back to placeholder data if APIs are not configured or fail.
 """
 from __future__ import annotations
@@ -16,10 +15,7 @@ from .facebook_service import facebook_service
 from .facebook_ads_service import facebook_ads_service
 from .google_ads_service import google_ads_service
 from .mailchimp_service import mailchimp_marketing_service
-from .instagram_service import instagram_service
-from .linkedin_service import linkedin_service
-from .pinterest_service import pinterest_service
-from .tiktok_service import tiktok_service
+from .brevo_service import brevo_marketing_service
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +126,11 @@ def get_ads_metrics(start: date, end: date, compare: Optional[str] = None) -> Di
         return _get_placeholder_ads_metrics(start, end)
     
     try:
-        google_metrics = google_ads_service.get_metrics(start, end)
+        # Try cached script data first, fall back to API
+        google_metrics = google_ads_service.get_cached_script_data(start, end)
+        if not google_metrics:
+            google_metrics = google_ads_service.get_metrics(start, end)
+        
         facebook_account = facebook_ads_service.get_account_metrics(start, end)
         facebook_campaigns = facebook_ads_service.get_campaign_metrics(start, end)
 
@@ -149,17 +149,126 @@ def get_ads_metrics(start: date, end: date, compare: Optional[str] = None) -> Di
 
 def get_email_metrics(start: date, end: date) -> Dict[str, Any]:
     """
-    Fetch email marketing metrics from Mailchimp.
+    Fetch email marketing metrics from Brevo (primary) and Mailchimp (legacy).
+    
+    Strategy:
+    - Brevo: Used for new campaigns (Dec 2025+)
+    - Mailchimp: Used for historical campaigns (pre-Dec 2025)
+    - Results are merged, with Brevo metrics taking precedence for overlapping periods
     """
     if not USE_REAL_DATA:
         logger.info("Using placeholder email metrics (real data disabled)")
-        return mailchimp_marketing_service.get_placeholder_metrics(start, end)
+        return brevo_marketing_service.get_placeholder_metrics(start, end)
 
+    brevo_metrics = None
+    mailchimp_metrics = None
+    
+    # Try Brevo first (primary email service going forward)
     try:
-        return mailchimp_marketing_service.get_email_metrics(start, end)
+        brevo_metrics = brevo_marketing_service.get_email_metrics(start, end)
+        logger.info(f"Brevo: {brevo_metrics.get('summary', {}).get('campaigns_sent', 0)} campaigns")
     except Exception as exc:
-        logger.error("Error fetching email metrics: %s", exc)
-        return mailchimp_marketing_service.get_placeholder_metrics(start, end)
+        logger.warning("Error fetching Brevo metrics: %s", exc)
+    
+    # Also fetch Mailchimp for historical data
+    try:
+        mailchimp_metrics = mailchimp_marketing_service.get_email_metrics(start, end)
+        logger.info(f"Mailchimp: {mailchimp_metrics.get('summary', {}).get('campaigns_sent', 0)} campaigns")
+    except Exception as exc:
+        logger.warning("Error fetching Mailchimp metrics: %s", exc)
+    
+    # Merge the results
+    return _merge_email_metrics(brevo_metrics, mailchimp_metrics, start, end)
+
+
+def _merge_email_metrics(
+    brevo: Optional[Dict[str, Any]], 
+    mailchimp: Optional[Dict[str, Any]], 
+    start: date, 
+    end: date
+) -> Dict[str, Any]:
+    """
+    Merge Brevo and Mailchimp email metrics.
+    
+    - Combines campaign counts and totals
+    - Merges top campaigns list
+    - Calculates weighted averages for rates
+    """
+    from datetime import datetime
+    
+    # If only one service has data, return that
+    if brevo and not mailchimp:
+        return brevo
+    if mailchimp and not brevo:
+        return mailchimp
+    if not brevo and not mailchimp:
+        return brevo_marketing_service.get_placeholder_metrics(start, end)
+    
+    # Both have data - merge them
+    brevo_summary = brevo.get("summary", {})
+    mc_summary = mailchimp.get("summary", {})
+    
+    # Sum up totals
+    total_campaigns = brevo_summary.get("campaigns_sent", 0) + mc_summary.get("campaigns_sent", 0)
+    total_emails = brevo_summary.get("emails_sent", 0) + mc_summary.get("emails_sent", 0)
+    total_contacts = max(brevo_summary.get("total_contacts", 0), mc_summary.get("total_contacts", 0))
+    total_conversions = brevo_summary.get("conversions", 0) + mc_summary.get("conversions", 0)
+    
+    # Calculate weighted average rates
+    brevo_emails = brevo_summary.get("emails_sent", 0)
+    mc_emails = mc_summary.get("emails_sent", 0)
+    
+    if total_emails > 0:
+        avg_open_rate = (
+            (brevo_summary.get("open_rate", 0) * brevo_emails + 
+             mc_summary.get("open_rate", 0) * mc_emails) / total_emails
+        )
+        avg_click_rate = (
+            (brevo_summary.get("click_rate", 0) * brevo_emails + 
+             mc_summary.get("click_rate", 0) * mc_emails) / total_emails
+        )
+        avg_delivery_rate = (
+            (brevo_summary.get("delivery_rate", 0) * brevo_emails + 
+             mc_summary.get("delivery_rate", 0) * mc_emails) / total_emails
+        )
+    else:
+        avg_open_rate = 0
+        avg_click_rate = 0
+        avg_delivery_rate = 0
+    
+    # Merge top campaigns (take top 3 from combined list)
+    all_campaigns = brevo.get("top_campaigns", []) + mailchimp.get("top_campaigns", [])
+    top_campaigns = sorted(all_campaigns, key=lambda c: c.get("open_rate", 0), reverse=True)[:3]
+    
+    # Merge trends
+    all_trends = brevo.get("trend", []) + mailchimp.get("trend", [])
+    # Sort by date
+    all_trends.sort(key=lambda t: t.get("date", ""))
+    
+    # Merge subscriber growth (prefer Brevo if available, otherwise Mailchimp)
+    growth = brevo.get("subscriber_growth", []) or mailchimp.get("subscriber_growth", [])
+    
+    return {
+        "summary": {
+            "campaigns_sent": total_campaigns,
+            "emails_sent": total_emails,
+            "total_contacts": total_contacts,
+            "open_rate": round(avg_open_rate, 2),
+            "click_rate": round(avg_click_rate, 2),
+            "delivery_rate": round(avg_delivery_rate, 2),
+            "conversions": total_conversions,
+        },
+        "top_campaigns": top_campaigns,
+        "trend": all_trends,
+        "subscriber_growth": growth,
+        "is_placeholder": False,
+        "source": "brevo+mailchimp",
+        "sources": {
+            "brevo": brevo.get("source", "unknown") if brevo else None,
+            "mailchimp": mailchimp.get("source", "unknown") if mailchimp else None,
+        },
+        "fetched_at": datetime.utcnow().isoformat(),
+    }
 
 
 def _calculate_comparison(current: Dict, previous: Dict) -> Dict[str, float]:
@@ -180,198 +289,44 @@ def _calculate_comparison(current: Dict, previous: Dict) -> Dict[str, float]:
 
 
 def _get_placeholder_social_metrics(start: date, end: date) -> Dict[str, Any]:
-    """Return placeholder social metrics"""
-    total_days = (end - start).days + 1
-    
+    """Return empty social metrics - NO FAKE DATA."""
     return {
         "summary": {
-            "total_page_likes": {
-                "value": 2785,
-                "change": 4.6,
-                "trend": "up",
-            },
-            "reach": {
-                "organic": 18340,
-                "paid": 8640,
-                "total": 26980,
-                "change": -2.1,
-                "trend": "down",
-            },
-            "impressions": 38950,
-            "page_visits": 2946,
-            "unique_clicks": 4834,
-            "video_views_3s": 5190,
+            "total_page_likes": {"value": 0, "change": 0, "trend": "down"},
+            "reach": {"organic": 0, "paid": 0, "total": 0, "change": 0, "trend": "down"},
+            "impressions": 0,
+            "page_visits": 0,
+            "unique_clicks": 0,
+            "video_views_3s": 0,
         },
         "click_actions": {
-            "get_directions": 37,
-            "phone_clicks": 34,
-            "website_clicks": 91,
-            "action_button": 99,
+            "get_directions": 0,
+            "phone_clicks": 0,
+            "website_clicks": 0,
+            "action_button": 0,
         },
         "post_overview": {
-            "posts_published": 18,
-            "post_reach": 8735,
-            "post_clicks": 3690,
-            "engagement_by_post": 1468,
-            "chart": [
-                {"date": (start + timedelta(days=idx)).isoformat(), "reach": 420 + idx * 15, "engagement": 180 + idx * 7}
-                for idx in range(total_days)
-            ],
+            "posts_published": 0,
+            "post_reach": 0,
+            "post_clicks": 0,
+            "engagement_by_post": 0,
+            "chart": [],
         },
-        "top_posts": [
-            {"title": "Announcing fall caregiver event", "reach": 1250, "clicks": 210, "platform": "Facebook"},
-            {"title": "Meet the team: spotlight", "reach": 980, "clicks": 162, "platform": "Instagram"},
-            {"title": "Client success story", "reach": 860, "clicks": 131, "platform": "LinkedIn"},
-        ],
+        "top_posts": [],
+        "is_placeholder": True,
+        "not_configured": True,
+        "message": "Facebook/Instagram not configured or missing read_insights permission",
     }
 
 
 def _get_placeholder_ads_metrics(start: date, end: date) -> Dict[str, Any]:
-    """Return placeholder ads metrics for both Google and Facebook"""
+    """Return empty ads metrics - NO FAKE DATA."""
     return {
         "google_ads": google_ads_service.get_placeholder_metrics(start, end),
         "facebook_ads": {
             "account": facebook_ads_service.get_placeholder_account_metrics(start, end),
-            "campaigns": [
-                {"name": "October 2025 PMax Lead Gen Denver", "spend": 1190.78, "clicks": 280, "impressions": 8930, "conversions": 35},
-                {"name": "October 2025 PMax Lead Gen - Springs", "spend": 1195.14, "clicks": 249, "impressions": 7530, "conversions": 25},
-            ],
-        },
-    }
-
-
-def get_instagram_metrics(start: date, end: date) -> Dict[str, Any]:
-    """
-    Fetch Instagram Business account metrics.
-    
-    Args:
-        start: Start date
-        end: End date
-    
-    Returns:
-        Dictionary containing Instagram metrics
-    """
-    if not USE_REAL_DATA:
-        logger.info("Using placeholder Instagram metrics (real data disabled)")
-        return instagram_service._get_placeholder_metrics(start, end)
-    
-    try:
-        return instagram_service.get_account_metrics(start, end)
-    except Exception as e:
-        logger.error(f"Error fetching Instagram metrics: {e}")
-        return instagram_service._get_placeholder_metrics(start, end)
-
-
-def get_linkedin_metrics(start: date, end: date) -> Dict[str, Any]:
-    """
-    Fetch LinkedIn company page and ads metrics.
-    
-    Args:
-        start: Start date
-        end: End date
-    
-    Returns:
-        Dictionary containing LinkedIn organic and ads metrics
-    """
-    if not USE_REAL_DATA:
-        logger.info("Using placeholder LinkedIn metrics (real data disabled)")
-        return linkedin_service._get_placeholder_metrics(start, end)
-    
-    try:
-        organic = linkedin_service.get_organization_metrics(start, end)
-        ads = linkedin_service.get_ad_metrics(start, end)
-        return {
-            "organic": organic,
-            "ads": ads,
-        }
-    except Exception as e:
-        logger.error(f"Error fetching LinkedIn metrics: {e}")
-        return {
-            "organic": linkedin_service._get_placeholder_metrics(start, end),
-            "ads": linkedin_service._get_placeholder_ad_metrics(start, end),
-        }
-
-
-def get_pinterest_metrics(start: date, end: date) -> Dict[str, Any]:
-    """
-    Fetch Pinterest user account and ads metrics.
-    
-    Args:
-        start: Start date
-        end: End date
-    
-    Returns:
-        Dictionary containing Pinterest organic and ads metrics
-    """
-    if not USE_REAL_DATA:
-        logger.info("Using placeholder Pinterest metrics (real data disabled)")
-        return pinterest_service._get_placeholder_metrics(start, end)
-    
-    try:
-        organic = pinterest_service.get_user_metrics(start, end)
-        ads = pinterest_service.get_ad_metrics(start, end)
-        return {
-            "organic": organic,
-            "ads": ads,
-        }
-    except Exception as e:
-        logger.error(f"Error fetching Pinterest metrics: {e}")
-        return {
-            "organic": pinterest_service._get_placeholder_metrics(start, end),
-            "ads": pinterest_service._get_placeholder_ad_metrics(start, end),
-        }
-
-
-def get_tiktok_metrics(start: date, end: date) -> Dict[str, Any]:
-    """
-    Fetch TikTok ads and engagement metrics.
-    
-    Args:
-        start: Start date
-        end: End date
-    
-    Returns:
-        Dictionary containing TikTok ads and engagement metrics
-    """
-    if not USE_REAL_DATA:
-        logger.info("Using placeholder TikTok metrics (real data disabled)")
-        return tiktok_service._get_placeholder_metrics(start, end)
-    
-    try:
-        ads = tiktok_service.get_ad_metrics(start, end)
-        campaigns = tiktok_service.get_campaign_metrics(start, end)
-        engagement = tiktok_service.get_engagement_metrics(start, end)
-        return {
-            "ads": ads,
-            "campaigns": campaigns,
-            "engagement": engagement,
-        }
-    except Exception as e:
-        logger.error(f"Error fetching TikTok metrics: {e}")
-        return {
-            "ads": tiktok_service._get_placeholder_metrics(start, end),
             "campaigns": [],
-            "engagement": tiktok_service._get_placeholder_engagement(start, end),
-        }
-
-
-def get_all_social_metrics(start: date, end: date) -> Dict[str, Any]:
-    """
-    Fetch social media metrics from ALL platforms.
-    
-    Args:
-        start: Start date
-        end: End date
-    
-    Returns:
-        Dictionary containing metrics from Facebook, Instagram, LinkedIn, Pinterest, TikTok
-    """
-    return {
-        "facebook": get_social_metrics(start, end),
-        "instagram": get_instagram_metrics(start, end),
-        "linkedin": get_linkedin_metrics(start, end),
-        "pinterest": get_pinterest_metrics(start, end),
-        "tiktok": get_tiktok_metrics(start, end),
-        "fetched_at": date.today().isoformat(),
+            "not_configured": True,
+        },
     }
 

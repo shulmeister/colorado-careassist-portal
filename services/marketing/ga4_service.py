@@ -109,6 +109,12 @@ class GA4Service:
             # Fetch top pages
             top_pages = self._get_top_pages(start_date, end_date)
             
+            # Fetch user retention metrics
+            user_retention = self._get_user_retention(start_date, end_date)
+            
+            # Fetch geographic performance
+            geographic_performance = self._get_geographic_performance(start_date, end_date)
+            
             return {
                 "total_users": total_users,
                 "sessions": sessions,
@@ -123,6 +129,8 @@ class GA4Service:
                 "conversion_paths": self._build_conversion_paths(conversions_by_source),
                 "sessions_by_medium": sessions_by_medium,
                 "top_pages": top_pages,
+                "user_retention": user_retention,
+                "geographic_performance": geographic_performance,
             }
             
         except Exception as e:
@@ -310,6 +318,139 @@ class GA4Service:
             logger.error(f"Error fetching top pages: {e}")
             return []
 
+    def _get_user_retention(self, start_date: date, end_date: date) -> Dict[str, Any]:
+        """Fetch user retention metrics (new vs returning users)."""
+        try:
+            # Get new vs returning users
+            request = RunReportRequest(
+                property=f"properties/{self.property_id}",
+                date_ranges=[DateRange(
+                    start_date=start_date.strftime("%Y-%m-%d"),
+                    end_date=end_date.strftime("%Y-%m-%d")
+                )],
+                dimensions=[Dimension(name="newVsReturning")],
+                metrics=[
+                    Metric(name="totalUsers"),
+                    Metric(name="sessions"),
+                    Metric(name="engagementRate"),
+                ]
+            )
+            
+            response = self.client.run_report(request)
+            
+            new_users = 0
+            returning_users = 0
+            new_sessions = 0
+            returning_sessions = 0
+            new_engagement_rate = 0
+            returning_engagement_rate = 0
+            
+            for row in response.rows:
+                user_type = row.dimension_values[0].value
+                users = int(row.metric_values[0].value)
+                sessions = int(row.metric_values[1].value)
+                engagement = float(row.metric_values[2].value) * 100
+                
+                if user_type == "new":
+                    new_users = users
+                    new_sessions = sessions
+                    new_engagement_rate = engagement
+                elif user_type == "returning":
+                    returning_users = users
+                    returning_sessions = sessions
+                    returning_engagement_rate = engagement
+            
+            total_users = new_users + returning_users
+            retention_rate = (returning_users / total_users * 100) if total_users > 0 else 0
+            
+            return {
+                "new_users": new_users,
+                "returning_users": returning_users,
+                "new_sessions": new_sessions,
+                "returning_sessions": returning_sessions,
+                "retention_rate": round(retention_rate, 2),
+                "new_engagement_rate": round(new_engagement_rate, 2),
+                "returning_engagement_rate": round(returning_engagement_rate, 2),
+            }
+        except Exception as e:
+            logger.error(f"Error fetching user retention: {e}")
+            return {
+                "new_users": 0,
+                "returning_users": 0,
+                "new_sessions": 0,
+                "returning_sessions": 0,
+                "retention_rate": 0,
+                "new_engagement_rate": 0,
+                "returning_engagement_rate": 0,
+            }
+
+    def _get_geographic_performance(self, start_date: date, end_date: date) -> Dict[str, Any]:
+        """Fetch geographic performance metrics (users by country/city)."""
+        try:
+            # Get users by country
+            country_request = RunReportRequest(
+                property=f"properties/{self.property_id}",
+                date_ranges=[DateRange(
+                    start_date=start_date.strftime("%Y-%m-%d"),
+                    end_date=end_date.strftime("%Y-%m-%d")
+                )],
+                dimensions=[Dimension(name="country")],
+                metrics=[Metric(name="totalUsers"), Metric(name="conversions")],
+                order_bys=[{"metric": {"metric_name": "totalUsers"}, "desc": True}],
+                limit=10
+            )
+            
+            country_response = self.client.run_report(country_request)
+            
+            top_countries = []
+            for row in country_response.rows:
+                country = row.dimension_values[0].value
+                users = int(row.metric_values[0].value)
+                conversions = int(float(row.metric_values[1].value))
+                
+                top_countries.append({
+                    "country": country,
+                    "users": users,
+                    "conversions": conversions,
+                    "conversion_rate": round((conversions / users * 100) if users > 0 else 0, 2)
+                })
+            
+            # Get users by city (top 10)
+            city_request = RunReportRequest(
+                property=f"properties/{self.property_id}",
+                date_ranges=[DateRange(
+                    start_date=start_date.strftime("%Y-%m-%d"),
+                    end_date=end_date.strftime("%Y-%m-%d")
+                )],
+                dimensions=[Dimension(name="city")],
+                metrics=[Metric(name="totalUsers")],
+                order_bys=[{"metric": {"metric_name": "totalUsers"}, "desc": True}],
+                limit=10
+            )
+            
+            city_response = self.client.run_report(city_request)
+            
+            top_cities = []
+            for row in city_response.rows:
+                city = row.dimension_values[0].value
+                users = int(row.metric_values[0].value)
+                
+                top_cities.append({
+                    "city": city,
+                    "users": users
+                })
+            
+            return {
+                "top_countries": top_countries,
+                "top_cities": top_cities
+            }
+        except Exception as e:
+            logger.error(f"Error fetching geographic performance: {e}")
+            return {
+                "top_countries": [],
+                "top_cities": []
+            }
+
     @staticmethod
     def _build_conversion_paths(conversions_by_source: Dict[str, int]) -> List[Dict[str, Any]]:
         """Build simple conversion-path snippets from source data."""
@@ -342,6 +483,19 @@ class GA4Service:
             "conversion_paths": [],
             "sessions_by_medium": [],
             "top_pages": [],
+            "user_retention": {
+                "new_users": 0,
+                "returning_users": 0,
+                "new_sessions": 0,
+                "returning_sessions": 0,
+                "retention_rate": 0,
+                "new_engagement_rate": 0,
+                "returning_engagement_rate": 0,
+            },
+            "geographic_performance": {
+                "top_countries": [],
+                "top_cities": []
+            },
             "not_configured": True,
             "message": "GA4 not configured. Add service account to your GA4 property."
         }
