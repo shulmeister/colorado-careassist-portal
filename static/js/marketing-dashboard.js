@@ -2190,8 +2190,13 @@
         let displayText = label;
 
         if (start && end) {
-            const startDate = new Date(start);
-            const endDate = new Date(end);
+            // Parse date strings as local dates (YYYY-MM-DD format)
+            const parseLocalDate = (dateStr) => {
+                const [year, month, day] = dateStr.split('-').map(Number);
+                return new Date(year, month - 1, day);
+            };
+            const startDate = parseLocalDate(start);
+            const endDate = parseLocalDate(end);
             displayText = `${label} (${formatShortDate(startDate)} - ${formatShortDate(endDate)})`;
         }
 
