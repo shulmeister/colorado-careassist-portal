@@ -11,7 +11,7 @@ The Marketing Dashboard has multiple API integrations. Here's the current status
 
 | Service | Status | Notes |
 |---------|--------|-------|
-| **Google Ads** | ⚠️ **NOT CONFIGURED** | Missing developer token and refresh token |
+| **Google Ads** | ✅ **CONFIGURED** | All credentials set, code fix deployed |
 | **Facebook Ads** | ✅ **CONFIGURED** | Has access token and account ID |
 | **Facebook Social** | ✅ **CONFIGURED** | Has access token and page ID |
 | **GA4** | ✅ **CONFIGURED** | Has property ID, needs service account JSON verification |
