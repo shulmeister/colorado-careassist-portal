@@ -153,6 +153,7 @@ class BrevoMarketingService:
                 campaign_detail = self._request("GET", f"/emailCampaigns/{campaign_id}")
                 stats = campaign_detail.get("statistics", {})
                 global_stats = stats.get("globalStats", {}) if stats else {}
+                logger.info(f"Campaign {campaign_id} detail: globalStats keys={list(global_stats.keys())}, sent={global_stats.get('sent')}, delivered={global_stats.get('delivered')}, uniqueViews={global_stats.get('uniqueViews')}")
             except (requests.HTTPError, KeyError, Exception) as exc:
                 logger.warning(f"Could not fetch details for campaign {campaign_id}: {exc}")
                 # Fallback to list endpoint data (may be incomplete)
