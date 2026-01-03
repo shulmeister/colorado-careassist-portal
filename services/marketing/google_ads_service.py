@@ -72,17 +72,23 @@ class GoogleAdsService:
 
         try:
             ga_service = client.get_service("GoogleAdsService")
+            
+            # First, try to get the correct customer ID if we're using a Manager Account
+            actual_customer_id = self._get_actual_customer_id(client, ga_service)
+            if not actual_customer_id:
+                logger.warning("Could not determine actual customer ID, using configured ID")
+                actual_customer_id = self.customer_id
 
-            daily, currency_code = self._fetch_daily_breakdown(ga_service, start_str, end_str)
+            daily, currency_code = self._fetch_daily_breakdown(ga_service, start_str, end_str, actual_customer_id)
             if not daily:
                 logger.warning("Google Ads daily breakdown returned no rows")
                 return self._get_placeholder_metrics(start_date, end_date)
 
             overview = self._build_overview_from_daily(daily, start_date, end_date)
-            campaigns = self._fetch_campaigns(ga_service, start_str, end_str)
-            quality_scores = self._fetch_quality_scores(ga_service, start_str, end_str)
-            search_terms = self._fetch_search_terms(ga_service, start_str, end_str)
-            device_performance = self._fetch_device_performance(ga_service, start_str, end_str)
+            campaigns = self._fetch_campaigns(ga_service, start_str, end_str, actual_customer_id)
+            quality_scores = self._fetch_quality_scores(ga_service, start_str, end_str, actual_customer_id)
+            search_terms = self._fetch_search_terms(ga_service, start_str, end_str, actual_customer_id)
+            device_performance = self._fetch_device_performance(ga_service, start_str, end_str, actual_customer_id)
 
             overview["spend"]["daily"] = daily
             overview["campaigns"] = campaigns
@@ -252,7 +258,34 @@ class GoogleAdsService:
 
         return None
 
-    def _fetch_daily_breakdown(self, ga_service, start: str, end: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    def _get_actual_customer_id(self, client, ga_service) -> Optional[str]:
+        """
+        If using a Manager Account, list accessible accounts and use the first one.
+        Otherwise, return the configured customer_id.
+        """
+        if not self.login_customer_id:
+            # Not using Manager Account, return configured ID
+            return self.customer_id
+        
+        try:
+            # List accessible accounts from Manager Account
+            customer_service = client.get_service("CustomerService")
+            accessible_customers = customer_service.list_accessible_customers()
+            
+            if accessible_customers.resource_names:
+                # Get the first accessible account ID (remove 'customers/' prefix)
+                first_account = accessible_customers.resource_names[0]
+                account_id = first_account.replace('customers/', '').replace('-', '')
+                logger.info(f"Found accessible account: {account_id}")
+                return account_id
+        except Exception as e:
+            logger.warning(f"Could not list accessible customers, using configured ID: {e}")
+        
+        return self.customer_id
+    
+    def _fetch_daily_breakdown(self, ga_service, start: str, end: str, customer_id: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        if not customer_id:
+            customer_id = self.customer_id
         # Query from customer_performance_view to get date-segmented metrics at account level
         # Include all important search KPIs
         query = f"""
@@ -280,13 +313,13 @@ class GoogleAdsService:
         
         try:
             # Try search_stream first (preferred for large datasets)
-            response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+            response = ga_service.search_stream(customer_id=customer_id, query=query)
             response_type = 'stream'
         except Exception as e:
             logger.warning(f"search_stream failed, trying search: {e}")
             try:
                 # Fallback to search method
-                response = ga_service.search(customer_id=self.customer_id, query=query)
+                response = ga_service.search(customer_id=customer_id, query=query)
                 response_type = 'search'
             except Exception as e2:
                 logger.error(f"Both search_stream and search failed: {e2}")
@@ -305,7 +338,7 @@ class GoogleAdsService:
                     ORDER BY segments.date
                 """
                 try:
-                    response = ga_service.search(customer_id=self.customer_id, query=query_alt)
+                    response = ga_service.search(customer_id=customer_id, query=query_alt)
                     response_type = 'search'
                 except Exception as e3:
                     logger.error(f"Alternative query also failed: {e3}")
@@ -369,7 +402,9 @@ class GoogleAdsService:
 
         return breakdown, currency_code
 
-    def _fetch_quality_scores(self, ga_service, start: str, end: str) -> Dict[str, Any]:
+    def _fetch_quality_scores(self, ga_service, start: str, end: str, customer_id: Optional[str] = None) -> Dict[str, Any]:
+        if not customer_id:
+            customer_id = self.customer_id
         """
         Fetch Quality Score metrics for the account.
         
@@ -395,7 +430,7 @@ class GoogleAdsService:
         ctr_scores = []
         
         try:
-            response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+            response = ga_service.search_stream(customer_id=customer_id, query=query)
             
             for batch in response:
                 for row in batch.results:
@@ -431,7 +466,9 @@ class GoogleAdsService:
             "keywords_analyzed": len(quality_scores)
         }
     
-    def _fetch_device_performance(self, ga_service, start: str, end: str) -> Dict[str, Any]:
+    def _fetch_device_performance(self, ga_service, start: str, end: str, customer_id: Optional[str] = None) -> Dict[str, Any]:
+        if not customer_id:
+            customer_id = self.customer_id
         """
         Fetch performance metrics broken down by device type.
         
@@ -457,7 +494,7 @@ class GoogleAdsService:
         }
         
         try:
-            response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+            response = ga_service.search_stream(customer_id=customer_id, query=query)
             
             for batch in response:
                 for row in batch.results:
@@ -501,7 +538,9 @@ class GoogleAdsService:
         
         return result
 
-    def _fetch_search_terms(self, ga_service, start: str, end: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def _fetch_search_terms(self, ga_service, start: str, end: str, customer_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        if not customer_id:
+            customer_id = self.customer_id
         """
         Fetch search terms report showing what people actually searched for.
         
@@ -525,7 +564,7 @@ class GoogleAdsService:
         search_terms = []
         
         try:
-            response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+            response = ga_service.search_stream(customer_id=customer_id, query=query)
             
             for batch in response:
                 for row in batch.results:
@@ -554,7 +593,9 @@ class GoogleAdsService:
         
         return search_terms
 
-    def _fetch_campaigns(self, ga_service, start: str, end: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def _fetch_campaigns(self, ga_service, start: str, end: str, customer_id: Optional[str] = None, limit: int = 50) -> List[Dict[str, Any]]:
+        if not customer_id:
+            customer_id = self.customer_id
         # Fetch only ACTIVE/ENABLED campaigns by default - prioritize active campaigns
         query = f"""
             SELECT
