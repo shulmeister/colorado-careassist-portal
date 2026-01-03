@@ -169,13 +169,9 @@
         presetSelectIds.forEach((id) => {
             const select = document.getElementById(id);
             if (!select) return;
-            // Remove any existing event listeners by cloning the element
-            const newSelect = select.cloneNode(true);
-            select.parentNode.replaceChild(newSelect, select);
-            // Add the event listener to the new element
-            newSelect.addEventListener('change', (event) => {
+            select.addEventListener('change', function(event) {
                 event.preventDefault();
-                const preset = newSelect.value;
+                const preset = this.value;
                 state.preset = preset;
                 syncPresetSelectors(preset);
                 fetchDashboardData(preset);
