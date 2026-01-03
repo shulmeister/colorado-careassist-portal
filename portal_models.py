@@ -186,6 +186,47 @@ class MarketingMetricSnapshot(Base):
         }
 
 
+class BrevoWebhookEvent(Base):
+    """
+    Store Brevo marketing webhook events for metrics aggregation.
+    Uses webhooks for real-time event data (opens, clicks, unsubscribes, etc.)
+    """
+    __tablename__ = "brevo_webhook_events"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    webhook_id = Column(Integer, nullable=True, index=True)  # Brevo webhook event ID (for deduplication)
+    event_type = Column(String(50), nullable=False, index=True)  # delivered, opened, click, hardBounce, softBounce, spam, unsubscribed
+    email = Column(String(255), nullable=False, index=True)
+    campaign_id = Column(Integer, nullable=True, index=True)
+    campaign_name = Column(String(255), nullable=True)
+    date_sent = Column(DateTime, nullable=True)
+    date_event = Column(DateTime, nullable=True, index=True)
+    click_url = Column(Text, nullable=True)  # For click events
+    event_metadata = Column(Text, nullable=True)  # JSON-encoded additional data (metadata is reserved in SQLAlchemy)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        metadata_json = {}
+        if self.event_metadata:
+            try:
+                metadata_json = json.loads(self.event_metadata)
+            except Exception:
+                pass
+        return {
+            "id": self.id,
+            "webhook_id": self.webhook_id,
+            "event_type": self.event_type,
+            "email": self.email,
+            "campaign_id": self.campaign_id,
+            "campaign_name": self.campaign_name,
+            "date_sent": self.date_sent.isoformat() if self.date_sent else None,
+            "date_event": self.date_event.isoformat() if self.date_event else None,
+            "click_url": self.click_url,
+            "metadata": metadata_json,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
 class OAuthToken(Base):
     """Store OAuth tokens for external service integrations"""
     __tablename__ = "oauth_tokens"

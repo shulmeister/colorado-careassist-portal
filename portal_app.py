@@ -13,7 +13,7 @@ import httpx
 from urllib.parse import urlencode, quote_plus, urljoin
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
-from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher
+from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher, BrevoWebhookEvent
 from services.marketing.metrics_service import (
     get_social_metrics,
     get_ads_metrics,
@@ -1370,12 +1370,106 @@ async def api_marketing_ads(
     })
 
 
+@app.post("/api/marketing/brevo-webhook")
+async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook endpoint for Brevo marketing email events.
+    Stores events for real-time metrics aggregation (hybrid model: webhooks + API).
+    
+    Events: delivered, opened, click, hardBounce, softBounce, spam, unsubscribed
+    """
+    try:
+        data = await request.json()
+        logger.info(f"Brevo marketing webhook received: {data.get('event', 'unknown')} for {data.get('email', 'unknown')}")
+        
+        # Extract webhook data
+        event_type = data.get("event")
+        recipient_email = data.get("email", "").lower().strip()
+        webhook_id = data.get("id")
+        campaign_id = data.get("camp_id")
+        campaign_name = data.get("campaign name", "Unknown Campaign")
+        date_sent_str = data.get("date_sent")
+        date_event_str = data.get("date_event")
+        click_url = data.get("URL") if event_type == "click" else None
+        
+        if not recipient_email:
+            logger.warning("No email address in Brevo webhook")
+            return JSONResponse({"status": "error", "reason": "no email address"})
+        
+        # Parse dates
+        date_sent = None
+        date_event = None
+        try:
+            if date_sent_str:
+                date_sent = datetime.strptime(date_sent_str, "%Y-%m-%d %H:%M:%S")
+            if date_event_str:
+                date_event = datetime.strptime(date_event_str, "%Y-%m-%d %H:%M:%S")
+        except Exception as e:
+            logger.warning(f"Error parsing dates: {e}")
+        
+        # Check for duplicate webhook events
+        if webhook_id:
+            existing = db.query(BrevoWebhookEvent).filter(
+                BrevoWebhookEvent.webhook_id == webhook_id
+            ).first()
+            
+            if existing:
+                logger.debug(f"Brevo webhook event already processed: webhook ID {webhook_id}")
+                return JSONResponse({
+                    "status": "success",
+                    "logged": False,
+                    "reason": "duplicate"
+                })
+        
+        # Store metadata as JSON
+        import json as json_lib
+        metadata = {
+            "ts_sent": data.get("ts_sent"),
+            "ts_event": data.get("ts_event"),
+            "tag": data.get("tag"),
+            "segment_ids": data.get("segment_ids"),
+        }
+        if event_type in ["hard_bounce", "soft_bounce", "spam"]:
+            metadata["reason"] = data.get("reason")
+        
+        # Create webhook event record
+        webhook_event = BrevoWebhookEvent(
+            webhook_id=webhook_id,
+            event_type=event_type,
+            email=recipient_email,
+            campaign_id=campaign_id,
+            campaign_name=campaign_name,
+            date_sent=date_sent,
+            date_event=date_event or datetime.utcnow(),
+            click_url=click_url,
+            event_metadata=json_lib.dumps(metadata) if metadata else None,
+        )
+        
+        db.add(webhook_event)
+        db.commit()
+        db.refresh(webhook_event)
+        
+        logger.info(f"Stored Brevo webhook event: {event_type} for {recipient_email} (campaign {campaign_id})")
+        
+        return JSONResponse({
+            "status": "success",
+            "logged": True,
+            "event": event_type,
+            "webhook_event_id": webhook_event.id
+        })
+        
+    except Exception as e:
+        logger.error(f"Error processing Brevo marketing webhook: {e}", exc_info=True)
+        db.rollback()
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
 @app.get("/api/marketing/email")
 async def api_marketing_email(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
 ):
-    """Return email marketing metrics (Mailchimp)."""
+    """Return email marketing metrics (Brevo + Mailchimp) using hybrid model (webhooks + API)."""
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
 

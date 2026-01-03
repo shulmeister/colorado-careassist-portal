@@ -149,26 +149,35 @@ def get_ads_metrics(start: date, end: date, compare: Optional[str] = None) -> Di
 
 def get_email_metrics(start: date, end: date) -> Dict[str, Any]:
     """
-    Fetch email marketing metrics from Brevo (primary) and Mailchimp (legacy).
+    Fetch email marketing metrics using HYBRID MODEL (webhooks + API).
     
     Strategy:
-    - Brevo: Used for new campaigns (Dec 2025+)
-    - Mailchimp: Used for historical campaigns (pre-Dec 2025)
-    - Results are merged, with Brevo metrics taking precedence for overlapping periods
+    - Webhooks: Real-time event data (opens, clicks, unsubscribes, bounces) - stored in database
+    - API: Aggregate metrics (campaign overview, historical data, total counts)
+    - Brevo: Primary service (Dec 2025+)
+    - Mailchimp: Legacy service (pre-Dec 2025)
+    
+    Hybrid approach:
+    1. Aggregate webhook events for real-time opens/clicks/unsubscribes
+    2. Use API for campaign counts, total contacts, and historical data
+    3. Combine both sources for complete picture
     """
     if not USE_REAL_DATA:
         logger.info("Using placeholder email metrics (real data disabled)")
         return brevo_marketing_service.get_placeholder_metrics(start, end)
 
+    # Aggregate webhook events (real-time data)
+    webhook_metrics = _aggregate_webhook_events(start, end)
+    
     brevo_metrics = None
     mailchimp_metrics = None
     
-    # Try Brevo first (primary email service going forward)
+    # Try Brevo API (for aggregate metrics)
     try:
         brevo_metrics = brevo_marketing_service.get_email_metrics(start, end)
-        logger.info(f"Brevo: {brevo_metrics.get('summary', {}).get('campaigns_sent', 0)} campaigns")
+        logger.info(f"Brevo API: {brevo_metrics.get('summary', {}).get('campaigns_sent', 0)} campaigns")
     except Exception as exc:
-        logger.warning("Error fetching Brevo metrics: %s", exc)
+        logger.warning("Error fetching Brevo API metrics: %s", exc)
     
     # Also fetch Mailchimp for historical data
     try:
@@ -177,8 +186,139 @@ def get_email_metrics(start: date, end: date) -> Dict[str, Any]:
     except Exception as exc:
         logger.warning("Error fetching Mailchimp metrics: %s", exc)
     
-    # Merge the results
-    return _merge_email_metrics(brevo_metrics, mailchimp_metrics, start, end)
+    # Merge API data, then enhance with webhook data
+    merged_metrics = _merge_email_metrics(brevo_metrics, mailchimp_metrics, start, end)
+    
+    # Enhance with webhook data (real-time events take precedence for opens/clicks)
+    if webhook_metrics:
+        merged_metrics = _enhance_with_webhook_data(merged_metrics, webhook_metrics, start, end)
+    
+    return merged_metrics
+
+
+def _aggregate_webhook_events(start: date, end: date) -> Optional[Dict[str, Any]]:
+    """
+    Aggregate Brevo webhook events from database for real-time metrics.
+    
+    Returns metrics calculated from stored webhook events:
+    - Opens (opened events)
+    - Clicks (click events)
+    - Unsubscribes (unsubscribed events)
+    - Bounces (hardBounce + softBounce events)
+    - Delivered (delivered events - for sent count)
+    """
+    try:
+        from portal_database import db_manager
+        from portal_models import BrevoWebhookEvent
+        from datetime import datetime
+        
+        db = db_manager.get_session()
+        try:
+            # Query webhook events in date range
+            events = db.query(BrevoWebhookEvent).filter(
+                BrevoWebhookEvent.date_event >= datetime.combine(start, datetime.min.time()),
+                BrevoWebhookEvent.date_event <= datetime.combine(end, datetime.max.time())
+            ).all()
+            
+            if not events:
+                logger.debug(f"No webhook events found for {start} to {end}")
+                return None
+            
+            # Aggregate by event type
+            opens = sum(1 for e in events if e.event_type == "opened")
+            clicks = sum(1 for e in events if e.event_type == "click")
+            unsubscribes = sum(1 for e in events if e.event_type == "unsubscribed")
+            hard_bounces = sum(1 for e in events if e.event_type == "hardBounce")
+            soft_bounces = sum(1 for e in events if e.event_type == "softBounce")
+            delivered = sum(1 for e in events if e.event_type == "delivered")
+            spam = sum(1 for e in events if e.event_type == "spam")
+            
+            total_bounces = hard_bounces + soft_bounces
+            emails_sent = delivered  # Use delivered events as proxy for sent
+            
+            # Calculate unique opens/clicks by email address
+            unique_opens = len(set(e.email for e in events if e.event_type == "opened"))
+            unique_clicks = len(set(e.email for e in events if e.event_type == "click"))
+            
+            # Get unique campaigns
+            campaigns = set(e.campaign_id for e in events if e.campaign_id)
+            
+            logger.info(f"Webhook aggregation: {len(events)} events, {emails_sent} sent, {opens} opens, {clicks} clicks")
+            
+            return {
+                "emails_sent": emails_sent,
+                "opens": opens,
+                "unique_opens": unique_opens,
+                "clicks": clicks,
+                "unique_clicks": unique_clicks,
+                "unsubscribes": unsubscribes,
+                "bounces": total_bounces,
+                "hard_bounces": hard_bounces,
+                "soft_bounces": soft_bounces,
+                "spam": spam,
+                "campaigns_count": len(campaigns),
+                "events_count": len(events),
+                "source": "webhooks"
+            }
+        finally:
+            db.close()
+    except Exception as exc:
+        logger.warning(f"Error aggregating webhook events: {exc}")
+        return None
+
+
+def _enhance_with_webhook_data(
+    api_metrics: Dict[str, Any],
+    webhook_metrics: Dict[str, Any],
+    start: date,
+    end: date
+) -> Dict[str, Any]:
+    """
+    Enhance API metrics with webhook data.
+    Webhook data (real-time events) takes precedence for opens/clicks.
+    API data provides campaign counts and total contacts.
+    """
+    summary = api_metrics.get("summary", {})
+    
+    # Use webhook data for opens/clicks (more accurate, real-time)
+    webhook_opens = webhook_metrics.get("opens", 0)
+    webhook_clicks = webhook_metrics.get("clicks", 0)
+    webhook_sent = webhook_metrics.get("emails_sent", 0)
+    
+    # Use API for campaign counts and total contacts (API is authoritative)
+    api_sent = summary.get("emails_sent", 0)
+    api_campaigns = summary.get("campaigns_sent", 0)
+    
+    # Prefer webhook sent count if available, otherwise use API
+    total_sent = webhook_sent if webhook_sent > 0 else api_sent
+    
+    # Calculate rates using webhook events (more accurate)
+    if total_sent > 0:
+        open_rate = (webhook_opens / total_sent) * 100
+        click_rate = (webhook_clicks / total_sent) * 100
+    else:
+        open_rate = summary.get("open_rate", 0)
+        click_rate = summary.get("click_rate", 0)
+    
+    # Use API for delivery rate (API calculates this from bounces)
+    delivery_rate = summary.get("delivery_rate", 0)
+    
+    # Update summary with hybrid data
+    enhanced_summary = summary.copy()
+    enhanced_summary.update({
+        "emails_sent": total_sent,
+        "open_rate": round(open_rate, 2),
+        "click_rate": round(click_rate, 2),
+        "opens": webhook_opens,  # Add absolute numbers
+        "clicks": webhook_clicks,
+    })
+    
+    api_metrics["summary"] = enhanced_summary
+    api_metrics["source"] = "hybrid"  # Mark as hybrid
+    api_metrics["sources"] = api_metrics.get("sources", {})
+    api_metrics["sources"]["webhooks"] = "real-time_events"
+    
+    return api_metrics
 
 
 def _merge_email_metrics(
