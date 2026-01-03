@@ -56,7 +56,7 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 - **Tech**: Jinja2 template, Chart.js, FastAPI routes (integrated into portal)
 - **Git Structure**: Nested git repo (has its own `.git` folder)
 - **Portal Route**: `/marketing` (built-in route in portal_app.py)
-- **Features**: Social media metrics, Google Ads, GA4, GBP analytics
+- **Features**: Social media metrics, Google Ads, GA4, GBP analytics, Email marketing (Brevo)
 
 #### 4. Activity Tracker
 - **Repository**: `Colorado-CareAssist-Route-Tracker` (nested repo)
@@ -192,6 +192,8 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
    RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
    RINGCENTRAL_EMBED_DEFAULT_TAB=messages
    RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
+   # Marketing Dashboard APIs
+   BREVO_API_KEY=your_brevo_api_key
    ```
    > ⚠️ Only the RingCentral browser app's client ID is used in the portal. Store your client secret securely and never commit it to source control.
 
@@ -249,6 +251,8 @@ The app is configured for Heroku deployment:
    heroku config:set RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
    heroku config:set RINGCENTRAL_EMBED_DEFAULT_TAB=messages
    heroku config:set RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
+   # Marketing Dashboard APIs
+   heroku config:set BREVO_API_KEY=your_brevo_api_key
    ```
 
 2. **Add PostgreSQL**
