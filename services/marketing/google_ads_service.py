@@ -253,6 +253,7 @@ class GoogleAdsService:
         return None
 
     def _fetch_daily_breakdown(self, ga_service, start: str, end: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        # Query from campaign to get date-segmented metrics
         query = f"""
             SELECT
               customer.currency_code,
@@ -262,7 +263,7 @@ class GoogleAdsService:
               metrics.impressions,
               metrics.conversions,
               metrics.conversions_value
-            FROM customer
+            FROM campaign
             WHERE segments.date BETWEEN '{start}' AND '{end}'
             ORDER BY segments.date
         """
