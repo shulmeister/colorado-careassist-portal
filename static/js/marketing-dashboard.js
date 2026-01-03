@@ -381,6 +381,19 @@
         const roasValue = safeNumber(google.efficiency?.roas);
         setText('googleRoasMetric', roasValue !== null ? `${roasValue.toFixed(2)}x` : '—');
         updatePill('googleRoasSummary', roasValue !== null ? `ROAS ${roasValue.toFixed(2)}x` : 'ROAS —');
+        
+        // New search KPIs
+        const convRate = safeNumber(google.efficiency?.conversion_rate);
+        setText('googleConversionRate', convRate !== null ? `${convRate.toFixed(2)}%` : '—');
+        
+        const searchIS = safeNumber(google.efficiency?.search_impression_share);
+        setText('googleSearchIS', searchIS !== null ? `${searchIS.toFixed(1)}%` : '—');
+        
+        const rankLostIS = safeNumber(google.efficiency?.search_rank_lost_impression_share);
+        setText('googleRankLostIS', rankLostIS !== null ? `${rankLostIS.toFixed(1)}%` : '—');
+        
+        const budgetLostIS = safeNumber(google.efficiency?.search_budget_lost_impression_share);
+        setText('googleBudgetLostIS', budgetLostIS !== null ? `${budgetLostIS.toFixed(1)}%` : '—');
 
         const costPerConv = safeNumber(google.efficiency?.cost_per_conversion);
         updatePill(
@@ -507,10 +520,12 @@
         const googleBody = document.getElementById('googleCampaignsTable');
         if (googleBody) {
             if (!googleCampaigns.length) {
-                googleBody.innerHTML = `<tr><td colspan="6" class="empty-state-text">No Google Ads campaigns found</td></tr>`;
+                googleBody.innerHTML = `<tr><td colspan="8" class="empty-state-text">No active Google Ads campaigns found</td></tr>`;
             } else {
-                googleBody.innerHTML = googleCampaigns.slice(0, 6).map((campaign, index) => {
+                googleBody.innerHTML = googleCampaigns.slice(0, 10).map((campaign, index) => {
                     const roasText = campaign.roas ? `${campaign.roas.toFixed(2)}x` : '—';
+                    const convRateText = campaign.conversion_rate !== undefined ? `${campaign.conversion_rate.toFixed(2)}%` : '—';
+                    const searchISText = campaign.search_impression_share !== undefined ? `${campaign.search_impression_share.toFixed(1)}%` : '—';
                     return `
                         <tr class="campaign-row" data-source="google" data-index="${index}">
                             <td>${index + 1}</td>
@@ -521,7 +536,9 @@
                             <td>${formatCurrency(campaign.spend, 2)}</td>
                             <td>${formatNumber(campaign.clicks)}</td>
                             <td>${formatNumber(campaign.conversions)}</td>
+                            <td>${convRateText}</td>
                             <td>${roasText}</td>
+                            <td>${searchISText}</td>
                         </tr>
                     `;
                 }).join('');

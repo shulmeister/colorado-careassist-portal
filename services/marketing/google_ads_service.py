@@ -254,6 +254,7 @@ class GoogleAdsService:
 
     def _fetch_daily_breakdown(self, ga_service, start: str, end: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         # Query from customer_performance_view to get date-segmented metrics at account level
+        # Include all important search KPIs
         query = f"""
             SELECT
               customer.currency_code,
@@ -262,7 +263,13 @@ class GoogleAdsService:
               metrics.clicks,
               metrics.impressions,
               metrics.conversions,
-              metrics.conversions_value
+              metrics.conversions_value,
+              metrics.ctr,
+              metrics.average_cpc,
+              metrics.conversion_rate,
+              metrics.search_impression_share,
+              metrics.search_rank_lost_impression_share,
+              metrics.search_budget_lost_impression_share
             FROM customer_performance_view
             WHERE segments.date BETWEEN '{start}' AND '{end}'
             ORDER BY segments.date
@@ -336,6 +343,12 @@ class GoogleAdsService:
                 impressions = self._safe_int(getattr(row.metrics, "impressions", 0))
                 conversions = self._safe_float(getattr(row.metrics, "conversions", 0.0))
                 conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
+                ctr = self._safe_float(getattr(row.metrics, "ctr", 0.0))
+                avg_cpc = self._safe_float(getattr(row.metrics, "average_cpc", 0.0))
+                conversion_rate = self._safe_float(getattr(row.metrics, "conversion_rate", 0.0))
+                search_impression_share = self._safe_float(getattr(row.metrics, "search_impression_share", 0.0))
+                search_rank_lost_is = self._safe_float(getattr(row.metrics, "search_rank_lost_impression_share", 0.0))
+                search_budget_lost_is = self._safe_float(getattr(row.metrics, "search_budget_lost_impression_share", 0.0))
 
                 breakdown.append({
                     "date": row.segments.date,
@@ -346,6 +359,12 @@ class GoogleAdsService:
                     "conversion_value": round(conversion_value, 2),
                     "roas": round(self._safe_divide(conversion_value, spend), 2),
                     "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
+                    "ctr": round(ctr * 100, 2),
+                    "cpc": round(avg_cpc, 2) if avg_cpc > 0 else round(self._safe_divide(spend, clicks), 2),
+                    "conversion_rate": round(conversion_rate * 100, 2),
+                    "search_impression_share": round(search_impression_share * 100, 2),
+                    "search_rank_lost_is": round(search_rank_lost_is * 100, 2),
+                    "search_budget_lost_is": round(search_budget_lost_is * 100, 2),
                 })
 
         return breakdown, currency_code
@@ -535,7 +554,8 @@ class GoogleAdsService:
         
         return search_terms
 
-    def _fetch_campaigns(self, ga_service, start: str, end: str, limit: int = 12) -> List[Dict[str, Any]]:
+    def _fetch_campaigns(self, ga_service, start: str, end: str, limit: int = 50) -> List[Dict[str, Any]]:
+        # Fetch only ACTIVE/ENABLED campaigns by default - prioritize active campaigns
         query = f"""
             SELECT
               campaign.id,
@@ -547,10 +567,15 @@ class GoogleAdsService:
               metrics.impressions,
               metrics.conversions,
               metrics.conversions_value,
-              metrics.ctr
+              metrics.ctr,
+              metrics.average_cpc,
+              metrics.conversion_rate,
+              metrics.search_impression_share,
+              metrics.search_rank_lost_impression_share,
+              metrics.search_budget_lost_impression_share
             FROM campaign
             WHERE segments.date BETWEEN '{start}' AND '{end}'
-              AND campaign.status != 'REMOVED'
+              AND campaign.status = 'ENABLED'
             ORDER BY metrics.cost_micros DESC
             LIMIT {limit}
         """
@@ -565,6 +590,11 @@ class GoogleAdsService:
                 conversions = self._safe_float(getattr(row.metrics, "conversions", 0.0))
                 conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
                 ctr = self._safe_float(getattr(row.metrics, "ctr", 0.0))
+                avg_cpc = self._safe_float(getattr(row.metrics, "average_cpc", 0.0))
+                conversion_rate = self._safe_float(getattr(row.metrics, "conversion_rate", 0.0))
+                search_impression_share = self._safe_float(getattr(row.metrics, "search_impression_share", 0.0))
+                search_rank_lost_is = self._safe_float(getattr(row.metrics, "search_rank_lost_impression_share", 0.0))
+                search_budget_lost_is = self._safe_float(getattr(row.metrics, "search_budget_lost_impression_share", 0.0))
 
                 campaigns.append(
                     {
@@ -580,9 +610,13 @@ class GoogleAdsService:
                         "conversions": conversions,
                         "conversion_value": round(conversion_value, 2),
                         "ctr": round(ctr, 2),
-                        "cpc": round(self._safe_divide(spend, clicks), 2),
+                        "cpc": round(self._safe_divide(spend, clicks), 2) if clicks > 0 else round(avg_cpc, 2),
                         "roas": round(self._safe_divide(conversion_value, spend), 2),
                         "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
+                        "conversion_rate": round(conversion_rate * 100, 2),
+                        "search_impression_share": round(search_impression_share * 100, 2),
+                        "search_rank_lost_is": round(search_rank_lost_is * 100, 2),
+                        "search_budget_lost_is": round(search_budget_lost_is * 100, 2),
                     }
                 )
 
@@ -598,7 +632,11 @@ class GoogleAdsService:
             "impressions": 0,
             "conversions": 0.0,
             "conversion_value": 0.0,
+            "search_impression_share": 0.0,
+            "search_rank_lost_is": 0.0,
+            "search_budget_lost_is": 0.0,
         }
+        daily_count = 0
 
         for entry in daily:
             totals["spend"] += entry.get("spend", 0.0)
@@ -606,6 +644,12 @@ class GoogleAdsService:
             totals["impressions"] += entry.get("impressions", 0)
             totals["conversions"] += entry.get("conversions", 0.0)
             totals["conversion_value"] += entry.get("conversion_value", 0.0)
+            # Average impression share metrics across days
+            if entry.get("search_impression_share") is not None:
+                totals["search_impression_share"] += entry.get("search_impression_share", 0.0)
+                totals["search_rank_lost_is"] += entry.get("search_rank_lost_is", 0.0)
+                totals["search_budget_lost_is"] += entry.get("search_budget_lost_is", 0.0)
+                daily_count += 1
 
         cost = totals["spend"]
         clicks = totals["clicks"]
@@ -620,6 +664,11 @@ class GoogleAdsService:
         cost_per_conversion = self._safe_divide(cost, conversions)
         roas = self._safe_divide(conversion_value, cost)
         conversion_rate = self._safe_divide(conversions, clicks) * 100
+        
+        # Average impression share metrics
+        avg_search_is = self._safe_divide(totals["search_impression_share"], daily_count) if daily_count > 0 else 0.0
+        avg_rank_lost_is = self._safe_divide(totals["search_rank_lost_is"], daily_count) if daily_count > 0 else 0.0
+        avg_budget_lost_is = self._safe_divide(totals["search_budget_lost_is"], daily_count) if daily_count > 0 else 0.0
 
         return {
             "currency_code": self.currency_code,
@@ -641,6 +690,9 @@ class GoogleAdsService:
                 "cost_per_conversion": round(cost_per_conversion, 2),
                 "roas": round(roas, 2),
                 "conversion_rate": round(conversion_rate, 2),
+                "search_impression_share": round(avg_search_is, 2),
+                "search_rank_lost_impression_share": round(avg_rank_lost_is, 2),
+                "search_budget_lost_impression_share": round(avg_budget_lost_is, 2),
             },
             "campaigns": [],
         }
