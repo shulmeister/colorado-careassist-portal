@@ -165,11 +165,19 @@ class BrevoMarketingService:
                 global_stats = stats.get("globalStats", {}) if stats else {}
             
             # Brevo uses 'uniqueViews' for opens, 'uniqueClicks' for clicks
+            # Try multiple sources for emails_sent count
             emails_sent = (
                 global_stats.get("sent", 0) 
                 or global_stats.get("delivered", 0)
-                or campaign.get("recipients", {}).get("totalRecipients", 0)
             )
+            
+            # If statistics are zero, try to get recipient count from campaign object
+            if emails_sent == 0:
+                recipients = campaign_detail.get("recipients", {}) if 'campaign_detail' in locals() else campaign.get("recipients", {})
+                if isinstance(recipients, dict):
+                    emails_sent = recipients.get("totalRecipients", 0) or recipients.get("total", 0)
+                elif isinstance(recipients, (int, float)):
+                    emails_sent = int(recipients)
             opens = global_stats.get("uniqueViews", 0) or global_stats.get("viewed", 0)
             clicks = global_stats.get("uniqueClicks", 0) or global_stats.get("clickers", 0)
             bounces = (
