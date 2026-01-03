@@ -152,6 +152,11 @@ class BrevoMarketingService:
             stats = campaign.get("statistics", {})
             global_stats = stats.get("globalStats", {}) if stats else {}
             
+            # Log actual globalStats structure for debugging
+            logger.info(f"Campaign {campaign_id} globalStats keys: {list(global_stats.keys()) if global_stats else 'empty'}")
+            if global_stats:
+                logger.info(f"Campaign {campaign_id} sample globalStats values: sent={global_stats.get('sent')}, delivered={global_stats.get('delivered')}, uniqueOpens={global_stats.get('uniqueOpens')}, uniqueClicks={global_stats.get('uniqueClicks')}")
+            
             # Extract metrics from globalStats or fallback to campaign-level fields
             emails_sent = (
                 global_stats.get("sent", 0) 
@@ -165,8 +170,6 @@ class BrevoMarketingService:
                 (global_stats.get("hardBounces", 0) or 0) + 
                 (global_stats.get("softBounces", 0) or 0)
             )
-            
-            logger.info(f"Campaign {campaign_id}: sent={emails_sent}, opens={opens}, clicks={clicks}, stats_keys={list(stats.keys()) if stats else 'none'}")
 
             report_entry = {
                 "id": str(campaign_id),
