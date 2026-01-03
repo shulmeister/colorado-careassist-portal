@@ -117,6 +117,7 @@ class GoogleAdsService:
             "refresh_token": refresh_token,
             "client_id": self.client_id,
             "client_secret": self.client_secret,
+            "use_proto_plus": True,
         }
 
         if self.login_customer_id:
