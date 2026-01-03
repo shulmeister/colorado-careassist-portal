@@ -272,30 +272,63 @@ class GoogleAdsService:
         currency_code: Optional[str] = None
         
         try:
+            # Try search_stream first (preferred for large datasets)
             response = ga_service.search_stream(customer_id=self.customer_id, query=query)
+            response_type = 'stream'
         except Exception as e:
-            logger.error(f"Google Ads API query error: {e}")
-            # Try alternative query from campaign if customer_performance_view fails
-            query_alt = f"""
-                SELECT
-                  customer.currency_code,
-                  segments.date,
-                  metrics.cost_micros,
-                  metrics.clicks,
-                  metrics.impressions,
-                  metrics.conversions,
-                  metrics.conversions_value
-                FROM campaign
-                WHERE segments.date BETWEEN '{start}' AND '{end}'
-                ORDER BY segments.date
-            """
+            logger.warning(f"search_stream failed, trying search: {e}")
             try:
-                response = ga_service.search_stream(customer_id=self.customer_id, query=query_alt)
+                # Fallback to search method
+                response = ga_service.search(customer_id=self.customer_id, query=query)
+                response_type = 'search'
             except Exception as e2:
-                logger.error(f"Alternative Google Ads query also failed: {e2}")
-                return [], None
+                logger.error(f"Both search_stream and search failed: {e2}")
+                # Try alternative query from campaign
+                query_alt = f"""
+                    SELECT
+                      customer.currency_code,
+                      segments.date,
+                      metrics.cost_micros,
+                      metrics.clicks,
+                      metrics.impressions,
+                      metrics.conversions,
+                      metrics.conversions_value
+                    FROM campaign
+                    WHERE segments.date BETWEEN '{start}' AND '{end}'
+                    ORDER BY segments.date
+                """
+                try:
+                    response = ga_service.search(customer_id=self.customer_id, query=query_alt)
+                    response_type = 'search'
+                except Exception as e3:
+                    logger.error(f"Alternative query also failed: {e3}")
+                    return [], None
 
-        for batch in response:
+        # Handle both search_stream (iterable) and search (single response) formats
+        if response_type == 'stream':
+            for batch in response:
+                for row in batch.results:
+                    if not currency_code:
+                        currency_code = getattr(row.customer, "currency_code", None)
+                    spend = self._micros_to_currency(getattr(row.metrics, "cost_micros", 0))
+                    clicks = self._safe_int(getattr(row.metrics, "clicks", 0))
+                    impressions = self._safe_int(getattr(row.metrics, "impressions", 0))
+                    conversions = self._safe_float(getattr(row.metrics, "conversions", 0.0))
+                    conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
+
+                    breakdown.append({
+                        "date": row.segments.date,
+                        "spend": round(spend, 2),
+                        "clicks": clicks,
+                        "impressions": impressions,
+                        "conversions": conversions,
+                        "conversion_value": round(conversion_value, 2),
+                        "roas": round(self._safe_divide(conversion_value, spend), 2),
+                        "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
+                    })
+        else:
+            # search method returns results directly
+            for row in response.results:
             for row in batch.results:
                 if not currency_code:
                     currency_code = getattr(row.customer, "currency_code", None)
