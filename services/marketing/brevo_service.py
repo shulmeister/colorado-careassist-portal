@@ -147,10 +147,17 @@ class BrevoMarketingService:
                     # If we can't parse the date, include it (better to show data than hide it)
                     pass
 
-            # Brevo API includes statistics directly in the campaign response
-            # Check campaign object for statistics
-            stats = campaign.get("statistics", {})
-            global_stats = stats.get("globalStats", {}) if stats else {}
+            # Brevo API: List endpoint doesn't include full statistics
+            # Need to fetch individual campaign details to get statistics
+            try:
+                campaign_detail = self._request("GET", f"/emailCampaigns/{campaign_id}")
+                stats = campaign_detail.get("statistics", {})
+                global_stats = stats.get("globalStats", {}) if stats else {}
+            except (requests.HTTPError, KeyError, Exception) as exc:
+                logger.warning(f"Could not fetch details for campaign {campaign_id}: {exc}")
+                # Fallback to list endpoint data (may be incomplete)
+                stats = campaign.get("statistics", {})
+                global_stats = stats.get("globalStats", {}) if stats else {}
             
             # Brevo uses 'uniqueViews' for opens, 'uniqueClicks' for clicks
             emails_sent = (
@@ -164,6 +171,8 @@ class BrevoMarketingService:
                 (global_stats.get("hardBounces", 0) or 0) + 
                 (global_stats.get("softBounces", 0) or 0)
             )
+            
+            logger.info(f"Campaign {campaign_id}: sent={emails_sent}, opens={opens}, clicks={clicks}")
 
             report_entry = {
                 "id": str(campaign_id),
