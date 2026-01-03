@@ -152,20 +152,14 @@ class BrevoMarketingService:
             stats = campaign.get("statistics", {})
             global_stats = stats.get("globalStats", {}) if stats else {}
             
-            # Log actual globalStats structure for debugging
-            logger.info(f"Campaign {campaign_id} globalStats keys: {list(global_stats.keys()) if global_stats else 'empty'}")
-            if global_stats:
-                logger.info(f"Campaign {campaign_id} sample globalStats values: sent={global_stats.get('sent')}, delivered={global_stats.get('delivered')}, uniqueOpens={global_stats.get('uniqueOpens')}, uniqueClicks={global_stats.get('uniqueClicks')}")
-            
-            # Extract metrics from globalStats or fallback to campaign-level fields
+            # Brevo uses 'uniqueViews' for opens, 'uniqueClicks' for clicks
             emails_sent = (
                 global_stats.get("sent", 0) 
                 or global_stats.get("delivered", 0)
                 or campaign.get("recipients", {}).get("totalRecipients", 0)
-                or campaign.get("sent", 0)
             )
-            opens = global_stats.get("uniqueOpens", 0) or global_stats.get("opens", 0)
-            clicks = global_stats.get("uniqueClicks", 0) or global_stats.get("clicks", 0)
+            opens = global_stats.get("uniqueViews", 0) or global_stats.get("viewed", 0)
+            clicks = global_stats.get("uniqueClicks", 0) or global_stats.get("clickers", 0)
             bounces = (
                 (global_stats.get("hardBounces", 0) or 0) + 
                 (global_stats.get("softBounces", 0) or 0)
