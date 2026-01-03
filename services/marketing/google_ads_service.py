@@ -329,7 +329,6 @@ class GoogleAdsService:
         else:
             # search method returns results directly
             for row in response.results:
-            for row in batch.results:
                 if not currency_code:
                     currency_code = getattr(row.customer, "currency_code", None)
                 spend = self._micros_to_currency(getattr(row.metrics, "cost_micros", 0))
@@ -338,18 +337,16 @@ class GoogleAdsService:
                 conversions = self._safe_float(getattr(row.metrics, "conversions", 0.0))
                 conversion_value = self._safe_float(getattr(row.metrics, "conversions_value", 0.0))
 
-                breakdown.append(
-                    {
-                        "date": row.segments.date,
-                        "spend": round(spend, 2),
-                        "clicks": clicks,
-                        "impressions": impressions,
-                        "conversions": conversions,
-                        "conversion_value": round(conversion_value, 2),
-                        "roas": round(self._safe_divide(conversion_value, spend), 2),
-                        "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
-                    }
-                )
+                breakdown.append({
+                    "date": row.segments.date,
+                    "spend": round(spend, 2),
+                    "clicks": clicks,
+                    "impressions": impressions,
+                    "conversions": conversions,
+                    "conversion_value": round(conversion_value, 2),
+                    "roas": round(self._safe_divide(conversion_value, spend), 2),
+                    "cost_per_conversion": round(self._safe_divide(spend, conversions), 2),
+                })
 
         return breakdown, currency_code
 
