@@ -8,7 +8,7 @@ import { LoginSkeleton } from "./LoginSkeleton";
 
 const checkPortalSession = async () => {
   try {
-    const res = await fetch("/auth/me", { credentials: "include" });
+    const res = await fetch("auth/me", { credentials: "include" });
     if (!res.ok) return false;
     const body = await res.json();
     return !!body?.user?.email;

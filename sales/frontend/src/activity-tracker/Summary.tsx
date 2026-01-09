@@ -46,7 +46,7 @@ const Summary = () => {
   useEffect(() => {
     const fetchSummaryData = async () => {
       try {
-        const summaryRes = await fetch("/api/dashboard/summary", {
+        const summaryRes = await fetch("api/dashboard/summary", {
           credentials: "include",
         });
         if (!summaryRes.ok) {

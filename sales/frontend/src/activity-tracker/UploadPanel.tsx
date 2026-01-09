@@ -129,7 +129,7 @@ export const UploadPanel = ({ showLegacyLink = true }: UploadPanelProps) => {
     formData.append("file", file);
 
     try {
-      const response = await fetch("/upload", {
+      const response = await fetch("upload", {
         method: "POST",
         body: formData,
         credentials: "include",
@@ -158,7 +158,7 @@ export const UploadPanel = ({ showLegacyLink = true }: UploadPanelProps) => {
     setError(null);
 
     try {
-      const response = await fetch("/upload-url", {
+      const response = await fetch("upload-url", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -210,7 +210,7 @@ export const UploadPanel = ({ showLegacyLink = true }: UploadPanelProps) => {
       let totalFiles = 0;
 
       while (hasMore) {
-        const response = await fetch("/bulk-business-cards", {
+        const response = await fetch("bulk-business-cards", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -297,7 +297,7 @@ export const UploadPanel = ({ showLegacyLink = true }: UploadPanelProps) => {
         let totalFiles = 0;
 
         while (hasMore) {
-          const response = await fetch("/bulk-business-cards", {
+          const response = await fetch("bulk-business-cards", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

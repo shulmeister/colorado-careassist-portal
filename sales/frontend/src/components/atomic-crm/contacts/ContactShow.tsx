@@ -157,7 +157,7 @@ const ContactDealsContent = ({ contactId, companyId }: { contactId: number; comp
     const fetchDeals = async () => {
       try {
         // Fetch all deals and filter client-side for those containing this contact_id
-        const response = await fetch(`/admin/deals`);
+        const response = await fetch(`admin/deals`);
         if (response.ok) {
           const data = await response.json();
           const allDeals = data.data || data || [];

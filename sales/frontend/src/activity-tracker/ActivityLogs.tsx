@@ -46,7 +46,7 @@ export const ActivityLogs = () => {
   const fetchActivities = async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/dashboard/recent-activity?limit=50", {
+      const response = await fetch("api/dashboard/recent-activity?limit=50", {
         credentials: "include",
       });
       if (!response.ok) {

@@ -36,7 +36,7 @@ const Visits = () => {
   useEffect(() => {
     const fetchVisits = async () => {
       try {
-        const response = await fetch("/api/visits", { credentials: "include" });
+        const response = await fetch("api/visits", { credentials: "include" });
         if (response.ok) {
           const data = await response.json();
           setVisits(data);

@@ -53,7 +53,7 @@ export function BulkMergeButton() {
     try {
       const duplicateIds = selectedIds.filter((id) => id !== primaryId);
 
-      const response = await fetch("/api/contacts/merge", {
+      const response = await fetch("api/contacts/merge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
