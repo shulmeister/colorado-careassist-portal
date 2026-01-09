@@ -68,23 +68,16 @@ def import_csv_leads(csv_file_path):
                         skipped += 1
                         continue
 
-                    # Split name into first and last
-                    name_parts = name.split(maxsplit=1)
-                    first_name = name_parts[0] if name_parts else name
-                    last_name = name_parts[1] if len(name_parts) > 1 else ''
-
                     # Create new lead
                     lead = Lead(
-                        full_name=name,
-                        first_name=first_name,
-                        last_name=last_name,
-                        email=email if email else None,
+                        name=name,
+                        email=email if email else 'noemail@example.com',
                         phone=phone,
                         source='facebook_ads',
                         facebook_lead_id=None,
                         status='new',
-                        notes=f"Stage: {stage}",
-                        date_received=created_date
+                        priority='medium',
+                        notes=f"Stage: {stage}. Imported from CSV on {datetime.now().strftime('%Y-%m-%d')}"
                     )
 
                     db.session.add(lead)
