@@ -80,7 +80,7 @@ export const CompanyTasksList = ({ companyId }: { companyId: Identifier }) => {
 
   const handleAddTask = async () => {
     try {
-      const response = await fetch("/admin/tasks", {
+      const response = await fetch("admin/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

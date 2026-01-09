@@ -83,7 +83,7 @@ export const ContactTasksList = ({ contactId }: { contactId: Identifier }) => {
 
   const handleAddTask = async () => {
     try {
-      const response = await fetch("/admin/tasks", {
+      const response = await fetch("admin/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
