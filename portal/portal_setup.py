@@ -158,6 +158,54 @@ def setup_default_tools():
                 "description": "HR and payroll services",
                 "category": "HR",
                 "display_order": 17
+            },
+            {
+                "name": "HPanel",
+                "url": "https://hpanel.hostinger.com",
+                "icon": "https://hpanel.hostinger.com/favicon.ico",
+                "description": "Hostinger control panel",
+                "category": "Development",
+                "display_order": 18
+            },
+            {
+                "name": "Heroku",
+                "url": "https://dashboard.heroku.com",
+                "icon": "https://www.herokucdn.com/favicons/favicon.ico",
+                "description": "Cloud platform dashboard",
+                "category": "Development",
+                "display_order": 19
+            },
+            {
+                "name": "GitHub",
+                "url": "https://github.com/shulmeister",
+                "icon": "https://github.githubassets.com/favicons/favicon.svg",
+                "description": "Source code repositories",
+                "category": "Development",
+                "display_order": 20
+            },
+            {
+                "name": "Google Tag Manager",
+                "url": "https://tagmanager.google.com",
+                "icon": "https://www.gstatic.com/analytics-suite/header/suite/v2/ic_tag_manager.svg",
+                "description": "Manage website tracking tags",
+                "category": "Marketing",
+                "display_order": 21
+            },
+            {
+                "name": "Google Groups",
+                "url": "https://groups.google.com",
+                "icon": "https://www.gstatic.com/images/branding/product/1x/groups_48dp.png",
+                "description": "Manage email groups and forums",
+                "category": "Communication",
+                "display_order": 22
+            },
+            {
+                "name": "Google Business Profile",
+                "url": "https://business.google.com",
+                "icon": "https://www.gstatic.com/images/branding/product/1x/business_profile_manager_48dp.png",
+                "description": "Manage Google Business listings",
+                "category": "Marketing",
+                "display_order": 23
             }
         ]
         
