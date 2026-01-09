@@ -147,9 +147,9 @@ const dataProvider: DataProvider = {
     if (contactId) params.append('contact_id', String(contactId));
     if (dealId) params.append('deal_id', String(dealId));
     
-    const url = params.toString() 
-      ? `/api/activity-logs?${params.toString()}`
-      : `/api/activity-logs`;
+    const url = params.toString()
+      ? `api/activity-logs?${params.toString()}`
+      : `api/activity-logs`;
     const { json } = await httpClient<any>(url);
     // API returns {success, logs, count} - extract just the logs array
     return json.logs || [];
