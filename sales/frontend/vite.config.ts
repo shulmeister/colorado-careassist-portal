@@ -40,7 +40,7 @@ export default defineConfig({
           ),
         }
       : undefined,
-  base: "./",
+  base: "/sales/",
   esbuild: {
     keepNames: true,
   },
