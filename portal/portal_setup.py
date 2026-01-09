@@ -50,7 +50,7 @@ def setup_default_tools():
             {
                 "name": "GoFormz",
                 "url": "https://app.goformz.com",
-                "icon": "https://app.goformz.com/favicon.ico",
+                "icon": "https://www.goformz.com/wp-content/themes/goformz-theme/assets/images/goformz-logo-blue.svg",
                 "description": "Digital forms and mobile data collection",
                 "category": "Forms",
                 "display_order": 4
@@ -98,7 +98,7 @@ def setup_default_tools():
             {
                 "name": "Google Ads",
                 "url": "https://ads.google.com",
-                "icon": "https://www.gstatic.com/images/branding/product/1x/google_ads_32dp.png",
+                "icon": "https://www.gstatic.com/ads-frontend/compass_icons/compass_icon_192.png",
                 "description": "Manage Google advertising campaigns",
                 "category": "Marketing",
                 "display_order": 10
@@ -114,7 +114,7 @@ def setup_default_tools():
             {
                 "name": "Google Cloud Console",
                 "url": "https://console.cloud.google.com",
-                "icon": "https://www.gstatic.com/devrel-devsite/prod/vbf66f6c36316c321f03d50e142b426ee316c88952ceb993e4be77e49bf3c73dd/cloud/images/favicons/onecloud/favicon.ico",
+                "icon": "https://www.gstatic.com/pantheon/images/welcome/supercloud.svg",
                 "description": "Google Cloud Platform management",
                 "category": "Development",
                 "display_order": 12
@@ -138,7 +138,7 @@ def setup_default_tools():
             {
                 "name": "Meta Business Suite",
                 "url": "https://business.facebook.com",
-                "icon": "https://static.xx.fbcdn.net/rsrc.php/yb/r/hLRJ1GG_y0J.ico",
+                "icon": "https://static.xx.fbcdn.net/rsrc.php/v3/yJ/r/8dK8qmqxzpA.png",
                 "description": "Manage Facebook and Instagram business",
                 "category": "Marketing",
                 "display_order": 15
@@ -146,7 +146,7 @@ def setup_default_tools():
             {
                 "name": "Facebook Ads Manager",
                 "url": "https://www.facebook.com/adsmanager",
-                "icon": "https://static.xx.fbcdn.net/rsrc.php/yb/r/hLRJ1GG_y0J.ico",
+                "icon": "https://static.xx.fbcdn.net/rsrc.php/v3/yZ/r/OTB6Bkrf2Ah.png",
                 "description": "Create and manage Facebook ads",
                 "category": "Marketing",
                 "display_order": 16
@@ -162,7 +162,7 @@ def setup_default_tools():
             {
                 "name": "HPanel",
                 "url": "https://hpanel.hostinger.com",
-                "icon": "https://hpanel.hostinger.com/favicon.ico",
+                "icon": "https://www.hostinger.com/h-assets/images/logo-transparent.svg",
                 "description": "Hostinger control panel",
                 "category": "Development",
                 "display_order": 18
@@ -178,7 +178,7 @@ def setup_default_tools():
             {
                 "name": "GitHub",
                 "url": "https://github.com/shulmeister",
-                "icon": "https://github.githubassets.com/favicons/favicon.svg",
+                "icon": "https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png",
                 "description": "Source code repositories",
                 "category": "Development",
                 "display_order": 20
@@ -202,7 +202,7 @@ def setup_default_tools():
             {
                 "name": "Google Business Profile",
                 "url": "https://business.google.com",
-                "icon": "https://www.gstatic.com/images/branding/product/1x/business_profile_manager_48dp.png",
+                "icon": "https://www.gstatic.com/identity/boq/accountsettingsmobile/account_settings_96x96_db66f976ef3a88f2bb71860d5c34a613.png",
                 "description": "Manage Google Business listings",
                 "category": "Marketing",
                 "display_order": 23
