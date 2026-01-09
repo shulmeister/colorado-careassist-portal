@@ -851,37 +851,8 @@ async def get_sync_status(
 
 # ==================== Embedded Dashboards ====================
 
-@app.get("/sales")
-async def sales_dashboard_redirect(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """Redirect to Sales Dashboard using portal-issued SSO token"""
-    sales_dashboard_url = os.getenv(
-        "SALES_DASHBOARD_URL",
-        "https://careassist-tracker-0fcf2cecdb22.herokuapp.com"
-    )
-    
-    token_payload = {
-        "user_id": current_user.get("email"),
-        "email": current_user.get("email"),
-        "name": current_user.get("name"),
-        "domain": current_user.get("email", "").split("@")[-1] if current_user.get("email") else "",
-        "via_portal": True,
-        "login_time": datetime.utcnow().isoformat()
-    }
-    
-    portal_token = PORTAL_SSO_SERIALIZER.dumps(token_payload)
-    sales_portal_auth = sales_dashboard_url.rstrip("/") + "/portal-auth"
-    
-    query = urlencode({
-        "portal_token": portal_token,
-        "portal_user_email": current_user.get("email", "")
-    })
-    
-    redirect_url = f"{sales_portal_auth}?{query}"
-    
-    logger.info(f"Redirecting {current_user.get('email')} to Sales Dashboard with portal token")
-    return RedirectResponse(url=redirect_url, status_code=302)
+# Sales dashboard is now mounted at /sales via unified_app.py
+# No redirect needed - the mounted FastAPI app handles /sales/* routes directly
 
 
 @app.get("/activity-tracker")
