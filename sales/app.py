@@ -541,7 +541,7 @@ app = FastAPI(title="Colorado CareAssist Sales Dashboard", version="2.0.0")
 # Add security middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "https://tracker.coloradocareassist.com"],  # Production domain
+    allow_origins=["http://localhost:8000", "https://tracker.coloradocareassist.com", "https://portal.coloradocareassist.com"],  # Production domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -549,8 +549,8 @@ app.add_middleware(
 
 # Add trusted host middleware
 app.add_middleware(
-    TrustedHostMiddleware, 
-    allowed_hosts=["localhost", "127.0.0.1", "*.herokuapp.com", "tracker.coloradocareassist.com"]  # Production domain
+    TrustedHostMiddleware,
+    allowed_hosts=["localhost", "127.0.0.1", "*.herokuapp.com", "tracker.coloradocareassist.com", "portal.coloradocareassist.com"]  # Production domains
 )
 
 # Mount static files and templates
