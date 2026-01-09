@@ -9461,11 +9461,20 @@ async def legacy_dashboard(request: Request, current_user: Dict[str, Any] = Depe
         'defaultTab': RINGCENTRAL_EMBED_DEFAULT_TAB,
         'redirectUri': RINGCENTRAL_EMBED_REDIRECT_URI,
     }
-    
+
     return templates.TemplateResponse("dashboard.html", {
-        "request": request, 
+        "request": request,
         "user": current_user,
-        "ringcentral_config": ringcentral_config
+        "ringcentral_config": ringcentral_config,
+        "ringcentral": {
+            "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
+            "clientId": RINGCENTRAL_EMBED_CLIENT_ID or '',
+            "server": RINGCENTRAL_EMBED_SERVER,
+            "appUrl": RINGCENTRAL_EMBED_APP_URL,
+            "adapterUrl": RINGCENTRAL_EMBED_ADAPTER_URL,
+            "defaultTab": RINGCENTRAL_EMBED_DEFAULT_TAB,
+            "redirectUri": RINGCENTRAL_EMBED_REDIRECT_URI
+        }
     })
 
 # SPA catch-all route - must be last!
