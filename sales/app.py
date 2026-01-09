@@ -554,7 +554,7 @@ app.add_middleware(
 )
 
 # Mount static files and templates
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 
 # Mount React frontend static assets
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
