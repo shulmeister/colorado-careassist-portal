@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketing Dashboard - Colorado CareAssist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .back-to-portal {
+            margin-top: 12px;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            color: #dbeafe;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(59, 130, 246, 0.25);
+            border-color: rgba(59, 130, 246, 0.55);
+            color: #e0f2fe;
+            transform: translateX(-2px);
+        }
+
+        .sidebar-nav {
+            padding: 0 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .sidebar-link:hover {
+            background: rgba(148, 163, 184, 0.15);
+            color: #f8fafc;
+        }
+
+        .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.18);
+            border: 1px solid rgba(59, 130, 246, 0.45);
+            color: #bfdbfe;
+        }
+
+        .sidebar-link.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .sidebar-link .icon {
+            font-size: 15px;
+        }
+
+        .tab-content {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: auto;
+            min-height: 600px;
+        }
+        
+        /* Main Content */
+        .content {
+            background: #0f172a;
+            padding: 16px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        .content-header {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 40px;
+        }
+        
+        .header-left {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .page-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f9fafb;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .page-subtitle {
+            font-size: 10px;
+            color: #9ca3af;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .segment-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .segment-chip {
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #cbd5f5;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .segment-chip.active {
+            background: rgba(34, 197, 94, 0.2);
+            border-color: rgba(34, 197, 94, 0.6);
+            color: #bbf7d0;
+        }
+
+        .filter-select {
+            padding: 6px 10px;
+            background: #252d47;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            color: #e5e7eb;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .refresh-btn {
+            padding: 6px 12px;
+            background: #3b82f6;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .refresh-btn:hover {
+            background: #2563eb;
+        }
+
+        /* Grid Layout - ULTRA COMPACT */
+        .grid {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 8px;
+            min-height: 100px;
+            width: 100%;
+        }
+
+        .grid-3 {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .grid-4 {
+            grid-template-columns: repeat(4, 1fr);
+        }
+        
+        .grid-6 {
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+        }
+        
+        @media (max-width: 1600px) {
+            .grid-6 {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        /* Card Styles - ULTRA COMPACT */
+        .card {
+            background: #252d47;
+            border: 1px solid #374151;
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            min-height: 80px;
+        }
+        
+        .card.google-card {
+            border-color: rgba(34, 197, 94, 0.35);
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.75));
+        }
+
+        .card.facebook-card {
+            border-color: rgba(59, 130, 246, 0.35);
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(15, 23, 42, 0.78));
+        }
+        
+        .card-compact {
+            padding: 8px;
+        }
+
+        .card-header {
+            margin-bottom: 4px;
+        }
+
+        .metric-subtext {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .metric-pill {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            color: #e5e7eb;
+            background: rgba(148, 163, 184, 0.2);
+        }
+
+        .metric-pill.google {
+            border-color: rgba(34, 197, 94, 0.45);
+            background: rgba(34, 197, 94, 0.2);
+            color: #bbf7d0;
+        }
+
+        .metric-pill.facebook {
+            border-color: rgba(59, 130, 246, 0.45);
+            background: rgba(59, 130, 246, 0.18);
+            color: #bfdbfe;
+        }
+
+        .metric-pill.ghost {
+            border-color: rgba(148, 163, 184, 0.2);
+            background: rgba(148, 163, 184, 0.12);
+            color: #cbd5f5;
+        }
+
+        .card-label {
+            font-size: 8px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.2px;
+            margin-bottom: 1px;
+            line-height: 1;
+        }
+
+        .card-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #f9fafb;
+            line-height: 1.1;
+            margin-bottom: 2px;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f9fafb;
+            margin-bottom: 2px;
+            line-height: 1;
+        }
+        
+        .metric-value-small {
+            font-size: 16px;
+        }
+
+        .metric-change {
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .metric-change.positive {
+            color: #34d399;
+        }
+
+        .metric-change.negative {
+            color: #f87171;
+        }
+
+        .metric-change-detail {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-left: 4px;
+        }
+
+        .target-badge {
+            font-size: 10px;
+            color: #22c55e;
+            margin-left: 6px;
+        }
+
+        .alert-timeline {
+            margin-top: 8px;
+            border-top: 1px solid #334155;
+            padding-top: 6px;
+        }
+
+        .timeline-entry {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #94a3b8;
+            padding: 2px 0;
+        }
+
+        .timeline-entry.critical {
+            color: #f87171;
+        }
+
+        .timeline-entry.warning {
+            color: #fbbf24;
+        }
+
+        .timeline-entry.info {
+            color: #38bdf8;
+        }
+
+        .timeline-entry.clear {
+            color: #34d399;
+        }
+
+        /* Chart Container - ULTRA COMPACT */
+        .chart-container {
+            position: relative;
+            height: 60px;
+            margin-top: 4px;
+            flex: 1;
+        }
+
+        .chart-container-medium {
+            position: relative;
+            height: 80px;
+            margin-top: 4px;
+            flex: 1;
+        }
+        
+        .chart-container-large {
+            position: relative;
+            height: 100px;
+            margin-top: 4px;
+            flex: 1;
+        }
+
+        .campaign-row {
+            cursor: pointer;
+        }
+
+        .campaign-row:hover {
+            background: rgba(34, 197, 94, 0.08);
+        }
+
+        .drilldown-panel {
+            margin-top: 8px;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            background: linear-gradient(135deg, rgba(15,23,42,0.95), rgba(15,23,42,0.75));
+            padding: 12px;
+            display: none;
+        }
+
+        .drilldown-panel.active {
+            display: block;
+        }
+
+        .drilldown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .drilldown-label {
+            font-size: 10px;
+            color: #94a3b8;
+            text-transform: uppercase;
+        }
+
+        .drilldown-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .drilldown-close {
+            border: none;
+            background: rgba(148, 163, 184, 0.15);
+            color: #e2e8f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        /* Stats Table */
+        .stats-table {
+            width: 100%;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-around;
+        }
+
+        .stats-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            border-bottom: 1px solid #374151;
+        }
+
+        .stats-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .stats-label {
+            font-size: 10px;
+            color: #9ca3af;
+        }
+
+        .stats-value {
+            font-size: 11px;
+            font-weight: 600;
+            color: #f9fafb;
+        }
+
+        .stats-change {
+            font-size: 9px;
+            margin-left: 4px;
+        }
+
+        .stats-change.positive {
+            color: #34d399;
+        }
+
+        .stats-change.negative {
+            color: #f87171;
+        }
+
+        /* Campaigns Table */
+        .campaigns-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+            font-size: 11px;
+        }
+
+        .campaigns-table th {
+            text-align: left;
+            font-size: 10px;
+            color: #9ca3af;
+            font-weight: 600;
+            padding: 4px 6px;
+            border-bottom: 1px solid #374151;
+        }
+
+        .campaigns-table td {
+            font-size: 11px;
+            color: #e5e7eb;
+            padding: 6px;
+            border-bottom: 1px solid #374151;
+        }
+
+        .campaigns-table tr:hover {
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .campaign-name {
+            color: #f9fafb;
+            font-weight: 500;
+            font-size: 11px;
+        }
+
+        .campaign-id {
+            font-size: 9px;
+            color: #6b7280;
+            display: block;
+            margin-top: 2px;
+        }
+
+        /* Footer - REMOVED */
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 20px 10px;
+            color: #6b7280;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+        }
+
+        .empty-state-text {
+            font-size: 11px;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #9ca3af;
+        }
+
+        .spinner {
+            border: 3px solid #374151;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 1400px) {
+            .grid-4 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .grid-3 {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .grid-2, .grid-3, .grid-4 {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Marketing Dashboard</div>
+                <div class="sidebar-subtitle">Performance & Attribution</div>
+                <div class="back-to-portal">
+                    <a href="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/" class="back-button">← Back to Portal</a>
+                </div>
+            </div>
+            
+            <nav class="sidebar-nav">
+                <a class="sidebar-link active" href="#tab-overview" data-tab="overview"><span class="icon">📊</span> Overview</a>
+                <a class="sidebar-link" href="#tab-organic" data-tab="organic"><span class="icon">🌱</span> Organic</a>
+                <a class="sidebar-link" href="#tab-paid" data-tab="paid"><span class="icon">🎯</span> Paid</a>
+                <a class="sidebar-link" href="#tab-email" data-tab="email"><span class="icon">📧</span> Email</a>
+                <a class="sidebar-link" href="#tab-website" data-tab="website"><span class="icon">🌐</span> Website & GBP</a>
+                <a class="sidebar-link disabled" href="#tab-settings" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
+            </nav>
+        </aside>
+        
+        <!-- Main Content -->
+        <main class="content">
+            <!-- Overview Tab -->
+            <div class="tab-content active" id="tab-overview">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Facebook Ads & Google Ads Dashboard</h1>
+                        <div class="page-subtitle" id="dateRangeDisplay">Loading...</div>
+                    </div>
+                    
+                    <div class="filters">
+                        <select class="filter-select" id="datePreset">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                            <option value="quarter_to_date">Quarter to Date</option>
+                            <option value="year_to_date">Year to Date</option>
+                            <option value="last_12_months">Last 12 Months</option>
+                        </select>
+                        <button class="refresh-btn" id="refreshBtn">
+                            <span>↻</span>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="segment-filters" id="segmentFilters"></div>
+
+    <!-- Compact 6-column grid -->
+    <div class="grid grid-6">
+        <!-- ROAS Chart -->
+        <div class="card card-compact google-card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">ROAS</div>
+            </div>
+            <div class="chart-container">
+                <canvas id="roasChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Cost Chart -->
+        <div class="card card-compact google-card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Cost</div>
+            </div>
+            <div class="chart-container">
+                <canvas id="costPerfChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Cost/Conv Chart -->
+        <div class="card card-compact google-card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Cost / Conversion</div>
+            </div>
+            <div class="chart-container">
+                <canvas id="costConvChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Google Ads Spend -->
+        <div class="card card-compact google-card">
+            <div class="card-header">
+                <div class="card-label">Google Ads Spent</div>
+                <div class="card-title">Amount Spent</div>
+            </div>
+            <div class="metric-value metric-value-small" id="googleAdsSpend">--</div>
+            <div class="metric-subtext">
+                <span class="metric-pill google" id="googleRoasSummary">ROAS --</span>
+                <span class="metric-pill ghost" id="googleCostPerConvPill">Cost/Conv --</span>
+            </div>
+        </div>
+
+        <!-- Facebook Ads Spend -->
+        <div class="card card-compact facebook-card">
+            <div class="card-header">
+                <div class="card-label">Facebook Ads Spent</div>
+                <div class="card-title">Amount Spent</div>
+            </div>
+            <div class="metric-value metric-value-small" id="facebookAdsSpend">--</div>
+            <div class="metric-subtext">
+                <span class="metric-pill facebook" id="facebookCtrPill">CTR --</span>
+                <span class="metric-pill ghost" id="facebookCpcPill">CPC --</span>
+            </div>
+            <div class="metric-change positive" id="facebookAdsChange"></div>
+        </div>
+        
+        <!-- Sessions -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Sessions</div>
+            </div>
+            <div class="metric-value metric-value-small" id="totalSessions">16,460</div>
+        </div>
+    </div>
+
+    <!-- Second Row: Stats and Charts -->
+    <div class="grid grid-6">
+        <!-- Google Account Overview -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Account overview</div>
+            </div>
+            <div class="stats-table">
+                <div class="stats-row">
+                    <div class="stats-label">Spend</div>
+                    <div class="stats-value" id="googleAccountSpend">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Clicks</div>
+                    <div class="stats-value" id="googleClicks">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Impressions</div>
+                    <div class="stats-value" id="googleImpressions">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">CTR</div>
+                    <div class="stats-value" id="googleCTR">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Avg. CPC</div>
+                    <div class="stats-value" id="googleCPC">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Conversions</div>
+                    <div class="stats-value" id="googleConversions">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Conv. Value</div>
+                    <div class="stats-value" id="googleConvValue">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">ROAS</div>
+                    <div class="stats-value" id="googleRoasMetric">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Conv. Rate</div>
+                    <div class="stats-value" id="googleConversionRate">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Search IS</div>
+                    <div class="stats-value" id="googleSearchIS">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Lost IS (Rank)</div>
+                    <div class="stats-value" id="googleRankLostIS">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Lost IS (Budget)</div>
+                    <div class="stats-value" id="googleBudgetLostIS">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Impressions -->
+        <div class="card card-compact" style="grid-column: span 2;">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Impressions</div>
+            </div>
+            <div class="metric-value metric-value-small" id="totalImpressions">20,174</div>
+            <div class="chart-container-medium">
+                <canvas id="impressionsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Sessions with Chart -->
+        <div class="card card-compact" style="grid-column: span 2;">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Sessions</div>
+            </div>
+            <div class="chart-container-medium">
+                <canvas id="sessionsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Facebook Account Overview -->
+        <div class="card card-compact facebook-card">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Account Overview</div>
+            </div>
+            <div class="stats-table">
+                <div class="stats-row">
+                    <div class="stats-label">Spend</div>
+                    <div class="stats-value" id="facebookAccountSpend">--</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Clicks</div>
+                    <div class="stats-value" id="facebookClicks">529</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">CTR</div>
+                    <div class="stats-value" id="facebookCTR">0.03%</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Avg. CPC</div>
+                    <div class="stats-value" id="facebookCPC">$ 4.51</div>
+                </div>
+                <div class="stats-row">
+                    <div class="stats-label">Conversions</div>
+                    <div class="stats-value" id="facebookConversions">60</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Row: Campaigns and Interactions -->
+    <div class="grid grid-6">
+        <!-- Google Campaigns -->
+        <div class="card card-compact" style="grid-column: span 2;">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Campaigns Overview</div>
+            </div>
+            <table class="campaigns-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Campaign</th>
+                        <th>Spend</th>
+                        <th>Clicks</th>
+                        <th>Conv.</th>
+                        <th>Conv. Rate</th>
+                        <th>ROAS</th>
+                        <th>Search IS</th>
+                    </tr>
+                </thead>
+                <tbody id="googleCampaignsTable">
+                    <tr>
+                        <td colspan="6" class="empty-state-text">Loading campaigns...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Interactions Chart 1 -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Interactions</div>
+            </div>
+            <div class="chart-container-medium">
+                <canvas id="interactionsChart1"></canvas>
+            </div>
+        </div>
+
+        <!-- Facebook Campaigns -->
+        <div class="card card-compact" style="grid-column: span 2;">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Campaigns Overview</div>
+            </div>
+            <table class="campaigns-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Campaign</th>
+                        <th>Spend</th>
+                        <th>Impr.</th>
+                        <th>Clicks</th>
+                    </tr>
+                </thead>
+                <tbody id="facebookCampaignsTable">
+                    <tr>
+                        <td colspan="5" class="empty-state-text">Loading campaigns...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Interactions Chart 2 -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">Last 30 days</div>
+                <div class="card-title">Interactions</div>
+            </div>
+            <div class="chart-container-medium">
+                <canvas id="interactionsChart2"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Google Ads Additional Metrics Row -->
+    <div class="grid grid-6">
+        <!-- Google Ads Quality Scores -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">QUALITY SCORES</div>
+                <div class="card-title">Ad Quality Metrics</div>
+            </div>
+            <div class="stats-table" id="googleQualityScores"></div>
+        </div>
+        
+        <!-- Google Ads Search Terms -->
+        <div class="card card-compact" style="grid-column: span 2;">
+            <div class="card-header">
+                <div class="card-label">SEARCH TERMS</div>
+                <div class="card-title">Top Performing Keywords</div>
+            </div>
+            <div class="stats-table" id="googleSearchTerms"></div>
+        </div>
+        
+        <!-- Google Ads Device Performance -->
+        <div class="card card-compact">
+            <div class="card-header">
+                <div class="card-label">DEVICE PERFORMANCE</div>
+                <div class="card-title">By Device Type</div>
+            </div>
+            <div class="stats-table" id="googleDevicePerformance"></div>
+        </div>
+            </div>
+            
+            <!-- Organic Tab (merged Social + Engagement) -->
+            <div class="tab-content" id="tab-organic">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Organic</h1>
+                        <div class="page-subtitle" id="organicDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="organicDatePreset">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="organicRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Social KPIs Grid -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">FACEBOOK</div>
+                            <div class="card-title">Page Likes</div>
+                        </div>
+                        <div class="metric-value" id="socialPageLikes">2,785</div>
+                    <div class="metric-change positive" id="socialLikesChange">▲ 4.6%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">REACH</div>
+                            <div class="card-title">Total Reach</div>
+                        </div>
+                        <div class="metric-value" id="socialReach">26,980</div>
+                    <div class="metric-change negative" id="socialReachChange">▼ 2.1%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT</div>
+                            <div class="card-title">Post Engagements</div>
+                        </div>
+                        <div class="metric-value" id="socialEngagement">1,468</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CONTENT</div>
+                            <div class="card-title">Posts Published</div>
+                        </div>
+                        <div class="metric-value" id="socialPosts">18</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">IMPRESSIONS</div>
+                            <div class="card-title">Total Impressions</div>
+                        </div>
+                        <div class="metric-value" id="socialImpressions">38,950</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">VIDEO</div>
+                            <div class="card-title">Video Views</div>
+                        </div>
+                        <div class="metric-value" id="socialVideoViews">5,190</div>
+                    </div>
+                </div>
+                
+                <!-- Social Performance Charts -->
+                <div class="grid grid-3">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">REACH TREND</div>
+                            <div class="card-title">Organic vs Paid Reach</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="socialReachChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT RATE</div>
+                            <div class="card-title">Post Engagement Over Time</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="socialEngagementChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOP POSTS</div>
+                            <div class="card-title">Best Performing Content</div>
+                        </div>
+                    <div class="stats-table" id="socialTopPosts"></div>
+                    </div>
+                    
+                    <!-- Facebook Audience Demographics -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">AUDIENCE</div>
+                            <div class="card-title">Demographics</div>
+                        </div>
+                        <div class="stats-table" id="facebookDemographics"></div>
+                    </div>
+                    
+                    <!-- LinkedIn Follower Growth -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">LINKEDIN</div>
+                            <div class="card-title">Follower Growth</div>
+                        </div>
+                        <div class="stats-table" id="linkedinFollowerGrowth"></div>
+                    </div>
+                </div>
+                
+                <!-- Engagement Analysis (merged from Engagement tab) -->
+                <div class="grid grid-2">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT BREAKDOWN</div>
+                            <div class="card-title">By Type</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="engagementTypeChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">DAILY TREND</div>
+                            <div class="card-title">Engagement Over Time</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="engagementTrendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Attribution Insights -->
+                <div class="grid grid-1">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ATTRIBUTION INSIGHTS</div>
+                            <div class="card-title">Where Are Your Engagements Coming From?</div>
+                        </div>
+                        <div class="stats-container" id="attributionBreakdown">
+                            <div class="stats-row">
+                                <div class="stats-label">Loading attribution data...</div>
+                                <div class="stats-value">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Paid Tab -->
+            <div class="tab-content" id="tab-paid">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Paid</h1>
+                        <div class="page-subtitle" id="paidDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="paidDatePreset">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="paidRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Paid Media KPIs -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOTAL SPEND</div>
+                            <div class="card-title">All Platforms</div>
+                        </div>
+                        <div class="metric-value" id="paidTotalSpend">$4,517.88</div>
+                        <div class="metric-change positive">▲ 8.2%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GOOGLE ADS</div>
+                            <div class="card-title">Amount Spent</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidGoogleSpend">$4,183.00</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">FACEBOOK ADS</div>
+                            <div class="card-title">Amount Spent</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidFacebookSpend">$334.88</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOTAL CLICKS</div>
+                            <div class="card-title">All Campaigns</div>
+                        </div>
+                        <div class="metric-value" id="paidClicks">851</div>
+                        <div class="metric-change positive">▲ 14.3%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">AVG CPC</div>
+                            <div class="card-title">Cost Per Click</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidCPC">$5.31</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CONVERSIONS</div>
+                            <div class="card-title">Leads Generated</div>
+                        </div>
+                        <div class="metric-value" id="paidConversions">43</div>
+                    </div>
+                </div>
+
+                <!-- Advanced Paid KPIs -->
+                <div class="grid grid-4">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ROAS</div>
+                            <div class="card-title">Return on Ad Spend</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidRoas">3.6x</div>
+                    </div>
+
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">COST / CONV</div>
+                            <div class="card-title">Blended</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidCostPerConv">$243</div>
+                    </div>
+
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CONV RATE</div>
+                            <div class="card-title">Clicks → Leads</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidConversionRate">5.3%</div>
+                    </div>
+
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">AVG CPM</div>
+                            <div class="card-title">All Platforms</div>
+                        </div>
+                        <div class="metric-value metric-value-small" id="paidCpm">$32.40</div>
+                    </div>
+                </div>
+                
+                <div class="grid grid-2">
+                    <div class="card card-compact" style="grid-column: span 2;">
+                        <div class="card-header">
+                            <div class="card-label">MONITOR</div>
+                            <div class="card-title">Flight Deck Alerts</div>
+                        </div>
+                        <div id="paidAlerts" class="stats-table">
+                            <div class="stats-row">
+                                <div class="stats-label">All systems nominal</div>
+                                <div class="stats-value">—</div>
+                            </div>
+                        </div>
+                        <div class="alert-timeline" id="alertTimeline">
+                            <div class="timeline-entry">No alert events</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Paid Media Charts -->
+                <div class="grid grid-2">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CAMPAIGN PERFORMANCE</div>
+                            <div class="card-title">Top Campaigns by ROAS</div>
+                        </div>
+                    <div class="stats-table" id="paidCampaignStats"></div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SPEND BY PLATFORM</div>
+                            <div class="card-title">Budget Allocation</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="paidSpendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Paid Media Advanced Charts -->
+                <div class="grid grid-2">
+                    <div class="card card-compact" style="grid-column: span 1;">
+                        <div class="card-header">
+                            <div class="card-label">DAILY TREND</div>
+                            <div class="card-title">Spend vs Conversions</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="paidDailyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="card card-compact" style="grid-column: span 1;">
+                        <div class="card-header">
+                            <div class="card-label">EFFICIENCY MAP</div>
+                            <div class="card-title">Campaign Bubble Chart</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="campaignEfficiencyChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Campaign Drilldown Panel -->
+                <div class="drilldown-panel" id="campaignDrilldown">
+                    <div class="drilldown-header">
+                        <div>
+                            <div class="drilldown-label">Campaign Detail</div>
+                            <div class="drilldown-title" id="drilldownTitle">Select a campaign</div>
+                        </div>
+                        <button class="drilldown-close" id="drilldownClose">✕</button>
+                    </div>
+                    <div class="drilldown-body" id="drilldownBody">
+                        <div class="stats-row">
+                            <div class="stats-label">Spend</div>
+                            <div class="stats-value">—</div>
+                        </div>
+                        <div class="stats-row">
+                            <div class="stats-label">Conversions</div>
+                            <div class="stats-value">—</div>
+                        </div>
+                    </div>
+                    <div class="stats-row" style="border-top: 1px solid #334155; margin-top: 8px;"></div>
+                    <div class="stats-label" style="margin-top: 6px;">Recently Viewed</div>
+                    <div id="recentCampaigns" class="stats-table" style="margin-top: 4px;"></div>
+                </div>
+            </div>
+            
+            <!-- Email Marketing Tab -->
+            <div class="tab-content" id="tab-email">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Email Marketing</h1>
+                        <div class="page-subtitle" id="emailDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="emailDatePreset">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="emailRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Email KPIs -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CAMPAIGNS</div>
+                            <div class="card-title">Emails Sent</div>
+                        </div>
+                        <div class="metric-value" id="emailCampaigns">12</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SUBSCRIBERS</div>
+                            <div class="card-title">Total Contacts</div>
+                        </div>
+                        <div class="metric-value" id="emailSubscribers">3,428</div>
+                        <div class="metric-change positive">▲ 5.2%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">OPEN RATE</div>
+                            <div class="card-title">Average</div>
+                        </div>
+                        <div class="metric-value" id="emailOpenRate">28.4%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CLICK RATE</div>
+                            <div class="card-title">Average CTR</div>
+                        </div>
+                        <div class="metric-value" id="emailClickRate">4.2%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">DELIVERABILITY</div>
+                            <div class="card-title">Delivery Rate</div>
+                        </div>
+                        <div class="metric-value" id="emailDeliveryRate">98.6%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CONVERSIONS</div>
+                            <div class="card-title">From Email</div>
+                        </div>
+                        <div class="metric-value" id="emailConversions">67</div>
+                    </div>
+                </div>
+                
+                <!-- Email Performance -->
+                <div class="grid grid-3">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOP CAMPAIGNS</div>
+                            <div class="card-title">Best Performing</div>
+                        </div>
+                        <div class="stats-table" id="emailTopCampaigns"></div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">ENGAGEMENT TREND</div>
+                            <div class="card-title">Opens & Clicks Over Time</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="emailEngagementChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">LIST GROWTH</div>
+                            <div class="card-title">Subscriber Growth</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="emailGrowthChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-2">
+                    <div class="card card-compact" style="grid-column: span 2;">
+                        <div class="card-header">
+                            <div class="card-label">ATTRIBUTION OVERLAY</div>
+                            <div class="card-title">Ad Conversions vs GA4 Sessions</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="attributionChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Website & GBP Tab -->
+            <div class="tab-content" id="tab-website">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Website & Google Business Profile</h1>
+                        <div class="page-subtitle" id="websiteDateRange">Last 30 days</div>
+                    </div>
+                    <div class="filters">
+                        <select class="filter-select" id="websiteDatePreset">
+                            <option value="today">Today</option>
+                            <option value="yesterday">Yesterday</option>
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="month_to_date">Month to Date</option>
+                        </select>
+                        <button class="refresh-btn" id="websiteRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+                
+                <!-- Website KPIs -->
+                <div class="grid grid-6">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GA4</div>
+                            <div class="card-title">Total Sessions</div>
+                        </div>
+                        <div class="metric-value" id="websiteSessions">1,872</div>
+                        <div class="metric-change positive">▲ 12.4%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">USERS</div>
+                            <div class="card-title">Unique Visitors</div>
+                        </div>
+                        <div class="metric-value" id="websiteUsers">1,403</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">BOUNCE RATE</div>
+                            <div class="card-title">Exit %</div>
+                        </div>
+                        <div class="metric-value" id="websiteBounceRate">42.8%</div>
+                        <div class="metric-change positive">▼ 5.1%</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">AVG SESSION</div>
+                            <div class="card-title">Duration</div>
+                        </div>
+                        <div class="metric-value" id="websiteAvgSession">2:34</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GBP VIEWS</div>
+                            <div class="card-title">Profile Views</div>
+                        </div>
+                        <div class="metric-value" id="gbpViews">3,240</div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GBP ACTIONS</div>
+                            <div class="card-title">Total Actions</div>
+                        </div>
+                        <div class="metric-value" id="gbpActions">486</div>
+                    </div>
+                </div>
+                
+                <!-- Website & GBP Charts -->
+                <div class="grid grid-3">
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TRAFFIC SOURCES</div>
+                            <div class="card-title">Top Channels</div>
+                        </div>
+                        <div class="stats-table">
+                            <div class="stats-row">
+                                <div class="stats-label">Organic Search</div>
+                                <div class="stats-value">680 <span class="stats-change">(36%)</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Direct</div>
+                                <div class="stats-value">560 <span class="stats-change">(30%)</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Paid Search</div>
+                                <div class="stats-value">410 <span class="stats-change">(22%)</span></div>
+                            </div>
+                            <div class="stats-row">
+                                <div class="stats-label">Social</div>
+                                <div class="stats-value">222 <span class="stats-change">(12%)</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SESSION TREND</div>
+                            <div class="card-title">Daily Sessions</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="websiteSessionsChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GBP SEARCHES</div>
+                            <div class="card-title">Discovery vs Direct</div>
+                        </div>
+                        <div class="chart-container-large">
+                            <canvas id="gbpSearchesChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- GA4 & GBP Additional Metrics -->
+                <div class="grid grid-3">
+                    <!-- GA4 User Retention -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">USER RETENTION</div>
+                            <div class="card-title">New vs Returning</div>
+                        </div>
+                        <div class="stats-table" id="ga4UserRetention"></div>
+                    </div>
+                    
+                    <!-- GA4 Geographic Performance -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">GEOGRAPHIC</div>
+                            <div class="card-title">Top Locations</div>
+                        </div>
+                        <div class="stats-table" id="ga4Geographic"></div>
+                    </div>
+                    
+                    <!-- GBP Reviews -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">REVIEWS</div>
+                            <div class="card-title">Google Business Profile</div>
+                        </div>
+                        <div class="stats-table" id="gbpReviews"></div>
+                    </div>
+                </div>
+                
+                <!-- GBP Search Insights -->
+                <div class="grid grid-3">
+                    <!-- Search Query Types -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SEARCH TYPES</div>
+                            <div class="card-title">Direct vs Discovery</div>
+                        </div>
+                        <div class="stats-table" id="gbpSearchQueryTypes"></div>
+                    </div>
+                    
+                    <!-- Views Breakdown -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">VIEWS BREAKDOWN</div>
+                            <div class="card-title">Search vs Maps</div>
+                        </div>
+                        <div class="stats-table" id="gbpViewsBreakdown"></div>
+                    </div>
+                    
+                    <!-- Photo Engagement -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">PHOTO ENGAGEMENT</div>
+                            <div class="card-title">Visual Content Performance</div>
+                        </div>
+                        <div class="stats-table" id="gbpPhotoEngagement"></div>
+                    </div>
+                </div>
+                
+                <!-- GBP Post Engagement & Search Keywords -->
+                <div class="grid grid-2">
+                    <!-- Post Engagement -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">POST ENGAGEMENT</div>
+                            <div class="card-title">GBP Posts Performance</div>
+                        </div>
+                        <div class="stats-table" id="gbpPostEngagement"></div>
+                    </div>
+                    
+                    <!-- Search Keywords -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">SEARCH KEYWORDS</div>
+                            <div class="card-title">Top Keywords Leading to Discovery</div>
+                        </div>
+                        <div class="stats-table" id="gbpSearchKeywords"></div>
+                    </div>
+                </div>
+            </div>
+            
+        </main>
+    </div>
+
+    <script src="/static/js/marketing-dashboard.js" defer></script>
+</body>
+</html>
+

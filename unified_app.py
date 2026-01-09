@@ -123,6 +123,33 @@ except Exception as e:
     import traceback
     logger.error(traceback.format_exc())
 
+# ==================== MOUNT PORTAL DASHBOARDS (Marketing & Client Satisfaction) ====================
+try:
+    portal_path = os.path.join(os.path.dirname(__file__), "portal")
+    if os.path.exists(portal_path):
+        sys.path.insert(0, portal_path)
+        logger.info(f"✅ Added portal path: {portal_path}")
+
+        # Import portal app routes
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("portal_app", os.path.join(portal_path, "portal_app.py"))
+        portal_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(portal_module)
+
+        # Get specific routes we need (marketing and client satisfaction)
+        # We'll re-export them at the main app level
+        portal_app_instance = portal_module.app
+
+        # Mount portal routes at /marketing and /client-satisfaction
+        app.mount("/portal-routes", portal_app_instance)
+        logger.info("✅ Mounted portal routes (marketing, client-satisfaction)")
+    else:
+        logger.warning("⚠️  Portal path not found at " + portal_path)
+except Exception as e:
+    logger.error(f"❌ Failed to mount portal routes: {e}")
+    import traceback
+    logger.error(traceback.format_exc())
+
 # ==================== PORTAL HOMEPAGE ====================
 @app.get("/", response_class=HTMLResponse)
 async def portal_home(request: Request):
@@ -160,7 +187,7 @@ async def portal_home(request: Request):
             .header p { font-size: 1.2rem; opacity: 0.9; }
             .dashboard-grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                grid-template-columns: repeat(3, 1fr);
                 gap: 30px;
                 margin-bottom: 40px;
             }
@@ -204,6 +231,8 @@ async def portal_home(request: Request):
             .sales-card { border-top: 4px solid #667eea; }
             .recruiting-card { border-top: 4px solid #f093fb; }
             .payroll-card { border-top: 4px solid #4ade80; }
+            .marketing-card { border-top: 4px solid #fb923c; }
+            .satisfaction-card { border-top: 4px solid #06b6d4; }
             .footer {
                 text-align: center;
                 color: white;
@@ -244,6 +273,20 @@ async def portal_home(request: Request):
                     <p>Convert Wellsky payroll exports to Adams Keegan format. Quick and easy Excel file conversion.</p>
                     <span class="btn">Open Converter</span>
                 </a>
+
+                <a href="/marketing" class="dashboard-card marketing-card">
+                    <div class="icon">📈</div>
+                    <h2>Marketing Dashboard</h2>
+                    <p>Track social media, Google Ads, email campaigns, and website analytics. Monitor marketing ROI.</p>
+                    <span class="btn">Open Marketing</span>
+                </a>
+
+                <a href="/client-satisfaction" class="dashboard-card satisfaction-card">
+                    <div class="icon">⭐</div>
+                    <h2>Client Satisfaction Tracker</h2>
+                    <p>Monitor client feedback, satisfaction scores, and service quality metrics. Track improvements.</p>
+                    <span class="btn">Open Tracker</span>
+                </a>
             </div>
 
             <div class="footer">
@@ -265,6 +308,16 @@ async def payroll_converter():
     else:
         raise HTTPException(status_code=404, detail="Payroll converter not found")
 
+@app.get("/marketing")
+async def marketing_redirect():
+    """Redirect to production marketing dashboard (temporary until fully integrated)"""
+    return RedirectResponse(url="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/marketing", status_code=307)
+
+@app.get("/client-satisfaction")
+async def client_satisfaction_redirect():
+    """Redirect to production client satisfaction tracker (temporary until fully integrated)"""
+    return RedirectResponse(url="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/client-satisfaction", status_code=307)
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint for monitoring"""
@@ -274,7 +327,9 @@ async def health_check():
         "services": {
             "sales": "mounted at /sales",
             "recruiting": "mounted at /recruiting",
-            "payroll": "available at /payroll"
+            "payroll": "available at /payroll",
+            "marketing": "redirects to production",
+            "client-satisfaction": "redirects to production"
         }
     }
 
