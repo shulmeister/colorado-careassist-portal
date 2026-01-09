@@ -40,12 +40,20 @@ def setup_default_tools():
                 "display_order": 2
             },
             {
+                "name": "Marketing Dashboard",
+                "url": "/marketing",
+                "icon": "https://cdn-icons-png.flaticon.com/512/3135/3135706.png",
+                "description": "Social media, ads, email, and website analytics",
+                "category": "Marketing",
+                "display_order": 3
+            },
+            {
                 "name": "Wellsky (AK) Payroll Converter",
                 "url": "/payroll",
                 "icon": "https://cdn-icons-png.flaticon.com/512/2830/2830284.png",
                 "description": "Convert Wellsky payroll data for Alaska",
                 "category": "Payroll",
-                "display_order": 3
+                "display_order": 4
             },
             {
                 "name": "GoFormz",
@@ -53,7 +61,7 @@ def setup_default_tools():
                 "icon": "https://www.goformz.com/wp-content/themes/goformz-theme/assets/images/goformz-logo-blue.svg",
                 "description": "Digital forms and mobile data collection",
                 "category": "Forms",
-                "display_order": 4
+                "display_order": 5
             },
             {
                 "name": "Wellsky",
@@ -61,7 +69,7 @@ def setup_default_tools():
                 "icon": "https://www.wellsky.com/favicon.ico",
                 "description": "Home health care management software",
                 "category": "Healthcare",
-                "display_order": 5
+                "display_order": 6
             },
             {
                 "name": "Google Drive",
@@ -69,7 +77,7 @@ def setup_default_tools():
                 "icon": "https://ssl.gstatic.com/images/branding/product/1x/drive_2020q4_32dp.png",
                 "description": "Access Google Drive files and folders",
                 "category": "Productivity",
-                "display_order": 6
+                "display_order": 7
             },
             {
                 "name": "Gmail",
@@ -77,7 +85,7 @@ def setup_default_tools():
                 "icon": "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico",
                 "description": "Access Gmail inbox",
                 "category": "Communication",
-                "display_order": 7
+                "display_order": 8
             },
             {
                 "name": "Google Calendar",
@@ -85,7 +93,7 @@ def setup_default_tools():
                 "icon": "https://calendar.google.com/googlecalendar/images/favicons_2020q4/calendar_31.ico",
                 "description": "View and manage calendar events",
                 "category": "Productivity",
-                "display_order": 8
+                "display_order": 9
             },
             {
                 "name": "QuickBooks",
@@ -93,7 +101,7 @@ def setup_default_tools():
                 "icon": "https://plugin.intuitcdn.net/sbg-web-shell-ui/6.4024.0/shell/harmony/images/favicons/favicon-qbo.ico",
                 "description": "Accounting and financial management",
                 "category": "Finance",
-                "display_order": 9
+                "display_order": 10
             },
             {
                 "name": "Google Ads",
@@ -101,7 +109,7 @@ def setup_default_tools():
                 "icon": "https://www.gstatic.com/ads-frontend/compass_icons/compass_icon_192.png",
                 "description": "Manage Google advertising campaigns",
                 "category": "Marketing",
-                "display_order": 10
+                "display_order": 11
             },
             {
                 "name": "Google Analytics",
@@ -109,7 +117,7 @@ def setup_default_tools():
                 "icon": "https://www.gstatic.com/analytics-suite/header/suite/v2/ic_analytics.svg",
                 "description": "Web analytics and reporting",
                 "category": "Analytics",
-                "display_order": 11
+                "display_order": 12
             },
             {
                 "name": "Google Cloud Console",
@@ -117,7 +125,7 @@ def setup_default_tools():
                 "icon": "https://www.gstatic.com/pantheon/images/welcome/supercloud.svg",
                 "description": "Google Cloud Platform management",
                 "category": "Development",
-                "display_order": 12
+                "display_order": 13
             },
             {
                 "name": "Brevo",
@@ -125,7 +133,7 @@ def setup_default_tools():
                 "icon": "https://app.brevo.com/favicon.ico",
                 "description": "Email marketing and automation",
                 "category": "Marketing",
-                "display_order": 13
+                "display_order": 14
             },
             {
                 "name": "Predis.ai",
@@ -133,7 +141,7 @@ def setup_default_tools():
                 "icon": "https://app.predis.ai/assets/logo-Cm63XoNc.png",
                 "description": "AI-powered social media content",
                 "category": "Marketing",
-                "display_order": 14
+                "display_order": 15
             },
             {
                 "name": "Meta Business Suite",
@@ -141,7 +149,7 @@ def setup_default_tools():
                 "icon": "https://static.xx.fbcdn.net/rsrc.php/v3/yJ/r/8dK8qmqxzpA.png",
                 "description": "Manage Facebook and Instagram business",
                 "category": "Marketing",
-                "display_order": 15
+                "display_order": 16
             },
             {
                 "name": "Facebook Ads Manager",
@@ -149,7 +157,7 @@ def setup_default_tools():
                 "icon": "https://static.xx.fbcdn.net/rsrc.php/v3/yZ/r/OTB6Bkrf2Ah.png",
                 "description": "Create and manage Facebook ads",
                 "category": "Marketing",
-                "display_order": 16
+                "display_order": 17
             },
             {
                 "name": "Adams Keegan",
@@ -157,7 +165,7 @@ def setup_default_tools():
                 "icon": "https://www.adamskeegan.com/wp-content/uploads/2022/12/cropped-AK-Favicon-32x32.png",
                 "description": "HR and payroll services",
                 "category": "HR",
-                "display_order": 17
+                "display_order": 18
             },
             {
                 "name": "HPanel",
@@ -165,7 +173,7 @@ def setup_default_tools():
                 "icon": "https://www.hostinger.com/h-assets/images/logo-transparent.svg",
                 "description": "Hostinger control panel",
                 "category": "Development",
-                "display_order": 18
+                "display_order": 19
             },
             {
                 "name": "Heroku",
@@ -173,7 +181,7 @@ def setup_default_tools():
                 "icon": "https://www.herokucdn.com/favicons/favicon.ico",
                 "description": "Cloud platform dashboard",
                 "category": "Development",
-                "display_order": 19
+                "display_order": 20
             },
             {
                 "name": "GitHub",
@@ -181,7 +189,7 @@ def setup_default_tools():
                 "icon": "https://github.githubassets.com/assets/GitHub-Mark-ea2971cee799.png",
                 "description": "Source code repositories",
                 "category": "Development",
-                "display_order": 20
+                "display_order": 21
             },
             {
                 "name": "Google Tag Manager",
@@ -189,7 +197,7 @@ def setup_default_tools():
                 "icon": "https://www.gstatic.com/analytics-suite/header/suite/v2/ic_tag_manager.svg",
                 "description": "Manage website tracking tags",
                 "category": "Marketing",
-                "display_order": 21
+                "display_order": 22
             },
             {
                 "name": "Google Groups",
@@ -197,7 +205,7 @@ def setup_default_tools():
                 "icon": "https://www.gstatic.com/images/branding/product/1x/groups_48dp.png",
                 "description": "Manage email groups and forums",
                 "category": "Communication",
-                "display_order": 22
+                "display_order": 23
             },
             {
                 "name": "Google Business Profile",
@@ -205,7 +213,7 @@ def setup_default_tools():
                 "icon": "https://www.gstatic.com/identity/boq/accountsettingsmobile/account_settings_96x96_db66f976ef3a88f2bb71860d5c34a613.png",
                 "description": "Manage Google Business listings",
                 "category": "Marketing",
-                "display_order": 23
+                "display_order": 24
             }
         ]
         
