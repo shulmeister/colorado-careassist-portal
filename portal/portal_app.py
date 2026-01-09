@@ -98,19 +98,8 @@ try:
 except Exception as e:
     logger.error(f"Failed to mount Tracker module: {e}")
 
-# 2. Mount Recruiter (Flask)
-try:
-    from services.recruiter.app import app as recruiter_app
-    from a2wsgi import WSGIMiddleware
-    
-    # Mount static files for recruiter (Flask expects them at /recruiting/static)
-    app.mount("/recruiting/static", StaticFiles(directory="static/recruiter"), name="recruiter_static")
-    
-    # Mount the Flask app
-    app.mount("/recruiting", WSGIMiddleware(recruiter_app))
-    logger.info("Mounted Recruiter module at /recruiting")
-except Exception as e:
-    logger.error(f"Failed to mount Recruiter module: {e}")
+# Recruiter dashboard is now mounted at /recruiting via unified_app.py
+# No mounting needed here - the Flask app is mounted at the unified_app level
 
 # =========================================================
 
