@@ -13,7 +13,7 @@ import { useConfigurationContext } from "../root/ConfigurationContext";
 const Header = () => {
   const portalUrl =
     import.meta.env.VITE_PORTAL_URL ??
-    "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/";
+    "https://portal.coloradocareassist.com/";
   const { darkModeLogo, lightModeLogo, title } = useConfigurationContext();
   const location = useLocation();
 
