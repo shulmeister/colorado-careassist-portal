@@ -1,0 +1,9 @@
+.heroku/
+.apt/
+node_modules/
+*.pyc
+__pycache__/
+frontend/.vite/
+service_account.json
+.env
+

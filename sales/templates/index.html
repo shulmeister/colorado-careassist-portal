@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colorado CareAssist - Route Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 40px;
+        }
+
+        .upload-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+            border: 2px dashed #dee2e6;
+            transition: all 0.3s ease;
+        }
+
+        .upload-section:hover {
+            border-color: #3498db;
+            background: #f0f8ff;
+        }
+
+        .upload-section.dragover {
+            border-color: #3498db;
+            background: #e3f2fd;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 10px;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.4);
+        }
+
+        .upload-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f5e8;
+            border-radius: 5px;
+            color: #2d5a2d;
+            display: none;
+        }
+
+        .results-section {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .results-title {
+            font-size: 1.5em;
+            color: #2c3e50;
+        }
+
+        .append-btn {
+            background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 1em;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .append-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+        }
+
+        .append-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .visits-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .visits-table th {
+            background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .visits-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .visits-table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .visits-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .stop-number {
+            font-weight: bold;
+            color: #3498db;
+            text-align: center;
+            width: 60px;
+        }
+
+        .business-name {
+            font-weight: 500;
+            color: #2c3e50;
+        }
+
+        .location {
+            color: #7f8c8d;
+            font-size: 0.9em;
+        }
+
+        .city {
+            color: #95a5a6;
+            font-size: 0.9em;
+        }
+
+        .notes {
+            color: #34495e;
+            font-style: italic;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #c3e6cb;
+            display: none;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border: 1px solid #f5c6cb;
+            display: none;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-around;
+            margin: 20px 0;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            flex: 1;
+            min-width: 150px;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        .stat-label {
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+
+            .content {
+                padding: 20px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .visits-table {
+                font-size: 0.9em;
+            }
+
+            .visits-table th,
+            .visits-table td {
+                padding: 8px 10px;
+            }
+
+            .results-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .stats {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Colorado CareAssist</h1>
+            <p>Route & Time Tracker - Upload MyWay Routes or Time Sheets</p>
+        </div>
+
+        <div class="content">
+            <div class="upload-section" id="uploadSection">
+                <h2>Upload PDF File</h2>
+                <p>Select a MyWay route PDF to extract visits OR a time tracking PDF to extract hours worked</p>
+                <input type="file" id="fileInput" class="file-input" accept=".pdf">
+                <button class="upload-btn" id="uploadBtn">Choose PDF File</button>
+                <div class="file-info" id="fileInfo"></div>
+            </div>
+
+            <div class="success-message" id="successMessage"></div>
+            <div class="error-message" id="errorMessage"></div>
+
+            <div class="results-section" id="resultsSection">
+                <div class="results-header">
+                    <h3 class="results-title" id="resultsTitle">Extracted Data</h3>
+                    <button class="append-btn" id="appendBtn">Process Data</button>
+                </div>
+
+                <div class="stats" id="statsSection">
+                    <div class="stat-item">
+                        <div class="stat-number" id="totalVisits">0</div>
+                        <div class="stat-label">Total Visits</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number" id="uniqueBusinesses">0</div>
+                        <div class="stat-label">Unique Businesses</div>
+                    </div>
+                </div>
+
+                <div class="loading" id="loadingSection" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Processing PDF...</p>
+                </div>
+
+                <div id="tableContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentData = null;
+        let currentFilename = '';
+        let currentDataType = null;
+
+        // DOM elements
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const uploadSection = document.getElementById('uploadSection');
+        const fileInfo = document.getElementById('fileInfo');
+        const resultsSection = document.getElementById('resultsSection');
+        const loadingSection = document.getElementById('loadingSection');
+        const appendBtn = document.getElementById('appendBtn');
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+        const tableContainer = document.getElementById('tableContainer');
+        const totalVisitsEl = document.getElementById('totalVisits');
+        const uniqueBusinessesEl = document.getElementById('uniqueBusinesses');
+        const resultsTitle = document.getElementById('resultsTitle');
+
+        // Event listeners
+        fileInput.addEventListener('change', handleFileSelect);
+        appendBtn.addEventListener('click', appendToSheet);
+
+        // Drag and drop functionality
+        uploadSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+
+        uploadSection.addEventListener('dragleave', () => {
+            uploadSection.classList.remove('dragover');
+        });
+
+        uploadSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                handleFileSelect();
+            }
+        });
+
+        function handleFileSelect() {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            if (!file.name.toLowerCase().endsWith('.pdf')) {
+                showError('Please select a PDF file.');
+                return;
+            }
+
+            currentFilename = file.name;
+            fileInfo.textContent = `Selected: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`;
+            fileInfo.style.display = 'block';
+
+            uploadBtn.textContent = 'Process PDF';
+            uploadBtn.onclick = processFile;
+        }
+
+        async function processFile() {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            showLoading();
+            hideMessages();
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentData = result;
+                    currentDataType = result.type;
+                    displayResults(result);
+                    
+                    if (result.type === 'time_tracking') {
+                        showSuccess(`Successfully processed time tracking data: ${result.date} - ${result.total_hours} hours`);
+                    } else {
+                        showSuccess(`Successfully processed ${result.count} visits from ${result.filename}`);
+                    }
+                } else {
+                    showError(result.detail || 'Failed to process PDF');
+                }
+            } catch (error) {
+                showError('Error processing file: ' + error.message);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayResults(result) {
+            if (result.type === 'time_tracking') {
+                resultsTitle.textContent = 'Time Tracking Data';
+                appendBtn.textContent = 'Update Daily Summary';
+                displayTimeTrackingResults(result);
+            } else {
+                resultsTitle.textContent = 'Extracted Visits';
+                appendBtn.textContent = 'Append to Tracker';
+                displayVisitsResults(result);
+            }
+            resultsSection.style.display = 'block';
+        }
+
+        function displayTimeTrackingResults(result) {
+            // Update stats for time tracking
+            totalVisitsEl.textContent = '1';
+            uniqueBusinessesEl.textContent = 'Time Entry';
+
+            // Create table for time tracking
+            const table = document.createElement('table');
+            table.className = 'visits-table';
+            
+            // Header
+            const headerRow = table.insertRow();
+            ['Date', 'Hours Worked', 'Status'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+
+            // Data row
+            const row = table.insertRow();
+            
+            const dateCell = row.insertCell();
+            dateCell.className = 'business-name';
+            dateCell.textContent = result.date || 'Not detected';
+            
+            const hoursCell = row.insertCell();
+            hoursCell.className = 'stop-number';
+            hoursCell.textContent = result.total_hours || 'Not detected';
+            
+            const statusCell = row.insertCell();
+            statusCell.className = 'notes';
+            statusCell.textContent = 'Ready to update Daily Summary';
+
+            tableContainer.innerHTML = '';
+            tableContainer.appendChild(table);
+        }
+
+        function displayVisitsResults(result) {
+            const visits = result.visits;
+            
+            // Update stats
+            totalVisitsEl.textContent = visits.length;
+            const uniqueBusinesses = new Set(visits.map(v => v.business_name)).size;
+            uniqueBusinessesEl.textContent = uniqueBusinesses;
+
+            // Create table
+            const table = document.createElement('table');
+            table.className = 'visits-table';
+            
+            // Header
+            const headerRow = table.insertRow();
+            ['Stop', 'Business Name', 'Location', 'City', 'Notes'].forEach(text => {
+                const th = document.createElement('th');
+                th.textContent = text;
+                headerRow.appendChild(th);
+            });
+
+            // Data rows
+            visits.forEach(visit => {
+                const row = table.insertRow();
+                
+                const stopCell = row.insertCell();
+                stopCell.className = 'stop-number';
+                stopCell.textContent = visit.stop;
+                
+                const businessCell = row.insertCell();
+                businessCell.className = 'business-name';
+                businessCell.textContent = visit.business_name;
+                
+                const locationCell = row.insertCell();
+                locationCell.className = 'location';
+                locationCell.textContent = visit.location;
+                
+                const cityCell = row.insertCell();
+                cityCell.className = 'city';
+                cityCell.textContent = visit.city;
+                
+                const notesCell = row.insertCell();
+                notesCell.className = 'notes';
+                notesCell.textContent = visit.notes;
+                notesCell.title = visit.notes; // Tooltip for full text
+            });
+
+            tableContainer.innerHTML = '';
+            tableContainer.appendChild(table);
+        }
+
+        async function appendToSheet() {
+            if (!currentData) {
+                showError('No data to process');
+                return;
+            }
+
+            appendBtn.disabled = true;
+            appendBtn.textContent = currentDataType === 'time_tracking' ? 'Updating...' : 'Appending...';
+
+            try {
+                const response = await fetch('/append-to-sheet', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(currentData)
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showSuccess(result.message);
+                    appendBtn.textContent = 'Successfully Added!';
+                    appendBtn.style.background = '#27ae60';
+                } else {
+                    showError(result.detail || 'Failed to update sheet');
+                }
+            } catch (error) {
+                showError('Error updating sheet: ' + error.message);
+            } finally {
+                appendBtn.disabled = false;
+                if (appendBtn.textContent === 'Updating...' || appendBtn.textContent === 'Appending...') {
+                    appendBtn.textContent = currentDataType === 'time_tracking' ? 'Update Daily Summary' : 'Append to Tracker';
+                }
+            }
+        }
+
+        function showLoading() {
+            loadingSection.style.display = 'block';
+            uploadBtn.disabled = true;
+        }
+
+        function hideLoading() {
+            loadingSection.style.display = 'none';
+            uploadBtn.disabled = false;
+        }
+
+        function showSuccess(message) {
+            successMessage.textContent = message;
+            successMessage.style.display = 'block';
+            errorMessage.style.display = 'none';
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            successMessage.style.display = 'none';
+        }
+
+        function hideMessages() {
+            successMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+        }
+
+        // Upload button click handler
+        uploadBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (uploadBtn.textContent === 'Choose PDF File') {
+                fileInput.click();
+            } else if (uploadBtn.textContent === 'Process PDF') {
+                processFile();
+            }
+        });
+    </script>
+</body>
+</html>

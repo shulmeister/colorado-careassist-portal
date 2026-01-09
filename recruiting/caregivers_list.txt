@@ -1,0 +1,72 @@
+Reading employee CSV file...
+
+Total caregivers in employee file: 66
+
+Caregiver list (will search in database):
+================================================================================
+ 1. Diana Aldan-muna               | 916-803-2079    | dendeemuna67@yahoo.com
+ 2. Billy Assa                     | 720-499-2611    | billy.r.assa@gmail.com
+ 3. Angela Atteberry               | 817-317-6791    | atteberry1981@icloud.com
+ 4. Lakesha Barker                 | 720-404-7884    | barkerlakesha@gmail.com
+ 5. Jasmaine Batts                 |                 | jasmainebatts@icloud.com
+ 6. Debbie Bobak                   | 719-432-9903    | dbncolorado@yahoo.com
+ 7. Andrea Boone                   | 719-418-1170    | abooneco@gmail.com
+ 8. Lakiah Burt                    | 719-352-5016    | lakiahburt30@gmail.com
+ 9. Dina Castaneda Ortega          | 303-917-8832    | dynamite.co3@gmail.com
+10. Jennifer Clinkscales           | 720-275-8181    | clink.realty@gmail.com
+11. Brechelle Crockett             | 323-407-0831    | brechellec@gmail.com
+12. Ladonna Damron                 | 719-717-6698    | ladonna1989johnson@gmail.com
+13. Marilyn Delange                | 303-550-0117    | mjdelange@msn.com
+14. Emily Diamond                  |                 | emilydiamond67@gmail.com
+15. Juniper Dickerson              | 720-779-4208    | juniper.dickerson@gmail.com
+16. Serenity Dorrance              | 720-546-1981    | serenityfaith.xoxo@gmail.com
+17. Brandy Edwards                 | 539-995-0611    | brandymedwards360@gmail.com
+18. Zoya Engelking                 |                 | zoyaeng@outlook.com
+19. Emeka Ezeani                   | 720-661-4321    | emekaezeani97@gmail.com
+20. Aliyana Foster                 | 360-787-1428    | fosteraliyana3@gmail.com
+21. Christina Garcia               | 303-865-0386    | christinacruz86@yahoo.com
+22. Danielle Garcia                | 719-888-0441    | dgskywalker83@gmail.com
+23. Teri Gard                      | 719-330-0341    | terriffict2022@gmail.com
+24. Tigist Gebrehana               | 720-325-7928    | tgyetemesgen@yahoo.com
+25. Beth Gourley                   | 719-675-9441    | bethgourley13@gmail.com
+26. Ann Marie Grant-rose           | 719-452-2834    | annmariegrant156@gmail.com
+27. Halie Gutierrez                | 719-663-4853    | halieanngutierrez69@icloud.com
+28. Addison Hairfield              | 719-839-6190    | addisonhairfield26@gmail.com
+29. Shawnisha Jackson              | 303-868-1678    | shawnisha10@gmail.com
+30. Christ-neiley Joseph           | 719-460-3272    | jchristneileyjoseph123@gmail.com
+31. Watcharline Jules              | 203-243-5326    | watcharlinejules@gmail.com
+32. Michelle Kearney               | 423-539-0510    | michellekearney72@gmail.com
+33. Kandis Keys                    | 719-217-9249    | kandiskeys@icloud.com
+34. Jean Knoefler                  | 719-306-7941    | jeaneverlasting56@gmail.com
+35. Elaine Kozloski                | 719-287-1648    | elainejoy61@yahoo.com
+36. Gloria Kvapil                  | 715-226-0514    | gloria.cross.0926@gmail.com
+37. Karen Lieljuris                | 609-304-0413    | kjlieljuris@gmail.com
+38. Gwendolyn Manuel               | 251-206-8664    | gwenmanuel95@gmail.com
+39. Lola Marable                   | 850-896-6003    | lolamarable9@gmail.com
+40. Beth Martin                    |                 | bethadinamartin69@aol.com
+41. Liza Martinez                  | 719-355-0875    | lizamartinez826@gmail.com
+42. Mary Mary Mosha                |                 | marymosha56@yahoo.com
+43. Navon Medina                   | 303-349-9663    | navonamed@yahoo.com
+44. Dennis Muna                    | 916-802-9958    | dennis.muna@gmail.com
+45. Angela Oborne                  | 720-998-8309    | babie_ole@yahoo.com
+46. Shaunte Oliver                 | 720-334-7047    | issacoliver107@gmail.com
+47. Heather Paillette              | 719-200-3196    | pailletteh@gmail.com
+48. Aliyah Pierson                 | 480-776-7399    | aliyah8665@gmail.com
+49. Kavitha Ramasamy               | 719-229-2170    | tarakaviram@gmail.com
+50. Andrea Ricketts                | 719-246-7417    | andrearicketts87@gmail.com
+51. Tamara Ritchie                 | 719-755-9698    | tritc12@wgu.edu
+52. Jennifer Sachse                |                 | jensachse3@gmail.com
+53. Sheila Sandoval                | 720-694-7447    | sheilasandoval9@gmail.com
+54. Virginia Seaman                | 719-439-3067    | theseamanfamily@comcast.net
+55. Kristin Sinatra                |                 | kristin.sinatra@yahoo.com
+56. Laura Smith                    |                 | fraulau337@gmail.com
+57. Kirah Stearns                  | 719-439-5600    | kirahstearns1@gmail.com
+58. Chineta Stephens Davis         | 719-231-1622    | chinetadavis@outlook.com
+59. Courtney Truesdell             | 808-220-5894    | courtney_truesdell@hotmail.com
+60. Sarah Trujillo                 | 618-975-1604    | trujillo1971@gmail.com
+61. Lisa Wambugu                   | 951-474-7017    | zipwambugu@gmail.com
+62. Racheal Wambui                 | 719-499-5376    | nimmohvalentine@gmail.com
+63. Stacey Widger                  | 719-588-5668    | staceywidger5668@gmail.com
+64. Kathryn Williams               | 720-215-1255    | katzmeow71@yahoo.com
+65. Destine Wood                   |                 | wooddestine1985@gmail.com
+66. Karen Yu                       | 719-646-8822    | gnk2836@yahoo.com

@@ -1,0 +1,4016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Sales Dashboard v2.2</title>
+    <script>
+        // Navigation fix - ensures Reports is always replaced with Activity Logs
+        (function fixNavigation() {
+            function fixAllNav() {
+                const allNavItems = document.querySelectorAll('.nav-item');
+                allNavItems.forEach(item => {
+                    const text = item.textContent.trim();
+                    const href = item.getAttribute('href');
+                    
+                    // Fix any Reports navigation items
+                    if (text.includes('Reports') || href === '#reports') {
+                        console.log('🔧 Fixing Reports navigation:', text);
+                        item.setAttribute('href', '#activity-logs');
+                        item.setAttribute('onclick', 'showActivityLogsTab()');
+                        item.setAttribute('id', 'nav-activity-logs');
+                        item.innerHTML = '<span class="nav-icon">📋</span><span class="nav-text">Activity Logs</span>';
+                    }
+                });
+                
+                // Also check for old nav-reports ID
+                const reportsNav = document.getElementById('nav-reports');
+                if (reportsNav) {
+                    reportsNav.id = 'nav-activity-logs';
+                    reportsNav.setAttribute('href', '#activity-logs');
+                    reportsNav.setAttribute('onclick', 'showActivityLogsTab()');
+                    reportsNav.innerHTML = '<span class="nav-icon">📋</span><span class="nav-text">Activity Logs</span>';
+                }
+            }
+            
+            // Run immediately and after DOM loads
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', fixAllNav);
+            } else {
+                fixAllNav();
+            }
+            
+            // Continuous monitoring for 5 seconds (in case of dynamic content)
+            let attempts = 0;
+            const maxAttempts = 100; // 5 seconds at 50ms intervals
+            const interval = setInterval(() => {
+                fixAllNav();
+                attempts++;
+                if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                }
+            }, 50);
+            
+            // Watch for DOM changes that might restore "Reports"
+            const observer = new MutationObserver(function(mutations) {
+                let needsFix = false;
+                mutations.forEach(function(mutation) {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1) {
+                            if (node.classList && node.classList.contains('nav-item')) {
+                                const text = node.textContent.trim();
+                                const href = node.getAttribute('href');
+                                if (text.includes('Reports') || href === '#reports') {
+                                    needsFix = true;
+                                }
+                            }
+                            const navItems = node.querySelectorAll ? node.querySelectorAll('.nav-item') : [];
+                            navItems.forEach(item => {
+                                const text = item.textContent.trim();
+                                const href = item.getAttribute('href');
+                                if (text.includes('Reports') || href === '#reports') {
+                                    needsFix = true;
+                                }
+                            });
+                        }
+                    });
+                });
+                if (needsFix) {
+                    fixAllNav();
+                }
+            });
+            
+            // Observe navigation menu when it's available
+            const observeNav = () => {
+                const navMenu = document.querySelector('.nav-menu');
+                if (navMenu) {
+                    observer.observe(navMenu, {
+                        childList: true,
+                        subtree: true,
+                        characterData: true
+                    });
+                } else {
+                    setTimeout(observeNav, 100);
+                }
+            };
+            observeNav();
+        })();
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+
+        .tab-content {
+            display: block;
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .tab-content.hidden {
+            display: none !important;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 0 24px 32px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 24px;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .nav-menu {
+            padding: 0 16px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin-bottom: 4px;
+            border-radius: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .nav-item.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .nav-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+
+        /* Force fix any Reports navigation items */
+        a.nav-item[href="#reports"] {
+            display: none !important;
+        }
+        
+        a.nav-item[href="#activity-logs"] {
+            display: flex !important;
+        }
+
+        /* RingCentral Sidebar Widget */
+        .sidebar-ringcentral {
+            margin: 16px 0;
+            padding: 12px;
+            background: #1e293b;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        .sidebar-ringcentral-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .sidebar-ringcentral-title {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sidebar-ringcentral-name {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .sidebar-ringcentral-subtitle {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .sidebar-ringcentral-expand {
+            background: #3b82f6;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .sidebar-ringcentral-expand:hover {
+            background: #2563eb;
+        }
+
+        .sidebar-ringcentral-frame {
+            width: 100%;
+            height: 400px;
+            border: none;
+            border-radius: 6px;
+            background: #0f172a;
+        }
+
+        .user-section {
+            margin-top: auto;
+            padding: 16px;
+            border-top: 1px solid #334155;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            margin-right: 12px;
+            font-size: 14px;
+        }
+
+        .user-details h4 {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .user-email {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .logout-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s ease;
+            width: 100%;
+        }
+
+        .logout-btn:hover {
+            background: #b91c1c;
+        }
+
+        /* Main Content */
+        .main-content {
+            background: #0f172a;
+            padding: 16px;
+            overflow-y: auto;
+        }
+
+        .dashboard-header {
+            margin-bottom: 12px;
+        }
+
+        .dashboard-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 4px;
+        }
+
+        .dashboard-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        /* KPI Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .kpi-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            transition: all 0.2s ease;
+        }
+
+        .kpi-card:hover {
+            border-color: #475569;
+            transform: translateY(-2px);
+        }
+
+        .kpi-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .kpi-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-subtitle {
+            font-size: 10px;
+            font-weight: 400;
+            color: #64748b;
+            letter-spacing: 0.3px;
+            margin-top: 2px;
+        }
+
+        .kpi-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .kpi-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: #f1f5f9;
+            margin-bottom: 6px;
+        }
+
+        .kpi-change {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .kpi-change.positive {
+            color: #10b981;
+        }
+
+        .kpi-change.negative {
+            color: #ef4444;
+        }
+
+        .kpi-change.neutral {
+            color: #94a3b8;
+        }
+
+        /* Chart Container */
+        .chart-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .chart-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .chart-card canvas {
+            width: 100% !important;
+            height: 200px !important;
+            max-height: 200px;
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .chart-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        /* Upload Section */
+        .upload-section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
+        .upload-header {
+            margin-bottom: 20px;
+        }
+
+        .upload-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .upload-instructions {
+            margin-bottom: 20px;
+        }
+
+        .file-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .file-type {
+            background: #334155;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .file-type h4 {
+            color: #f1f5f9;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .file-type p {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .file-type .extensions {
+            font-weight: 600;
+            color: #3b82f6;
+        }
+
+        .upload-area {
+            border: 2px dashed #475569;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #0f172a;
+        }
+
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background: #1e293b;
+        }
+
+        .upload-area.dragover {
+            border-color: #3b82f6;
+            background: #1e293b;
+        }
+
+        .file-selected {
+            background: #065f46;
+            border-color: #10b981;
+            color: #d1fae5;
+        }
+
+        .upload-status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .upload-status.success {
+            background: #065f46;
+            color: #d1fae5;
+            border: 1px solid #10b981;
+        }
+
+        .upload-status.error {
+            background: #7f1d1d;
+            color: #fecaca;
+            border: 1px solid #ef4444;
+        }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: #dc2626;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        /* Table Styles */
+        .table-container {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+
+        .table-container h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 20px;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+            color: #e2e8f0;
+        }
+
+        .table th {
+            background: #334155;
+            font-weight: 600;
+            color: #f1f5f9;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table tr:hover {
+            background: #334155;
+        }
+
+        /* Contact and Time Cards */
+        .contact-card {
+            background: #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .contact-card h4 {
+            color: #f1f5f9;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .contact-card p {
+            color: #94a3b8;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .time-tracking-card {
+            background: #065f46;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border-left: 4px solid #10b981;
+        }
+
+        .time-tracking-card h4 {
+            color: #d1fae5;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .time-tracking-card p {
+            color: #a7f3d0;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .visits-table {
+            margin-top: 16px;
+        }
+
+        .visits-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .visits-table th,
+        .visits-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+            color: #e2e8f0;
+        }
+
+        .visits-table th {
+            background: #334155;
+            font-weight: 600;
+            color: #f1f5f9;
+            font-size: 12px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+            
+            .chart-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px;
+            }
+            
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .kpi-value {
+                font-size: 28px;
+            }
+        }
+
+        .search-container {
+            margin-bottom: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .search-input::placeholder {
+            color: #64748b;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 0;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #f1f5f9;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #cbd5e1;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            color: #f1f5f9;
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 20px 24px;
+            border-top: 1px solid #334155;
+            margin-top: 8px;
+        }
+
+        #contactForm {
+            padding: 24px;
+        }
+
+        /* Activity Logs Styling */
+        .activity-logs-container {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 24px;
+        }
+
+        .activity-logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .activity-logs-header h3 {
+            color: #f1f5f9;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .activity-logs-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .activity-logs-layout {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 24px;
+            min-height: 600px;
+        }
+
+        .activity-logs-sidebar {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-y: auto;
+            max-height: calc(100vh - 300px);
+        }
+
+        .activity-logs-list-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .activity-logs-list-header h4 {
+            color: #f1f5f9;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .activity-logs-count {
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .activity-logs-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .activity-log-item {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .activity-log-item:hover {
+            background: #334155;
+            border-color: #475569;
+        }
+
+        .activity-log-item.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }
+
+        .activity-log-item.active .activity-log-title {
+            color: white;
+        }
+
+        .activity-log-item.active .activity-log-date {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .activity-log-title {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .activity-log-date {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .activity-log-skeleton {
+            height: 60px;
+            background: linear-gradient(90deg, #334155 25%, #475569 50%, #334155 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+            border-radius: 8px;
+        }
+
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .activity-logs-preview {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .activity-log-preview-container {
+            width: 100%;
+            height: calc(100vh - 300px);
+            min-height: 600px;
+            position: relative;
+        }
+
+        .activity-log-preview-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #94a3b8;
+        }
+
+        .placeholder-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .activity-log-preview-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #ffffff;
+        }
+
+        .activity-log-preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border-bottom: 1px solid #334155;
+            background: #1e293b;
+        }
+
+        .activity-log-preview-header h4 {
+            color: #f1f5f9;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .activity-log-preview-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .activity-logs-embed {
+            position: relative;
+            width: 100%;
+            min-height: 600px;
+            background: #0f172a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .activity-logs-embed iframe {
+            width: 100%;
+            height: calc(100vh - 300px);
+            min-height: 600px;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        .activity-logs-actions {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #334155;
+        }
+
+        .btn-refresh {
+            background: #334155;
+            color: #f1f5f9;
+            border: 1px solid #475569;
+        }
+
+        .btn-refresh:hover {
+            background: #475569;
+            border-color: #64748b;
+        }
+
+        .activity-logs-info {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 20px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .activity-logs-info strong {
+            color: #cbd5e1;
+        }
+
+        @media (max-width: 768px) {
+            .activity-logs-layout {
+                grid-template-columns: 1fr;
+            }
+
+            .activity-logs-sidebar {
+                max-height: 300px;
+            }
+
+            .activity-log-preview-container {
+                height: 500px;
+                min-height: 500px;
+            }
+
+            .activity-logs-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+
+            .activity-logs-controls {
+                width: 100%;
+                justify-content: flex-start;
+            }
+        }
+
+        /* Notes inline editing */
+        .notes-display {
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 4px;
+            transition: background 0.2s;
+            color: #cbd5e1;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 300px;
+        }
+        .notes-display:hover {
+            background: #334155;
+        }
+        .notes-display.editing {
+            display: none !important;
+        }
+        .notes-textarea {
+            display: none;
+            width: 100%;
+            min-height: 60px;
+            padding: 6px;
+            background: #1e293b;
+            border: 2px solid #3b82f6;
+            border-radius: 4px;
+            color: #f1f5f9;
+            font-family: inherit;
+            font-size: 0.75rem;
+            resize: vertical;
+        }
+        .notes-textarea.active {
+            display: block !important;
+        }
+        .notes-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+        }
+
+        /* ==================================
+           Lead Pipeline / Kanban Board Styles
+           ================================== */
+        .pipeline-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .btn-primary, .btn-secondary {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            display: flex;
+            align-items: center;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #334155;
+            color: #f1f5f9;
+            border: 1px solid #475569;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .kanban-board {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 24px;
+            min-height: 500px;
+        }
+
+        .kanban-loading {
+            grid-column: 1 / -1;
+            text-align: center;
+            padding: 60px 20px;
+            color: #94a3b8;
+            font-size: 16px;
+        }
+
+        .kanban-column {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 16px;
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .kanban-column-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #334155;
+        }
+
+        .kanban-column-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .kanban-column-count {
+            background: #334155;
+            color: #cbd5e1;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .kanban-column-cards {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            overflow-y: auto;
+        }
+
+        .lead-card {
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 14px;
+            cursor: grab;
+            transition: all 0.2s;
+        }
+
+        .lead-card:hover {
+            border-color: #3b82f6;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.1);
+        }
+
+        .lead-card.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+
+        .lead-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .lead-card-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #f1f5f9;
+            flex: 1;
+        }
+
+        .lead-card-priority {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .lead-card-priority.high {
+            background: rgba(239, 68, 68, 0.2);
+            color: #fca5a5;
+        }
+
+        .lead-card-priority.medium {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fcd34d;
+        }
+
+        .lead-card-priority.low {
+            background: rgba(34, 197, 94, 0.2);
+            color: #86efac;
+        }
+
+        .lead-card-info {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .lead-card-info-icon {
+            font-size: 12px;
+        }
+
+        .lead-card-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .lead-card-tag {
+            background: #334155;
+            color: #cbd5e1;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .lead-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #334155;
+        }
+
+        .lead-card-revenue {
+            font-size: 14px;
+            font-weight: 700;
+            color: #22c55e;
+        }
+
+        .lead-card-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .lead-card-action-btn {
+            background: #334155;
+            color: #cbd5e1;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .lead-card-action-btn:hover {
+            background: #475569;
+            color: #f1f5f9;
+        }
+
+        .kanban-column-cards.drag-over {
+            background: rgba(59, 130, 246, 0.05);
+            border: 2px dashed #3b82f6;
+            border-radius: 8px;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #cbd5e1;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            color: #f1f5f9;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid #334155;
+        }
+
+        .btn-cancel {
+            background: #334155;
+            color: #cbd5e1;
+            padding: 10px 20px;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-cancel:hover {
+            background: #475569;
+        }
+
+        .btn-save {
+            background: #3b82f6;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-save:hover {
+            background: #2563eb;
+        }
+
+        .btn-delete {
+            background: #dc2626;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: auto;
+        }
+
+        .btn-delete:hover {
+            background: #b91c1c;
+        }
+
+        @media (max-width: 1200px) {
+            .kanban-board {
+                grid-template-columns: 1fr;
+            }
+            
+            .kanban-column {
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Sales Dashboard</div>
+                <div class="sidebar-subtitle">Colorado CareAssist</div>
+        </div>
+
+            <nav class="nav-menu">
+                <a href="#" class="nav-item" style="background: #3b82f6; color: white; font-weight: 600; margin-bottom: 16px;" onclick="event.preventDefault(); window.location.href = window.location.href.includes('portal-coloradocareassist') ? '/' : 'https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/';">
+                    <span class="nav-icon">←</span>
+                    Back to Portal
+                </a>
+                <a href="#dashboard" class="nav-item active" onclick="showDashboardTab()">
+                    <span class="nav-icon">📊</span>
+                    Dashboard
+                </a>
+                <a href="#visits" class="nav-item" onclick="showVisitsTab()">
+                    <span class="nav-icon">🏥</span>
+                    Visits
+                </a>
+                <a href="#sales" class="nav-item" onclick="showSalesTab()">
+                    <span class="nav-icon">💰</span>
+                    Closed Sales
+                </a>
+                <a href="#contacts" class="nav-item" onclick="showContactsTab()">
+                    <span class="nav-icon">📇</span>
+                    Contacts
+                </a>
+                <a href="#leads" class="nav-item" onclick="showLeadsTab()">
+                    <span class="nav-icon">🎯</span>
+                    <span class="nav-text">Lead Tracker</span>
+                </a>
+                <a href="#activity-logs" class="nav-item" onclick="showActivityLogsTab()" id="nav-activity-logs">
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-text">Activity Logs</span>
+                </a>
+                <a href="#settings" class="nav-item">
+                    <span class="nav-icon">⚙️</span>
+                    Settings
+                </a>
+            </nav>
+
+            {% if ringcentral.enabled %}
+            <div class="sidebar-ringcentral">
+                <div class="sidebar-ringcentral-header">
+                    <div class="sidebar-ringcentral-title">
+                        <span class="nav-icon">💬</span>
+                        <div>
+                            <div class="sidebar-ringcentral-name">RingCentral</div>
+                            <div class="sidebar-ringcentral-subtitle">Calls & SMS</div>
+                        </div>
+                    </div>
+                    <a
+                        class="sidebar-ringcentral-expand"
+                        href="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        Open App
+                    </a>
+                </div>
+                <iframe
+                    id="rc-widget-sidebar"
+                    class="sidebar-ringcentral-frame"
+                    allow="microphone; camera; autoplay; clipboard-write"
+                    loading="lazy"
+                    title="RingCentral Sidebar"
+                    src="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
+                ></iframe>
+            </div>
+            {% endif %}
+            
+            <div class="user-section">
+                {% if user %}
+                <div class="user-info">
+                    <div class="user-avatar">{{ user.name[0] if user.name else 'U' }}</div>
+                    <div class="user-details">
+                        <h4>{{ user.name or 'User' }}</h4>
+                        <div class="user-email">{{ user.email or 'user@example.com' }}</div>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Dashboard Tab Content -->
+            <div id="dashboardTab" class="tab-content">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Sales Overview</h1>
+                    <p class="dashboard-subtitle">Real-time insights and analytics</p>
+                </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Total Visits</div>
+                        <div class="kpi-icon" style="background: #3b82f6;">📊</div>
+                    </div>
+                    <div class="kpi-value" id="totalVisits">-</div>
+                    <div class="kpi-change neutral" id="visitsChange">Loading...</div>
+                    </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div>
+                            <div class="kpi-title">Total Costs</div>
+                            <div class="kpi-subtitle">Excluding Bonuses</div>
+                        </div>
+                        <div class="kpi-icon" style="background: #ef4444;">💰</div>
+                    </div>
+                    <div class="kpi-value" id="totalCosts">-</div>
+                    <div class="kpi-change neutral" id="costsChange">Loading...</div>
+                    </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Bonuses Earned</div>
+                        <div class="kpi-icon" style="background: #10b981;">🏆</div>
+                    </div>
+                    <div class="kpi-value" id="totalBonusesEarned">-</div>
+                    <div class="kpi-change neutral" id="bonusesChange">Loading...</div>
+                    </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Cost Per Visit</div>
+                        <div class="kpi-icon" style="background: #8b5cf6;">📈</div>
+                    </div>
+                    <div class="kpi-value" id="costPerVisit">-</div>
+                    <div class="kpi-change neutral" id="cpvChange">Loading...</div>
+                    </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div>
+                            <div class="kpi-title">Emails Sent</div>
+                            <div class="kpi-subtitle">Last 7 Days</div>
+                        </div>
+                        <div class="kpi-icon" style="background: #f59e0b;">📧</div>
+                    </div>
+                    <div class="kpi-value" id="emailsSent7Days">-</div>
+                    <div class="kpi-change neutral" id="emailsChange">Loading...</div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Total Hours</div>
+                        <div class="kpi-icon" style="background: #06b6d4;">⏰</div>
+                    </div>
+                    <div class="kpi-value" id="totalHours">-</div>
+                    <div class="kpi-change neutral" id="hoursChange">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="chart-section">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <div>
+                            <div class="chart-title">Costs by Month</div>
+                            <div class="chart-subtitle">Monthly cost trends</div>
+                        </div>
+                    </div>
+                    <canvas id="costsChart"></canvas>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <div>
+                            <div class="chart-title">Referral Types</div>
+                            <div class="chart-subtitle">Visits by referral category</div>
+                        </div>
+                    </div>
+                    <canvas id="facilitiesChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <div class="upload-header">
+                    <h3 class="upload-title">File Upload</h3>
+                </div>
+                
+                <div class="upload-instructions">
+                    <div class="file-types">
+                        <div class="file-type">
+                            <h4>📄 PDF Files</h4>
+                            <p class="extensions">.pdf</p>
+                            <p>MyWay route plans</p>
+                            <p>Time tracking reports</p>
+                        </div>
+                        <div class="file-type">
+                            <h4>🖼️ Image Files</h4>
+                            <p class="extensions">.jpg, .jpeg, .png, .heic</p>
+                            <p>Business cards</p>
+                            <p>iPhone photos (HEIC)</p>
+                            <p>Contact information</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png,.heic,.heif" style="display: none;">
+                    <div id="uploadText">
+                        <h3>📁 Choose File or Drag & Drop</h3>
+                        <p>Upload PDFs or images to process</p>
+                        <small>Supported: PDF, JPG, PNG, HEIC (iPhone photos)</small>
+                    </div>
+                </div>
+
+                <div id="uploadStatus" class="upload-status" style="display: none;"></div>
+                
+                <div id="resultsContainer" style="margin-top: 20px;"></div>
+                
+                <button id="appendBtn" class="btn" style="display: none; margin-top: 16px;">Save Data</button>
+                    </div>
+
+                    <!-- Recent Activity -->
+                        <div class="table-container">
+                <h3>Recent Activity</h3>
+                <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Type</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentActivityList">
+                        <tr>
+                            <td colspan="3" style="text-align: center; color: #94a3b8;">Loading...</td>
+                        </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+            <!-- Visits Tab Content -->
+            <div id="visitsTab" class="tab-content hidden">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Daily Visits Summary</h1>
+                    <p class="dashboard-subtitle">Visit tracking and facility data</p>
+            </div>
+
+                <div class="table-container">
+                    <div class="search-container">
+                        <input type="text" id="visitsSearch" placeholder="Search visits by business name, address, or city..." class="search-input">
+                    </div>
+                    <h3>All Visits</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Business Name</th>
+                                <th>Address</th>
+                                <th>City</th>
+                                <th>Stop #</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody id="visitsList">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: #94a3b8;">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Closed Sales Tab Content -->
+            <div id="salesTab" class="tab-content hidden">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Closed Sales</h1>
+                    <p class="dashboard-subtitle">Sales bonuses and commission tracking</p>
+                </div>
+
+                <div class="table-container">
+                    <div class="search-container">
+                        <input type="text" id="salesSearch" placeholder="Search sales by client name..." class="search-input">
+                    </div>
+                    <h3>Sales Bonuses</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Client Name</th>
+                                <th>Bonus Amount</th>
+                                <th>Commission Paid</th>
+                                <th>Start Date</th>
+                                <th>WellSky Status</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="salesList">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: #94a3b8;">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Contacts Tab Content -->
+            <div id="contactsTab" class="tab-content hidden">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Business Card Contacts</h1>
+                    <p class="dashboard-subtitle">Saved contact information from business cards</p>
+                </div>
+
+                <div class="table-container">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <div class="search-container" style="flex: 1; margin-right: 16px;">
+                            <input type="text" id="contactsSearch" placeholder="Search contacts by name, company, or email..." class="search-input">
+                        </div>
+                        <button class="btn" onclick="showAddContactModal()" style="margin-right: 8px;">+ Add Contact</button>
+                        <button class="btn" onclick="syncBrevoContacts()" style="background: #0b996e; margin-right: 8px;">🔄 Sync from Brevo</button>
+                        <button class="btn" onclick="pushToBrevo()" style="background: #3b82f6;">📤 Push to Brevo</button>
+                    </div>
+                    <div id="contactsStatus" class="upload-status" style="display: none; margin-bottom: 16px;"></div>
+                    <h3>Saved Contacts</h3>
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Company</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contactsList">
+                            <tr>
+                                <td colspan="6" style="text-align: center; color: #94a3b8;">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Lead Tracker Tab Content -->
+            <div id="leadsTab" class="tab-content hidden">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Lead Pipeline</h1>
+                    <p class="dashboard-subtitle">Manage leads through your sales pipeline</p>
+                    <div class="pipeline-actions">
+                        <button class="btn-primary" onclick="showAddLeadModal()">
+                            <span style="margin-right: 8px;">+</span> Add Lead
+                        </button>
+                        <button class="btn-secondary" onclick="showReferralSourcesModal()">
+                            📇 Manage Referral Sources
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Kanban Board -->
+                <div class="kanban-board" id="kanbanBoard">
+                    <div class="kanban-loading">Loading pipeline...</div>
+                </div>
+            </div>
+
+            <!-- Lead Modal -->
+            <div id="leadModal" class="modal-overlay">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="leadModalTitle">Add Lead</h2>
+                        <button class="modal-close" onclick="closeLeadModal()">×</button>
+                    </div>
+                    <form id="leadForm" onsubmit="saveLead(event)">
+                        <input type="hidden" id="leadId">
+                        <input type="hidden" id="leadStageId">
+                        
+                        <div class="form-group">
+                            <label class="form-label">Lead Name *</label>
+                            <input type="text" id="leadName" class="form-input" required placeholder="Enter lead name">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Contact Person</label>
+                                <input type="text" id="leadContactName" class="form-input" placeholder="Contact name">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Phone</label>
+                                <input type="tel" id="leadPhone" class="form-input" placeholder="Phone number">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" id="leadEmail" class="form-input" placeholder="Email address">
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Address</label>
+                                <input type="text" id="leadAddress" class="form-input" placeholder="Street address">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">City</label>
+                                <input type="text" id="leadCity" class="form-input" placeholder="City">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Source</label>
+                                <select id="leadSource" class="form-select">
+                                    <option value="">Select source...</option>
+                                    <option value="Referral">Referral</option>
+                                    <option value="Direct">Direct</option>
+                                    <option value="Website">Website</option>
+                                    <option value="Cold Call">Cold Call</option>
+                                    <option value="Event">Event</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Payor Source</label>
+                                <select id="leadPayorSource" class="form-select">
+                                    <option value="">Select payor...</option>
+                                    <option value="Medicaid">Medicaid</option>
+                                    <option value="Medicare">Medicare</option>
+                                    <option value="Private Pay">Private Pay</option>
+                                    <option value="Insurance">Insurance</option>
+                                    <option value="VA">VA</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Expected Revenue (Monthly)</label>
+                                <input type="number" id="leadRevenue" class="form-input" placeholder="$0" step="0.01">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Expected Close Date</label>
+                                <input type="date" id="leadCloseDate" class="form-input">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Priority</label>
+                            <select id="leadPriority" class="form-select">
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Referral Source</label>
+                            <select id="leadReferralSourceId" class="form-select">
+                                <option value="">None</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Notes</label>
+                            <textarea id="leadNotes" class="form-textarea" placeholder="Add any additional notes..."></textarea>
+                        </div>
+
+                        <div class="modal-actions">
+                            <button type="button" id="deleteLeadBtn" class="btn-delete" onclick="deleteLead()" style="display: none;">Delete</button>
+                            <button type="button" class="btn-cancel" onclick="closeLeadModal()">Cancel</button>
+                            <button type="submit" class="btn-save">Save Lead</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Referral Sources Modal -->
+            <div id="referralSourcesModal" class="modal-overlay">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title">Referral Sources</h2>
+                        <button class="modal-close" onclick="closeReferralSourcesModal()">×</button>
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <button class="btn-primary" onclick="showAddReferralSourceForm()">+ Add Referral Source</button>
+                    </div>
+                    <div id="referralSourcesList"></div>
+                </div>
+            </div>
+
+            <!-- Activity Logs Tab Content -->
+            <div id="activityLogsTab" class="tab-content hidden">
+                <div class="dashboard-header">
+                    <h1 class="dashboard-title">Activity Logs</h1>
+                    <p class="dashboard-subtitle">Daily activity reports from Maryssa</p>
+                </div>
+
+                <div class="activity-logs-container">
+                    <div class="activity-logs-header">
+                        <h3>Activity Logs</h3>
+                        <div class="activity-logs-controls">
+                            <button class="btn" onclick="showAddLogModal()" style="background: #10b981; margin-right: 8px;">
+                                ➕ Add Log
+                            </button>
+                            <button class="btn btn-refresh" onclick="loadActivityLogs()" title="Refresh logs">
+                                🔄 Refresh
+                            </button>
+                    </div>
+                    </div>
+
+                    <div class="activity-logs-layout">
+                        <!-- Activity Logs List -->
+                        <div class="activity-logs-sidebar">
+                            <div class="activity-logs-list-header">
+                                <h4>All Activity Logs</h4>
+                                <span id="activityLogsCount" class="activity-logs-count">Loading...</span>
+                            </div>
+                            <div id="activityLogsList" class="activity-logs-list">
+                                <div class="activity-log-item loading">
+                                    <div class="activity-log-skeleton"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Activity Log Preview -->
+                        <div class="activity-logs-preview">
+                            <div id="activityLogPreview" class="activity-log-preview-container">
+                                <div class="activity-log-preview-placeholder">
+                                    <div class="placeholder-icon">📋</div>
+                                    <p>Select an activity log to view</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Add Activity Log Modal -->
+            <div id="addLogModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Add Activity Log</h2>
+                        <button class="modal-close" onclick="closeAddLogModal()">&times;</button>
+                    </div>
+                    <form id="addLogForm" onsubmit="addActivityLog(event)">
+                        <div class="form-group">
+                            <label>Google Drive URL *</label>
+                            <input type="url" id="logUrl" placeholder="https://docs.google.com/document/d/..." required style="width: 100%; padding: 12px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; color: #e2e8f0;">
+                            <small style="color: #94a3b8; margin-top: 8px; display: block;">Paste the link to a Google Doc activity log</small>
+                        </div>
+                        <div class="form-group" style="margin-top: 20px;">
+                            <button type="submit" class="btn" style="background: #10b981; width: 100%;">Add Log</button>
+                            <button type="button" class="btn" onclick="closeAddLogModal()" style="background: #64748b; width: 100%; margin-top: 8px;">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Contact Modal -->
+            <div id="contactModal" class="modal" style="display: none;">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 id="contactModalTitle">Add Contact</h2>
+                        <button class="modal-close" onclick="closeContactModal()">&times;</button>
+                    </div>
+                    <form id="contactForm" onsubmit="saveContactForm(event)">
+                        <input type="hidden" id="contactId" value="">
+                        <div class="form-group">
+                            <label>Name *</label>
+                            <input type="text" id="contactName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Company</label>
+                            <input type="text" id="contactCompany">
+                        </div>
+                        <div class="form-group">
+                            <label>Title</label>
+                            <input type="text" id="contactTitle">
+                        </div>
+                        <div class="form-group">
+                            <label>Email</label>
+                            <input type="email" id="contactEmail">
+                        </div>
+                        <div class="form-group">
+                            <label>Phone</label>
+                            <input type="tel" id="contactPhone">
+                        </div>
+                        <div class="form-group">
+                            <label>Address</label>
+                            <input type="text" id="contactAddress">
+                        </div>
+                        <div class="form-group">
+                            <label>Website</label>
+                            <input type="url" id="contactWebsite">
+                        </div>
+                        <div class="form-group">
+                            <label>Notes</label>
+                            <textarea id="contactNotes" rows="3"></textarea>
+                        </div>
+                        <div class="modal-actions">
+                            <button type="button" class="btn" onclick="closeContactModal()" style="background: #64748b;">Cancel</button>
+                            <button type="submit" class="btn">Save Contact</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables to store current data
+        let currentVisits = [];
+        let currentSales = [];
+        let currentContacts = [];
+        let currentTimeEntry = null;
+
+        // Global error suppression for browser extensions
+        window.addEventListener('error', function(e) {
+            if (e.message.includes('pageMenu') || e.message.includes('duplicate id')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        // Dashboard data loading
+        async function loadDashboardData() {
+            try {
+                console.log('Loading dashboard data...');
+                const response = await fetch('/api/dashboard/summary', {
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Dashboard data received:', data);
+                
+                // Helper function to safely set text content
+                function safeSetText(id, value, formatter = (v) => v) {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.textContent = formatter(value);
+                    } else {
+                        console.warn(`Element with id '${id}' not found`);
+                    }
+                }
+                
+                // Update KPI cards with null checks
+                safeSetText('totalVisits', data.total_visits?.toLocaleString() || '0');
+                safeSetText('totalCosts', data.total_costs, (v) => v ? `$${v.toLocaleString()}` : '$0');
+                safeSetText('totalBonusesEarned', data.total_bonuses_earned, (v) => v ? `$${v.toLocaleString()}` : '$0');
+                safeSetText('costPerVisit', data.cost_per_visit, (v) => v ? `$${v.toFixed(2)}` : '$0.00');
+                safeSetText('emailsSent7Days', data.emails_sent_7_days, (v) => v ? v.toLocaleString() : '0');
+                safeSetText('totalHours', data.total_hours, (v) => v ? v.toFixed(1) : '0.0');
+
+                // Update change indicators
+                safeSetText('visitsChange', `${data.visits_this_month || 0} this month`);
+                safeSetText('costsChange', `${data.costs_this_month ? '$' + data.costs_this_month.toLocaleString() : '$0'} this month`);
+                safeSetText('bonusesChange', `${data.bonuses_this_month ? '$' + data.bonuses_this_month.toLocaleString() : '$0'} this month`);
+                safeSetText('cpvChange', 'Daily costs only');
+                safeSetText('emailsChange', 'From Gmail API');
+                safeSetText('hoursChange', `${data.hours_this_month || 0} this month`);
+
+                // Load charts after a short delay to ensure Chart.js is ready
+                setTimeout(() => {
+                    loadCharts();
+                    loadRecentActivity();
+                }, 100);
+
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                
+                // Show error state only if elements exist
+                function safeSetError(id, message = 'Error') {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.textContent = message;
+                    }
+                }
+                
+                safeSetError('totalVisits', '-');
+                safeSetError('totalCosts', '-');
+                safeSetError('totalBonusesEarned', '-');
+                safeSetError('costPerVisit', '-');
+                safeSetError('emailsSent7Days', '-');
+                safeSetError('totalHours', '-');
+                
+                // Show user-friendly error message if API is unavailable
+                if (error.message.includes('503') || error.message.includes('Service Unavailable')) {
+                    console.error('Server is unavailable. Please check if the server is running.');
+                    
+                    // Show notification to user
+                    const uploadStatus = document.getElementById('uploadStatus');
+                    if (uploadStatus) {
+                        uploadStatus.className = 'upload-status error';
+                        uploadStatus.innerHTML = '⚠️ Server is temporarily unavailable. Retrying in 5 seconds...';
+                        uploadStatus.style.display = 'block';
+                        
+                        // Retry after 5 seconds
+                        setTimeout(() => {
+                            uploadStatus.innerHTML = '🔄 Retrying...';
+                            loadDashboardData();
+                        }, 5000);
+                    }
+                }
+            }
+        }
+
+        // Chart loading
+        async function loadCharts() {
+            try {
+                if (typeof Chart === 'undefined') {
+                    console.log('Chart.js not loaded yet, retrying...');
+                    setTimeout(loadCharts, 100);
+                    return;
+                }
+
+                // Load costs chart
+                const costsResponse = await fetch('/api/dashboard/costs-by-month', {
+                    credentials: 'include'
+                });
+                const costsData = await costsResponse.json();
+                
+                const costsCtx = document.getElementById('costsChart').getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (window.costsChart && typeof window.costsChart.destroy === 'function') {
+                    window.costsChart.destroy();
+                }
+                
+                window.costsChart = new Chart(costsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: costsData.map(item => item.month),
+                        datasets: [{
+                                label: 'Costs',
+                            data: costsData.map(item => item.costs),
+                            backgroundColor: '#3b82f6',
+                            borderColor: '#2563eb',
+                                borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#e2e8f0'
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: '#94a3b8'
+                                },
+                                grid: {
+                                    color: '#334155'
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                },
+                                grid: {
+                                    color: '#334155'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Load referral types chart
+                const referralTypesResponse = await fetch('/api/dashboard/referral-types', {
+                    credentials: 'include'
+                });
+                const referralTypesData = await referralTypesResponse.json();
+
+                const facilitiesCtx = document.getElementById('facilitiesChart').getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (window.facilitiesChart && typeof window.facilitiesChart.destroy === 'function') {
+                    window.facilitiesChart.destroy();
+                }
+                
+                // Map referral types to specific colors
+                const colorMap = {
+                    'Hospitals': '#3b82f6',
+                    'Veterans Centers': '#8b5cf6',
+                    'Assisted Living/Nursing': '#06b6d4',
+                    'Doctors Offices': '#10b981',
+                    'Rehabs': '#f59e0b',
+                    'Home Health/Hospice': '#ef4444',
+                    'Community Centers': '#a855f7',
+                    'Pharmacies/Supply': '#14b8a6',
+                    'Social Services': '#f97316',
+                    'Other': '#94a3b8'
+                };
+                
+                window.facilitiesChart = new Chart(facilitiesCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: referralTypesData.map(item => item.type),
+                        datasets: [{
+                            data: referralTypesData.map(item => item.count),
+                            backgroundColor: referralTypesData.map(item => colorMap[item.type] || '#94a3b8')
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#e2e8f0'
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error loading charts:', error);
+            }
+        }
+
+        // Recent activity loading
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('/api/dashboard/recent-activity', {
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                const tbody = document.getElementById('recentActivityList');
+                tbody.innerHTML = '';
+
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #94a3b8;">No recent activity</td></tr>';
+                    return;
+                }
+
+                data.forEach(activity => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${new Date(activity.date).toLocaleDateString()}</td>
+                        <td>${activity.type}</td>
+                        <td>${activity.description}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error loading recent activity:', error);
+                const tbody = document.getElementById('recentActivityList');
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #ef4444;">Error loading activity</td></tr>';
+            }
+        }
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const appendBtn = document.getElementById('appendBtn');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        async function handleFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            uploadArea.classList.add('file-selected');
+            uploadArea.innerHTML = `
+                <div style="color: #10b981;">
+                    <h3>✅ ${file.name}</h3>
+                    <p>Size: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    <p>Type: ${file.type}</p>
+                </div>
+            `;
+
+            uploadStatus.style.display = 'block';
+            uploadStatus.className = 'upload-status';
+            uploadStatus.innerHTML = '⏳ Processing...';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                // Check if response is ok before parsing JSON
+                if (!response.ok) {
+                    let errorDetail = `Server error (${response.status})`;
+                    try {
+                        const errorData = await response.json();
+                        errorDetail = errorData.detail || errorData.error || errorDetail;
+                    } catch (e) {
+                        errorDetail = await response.text().catch(() => errorDetail);
+                    }
+                    throw new Error(errorDetail);
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    uploadStatus.className = 'upload-status success';
+                    uploadStatus.innerHTML = '✅ Upload successful!';
+                    displayResults(result);
+                } else {
+                    throw new Error(result.error || result.detail || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                uploadStatus.className = 'upload-status error';
+                let errorMessage = error.message || 'Upload failed';
+                if (errorMessage.includes('HEIC') || errorMessage.includes('heic')) {
+                    errorMessage = 'Unable to process HEIC file. Please convert the image to JPEG or PNG format and try again.';
+                } else if (errorMessage.includes('500') || errorMessage.includes('Internal Server Error')) {
+                    errorMessage = 'Server error occurred. Please check the server logs or try again later.';
+                }
+                uploadStatus.innerHTML = `❌ Upload failed: ${errorMessage}`;
+            }
+        }
+
+        function displayResults(result) {
+            resultsContainer.innerHTML = '';
+            
+            if (result.type === 'business_card') {
+                const contact = result.contact;
+                const brevoStatus = result.brevo_export || result.mailchimp_export;
+                
+                let brevoMessage = '';
+                if (brevoStatus) {
+                    if (brevoStatus.success) {
+                        brevoMessage = `<div class="success-message" style="background: #0b996e; color: white; padding: 8px; border-radius: 4px; margin: 8px 0;">✅ ${brevoStatus.message}</div>`;
+                    } else {
+                        brevoMessage = `<div class="error-message" style="background: #ef4444; color: white; padding: 8px; border-radius: 4px; margin: 8px 0;">❌ Brevo: ${brevoStatus.error}</div>`;
+                    }
+                } else {
+                    brevoMessage = '<div class="info-message" style="background: #3b82f6; color: white; padding: 8px; border-radius: 4px; margin: 8px 0;">ℹ️ Contact saved to dashboard</div>';
+                }
+                
+                resultsContainer.innerHTML = `
+                    <div class="contact-card">
+                        <h4>📇 Business Card Contact</h4>
+                        <p><strong>First Name:</strong> ${contact.first_name || 'N/A'}</p>
+                        <p><strong>Last Name:</strong> ${contact.last_name || 'N/A'}</p>
+                        <p><strong>Email:</strong> ${contact.email || 'N/A'}</p>
+                        <p><strong>Company:</strong> ${contact.company || 'N/A'}</p>
+                        ${brevoMessage}
+                        <details style="margin-top: 12px;">
+                            <summary style="cursor: pointer; color: #94a3b8;">Raw extracted text</summary>
+                            <pre style="margin-top: 8px; color: #94a3b8; font-size: 12px;">${result.extracted_text || 'No text extracted'}</pre>
+                        </details>
+                    </div>
+                `;
+                appendBtn.textContent = 'Save Contact';
+                appendBtn.style.display = 'block';
+            } else if (result.type === 'time_tracking') {
+                // Store time entry globally for saving
+                currentTimeEntry = result;
+                
+                resultsContainer.innerHTML = `
+                    <div class="time-tracking-card">
+                        <h4>⏰ Time Tracking Entry</h4>
+                        <p><strong>Date:</strong> ${result.date || 'N/A'}</p>
+                        <p><strong>Total Hours:</strong> ${result.total_hours || 'N/A'}</p>
+                    </div>
+                `;
+                appendBtn.textContent = 'Update Hours';
+                appendBtn.style.display = 'block';
+            } else {
+                // Display MyWay route visits
+                if (result.visits && result.visits.length > 0) {
+                    // Store visits globally for saving
+                    currentVisits = result.visits;
+                    
+                    let tableHtml = `
+                        <div class="visits-table">
+                            <h3>🚗 MyWay Route Visits</h3>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Stop</th>
+                                        <th>Business Name</th>
+                                        <th>Address</th>
+                                        <th>City</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    result.visits.forEach(visit => {
+                        tableHtml += `
+                            <tr>
+                                <td>${visit.stop_number || ''}</td>
+                                <td>${visit.business_name || ''}</td>
+                                <td>${visit.address || ''}</td>
+                                <td>${visit.city || ''}</td>
+                                <td>${visit.notes || ''}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    tableHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    resultsContainer.innerHTML = tableHtml;
+                } else {
+                    resultsContainer.innerHTML = '<p style="color: #94a3b8;">No visits found in PDF. The PDF may not contain recognizable visit data.</p>';
+                }
+                appendBtn.textContent = 'Save Visits';
+                appendBtn.style.display = 'block';
+            }
+        }
+
+        // Add click handler for Save Contact button
+        appendBtn.addEventListener('click', async function() {
+            const buttonText = appendBtn.textContent;
+            
+            if (buttonText === 'Save Contact') {
+                try {
+                    // Get the contact data from the displayed results
+                    const contactCard = resultsContainer.querySelector('.contact-card');
+                    if (!contactCard) {
+                        throw new Error('No contact data found');
+                    }
+                    
+                    // Extract contact information from the displayed text
+                    const contactData = {
+                        name: `${contactCard.querySelector('p:nth-child(2)')?.textContent.replace('First Name:', '').trim() || ''} ${contactCard.querySelector('p:nth-child(3)')?.textContent.replace('Last Name:', '').trim() || ''}`.trim(),
+                        company: contactCard.querySelector('p:nth-child(5)')?.textContent.replace('Company:', '').trim() || '',
+                        email: contactCard.querySelector('p:nth-child(4)')?.textContent.replace('Email:', '').trim() || '',
+                        phone: '',
+                        website: '',
+                        address: '',
+                        notes: ''
+                    };
+                    
+                    // Send to save-contact API
+                    const response = await fetch('/api/save-contact', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify(contactData)
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        uploadStatus.className = 'upload-status success';
+                        uploadStatus.innerHTML = '✅ Contact saved successfully!';
+                        uploadStatus.style.display = 'block';
+                        appendBtn.style.display = 'none';
+                    } else {
+                        throw new Error(result.error || 'Failed to save contact');
+                    }
+                } catch (error) {
+                    console.error('Error saving contact:', error);
+                    uploadStatus.className = 'upload-status error';
+                    uploadStatus.innerHTML = `❌ Failed to save contact: ${error.message}`;
+                    uploadStatus.style.display = 'block';
+                }
+            } else if (buttonText === 'Save Visits') {
+                // Handle saving visits (existing functionality)
+                try {
+                    const response = await fetch('/api/save-visits', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ visits: currentVisits })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        uploadStatus.className = 'upload-status success';
+                        let message = `✅ Successfully saved ${result.count} visit(s)`;
+                        
+                        // Show duplicate notice if any
+                        if (result.duplicates > 0) {
+                            message += `<br>⚠️ Skipped ${result.duplicates} duplicate visit(s):`;
+                            message += '<ul style="margin: 8px 0; padding-left: 20px; text-align: left;">';
+                            result.duplicate_details.slice(0, 5).forEach(dup => {
+                                message += `<li>${dup.business_name}${dup.city ? ' (' + dup.city + ')' : ''} on ${dup.date}</li>`;
+                            });
+                            if (result.duplicates > 5) {
+                                message += `<li>... and ${result.duplicates - 5} more</li>`;
+                            }
+                            message += '</ul>';
+                        }
+                        
+                        uploadStatus.innerHTML = message;
+                        uploadStatus.style.display = 'block';
+                        appendBtn.style.display = 'none';
+                        
+                        // Reload visits to show new data
+                        loadVisitsData();
+                    } else {
+                        throw new Error(result.error || 'Failed to save visits');
+                    }
+                } catch (error) {
+                    console.error('Error saving visits:', error);
+                    uploadStatus.className = 'upload-status error';
+                    uploadStatus.innerHTML = `❌ Failed to save visits: ${error.message}`;
+                    uploadStatus.style.display = 'block';
+                }
+            } else if (buttonText === 'Update Hours') {
+                // Handle updating hours (existing functionality)
+                try {
+                    const response = await fetch('/api/save-time-entry', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        credentials: 'include',
+                        body: JSON.stringify({ timeEntry: currentTimeEntry })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        uploadStatus.className = 'upload-status success';
+                        uploadStatus.innerHTML = '✅ Hours updated successfully!';
+                        uploadStatus.style.display = 'block';
+                        appendBtn.style.display = 'none';
+                    } else {
+                        throw new Error(result.error || 'Failed to update hours');
+                    }
+                } catch (error) {
+                    console.error('Error updating hours:', error);
+                    uploadStatus.className = 'upload-status error';
+                    uploadStatus.innerHTML = `❌ Failed to update hours: ${error.message}`;
+                    uploadStatus.style.display = 'block';
+                }
+            }
+        });
+
+        // Tab switching functions
+        function showDashboardTab() {
+            hideAllTabs();
+            // Show the main dashboard
+            document.getElementById('dashboardTab').classList.remove('hidden');
+            updateActiveNav('dashboard');
+        }
+
+        function showVisitsTab() {
+            console.log('showVisitsTab called');
+            hideAllTabs();
+            // Hide the main dashboard
+            const dashboardTab = document.getElementById('dashboardTab');
+            dashboardTab.classList.add('hidden');
+            console.log('Dashboard hidden, classList:', dashboardTab.classList.toString());
+            
+            const visitsTab = document.getElementById('visitsTab');
+            console.log('visitsTab element:', visitsTab);
+            visitsTab.classList.remove('hidden');
+            console.log('visitsTab hidden class removed');
+            console.log('visitsTab display style:', visitsTab.style.display);
+            console.log('visitsTab computed style:', window.getComputedStyle(visitsTab).display);
+            console.log('visitsTab classList:', visitsTab.classList.toString());
+            updateActiveNav('visits');
+            loadVisitsData();
+        }
+
+        function showSalesTab() {
+            console.log('showSalesTab called');
+            hideAllTabs();
+            // Hide the main dashboard
+            const dashboardTab = document.getElementById('dashboardTab');
+            dashboardTab.classList.add('hidden');
+            console.log('Dashboard hidden, classList:', dashboardTab.classList.toString());
+            
+            const salesTab = document.getElementById('salesTab');
+            console.log('salesTab element:', salesTab);
+            salesTab.classList.remove('hidden');
+            console.log('salesTab hidden class removed');
+            console.log('salesTab classList:', salesTab.classList.toString());
+            updateActiveNav('sales');
+            loadSalesData();
+        }
+
+        function showActivityLogsTab() {
+            console.log('showActivityLogsTab called');
+            try {
+                hideAllTabs();
+                const activityLogsTab = document.getElementById('activityLogsTab');
+                if (!activityLogsTab) {
+                    console.error('activityLogsTab element not found!');
+                    return;
+                }
+                activityLogsTab.classList.remove('hidden');
+                updateActiveNav('activity-logs');
+                loadActivityLogs();
+            } catch (error) {
+                console.error('Error in showActivityLogsTab:', error);
+            }
+        }
+
+        let currentActivityLogs = [];
+        let selectedLogId = null;
+
+        async function loadActivityLogs() {
+            console.log('loadActivityLogs called');
+            const logsList = document.getElementById('activityLogsList');
+            const countEl = document.getElementById('activityLogsCount');
+            
+            if (!logsList || !countEl) {
+                console.error('Activity logs elements not found', { logsList, countEl });
+                return;
+            }
+            
+            try {
+                console.log('Loading activity logs...');
+                // Show loading state
+                logsList.innerHTML = '<div class="activity-log-item loading"><div class="activity-log-skeleton"></div></div>';
+                countEl.textContent = 'Loading...';
+                
+                const response = await fetch('/api/activity-logs', {
+                    credentials: 'include'
+                });
+                
+                console.log('Activity logs response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Activity logs data received:', data);
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Failed to load activity logs');
+                }
+                
+                currentActivityLogs = data.logs || [];
+                console.log(`Found ${currentActivityLogs.length} activity logs`);
+                
+                // Update count
+                countEl.textContent = `${currentActivityLogs.length} logs`;
+                
+                // Render logs list
+                if (currentActivityLogs.length === 0) {
+                    console.log('No activity logs found, showing empty message');
+                    logsList.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 20px;">No activity logs found</div>';
+                } else {
+                    console.log('Rendering activity logs list with', currentActivityLogs.length, 'logs');
+                    logsList.innerHTML = currentActivityLogs.map((log, index) => {
+                        // Use modified_time if available, otherwise use created_time, otherwise use created_at
+                        const dateTime = log.modified_time || log.created_time || log.created_at;
+                        const date = dateTime 
+                            ? new Date(dateTime).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric',
+                                year: 'numeric' 
+                            })
+                            : 'Unknown date';
+                        
+                        return `
+                            <div class="activity-log-item" data-log-id="${log.id}" onclick="selectActivityLog('${log.id}')">
+                                <div class="activity-log-title">${log.name}</div>
+                                <div class="activity-log-date">Updated: ${date}</div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    // Select the first log by default
+                    if (currentActivityLogs.length > 0) {
+                        selectActivityLog(currentActivityLogs[0].id);
+                    }
+                }
+                
+            } catch (error) {
+                console.error('Error loading activity logs:', error);
+                logsList.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 20px;">Error loading activity logs: ${error.message}</div>`;
+                countEl.textContent = 'Error';
+            }
+        }
+
+        function selectActivityLog(logId) {
+            if (!logId) {
+                console.error('No log ID provided');
+                return;
+            }
+            
+            selectedLogId = logId;
+            const log = currentActivityLogs.find(l => l.id === logId);
+            
+            if (!log) {
+                console.error('Log not found:', logId);
+                return;
+            }
+            
+            // Update active state in list
+            document.querySelectorAll('.activity-log-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            const activeItem = document.querySelector(`[data-log-id="${logId}"]`);
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
+            
+            // Update preview
+            const previewContainer = document.getElementById('activityLogPreview');
+            if (!previewContainer) {
+                console.error('Preview container not found');
+                return;
+            }
+            // Use embed URL format for better compatibility with publicly shared docs
+            const embedUrl = log.preview_url.replace('/preview', '/preview?rm=minimal&embedded=true');
+            
+            previewContainer.innerHTML = `
+                <div class="activity-log-preview-header">
+                    <h4>${log.name}</h4>
+                    <div class="activity-log-preview-actions">
+                        <a href="${log.edit_url || log.preview_url}" target="_blank" class="btn" style="padding: 8px 16px; font-size: 12px;">
+                            📝 Open in Google Docs
+                        </a>
+                    </div>
+                </div>
+                <div style="position: relative; width: 100%; height: 100%;">
+                    <iframe 
+                        src="${embedUrl}"
+                        frameborder="0"
+                        style="width: 100%; height: 100%; border: none;"
+                        allow="autoplay; clipboard-read; clipboard-write"
+                        allowfullscreen
+                        title="${log.name}"
+                        loading="lazy"
+                    ></iframe>
+                </div>
+            `;
+        }
+
+        function refreshActivityLogs() {
+            loadActivityLogs();
+        }
+
+        function showAddLogModal() {
+            document.getElementById('addLogModal').style.display = 'flex';
+            document.getElementById('logUrl').focus();
+        }
+
+        function closeAddLogModal() {
+            document.getElementById('addLogModal').style.display = 'none';
+            document.getElementById('addLogForm').reset();
+        }
+
+        async function addActivityLog(event) {
+            event.preventDefault();
+            
+            const urlInput = document.getElementById('logUrl');
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                alert('Please enter a Google Drive URL');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/activity-logs/add', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ url: url })
+                });
+                
+                if (!response.ok) {
+                    let errorMessage = 'Failed to add activity log';
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.detail || errorData.error || errorMessage;
+                        
+                        // Provide more helpful error messages
+                        if (errorMessage.includes('not found') || errorMessage.includes('access')) {
+                            errorMessage = 'File not accessible via API. Make sure the file is shared with maryssa@coloradocareassist.com or the file will be added with limited metadata.';
+                        }
+                    } catch (e) {
+                        errorMessage = `Server error (${response.status}). The file may still be accessible via the preview link.`;
+                    }
+                    throw new Error(errorMessage);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Close modal and refresh the list
+                    closeAddLogModal();
+                    
+                    // Reload activity logs to show the new one
+                    loadActivityLogs();
+                    
+                    // Show success message
+                    const logsList = document.getElementById('activityLogsList');
+                    if (logsList) {
+                        const successMsg = document.createElement('div');
+                        successMsg.style.cssText = 'color: #10b981; text-align: center; padding: 10px; background: #064e3b; border: 1px solid #10b981; border-radius: 8px; margin-bottom: 10px;';
+                        successMsg.textContent = `✅ Successfully added: ${result.log.name}`;
+                        logsList.insertBefore(successMsg, logsList.firstChild);
+                        
+                        // Remove success message after 3 seconds
+                        setTimeout(() => {
+                            successMsg.remove();
+                        }, 3000);
+                    }
+                } else {
+                    throw new Error(result.error || 'Failed to add activity log');
+                }
+            } catch (error) {
+                console.error('Error adding activity log:', error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+
+        function showContactsTab() {
+            console.log('showContactsTab called');
+            hideAllTabs();
+            const contactsTab = document.getElementById('contactsTab');
+            console.log('contactsTab element:', contactsTab);
+            contactsTab.classList.remove('hidden');
+            console.log('contactsTab hidden class removed');
+            updateActiveNav('contacts');
+            loadContactsData();
+        }
+
+        function showLeadsTab() {
+            console.log('showLeadsTab called');
+            hideAllTabs();
+            const leadsTab = document.getElementById('leadsTab');
+            console.log('leadsTab element:', leadsTab);
+            leadsTab.classList.remove('hidden');
+            console.log('leadsTab hidden class removed');
+            updateActiveNav('leads');
+            // loadLeadsData(); // TODO: Implement when backend is ready
+        }
+
+        function hideAllTabs() {
+            // Hide all tab content
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabContents.forEach(tab => {
+                tab.classList.add('hidden');
+            });
+        }
+
+        function updateActiveNav(activeTab) {
+            // Update navigation active state
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => item.classList.remove('active'));
+            
+            // Try to find by onclick attribute first
+            let activeItem = document.querySelector(`[onclick*="${activeTab}"]`);
+            
+            // If not found, try by href attribute
+            if (!activeItem) {
+                activeItem = document.querySelector(`a[href="#${activeTab}"]`);
+            }
+            
+            // Also handle 'activity-logs' if searching for 'reports' (backward compatibility)
+            if (!activeItem && activeTab === 'reports') {
+                activeItem = document.querySelector(`a[href="#activity-logs"]`);
+            }
+            
+            if (activeItem) {
+                activeItem.classList.add('active');
+            }
+        }
+
+        // Load visits data
+        async function loadVisitsData() {
+            try {
+                console.log('Loading visits data...');
+                const response = await fetch('/api/visits', {
+                    credentials: 'include'
+                });
+                
+                console.log('Visits response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const visits = await response.json();
+                console.log('Visits data received:', visits.length, 'visits');
+                
+                // Store visits globally for saving
+                currentVisits = visits;
+
+                const tbody = document.getElementById('visitsList');
+                console.log('Found visits tbody:', tbody);
+                tbody.innerHTML = '';
+
+                if (visits.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8;">No visits found</td></tr>';
+                    return;
+                }
+
+                visits.forEach((visit, index) => {
+                    if (index < 5) console.log('Processing visit', index, ':', visit);
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${visit.visit_date ? (() => {
+                            // Extract date portion before timezone conversion to avoid day shifts
+                            const dateStr = typeof visit.visit_date === 'string' 
+                                ? visit.visit_date.split('T')[0]  // Get YYYY-MM-DD from ISO string
+                                : visit.visit_date; // Already a date string
+                            const [year, month, day] = dateStr.split('-');
+                            // Create date in local timezone using date components
+                            return new Date(parseInt(year), parseInt(month) - 1, parseInt(day)).toLocaleDateString();
+                        })() : 'N/A'}</td>
+                        <td>${visit.business_name || 'N/A'}</td>
+                        <td>${visit.address || 'N/A'}</td>
+                        <td>${visit.city || 'N/A'}</td>
+                        <td>${visit.stop_number || 'N/A'}</td>
+                    `;
+                    
+                    // Notes cell with inline editing
+                    const notesCell = document.createElement('td');
+                    notesCell.className = 'notes-col';
+                    
+                    const notes = visit.notes || '';
+                    const notesDisplay = document.createElement('div');
+                    notesDisplay.className = 'notes-display';
+                    notesDisplay.title = 'Click to edit notes';
+                    const maxPreviewLength = 40;
+                    if (notes && notes.length > maxPreviewLength) {
+                        notesDisplay.textContent = notes.substring(0, maxPreviewLength) + '...';
+                    } else {
+                        notesDisplay.textContent = notes || 'Click to add notes';
+                    }
+                    
+                    const notesTextarea = document.createElement('textarea');
+                    notesTextarea.className = 'notes-textarea';
+                    notesTextarea.value = notes;
+                    notesTextarea.placeholder = 'Enter notes here...';
+                    
+                    // Click display to edit
+                    notesDisplay.addEventListener('click', function() {
+                        notesDisplay.classList.add('editing');
+                        notesTextarea.classList.add('active');
+                        notesTextarea.focus();
+                    });
+                    
+                    // Save on blur (click away)
+                    notesTextarea.addEventListener('blur', function() {
+                        const newNotes = notesTextarea.value.trim();
+                        saveVisitNotes(visit.id, notesTextarea, function(success) {
+                            if (success) {
+                                // Update display
+                                if (newNotes && newNotes.length > maxPreviewLength) {
+                                    notesDisplay.textContent = newNotes.substring(0, maxPreviewLength) + '...';
+                                } else {
+                                    notesDisplay.textContent = newNotes || 'Click to add notes';
+                                }
+                            }
+                            notesDisplay.classList.remove('editing');
+                            notesTextarea.classList.remove('active');
+                        });
+                    });
+                    
+                    // Save on Ctrl/Cmd+Enter, Cancel on Escape
+                    notesTextarea.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') {
+                            notesTextarea.value = notes;
+                            notesTextarea.blur();
+                        } else if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                            notesTextarea.blur();
+                        }
+                    });
+                    
+                    notesCell.appendChild(notesDisplay);
+                    notesCell.appendChild(notesTextarea);
+                    row.appendChild(notesCell);
+                    
+                    tbody.appendChild(row);
+                });
+                console.log('Added', visits.length, 'rows to visits table');
+            } catch (error) {
+                console.error('Error loading visits:', error);
+                const tbody = document.getElementById('visitsList');
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ef4444;">Error loading visits</td></tr>';
+            }
+        }
+
+        // Save visit notes
+        function saveVisitNotes(visitId, textarea, callback) {
+            const notes = textarea.value;
+            
+            fetch('/api/visits/' + visitId, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ notes: notes })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    if (callback) callback(true);
+                } else {
+                    alert('Error updating notes: ' + data.error);
+                    if (callback) callback(false);
+                }
+            })
+            .catch(error => {
+                console.error('Error updating notes:', error);
+                alert('Error updating notes: ' + error.message);
+                if (callback) callback(false);
+            });
+        }
+
+        // Load sales data
+        async function loadSalesData() {
+            try {
+                console.log('Loading sales data...');
+                const response = await fetch('/api/sales-bonuses', {
+                    credentials: 'include'
+                });
+                
+                console.log('Sales response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const sales = await response.json();
+                console.log('Sales data received:', sales.length, 'sales');
+                
+                // Store sales globally for saving
+                currentSales = sales;
+
+                const tbody = document.getElementById('salesList');
+                console.log('Found sales tbody:', tbody);
+                tbody.innerHTML = '';
+
+                if (sales.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8;">No sales data found</td></tr>';
+                    return;
+                }
+
+                sales.forEach((sale, index) => {
+                    if (index < 3) console.log('Processing sale', index, ':', sale);
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${sale.client_name || 'N/A'}</td>
+                        <td>$${sale.bonus_amount ? sale.bonus_amount.toLocaleString() : '0'}</td>
+                        <td>${sale.commission_paid ? '✅ Yes' : '❌ No'}</td>
+                        <td>${sale.start_date ? new Date(sale.start_date).toLocaleDateString() : 'N/A'}</td>
+                        <td>${sale.wellsky_status || 'N/A'}</td>
+                        <td>${sale.status || 'N/A'}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                console.log('Added', sales.length, 'rows to sales table');
+            } catch (error) {
+                console.error('Error loading sales:', error);
+                const tbody = document.getElementById('salesList');
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ef4444;">Error loading sales data</td></tr>';
+            }
+        }
+
+        // Load contacts data
+        async function loadContactsData() {
+            try {
+                console.log('Loading contacts data...');
+                const response = await fetch('/api/contacts', {
+                    credentials: 'include'
+                });
+                
+                console.log('Contacts response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const contacts = await response.json();
+                console.log('Contacts data received:', contacts.length, 'contacts');
+                
+                // Store contacts globally for saving
+                currentContacts = contacts;
+
+                const tbody = document.getElementById('contactsList');
+                console.log('Found contacts tbody:', tbody);
+                tbody.innerHTML = '';
+
+                if (contacts.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #94a3b8;">No contacts found. Sync from Brevo or add manually.</td></tr>';
+                    return;
+                }
+
+                contacts.forEach(contact => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${contact.name || 'N/A'}</td>
+                        <td>${contact.company || 'N/A'}</td>
+                        <td>${contact.email || 'N/A'}</td>
+                        <td>${contact.phone || 'N/A'}</td>
+                        <td>${contact.created_at ? new Date(contact.created_at).toLocaleDateString() : 'N/A'}</td>
+                        <td>
+                            <button class="btn" onclick="editContact(${contact.id})" style="padding: 4px 8px; font-size: 12px; margin-right: 4px;">Edit</button>
+                            <button class="btn" onclick="deleteContact(${contact.id})" style="padding: 4px 8px; font-size: 12px; background: #ef4444;">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                console.log('Added', contacts.length, 'rows to contacts table');
+            } catch (error) {
+                console.error('Error loading contacts:', error);
+                const tbody = document.getElementById('contactsList');
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ef4444;">Error loading contacts data</td></tr>';
+            }
+        }
+
+        // Search functionality
+        function setupSearch() {
+            // Visits search
+            const visitsSearch = document.getElementById('visitsSearch');
+            if (visitsSearch) {
+                visitsSearch.addEventListener('input', function(e) {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const rows = document.querySelectorAll('#visitsList tr');
+                    
+                    rows.forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        if (text.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
+                });
+            }
+
+            // Sales search
+            const salesSearch = document.getElementById('salesSearch');
+            if (salesSearch) {
+                salesSearch.addEventListener('input', function(e) {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const rows = document.querySelectorAll('#salesList tr');
+                    
+                    rows.forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        if (text.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
+                });
+            }
+
+            // Contacts search
+            const contactsSearch = document.getElementById('contactsSearch');
+            if (contactsSearch) {
+                contactsSearch.addEventListener('input', function(e) {
+                    const searchTerm = e.target.value.toLowerCase();
+                    const rows = document.querySelectorAll('#contactsList tr');
+                    
+                    rows.forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        if (text.includes(searchTerm)) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    });
+                });
+            }
+        }
+
+        // Logout function
+        async function logout() {
+            try {
+                const response = await fetch('/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/auth/login';
+            } else {
+                    console.error('Logout failed');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+
+        // Contact management functions
+        function showAddContactModal() {
+            document.getElementById('contactModalTitle').textContent = 'Add Contact';
+            document.getElementById('contactId').value = '';
+            document.getElementById('contactForm').reset();
+            document.getElementById('contactModal').style.display = 'flex';
+        }
+
+        function closeContactModal() {
+            document.getElementById('contactModal').style.display = 'none';
+            document.getElementById('contactForm').reset();
+            document.getElementById('contactId').value = '';
+        }
+
+        async function editContact(contactId) {
+            const contact = currentContacts.find(c => c.id === contactId);
+            if (!contact) {
+                alert('Contact not found');
+                return;
+            }
+
+            document.getElementById('contactModalTitle').textContent = 'Edit Contact';
+            document.getElementById('contactId').value = contact.id;
+            document.getElementById('contactName').value = contact.name || '';
+            document.getElementById('contactCompany').value = contact.company || '';
+            document.getElementById('contactTitle').value = contact.title || '';
+            document.getElementById('contactEmail').value = contact.email || '';
+            document.getElementById('contactPhone').value = contact.phone || '';
+            document.getElementById('contactAddress').value = contact.address || '';
+            document.getElementById('contactWebsite').value = contact.website || '';
+            document.getElementById('contactNotes').value = contact.notes || '';
+            document.getElementById('contactModal').style.display = 'flex';
+        }
+
+        async function deleteContact(contactId) {
+            if (!confirm('Are you sure you want to delete this contact?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/contacts/${contactId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    const statusEl = document.getElementById('contactsStatus');
+                    statusEl.className = 'upload-status success';
+                    statusEl.innerHTML = '✅ Contact deleted successfully';
+                    statusEl.style.display = 'block';
+                    loadContactsData();
+                } else {
+                    throw new Error(result.error || 'Failed to delete contact');
+                }
+            } catch (error) {
+                console.error('Error deleting contact:', error);
+                const statusEl = document.getElementById('contactsStatus');
+                statusEl.className = 'upload-status error';
+                statusEl.innerHTML = `❌ Failed to delete contact: ${error.message}`;
+                statusEl.style.display = 'block';
+            }
+        }
+
+        async function saveContactForm(event) {
+            event.preventDefault();
+
+            const contactId = document.getElementById('contactId').value;
+            const contactData = {
+                name: document.getElementById('contactName').value,
+                company: document.getElementById('contactCompany').value,
+                title: document.getElementById('contactTitle').value,
+                email: document.getElementById('contactEmail').value,
+                phone: document.getElementById('contactPhone').value,
+                address: document.getElementById('contactAddress').value,
+                website: document.getElementById('contactWebsite').value,
+                notes: document.getElementById('contactNotes').value
+            };
+
+            try {
+                let response;
+                if (contactId) {
+                    // Update existing
+                    response = await fetch(`/api/contacts/${contactId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(contactData)
+                    });
+                } else {
+                    // Create new
+                    response = await fetch('/api/save-contact', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify(contactData)
+                    });
+                }
+
+                const result = await response.json();
+
+                if (result.success) {
+                    closeContactModal();
+                    const statusEl = document.getElementById('contactsStatus');
+                    statusEl.className = 'upload-status success';
+                    statusEl.innerHTML = `✅ ${contactId ? 'Contact updated' : 'Contact added'} successfully`;
+                    statusEl.style.display = 'block';
+                    loadContactsData();
+                } else {
+                    throw new Error(result.error || 'Failed to save contact');
+                }
+            } catch (error) {
+                console.error('Error saving contact:', error);
+                const statusEl = document.getElementById('contactsStatus');
+                statusEl.className = 'upload-status error';
+                statusEl.innerHTML = `❌ Failed to save contact: ${error.message}`;
+                statusEl.style.display = 'block';
+            }
+        }
+
+        async function syncBrevoContacts() {
+            const statusEl = document.getElementById('contactsStatus');
+            statusEl.className = 'upload-status';
+            statusEl.innerHTML = '🔄 Syncing contacts from Brevo...';
+            statusEl.style.display = 'block';
+
+            try {
+                const response = await fetch('/api/sync-brevo-contacts', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusEl.className = 'upload-status success';
+                    statusEl.innerHTML = `✅ ${result.message}<br>Added: ${result.added}, Updated: ${result.updated || 0}, Total: ${result.total}`;
+                    loadContactsData();
+                } else {
+                    throw new Error(result.error || 'Failed to sync contacts');
+                }
+            } catch (error) {
+                console.error('Error syncing contacts:', error);
+                statusEl.className = 'upload-status error';
+                statusEl.innerHTML = `❌ Failed to sync contacts: ${error.message}`;
+            }
+        }
+
+        async function pushToBrevo() {
+            const statusEl = document.getElementById('contactsStatus');
+            statusEl.className = 'upload-status';
+            statusEl.innerHTML = '📤 Pushing contacts to Brevo...';
+            statusEl.style.display = 'block';
+
+            try {
+                const response = await fetch('/api/push-to-brevo', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    statusEl.className = 'upload-status success';
+                    statusEl.innerHTML = `✅ ${result.message}<br>Pushed: ${result.pushed}, Filtered out (low quality): ${result.filtered_out || 0}`;
+                } else {
+                    throw new Error(result.error || 'Failed to push contacts');
+                }
+            } catch (error) {
+                console.error('Error pushing to Brevo:', error);
+                statusEl.className = 'upload-status error';
+                statusEl.innerHTML = `❌ Failed to push contacts: ${error.message}`;
+            }
+        }
+
+        // Initialize dashboard on load
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('Dashboard initialized - Activity Logs tab should be available');
+            
+            loadDashboardData();
+            setupSearch();
+            
+            // Handle hash routing on page load
+            handleHashRoute();
+            
+            // Handle hash changes (including #reports redirect)
+            window.addEventListener('hashchange', handleHashRoute);
+        });
+
+        // Hash routing function
+        function handleHashRoute() {
+            const hash = window.location.hash;
+            
+            // Redirect #reports to #activity-logs for backward compatibility
+            if (hash === '#reports') {
+                window.location.hash = '#activity-logs';
+                return;
+            }
+            
+            // Route to appropriate tab based on hash
+            switch(hash) {
+                case '#dashboard':
+                    showDashboardTab();
+                    break;
+                case '#visits':
+                    showVisitsTab();
+                    break;
+                case '#sales':
+                    showSalesTab();
+                    break;
+                case '#contacts':
+                    showContactsTab();
+                    break;
+                case '#leads':
+                    showLeadsTab();
+                    break;
+                case '#activity-logs':
+                    showActivityLogsTab();
+                    break;
+                default:
+                    // Default to dashboard if no hash or unknown hash
+                    if (!hash || hash === '#') {
+                        showDashboardTab();
+                    }
+                    break;
+            }
+        }
+
+        // ============================================================================
+        // Lead Pipeline / Kanban Board Functions
+        // ============================================================================
+        
+        let pipelineStages = [];
+        let pipelineLeads = [];
+        let referralSources = [];
+        let currentEditingLead = null;
+
+        async function loadPipeline() {
+            try {
+                // Load stages
+                const stagesResponse = await fetch('/api/pipeline/stages', { credentials: 'include' });
+                pipelineStages = await stagesResponse.json();
+
+                // Load leads
+                const leadsResponse = await fetch('/api/pipeline/leads', { credentials: 'include' });
+                pipelineLeads = await leadsResponse.json();
+
+                // Load referral sources for dropdown
+                const sourcesResponse = await fetch('/api/pipeline/referral-sources', { credentials: 'include' });
+                referralSources = await sourcesResponse.json();
+
+                // Populate referral source dropdown
+                populateReferralSourceDropdown();
+
+                // Render Kanban board
+                renderKanbanBoard();
+            } catch (error) {
+                console.error('Error loading pipeline:', error);
+                const boardEl = document.getElementById('kanbanBoard');
+                boardEl.innerHTML = '<div class="kanban-loading" style="color: #ef4444;">Error loading pipeline. Please try again.</div>';
+            }
+        }
+
+        function renderKanbanBoard() {
+            const boardEl = document.getElementById('kanbanBoard');
+            boardEl.innerHTML = '';
+
+            pipelineStages.forEach(stage => {
+                const stageLeads = pipelineLeads.filter(lead => lead.stage_id === stage.id);
+                
+                const columnEl = document.createElement('div');
+                columnEl.className = 'kanban-column';
+                columnEl.setAttribute('data-stage-id', stage.id);
+                
+                columnEl.innerHTML = `
+                    <div class="kanban-column-header">
+                        <div class="kanban-column-title">${stage.name}</div>
+                        <div class="kanban-column-count">${stageLeads.length}</div>
+                    </div>
+                    <div class="kanban-column-cards" data-stage-id="${stage.id}">
+                        ${stageLeads.length === 0 ? '<div style="color: #64748b; text-align: center; padding: 20px; font-size: 13px;">No leads yet</div>' : ''}
+                    </div>
+                `;
+                
+                boardEl.appendChild(columnEl);
+                
+                // Add lead cards
+                const cardsContainer = columnEl.querySelector('.kanban-column-cards');
+                stageLeads.forEach(lead => {
+                    const cardEl = createLeadCard(lead);
+                    cardsContainer.appendChild(cardEl);
+                });
+                
+                // Setup drop zone
+                setupDropZone(cardsContainer, stage.id);
+            });
+        }
+
+        function createLeadCard(lead) {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'lead-card';
+            cardEl.setAttribute('draggable', 'true');
+            cardEl.setAttribute('data-lead-id', lead.id);
+            
+            const revenueFormatted = lead.expected_revenue 
+                ? `$${parseFloat(lead.expected_revenue).toLocaleString()}/mo` 
+                : '';
+            
+            cardEl.innerHTML = `
+                <div class="lead-card-header">
+                    <div class="lead-card-name">${lead.name}</div>
+                    ${lead.priority ? `<div class="lead-card-priority ${lead.priority}">${lead.priority}</div>` : ''}
+                </div>
+                ${lead.email ? `<div class="lead-card-info"><span class="lead-card-info-icon">✉️</span> ${lead.email}</div>` : ''}
+                ${lead.phone ? `<div class="lead-card-info"><span class="lead-card-info-icon">📞</span> ${lead.phone}</div>` : ''}
+                ${lead.city ? `<div class="lead-card-info"><span class="lead-card-info-icon">📍</span> ${lead.city}</div>` : ''}
+                <div class="lead-card-tags">
+                    ${lead.source ? `<span class="lead-card-tag">${lead.source}</span>` : ''}
+                    ${lead.payor_source ? `<span class="lead-card-tag">${lead.payor_source}</span>` : ''}
+                </div>
+                ${revenueFormatted || lead.expected_close_date ? `
+                    <div class="lead-card-footer">
+                        ${revenueFormatted ? `<div class="lead-card-revenue">${revenueFormatted}</div>` : '<div></div>'}
+                        <div class="lead-card-actions">
+                            <button class="lead-card-action-btn" onclick="editLead(${lead.id}); event.stopPropagation();">Edit</button>
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+            
+            // Drag events
+            cardEl.addEventListener('dragstart', (e) => {
+                cardEl.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', lead.id);
+            });
+            
+            cardEl.addEventListener('dragend', (e) => {
+                cardEl.classList.remove('dragging');
+            });
+            
+            // Click to edit
+            cardEl.addEventListener('click', () => {
+                editLead(lead.id);
+            });
+            
+            return cardEl;
+        }
+
+        function setupDropZone(container, stageId) {
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                container.classList.add('drag-over');
+            });
+            
+            container.addEventListener('dragleave', (e) => {
+                container.classList.remove('drag-over');
+            });
+            
+            container.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                container.classList.remove('drag-over');
+                
+                const leadId = e.dataTransfer.getData('text/plain');
+                const lead = pipelineLeads.find(l => l.id === parseInt(leadId));
+                
+                if (lead && lead.stage_id !== stageId) {
+                    await moveLead(lead.id, stageId);
+                }
+            });
+        }
+
+        async function moveLead(leadId, newStageId) {
+            try {
+                const response = await fetch(`/api/pipeline/leads/${leadId}/move`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ stage_id: newStageId, order_index: 0 })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    await loadPipeline(); // Reload to show updated board
+                } else {
+                    throw new Error(result.error || 'Failed to move lead');
+                }
+            } catch (error) {
+                console.error('Error moving lead:', error);
+                alert('Failed to move lead: ' + error.message);
+            }
+        }
+
+        function showAddLeadModal() {
+            currentEditingLead = null;
+            document.getElementById('leadModalTitle').textContent = 'Add Lead';
+            document.getElementById('leadForm').reset();
+            document.getElementById('leadId').value = '';
+            document.getElementById('leadStageId').value = pipelineStages[0]?.id || '';
+            document.getElementById('deleteLeadBtn').style.display = 'none';
+            document.getElementById('leadModal').classList.add('active');
+        }
+
+        function closeLeadModal() {
+            document.getElementById('leadModal').classList.remove('active');
+            currentEditingLead = null;
+        }
+
+        async function editLead(leadId) {
+            const lead = pipelineLeads.find(l => l.id === leadId);
+            if (!lead) return;
+            
+            currentEditingLead = lead;
+            document.getElementById('leadModalTitle').textContent = 'Edit Lead';
+            document.getElementById('leadId').value = lead.id;
+            document.getElementById('leadStageId').value = lead.stage_id;
+            document.getElementById('leadName').value = lead.name || '';
+            document.getElementById('leadContactName').value = lead.contact_name || '';
+            document.getElementById('leadPhone').value = lead.phone || '';
+            document.getElementById('leadEmail').value = lead.email || '';
+            document.getElementById('leadAddress').value = lead.address || '';
+            document.getElementById('leadCity').value = lead.city || '';
+            document.getElementById('leadSource').value = lead.source || '';
+            document.getElementById('leadPayorSource').value = lead.payor_source || '';
+            document.getElementById('leadRevenue').value = lead.expected_revenue || '';
+            document.getElementById('leadCloseDate').value = lead.expected_close_date ? lead.expected_close_date.split('T')[0] : '';
+            document.getElementById('leadPriority').value = lead.priority || 'medium';
+            document.getElementById('leadReferralSourceId').value = lead.referral_source_id || '';
+            document.getElementById('leadNotes').value = lead.notes || '';
+            document.getElementById('deleteLeadBtn').style.display = 'block';
+            document.getElementById('leadModal').classList.add('active');
+        }
+
+        async function saveLead(event) {
+            event.preventDefault();
+            
+            const leadId = document.getElementById('leadId').value;
+            const stageId = document.getElementById('leadStageId').value || pipelineStages[0]?.id;
+            
+            const leadData = {
+                name: document.getElementById('leadName').value,
+                contact_name: document.getElementById('leadContactName').value,
+                phone: document.getElementById('leadPhone').value,
+                email: document.getElementById('leadEmail').value,
+                address: document.getElementById('leadAddress').value,
+                city: document.getElementById('leadCity').value,
+                source: document.getElementById('leadSource').value,
+                payor_source: document.getElementById('leadPayorSource').value,
+                expected_revenue: parseFloat(document.getElementById('leadRevenue').value) || null,
+                expected_close_date: document.getElementById('leadCloseDate').value || null,
+                priority: document.getElementById('leadPriority').value,
+                referral_source_id: document.getElementById('leadReferralSourceId').value || null,
+                notes: document.getElementById('leadNotes').value,
+                stage_id: parseInt(stageId)
+            };
+            
+            try {
+                const url = leadId ? `/api/pipeline/leads/${leadId}` : '/api/pipeline/leads';
+                const method = leadId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(leadData)
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    closeLeadModal();
+                    await loadPipeline();
+                } else {
+                    throw new Error(result.error || 'Failed to save lead');
+                }
+            } catch (error) {
+                console.error('Error saving lead:', error);
+                alert('Failed to save lead: ' + error.message);
+            }
+        }
+
+        async function deleteLead() {
+            const leadId = document.getElementById('leadId').value;
+            if (!leadId) return;
+            
+            if (!confirm('Are you sure you want to delete this lead?')) return;
+            
+            try {
+                const response = await fetch(`/api/pipeline/leads/${leadId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    closeLeadModal();
+                    await loadPipeline();
+                } else {
+                    throw new Error(result.error || 'Failed to delete lead');
+                }
+            } catch (error) {
+                console.error('Error deleting lead:', error);
+                alert('Failed to delete lead: ' + error.message);
+            }
+        }
+
+        function populateReferralSourceDropdown() {
+            const dropdown = document.getElementById('leadReferralSourceId');
+            dropdown.innerHTML = '<option value="">None</option>' + 
+                referralSources.map(source => 
+                    `<option value="${source.id}">${source.name}${source.organization ? ` (${source.organization})` : ''}</option>`
+                ).join('');
+        }
+
+        function showReferralSourcesModal() {
+            loadReferralSourcesList();
+            document.getElementById('referralSourcesModal').classList.add('active');
+        }
+
+        function closeReferralSourcesModal() {
+            document.getElementById('referralSourcesModal').classList.remove('active');
+        }
+
+        async function loadReferralSourcesList() {
+            try {
+                const response = await fetch('/api/pipeline/referral-sources', { credentials: 'include' });
+                referralSources = await response.json();
+                
+                const listEl = document.getElementById('referralSourcesList');
+                if (referralSources.length === 0) {
+                    listEl.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 40px;">No referral sources yet. Add one to get started!</div>';
+                } else {
+                    listEl.innerHTML = referralSources.map(source => `
+                        <div style="background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                                <div>
+                                    <div style="font-size: 16px; font-weight: 600; color: #f1f5f9; margin-bottom: 8px;">${source.name}</div>
+                                    ${source.organization ? `<div style="font-size: 14px; color: #94a3b8; margin-bottom: 4px;">${source.organization}</div>` : ''}
+                                    ${source.email ? `<div style="font-size: 13px; color: #94a3b8;">📧 ${source.email}</div>` : ''}
+                                    ${source.phone ? `<div style="font-size: 13px; color: #94a3b8;">📞 ${source.phone}</div>` : ''}
+                                </div>
+                                <button class="btn-delete" style="margin: 0;" onclick="deleteReferralSource(${source.id})">Delete</button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading referral sources:', error);
+            }
+        }
+
+        function showAddReferralSourceForm() {
+            const name = prompt('Referral Source Name:');
+            if (!name) return;
+            
+            const organization = prompt('Organization (optional):') || '';
+            const email = prompt('Email (optional):') || '';
+            const phone = prompt('Phone (optional):') || '';
+            
+            addReferralSource({ name, organization, email, phone });
+        }
+
+        async function addReferralSource(data) {
+            try {
+                const response = await fetch('/api/pipeline/referral-sources', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    await loadReferralSourcesList();
+                    await loadPipeline(); // Refresh to update dropdown
+                } else {
+                    throw new Error(result.error || 'Failed to add referral source');
+                }
+            } catch (error) {
+                console.error('Error adding referral source:', error);
+                alert('Failed to add referral source: ' + error.message);
+            }
+        }
+
+        async function deleteReferralSource(sourceId) {
+            if (!confirm('Are you sure you want to delete this referral source?')) return;
+            
+            try {
+                const response = await fetch(`/api/pipeline/referral-sources/${sourceId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    await loadReferralSourcesList();
+                    await loadPipeline(); // Refresh to update dropdown
+                } else {
+                    throw new Error(result.error || 'Failed to delete referral source');
+                }
+            } catch (error) {
+                console.error('Error deleting referral source:', error);
+                alert('Failed to delete referral source: ' + error.message);
+            }
+        }
+
+        // Update showLeadsTab to load pipeline when tab is shown
+        const originalShowLeadsTab = window.showLeadsTab;
+        window.showLeadsTab = function() {
+            if (originalShowLeadsTab) originalShowLeadsTab();
+            loadPipeline();
+        };
+    </script>
+</body>
+</html>

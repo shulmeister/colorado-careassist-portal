@@ -1,0 +1,55 @@
+{
+  "month": "January 2025",
+  "new_hire": {
+    "name": "Amy Fishleigh",
+    "title": "HR Manager",
+    "description": "Amy is our new HR Manager and will be so helpful for all our employees, but particularly focused on hiring and onboarding caregivers at scale.",
+    "linkedin": "https://www.linkedin.com/in/amy-fishleigh-3a637b106"
+  },
+  "service_additions": [
+    {
+      "title": "Free Vitals Check Program",
+      "description": "We continue our free program of coming to your facility or home for a vitals check - blood pressure, O2, etc."
+    },
+    {
+      "title": "Handyman Services",
+      "description": "We have handymen on staff in Colorado Springs and Denver ready to help with basic maintenance needs."
+    },
+    {
+      "title": "Pet Care Services",
+      "description": "We love pets - even birds! A lot of our clients have birds. Our team is ready to help with pet care needs."
+    }
+  ],
+  "articles": [
+    {
+      "source": "Wall Street Journal",
+      "title": "America's Seniors Are Overmedicated",
+      "url": "https://www.wsj.com/health/healthcare/americas-seniors-are-overmedicated-f397bb1d?st=oNStuY&reflink=desktopwebshare_permalink",
+      "summary": "Important insights about medication management for older adults."
+    },
+    {
+      "source": "New York Times",
+      "title": "Solving the Home Care Quandary",
+      "url": "https://www.nytimes.com/2025/12/02/health/seniors-aging-home-care.html",
+      "summary": "Exploring challenges and solutions in home care services for seniors."
+    },
+    {
+      "source": "Colorado Public Radio",
+      "title": "Sage advice on aging and dying from a Colorado geriatrician",
+      "url": "https://www.cpr.org/2025/11/17/colorado-geriatrician-on-aging-dying-nursing-homes/",
+      "summary": "Dr. Erika Altneu, a geriatrician in Salida, shares insights on aging, medications, loneliness, and end-of-life care."
+    },
+    {
+      "source": "Cleveland.com",
+      "title": "Winter weather poses risks for those living with Alzheimer's and dementia",
+      "url": "https://www.cleveland.com/opinion/2025/12/winter-weather-poses-risks-for-those-living-with-alzheimers-and-dementia-mary-ertle.html",
+      "summary": "Safety tips for caregivers during winter months, including prevention strategies for wandering and cold weather hazards."
+    }
+  ],
+  "notes": {
+    "for_clients": "All 4 articles are relevant to clients/families - medication, home care, aging advice, and winter safety for dementia",
+    "for_referral_sources": "Articles 1, 2, and 3 are relevant to healthcare providers - overmedication, home care challenges, and geriatric care insights",
+    "new_hire_relevant": "Relevant to both audiences - shows growth and commitment to quality care through better hiring/onboarding"
+  }
+}
+

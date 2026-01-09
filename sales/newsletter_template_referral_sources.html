@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colorado CareAssist Newsletter - Referral Partners</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4;">
+    <table role="presentation" style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td style="padding: 20px 0; text-align: center; background-color: #ffffff;">
+                <table role="presentation" style="width: 100%; max-width: 600px; margin: 0 auto; border-collapse: collapse;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="padding: 30px 20px; text-align: center; background-color: #2563eb; color: #ffffff;">
+                            <h1 style="margin: 0; font-size: 28px; font-weight: bold;">Colorado CareAssist</h1>
+                            <p style="margin: 10px 0 0 0; font-size: 16px; opacity: 0.9;">Your Partner in Care</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Main Content -->
+                    <tr>
+                        <td style="padding: 40px 30px; background-color: #ffffff;">
+                            <h2 style="margin: 0 0 20px 0; font-size: 24px; color: #1f2937;">{{MONTH}} Newsletter</h2>
+                            
+                            <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #4b5563;">
+                                Dear {{FIRSTNAME|Valued Partner}},
+                            </p>
+                            
+                            <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #4b5563;">
+                                Thank you for your continued partnership. We're committed to providing exceptional care coordination for the patients you refer to us, and we appreciate the trust you place in our services.
+                            </p>
+                            
+                            <!-- Updates Section (Optional) -->
+                            {{#IF_UPDATES}}
+                            <div style="margin: 30px 0; padding: 20px; background-color: #f9fafb; border-left: 4px solid #2563eb;">
+                                <h3 style="margin: 0 0 15px 0; font-size: 20px; color: #1f2937;">What's New at Colorado CareAssist</h3>
+                                {{RECENT_HIRES}}
+                                {{SERVICE_ADDITIONS}}
+                            </div>
+                            {{/IF_UPDATES}}
+                            
+                            <!-- External Articles Section -->
+                            <div style="margin: 30px 0;">
+                                <h3 style="margin: 0 0 20px 0; font-size: 20px; color: #1f2937;">Healthcare Industry Insights</h3>
+                                <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #4b5563;">
+                                    Here are some articles and resources relevant to healthcare providers and facilities:
+                                </p>
+                                
+                                <!-- Article 1 -->
+                                <div style="margin: 0 0 20px 0; padding: 15px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 5px;">
+                                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">{{ARTICLE1_SOURCE}}</p>
+                                    <h4 style="margin: 0 0 8px 0; font-size: 18px; color: #1f2937; line-height: 1.4;">
+                                        <a href="{{ARTICLE1_URL}}" style="color: #2563eb; text-decoration: none;">{{ARTICLE1_TITLE}}</a>
+                                    </h4>
+                                    <p style="margin: 0; font-size: 15px; color: #6b7280; line-height: 1.5;">{{ARTICLE1_SUMMARY}}</p>
+                                </div>
+                                
+                                <!-- Article 2 -->
+                                <div style="margin: 0 0 20px 0; padding: 15px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 5px;">
+                                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">{{ARTICLE2_SOURCE}}</p>
+                                    <h4 style="margin: 0 0 8px 0; font-size: 18px; color: #1f2937; line-height: 1.4;">
+                                        <a href="{{ARTICLE2_URL}}" style="color: #2563eb; text-decoration: none;">{{ARTICLE2_TITLE}}</a>
+                                    </h4>
+                                    <p style="margin: 0; font-size: 15px; color: #6b7280; line-height: 1.5;">{{ARTICLE2_SUMMARY}}</p>
+                                </div>
+                                
+                                <!-- Article 3 -->
+                                <div style="margin: 0 0 20px 0; padding: 15px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 5px;">
+                                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">{{ARTICLE3_SOURCE}}</p>
+                                    <h4 style="margin: 0 0 8px 0; font-size: 18px; color: #1f2937; line-height: 1.4;">
+                                        <a href="{{ARTICLE3_URL}}" style="color: #2563eb; text-decoration: none;">{{ARTICLE3_TITLE}}</a>
+                                    </h4>
+                                    <p style="margin: 0; font-size: 15px; color: #6b7280; line-height: 1.5;">{{ARTICLE3_SUMMARY}}</p>
+                                </div>
+                                
+                                <!-- Article 4 (Optional) -->
+                                {{#IF_ARTICLE4}}
+                                <div style="margin: 0 0 20px 0; padding: 15px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 5px;">
+                                    <p style="margin: 0 0 8px 0; font-size: 14px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px;">{{ARTICLE4_SOURCE}}</p>
+                                    <h4 style="margin: 0 0 8px 0; font-size: 18px; color: #1f2937; line-height: 1.4;">
+                                        <a href="{{ARTICLE4_URL}}" style="color: #2563eb; text-decoration: none;">{{ARTICLE4_TITLE}}</a>
+                                    </h4>
+                                    <p style="margin: 0; font-size: 15px; color: #6b7280; line-height: 1.5;">{{ARTICLE4_SUMMARY}}</p>
+                                </div>
+                                {{/IF_ARTICLE4}}
+                            </div>
+                            
+                            <!-- Survey & Review Links -->
+                            <div style="margin: 30px 0; padding: 20px; background-color: #eff6ff; border-radius: 5px;">
+                                <h3 style="margin: 0 0 15px 0; font-size: 20px; color: #1f2937;">Your Feedback Helps Us Serve You Better</h3>
+                                <p style="margin: 0 0 20px 0; font-size: 16px; line-height: 1.6; color: #4b5563;">
+                                    We value your partnership and would appreciate your feedback on our referral process and care coordination services.
+                                </p>
+                                <div style="margin: 0; text-align: left;">
+                                    <p style="margin: 0 0 12px 0;">
+                                        <a href="https://forms.gle/Bjcgg9Zgib12JPiD6" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 5px; font-size: 15px; font-weight: bold; margin-right: 10px;">Referral Partner Survey</a>
+                                    </p>
+                                    <p style="margin: 0;">
+                                        <a href="https://g.page/r/CQhjbJz17xaDEBE/review" style="display: inline-block; padding: 12px 24px; background-color: #ffffff; color: #2563eb; text-decoration: none; border: 2px solid #2563eb; border-radius: 5px; font-size: 15px; font-weight: bold;">Leave a Google Review</a>
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            <p style="margin: 30px 0 0 0; font-size: 16px; line-height: 1.6; color: #4b5563;">
+                                Thank you for your continued partnership and trust in Colorado CareAssist.
+                            </p>
+                            
+                            <p style="margin: 20px 0 0 0; font-size: 16px; line-height: 1.6; color: #4b5563;">
+                                Best regards,<br>
+                                <strong>The Colorado CareAssist Team</strong>
+                            </p>
+                            
+                            <div style="margin: 30px 0 0 0; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+                                <p style="margin: 0; font-size: 14px; color: #6b7280;">
+                                    Questions about referrals? Contact us at <a href="mailto:jason@coloradocareassist.com" style="color: #2563eb;">jason@coloradocareassist.com</a>
+                                </p>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 30px 20px; text-align: center; background-color: #f9fafb; border-top: 1px solid #e5e7eb;">
+                            <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">
+                                Colorado CareAssist<br>
+                                Your Partner in Care
+                            </p>
+                            <p style="margin: 10px 0 0 0; font-size: 12px; color: #9ca3af;">
+                                If you no longer wish to receive these emails, please <a href="#" style="color: #2563eb;">unsubscribe</a>.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+

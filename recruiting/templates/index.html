@@ -1,0 +1,1988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caregiver Recruiter Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* Container */
+        .container-fluid {
+            background: #0f172a;
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        /* Navigation Bar */
+        .navbar {
+            background: #1e293b !important;
+            border-bottom: 1px solid #334155;
+            padding: 8px 16px;
+        }
+
+        .navbar-brand {
+            color: #f1f5f9 !important;
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        .navbar-brand i {
+            color: #3b82f6;
+            margin-right: 8px;
+        }
+
+        .navbar-nav {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .nav-link {
+            color: #94a3b8 !important;
+            padding: 8px 16px !important;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            background: transparent !important;
+            border: none !important;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .nav-link:hover {
+            background: #334155 !important;
+            color: #f1f5f9 !important;
+        }
+
+        .nav-link.active {
+            background: #3b82f6 !important;
+            color: white !important;
+        }
+
+        /* Main Content */
+        .container-fluid > div:not(.navbar) {
+            padding: 12px;
+        }
+
+        /* Headers */
+        h2, h3, h4, h5, h6 {
+            color: #f1f5f9;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        h2 {
+            font-size: 16px;
+        }
+
+        /* Cards */
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            color: #e2e8f0;
+        }
+
+        .card-header {
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            padding: 8px 12px;
+            border-radius: 8px 8px 0 0 !important;
+        }
+
+        .card-header h5, .card-header h6 {
+            color: #f1f5f9;
+            margin-bottom: 0;
+            font-size: 12px;
+        }
+
+        .card-body {
+            padding: 12px;
+        }
+
+        .card-body h2 {
+            font-size: 24px;
+            margin: 4px 0;
+        }
+
+        .card-body h5 {
+            font-size: 11px;
+            margin-bottom: 4px;
+        }
+
+        .card-title {
+            color: #f1f5f9 !important;
+        }
+
+        /* Tables */
+        .table {
+            color: #e2e8f0;
+            margin-bottom: 0;
+        }
+
+        .table thead th {
+            background: #0f172a;
+            color: #94a3b8;
+            border-bottom: 1px solid #334155;
+            padding: 6px 8px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table tbody td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #334155;
+            vertical-align: middle;
+            font-size: 12px;
+        }
+
+        .table tbody tr {
+            transition: background 0.2s ease;
+        }
+
+        .table tbody tr:hover {
+            background: #334155;
+        }
+
+        .table-active {
+            background: #334155 !important;
+        }
+
+        .table-responsive {
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        /* Buttons */
+        .btn {
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 12px;
+            font-weight: 500;
+            font-size: 14px;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #475569;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #334155;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        .btn-outline-primary {
+            background: transparent;
+            border: 1px solid #3b82f6;
+            color: #3b82f6;
+        }
+
+        .btn-outline-primary:hover {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-outline-danger {
+            background: transparent;
+            border: 1px solid #ef4444;
+            color: #ef4444;
+        }
+
+        .btn-outline-danger:hover {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .btn-link {
+            text-decoration: none;
+        }
+
+        /* Forms */
+        .form-control, .form-select {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .form-control:focus, .form-select:focus {
+            background: #0f172a;
+            border-color: #3b82f6;
+            color: #e2e8f0;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-control::placeholder {
+            color: #64748b;
+        }
+
+        .form-label {
+            color: #94a3b8;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .form-select option {
+            background: #1e293b;
+            color: #e2e8f0;
+        }
+
+        .form-select-sm, .form-control-sm {
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+
+        /* Badges/Status Indicators */
+        .badge {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            display: inline-block;
+        }
+
+        .sentiment-positive { 
+            color: #10b981;
+            font-weight: 600;
+        }
+        
+        .sentiment-negative { 
+            color: #ef4444;
+            font-weight: 600;
+        }
+        
+        .sentiment-neutral { 
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .priority-high { 
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .priority-medium { 
+            background-color: rgba(234, 179, 8, 0.15);
+            color: #eab308;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+        
+        .priority-low { 
+            background-color: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .status-new { 
+            background-color: rgba(148, 163, 184, 0.15);
+            color: #94a3b8;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+        }
+        
+        .status-contacted { 
+            background-color: rgba(59, 130, 246, 0.15);
+            color: #3b82f6;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+        
+        .status-interested { 
+            background-color: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        
+        .status-not_interested { 
+            background-color: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        
+        .status-hired { 
+            background-color: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .bg-primary {
+            background: #3b82f6 !important;
+            color: white !important;
+        }
+
+        .bg-success {
+            background: #10b981 !important;
+            color: white !important;
+        }
+
+        .bg-info {
+            background: #06b6d4 !important;
+            color: white !important;
+        }
+
+        .bg-warning {
+            background: #eab308 !important;
+            color: white !important;
+        }
+
+        .bg-secondary {
+            background: #64748b !important;
+            color: white !important;
+        }
+
+        .bg-light {
+            background: #334155 !important;
+            color: #e2e8f0 !important;
+        }
+
+        /* Activity Timeline */
+        .activity-timeline {
+            border-left: 2px solid #334155;
+            padding-left: 20px;
+            margin-left: 10px;
+        }
+
+        .activity-item {
+            margin-bottom: 15px;
+            padding: 16px;
+            background-color: #0f172a;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        /* Upload Area */
+        .upload-area {
+            border: 2px dashed #334155;
+            border-radius: 12px;
+            padding: 60px 40px;
+            text-align: center;
+            background-color: #1e293b;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+
+        .upload-area i {
+            color: #64748b;
+        }
+
+        /* Alerts */
+        .alert {
+            border-radius: 8px;
+            padding: 16px;
+            border: none;
+        }
+
+        .alert-success {
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .alert-warning {
+            background: rgba(234, 179, 8, 0.15);
+            color: #eab308;
+            border: 1px solid rgba(234, 179, 8, 0.3);
+        }
+
+        /* Spinners */
+        .spinner-border {
+            border-color: #3b82f6;
+            border-right-color: transparent;
+        }
+
+        /* Modal */
+        .modal-content {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+        }
+
+        .modal-header {
+            border-bottom: 1px solid #334155;
+            padding: 16px 24px;
+        }
+
+        .modal-title {
+            color: #f1f5f9;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-footer {
+            border-top: 1px solid #334155;
+            padding: 16px 24px;
+        }
+
+        .btn-close {
+            filter: invert(1);
+            opacity: 0.6;
+        }
+
+        .btn-close:hover {
+            opacity: 1;
+        }
+
+        /* Text Colors */
+        .text-primary {
+            color: #3b82f6 !important;
+        }
+
+        .text-success {
+            color: #10b981 !important;
+        }
+
+        .text-info {
+            color: #06b6d4 !important;
+        }
+
+        .text-warning {
+            color: #eab308 !important;
+        }
+
+        .text-danger {
+            color: #ef4444 !important;
+        }
+
+        .text-muted {
+            color: #64748b !important;
+        }
+
+        .text-white {
+            color: #f1f5f9 !important;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        /* Utility Classes */
+        .mb-4 {
+            margin-bottom: 24px !important;
+        }
+
+        .mb-3 {
+            margin-bottom: 16px !important;
+        }
+
+        .mb-2 {
+            margin-bottom: 8px !important;
+        }
+
+        .mt-2 {
+            margin-top: 8px !important;
+        }
+
+        .mt-3 {
+            margin-top: 16px !important;
+        }
+
+        .mt-4 {
+            margin-top: 24px !important;
+        }
+
+        .ms-2 {
+            margin-left: 8px !important;
+        }
+
+        .gap-2 {
+            gap: 8px;
+        }
+
+        .d-flex {
+            display: flex;
+        }
+
+        .justify-content-between {
+            justify-content: space-between;
+        }
+
+        .justify-content-center {
+            justify-content: center;
+        }
+
+        .align-items-center {
+            align-items: center;
+        }
+
+        /* Pre/Code blocks */
+        pre {
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Row/Col spacing */
+        .row {
+            margin: 0 -12px;
+        }
+
+        .col-md-3, .col-md-4, .col-md-6, .col-md-8, .col-12 {
+            padding: 0 12px;
+        }
+
+        /* Ensure proper hover states */
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Grid layout responsive */
+        @media (max-width: 768px) {
+            .col-md-3, .col-md-4, .col-md-6, .col-md-8 {
+                width: 100%;
+                margin-bottom: 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Main App Component
+        function App() {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [leads, setLeads] = useState([]);
+            const [analytics, setAnalytics] = useState({});
+            const [loading, setLoading] = useState(false);
+            const [selectedLead, setSelectedLead] = useState(null);
+            const [alertRules, setAlertRules] = useState([]);
+            const [users, setUsers] = useState([]);
+            const [goformzStatus, setGoformzStatus] = useState(null);
+            const [goformzTemplates, setGoformzTemplates] = useState([]);
+            const [goformzUsers, setGoformzUsers] = useState([]);
+            const [goformzLoading, setGoformzLoading] = useState(false);
+            const [goformzError, setGoformzError] = useState(null);
+            const [selectedTemplate, setSelectedTemplate] = useState(null);
+            const [templateDetail, setTemplateDetail] = useState(null);
+
+            useEffect(() => {
+                fetchLeads();
+                fetchAnalytics();
+                fetchAlertRules();
+                fetchUsers();
+            }, []);
+
+            useEffect(() => {
+                if (activeTab === 'goformz' && !goformzStatus && !goformzLoading) {
+                    fetchGoformzData();
+                }
+            }, [activeTab]);
+
+            const fetchLeads = async () => {
+                try {
+                    const response = await axios.get('/api/leads');
+                    setLeads(response.data.leads);
+                } catch (error) {
+                    console.error('Error fetching leads:', error);
+                }
+            };
+
+            const fetchAnalytics = async () => {
+                try {
+                    const response = await axios.get('/api/analytics');
+                    setAnalytics(response.data);
+                } catch (error) {
+                    console.error('Error fetching analytics:', error);
+                }
+            };
+
+            const fetchAlertRules = async () => {
+                try {
+                    const response = await axios.get('/api/alert-rules');
+                    setAlertRules(response.data);
+                } catch (error) {
+                    console.error('Error fetching alert rules:', error);
+                }
+            };
+
+            const fetchUsers = async () => {
+                try {
+                    const response = await axios.get('/api/users');
+                    setUsers(response.data);
+                } catch (error) {
+                    console.error('Error fetching users:', error);
+                }
+            };
+
+            const fetchGoformzData = async () => {
+                setGoformzLoading(true);
+                setGoformzError(null);
+                try {
+                    const [statusRes, templatesRes, usersRes] = await Promise.all([
+                        axios.get('/api/goformz/status'),
+                        axios.get('/api/goformz/templates'),
+                        axios.get('/api/goformz/users')
+                    ]);
+                    setGoformzStatus(statusRes.data.status || null);
+                    setGoformzTemplates(templatesRes.data.templates || []);
+                    setGoformzUsers(usersRes.data.users || []);
+                } catch (error) {
+                    console.error('Error fetching GoFormz data:', error);
+                    setGoformzError(error.response?.data?.error || 'Unable to load GoFormz data');
+                } finally {
+                    setGoformzLoading(false);
+                }
+            };
+
+            const createUser = async (userData) => {
+                try {
+                    await axios.post('/api/users', userData);
+                    fetchUsers();
+                } catch (error) {
+                    console.error('Error creating user:', error);
+                    throw error;
+                }
+            };
+
+            const deleteUser = async (userId) => {
+                try {
+                    await axios.delete(`/api/users/${userId}`);
+                    fetchUsers();
+                } catch (error) {
+                    console.error('Error deleting user:', error);
+                    throw error;
+                }
+            };
+
+            const updateUser = async (userId, userData) => {
+                try {
+                    await axios.put(`/api/users/${userId}`, userData);
+                    fetchUsers();
+                } catch (error) {
+                    console.error('Error updating user:', error);
+                    throw error;
+                }
+            };
+
+            const updateLead = async (leadId, updates) => {
+                try {
+                    await axios.put(`/api/leads/${leadId}`, updates);
+                    fetchLeads();
+                    fetchAnalytics();
+                } catch (error) {
+                    console.error('Error updating lead:', error);
+                }
+            };
+
+            const addActivity = async (leadId, activity) => {
+                try {
+                    await axios.post(`/api/leads/${leadId}/activities`, activity);
+                    fetchLeads();
+                } catch (error) {
+                    console.error('Error adding activity:', error);
+                }
+            };
+
+            const loadTemplateDetail = async (templateId) => {
+                if (!templateId) return;
+                setSelectedTemplate(templateId);
+                setTemplateDetail(null);
+                try {
+                    const response = await axios.get(`/api/goformz/template/${templateId}`);
+                    if (response.data.success) {
+                        setTemplateDetail(response.data.template);
+                    }
+                } catch (error) {
+                    console.error('Error fetching template detail:', error);
+                }
+            };
+
+            const handleGoformzRefresh = () => {
+                fetchGoformzData();
+            };
+
+            return (
+                <div className="container-fluid">
+                    <nav className="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+                        <div className="container-fluid">
+                            <a className="navbar-brand" href="#">
+                                <i className="fas fa-heart"></i> Caregiver Recruiter Dashboard
+                            </a>
+                            <div className="navbar-nav">
+                                <a 
+                                    href="//"
+                                    className="nav-link"
+                                    style={{background: '#3b82f6', color: 'white', fontWeight: '600'}}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        window.location.href = window.location.href.includes('portal-coloradocareassist') 
+                                            ? '/' 
+                                            : 'https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/';
+                                    }}
+                                >
+                                    <i className="fas fa-arrow-left"></i> Back to Portal
+                                </a>
+                                <button 
+                                    className={`nav-link btn btn-link text-white ${activeTab === 'dashboard' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('dashboard')}
+                                >
+                                    <i className="fas fa-tachometer-alt"></i> Dashboard
+                                </button>
+                                <button 
+                                    className={`nav-link btn btn-link text-white ${activeTab === 'leads' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('leads')}
+                                >
+                                    <i className="fas fa-users"></i> Leads
+                                </button>
+                                <button 
+                                    className={`nav-link btn btn-link text-white ${activeTab === 'upload' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('upload')}
+                                >
+                                    <i className="fas fa-upload"></i> Upload
+                                </button>
+                                <button 
+                                    className={`nav-link btn btn-link text-white ${activeTab === 'alerts' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('alerts')}
+                                >
+                                    <i className="fas fa-bell"></i> Alerts
+                                </button>
+                                <button 
+                                    className={`nav-link btn btn-link text-white ${activeTab === 'users' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('users')}
+                                >
+                                    <i className="fas fa-users"></i> Users
+                                </button>
+                                <button 
+                                    className={`nav-link btn btn-link text-white ${activeTab === 'goformz' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('goformz')}
+                                >
+                                    <i className="fas fa-file-alt"></i> GoFormz
+                                </button>
+                            </div>
+                        </div>
+                    </nav>
+
+                    {activeTab === 'dashboard' && (
+                        <DashboardTab analytics={analytics} leads={leads} />
+                    )}
+                    {activeTab === 'leads' && (
+                        <LeadsTab 
+                            leads={leads} 
+                            users={users}
+                            onUpdateLead={updateLead}
+                            onAddActivity={addActivity}
+                            selectedLead={selectedLead}
+                            onSelectLead={setSelectedLead}
+                        />
+                    )}
+                    {activeTab === 'upload' && (
+                        <UploadTab onUploadComplete={fetchLeads} />
+                    )}
+                    {activeTab === 'alerts' && (
+                        <AlertsTab alertRules={alertRules} onRefresh={fetchAlertRules} />
+                    )}
+                    {activeTab === 'users' && (
+                        <UsersTab 
+                            users={users} 
+                            onCreateUser={createUser}
+                            onDeleteUser={deleteUser}
+                            onUpdateUser={updateUser}
+                        />
+                    )}
+                    {activeTab === 'goformz' && (
+                        <GoformzTab 
+                            status={goformzStatus}
+                            templates={goformzTemplates}
+                            users={goformzUsers}
+                            loading={goformzLoading}
+                            error={goformzError}
+                            onRefresh={handleGoformzRefresh}
+                            onSelectTemplate={loadTemplateDetail}
+                            selectedTemplate={selectedTemplate}
+                            templateDetail={templateDetail}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Dashboard Tab Component
+        function DashboardTab({ analytics, leads }) {
+            const getSentimentClass = (score) => {
+                if (score > 0.1) return 'sentiment-positive';
+                if (score < -0.1) return 'sentiment-negative';
+                return 'sentiment-neutral';
+            };
+
+            return (
+                <div>
+                    <h2 className="mb-4">Dashboard Overview</h2>
+                    
+                    <div className="row mb-4">
+                        <div className="col-md-3">
+                            <div className="card text-center">
+                                <div className="card-body">
+                                    <h5 className="card-title">Total Leads</h5>
+                                    <h2 className="text-primary">{analytics.total_leads || 0}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-3">
+                            <div className="card text-center">
+                                <div className="card-body">
+                                    <h5 className="card-title">Avg Sentiment</h5>
+                                    <h2 className={getSentimentClass(analytics.average_sentiment || 0)}>
+                                        {(analytics.average_sentiment || 0).toFixed(2)}
+                                    </h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-3">
+                            <div className="card text-center">
+                                <div className="card-body">
+                                    <h5 className="card-title">New Leads (Today)</h5>
+                                    <h2 className="text-info">{analytics.status_breakdown?.new || 0}</h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-3">
+                            <div className="card text-center">
+                                <div className="card-body">
+                                    <h5 className="card-title">Hired</h5>
+                                    <h2 className="text-success">{analytics.status_breakdown?.hired || 0}</h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="row">
+                        <div className="col-md-6">
+                            <div className="card">
+                                <div className="card-header">
+                                    <h5>Status Breakdown</h5>
+                                </div>
+                                <div className="card-body">
+                                    {analytics.status_breakdown && Object.entries(analytics.status_breakdown).map(([status, count]) => (
+                                        <div key={status} className="d-flex justify-content-between mb-2">
+                                            <span className={`badge status-${status}`}>{status.replace('_', ' ')}</span>
+                                            <span>{count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-6">
+                            <div className="card">
+                                <div className="card-header">
+                                    <h5>Recruiter Performance</h5>
+                                </div>
+                                <div className="card-body">
+                                    {analytics.recruiter_performance && Object.entries(analytics.recruiter_performance).map(([recruiter, count]) => (
+                                        <div key={recruiter} className="d-flex justify-content-between mb-2">
+                                            <span>{recruiter}</span>
+                                            <span className="badge bg-primary">{count}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="row mt-4">
+                        <div className="col-12">
+                            <div className="card">
+                                <div className="card-header">
+                                    <h5>Recent Activity</h5>
+                                </div>
+                                <div className="card-body">
+                                    {analytics.recent_activities && analytics.recent_activities.length > 0 ? (
+                                        <div className="activity-timeline">
+                                            {analytics.recent_activities.map((activity, index) => (
+                                                <div key={index} className="activity-item">
+                                                    <div className="d-flex justify-content-between">
+                                                        <strong>{activity.lead_name}</strong>
+                                                        <small className="text-muted">{new Date(activity.created_at).toLocaleString()}</small>
+                                                    </div>
+                                                    <div>
+                                                        <span className={`badge bg-${activity.type === 'call' ? 'success' : activity.type === 'email' ? 'info' : 'warning'}`}>
+                                                            {activity.type}
+                                                        </span>
+                                                        <span className="ms-2">{activity.description}</span>
+                                                    </div>
+                                                    <small className="text-muted">by {activity.created_by}</small>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-muted">No recent activity</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Leads Tab Component
+        function LeadsTab({ leads, users, onUpdateLead, onAddActivity, selectedLead, onSelectLead }) {
+            const [filters, setFilters] = useState({
+                status: '',
+                assigned_to: '',
+                priority: ''
+            });
+
+            const filteredLeads = leads.filter(lead => {
+                return (!filters.status || lead.status === filters.status) &&
+                       (!filters.assigned_to || lead.assigned_to === filters.assigned_to) &&
+                       (!filters.priority || lead.priority === filters.priority);
+            });
+
+            const getSentimentClass = (score) => {
+                if (score > 0.1) return 'sentiment-positive';
+                if (score < -0.1) return 'sentiment-negative';
+                return 'sentiment-neutral';
+            };
+
+            return (
+                <div>
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Leads Management</h2>
+                        <div className="d-flex gap-2">
+                            <select 
+                                className="form-select" 
+                                value={filters.status}
+                                onChange={(e) => setFilters({...filters, status: e.target.value})}
+                            >
+                                <option value="">All Statuses</option>
+                                <option value="new">New</option>
+                                <option value="contacted">Contacted</option>
+                                <option value="interested">Interested</option>
+                                <option value="not_interested">Not Interested</option>
+                                <option value="hired">Hired</option>
+                            </select>
+                            <select 
+                                className="form-select" 
+                                value={filters.priority}
+                                onChange={(e) => setFilters({...filters, priority: e.target.value})}
+                            >
+                                <option value="">All Priorities</option>
+                                <option value="high">High</option>
+                                <option value="medium">Medium</option>
+                                <option value="low">Low</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="row">
+                        <div className="col-md-8">
+                            <div className="card">
+                                <div className="card-body">
+                                    <div className="table-responsive">
+                                        <table className="table table-hover">
+                                            <thead>
+                                                <tr>
+                                                    <th>Name</th>
+                                                    <th>Phone</th>
+                                                    <th>Status</th>
+                                                    <th>Priority</th>
+                                                    <th>Assigned To</th>
+                                                    <th>Sentiment</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredLeads.map(lead => (
+                                                    <tr key={lead.id} className={selectedLead?.id === lead.id ? 'table-active' : ''}>
+                                                        <td>{lead.name}</td>
+                                                        <td>{lead.phone}</td>
+                                                        <td>
+                                                            <span className={`badge status-${lead.status}`}>
+                                                                {lead.status.replace('_', ' ')}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <span className={`badge priority-${lead.priority}`}>
+                                                                {lead.priority}
+                                                            </span>
+                                                        </td>
+                                                        <td>{lead.assigned_to || 'Unassigned'}</td>
+                                                        <td>
+                                                            <span className={getSentimentClass(lead.sentiment_score)}>
+                                                                {(lead.sentiment_score || 0).toFixed(2)}
+                                                            </span>
+                                                        </td>
+                                                        <td>
+                                                            <button 
+                                                                className="btn btn-sm btn-outline-primary"
+                                                                onClick={() => onSelectLead(lead)}
+                                                            >
+                                                                <i className="fas fa-eye"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-4">
+                        {selectedLead && (
+                            <LeadDetail 
+                                lead={selectedLead} 
+                                users={users}
+                                onUpdateLead={onUpdateLead}
+                                onAddActivity={onAddActivity}
+                            />
+                        )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Lead Detail Component
+        function LeadDetail({ lead, users, onUpdateLead, onAddActivity }) {
+            const [isEditing, setIsEditing] = useState(false);
+            const [editData, setEditData] = useState({
+                name: lead.name,
+                email: lead.email,
+                phone: lead.phone,
+                notes: lead.notes,
+                status: lead.status,
+                priority: lead.priority,
+                assigned_to: lead.assigned_to_id
+            });
+            const [newActivity, setNewActivity] = useState({
+                type: 'call',
+                description: '',
+                created_by: 'Current User'
+            });
+
+            const handleSave = () => {
+                onUpdateLead(lead.id, editData);
+                setIsEditing(false);
+            };
+
+            const handleAddActivity = () => {
+                if (newActivity.description.trim()) {
+                    onAddActivity(lead.id, newActivity);
+                    setNewActivity({
+                        type: 'call',
+                        description: '',
+                        created_by: 'Current User'
+                    });
+                }
+            };
+
+            return (
+                <div className="card">
+                    <div className="card-header d-flex justify-content-between align-items-center">
+                        <h5>Lead Details</h5>
+                        <button 
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => setIsEditing(!isEditing)}
+                        >
+                            <i className="fas fa-edit"></i>
+                        </button>
+                    </div>
+                    <div className="card-body">
+                        {isEditing ? (
+                            <div>
+                                <div className="mb-3">
+                                    <label className="form-label">Name</label>
+                                    <input 
+                                        type="text" 
+                                        className="form-control"
+                                        value={editData.name}
+                                        onChange={(e) => setEditData({...editData, name: e.target.value})}
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Email</label>
+                                    <input 
+                                        type="email" 
+                                        className="form-control"
+                                        value={editData.email}
+                                        onChange={(e) => setEditData({...editData, email: e.target.value})}
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Phone</label>
+                                    <input 
+                                        type="text" 
+                                        className="form-control"
+                                        value={editData.phone}
+                                        onChange={(e) => setEditData({...editData, phone: e.target.value})}
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Status</label>
+                                    <select 
+                                        className="form-select"
+                                        value={editData.status}
+                                        onChange={(e) => setEditData({...editData, status: e.target.value})}
+                                    >
+                                        <option value="new">New</option>
+                                        <option value="contacted">Contacted</option>
+                                        <option value="interested">Interested</option>
+                                        <option value="not_interested">Not Interested</option>
+                                        <option value="hired">Hired</option>
+                                    </select>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Priority</label>
+                                    <select 
+                                        className="form-select"
+                                        value={editData.priority}
+                                        onChange={(e) => setEditData({...editData, priority: e.target.value})}
+                                    >
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                    </select>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Assigned To</label>
+                                    <select 
+                                        className="form-select"
+                                        value={editData.assigned_to || ''}
+                                        onChange={(e) => setEditData({...editData, assigned_to: e.target.value ? parseInt(e.target.value) : null})}
+                                    >
+                                        <option value="">Unassigned</option>
+                                        {users.map(user => (
+                                            <option key={user.id} value={user.id}>{user.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Notes</label>
+                                    <textarea 
+                                        className="form-control"
+                                        rows="3"
+                                        value={editData.notes}
+                                        onChange={(e) => setEditData({...editData, notes: e.target.value})}
+                                    />
+                                </div>
+                                <div className="d-flex gap-2">
+                                    <button className="btn btn-primary" onClick={handleSave}>
+                                        Save
+                                    </button>
+                                    <button className="btn btn-secondary" onClick={() => setIsEditing(false)}>
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <h6>{lead.name}</h6>
+                                <p><strong>Phone:</strong> {lead.phone}</p>
+                                <p><strong>Email:</strong> {lead.email || 'N/A'}</p>
+                                <p><strong>Status:</strong> <span className={`badge status-${lead.status}`}>{lead.status.replace('_', ' ')}</span></p>
+                                <p><strong>Priority:</strong> <span className={`badge priority-${lead.priority}`}>{lead.priority}</span></p>
+                                <p><strong>Assigned To:</strong> {lead.assigned_to || 'Unassigned'}</p>
+                                <p><strong>Notes:</strong></p>
+                                <div className="border p-2 rounded bg-light">
+                                    {lead.notes || 'No notes available'}
+                                </div>
+                            </div>
+                        )}
+
+                        <hr />
+                        
+                        <h6>Add Activity</h6>
+                        <div className="mb-2">
+                            <select 
+                                className="form-select form-select-sm"
+                                value={newActivity.type}
+                                onChange={(e) => setNewActivity({...newActivity, type: e.target.value})}
+                            >
+                                <option value="call">Call</option>
+                                <option value="email">Email</option>
+                                <option value="text">Text</option>
+                                <option value="note">Note</option>
+                            </select>
+                        </div>
+                        <div className="mb-2">
+                            <textarea 
+                                className="form-control form-control-sm"
+                                rows="2"
+                                placeholder="Activity description..."
+                                value={newActivity.description}
+                                onChange={(e) => setNewActivity({...newActivity, description: e.target.value})}
+                            />
+                        </div>
+                        <button 
+                            className="btn btn-sm btn-success"
+                            onClick={handleAddActivity}
+                            disabled={!newActivity.description.trim()}
+                        >
+                            Add Activity
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // Upload Tab Component
+        function UploadTab({ onUploadComplete }) {
+            const [dragActive, setDragActive] = useState(false);
+            const [uploading, setUploading] = useState(false);
+            const [uploadResult, setUploadResult] = useState(null);
+            const fileInputRef = useRef(null);
+
+            const handleDrag = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.type === "dragenter" || e.type === "dragover") {
+                    setDragActive(true);
+                } else if (e.type === "dragleave") {
+                    setDragActive(false);
+                }
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDragActive(false);
+        
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            };
+
+            const handleFile = async (file) => {
+                if (!file.name.endsWith('.zip') && !file.name.endsWith('.csv')) {
+                    alert('Please upload a zip or csv file');
+                    return;
+                }
+
+                setUploading(true);
+                setUploadResult(null);
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const response = await axios.post('/api/leads/upload', formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data',
+                        },
+                    });
+                    setUploadResult(response.data);
+                    onUploadComplete();
+                } catch (error) {
+                    setUploadResult({ error: error.response?.data?.error || 'Upload failed' });
+                } finally {
+                    setUploading(false);
+                }
+            };
+
+            return (
+                <div>
+                    <h2 className="mb-4">Upload Lead Files</h2>
+                    
+                    <div 
+                        className={`upload-area ${dragActive ? 'dragover' : ''}`}
+                        onDragEnter={handleDrag}
+                        onDragLeave={handleDrag}
+                        onDragOver={handleDrag}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <i className="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                        <h5>Drop your zip or csv file here or click to browse</h5>
+                        <p className="text-muted">Both .zip and .csv files are supported</p>
+                        <input 
+                            ref={fileInputRef}
+                            type="file" 
+                            accept=".zip,.csv"
+                            style={{ display: 'none' }}
+                            onChange={(e) => e.target.files[0] && handleFile(e.target.files[0])}
+                        />
+                    </div>
+
+                    {uploading && (
+                        <div className="text-center mt-3">
+                            <div className="spinner-border text-primary" role="status">
+                                <span className="visually-hidden">Uploading...</span>
+                            </div>
+                            <p className="mt-2">Processing your file...</p>
+                        </div>
+                    )}
+
+                    {uploadResult && (
+                        <div className={`alert ${uploadResult.error ? 'alert-danger' : uploadResult.leads_added === 0 && uploadResult.duplicates_skipped > 0 ? 'alert-warning' : 'alert-success'} mt-3`}>
+                            {uploadResult.error ? (
+                                <p><strong>Error:</strong> {uploadResult.error}</p>
+                            ) : (
+                                <div>
+                                    <p><strong>{uploadResult.message || 'Upload Successful!'}</strong></p>
+                                    {uploadResult.leads_added > 0 && (
+                                        <p>Leads added: {uploadResult.leads_added}</p>
+                                    )}
+                                    {uploadResult.duplicates_skipped > 0 && (
+                                        <p className="text-warning">Duplicates skipped: {uploadResult.duplicates_skipped}</p>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Alerts Tab Component
+        function AlertsTab({ alertRules, onRefresh }) {
+            const [showCreateForm, setShowCreateForm] = useState(false);
+            const [newRule, setNewRule] = useState({
+                name: '',
+                condition: '',
+                email_recipients: '',
+                is_active: true
+            });
+
+            const createRule = async () => {
+                try {
+                    await axios.post('/api/alert-rules', newRule);
+                    setNewRule({
+                        name: '',
+                        condition: '',
+                        email_recipients: '',
+                        is_active: true
+                    });
+                    setShowCreateForm(false);
+                    onRefresh();
+                } catch (error) {
+                    console.error('Error creating alert rule:', error);
+                }
+            };
+
+            return (
+                <div>
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2>Alert Rules</h2>
+                        <button 
+                            className="btn btn-primary"
+                            onClick={() => setShowCreateForm(true)}
+                        >
+                            <i className="fas fa-plus"></i> Create Rule
+                        </button>
+                    </div>
+
+                    {showCreateForm && (
+                        <div className="card mb-4">
+                            <div className="card-header">
+                                <h5>Create New Alert Rule</h5>
+                            </div>
+                            <div className="card-body">
+                                <div className="mb-3">
+                                    <label className="form-label">Rule Name</label>
+                                    <input 
+                                        type="text" 
+                                        className="form-control"
+                                        value={newRule.name}
+                                        onChange={(e) => setNewRule({...newRule, name: e.target.value})}
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Email Recipients (comma-separated)</label>
+                                    <input 
+                                        type="text" 
+                                        className="form-control"
+                                        placeholder="email1@company.com, email2@company.com"
+                                        value={newRule.email_recipients}
+                                        onChange={(e) => setNewRule({...newRule, email_recipients: e.target.value})}
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Condition (JSON format)</label>
+                                    <textarea 
+                                        className="form-control"
+                                        rows="3"
+                                        placeholder='[{"field": "priority", "operator": "equals", "value": "high"}]'
+                                        value={newRule.condition}
+                                        onChange={(e) => setNewRule({...newRule, condition: e.target.value})}
+                                    />
+                                </div>
+                                <div className="d-flex gap-2">
+                                    <button className="btn btn-primary" onClick={createRule}>
+                                        Create Rule
+                                    </button>
+                                    <button className="btn btn-secondary" onClick={() => setShowCreateForm(false)}>
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="row">
+                        {alertRules.map(rule => (
+                            <div key={rule.id} className="col-md-6 mb-3">
+                                <div className="card">
+                                    <div className="card-header d-flex justify-content-between align-items-center">
+                                        <h6>{rule.name}</h6>
+                                        <span className={`badge ${rule.is_active ? 'bg-success' : 'bg-secondary'}`}>
+                                            {rule.is_active ? 'Active' : 'Inactive'}
+                                        </span>
+                                    </div>
+                                    <div className="card-body">
+                                        <p><strong>Recipients:</strong> {rule.email_recipients}</p>
+                                        <p><strong>Condition:</strong></p>
+                                        <pre className="bg-light p-2 rounded">{rule.condition}</pre>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            );
+        }
+
+        // Users Tab Component
+        function UsersTab({ users, onCreateUser, onDeleteUser, onUpdateUser }) {
+            const [showCreateForm, setShowCreateForm] = useState(false);
+            const [editingUser, setEditingUser] = useState(null);
+            const [newUser, setNewUser] = useState({
+                name: '',
+                email: ''
+            });
+            const [editUser, setEditUser] = useState({
+                name: '',
+                email: ''
+            });
+
+            const handleCreateUser = async () => {
+                if (!newUser.name || !newUser.email) {
+                    alert('Please fill in all fields');
+                    return;
+                }
+                
+                try {
+                    await onCreateUser(newUser);
+                    setNewUser({ name: '', email: '' });
+                    setShowCreateForm(false);
+                } catch (error) {
+                    alert(error.response?.data?.error || 'Error creating user');
+                }
+            };
+
+            const handleDeleteUser = async (userId, userName) => {
+                if (confirm(`Are you sure you want to delete ${userName}?`)) {
+                    try {
+                        await onDeleteUser(userId);
+                    } catch (error) {
+                        alert(error.response?.data?.error || 'Error deleting user');
+                    }
+                }
+            };
+
+            const handleUpdateUser = async () => {
+                if (!editUser.name || !editUser.email) {
+                    alert('Please fill in all fields');
+                    return;
+                }
+                
+                try {
+                    await onUpdateUser(editingUser.id, editUser);
+                    setEditingUser(null);
+                } catch (error) {
+                    alert(error.response?.data?.error || 'Error updating user');
+                }
+            };
+
+            return (
+                <div>
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <h2>User Management</h2>
+                        <button 
+                            className="btn btn-primary"
+                            onClick={() => setShowCreateForm(true)}
+                        >
+                            <i className="fas fa-plus"></i> Add User
+                        </button>
+                    </div>
+
+                    {showCreateForm && (
+                        <div className="card mb-4">
+                            <div className="card-header">
+                                <h5>Add New User</h5>
+                            </div>
+                            <div className="card-body">
+                                <div className="mb-3">
+                                    <label className="form-label">Name</label>
+                                    <input 
+                                        type="text" 
+                                        className="form-control"
+                                        value={newUser.name}
+                                        onChange={(e) => setNewUser({...newUser, name: e.target.value})}
+                                        placeholder="Enter user name"
+                                    />
+                                </div>
+                                <div className="mb-3">
+                                    <label className="form-label">Email</label>
+                                    <input 
+                                        type="email" 
+                                        className="form-control"
+                                        value={newUser.email}
+                                        onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                                        placeholder="Enter email address"
+                                    />
+                                </div>
+                                <div className="d-flex gap-2">
+                                    <button className="btn btn-primary" onClick={handleCreateUser}>
+                                        Add User
+                                    </button>
+                                    <button className="btn btn-secondary" onClick={() => setShowCreateForm(false)}>
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="row">
+                        {users.map(user => (
+                            <div key={user.id} className="col-md-6 mb-3">
+                                <div className="card">
+                                    <div className="card-header d-flex justify-content-between align-items-center">
+                                        <h6>{user.name}</h6>
+                                        <div className="d-flex gap-2">
+                                            <button 
+                                                className="btn btn-sm btn-outline-primary"
+                                                onClick={() => {
+                                                    setEditingUser(user);
+                                                    setEditUser({ name: user.name, email: user.email });
+                                                }}
+                                            >
+                                                <i className="fas fa-edit"></i>
+                                            </button>
+                                            <button 
+                                                className="btn btn-sm btn-outline-danger"
+                                                onClick={() => handleDeleteUser(user.id, user.name)}
+                                            >
+                                                <i className="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="card-body">
+                                        <p><strong>Email:</strong> {user.email}</p>
+                                        <p><strong>Assigned Leads:</strong> {user.lead_count}</p>
+                                        <p><strong>Created:</strong> {new Date(user.created_at).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {editingUser && (
+                        <div className="modal show d-block" style={{backgroundColor: 'rgba(0,0,0,0.5)'}}>
+                            <div className="modal-dialog">
+                                <div className="modal-content">
+                                    <div className="modal-header">
+                                        <h5 className="modal-title">Edit User</h5>
+                                        <button 
+                                            type="button" 
+                                            className="btn-close" 
+                                            onClick={() => setEditingUser(null)}
+                                        ></button>
+                                    </div>
+                                    <div className="modal-body">
+                                        <div className="mb-3">
+                                            <label className="form-label">Name</label>
+                                            <input 
+                                                type="text" 
+                                                className="form-control"
+                                                value={editUser.name}
+                                                onChange={(e) => setEditUser({...editUser, name: e.target.value})}
+                                            />
+                                        </div>
+                                        <div className="mb-3">
+                                            <label className="form-label">Email</label>
+                                            <input 
+                                                type="email" 
+                                                className="form-control"
+                                                value={editUser.email}
+                                                onChange={(e) => setEditUser({...editUser, email: e.target.value})}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="modal-footer">
+                                        <button className="btn btn-primary" onClick={handleUpdateUser}>
+                                            Save Changes
+                                        </button>
+                                        <button className="btn btn-secondary" onClick={() => setEditingUser(null)}>
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function GoformzTab({ status, templates, users, loading, error, onRefresh, onSelectTemplate, selectedTemplate, templateDetail }) {
+            const hasCredentials = status?.client_id_set && status?.client_secret_set;
+
+            const copyValue = (value) => {
+                if (!value) return;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(value).catch(() => window.prompt('Copy value', value));
+                } else {
+                    window.prompt('Copy value', value);
+                }
+            };
+
+            const fieldMappingEntries = status?.field_mapping && typeof status.field_mapping === 'object'
+                ? Object.entries(status.field_mapping)
+                : null;
+
+            const templateFields = templateDetail?.fields
+                ? Object.entries(templateDetail.fields).slice(0, 12)
+                : [];
+            const totalFieldCount = templateDetail?.fields
+                ? Object.keys(templateDetail.fields).length
+                : 0;
+
+            return (
+                <div>
+                    <div className="d-flex justify-content-between align-items-center mb-4">
+                        <div>
+                            <h2>GoFormz Integration</h2>
+                            <p className="text-muted">Monitor configuration, templates, and assignment targets.</p>
+                        </div>
+                        <button className="btn btn-secondary" onClick={onRefresh} disabled={loading}>
+                            {loading ? 'Refreshing...' : 'Refresh'}
+                        </button>
+                    </div>
+
+                    {error && (
+                        <div className="alert alert-danger">{error}</div>
+                    )}
+
+                    <div className="row mb-4">
+                        <div className="col-md-3">
+                            <div className="card text-center">
+                                <div className="card-body">
+                                    <h5>Credentials</h5>
+                                    <h2 className={status?.connection_ok ? 'text-success' : 'text-danger'}>
+                                        {status?.connection_ok ? 'Connected' : 'Missing'}
+                                    </h2>
+                                    <p className="text-muted small">
+                                        {hasCredentials ? 'Client ID & Secret configured' : 'Add GOFORMZ_CLIENT_ID/SECRET'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-3">
+                            <div className="card text-center">
+                                <div className="card-body">
+                                    <h5>Employee Template ID</h5>
+                                    <h2 className={status?.employee_template_id ? 'text-info' : 'text-warning'}>
+                                        {status?.employee_template_id ? 'Set' : 'Auto'}
+                                    </h2>
+                                    <p className="text-muted small">
+                                        {status?.employee_template_id || 'Auto-detects "* Employee Packet"'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-3">
+                            <div className="card text-center">
+                                <div className="card-body">
+                                    <h5>Assignment User</h5>
+                                    <h2 className={status?.user_id ? 'text-success' : 'text-warning'}>
+                                        {status?.user_id ? 'Pinned' : 'Auto'}
+                                    </h2>
+                                    <p className="text-muted small">
+                                        {status?.user_id || 'Defaults to first user from API'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-3">
+                            <div className="card text-center">
+                                <div className="card-body">
+                                    <h5>Field Mapping</h5>
+                                    <h2 className={fieldMappingEntries ? 'text-success' : 'text-muted'}>
+                                        {fieldMappingEntries ? `${fieldMappingEntries.length} Fields` : 'Not set'}
+                                    </h2>
+                                    <p className="text-muted small">GOFORMZ_FIELD_MAPPING</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {fieldMappingEntries && (
+                        <div className="card mb-4">
+                            <div className="card-header">
+                                <h5>Field Mapping Preview</h5>
+                            </div>
+                            <div className="card-body">
+                                <div className="table-responsive">
+                                    <table className="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Lead Field</th>
+                                                <th>GoFormz Field Name</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {fieldMappingEntries.map(([leadField, goformzField]) => (
+                                                <tr key={leadField}>
+                                                    <td>{leadField}</td>
+                                                    <td className="text-muted">{goformzField}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="row">
+                        <div className="col-md-7">
+                            <div className="card mb-4">
+                                <div className="card-header d-flex justify-content-between align-items-center">
+                                    <h5>GoFormz Templates ({templates.length})</h5>
+                                    <small className="text-muted">Click “View” to inspect fields</small>
+                                </div>
+                                <div className="card-body">
+                                    {templates.length === 0 ? (
+                                        <p className="text-muted">No templates returned. Confirm GoFormz access.</p>
+                                    ) : (
+                                        <div className="table-responsive">
+                                            <table className="table table-hover">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Name</th>
+                                                        <th>Template ID</th>
+                                                        <th className="text-end">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {templates.map(template => (
+                                                        <tr key={template.id} className={selectedTemplate === template.id ? 'table-active' : ''}>
+                                                            <td>{template.name}</td>
+                                                            <td className="text-muted">{template.id}</td>
+                                                            <td className="text-end">
+                                                                <button 
+                                                                    className="btn btn-sm btn-outline-secondary"
+                                                                    style={{ marginRight: '8px' }}
+                                                                    onClick={() => copyValue(template.id)}
+                                                                >
+                                                                    Copy ID
+                                                                </button>
+                                                                <button 
+                                                                    className="btn btn-sm btn-outline-primary"
+                                                                    onClick={() => onSelectTemplate(template.id)}
+                                                                >
+                                                                    View
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="col-md-5">
+                            <div className="card mb-4">
+                                <div className="card-header">
+                                    <h5>Template Details</h5>
+                                </div>
+                                <div className="card-body" style={{ minHeight: '220px' }}>
+                                    {!selectedTemplate && (
+                                        <p className="text-muted">Select a template to view its fields.</p>
+                                    )}
+                                    {selectedTemplate && !templateDetail && (
+                                        <p className="text-muted">Loading template metadata...</p>
+                                    )}
+                                    {templateDetail && (
+                                        <div>
+                                            <p><strong>{templateDetail.name}</strong></p>
+                                            <p className="text-muted small">{templateDetail.id}</p>
+                                            {templateFields.length === 0 ? (
+                                                <p className="text-muted">No field metadata returned.</p>
+                                            ) : (
+                                                <div className="table-responsive">
+                                                    <table className="table table-sm">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Field</th>
+                                                                <th>Type</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {templateFields.map(([fieldKey, fieldData]) => (
+                                                                <tr key={fieldKey}>
+                                                                    <td>{fieldData?.name || fieldKey}</td>
+                                                                    <td className="text-muted">{fieldData?.type || 'Text'}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                    {totalFieldCount > templateFields.length && (
+                                                        <p className="text-muted small">
+                                                            Showing first {templateFields.length} of {totalFieldCount} fields.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="card">
+                        <div className="card-header">
+                            <h5>GoFormz Users ({users.length})</h5>
+                        </div>
+                        <div className="card-body">
+                            {users.length === 0 ? (
+                                <p className="text-muted">No users returned. Confirm your GoFormz plan includes additional seats.</p>
+                            ) : (
+                                <div className="table-responsive">
+                                    <table className="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Email</th>
+                                                <th>User ID</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {users.map(user => (
+                                                <tr key={user.id}>
+                                                    <td>{user.name || user.fullName || '—'}</td>
+                                                    <td>{user.email || user.login || '—'}</td>
+                                                    <td className="text-muted">
+                                                        {user.id}
+                                                        <button 
+                                                            className="btn btn-sm btn-link text-info ms-2"
+                                                            onClick={() => copyValue(user.id)}
+                                                        >
+                                                            Copy
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

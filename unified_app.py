@@ -45,13 +45,23 @@ if os.path.exists("static"):
 
 # ==================== MOUNT SALES DASHBOARD ====================
 try:
+    # Set DATABASE_URL for sales dashboard (from SALES_DATABASE_URL)
+    if os.getenv("SALES_DATABASE_URL"):
+        os.environ["DATABASE_URL"] = os.getenv("SALES_DATABASE_URL")
+        logger.info("✅ Set DATABASE_URL for sales dashboard")
+
     # Add sales dashboard to path
     sales_path = os.path.join(os.path.dirname(__file__), "sales")
     if os.path.exists(sales_path):
         sys.path.insert(0, sales_path)
+        logger.info(f"✅ Added sales path: {sales_path}")
 
         # Import sales app
-        from app import app as sales_app
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("sales_app", os.path.join(sales_path, "app.py"))
+        sales_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sales_module)
+        sales_app = sales_module.app
 
         # Mount sales dashboard at /sales
         app.mount("/sales", sales_app)
@@ -60,16 +70,28 @@ try:
         logger.warning("⚠️  Sales dashboard not found at " + sales_path)
 except Exception as e:
     logger.error(f"❌ Failed to mount sales dashboard: {e}")
+    import traceback
+    logger.error(traceback.format_exc())
 
 # ==================== MOUNT RECRUITER DASHBOARD ====================
 try:
+    # Set DATABASE_URL for recruiting dashboard (from RECRUITING_DATABASE_URL)
+    if os.getenv("RECRUITING_DATABASE_URL"):
+        os.environ["DATABASE_URL"] = os.getenv("RECRUITING_DATABASE_URL")
+        logger.info("✅ Set DATABASE_URL for recruiting dashboard")
+
     # Add recruiter dashboard to path
     recruiter_path = os.path.join(os.path.dirname(__file__), "recruiting")
     if os.path.exists(recruiter_path):
         sys.path.insert(0, recruiter_path)
+        logger.info(f"✅ Added recruiting path: {recruiter_path}")
 
         # Import Flask app
-        from app import app as flask_app
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("recruiting_app", os.path.join(recruiter_path, "app.py"))
+        recruiting_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(recruiting_module)
+        flask_app = recruiting_module.app
 
         # Mount Flask app using WSGI middleware
         app.mount("/recruiting", WSGIMiddleware(flask_app))
@@ -78,6 +100,8 @@ try:
         logger.warning("⚠️  Recruiter dashboard not found at " + recruiter_path)
 except Exception as e:
     logger.error(f"❌ Failed to mount recruiter dashboard: {e}")
+    import traceback
+    logger.error(traceback.format_exc())
 
 # ==================== PORTAL HOMEPAGE ====================
 @app.get("/", response_class=HTMLResponse)

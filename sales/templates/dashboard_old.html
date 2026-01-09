@@ -1,0 +1,1350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colorado CareAssist Sales Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHZpZXdCb3g9IjAgMCAzMiAzMiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMjUvc3ZnIj4KPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iOCIgZmlsbD0idXJsKCNncmFkaWVudCkiLz4KPHN2ZyB4PSI4IiB5PSI4IiB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSI+CjxwYXRoIGQ9Ik04IDJMMTMgNkg4VjJaTTggNkgzTDggMlY2WiIgZmlsbD0id2hpdGUiLz4KPHBhdGggZD0iTTIgN0gxNFYxM0gyVjdaIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNMiAxM0gxNFYxNUgyVjEzWiIgZmlsbD0id2hpdGUiLz4KPC9zdmc+CjxkZWZzPgo8bGluZWFyR3JhZGllbnQgaWQ9ImdyYWRpZW50IiB4MT0iMCIgeTE9IjAiIHgyPSIzMiIgeTI9IjMyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+CjxzdG9wIHN0b3AtY29sb3I9IiM2NjdlZWEiLz4KPHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjNzY0YmEyIi8+CjwvbGluZWFyR3JhZGllbnQ+CjwvZGVmcz4KPC9zdmc+">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            color: #666;
+        }
+
+        .user-info {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #667eea;
+        }
+
+        .user-details {
+            text-align: right;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9rem;
+        }
+
+        .user-email {
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .logout-btn {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
+        }
+            margin-bottom: 20px;
+        }
+
+        .nav-toggle {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 12px;
+            padding: 25px;
+            cursor: pointer;
+            color: white;
+            font-size: 2.2rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .nav-toggle:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .nav-menu {
+            position: fixed;
+            top: 0;
+            right: -300px;
+            width: 300px;
+            height: 100vh;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            transition: right 0.3s ease;
+            z-index: 1000;
+            padding: 30px;
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-menu.active {
+            right: 0;
+        }
+
+        .nav-menu h3 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 1.5rem;
+        }
+
+        .nav-item {
+            display: block;
+            padding: 15px 20px;
+            margin: 10px 0;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(135deg, #764ba2, #667eea);
+        }
+
+        .content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .summary-card {
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-icon {
+            font-size: 2rem;
+            margin-bottom: 15px;
+            opacity: 0.8;
+        }
+
+        .summary-card h3 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .summary-card p {
+            color: #7f8c8d;
+            font-size: 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .summary-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #3498db, #2ecc71, #f39c12, #e74c3c);
+            background-size: 300% 300%;
+            animation: gradientShift 3s ease infinite;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .chart-card {
+            grid-column: span 2;
+        }
+
+        .chart-card h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.3rem;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 12px;
+            border: 1px solid #e0e0e0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #27ae60, #229954);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .upload-section {
+            background: white;
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-instructions {
+            margin-bottom: 30px;
+        }
+
+        .upload-instructions h3 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+        }
+
+        .file-types {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .file-type {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .file-type strong {
+            color: #333;
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .file-type ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .file-type li {
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .upload-area {
+            text-align: center;
+            padding: 20px;
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            background: #fafafa;
+        }
+
+        .file-selected {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            text-align: left;
+        }
+
+        .upload-status {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .upload-status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .upload-status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .contact-card, .time-tracking-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+
+        .contact-details, .time-details {
+            margin: 15px 0;
+        }
+
+        .contact-details p, .time-details p {
+            margin: 8px 0;
+            color: #333;
+        }
+
+        .extracted-text {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+        }
+
+        .extracted-text pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-right: 15px;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .file-info {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 8px;
+            color: #333;
+        }
+
+        .success-message, .error-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+
+        .success-message {
+            background: rgba(39, 174, 96, 0.1);
+            color: #27ae60;
+            border: 1px solid rgba(39, 174, 96, 0.2);
+        }
+
+        .error-message {
+            background: rgba(231, 76, 60, 0.1);
+            color: #e74c3c;
+            border: 1px solid rgba(231, 76, 60, 0.2);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+            display: none;
+        }
+
+        .overlay.active {
+            display: block;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .nav-menu {
+                width: 100%;
+                right: -100%;
+            }
+            
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .chart-card {
+                grid-column: span 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Colorado CareAssist Sales Dashboard</h1>
+            <p>Unified platform for tracking visits, hours, contacts, and activity notes.</p>
+            {% if user %}
+            <div class="user-info">
+                <img src="{{ user.picture or '/static/favicon.ico' }}" alt="User Avatar" class="user-avatar">
+                <div class="user-details">
+                    <div class="user-name">{{ user.name or 'User' }}</div>
+                    <div class="user-email">{{ user.email }}</div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+            {% endif %}
+            <button class="nav-toggle" onclick="toggleNav()">☰</button>
+        </div>
+
+        <div class="nav-menu" id="navMenu">
+            <h3>Navigation</h3>
+            <a href="#" class="nav-item active" onclick="showPage('dashboard')">📊 Dashboard</a>
+            <a href="#" class="nav-item" onclick="showPage('visits')">🏥 Visits</a>
+            <a href="#" class="nav-item" onclick="showPage('hours')">⏰ Hours</a>
+            <a href="#" class="nav-item" onclick="showPage('contacts')">👥 Contacts</a>
+            <a href="#" class="nav-item" onclick="showPage('activity-notes')">📝 Activity Notes</a>
+            <a href="#" class="nav-item" onclick="showPage('upload')">📤 Upload Files</a>
+        </div>
+
+        <div class="overlay" id="overlay" onclick="closeNav()"></div>
+
+        <div class="content">
+            <!-- Dashboard Page -->
+            <div id="dashboard" class="page active">
+                <div class="dashboard-grid">
+                    <!-- Summary Cards -->
+                    <div class="card summary-card">
+                        <div class="card-icon">📊</div>
+                        <h3 id="totalVisits">-</h3>
+                        <p>Total Visits</p>
+                    </div>
+                    <div class="card summary-card">
+                        <div class="card-icon">💰</div>
+                        <h3 id="totalBonusesEarned">-</h3>
+                        <p>Bonuses Earned</p>
+                    </div>
+                    <div class="card summary-card">
+                        <div class="card-icon">💸</div>
+                        <h3 id="totalCosts">-</h3>
+                        <p>Total Costs</p>
+                    </div>
+                    <div class="card summary-card">
+                        <div class="card-icon">📈</div>
+                        <h3 id="costPerVisit">-</h3>
+                        <p>Cost Per Visit</p>
+                    </div>
+                    <div class="card summary-card">
+                        <div class="card-icon">🎯</div>
+                        <h3 id="bonusPerVisit">-</h3>
+                        <p>Bonus Per Visit</p>
+                    </div>
+
+                    <!-- Charts -->
+                    <div class="card chart-card">
+                        <h2>Costs by Month</h2>
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                    <div class="card chart-card">
+                        <h2>Visits by Month</h2>
+                        <canvas id="visitsChart"></canvas>
+                    </div>
+                    <div class="card chart-card">
+                        <h2>Top Facilities</h2>
+                        <canvas id="topFacilitiesChart"></canvas>
+                    </div>
+
+                    <!-- Recent Activity -->
+                    <div class="card full-width">
+                        <h2>Recent Activity</h2>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Type</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentActivityList">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visits Page -->
+            <div id="visits" class="page">
+                <h2>Visits Management</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Stop #</th>
+                                <th>Business Name</th>
+                                <th>Address</th>
+                                <th>City</th>
+                                <th>Date</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="visitsList">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Hours Page -->
+            <div id="hours" class="page">
+                <h2>Hours Management</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Hours Worked</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hoursList">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Contacts Page -->
+            <div id="contacts" class="page">
+                <h2>Contacts Management</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Company</th>
+                                <th>Title</th>
+                                <th>Phone</th>
+                                <th>Email</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contactsList">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Activity Notes Page -->
+            <div id="activity-notes" class="page">
+                <h2>Activity Notes</h2>
+                <div style="margin-bottom: 20px;">
+                    <button class="btn btn-success" onclick="showAddNoteForm()">+ Add New Note</button>
+                </div>
+                
+                <div id="addNoteForm" style="display: none; background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px;">
+                    <h3>Add New Activity Note</h3>
+                    <div class="form-group">
+                        <label for="noteDate">Date:</label>
+                        <input type="date" id="noteDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="noteText">Notes:</label>
+                        <textarea id="noteText" placeholder="Enter your activity notes..." required></textarea>
+                    </div>
+                    <button class="btn btn-success" onclick="saveActivityNote()">Save Note</button>
+                    <button class="btn" onclick="hideAddNoteForm()">Cancel</button>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Notes</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activityNotesList">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Upload Page -->
+            <div id="upload" class="page">
+                <h2>📤 Upload Files</h2>
+                <div class="upload-section">
+                    <div class="upload-instructions">
+                        <h3>Supported File Types:</h3>
+                        <div class="file-types">
+                            <div class="file-type">
+                                <strong>📄 PDF Files:</strong>
+                                <ul>
+                                    <li>MyWay route PDFs (.pdf)</li>
+                                    <li>Time tracking PDFs (.pdf)</li>
+                                </ul>
+                            </div>
+                            <div class="file-type">
+                                <strong>🖼️ Image Files:</strong>
+                                <ul>
+                                    <li>Business card photos (.jpg, .jpeg, .png)</li>
+                                    <li>Scanned business cards (.jpg, .jpeg, .png)</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="upload-area">
+                        <input type="file" id="fileInput" class="file-input" accept=".pdf,.jpg,.jpeg,.png">
+                        <button class="upload-btn" id="uploadBtn">📁 Choose File</button>
+                        <div class="file-info" id="fileInfo"></div>
+                    </div>
+                </div>
+
+                <div class="success-message" id="successMessage"></div>
+                <div class="error-message" id="errorMessage"></div>
+
+                <!-- Results Section -->
+                <div id="resultsSection" style="display: none;">
+                    <h2 id="resultsTitle">Extracted Data</h2>
+                    <div class="stats">
+                        <p>Total Items: <span id="totalItemsEl">0</span></p>
+                        <p>Type: <span id="dataTypeEl">N/A</span></p>
+                    </div>
+                    <div class="table-container" id="tableContainer"></div>
+                    <button class="btn btn-success" id="appendBtn">Save to Dashboard</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentPage = 'dashboard';
+        let visitsChart, hoursChart, topFacilitiesChart;
+
+        // Authentication functions
+        async function logout() {
+            try {
+                const response = await fetch('/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/auth/login';
+                } else {
+                    console.error('Logout failed');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                // Force redirect even if logout fails
+                window.location.href = '/auth/login';
+            }
+        }
+
+        // Suppress browser extension errors
+        window.addEventListener('error', function(e) {
+            if (e.message && e.message.includes('pageMenu')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        // Navigation functions
+        function toggleNav() {
+            const navMenu = document.getElementById('navMenu');
+            const overlay = document.getElementById('overlay');
+            if (navMenu) navMenu.classList.toggle('active');
+            if (overlay) overlay.classList.toggle('active');
+        }
+
+        function closeNav() {
+            const navMenu = document.getElementById('navMenu');
+            const overlay = document.getElementById('overlay');
+            if (navMenu) navMenu.classList.remove('active');
+            if (overlay) overlay.classList.remove('active');
+        }
+
+        function showPage(pageName) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+
+            // Show selected page
+            document.getElementById(pageName).classList.add('active');
+
+            // Update navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Update current page
+            currentPage = pageName;
+
+            // Load page-specific data
+            if (pageName === 'dashboard') {
+                loadDashboardData();
+            } else if (pageName === 'visits') {
+                loadVisitsData();
+            } else if (pageName === 'hours') {
+                loadHoursData();
+            } else if (pageName === 'contacts') {
+                loadContactsData();
+            } else if (pageName === 'activity-notes') {
+                loadActivityNotesData();
+            }
+
+            closeNav();
+        }
+
+        // Dashboard functions
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard/summary');
+                const data = await response.json();
+
+                // Check if data exists and has the required fields
+                if (data && typeof data === 'object') {
+                    document.getElementById('totalVisits').textContent = data.total_visits || 0;
+                    document.getElementById('totalBonusesEarned').textContent = '$' + (data.total_bonuses_earned || 0).toLocaleString();
+                    document.getElementById('totalCosts').textContent = '$' + (data.total_costs || 0).toLocaleString();
+                    document.getElementById('totalBonusesPaid').textContent = '$' + (data.total_bonuses_paid || 0).toLocaleString();
+                    document.getElementById('costPerVisit').textContent = '$' + (data.cost_per_visit || 0).toFixed(2);
+                    document.getElementById('bonusPerVisit').textContent = '$' + (data.bonus_per_visit || 0).toFixed(2);
+                } else {
+                    console.error('Invalid data received from API:', data);
+                    // Set default values
+                    document.getElementById('totalVisits').textContent = '0';
+                    document.getElementById('totalBonusesEarned').textContent = '$0';
+                    document.getElementById('totalCosts').textContent = '$0';
+                    document.getElementById('totalBonusesPaid').textContent = '$0';
+                    document.getElementById('costPerVisit').textContent = '$0.00';
+                    document.getElementById('bonusPerVisit').textContent = '$0.00';
+                }
+
+                // Wait a bit for Chart.js to load, then load charts
+                setTimeout(async () => {
+                    await loadCharts();
+                    await loadRecentActivity();
+                }, 100);
+
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                // Set default values on error
+                document.getElementById('totalVisits').textContent = '0';
+                document.getElementById('totalBonusesEarned').textContent = '$0';
+                document.getElementById('totalCosts').textContent = '$0';
+                document.getElementById('totalBonusesPaid').textContent = '$0';
+                document.getElementById('costPerVisit').textContent = '$0.00';
+                document.getElementById('bonusPerVisit').textContent = '$0.00';
+            }
+        }
+
+        async function loadCharts() {
+            try {
+                // Check if Chart.js is loaded
+                if (typeof Chart === 'undefined') {
+                    console.warn('Chart.js not loaded, skipping chart creation');
+                    return;
+                }
+
+                // Costs by Month Chart (No Revenue)
+                const revenueResponse = await fetch('/api/dashboard/revenue-by-month');
+                const revenueData = await revenueResponse.json();
+
+                const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+                if (window.revenueChart && typeof window.revenueChart.destroy === 'function') {
+                    window.revenueChart.destroy();
+                }
+                window.revenueChart = new Chart(revenueCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: revenueData.map(item => item.month),
+                        datasets: [
+                            {
+                                label: 'Costs',
+                                data: revenueData.map(item => item.costs),
+                                backgroundColor: 'rgba(231, 76, 60, 0.8)',
+                                borderColor: '#e74c3c',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Visits by Month Chart
+                const visitsResponse = await fetch('/api/dashboard/visits-by-month');
+                const visitsData = await visitsResponse.json();
+
+                const visitsCtx = document.getElementById('visitsChart').getContext('2d');
+                if (visitsChart && typeof visitsChart.destroy === 'function') visitsChart.destroy();
+                visitsChart = new Chart(visitsCtx, {
+                    type: 'line',
+                    data: {
+                        labels: visitsData.map(item => item.month),
+                        datasets: [{
+                            label: 'Visits',
+                            data: visitsData.map(item => item.count),
+                            borderColor: '#667eea',
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                display: false
+                            }
+                        }
+                    }
+                });
+
+                // Top Facilities Chart
+                const facilitiesResponse = await fetch('/api/dashboard/top-facilities');
+                const facilitiesData = await facilitiesResponse.json();
+
+                const facilitiesCtx = document.getElementById('topFacilitiesChart').getContext('2d');
+                if (topFacilitiesChart && typeof topFacilitiesChart.destroy === 'function') topFacilitiesChart.destroy();
+                topFacilitiesChart = new Chart(facilitiesCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: facilitiesData.slice(0, 5).map(item => item.business_name),
+                        datasets: [{
+                            data: facilitiesData.slice(0, 5).map(item => item.visit_count),
+                            backgroundColor: [
+                                '#667eea',
+                                '#764ba2',
+                                '#f093fb',
+                                '#f5576c',
+                                '#4facfe'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading charts:', error);
+            }
+        }
+
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('/api/dashboard/recent-activity');
+                const data = await response.json();
+
+                const tbody = document.getElementById('recentActivityList');
+                tbody.innerHTML = '';
+
+                data.forEach(activity => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${new Date(activity.date).toLocaleDateString()}</td>
+                        <td>${activity.type}</td>
+                        <td>${activity.description}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error loading recent activity:', error);
+            }
+        }
+
+        // Activity Notes functions
+        function showAddNoteForm() {
+            document.getElementById('addNoteForm').style.display = 'block';
+            document.getElementById('noteDate').value = new Date().toISOString().split('T')[0];
+        }
+
+        function hideAddNoteForm() {
+            document.getElementById('addNoteForm').style.display = 'none';
+            document.getElementById('noteDate').value = '';
+            document.getElementById('noteText').value = '';
+        }
+
+        async function saveActivityNote() {
+            const date = document.getElementById('noteDate').value;
+            const notes = document.getElementById('noteText').value;
+
+            if (!date || !notes) {
+                alert('Please fill in all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/activity-notes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ date, notes })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    hideAddNoteForm();
+                    loadActivityNotesData();
+                    showMessage('Activity note saved successfully!', 'success');
+                } else {
+                    showMessage('Error saving activity note', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving activity note:', error);
+                showMessage('Error saving activity note', 'error');
+            }
+        }
+
+        async function loadActivityNotesData() {
+            try {
+                const response = await fetch('/api/activity-notes');
+                const data = await response.json();
+
+                const tbody = document.getElementById('activityNotesList');
+                tbody.innerHTML = '';
+
+                data.notes.forEach(note => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${new Date(note.date).toLocaleDateString()}</td>
+                        <td>${note.notes}</td>
+                        <td>${new Date(note.created_at).toLocaleDateString()}</td>
+                        <td>
+                            <button class="btn btn-danger" onclick="deleteActivityNote(${note.id})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error loading activity notes:', error);
+            }
+        }
+
+        async function deleteActivityNote(noteId) {
+            if (!confirm('Are you sure you want to delete this activity note?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/activity-notes/${noteId}`, {
+                    method: 'DELETE'
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    loadActivityNotesData();
+                    showMessage('Activity note deleted successfully!', 'success');
+                } else {
+                    showMessage('Error deleting activity note', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting activity note:', error);
+                showMessage('Error deleting activity note', 'error');
+            }
+        }
+
+        // Data loading functions for other pages
+        async function loadVisitsData() {
+            // Implementation for loading visits data
+            console.log('Loading visits data...');
+        }
+
+        async function loadHoursData() {
+            // Implementation for loading hours data
+            console.log('Loading hours data...');
+        }
+
+        async function loadContactsData() {
+            // Implementation for loading contacts data
+            console.log('Loading contacts data...');
+        }
+
+        // Utility functions
+        function showMessage(message, type) {
+            const messageEl = document.getElementById(type === 'success' ? 'successMessage' : 'errorMessage');
+            messageEl.textContent = message;
+            messageEl.style.display = 'block';
+            setTimeout(() => {
+                messageEl.style.display = 'none';
+            }, 3000);
+        }
+
+        // File upload functionality (existing code)
+        document.getElementById('uploadBtn').addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Show file info immediately
+            document.getElementById('fileInfo').innerHTML = `
+                <div class="file-selected">
+                    <strong>✅ Selected:</strong> ${file.name}<br>
+                    <strong>📏 Size:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB<br>
+                    <strong>📄 Type:</strong> ${file.type}<br>
+                    <div class="upload-status">🔄 Processing...</div>
+                </div>
+            `;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('fileInfo').innerHTML = `
+                        <div class="file-selected">
+                            <strong>✅ Selected:</strong> ${file.name}<br>
+                            <strong>📏 Size:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB<br>
+                            <strong>📄 Type:</strong> ${file.type}<br>
+                            <div class="upload-status success">✅ Upload successful!</div>
+                        </div>
+                    `;
+                    displayResults(result);
+                    showMessage('File uploaded and processed successfully!', 'success');
+                } else {
+                    document.getElementById('fileInfo').innerHTML = `
+                        <div class="file-selected">
+                            <strong>❌ Selected:</strong> ${file.name}<br>
+                            <strong>📏 Size:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB<br>
+                            <strong>📄 Type:</strong> ${file.type}<br>
+                            <div class="upload-status error">❌ Upload failed</div>
+                        </div>
+                    `;
+                    showMessage(result.error || 'Upload failed', 'error');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                document.getElementById('fileInfo').innerHTML = `
+                    <div class="file-selected">
+                        <strong>❌ Selected:</strong> ${file.name}<br>
+                        <strong>📏 Size:</strong> ${(file.size / 1024 / 1024).toFixed(2)} MB<br>
+                        <strong>📄 Type:</strong> ${file.type}<br>
+                        <div class="upload-status error">❌ Upload failed: ${error.message}</div>
+                    </div>
+                `;
+                showMessage('Upload failed: ' + error.message, 'error');
+            }
+        });
+
+        function displayResults(result) {
+            document.getElementById('resultsSection').style.display = 'block';
+            document.getElementById('totalItemsEl').textContent = result.total_items || 0;
+            document.getElementById('dataTypeEl').textContent = result.type || 'Unknown';
+
+            const tableContainer = document.getElementById('tableContainer');
+            const appendBtn = document.getElementById('appendBtn');
+
+            if (result.type === 'business_card') {
+                // Display business card contact information
+                const contact = result.contact || {};
+                tableContainer.innerHTML = `
+                    <div class="contact-card">
+                        <h3>📇 Extracted Contact Information</h3>
+                        <div class="contact-details">
+                            <p><strong>Name:</strong> ${contact.name || 'Not detected'}</p>
+                            <p><strong>Company:</strong> ${contact.company || 'Not detected'}</p>
+                            <p><strong>Title:</strong> ${contact.title || 'Not detected'}</p>
+                            <p><strong>Phone:</strong> ${contact.phone || 'Not detected'}</p>
+                            <p><strong>Email:</strong> ${contact.email || 'Not detected'}</p>
+                            <p><strong>Website:</strong> ${contact.website || 'Not detected'}</p>
+                            <p><strong>Address:</strong> ${contact.address || 'Not detected'}</p>
+                        </div>
+                        <div class="extracted-text">
+                            <h4>Raw Extracted Text:</h4>
+                            <pre>${result.extracted_text || 'No text extracted'}</pre>
+                        </div>
+                    </div>
+                `;
+                appendBtn.textContent = 'Save Contact';
+                appendBtn.style.display = 'block';
+            } else if (result.type === 'time_tracking') {
+                // Display time tracking data
+                tableContainer.innerHTML = `
+                    <div class="time-tracking-card">
+                        <h3>⏰ Time Tracking Data</h3>
+                        <div class="time-details">
+                            <p><strong>Date:</strong> ${result.date || 'Not detected'}</p>
+                            <p><strong>Total Hours:</strong> ${result.total_hours || 'Not detected'}</p>
+                        </div>
+                    </div>
+                `;
+                appendBtn.textContent = 'Update Hours';
+                appendBtn.style.display = 'block';
+            } else {
+                // Display MyWay route visits
+                if (result.visits && result.visits.length > 0) {
+                    let tableHtml = `
+                        <div class="visits-table">
+                            <h3>🚗 MyWay Route Visits</h3>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Stop</th>
+                                        <th>Business Name</th>
+                                        <th>Address</th>
+                                        <th>City</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    result.visits.forEach(visit => {
+                        tableHtml += `
+                            <tr>
+                                <td>${visit.stop_number || ''}</td>
+                                <td>${visit.business_name || ''}</td>
+                                <td>${visit.address || ''}</td>
+                                <td>${visit.city || ''}</td>
+                                <td>${visit.notes || ''}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    tableHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    tableContainer.innerHTML = tableHtml;
+                } else {
+                    tableContainer.innerHTML = '<p>No visits found in PDF. The PDF may not contain recognizable visit data.</p>';
+                }
+                appendBtn.textContent = 'Save Visits';
+                appendBtn.style.display = 'block';
+            }
+        }
+
+        // Initialize dashboard on load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboardData();
+        });
+    </script>
+</body>
+</html>

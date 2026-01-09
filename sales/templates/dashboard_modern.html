@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sales Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            padding: 0 24px 32px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 24px;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .nav-menu {
+            padding: 0 16px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin-bottom: 4px;
+            border-radius: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .nav-item.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .nav-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+
+        .user-section {
+            margin-top: auto;
+            padding: 16px;
+            border-top: 1px solid #334155;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            margin-right: 12px;
+            font-size: 14px;
+        }
+
+        .user-details h4 {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .user-email {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .logout-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s ease;
+            width: 100%;
+        }
+
+        .logout-btn:hover {
+            background: #b91c1c;
+        }
+
+        /* Main Content */
+        .main-content {
+            background: #0f172a;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .dashboard-header {
+            margin-bottom: 32px;
+        }
+
+        .dashboard-title {
+            font-size: 32px;
+            font-weight: 800;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .dashboard-subtitle {
+            font-size: 16px;
+            color: #94a3b8;
+        }
+
+        /* KPI Grid */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .kpi-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            transition: all 0.2s ease;
+        }
+
+        .kpi-card:hover {
+            border-color: #475569;
+            transform: translateY(-2px);
+        }
+
+        .kpi-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .kpi-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .kpi-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .kpi-value {
+            font-size: 36px;
+            font-weight: 800;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .kpi-change {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .kpi-change.positive {
+            color: #10b981;
+        }
+
+        .kpi-change.negative {
+            color: #ef4444;
+        }
+
+        .kpi-change.neutral {
+            color: #94a3b8;
+        }
+
+        /* Chart Container */
+        .chart-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        .chart-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .chart-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+        }
+
+        .chart-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .chart-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        /* Upload Section */
+        .upload-section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+
+        .upload-header {
+            margin-bottom: 20px;
+        }
+
+        .upload-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .upload-instructions {
+            margin-bottom: 20px;
+        }
+
+        .file-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .file-type {
+            background: #334155;
+            padding: 16px;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .file-type h4 {
+            color: #f1f5f9;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .file-type p {
+            color: #94a3b8;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .file-type .extensions {
+            font-weight: 600;
+            color: #3b82f6;
+        }
+
+        .upload-area {
+            border: 2px dashed #475569;
+            border-radius: 8px;
+            padding: 32px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #0f172a;
+        }
+
+        .upload-area:hover {
+            border-color: #3b82f6;
+            background: #1e293b;
+        }
+
+        .upload-area.dragover {
+            border-color: #3b82f6;
+            background: #1e293b;
+        }
+
+        .file-selected {
+            background: #065f46;
+            border-color: #10b981;
+            color: #d1fae5;
+        }
+
+        .upload-status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .upload-status.success {
+            background: #065f46;
+            color: #d1fae5;
+            border: 1px solid #10b981;
+        }
+
+        .upload-status.error {
+            background: #7f1d1d;
+            color: #fecaca;
+            border: 1px solid #ef4444;
+        }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: #dc2626;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        /* Table Styles */
+        .table-container {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 32px;
+        }
+
+        .table-container h3 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 20px;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+            color: #e2e8f0;
+        }
+
+        .table th {
+            background: #334155;
+            font-weight: 600;
+            color: #f1f5f9;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table tr:hover {
+            background: #334155;
+        }
+
+        /* Contact and Time Cards */
+        .contact-card {
+            background: #334155;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .contact-card h4 {
+            color: #f1f5f9;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .contact-card p {
+            color: #94a3b8;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .time-tracking-card {
+            background: #065f46;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 16px;
+            border-left: 4px solid #10b981;
+        }
+
+        .time-tracking-card h4 {
+            color: #d1fae5;
+            margin-bottom: 12px;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .time-tracking-card p {
+            color: #a7f3d0;
+            margin-bottom: 6px;
+            font-size: 14px;
+        }
+
+        .visits-table {
+            margin-top: 16px;
+        }
+
+        .visits-table table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .visits-table th,
+        .visits-table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+            color: #e2e8f0;
+        }
+
+        .visits-table th {
+            background: #334155;
+            font-weight: 600;
+            color: #f1f5f9;
+            font-size: 12px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+            
+            .chart-section {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px;
+            }
+            
+            .kpi-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .kpi-value {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Sales Dashboard</div>
+                <div class="sidebar-subtitle">Colorado CareAssist</div>
+            </div>
+            
+            <nav class="nav-menu">
+                <a href="#dashboard" class="nav-item active">
+                    <span class="nav-icon">📊</span>
+                    Dashboard
+                </a>
+                <a href="#visits" class="nav-item">
+                    <span class="nav-icon">🏥</span>
+                    Visits
+                </a>
+                <a href="#contacts" class="nav-item">
+                    <span class="nav-icon">👥</span>
+                    Contacts
+                </a>
+                <a href="#reports" class="nav-item">
+                    <span class="nav-icon">📈</span>
+                    Reports
+                </a>
+                <a href="#settings" class="nav-item">
+                    <span class="nav-icon">⚙️</span>
+                    Settings
+                </a>
+            </nav>
+            
+            <div class="user-section">
+                {% if user %}
+                <div class="user-info">
+                    <div class="user-avatar">{{ user.name[0] if user.name else 'U' }}</div>
+                    <div class="user-details">
+                        <h4>{{ user.name or 'User' }}</h4>
+                        <div class="user-email">{{ user.email or 'user@example.com' }}</div>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Sales Overview</h1>
+                <p class="dashboard-subtitle">Real-time insights and analytics</p>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Total Visits</div>
+                        <div class="kpi-icon" style="background: #3b82f6;">📊</div>
+                    </div>
+                    <div class="kpi-value" id="totalVisits">-</div>
+                    <div class="kpi-change neutral" id="visitsChange">Loading...</div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Total Costs</div>
+                        <div class="kpi-icon" style="background: #ef4444;">💰</div>
+                    </div>
+                    <div class="kpi-value" id="totalCosts">-</div>
+                    <div class="kpi-change neutral" id="costsChange">Loading...</div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Bonuses Earned</div>
+                        <div class="kpi-icon" style="background: #10b981;">🏆</div>
+                    </div>
+                    <div class="kpi-value" id="totalBonusesEarned">-</div>
+                    <div class="kpi-change neutral" id="bonusesChange">Loading...</div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Cost Per Visit</div>
+                        <div class="kpi-icon" style="background: #8b5cf6;">📈</div>
+                    </div>
+                    <div class="kpi-value" id="costPerVisit">-</div>
+                    <div class="kpi-change neutral" id="cpvChange">Loading...</div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Bonus Per Visit</div>
+                        <div class="kpi-icon" style="background: #f59e0b;">🎯</div>
+                    </div>
+                    <div class="kpi-value" id="bonusPerVisit">-</div>
+                    <div class="kpi-change neutral" id="bpvChange">Loading...</div>
+                </div>
+
+                <div class="kpi-card">
+                    <div class="kpi-header">
+                        <div class="kpi-title">Total Hours</div>
+                        <div class="kpi-icon" style="background: #06b6d4;">⏰</div>
+                    </div>
+                    <div class="kpi-value" id="totalHours">-</div>
+                    <div class="kpi-change neutral" id="hoursChange">Loading...</div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="chart-section">
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <div>
+                            <div class="chart-title">Costs by Month</div>
+                            <div class="chart-subtitle">Monthly cost trends</div>
+                        </div>
+                    </div>
+                    <canvas id="costsChart" width="400" height="200"></canvas>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <div>
+                            <div class="chart-title">Top Facilities</div>
+                            <div class="chart-subtitle">Most visited locations</div>
+                        </div>
+                    </div>
+                    <canvas id="facilitiesChart" width="300" height="200"></canvas>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <div class="upload-header">
+                    <h3 class="upload-title">File Upload</h3>
+                </div>
+                
+                <div class="upload-instructions">
+                    <div class="file-types">
+                        <div class="file-type">
+                            <h4>📄 PDF Files</h4>
+                            <p class="extensions">.pdf</p>
+                            <p>MyWay route plans</p>
+                            <p>Time tracking reports</p>
+                        </div>
+                        <div class="file-type">
+                            <h4>🖼️ Image Files</h4>
+                            <p class="extensions">.jpg, .jpeg, .png</p>
+                            <p>Business cards</p>
+                            <p>Contact information</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="upload-area" id="uploadArea">
+                    <input type="file" id="fileInput" accept=".pdf,.jpg,.jpeg,.png" style="display: none;">
+                    <div id="uploadText">
+                        <h3>📁 Choose File or Drag & Drop</h3>
+                        <p>Upload PDFs or images to process</p>
+                    </div>
+                </div>
+
+                <div id="uploadStatus" class="upload-status" style="display: none;"></div>
+                
+                <div id="resultsContainer" style="margin-top: 20px;"></div>
+                
+                <button id="appendBtn" class="btn" style="display: none; margin-top: 16px;">Save Data</button>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="table-container">
+                <h3>Recent Activity</h3>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentActivityList">
+                        <tr>
+                            <td colspan="3" style="text-align: center; color: #94a3b8;">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global error suppression for browser extensions
+        window.addEventListener('error', function(e) {
+            if (e.message.includes('pageMenu') || e.message.includes('duplicate id')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+
+        // Dashboard data loading
+        async function loadDashboardData() {
+            try {
+                console.log('Loading dashboard data...');
+                const response = await fetch('/api/dashboard/summary');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                console.log('Dashboard data received:', data);
+                
+                // Update KPI cards with null checks
+                document.getElementById('totalVisits').textContent = data.total_visits?.toLocaleString() || '0';
+                document.getElementById('totalCosts').textContent = data.total_costs ? `$${data.total_costs.toLocaleString()}` : '$0';
+                document.getElementById('totalBonusesEarned').textContent = data.total_bonuses_earned ? `$${data.total_bonuses_earned.toLocaleString()}` : '$0';
+                document.getElementById('costPerVisit').textContent = data.cost_per_visit ? `$${data.cost_per_visit.toFixed(2)}` : '$0.00';
+                document.getElementById('bonusPerVisit').textContent = data.bonus_per_visit ? `$${data.bonus_per_visit.toFixed(2)}` : '$0.00';
+                document.getElementById('totalHours').textContent = data.total_hours ? data.total_hours.toFixed(1) : '0.0';
+
+                // Update change indicators
+                document.getElementById('visitsChange').textContent = `${data.visits_this_month || 0} this month`;
+                document.getElementById('costsChange').textContent = `${data.costs_this_month ? '$' + data.costs_this_month.toLocaleString() : '$0'} this month`;
+                document.getElementById('bonusesChange').textContent = `${data.bonuses_this_month ? '$' + data.bonuses_this_month.toLocaleString() : '$0'} this month`;
+                document.getElementById('cpvChange').textContent = 'Daily costs only';
+                document.getElementById('bpvChange').textContent = 'Potential revenue';
+                document.getElementById('hoursChange').textContent = `${data.hours_this_month || 0} this month`;
+
+                // Load charts after a short delay to ensure Chart.js is ready
+                setTimeout(() => {
+                    loadCharts();
+                    loadRecentActivity();
+                }, 100);
+
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                
+                // Show error state
+                document.getElementById('totalVisits').textContent = 'Error';
+                document.getElementById('totalCosts').textContent = 'Error';
+                document.getElementById('totalBonusesEarned').textContent = 'Error';
+                document.getElementById('costPerVisit').textContent = 'Error';
+                document.getElementById('bonusPerVisit').textContent = 'Error';
+                document.getElementById('totalHours').textContent = 'Error';
+            }
+        }
+
+        // Chart loading
+        async function loadCharts() {
+            try {
+                if (typeof Chart === 'undefined') {
+                    console.log('Chart.js not loaded yet, retrying...');
+                    setTimeout(loadCharts, 100);
+                    return;
+                }
+
+                // Load costs chart
+                const costsResponse = await fetch('/api/dashboard/costs-by-month');
+                const costsData = await costsResponse.json();
+                
+                const costsCtx = document.getElementById('costsChart').getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (window.costsChart && typeof window.costsChart.destroy === 'function') {
+                    window.costsChart.destroy();
+                }
+                
+                window.costsChart = new Chart(costsCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: costsData.map(item => item.month),
+                        datasets: [{
+                            label: 'Costs',
+                            data: costsData.map(item => item.costs),
+                            backgroundColor: '#3b82f6',
+                            borderColor: '#2563eb',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#e2e8f0'
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: '#94a3b8'
+                                },
+                                grid: {
+                                    color: '#334155'
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    color: '#94a3b8',
+                                    callback: function(value) {
+                                        return '$' + value.toLocaleString();
+                                    }
+                                },
+                                grid: {
+                                    color: '#334155'
+                                }
+                            }
+                        }
+                    }
+                });
+
+                // Load facilities chart
+                const facilitiesResponse = await fetch('/api/dashboard/top-facilities');
+                const facilitiesData = await facilitiesResponse.json();
+                
+                const facilitiesCtx = document.getElementById('facilitiesChart').getContext('2d');
+                
+                // Destroy existing chart if it exists
+                if (window.facilitiesChart && typeof window.facilitiesChart.destroy === 'function') {
+                    window.facilitiesChart.destroy();
+                }
+                
+                window.facilitiesChart = new Chart(facilitiesCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: facilitiesData.slice(0, 5).map(item => item.facility_name),
+                        datasets: [{
+                            data: facilitiesData.slice(0, 5).map(item => item.visit_count),
+                            backgroundColor: [
+                                '#3b82f6',
+                                '#8b5cf6',
+                                '#10b981',
+                                '#f59e0b',
+                                '#ef4444'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#e2e8f0'
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error loading charts:', error);
+            }
+        }
+
+        // Recent activity loading
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('/api/dashboard/recent-activity');
+                const data = await response.json();
+
+                const tbody = document.getElementById('recentActivityList');
+                tbody.innerHTML = '';
+
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #94a3b8;">No recent activity</td></tr>';
+                    return;
+                }
+
+                data.forEach(activity => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${new Date(activity.date).toLocaleDateString()}</td>
+                        <td>${activity.type}</td>
+                        <td>${activity.description}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Error loading recent activity:', error);
+                const tbody = document.getElementById('recentActivityList');
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #ef4444;">Error loading activity</td></tr>';
+            }
+        }
+
+        // File upload handling
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const uploadStatus = document.getElementById('uploadStatus');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const appendBtn = document.getElementById('appendBtn');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('dragleave', handleDragLeave);
+        uploadArea.addEventListener('drop', handleDrop);
+
+        fileInput.addEventListener('change', handleFileSelect);
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        async function handleFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            uploadArea.classList.add('file-selected');
+            uploadArea.innerHTML = `
+                <div style="color: #10b981;">
+                    <h3>✅ ${file.name}</h3>
+                    <p>Size: ${(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                    <p>Type: ${file.type}</p>
+                </div>
+            `;
+
+            uploadStatus.style.display = 'block';
+            uploadStatus.className = 'upload-status';
+            uploadStatus.innerHTML = '⏳ Processing...';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    uploadStatus.className = 'upload-status success';
+                    uploadStatus.innerHTML = '✅ Upload successful!';
+                    displayResults(result);
+                } else {
+                    throw new Error(result.error || 'Upload failed');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                uploadStatus.className = 'upload-status error';
+                uploadStatus.innerHTML = `❌ Upload failed: ${error.message}`;
+            }
+        }
+
+        function displayResults(result) {
+            resultsContainer.innerHTML = '';
+            
+            if (result.type === 'business_card') {
+                const contact = result.contact;
+                resultsContainer.innerHTML = `
+                    <div class="contact-card">
+                        <h4>📇 Business Card Contact</h4>
+                        <p><strong>Name:</strong> ${contact.name || 'N/A'}</p>
+                        <p><strong>Company:</strong> ${contact.company || 'N/A'}</p>
+                        <p><strong>Title:</strong> ${contact.title || 'N/A'}</p>
+                        <p><strong>Phone:</strong> ${contact.phone || 'N/A'}</p>
+                        <p><strong>Email:</strong> ${contact.email || 'N/A'}</p>
+                        <p><strong>Website:</strong> ${contact.website || 'N/A'}</p>
+                        <p><strong>Address:</strong> ${contact.address || 'N/A'}</p>
+                        <details style="margin-top: 12px;">
+                            <summary style="cursor: pointer; color: #94a3b8;">Raw extracted text</summary>
+                            <pre style="margin-top: 8px; color: #94a3b8; font-size: 12px;">${result.extracted_text || 'No text extracted'}</pre>
+                        </details>
+                    </div>
+                `;
+                appendBtn.textContent = 'Save Contact';
+                appendBtn.style.display = 'block';
+            } else if (result.type === 'time_tracking') {
+                resultsContainer.innerHTML = `
+                    <div class="time-tracking-card">
+                        <h4>⏰ Time Tracking Entry</h4>
+                        <p><strong>Date:</strong> ${result.date || 'N/A'}</p>
+                        <p><strong>Total Hours:</strong> ${result.total_hours || 'N/A'}</p>
+                    </div>
+                `;
+                appendBtn.textContent = 'Update Hours';
+                appendBtn.style.display = 'block';
+            } else {
+                // Display MyWay route visits
+                if (result.visits && result.visits.length > 0) {
+                    let tableHtml = `
+                        <div class="visits-table">
+                            <h3>🚗 MyWay Route Visits</h3>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Stop</th>
+                                        <th>Business Name</th>
+                                        <th>Address</th>
+                                        <th>City</th>
+                                        <th>Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    result.visits.forEach(visit => {
+                        tableHtml += `
+                            <tr>
+                                <td>${visit.stop_number || ''}</td>
+                                <td>${visit.business_name || ''}</td>
+                                <td>${visit.address || ''}</td>
+                                <td>${visit.city || ''}</td>
+                                <td>${visit.notes || ''}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    tableHtml += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    resultsContainer.innerHTML = tableHtml;
+                } else {
+                    resultsContainer.innerHTML = '<p style="color: #94a3b8;">No visits found in PDF. The PDF may not contain recognizable visit data.</p>';
+                }
+                appendBtn.textContent = 'Save Visits';
+                appendBtn.style.display = 'block';
+            }
+        }
+
+        // Logout function
+        async function logout() {
+            try {
+                const response = await fetch('/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/auth/login';
+                } else {
+                    console.error('Logout failed');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        }
+
+        // Initialize dashboard on load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboardData();
+        });
+    </script>
+</body>
+</html>

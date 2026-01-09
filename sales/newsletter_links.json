@@ -1,0 +1,17 @@
+{
+  "google_reviews": {
+    "denver": "https://g.page/r/CQhjbJz17xaDEBE/review",
+    "colorado_springs": "https://g.page/r/CZb4OLGSmhxsEBE/review",
+    "default": "https://g.page/r/CQhjbJz17xaDEBE/review"
+  },
+  "surveys": {
+    "client_satisfaction": "https://forms.gle/zSCvFYV7DtmEhP9r9",
+    "referral_partner": "https://forms.gle/Bjcgg9Zgib12JPiD6"
+  },
+  "notes": {
+    "client_audience": "Use client_satisfaction survey link",
+    "referral_audience": "Use referral_partner survey link",
+    "google_review": "Can use default (Denver) or choose based on contact location if known"
+  }
+}
+
