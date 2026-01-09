@@ -63,6 +63,9 @@ try:
         spec.loader.exec_module(sales_module)
         sales_app = sales_module.app
 
+        # Set root_path so the app knows it's mounted at /sales
+        sales_app.root_path = "/sales"
+
         # Mount sales dashboard at /sales
         app.mount("/sales", sales_app)
         logger.info("✅ Mounted Sales Dashboard at /sales")
