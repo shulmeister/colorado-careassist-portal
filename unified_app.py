@@ -308,15 +308,45 @@ async def payroll_converter():
     else:
         raise HTTPException(status_code=404, detail="Payroll converter not found")
 
-@app.get("/marketing")
-async def marketing_redirect():
-    """Redirect to production marketing dashboard (temporary until fully integrated)"""
-    return RedirectResponse(url="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/marketing", status_code=307)
+@app.get("/marketing", response_class=HTMLResponse)
+async def marketing_dashboard(request: Request):
+    """Marketing Dashboard - Social Media, Ads, Email, Website Analytics"""
+    # Import portal app to use its route handler
+    try:
+        portal_path = os.path.join(os.path.dirname(__file__), "portal")
+        sys.path.insert(0, portal_path)
 
-@app.get("/client-satisfaction")
-async def client_satisfaction_redirect():
-    """Redirect to production client satisfaction tracker (temporary until fully integrated)"""
-    return RedirectResponse(url="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/client-satisfaction", status_code=307)
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("portal_app", os.path.join(portal_path, "portal_app.py"))
+        portal_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(portal_module)
+
+        # Call the marketing dashboard function from portal_app
+        # This needs the current_user dependency, so we'll need to handle auth
+        return await portal_module.marketing_dashboard(request, current_user=None)
+    except Exception as e:
+        logger.error(f"❌ Failed to load marketing dashboard: {e}")
+        # Fallback to redirect if integration fails
+        return RedirectResponse(url="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/marketing", status_code=307)
+
+@app.get("/client-satisfaction", response_class=HTMLResponse)
+async def client_satisfaction_tracker(request: Request):
+    """Client Satisfaction Tracker - Monitor feedback and service quality"""
+    try:
+        portal_path = os.path.join(os.path.dirname(__file__), "portal")
+        sys.path.insert(0, portal_path)
+
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("portal_app", os.path.join(portal_path, "portal_app.py"))
+        portal_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(portal_module)
+
+        # Call the client satisfaction function from portal_app
+        return await portal_module.client_satisfaction_embedded(request, current_user=None)
+    except Exception as e:
+        logger.error(f"❌ Failed to load client satisfaction tracker: {e}")
+        # Fallback to redirect if integration fails
+        return RedirectResponse(url="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/client-satisfaction", status_code=307)
 
 @app.get("/health")
 async def health_check():
@@ -328,8 +358,8 @@ async def health_check():
             "sales": "mounted at /sales",
             "recruiting": "mounted at /recruiting",
             "payroll": "available at /payroll",
-            "marketing": "redirects to production",
-            "client-satisfaction": "redirects to production"
+            "marketing": "integrated at /marketing",
+            "client-satisfaction": "integrated at /client-satisfaction"
         }
     }
 
