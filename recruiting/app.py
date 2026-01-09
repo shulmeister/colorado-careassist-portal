@@ -37,6 +37,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 CORS(app, origins=[
     'https://recruit.coloradocareassist.com',
     'https://tracker.coloradocareassist.com',
+    'https://portal.coloradocareassist.com',
     'http://localhost:5000'  # For development
 ])
 
