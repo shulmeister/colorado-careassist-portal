@@ -11,7 +11,8 @@ Architecture:
 import os
 import sys
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi import HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.wsgi import WSGIMiddleware
@@ -202,6 +203,7 @@ async def portal_home(request: Request):
             .dashboard-card .btn:hover { opacity: 0.9; }
             .sales-card { border-top: 4px solid #667eea; }
             .recruiting-card { border-top: 4px solid #f093fb; }
+            .payroll-card { border-top: 4px solid #4ade80; }
             .footer {
                 text-align: center;
                 color: white;
@@ -235,17 +237,33 @@ async def portal_home(request: Request):
                     <p>Track caregiver leads from Facebook, manage applications, and monitor recruiting pipeline.</p>
                     <span class="btn">Open Recruiting</span>
                 </a>
+
+                <a href="/payroll" class="dashboard-card payroll-card">
+                    <div class="icon">💰</div>
+                    <h2>AK Payroll Converter</h2>
+                    <p>Convert Wellsky payroll exports to Adams Keegan format. Quick and easy Excel file conversion.</p>
+                    <span class="btn">Open Converter</span>
+                </a>
             </div>
 
             <div class="footer">
                 <p>Colorado CareAssist Portal v3.0 • Unified Edition • Cost Optimized</p>
-                <p style="font-size: 0.9rem; margin-top: 10px;">Saves $228/year vs 3-app architecture</p>
+                <p style="font-size: 0.9rem; margin-top: 10px;">Saves $336/year vs 4-app architecture</p>
             </div>
         </div>
     </body>
     </html>
     """
     return HTMLResponse(content=html_content)
+
+@app.get("/payroll")
+async def payroll_converter():
+    """Serve the Wellsky (AK) Payroll Converter tool"""
+    payroll_file = os.path.join(os.path.dirname(__file__), "payroll-converter.html")
+    if os.path.exists(payroll_file):
+        return FileResponse(payroll_file)
+    else:
+        raise HTTPException(status_code=404, detail="Payroll converter not found")
 
 @app.get("/health")
 async def health_check():
@@ -255,7 +273,8 @@ async def health_check():
         "version": "3.0.0",
         "services": {
             "sales": "mounted at /sales",
-            "recruiting": "mounted at /recruiting"
+            "recruiting": "mounted at /recruiting",
+            "payroll": "available at /payroll"
         }
     }
 
