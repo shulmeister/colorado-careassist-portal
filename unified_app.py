@@ -3,76 +3,68 @@ Colorado CareAssist - Unified Portal (v3.0)
 Consolidates portal hub + sales dashboard + recruiter dashboard into ONE app
 
 Architecture:
-- /                    → Portal homepage (dashboard selector)
-- /sales/*             → Sales CRM (FastAPI)
-- /recruiting/*        → Recruiter dashboard (Flask)
-- /auth/*              → Unified Google OAuth
+- /                    → Full Portal app (with all tools, analytics, etc)
+- /sales/*             → Sales CRM (FastAPI) - mounted inside portal
+- /recruiting/*        → Recruiter dashboard (Flask) - mounted inside portal
+- /payroll             → Payroll converter
 """
 import os
 import sys
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
-from fastapi import HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.wsgi import WSGIMiddleware
-from starlette.routing import Mount
+from fastapi import FastAPI
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize main FastAPI app
-app = FastAPI(
-    title="Colorado CareAssist Portal",
-    description="Unified portal with sales CRM and recruiter dashboard",
-    version="3.0.0"
-)
+# Import and set up the portal app as the main app
+try:
+    portal_path = os.path.join(os.path.dirname(__file__), "portal")
+    sys.path.insert(0, portal_path)
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("portal_app", os.path.join(portal_path, "portal_app.py"))
+    portal_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(portal_module)
 
-# Mount static files from portal
-if os.path.exists("static"):
-    app.mount("/static", StaticFiles(directory="static"), name="static")
-    logger.info("✅ Mounted portal static files")
+    # Use the portal app as our main app
+    app = portal_module.app
+    logger.info("✅ Loaded Portal app as main application")
+
+except Exception as e:
+    logger.error(f"❌ Failed to load portal app: {e}")
+    import traceback
+    logger.error(traceback.format_exc())
+    # Fallback to empty FastAPI app if portal fails
+    app = FastAPI(title="Colorado CareAssist Portal", version="3.0.0")
+
+# Now mount sales and recruiting into the portal app
+from fastapi.middleware.wsgi import WSGIMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # ==================== MOUNT SALES DASHBOARD ====================
 try:
-    # Set DATABASE_URL for sales dashboard (from SALES_DATABASE_URL)
+    # Set DATABASE_URL for sales dashboard
     if os.getenv("SALES_DATABASE_URL"):
         os.environ["DATABASE_URL"] = os.getenv("SALES_DATABASE_URL")
         logger.info("✅ Set DATABASE_URL for sales dashboard")
 
-    # Add sales dashboard to path
     sales_path = os.path.join(os.path.dirname(__file__), "sales")
     if os.path.exists(sales_path):
         sys.path.insert(0, sales_path)
         logger.info(f"✅ Added sales path: {sales_path}")
 
         # Import sales app
-        import importlib.util
         spec = importlib.util.spec_from_file_location("sales_app", os.path.join(sales_path, "app.py"))
         sales_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(sales_module)
         sales_app = sales_module.app
 
-        # Create middleware to rewrite redirect URLs to include /sales prefix
-        from starlette.middleware.base import BaseHTTPMiddleware
-        from starlette.responses import RedirectResponse as StarletteRedirectResponse
-
+        # Create middleware to rewrite redirect URLs
         class PrefixRedirectMiddleware(BaseHTTPMiddleware):
             """Middleware to add /sales prefix to relative redirects"""
             async def dispatch(self, request, call_next):
                 response = await call_next(request)
-                # If it's a redirect with a relative path, prepend /sales
                 if response.status_code in (301, 302, 303, 307, 308):
                     location = response.headers.get("location", "")
                     if location.startswith("/") and not location.startswith("/sales"):
@@ -80,14 +72,11 @@ try:
                         logger.info(f"🔄 Rewrote redirect: {location} -> /sales{location}")
                 return response
 
-        # Add middleware to sales app
         sales_app.add_middleware(PrefixRedirectMiddleware)
-
-        # Mount sales dashboard at /sales
         app.mount("/sales", sales_app)
-        logger.info("✅ Mounted Sales Dashboard at /sales with redirect middleware")
+        logger.info("✅ Mounted Sales Dashboard at /sales")
     else:
-        logger.warning("⚠️  Sales dashboard not found at " + sales_path)
+        logger.warning("⚠️  Sales dashboard not found")
 except Exception as e:
     logger.error(f"❌ Failed to mount sales dashboard: {e}")
     import traceback
@@ -95,19 +84,17 @@ except Exception as e:
 
 # ==================== MOUNT RECRUITER DASHBOARD ====================
 try:
-    # Set DATABASE_URL for recruiting dashboard (from RECRUITING_DATABASE_URL)
+    # Set DATABASE_URL for recruiting dashboard
     if os.getenv("RECRUITING_DATABASE_URL"):
         os.environ["DATABASE_URL"] = os.getenv("RECRUITING_DATABASE_URL")
         logger.info("✅ Set DATABASE_URL for recruiting dashboard")
 
-    # Add recruiter dashboard to path
     recruiter_path = os.path.join(os.path.dirname(__file__), "recruiting")
     if os.path.exists(recruiter_path):
         sys.path.insert(0, recruiter_path)
         logger.info(f"✅ Added recruiting path: {recruiter_path}")
 
         # Import Flask app
-        import importlib.util
         spec = importlib.util.spec_from_file_location("recruiting_app", os.path.join(recruiter_path, "app.py"))
         recruiting_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(recruiting_module)
@@ -117,187 +104,14 @@ try:
         app.mount("/recruiting", WSGIMiddleware(flask_app))
         logger.info("✅ Mounted Recruiter Dashboard at /recruiting")
     else:
-        logger.warning("⚠️  Recruiter dashboard not found at " + recruiter_path)
+        logger.warning("⚠️  Recruiter dashboard not found")
 except Exception as e:
     logger.error(f"❌ Failed to mount recruiter dashboard: {e}")
     import traceback
     logger.error(traceback.format_exc())
 
-# ==================== MOUNT PORTAL DASHBOARDS (Marketing & Client Satisfaction) ====================
-try:
-    portal_path = os.path.join(os.path.dirname(__file__), "portal")
-    if os.path.exists(portal_path):
-        sys.path.insert(0, portal_path)
-        logger.info(f"✅ Added portal path: {portal_path}")
-
-        # Import portal app routes
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("portal_app", os.path.join(portal_path, "portal_app.py"))
-        portal_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(portal_module)
-
-        # Get specific routes we need (marketing and client satisfaction)
-        # We'll re-export them at the main app level
-        portal_app_instance = portal_module.app
-
-        # Mount portal routes at /marketing and /client-satisfaction
-        app.mount("/portal-routes", portal_app_instance)
-        logger.info("✅ Mounted portal routes (marketing, client-satisfaction)")
-    else:
-        logger.warning("⚠️  Portal path not found at " + portal_path)
-except Exception as e:
-    logger.error(f"❌ Failed to mount portal routes: {e}")
-    import traceback
-    logger.error(traceback.format_exc())
-
-# ==================== PORTAL HOMEPAGE ====================
-@app.get("/", response_class=HTMLResponse)
-async def portal_home(request: Request):
-    """Portal homepage with dashboard selector"""
-    html_content = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Colorado CareAssist Portal</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body {
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-            }
-            .container { max-width: 1200px; width: 100%; }
-            .header {
-                text-align: center;
-                color: white;
-                margin-bottom: 60px;
-            }
-            .header h1 {
-                font-size: 3rem;
-                font-weight: 700;
-                margin-bottom: 10px;
-                text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
-            }
-            .header p { font-size: 1.2rem; opacity: 0.9; }
-            .dashboard-grid {
-                display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 30px;
-                margin-bottom: 40px;
-            }
-            .dashboard-card {
-                background: white;
-                border-radius: 20px;
-                padding: 40px 30px;
-                text-align: center;
-                transition: transform 0.3s ease, box-shadow 0.3s ease;
-                cursor: pointer;
-                text-decoration: none;
-                color: inherit;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            }
-            .dashboard-card:hover {
-                transform: translateY(-10px);
-                box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-            }
-            .dashboard-card .icon { font-size: 4rem; margin-bottom: 20px; }
-            .dashboard-card h2 {
-                font-size: 1.8rem;
-                margin-bottom: 15px;
-                color: #333;
-            }
-            .dashboard-card p {
-                color: #666;
-                line-height: 1.6;
-                margin-bottom: 20px;
-            }
-            .dashboard-card .btn {
-                display: inline-block;
-                padding: 12px 30px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border-radius: 25px;
-                text-decoration: none;
-                font-weight: 600;
-                transition: opacity 0.3s ease;
-            }
-            .dashboard-card .btn:hover { opacity: 0.9; }
-            .sales-card { border-top: 4px solid #667eea; }
-            .recruiting-card { border-top: 4px solid #f093fb; }
-            .payroll-card { border-top: 4px solid #4ade80; }
-            .marketing-card { border-top: 4px solid #fb923c; }
-            .satisfaction-card { border-top: 4px solid #06b6d4; }
-            .footer {
-                text-align: center;
-                color: white;
-                opacity: 0.8;
-                margin-top: 40px;
-            }
-            @media (max-width: 768px) {
-                .header h1 { font-size: 2rem; }
-                .dashboard-grid { grid-template-columns: 1fr; }
-            }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <div class="header">
-                <h1>🏥 Colorado CareAssist</h1>
-                <p>Select Your Dashboard</p>
-            </div>
-
-            <div class="dashboard-grid">
-                <a href="/sales" class="dashboard-card sales-card">
-                    <div class="icon">📊</div>
-                    <h2>Sales Dashboard</h2>
-                    <p>Manage contacts, companies, deals, and track sales performance. Full CRM with Brevo integration.</p>
-                    <span class="btn">Open Sales CRM</span>
-                </a>
-
-                <a href="/recruiting" class="dashboard-card recruiting-card">
-                    <div class="icon">👥</div>
-                    <h2>Recruiter Dashboard</h2>
-                    <p>Track caregiver leads from Facebook, manage applications, and monitor recruiting pipeline.</p>
-                    <span class="btn">Open Recruiting</span>
-                </a>
-
-                <a href="/payroll" class="dashboard-card payroll-card">
-                    <div class="icon">💰</div>
-                    <h2>AK Payroll Converter</h2>
-                    <p>Convert Wellsky payroll exports to Adams Keegan format. Quick and easy Excel file conversion.</p>
-                    <span class="btn">Open Converter</span>
-                </a>
-
-                <a href="/marketing" class="dashboard-card marketing-card">
-                    <div class="icon">📈</div>
-                    <h2>Marketing Dashboard</h2>
-                    <p>Track social media, Google Ads, email campaigns, and website analytics. Monitor marketing ROI.</p>
-                    <span class="btn">Open Marketing</span>
-                </a>
-
-                <a href="/client-satisfaction" class="dashboard-card satisfaction-card">
-                    <div class="icon">⭐</div>
-                    <h2>Client Satisfaction Tracker</h2>
-                    <p>Monitor client feedback, satisfaction scores, and service quality metrics. Track improvements.</p>
-                    <span class="btn">Open Tracker</span>
-                </a>
-            </div>
-
-            <div class="footer">
-                <p>Colorado CareAssist Portal v3.0 • Unified Edition • Cost Optimized</p>
-                <p style="font-size: 0.9rem; margin-top: 10px;">Saves $336/year vs 4-app architecture</p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html_content)
+# ==================== ADD PAYROLL CONVERTER ====================
+from fastapi.responses import FileResponse
 
 @app.get("/payroll")
 async def payroll_converter():
@@ -306,62 +120,10 @@ async def payroll_converter():
     if os.path.exists(payroll_file):
         return FileResponse(payroll_file)
     else:
+        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Payroll converter not found")
 
-@app.get("/marketing", response_class=HTMLResponse)
-async def marketing_dashboard(request: Request):
-    """Marketing Dashboard - Social Media, Ads, Email, Website Analytics"""
-    # Import portal app to use its route handler
-    try:
-        portal_path = os.path.join(os.path.dirname(__file__), "portal")
-        sys.path.insert(0, portal_path)
-
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("portal_app", os.path.join(portal_path, "portal_app.py"))
-        portal_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(portal_module)
-
-        # Call the marketing dashboard function from portal_app
-        # This needs the current_user dependency, so we'll need to handle auth
-        return await portal_module.marketing_dashboard(request, current_user=None)
-    except Exception as e:
-        logger.error(f"❌ Failed to load marketing dashboard: {e}")
-        # Fallback to redirect if integration fails
-        return RedirectResponse(url="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/marketing", status_code=307)
-
-@app.get("/client-satisfaction", response_class=HTMLResponse)
-async def client_satisfaction_tracker(request: Request):
-    """Client Satisfaction Tracker - Monitor feedback and service quality"""
-    try:
-        portal_path = os.path.join(os.path.dirname(__file__), "portal")
-        sys.path.insert(0, portal_path)
-
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("portal_app", os.path.join(portal_path, "portal_app.py"))
-        portal_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(portal_module)
-
-        # Call the client satisfaction function from portal_app
-        return await portal_module.client_satisfaction_embedded(request, current_user=None)
-    except Exception as e:
-        logger.error(f"❌ Failed to load client satisfaction tracker: {e}")
-        # Fallback to redirect if integration fails
-        return RedirectResponse(url="https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/client-satisfaction", status_code=307)
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for monitoring"""
-    return {
-        "status": "healthy",
-        "version": "3.0.0",
-        "services": {
-            "sales": "mounted at /sales",
-            "recruiting": "mounted at /recruiting",
-            "payroll": "available at /payroll",
-            "marketing": "integrated at /marketing",
-            "client-satisfaction": "integrated at /client-satisfaction"
-        }
-    }
+logger.info("✅ Portal app configured with sales, recruiting, and payroll")
 
 if __name__ == "__main__":
     import uvicorn
