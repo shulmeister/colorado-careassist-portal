@@ -5,7 +5,7 @@ import type {
   RaRecord,
 } from "ra-core";
 
-const apiUrl = "/admin";
+const apiUrl = "admin";
 
 type HttpResult<T> = { json: T; headers: Headers };
 
