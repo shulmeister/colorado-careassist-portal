@@ -27,7 +27,7 @@ class GoogleOAuthManager:
     def __init__(self):
         self.client_id = os.getenv("GOOGLE_CLIENT_ID")
         self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-        self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "https://portal.coloradocareassist.com/auth/callback")
+        self.redirect_uri = os.getenv("PORTAL_GOOGLE_REDIRECT_URI", os.getenv("GOOGLE_REDIRECT_URI", "https://portal.coloradocareassist.com/auth/callback"))
         self.scopes = [
             "https://www.googleapis.com/auth/userinfo.email",
             "https://www.googleapis.com/auth/userinfo.profile",
