@@ -34,7 +34,7 @@ def setup_default_tools():
             {
                 "name": "Recruiter Dashboard",
                 "url": "/recruiting",
-                "icon": "👥",
+                "icon": "https://cdn-icons-png.flaticon.com/512/681/681443.png",
                 "description": "Manage applicants and recruiting pipeline",
                 "category": "HR",
                 "display_order": 2
@@ -42,7 +42,7 @@ def setup_default_tools():
             {
                 "name": "Wellsky (AK) Payroll Converter",
                 "url": "/payroll",
-                "icon": "💰",
+                "icon": "https://cdn-icons-png.flaticon.com/512/2830/2830284.png",
                 "description": "Convert Wellsky payroll data for Alaska",
                 "category": "Payroll",
                 "display_order": 3
@@ -90,7 +90,7 @@ def setup_default_tools():
             {
                 "name": "QuickBooks",
                 "url": "https://qbo.intuit.com",
-                "icon": "https://qbo.intuit.com/favicon.ico",
+                "icon": "https://plugin.intuitcdn.net/sbg-web-shell-ui/6.4024.0/shell/harmony/images/favicons/favicon-qbo.ico",
                 "description": "Accounting and financial management",
                 "category": "Finance",
                 "display_order": 9
@@ -130,7 +130,7 @@ def setup_default_tools():
             {
                 "name": "Predis.ai",
                 "url": "https://app.predis.ai",
-                "icon": "https://app.predis.ai/favicon.ico",
+                "icon": "https://app.predis.ai/assets/logo-Cm63XoNc.png",
                 "description": "AI-powered social media content",
                 "category": "Marketing",
                 "display_order": 14
@@ -154,7 +154,7 @@ def setup_default_tools():
             {
                 "name": "Adams Keegan",
                 "url": "https://www.adamskeegan.com",
-                "icon": "https://www.adamskeegan.com/favicon.ico",
+                "icon": "https://www.adamskeegan.com/wp-content/uploads/2022/12/cropped-AK-Favicon-32x32.png",
                 "description": "HR and payroll services",
                 "category": "HR",
                 "display_order": 17
