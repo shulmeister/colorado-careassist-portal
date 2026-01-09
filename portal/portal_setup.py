@@ -25,11 +25,43 @@ def setup_default_tools():
         default_tools = [
             {
                 "name": "Sales Dashboard",
-                "url": "https://tracker.coloradocareassist.com",
+                "url": "/sales",
                 "icon": "📊",
                 "description": "View sales metrics, visits, and analytics",
                 "category": "Analytics",
                 "display_order": 1
+            },
+            {
+                "name": "Recruiter Dashboard",
+                "url": "/recruiting",
+                "icon": "👥",
+                "description": "Manage applicants and recruiting pipeline",
+                "category": "HR",
+                "display_order": 2
+            },
+            {
+                "name": "Wellsky (AK) Payroll Converter",
+                "url": "/payroll",
+                "icon": "💰",
+                "description": "Convert Wellsky payroll data for Alaska",
+                "category": "Payroll",
+                "display_order": 3
+            },
+            {
+                "name": "GoFormz",
+                "url": "https://app.goformz.com",
+                "icon": "📋",
+                "description": "Digital forms and mobile data collection",
+                "category": "Forms",
+                "display_order": 4
+            },
+            {
+                "name": "Wellsky",
+                "url": "https://www.wellsky.com",
+                "icon": "🏥",
+                "description": "Home health care management software",
+                "category": "Healthcare",
+                "display_order": 5
             },
             {
                 "name": "Google Drive",
@@ -37,7 +69,7 @@ def setup_default_tools():
                 "icon": "📁",
                 "description": "Access Google Drive files and folders",
                 "category": "Productivity",
-                "display_order": 2
+                "display_order": 6
             },
             {
                 "name": "Gmail",
@@ -45,7 +77,7 @@ def setup_default_tools():
                 "icon": "📧",
                 "description": "Access Gmail inbox",
                 "category": "Communication",
-                "display_order": 3
+                "display_order": 7
             },
             {
                 "name": "Google Calendar",
@@ -53,7 +85,23 @@ def setup_default_tools():
                 "icon": "📅",
                 "description": "View and manage calendar events",
                 "category": "Productivity",
-                "display_order": 4
+                "display_order": 8
+            },
+            {
+                "name": "QuickBooks",
+                "url": "https://qbo.intuit.com",
+                "icon": "💼",
+                "description": "Accounting and financial management",
+                "category": "Finance",
+                "display_order": 9
+            },
+            {
+                "name": "Google Ads",
+                "url": "https://ads.google.com",
+                "icon": "🎯",
+                "description": "Manage Google advertising campaigns",
+                "category": "Marketing",
+                "display_order": 10
             }
         ]
         
