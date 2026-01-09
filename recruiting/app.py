@@ -1061,7 +1061,7 @@ def index():
             
             // Load users first
             function loadUsers() {
-                return fetch('/api/users', {
+                return fetch('api/users', {
                     credentials: 'include'
                 })
                     .then(response => response.json())
@@ -1108,7 +1108,7 @@ def index():
                     return;
                 }
 
-                fetch('/api/leads', {
+                fetch('api/leads', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1184,7 +1184,7 @@ def index():
                             
                             // Refresh metrics with new time period immediately
                             console.log('Refreshing metrics with selectedTimePeriod:', selectedTimePeriod);
-                            fetch('/api/facebook/campaigns')
+                            fetch('api/facebook/campaigns')
                                 .then(response => response.json())
                                 .then(campaigns => {
                                     console.log('Loading metrics with time period:', selectedTimePeriod);
@@ -1248,7 +1248,7 @@ def index():
                 statusDiv.style.display = 'block';
                 statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Uploading...</div>';
                 
-                fetch('/api/leads/upload', {
+                fetch('api/leads/upload', {
                     method: 'POST',
                     body: formData
                 })
@@ -1293,7 +1293,7 @@ def index():
             }
 
             function loadStats() {
-                fetch('/api/stats')
+                fetch('api/stats')
                     .then(response => response.json())
                     .then(data => {
                         document.getElementById('totalLeads').textContent = data.total_leads;
@@ -1310,12 +1310,12 @@ def index():
             
             function updateCostPerMetrics(statsData) {
                 // Get all-time spend from Facebook campaigns
-                fetch('/api/facebook/campaigns')
+                fetch('api/facebook/campaigns')
                     .then(response => response.json())
                     .then(campaigns => {
                         let totalSpend = 0;
                         const promises = campaigns.map(campaign => {
-                            return fetch('/api/facebook/campaigns/' + campaign.campaign_id + '/metrics')
+                            return fetch('api/facebook/campaigns/' + campaign.campaign_id + '/metrics')
                                 .then(response => response.json())
                                 .then(metrics => {
                                     if (metrics && metrics.spend !== undefined) {
@@ -1823,7 +1823,7 @@ def index():
             function saveNotes(leadId, textarea, callback) {
                 const notes = textarea.value;
                 
-                fetch('/api/leads/' + leadId, {
+                fetch('api/leads/' + leadId, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1881,7 +1881,7 @@ def index():
             }
 
             function sendTextMessage(leadId, phoneNumber, message) {
-                fetch('/api/beetexting/send', {
+                fetch('api/beetexting/send', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1929,7 +1929,7 @@ def index():
                     return;
                 }
                 
-                fetch('/api/goformz/send-lead', {
+                fetch('api/goformz/send-lead', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1971,7 +1971,7 @@ def index():
             }
 
             function updateStatus(leadId, status) {
-                fetch('/api/leads/' + leadId, {
+                fetch('api/leads/' + leadId, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1995,7 +1995,7 @@ def index():
             // Facebook Campaign Functions
             function loadFacebookCampaigns() {
                 console.log('loadFacebookCampaigns called');
-                fetch('/api/facebook/campaigns')
+                fetch('api/facebook/campaigns')
                     .then(response => response.json())
                     .then(campaigns => {
                         displayCampaigns(campaigns);
@@ -2024,7 +2024,7 @@ def index():
                 pullBtn.disabled = true;
                 pullBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pulling...';
 
-                fetch('/api/facebook/fetch-leads', {
+                fetch('api/facebook/fetch-leads', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -2186,7 +2186,7 @@ def index():
                 button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
                 button.disabled = true;
                 
-                fetch('/api/facebook/sync-campaigns')
+                fetch('api/facebook/sync-campaigns')
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -2216,7 +2216,7 @@ def index():
                 const selectedPeriod = document.querySelector('input[name="timePeriod"]:checked').value;
                 const timePeriod = selectedPeriod === 'all' ? 365 : parseInt(selectedPeriod);
                 
-                fetch('/api/facebook/campaigns')
+                fetch('api/facebook/campaigns')
                     .then(response => response.json())
                     .then(campaigns => {
                         loadCampaignMetrics(campaigns, timePeriod);
@@ -2230,7 +2230,7 @@ def index():
 
 
             function toggleCampaign(campaignId, newStatus) {
-                fetch('/api/facebook/campaigns/' + campaignId + '/toggle', {
+                fetch('api/facebook/campaigns/' + campaignId + '/toggle', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
