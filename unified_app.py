@@ -63,12 +63,28 @@ try:
         spec.loader.exec_module(sales_module)
         sales_app = sales_module.app
 
-        # Set root_path so the app knows it's mounted at /sales
-        sales_app.root_path = "/sales"
+        # Create middleware to rewrite redirect URLs to include /sales prefix
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.responses import RedirectResponse as StarletteRedirectResponse
+
+        class PrefixRedirectMiddleware(BaseHTTPMiddleware):
+            """Middleware to add /sales prefix to relative redirects"""
+            async def dispatch(self, request, call_next):
+                response = await call_next(request)
+                # If it's a redirect with a relative path, prepend /sales
+                if response.status_code in (301, 302, 303, 307, 308):
+                    location = response.headers.get("location", "")
+                    if location.startswith("/") and not location.startswith("/sales"):
+                        response.headers["location"] = f"/sales{location}"
+                        logger.info(f"🔄 Rewrote redirect: {location} -> /sales{location}")
+                return response
+
+        # Add middleware to sales app
+        sales_app.add_middleware(PrefixRedirectMiddleware)
 
         # Mount sales dashboard at /sales
         app.mount("/sales", sales_app)
-        logger.info("✅ Mounted Sales Dashboard at /sales")
+        logger.info("✅ Mounted Sales Dashboard at /sales with redirect middleware")
     else:
         logger.warning("⚠️  Sales dashboard not found at " + sales_path)
 except Exception as e:
