@@ -31,10 +31,15 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PROMPT_TEMPLATE = """You are a helpful assistant that enriches company records.
 
 Given the following company information, determine:
-1. county: The Colorado county where this company is located (e.g., "Denver", "El Paso", "Jefferson"). If unknown, return null.
-2. facility_type: A normalized facility type from this list: skilled_nursing, hospital, rehab_hospital, assisted_living, independent_living, memory_care, home_health, hospice, primary_care, outpatient, placement_agency, legal, community_org, insurance, other. Pick the best match.
-3. website: The company's website URL (with https://). If you can infer it from email domain or organization name, provide it. If unknown, return null.
-4. logo_url: A Clearbit logo URL like https://logo.clearbit.com/<domain> if you determined a website domain. Otherwise null.
+1. company_name: Derive a proper, human-readable company name. If the name is a domain (like "3ahomes.org"), transform it into a proper company name (like "3A Homes"). If the name is already proper, return it as-is. Examples:
+   - "3ahomes.org" -> "3A Homes"
+   - "abilityconnectioncolorado.org" -> "Ability Connection Colorado"
+   - "parallon.com" -> "Parallon"
+   - "Denver Health" -> "Denver Health" (already proper)
+2. county: The Colorado county where this company is located (e.g., "Denver", "El Paso", "Jefferson"). If unknown, return null.
+3. facility_type: A normalized facility type from this list: skilled_nursing, hospital, rehab_hospital, assisted_living, independent_living, memory_care, home_health, hospice, primary_care, outpatient, placement_agency, legal, community_org, insurance, other. Pick the best match.
+4. website: The company's website URL (with https://). If you can infer it from email domain or organization name, provide it. If unknown, return null.
+5. logo_url: A Clearbit logo URL like https://logo.clearbit.com/<domain> if you determined a website domain. Otherwise null.
 
 Company data:
 - Name: {name}
@@ -47,7 +52,7 @@ Company data:
 - Notes: {notes}
 
 Respond ONLY with valid JSON (no markdown):
-{{"county": ..., "facility_type": ..., "website": ..., "logo_url": ...}}
+{{"company_name": ..., "county": ..., "facility_type": ..., "website": ..., "logo_url": ...}}
 """
 
 
@@ -144,6 +149,9 @@ def main():
             print("  -> no enrichment data")
             continue
 
+        if enriched.get("company_name"):
+            company.name = enriched["company_name"]
+            print(f"  ✓ Name: {enriched['company_name']}")
         if enriched.get("county"):
             company.county = enriched["county"]
         if enriched.get("facility_type"):
