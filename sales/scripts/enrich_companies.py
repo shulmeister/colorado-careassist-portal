@@ -90,8 +90,8 @@ def call_openai(prompt: str) -> dict | None:
 def call_gemini(prompt: str) -> dict | None:
     if not GEMINI_API_KEY:
         return None
-    # Try Gemini 2.5 Flash first (latest and fastest with your enterprise account)
-    models = ["gemini-2.5-flash-preview-04", "gemini-2.0-flash", "gemini-1.5-flash"]
+    # Try latest Gemini models (you have enterprise access)
+    models = ["gemini-2.0-flash-thinking-exp", "gemini-2.0-flash-exp", "gemini-2.0-flash", "gemini-1.5-flash"]
     for model in models:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
