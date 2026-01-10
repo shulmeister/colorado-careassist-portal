@@ -1752,9 +1752,11 @@ async def test_gbp_connection():
             status["accounts_accessible"] = len(accounts)
             status["accounts"] = accounts[:3]  # First 3 accounts
             
-            # Try to get locations
+            # Try to get locations - prefer LOCATION_GROUP accounts (these have business locations)
             locations = []
-            for account in accounts[:1]:  # Just first account
+            location_group_accounts = [a for a in accounts if a.get('type') == 'LOCATION_GROUP']
+            accounts_to_check = location_group_accounts[:2] if location_group_accounts else accounts[:1]
+            for account in accounts_to_check:
                 account_locations = gbp_service.get_locations(account.get('name'))
                 locations.extend(account_locations[:3])  # First 3 locations per account
             status["locations_accessible"] = len(locations)
