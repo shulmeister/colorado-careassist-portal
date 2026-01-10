@@ -1560,17 +1560,28 @@ async def test_gbp_connection():
     import os
     
     status = {
-        "service_account_configured": bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")),
-        "location_ids": os.getenv("GBP_LOCATION_IDS", "").split(","),
-        "service_initialized": gbp_service.service is not None,
+        "oauth_configured": bool(gbp_service.client_id and gbp_service.client_secret),
+        "access_token_available": bool(gbp_service.access_token),
+        "refresh_token_available": bool(gbp_service.refresh_token),
+        "location_ids": gbp_service.location_ids,
+        "service_initialized": bool(gbp_service.access_token),
     }
     
-    if gbp_service.service:
+    if gbp_service.access_token:
         try:
-            # Try to get location info
-            locations = gbp_service.get_location_info()
+            # Try to get accounts and locations
+            accounts = gbp_service.get_accounts()
+            status["accounts_accessible"] = len(accounts)
+            status["accounts"] = accounts[:3]  # First 3 accounts
+            
+            # Try to get locations
+            locations = []
+            for account in accounts[:1]:  # Just first account
+                account_locations = gbp_service.get_locations(account.get('name'))
+                locations.extend(account_locations[:3])  # First 3 locations per account
             status["locations_accessible"] = len(locations)
             status["locations"] = locations
+            
         except Exception as e:
             status["locations_accessible"] = 0
             status["error"] = str(e)
