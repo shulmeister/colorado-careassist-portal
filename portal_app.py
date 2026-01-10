@@ -1568,6 +1568,94 @@ async def test_ga4_connection():
     return JSONResponse(status)
 
 
+@app.get("/api/marketing/test-predis")
+async def test_predis_connection():
+    """Test Predis AI connection and return status."""
+    from services.marketing.predis_service import predis_service
+    import os
+    
+    status = {
+        "api_key_configured": bool(predis_service.api_key),
+        "api_working": False,
+        "account_info": None
+    }
+    
+    if predis_service.api_key:
+        try:
+            # Test API connection
+            account_info = predis_service.get_account_info()
+            status["api_working"] = account_info.get("api_working", False)
+            status["account_info"] = account_info
+        except Exception as e:
+            status["error"] = str(e)
+    
+    return JSONResponse(status)
+
+
+@app.get("/api/marketing/predis/posts")
+async def get_predis_posts(page: int = 1):
+    """Get recent Predis AI generated posts."""
+    from services.marketing.predis_service import predis_service
+    
+    try:
+        posts = predis_service.get_recent_creations(page=page)
+        return JSONResponse({
+            "success": True,
+            "posts": posts,
+            "page": page
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.post("/api/marketing/predis/generate")
+async def generate_predis_content(request: Request):
+    """Generate new content using Predis AI."""
+    from services.marketing.predis_service import predis_service
+    
+    try:
+        data = await request.json()
+        prompt = data.get("prompt", "")
+        media_type = data.get("media_type", "single_image")
+        
+        if not prompt:
+            return JSONResponse({
+                "success": False,
+                "error": "Prompt is required"
+            }, status_code=400)
+        
+        result = predis_service.generate_content(prompt=prompt, media_type=media_type)
+        return JSONResponse(result)
+        
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.get("/api/marketing/predis/templates")
+async def get_predis_templates(page: int = 1):
+    """Get Predis AI templates."""
+    from services.marketing.predis_service import predis_service
+    
+    try:
+        templates = predis_service.get_templates(page=page)
+        return JSONResponse({
+            "success": True,
+            "templates": templates,
+            "page": page
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
 @app.get("/api/marketing/test-gbp")
 async def test_gbp_connection():
     """Test GBP connection and return status."""
