@@ -90,22 +90,22 @@ def call_openai(prompt: str) -> dict | None:
 def call_gemini(prompt: str) -> dict | None:
     if not GEMINI_API_KEY:
         return None
-    models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    # Try Gemini 2.5 Flash first (latest and fastest with your enterprise account)
+    models = ["gemini-2.5-flash-preview-04", "gemini-2.0-flash", "gemini-1.5-flash"]
     for model in models:
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
             resp = httpx.post(
                 url,
                 headers={"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"},
-                json={"contents": [{"parts": [{"text": prompt}]}]},
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {"temperature": 0}
+                },
                 timeout=30.0,
             )
-            if resp.status_code == 429:
-                print(f"Gemini rate limited on {model}, waiting 10s...")
-                time.sleep(10)
-                continue
             if resp.status_code == 404:
-                continue  # model not available
+                continue  # model not available, try next
             if resp.status_code != 200:
                 print(f"Gemini {model} error {resp.status_code}")
                 continue
@@ -131,9 +131,11 @@ def enrich_company(source: ReferralSource) -> dict:
         source_type=source.source_type or "",
         notes=(source.notes or "")[:500],  # truncate long notes
     )
-    result = call_openai(prompt)
+    # Try Gemini first (you have enterprise access)
+    result = call_gemini(prompt)
     if not result:
-        result = call_gemini(prompt)
+        # Fallback to OpenAI if Gemini fails
+        result = call_openai(prompt)
     return result or {}
 
 
