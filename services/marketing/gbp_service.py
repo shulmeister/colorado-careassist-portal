@@ -231,6 +231,10 @@ class GBPService:
                 logger.error(f"Permission denied for {url}. Service account may need to be added to GBP. Response: {response.text}")
                 return None
 
+            if response.status_code == 400:
+                logger.error(f"Bad Request for {url}. Response: {response.text}")
+                return None
+
             response.raise_for_status()
             return response.json()
 
