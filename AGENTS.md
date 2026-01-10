@@ -33,10 +33,10 @@ colorado-careassist-portal/          ← THE HUB (this repo)
 
 | Property | Value |
 |----------|-------|
-| **Local Path** | `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal` |
+| **Local Path** | `/Users/shulmeister/Documents/GitHub/careassist-unified-portal` |
 | **GitHub** | `https://github.com/shulmeister/colorado-careassist-portal` |
-| **Heroku App** | `portal-coloradocareassist` |
-| **Live URL** | `https://portal.coloradocareassist.com` |
+| **Heroku App** | `careassist-unified` |
+| **Live URL** | `https://careassist-unified-0a11ddb45ac0.herokuapp.com` |
 | **Tech Stack** | FastAPI, Jinja2, PostgreSQL, Python 3.11 |
 
 ### Spoke 1: Sales Dashboard
@@ -89,8 +89,9 @@ colorado-careassist-portal/          ← THE HUB (this repo)
 
 ### For Portal Changes
 ```bash
-cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal
+cd /Users/shulmeister/Documents/GitHub/careassist-unified-portal
 git add -A && git commit -m "Description" && git push origin main && git push heroku main
+# Heroku app: careassist-unified
 ```
 
 ### For Sales Dashboard Changes
@@ -149,17 +150,34 @@ Marketing is part of the Portal - deploy from portal root.
 
 ## 5. Environment Variables
 
-### Portal (Heroku: `portal-coloradocareassist`)
+### Portal (Heroku: `careassist-unified`)
 ```
+# Auth
 GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 DATABASE_URL
+
+# Service Account (used for GA4, GBP, Google Sheets)
+GOOGLE_SERVICE_ACCOUNT_JSON   # Full JSON service account credentials
+
+# Marketing APIs
 FACEBOOK_ACCESS_TOKEN, FACEBOOK_AD_ACCOUNT_ID
-GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_CUSTOMER_ID
-GA4_PROPERTY_ID
+GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_CUSTOMER_ID, GOOGLE_ADS_REFRESH_TOKEN
+GA4_PROPERTY_ID               # Default: 445403783
+GBP_LOCATION_IDS              # Comma-separated location IDs (optional, auto-discovered if not set)
 LINKEDIN_ACCESS_TOKEN
 PINTEREST_ACCESS_TOKEN
 TIKTOK_CLIENT_KEY, TIKTOK_CLIENT_SECRET
 ```
+
+#### GBP API Setup (Important!)
+The GBP service uses `GOOGLE_SERVICE_ACCOUNT_JSON` for authentication. For it to work:
+1. The service account email must be added as a **Manager** in Google Business Profile
+2. Go to business.google.com → Your Business → Users and access → Add the service account email
+3. Enable these APIs in Google Cloud Console:
+   - My Business Account Management API
+   - My Business Business Information API
+   - Business Profile Performance API
+   - Google My Business API
 
 ### Sales Dashboard (Heroku: `careassist-tracker`)
 ```
@@ -188,13 +206,13 @@ git push origin main && git push heroku main
 
 ### Heroku Logs
 ```bash
-heroku logs -n 100 -a portal-coloradocareassist
-heroku logs -n 100 -a careassist-tracker
+heroku logs -n 100 -a careassist-unified      # Portal
+heroku logs -n 100 -a careassist-tracker      # Sales Dashboard
 ```
 
 ### Restart Heroku
 ```bash
-heroku restart -a portal-coloradocareassist
+heroku restart -a careassist-unified
 ```
 
 ---
@@ -231,5 +249,5 @@ Standalone folders like `/Users/shulmeister/Documents/GitHub/sales-dashboard/` m
 
 ---
 
-*Last Updated: December 29, 2025*
+*Last Updated: January 9, 2026*
 
