@@ -16,6 +16,7 @@ from .facebook_ads_service import facebook_ads_service
 from .google_ads_service import google_ads_service
 from .mailchimp_service import mailchimp_marketing_service
 from .brevo_service import brevo_marketing_service
+from .predis_service import predis_service
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +46,10 @@ def get_social_metrics(start: date, end: date, compare: Optional[str] = None) ->
         page_metrics = facebook_service.get_page_metrics(FACEBOOK_PAGE_ID, start, end)
         posts = facebook_service.get_posts_metrics(FACEBOOK_PAGE_ID, start, end, limit=50)
         click_actions = facebook_service.get_click_actions(FACEBOOK_PAGE_ID, start, end)
+        
+        # Fetch Predis AI earned social metrics
+        predis_analytics = predis_service.get_analytics(start, end)
+        predis_recent = predis_service.get_recent_creations(page=1)
         
         # Calculate comparison if requested
         comparison_data = {}
@@ -102,6 +107,16 @@ def get_social_metrics(start: date, end: date, compare: Optional[str] = None) ->
                 }
                 for post in posts[:10]  # Top 10 posts
             ],
+            "predis_ai": {
+                "total_posts": predis_analytics.get("total_posts", 0),
+                "total_engagement": predis_analytics.get("total_engagement", 0),
+                "avg_engagement_rate": predis_analytics.get("avg_engagement_rate", 0),
+                "top_performing_post": predis_analytics.get("top_performing_post"),
+                "platform_breakdown": predis_analytics.get("platform_breakdown", {}),
+                "content_type_performance": predis_analytics.get("content_type_performance", {}),
+                "growth_metrics": predis_analytics.get("growth_metrics", {}),
+                "recent_creations": predis_recent[:5] if predis_recent else [],
+            },
         }
         
     except Exception as e:
@@ -453,6 +468,16 @@ def _get_placeholder_social_metrics(start: date, end: date) -> Dict[str, Any]:
             "chart": [],
         },
         "top_posts": [],
+        "predis_ai": {
+            "total_posts": 0,
+            "total_engagement": 0,
+            "avg_engagement_rate": 0,
+            "top_performing_post": None,
+            "platform_breakdown": {},
+            "content_type_performance": {},
+            "growth_metrics": {},
+            "recent_creations": [],
+        },
         "is_placeholder": True,
         "not_configured": True,
         "message": "Facebook/Instagram not configured or missing read_insights permission",

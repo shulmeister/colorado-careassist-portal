@@ -879,6 +879,11 @@
         if (data.linkedin) {
             renderLinkedInFollowerGrowth(data.linkedin);
         }
+        
+        // Render Predis AI metrics
+        if (data.predis_ai) {
+            renderPredisAIMetrics(data.predis_ai);
+        }
         }
         
         // Also render engagement data if available
@@ -917,6 +922,82 @@
                 <div class="stats-value">${growth.trend === 'up' ? '↑ Increasing' : growth.trend === 'down' ? '↓ Decreasing' : '→ Stable'}</div>
             </div>
         `;
+    }
+    
+    function renderPredisAIMetrics(predisData) {
+        if (!predisData) return;
+        
+        // Update main KPI cards
+        setText('predisAIPosts', formatNumber(predisData.total_posts));
+        setText('predisAIEngagement', formatNumber(predisData.total_engagement));
+        setText('predisAIEngagementRate', formatPercent(predisData.avg_engagement_rate));
+        
+        // Calculate changes if growth metrics are available
+        if (predisData.growth_metrics) {
+            const postGrowth = predisData.growth_metrics.posts_growth || 0;
+            const engagementGrowth = predisData.growth_metrics.engagement_growth || 0;
+            
+            setChangeValue('predisAIPostsChange', postGrowth);
+            setChangeValue('predisAIEngagementChange', engagementGrowth);
+        }
+        
+        // Top performing post
+        if (predisData.top_performing_post) {
+            const topPost = predisData.top_performing_post;
+            setText('predisAITopPost', topPost.text ? topPost.text.substring(0, 50) + '...' : 'N/A');
+        } else {
+            setText('predisAITopPost', 'No posts yet');
+        }
+        
+        // Platform breakdown
+        const platformsContainer = document.getElementById('predisAIPlatforms');
+        if (platformsContainer && predisData.platform_breakdown) {
+            let platformHtml = '';
+            Object.entries(predisData.platform_breakdown).forEach(([platform, count]) => {
+                platformHtml += `
+                    <div class="stats-row">
+                        <div class="stats-label">${platform.charAt(0).toUpperCase() + platform.slice(1)}</div>
+                        <div class="stats-value">${formatNumber(count)}</div>
+                    </div>
+                `;
+            });
+            platformsContainer.innerHTML = platformHtml || '<div class="stats-row"><div class="stats-label">No data available</div></div>';
+        }
+        
+        // Content type performance
+        const contentTypesContainer = document.getElementById('predisAIContentTypes');
+        if (contentTypesContainer && predisData.content_type_performance) {
+            let contentHtml = '';
+            Object.entries(predisData.content_type_performance).forEach(([type, metrics]) => {
+                const avgEngagement = metrics.avg_engagement || 0;
+                contentHtml += `
+                    <div class="stats-row">
+                        <div class="stats-label">${type.replace(/_/g, ' ').charAt(0).toUpperCase() + type.replace(/_/g, ' ').slice(1)}</div>
+                        <div class="stats-value">${formatNumber(avgEngagement)}</div>
+                    </div>
+                `;
+            });
+            contentTypesContainer.innerHTML = contentHtml || '<div class="stats-row"><div class="stats-label">No data available</div></div>';
+        }
+        
+        // Recent creations
+        const recentContainer = document.getElementById('predisAIRecentCreations');
+        if (recentContainer && predisData.recent_creations) {
+            let recentHtml = '';
+            predisData.recent_creations.slice(0, 5).forEach(post => {
+                const postDate = post.created_at ? new Date(post.created_at).toLocaleDateString() : 'Unknown';
+                recentHtml += `
+                    <div class="stats-row" style="padding: 8px 0; border-bottom: 1px solid #334155;">
+                        <div style="flex: 1;">
+                            <div class="stats-label">${post.media_type || 'Post'} - ${postDate}</div>
+                            <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">${post.text || 'No text'}</div>
+                        </div>
+                        <div class="stats-value">${post.status || 'Generated'}</div>
+                    </div>
+                `;
+            });
+            recentContainer.innerHTML = recentHtml || '<div class="stats-row"><div class="stats-label">No recent creations</div></div>';
+        }
     }
     
     function renderFacebookDemographics(demographics) {
