@@ -255,21 +255,25 @@ class GBPService:
     def get_locations(self, account_name: str = None) -> List[Dict[str, Any]]:
         """
         Get list of locations for an account.
-        
+
         Args:
             account_name: Account resource name (e.g., "accounts/123456789")
-            
+
         Returns:
             List of location dictionaries
         """
         if not account_name:
-            # Try to get first account
+            # Try to get a LOCATION_GROUP account first (these have business locations)
             accounts = self.get_accounts()
-            if accounts:
+            location_group_accounts = [a for a in accounts if a.get("type") == "LOCATION_GROUP"]
+            if location_group_accounts:
+                account_name = location_group_accounts[0].get("name")
+                logger.info(f"Using LOCATION_GROUP account: {account_name}")
+            elif accounts:
                 account_name = accounts[0].get("name")
             else:
                 return []
-        
+
         url = f"{GBP_BUSINESS_INFO_API}/{account_name}/locations"
         data = self._make_api_request(url)
         
