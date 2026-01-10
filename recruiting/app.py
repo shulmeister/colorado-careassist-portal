@@ -1061,7 +1061,7 @@ def index():
             
             // Load users first
             function loadUsers() {
-                return fetch('/api/users', {
+                return fetch('/recruiting/api/users', {
                     credentials: 'include'
                 })
                     .then(response => response.json())
@@ -1108,7 +1108,7 @@ def index():
                     return;
                 }
 
-                fetch('/api/leads', {
+                fetch('/recruiting/api/leads', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1248,7 +1248,7 @@ def index():
                 statusDiv.style.display = 'block';
                 statusDiv.innerHTML = '<div class="alert alert-info"><i class="fas fa-spinner fa-spin"></i> Uploading...</div>';
                 
-                fetch('/api/leads/upload', {
+                fetch('/recruiting/api/leads/upload', {
                     method: 'POST',
                     body: formData
                 })
@@ -1293,7 +1293,7 @@ def index():
             }
 
             function loadStats() {
-                fetch('/api/stats')
+                fetch('/recruiting/api/stats')
                     .then(response => response.json())
                     .then(data => {
                         document.getElementById('totalLeads').textContent = data.total_leads;
@@ -1310,12 +1310,12 @@ def index():
             
             function updateCostPerMetrics(statsData) {
                 // Get all-time spend from Facebook campaigns
-                fetch('/api/facebook/campaigns')
+                fetch('/recruiting/api/facebook/campaigns')
                     .then(response => response.json())
                     .then(campaigns => {
                         let totalSpend = 0;
                         const promises = campaigns.map(campaign => {
-                            return fetch('/api/facebook/campaigns/' + campaign.campaign_id + '/metrics')
+                            return fetch('/recruiting/api/facebook/campaigns/' + campaign.campaign_id + '/metrics')
                                 .then(response => response.json())
                                 .then(metrics => {
                                     if (metrics && metrics.spend !== undefined) {
@@ -1345,7 +1345,7 @@ def index():
             }
 
             function loadLeads() {
-                const url = '/api/leads?page=' + currentPage + '&per_page=100' + (currentFilter ? '&status=' + currentFilter : '');
+                const url = '/recruiting/api/leads?page=' + currentPage + '&per_page=100' + (currentFilter ? '&status=' + currentFilter : '');
                 
                 fetch(url, {
                     credentials: 'include'
@@ -1440,7 +1440,7 @@ def index():
                 }
                 
                 // Reload and display leads with sorting
-                const url = '/api/leads?page=' + currentPage + '&per_page=100' + (currentFilter ? '&status=' + currentFilter : '');
+                const url = '/recruiting/api/leads?page=' + currentPage + '&per_page=100' + (currentFilter ? '&status=' + currentFilter : '');
                 
                 fetch(url, {
                     credentials: 'include'
@@ -1823,7 +1823,7 @@ def index():
             function saveNotes(leadId, textarea, callback) {
                 const notes = textarea.value;
                 
-                fetch('/api/leads/' + leadId, {
+                fetch('/recruiting/api/leads/' + leadId, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1881,7 +1881,7 @@ def index():
             }
 
             function sendTextMessage(leadId, phoneNumber, message) {
-                fetch('/api/beetexting/send', {
+                fetch('/recruiting/api/beetexting/send', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1929,7 +1929,7 @@ def index():
                     return;
                 }
                 
-                fetch('/api/goformz/send-lead', {
+                fetch('/recruiting/api/goformz/send-lead', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1971,7 +1971,7 @@ def index():
             }
 
             function updateStatus(leadId, status) {
-                fetch('/api/leads/' + leadId, {
+                fetch('/recruiting/api/leads/' + leadId, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1995,7 +1995,7 @@ def index():
             // Facebook Campaign Functions
             function loadFacebookCampaigns() {
                 console.log('loadFacebookCampaigns called');
-                fetch('/api/facebook/campaigns')
+                fetch('/recruiting/api/facebook/campaigns')
                     .then(response => response.json())
                     .then(campaigns => {
                         displayCampaigns(campaigns);
@@ -2024,7 +2024,7 @@ def index():
                 pullBtn.disabled = true;
                 pullBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Pulling...';
 
-                fetch('/api/facebook/fetch-leads', {
+                fetch('/recruiting/api/facebook/fetch-leads', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -2136,8 +2136,8 @@ def index():
                 
                 const promises = campaigns.map(campaign => {
                     const url = timePeriod >= 365 ? 
-                        '/api/facebook/campaigns/' + campaign.campaign_id + '/metrics' : 
-                        '/api/facebook/campaigns/' + campaign.campaign_id + '/metrics?days=' + timePeriod;
+                        '/recruiting/api/facebook/campaigns/' + campaign.campaign_id + '/metrics' : 
+                        '/recruiting/api/facebook/campaigns/' + campaign.campaign_id + '/metrics?days=' + timePeriod;
                     console.log('Making API call to:', url);
                     return fetch(url)
                         .then(response => {
@@ -2186,7 +2186,7 @@ def index():
                 button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
                 button.disabled = true;
                 
-                fetch('/api/facebook/sync-campaigns')
+                fetch('/recruiting/api/facebook/sync-campaigns')
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -2216,7 +2216,7 @@ def index():
                 const selectedPeriod = document.querySelector('input[name="timePeriod"]:checked').value;
                 const timePeriod = selectedPeriod === 'all' ? 365 : parseInt(selectedPeriod);
                 
-                fetch('/api/facebook/campaigns')
+                fetch('/recruiting/api/facebook/campaigns')
                     .then(response => response.json())
                     .then(campaigns => {
                         loadCampaignMetrics(campaigns, timePeriod);
@@ -2230,7 +2230,7 @@ def index():
 
 
             function toggleCampaign(campaignId, newStatus) {
-                fetch('/api/facebook/campaigns/' + campaignId + '/toggle', {
+                fetch('/recruiting/api/facebook/campaigns/' + campaignId + '/toggle', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
