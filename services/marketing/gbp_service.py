@@ -52,8 +52,12 @@ class GBPService:
         self.client_secret = GBP_CLIENT_SECRET
         self.location_ids = [lid.strip() for lid in GBP_LOCATION_IDS if lid.strip()]
 
-        # Try Service Account first (preferred method)
-        if GOOGLE_SERVICE_ACCOUNT_JSON:
+        # Try OAuth first if tokens are available (user-authenticated, has direct GBP access)
+        if self.access_token and self.refresh_token:
+            logger.info("GBP service initialized with OAuth authentication (user tokens available)")
+            self.use_service_account = False
+        # Fall back to Service Account if no OAuth tokens
+        elif GOOGLE_SERVICE_ACCOUNT_JSON:
             try:
                 from google.oauth2 import service_account
                 credentials_dict = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
@@ -66,9 +70,7 @@ class GBPService:
             except Exception as e:
                 logger.error(f"Failed to initialize GBP with service account: {e}")
                 self.credentials = None
-
-        # Fallback to OAuth if no service account
-        if not self.use_service_account:
+        else:
             if not self.client_id or not self.client_secret:
                 logger.warning("GBP OAuth not configured: Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET")
 
