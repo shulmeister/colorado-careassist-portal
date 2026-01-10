@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enrich all companies with OpenAI to add logos, websites, county, facility type
+Enrich all companies with OpenAI or Gemini to add logos, websites, county, facility type
 """
 import os
 import sys
@@ -28,11 +28,46 @@ Respond ONLY with valid JSON (no markdown fences):
 {{"county": ..., "facility_type": ..., "website": ..., "logo_url": ...}}
 """
 
+def call_gemini_enrich(company_name: str) -> dict:
+    """Call Gemini API to enrich company data"""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {}
+
+    prompt = ENRICH_PROMPT_TEMPLATE.format(company_name=company_name)
+
+    try:
+        resp = httpx.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}",
+            json={
+                "contents": [{
+                    "parts": [{"text": prompt}]
+                }],
+                "generationConfig": {
+                    "temperature": 0,
+                    "responseMimeType": "application/json"
+                }
+            },
+            timeout=30.0,
+        )
+        if not resp.is_success:
+            print(f"  Gemini error {resp.status_code}: {resp.text[:200]}")
+            return {}
+
+        result = resp.json()
+        content = result["candidates"][0]["content"]["parts"][0]["text"]
+        # Remove markdown fences if present
+        content = re.sub(r"^```json\s*", "", content.strip(), flags=re.IGNORECASE)
+        content = re.sub(r"```$", "", content.strip())
+        return json.loads(content)
+    except Exception as e:
+        print(f"  Gemini exception: {e}")
+        return {}
+
 def call_openai_enrich(company_name: str) -> dict:
     """Call OpenAI to enrich company data"""
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        print("ERROR: OPENAI_API_KEY not set")
         return {}
 
     prompt = ENRICH_PROMPT_TEMPLATE.format(company_name=company_name)
@@ -49,6 +84,9 @@ def call_openai_enrich(company_name: str) -> dict:
             timeout=30.0,
         )
         if not resp.is_success:
+            # If quota exceeded, return empty to trigger Gemini fallback
+            if resp.status_code == 429:
+                return {}
             print(f"  OpenAI error {resp.status_code}: {resp.text[:200]}")
             return {}
 
@@ -60,6 +98,23 @@ def call_openai_enrich(company_name: str) -> dict:
     except Exception as e:
         print(f"  OpenAI exception: {e}")
         return {}
+
+def enrich_company(company_name: str) -> dict:
+    """Try OpenAI first, fallback to Gemini if OpenAI fails"""
+    # Try OpenAI first
+    result = call_openai_enrich(company_name)
+    if result:
+        print(f"  ℹ Using OpenAI")
+        return result
+
+    # Fallback to Gemini
+    print(f"  ℹ OpenAI failed, trying Gemini...")
+    result = call_gemini_enrich(company_name)
+    if result:
+        print(f"  ℹ Using Gemini")
+        return result
+
+    return {}
 
 def main():
     engine = create_engine(DATABASE_URL)
@@ -75,14 +130,22 @@ def main():
 
     enriched_count = 0
     failed_count = 0
+    openai_count = 0
+    gemini_count = 0
 
     for i, company in enumerate(companies, 1):
         company_name = company.name or company.organization or "Unknown"
         print(f"[{i}/{len(companies)}] Enriching: {company_name}")
 
-        enriched = call_openai_enrich(company_name)
+        enriched = enrich_company(company_name)
 
         if enriched:
+            # Track which API was used
+            if "Using OpenAI" in str(enriched):
+                openai_count += 1
+            else:
+                gemini_count += 1
+
             # Update company with enriched data
             if enriched.get("county"):
                 company.county = enriched["county"]
@@ -106,7 +169,7 @@ def main():
             print(f"  ✗ Failed to enrich")
             failed_count += 1
 
-        # Rate limit to avoid overwhelming OpenAI
+        # Rate limit to avoid overwhelming APIs
         time.sleep(0.5)
 
     session.close()
