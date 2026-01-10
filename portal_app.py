@@ -1656,6 +1656,81 @@ async def get_predis_templates(page: int = 1):
         }, status_code=500)
 
 
+@app.post("/api/marketing/predis/webhook")
+async def predis_webhook(request: Request):
+    """
+    Webhook endpoint for Predis AI notifications.
+    
+    Handles notifications when content generation completes or fails.
+    Expected payload from Predis AI:
+    {
+        "event": "content_generated" | "content_failed" | "content_published",
+        "content_id": "...",
+        "status": "completed" | "failed" | "published",
+        "media_url": "...",
+        "text": "...",
+        "error": "..." (if failed),
+        "timestamp": "..."
+    }
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Get the raw body for signature verification (if needed)
+        body = await request.body()
+        data = await request.json()
+        
+        # Log the webhook event
+        event_type = data.get("event", "unknown")
+        content_id = data.get("content_id", "unknown")
+        logger.info(f"Predis webhook received: {event_type} for content {content_id}")
+        
+        # Handle different event types
+        if event_type == "content_generated":
+            # Content was successfully generated
+            logger.info(f"Content generated successfully: {content_id}")
+            logger.info(f"Media URL: {data.get('media_url')}")
+            logger.info(f"Text: {data.get('text', '')[:100]}...")
+            
+            # TODO: Store in database or notify user
+            # TODO: Send to scheduling queue if auto-publish enabled
+            
+        elif event_type == "content_failed":
+            # Content generation failed
+            logger.error(f"Content generation failed: {content_id}")
+            logger.error(f"Error: {data.get('error', 'Unknown error')}")
+            
+            # TODO: Notify user of failure
+            # TODO: Retry logic if appropriate
+            
+        elif event_type == "content_published":
+            # Content was published to social media
+            logger.info(f"Content published: {content_id}")
+            logger.info(f"Platform: {data.get('platform', 'unknown')}")
+            logger.info(f"Post URL: {data.get('post_url', '')}")
+            
+            # TODO: Update analytics
+            # TODO: Track performance
+            
+        else:
+            logger.warning(f"Unknown webhook event type: {event_type}")
+        
+        # Return success response
+        return JSONResponse({
+            "success": True,
+            "message": f"Webhook processed for event: {event_type}",
+            "content_id": content_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Predis webhook error: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
 @app.get("/api/marketing/test-gbp")
 async def test_gbp_connection():
     """Test GBP connection and return status."""
