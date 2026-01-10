@@ -1,6 +1,7 @@
 """
 Google Business Profile Performance API integration.
-Uses OAuth 2.0 for user authentication to access GBP metrics.
+Supports both Service Account and OAuth 2.0 authentication.
+Service Account is preferred if GOOGLE_SERVICE_ACCOUNT_JSON is set.
 """
 import os
 import json
@@ -11,7 +12,10 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# OAuth 2.0 Configuration
+# Service Account Configuration (preferred)
+GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+
+# OAuth 2.0 Configuration (fallback)
 GBP_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 GBP_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 GBP_REDIRECT_URI = os.getenv("GBP_REDIRECT_URI", "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/gbp/callback")
@@ -30,27 +34,46 @@ GBP_PERFORMANCE_API = "https://businessprofileperformance.googleapis.com/v1"
 GBP_ACCOUNT_MGMT_API = "https://mybusinessaccountmanagement.googleapis.com/v1"
 GBP_BUSINESS_INFO_API = "https://mybusinessbusinessinformation.googleapis.com/v1"
 
-# Required OAuth scopes
+# Required OAuth/API scopes
 OAUTH_SCOPES = [
     "https://www.googleapis.com/auth/business.manage"
 ]
 
 
 class GBPService:
-    """Google Business Profile service using OAuth 2.0"""
-    
+    """Google Business Profile service supporting Service Account and OAuth 2.0"""
+
     def __init__(self):
+        self.credentials = None
+        self.use_service_account = False
         self.access_token = GBP_ACCESS_TOKEN
         self.refresh_token = GBP_REFRESH_TOKEN
         self.client_id = GBP_CLIENT_ID
         self.client_secret = GBP_CLIENT_SECRET
         self.location_ids = [lid.strip() for lid in GBP_LOCATION_IDS if lid.strip()]
-        
-        if not self.client_id or not self.client_secret:
-            logger.warning("GBP OAuth not configured: Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET")
-        
-        if not self.access_token:
-            logger.warning("GBP not authenticated: No GBP_ACCESS_TOKEN. User needs to complete OAuth flow.")
+
+        # Try Service Account first (preferred method)
+        if GOOGLE_SERVICE_ACCOUNT_JSON:
+            try:
+                from google.oauth2 import service_account
+                credentials_dict = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+                self.credentials = service_account.Credentials.from_service_account_info(
+                    credentials_dict,
+                    scopes=OAUTH_SCOPES
+                )
+                self.use_service_account = True
+                logger.info("GBP service initialized with Service Account authentication")
+            except Exception as e:
+                logger.error(f"Failed to initialize GBP with service account: {e}")
+                self.credentials = None
+
+        # Fallback to OAuth if no service account
+        if not self.use_service_account:
+            if not self.client_id or not self.client_secret:
+                logger.warning("GBP OAuth not configured: Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET")
+
+            if not self.access_token:
+                logger.warning("GBP not authenticated: No GBP_ACCESS_TOKEN. User needs to complete OAuth flow.")
     
     def get_oauth_url(self, state: str = "gbp_auth") -> str:
         """
@@ -142,42 +165,73 @@ class GBPService:
             logger.error(f"Failed to refresh token: {response.text}")
             return False
     
+    def _get_access_token(self) -> Optional[str]:
+        """Get a valid access token from service account or OAuth."""
+        if self.use_service_account and self.credentials:
+            try:
+                # Refresh credentials if needed
+                if not self.credentials.valid:
+                    from google.auth.transport.requests import Request
+                    self.credentials.refresh(Request())
+                return self.credentials.token
+            except Exception as e:
+                logger.error(f"Failed to get service account token: {e}")
+                return None
+        else:
+            return self.access_token
+
     def _make_api_request(self, url: str, method: str = "GET", retry: bool = True) -> Optional[Dict]:
         """
         Make an authenticated API request.
-        
+
         Args:
             url: API endpoint URL
             method: HTTP method
             retry: Whether to retry with token refresh on 401
-            
+
         Returns:
             Response JSON or None
         """
-        if not self.access_token:
+        access_token = self._get_access_token()
+        if not access_token:
             logger.error("No access token available")
             return None
-        
+
         headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json"
         }
-        
+
         try:
             if method == "GET":
                 response = requests.get(url, headers=headers, timeout=30)
             else:
                 response = requests.request(method, url, headers=headers, timeout=30)
-            
+
             if response.status_code == 401 and retry:
                 # Token expired, try to refresh
-                if self.refresh_access_token():
+                if self.use_service_account:
+                    # Force refresh service account credentials
+                    self.credentials = None
+                    if GOOGLE_SERVICE_ACCOUNT_JSON:
+                        from google.oauth2 import service_account
+                        credentials_dict = json.loads(GOOGLE_SERVICE_ACCOUNT_JSON)
+                        self.credentials = service_account.Credentials.from_service_account_info(
+                            credentials_dict,
+                            scopes=OAUTH_SCOPES
+                        )
+                    return self._make_api_request(url, method, retry=False)
+                elif self.refresh_access_token():
                     return self._make_api_request(url, method, retry=False)
                 return None
-            
+
+            if response.status_code == 403:
+                logger.error(f"Permission denied for {url}. Service account may need to be added to GBP. Response: {response.text}")
+                return None
+
             response.raise_for_status()
             return response.json()
-            
+
         except requests.exceptions.RequestException as e:
             logger.error(f"API request failed: {e}")
             return None
@@ -356,20 +410,24 @@ class GBPService:
     def get_gbp_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """
         Fetch all GBP metrics for configured locations.
-        
+
         Args:
             start_date: Start date
             end_date: End date
-            
+
         Returns:
             Aggregated GBP metrics
         """
-        # Check if OAuth is configured
-        if not self.access_token:
-            return self._get_not_configured_data("GBP not authenticated. Complete OAuth flow to connect.")
-        
-        if not self.client_id or not self.client_secret:
-            return self._get_not_configured_data("GBP OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.")
+        # Check if authentication is configured
+        if self.use_service_account:
+            if not self.credentials:
+                return self._get_not_configured_data("Service account credentials failed to initialize. Check GOOGLE_SERVICE_ACCOUNT_JSON.")
+        else:
+            if not self.access_token:
+                return self._get_not_configured_data("GBP not authenticated. Complete OAuth flow to connect.")
+
+            if not self.client_id or not self.client_secret:
+                return self._get_not_configured_data("GBP OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.")
         
         logger.info(f"Fetching GBP metrics from {start_date} to {end_date}")
         
