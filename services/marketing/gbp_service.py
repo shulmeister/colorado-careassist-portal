@@ -278,7 +278,8 @@ class GBPService:
             else:
                 return []
 
-        url = f"{GBP_BUSINESS_INFO_API}/{account_name}/locations"
+        # The Business Information API requires a readMask parameter
+        url = f"{GBP_BUSINESS_INFO_API}/{account_name}/locations?readMask=name,title,storefrontAddress,phoneNumbers,websiteUri"
         data = self._make_api_request(url)
         
         if data and "locations" in data:
