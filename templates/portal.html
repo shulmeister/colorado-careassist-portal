@@ -1283,7 +1283,7 @@
         // Load tools
         async function loadTools() {
             try {
-                const response = await fetch('/api/tools', {
+                const response = await fetch('/api/tools?t=' + new Date().getTime(), {
                     credentials: 'include'
                 });
                 const data = await response.json();
