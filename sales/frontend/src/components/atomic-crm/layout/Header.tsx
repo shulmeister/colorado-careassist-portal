@@ -11,9 +11,7 @@ import { useUserMenu } from "@/hooks/user-menu-context";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 
 const Header = () => {
-  const portalUrl =
-    import.meta.env.VITE_PORTAL_URL ??
-    "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/";
+  const portalUrl = "/";
   const { darkModeLogo, lightModeLogo, title } = useConfigurationContext();
   const location = useLocation();
 
