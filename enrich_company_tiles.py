@@ -103,7 +103,7 @@ def main():
                 updated_count += 1
                 
                 # Rate limiting to be nice to API
-                time.sleep(1)
+                time.sleep(10)
             else:
                 print("   Skipping update (name match or failed)")
         
