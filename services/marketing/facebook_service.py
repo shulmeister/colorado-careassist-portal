@@ -13,6 +13,8 @@ import requests
 logger = logging.getLogger(__name__)
 
 FACEBOOK_ACCESS_TOKEN = os.getenv("FACEBOOK_ACCESS_TOKEN")
+FACEBOOK_PAGE_ACCESS_TOKEN = os.getenv("FACEBOOK_PAGE_ACCESS_TOKEN")
+FACEBOOK_PAGE_ID = os.getenv("FACEBOOK_PAGE_ID")
 FACEBOOK_AD_ACCOUNT_ID = os.getenv("FACEBOOK_AD_ACCOUNT_ID", "2228418524061660")
 GRAPH_API_VERSION = "v18.0"
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
@@ -20,11 +22,60 @@ GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 
 class FacebookMetricsService:
     """Service for fetching Facebook/Instagram metrics via Graph API"""
-    
-    def __init__(self, access_token: str = None):
+
+    def __init__(self, access_token: str = None, page_access_token: str = None):
         self.access_token = access_token or FACEBOOK_ACCESS_TOKEN
+        self.page_access_token = page_access_token or FACEBOOK_PAGE_ACCESS_TOKEN
+        self._page_tokens_cache = {}  # Cache page tokens by page_id
         if not self.access_token:
             logger.warning("Facebook access token not configured")
+
+    def _get_page_access_token(self, page_id: str) -> Optional[str]:
+        """
+        Get Page Access Token for a specific page.
+
+        For New Page Experience pages, many endpoints require a Page Access Token
+        instead of a User Access Token.
+
+        Returns cached token if available, otherwise fetches from API.
+        """
+        # Return configured page token if available
+        if self.page_access_token:
+            return self.page_access_token
+
+        # Check cache
+        if page_id in self._page_tokens_cache:
+            return self._page_tokens_cache[page_id]
+
+        if not self.access_token:
+            return None
+
+        try:
+            # Fetch page token from me/accounts
+            url = f"{GRAPH_API_BASE}/me/accounts"
+            params = {
+                "access_token": self.access_token,
+                "fields": "id,name,access_token"
+            }
+            response = requests.get(url, params=params, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+
+            # Find the page and get its token
+            for page in data.get("data", []):
+                if page.get("id") == page_id:
+                    token = page.get("access_token")
+                    if token:
+                        self._page_tokens_cache[page_id] = token
+                        logger.info(f"Retrieved Page Access Token for page {page_id}")
+                        return token
+
+            logger.warning(f"Page {page_id} not found in user's managed pages")
+            return None
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching page access token: {e}")
+            return None
     
     def get_page_metrics(self, page_id: str, start_date: date, end_date: date) -> Dict[str, Any]:
         """
@@ -94,10 +145,16 @@ class FacebookMetricsService:
         if metrics["is_new_page_experience"]:
             logger.info("New Page Experience detected - aggregating engagement from posts")
             try:
+                # NPE pages require Page Access Token for posts endpoint
+                page_token = self._get_page_access_token(page_id)
+                if not page_token:
+                    logger.warning("Could not get Page Access Token for NPE page - using user token")
+                    page_token = self.access_token
+
                 # Get posts with engagement metrics
                 posts_url = f"{GRAPH_API_BASE}/{page_id}/posts"
                 posts_params = {
-                    "access_token": self.access_token,
+                    "access_token": page_token,
                     "fields": "id,message,created_time,shares,likes.summary(true),comments.summary(true),reactions.summary(true)",
                     "since": start_date.isoformat(),
                     "until": end_date.isoformat(),
@@ -172,30 +229,33 @@ class FacebookMetricsService:
     def get_posts_metrics(self, page_id: str, start_date: date, end_date: date, limit: int = 50) -> List[Dict[str, Any]]:
         """
         Fetch posts and their engagement metrics
-        
+
         Args:
             page_id: Facebook Page ID
             start_date: Start date for posts
             end_date: End date for posts
             limit: Maximum number of posts to fetch
-        
+
         Returns:
             List of post metrics
         """
         if not self.access_token:
             logger.error("Cannot fetch posts: No access token")
             return []
-        
+
         try:
+            # Try page token first (required for NPE pages), fall back to user token
+            page_token = self._get_page_access_token(page_id) or self.access_token
+
             url = f"{GRAPH_API_BASE}/{page_id}/posts"
             params = {
-                "access_token": self.access_token,
+                "access_token": page_token,
                 "fields": "id,message,created_time,shares,likes.summary(true),comments.summary(true),reactions.summary(true)",
                 "since": start_date.isoformat(),
                 "until": end_date.isoformat(),
                 "limit": limit
             }
-            
+
             response = requests.get(url, params=params, timeout=30)
             response.raise_for_status()
             data = response.json()
@@ -203,7 +263,7 @@ class FacebookMetricsService:
             posts = []
             for post in data.get("data", []):
                 # Fetch post insights (reach, impressions)
-                post_insights = self._get_post_insights(post["id"])
+                post_insights = self._get_post_insights(post["id"], page_id)
                 
                 posts.append({
                     "id": post["id"],
@@ -386,12 +446,19 @@ class FacebookMetricsService:
             logger.debug(f"Could not fetch click actions (may need read_insights permission): {e}")
             return {}
     
-    def _get_post_insights(self, post_id: str) -> Dict[str, int]:
+    def _get_post_insights(self, post_id: str, page_id: str = None) -> Dict[str, int]:
         """Fetch insights for a specific post (requires read_insights permission)"""
         try:
+            # Use page token if available (required for NPE pages)
+            token = self.access_token
+            if page_id:
+                page_token = self._get_page_access_token(page_id)
+                if page_token:
+                    token = page_token
+
             url = f"{GRAPH_API_BASE}/{post_id}/insights"
             params = {
-                "access_token": self.access_token,
+                "access_token": token,
                 "metric": "post_impressions,post_impressions_unique,post_clicks"
             }
             
