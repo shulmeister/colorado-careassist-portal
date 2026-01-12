@@ -457,6 +457,377 @@ class RingCentralMessagingService:
             "skipped": skipped
         }
 
+    # =========================================================================
+    # Call Pattern Monitoring (works without call recordings)
+    # =========================================================================
+
+    def get_call_queues(self) -> List[Dict[str, Any]]:
+        """Get list of call queues from RingCentral."""
+        result = self._api_request("/account/~/call-queues")
+        if result:
+            queues = result.get("records", [])
+            return queues
+        return []
+
+    def get_call_logs(
+        self,
+        days_back: int = 7,
+        extension_id: str = None,
+        queue_id: str = None,
+        limit: int = 250
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch call logs from RingCentral.
+
+        Args:
+            days_back: Number of days to look back
+            extension_id: Filter by specific extension
+            queue_id: Filter by call queue (use extension ID of queue)
+            limit: Maximum records to fetch
+
+        Returns:
+            List of call log records
+        """
+        since = (datetime.utcnow() - timedelta(days=days_back)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        params = {
+            "dateFrom": since,
+            "perPage": min(limit, 250),
+            "view": "Detailed"
+        }
+
+        # Build the endpoint based on filters
+        if extension_id:
+            endpoint = f"/account/~/extension/{extension_id}/call-log"
+        elif queue_id:
+            endpoint = f"/account/~/extension/{queue_id}/call-log"
+        else:
+            endpoint = "/account/~/call-log"
+
+        result = self._api_request(endpoint, params=params)
+        if result:
+            calls = result.get("records", [])
+            logger.info(f"Fetched {len(calls)} call logs")
+            return calls
+        return []
+
+    def load_client_phones(self, db_session) -> Dict[str, str]:
+        """
+        Load client phone numbers from database for matching.
+
+        Returns:
+            Dict mapping cleaned phone number to client name
+        """
+        # Try to get from contacts table first
+        try:
+            from sales.app import Contact
+            contacts = db_session.query(Contact).filter(Contact.phone.isnot(None)).all()
+            phone_map = {}
+            for c in contacts:
+                if c.phone:
+                    # Clean phone number - keep last 10 digits
+                    clean = re.sub(r'[^\d]', '', c.phone)[-10:]
+                    if len(clean) >= 10:
+                        phone_map[clean] = c.name
+            logger.info(f"Loaded {len(phone_map)} client phone numbers from contacts")
+            return phone_map
+        except Exception as e:
+            logger.warning(f"Could not load contacts: {e}")
+            return {}
+
+    def match_phone_to_client(
+        self,
+        phone_number: str,
+        phone_map: Dict[str, str]
+    ) -> Optional[str]:
+        """Match a phone number to a client name."""
+        if not phone_number:
+            return None
+        clean = re.sub(r'[^\d]', '', phone_number)[-10:]
+        return phone_map.get(clean)
+
+    def analyze_call_patterns(
+        self,
+        calls: List[Dict[str, Any]],
+        phone_map: Dict[str, str]
+    ) -> Dict[str, Any]:
+        """
+        Analyze call logs for concerning patterns.
+
+        Detects:
+        - Repeat callers (3+ calls in period)
+        - Very short calls (<10 sec, potential hang-ups)
+        - Missed/voicemail calls
+        - Calls to Client Support queue
+
+        Returns:
+            Analysis results with flagged patterns
+        """
+        # Track patterns by phone number
+        caller_stats = {}  # phone -> {calls, total_duration, short_calls, missed, etc}
+
+        # Client Support queue extension
+        CLIENT_SUPPORT_QUEUE = "6"  # From your queues list
+
+        flagged_patterns = []
+
+        for call in calls:
+            direction = call.get("direction", "")
+            from_info = call.get("from", {})
+            to_info = call.get("to", {})
+            result = call.get("result", "")
+            duration = call.get("duration", 0)
+
+            # Get the external phone number (caller for inbound, callee for outbound)
+            if direction == "Inbound":
+                external_phone = from_info.get("phoneNumber", "")
+                internal_ext = to_info.get("extensionNumber", "")
+            else:
+                external_phone = to_info.get("phoneNumber", "")
+                internal_ext = from_info.get("extensionNumber", "")
+
+            if not external_phone:
+                continue
+
+            clean_phone = re.sub(r'[^\d]', '', external_phone)[-10:]
+            if len(clean_phone) < 10:
+                continue
+
+            # Initialize stats for this caller
+            if clean_phone not in caller_stats:
+                caller_stats[clean_phone] = {
+                    "phone": external_phone,
+                    "client_name": phone_map.get(clean_phone),
+                    "call_count": 0,
+                    "total_duration": 0,
+                    "short_calls": 0,  # < 10 seconds
+                    "missed_calls": 0,
+                    "voicemail": 0,
+                    "to_support_queue": 0,
+                    "calls": []
+                }
+
+            stats = caller_stats[clean_phone]
+            stats["call_count"] += 1
+            stats["total_duration"] += duration
+            stats["calls"].append({
+                "direction": direction,
+                "duration": duration,
+                "result": result,
+                "time": call.get("startTime"),
+                "extension": internal_ext
+            })
+
+            # Track patterns
+            if duration < 10 and result == "Accepted":
+                stats["short_calls"] += 1
+            if result in ("Missed", "No Answer"):
+                stats["missed_calls"] += 1
+            if result == "Voicemail":
+                stats["voicemail"] += 1
+            if internal_ext == CLIENT_SUPPORT_QUEUE:
+                stats["to_support_queue"] += 1
+
+        # Flag concerning patterns
+        for phone, stats in caller_stats.items():
+            issues = []
+            severity = "low"
+
+            # Repeat caller (3+ calls)
+            if stats["call_count"] >= 3:
+                issues.append(f"Repeat caller: {stats['call_count']} calls")
+                severity = "medium"
+
+            # Multiple short calls (frustration indicator)
+            if stats["short_calls"] >= 2:
+                issues.append(f"Multiple short calls: {stats['short_calls']}")
+                severity = "medium"
+
+            # Multiple missed + callback attempts
+            if stats["missed_calls"] >= 2:
+                issues.append(f"Multiple missed calls: {stats['missed_calls']}")
+                severity = "medium"
+
+            # Called support queue multiple times
+            if stats["to_support_queue"] >= 2:
+                issues.append(f"Multiple calls to Client Support: {stats['to_support_queue']}")
+                severity = "high"
+
+            # High frequency + short duration (very frustrated)
+            if stats["call_count"] >= 4 and stats["short_calls"] >= 2:
+                severity = "high"
+
+            if issues:
+                flagged_patterns.append({
+                    "phone": stats["phone"],
+                    "client_name": stats["client_name"],
+                    "issues": issues,
+                    "severity": severity,
+                    "call_count": stats["call_count"],
+                    "total_duration": stats["total_duration"],
+                    "short_calls": stats["short_calls"],
+                    "missed_calls": stats["missed_calls"],
+                    "to_support_queue": stats["to_support_queue"],
+                    "recent_calls": stats["calls"][-5:]  # Last 5 calls
+                })
+
+        # Sort by severity and call count
+        severity_order = {"high": 0, "medium": 1, "low": 2}
+        flagged_patterns.sort(key=lambda x: (severity_order.get(x["severity"], 3), -x["call_count"]))
+
+        return {
+            "total_calls_analyzed": len(calls),
+            "unique_callers": len(caller_stats),
+            "flagged_patterns": flagged_patterns,
+            "flagged_count": len(flagged_patterns)
+        }
+
+    def scan_calls_for_issues(
+        self,
+        db_session,
+        days_back: int = 7,
+        queue_id: str = None
+    ) -> Dict[str, Any]:
+        """
+        Scan call logs for patterns indicating potential client issues.
+
+        Args:
+            db_session: SQLAlchemy session
+            days_back: Number of days to analyze
+            queue_id: Optional - filter to specific call queue
+
+        Returns:
+            Scan results with flagged patterns
+        """
+        # Load client phone mappings
+        phone_map = self.load_client_phones(db_session)
+
+        # Get call logs
+        calls = self.get_call_logs(days_back=days_back, queue_id=queue_id)
+        if not calls:
+            return {
+                "success": True,
+                "message": "No calls found in period",
+                "flagged_patterns": [],
+                "total_calls": 0
+            }
+
+        # Analyze patterns
+        analysis = self.analyze_call_patterns(calls, phone_map)
+
+        return {
+            "success": True,
+            "days_analyzed": days_back,
+            "queue_filter": queue_id,
+            "total_calls": analysis["total_calls_analyzed"],
+            "unique_callers": analysis["unique_callers"],
+            "flagged_count": analysis["flagged_count"],
+            "flagged_patterns": analysis["flagged_patterns"],
+            "scanned_at": datetime.utcnow().isoformat()
+        }
+
+    def auto_create_call_complaints(
+        self,
+        db_session,
+        scan_results: Dict[str, Any],
+        auto_create: bool = False,
+        min_severity: str = "medium"
+    ) -> Dict[str, Any]:
+        """
+        Create complaint records from flagged call patterns.
+
+        Args:
+            db_session: SQLAlchemy session
+            scan_results: Results from scan_calls_for_issues
+            auto_create: If True, create records; if False, preview only
+            min_severity: Minimum severity to create complaints for
+
+        Returns:
+            Creation results
+        """
+        from portal_models import ClientComplaint
+
+        severity_levels = {"high": 3, "medium": 2, "low": 1}
+        min_level = severity_levels.get(min_severity, 2)
+
+        created = []
+        skipped = []
+
+        for pattern in scan_results.get("flagged_patterns", []):
+            pattern_severity = severity_levels.get(pattern.get("severity"), 1)
+
+            if pattern_severity < min_level:
+                skipped.append({
+                    "reason": f"Below minimum severity ({pattern.get('severity')})",
+                    "phone": pattern.get("phone")
+                })
+                continue
+
+            # Check if already tracked by phone number
+            phone = pattern.get("phone", "")
+            clean_phone = re.sub(r'[^\d]', '', phone)[-10:]
+
+            existing = db_session.query(ClientComplaint).filter(
+                ClientComplaint.notes.like(f'%call_pattern:{clean_phone}%'),
+                ClientComplaint.complaint_date >= (datetime.utcnow().date() - timedelta(days=7))
+            ).first()
+
+            if existing:
+                skipped.append({
+                    "reason": "Already tracked this week",
+                    "phone": phone,
+                    "existing_id": existing.id
+                })
+                continue
+
+            # Build description
+            issues_text = "; ".join(pattern.get("issues", []))
+            description = f"Call pattern alert: {issues_text}"
+
+            if auto_create:
+                new_complaint = ClientComplaint(
+                    client_name=pattern.get("client_name") or f"Caller: {phone}",
+                    complaint_date=datetime.utcnow().date(),
+                    category="call_pattern",
+                    severity=pattern.get("severity", "medium"),
+                    description=description,
+                    details=f"Phone: {phone}\nCalls: {pattern.get('call_count')}\n"
+                            f"Short calls: {pattern.get('short_calls')}\n"
+                            f"Missed: {pattern.get('missed_calls')}\n"
+                            f"To Support: {pattern.get('to_support_queue')}",
+                    status="review",
+                    source="ringcentral",
+                    reported_by="Call Pattern Monitor",
+                    notes=f"call_pattern:{clean_phone}"
+                )
+                db_session.add(new_complaint)
+                created.append({
+                    "client_name": new_complaint.client_name,
+                    "phone": phone,
+                    "issues": pattern.get("issues"),
+                    "severity": pattern.get("severity")
+                })
+            else:
+                created.append({
+                    "would_create": True,
+                    "client_name": pattern.get("client_name") or f"Caller: {phone}",
+                    "phone": phone,
+                    "issues": pattern.get("issues"),
+                    "severity": pattern.get("severity")
+                })
+
+        if auto_create:
+            db_session.commit()
+
+        return {
+            "success": True,
+            "mode": "created" if auto_create else "preview",
+            "created_count": len(created),
+            "skipped_count": len(skipped),
+            "created": created,
+            "skipped": skipped
+        }
+
     def get_status(self) -> Dict[str, Any]:
         """
         Get the current status of the RingCentral messaging integration.
@@ -472,6 +843,7 @@ class RingCentralMessagingService:
             "server": RINGCENTRAL_SERVER,
             "api_connected": False,
             "teams_available": [],
+            "call_queues": [],
             "error": None
         }
 
@@ -481,6 +853,11 @@ class RingCentralMessagingService:
                 status["api_connected"] = True
                 teams = self.list_teams()
                 status["teams_available"] = [t.get("name") for t in teams[:10]]
+                queues = self.get_call_queues()
+                status["call_queues"] = [
+                    {"id": q.get("id"), "name": q.get("name"), "ext": q.get("extensionNumber")}
+                    for q in queues
+                ]
             else:
                 status["error"] = "Failed to authenticate with RingCentral API"
         else:

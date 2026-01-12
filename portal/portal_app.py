@@ -1317,6 +1317,117 @@ async def api_ringcentral_preview(
     })
 
 
+# =============================================================================
+# RingCentral Call Pattern Monitoring API
+# =============================================================================
+
+@app.get("/api/client-satisfaction/ringcentral/call-queues")
+async def api_ringcentral_call_queues(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """List available RingCentral call queues"""
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+
+    queues = ringcentral_messaging_service.get_call_queues()
+    return JSONResponse({
+        "success": True,
+        "queues": [
+            {"id": q.get("id"), "name": q.get("name"), "ext": q.get("extensionNumber")}
+            for q in queues
+        ]
+    })
+
+
+@app.post("/api/client-satisfaction/ringcentral/scan-calls")
+async def api_ringcentral_scan_calls(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Scan call logs for patterns indicating potential client issues.
+
+    Detects:
+    - Repeat callers (3+ calls)
+    - Short calls (<10 sec, potential frustration)
+    - Multiple missed calls
+    - Multiple calls to Client Support queue
+
+    Request body:
+        - days_back: Number of days to analyze (default 7)
+        - queue_id: Optional - filter to specific call queue ID
+        - auto_create: If true, create complaint records for flagged patterns
+        - min_severity: Minimum severity to create complaints (default "medium")
+    """
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+
+    data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    days_back = data.get("days_back", 7)
+    queue_id = data.get("queue_id")
+    auto_create = data.get("auto_create", False)
+    min_severity = data.get("min_severity", "medium")
+
+    # Scan call logs
+    scan_results = ringcentral_messaging_service.scan_calls_for_issues(
+        db,
+        days_back=days_back,
+        queue_id=queue_id
+    )
+
+    if not scan_results.get("success"):
+        return JSONResponse(scan_results, status_code=400)
+
+    # Auto-create complaints if requested
+    if auto_create and scan_results.get("flagged_patterns"):
+        create_results = ringcentral_messaging_service.auto_create_call_complaints(
+            db, scan_results, auto_create=True, min_severity=min_severity
+        )
+        scan_results["auto_create_results"] = create_results
+
+    return JSONResponse(scan_results)
+
+
+@app.post("/api/client-satisfaction/ringcentral/preview-calls")
+async def api_ringcentral_preview_calls(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Preview call pattern analysis without creating complaint records.
+
+    Request body:
+        - days_back: Number of days to analyze (default 7)
+        - queue_id: Optional - filter to specific call queue ID
+    """
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+
+    data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    days_back = data.get("days_back", 7)
+    queue_id = data.get("queue_id")
+
+    # Scan call logs
+    scan_results = ringcentral_messaging_service.scan_calls_for_issues(
+        db,
+        days_back=days_back,
+        queue_id=queue_id
+    )
+
+    if not scan_results.get("success"):
+        return JSONResponse(scan_results, status_code=400)
+
+    # Preview what would be created
+    preview_results = ringcentral_messaging_service.auto_create_call_complaints(
+        db, scan_results, auto_create=False
+    )
+
+    return JSONResponse({
+        **scan_results,
+        "preview": preview_results
+    })
+
+
 @app.get("/connections", response_class=HTMLResponse)
 async def connections_page(
     request: Request,

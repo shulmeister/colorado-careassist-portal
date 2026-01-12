@@ -579,12 +579,38 @@
                             <span style="color: #94a3b8;">Checking RingCentral status...</span>
                         </div>
                         <div id="scanResults" style="display: none;">
-                            <div style="font-weight: 600; margin-bottom: 8px;">Scan Results</div>
+                            <div style="font-weight: 600; margin-bottom: 8px;">Chat Scan Results</div>
                             <div id="scanResultsContent"></div>
                         </div>
                         <p style="color: #64748b; font-size: 12px; margin-top: 12px;">
                             Scans the "New Scheduling" chat for client mentions with potential complaints.
-                            Preview to see results before creating complaint records.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="section-card" style="grid-column: 1 / -1;">
+                    <div class="section-header">
+                        <div class="section-title">Call Pattern Monitor</div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="callQueueSelect" style="background: #334155; border: 1px solid #475569; color: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 13px;">
+                                <option value="">All Queues</option>
+                            </select>
+                            <select id="callDaysSelect" style="background: #334155; border: 1px solid #475569; color: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 13px;">
+                                <option value="3">Last 3 days</option>
+                                <option value="7" selected>Last 7 days</option>
+                                <option value="14">Last 14 days</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="previewCallPatterns()">Preview</button>
+                            <button class="btn btn-primary" onclick="scanCallPatterns(true)">Scan & Flag</button>
+                        </div>
+                    </div>
+                    <div class="section-content" id="callPatternSection">
+                        <div id="callPatternResults" style="display: none;">
+                            <div id="callPatternContent"></div>
+                        </div>
+                        <p style="color: #64748b; font-size: 12px;">
+                            Detects concerning call patterns: repeat callers, short/hang-up calls, missed calls, frequent support calls.
+                            Matches phone numbers to client records when possible.
                         </p>
                     </div>
                 </div>
@@ -1018,10 +1044,21 @@
                         </div>
                         ${status.teams_available.length > 0 ? `
                             <div style="margin-top: 8px; color: #94a3b8; font-size: 12px;">
-                                Available teams: ${status.teams_available.join(', ')}
+                                Teams: ${status.teams_available.join(', ')}
                             </div>
                         ` : ''}
                     `;
+
+                    // Populate call queues dropdown
+                    if (status.call_queues && status.call_queues.length > 0) {
+                        const select = document.getElementById('callQueueSelect');
+                        status.call_queues.forEach(q => {
+                            const option = document.createElement('option');
+                            option.value = q.id;
+                            option.textContent = `${q.name} (Ext ${q.ext})`;
+                            select.appendChild(option);
+                        });
+                    }
                 } else if (status.configured) {
                     container.innerHTML = `
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -1151,6 +1188,128 @@
                 }
             } catch (err) {
                 content.innerHTML = `<span style="color: #ef4444;">Scan error: ${err.message}</span>`;
+            }
+        }
+
+        // Call Pattern Monitor Functions
+        async function previewCallPatterns() {
+            const container = document.getElementById('callPatternResults');
+            const content = document.getElementById('callPatternContent');
+            container.style.display = 'block';
+            content.innerHTML = '<span style="color: #94a3b8;">Analyzing call patterns...</span>';
+
+            const queueId = document.getElementById('callQueueSelect').value;
+            const daysBack = document.getElementById('callDaysSelect').value;
+
+            try {
+                const response = await fetch('/api/client-satisfaction/ringcentral/preview-calls', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days_back: parseInt(daysBack), queue_id: queueId || null })
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    content.innerHTML = `<span style="color: #ef4444;">Error: ${result.error || 'Unknown error'}</span>`;
+                    return;
+                }
+
+                if (result.flagged_patterns && result.flagged_patterns.length > 0) {
+                    content.innerHTML = `
+                        <div style="margin-bottom: 12px;">
+                            <span style="color: #22c55e;">Found ${result.flagged_count} flagged pattern(s)</span>
+                            <span style="color: #64748b; margin-left: 16px;">${result.total_calls} calls from ${result.unique_callers} callers</span>
+                        </div>
+                        ${result.flagged_patterns.map(p => `
+                            <div style="background: #334155; padding: 12px; border-radius: 6px; margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div>
+                                        <div style="font-weight: 600; color: ${p.severity === 'high' ? '#ef4444' : p.severity === 'medium' ? '#f59e0b' : '#94a3b8'};">
+                                            ${p.client_name || p.phone}
+                                            <span style="font-weight: normal; font-size: 12px; margin-left: 8px;">(${p.severity})</span>
+                                        </div>
+                                        ${p.client_name ? `<div style="color: #64748b; font-size: 12px;">${p.phone}</div>` : ''}
+                                    </div>
+                                    <div style="text-align: right; font-size: 12px; color: #94a3b8;">
+                                        ${p.call_count} calls
+                                    </div>
+                                </div>
+                                <div style="margin-top: 8px;">
+                                    ${p.issues.map(i => `<span style="background: #1e293b; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px;">${i}</span>`).join('')}
+                                </div>
+                                <div style="margin-top: 8px; color: #64748b; font-size: 11px;">
+                                    Short: ${p.short_calls} | Missed: ${p.missed_calls} | To Support: ${p.to_support_queue}
+                                </div>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    content.innerHTML = `
+                        <div style="color: #22c55e;">No concerning patterns detected</div>
+                        <div style="color: #64748b; font-size: 12px; margin-top: 4px;">
+                            Analyzed ${result.total_calls || 0} calls from ${result.unique_callers || 0} callers over ${daysBack} days
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                content.innerHTML = `<span style="color: #ef4444;">Error: ${err.message}</span>`;
+            }
+        }
+
+        async function scanCallPatterns(autoCreate) {
+            if (autoCreate && !confirm('This will create complaint records for flagged call patterns. Continue?')) {
+                return;
+            }
+
+            const container = document.getElementById('callPatternResults');
+            const content = document.getElementById('callPatternContent');
+            container.style.display = 'block';
+            content.innerHTML = '<span style="color: #94a3b8;">Scanning and creating records...</span>';
+
+            const queueId = document.getElementById('callQueueSelect').value;
+            const daysBack = document.getElementById('callDaysSelect').value;
+
+            try {
+                const response = await fetch('/api/client-satisfaction/ringcentral/scan-calls', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        days_back: parseInt(daysBack),
+                        queue_id: queueId || null,
+                        auto_create: autoCreate,
+                        min_severity: 'medium'
+                    })
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    content.innerHTML = `<span style="color: #ef4444;">Error: ${result.error || 'Unknown error'}</span>`;
+                    return;
+                }
+
+                const createResult = result.auto_create_results;
+                if (createResult) {
+                    content.innerHTML = `
+                        <div style="color: #22c55e; margin-bottom: 12px;">
+                            Scan complete! Created ${createResult.created_count} complaint(s), skipped ${createResult.skipped_count}
+                        </div>
+                        ${createResult.created.length > 0 ? `
+                            <div style="font-weight: 600; margin-bottom: 8px;">Created:</div>
+                            ${createResult.created.map(c => `
+                                <div style="background: #334155; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;">
+                                    <span style="font-weight: 600;">${c.client_name}</span>
+                                    <span style="color: #64748b; margin-left: 8px;">${c.phone}</span>
+                                    <span style="color: ${c.severity === 'high' ? '#ef4444' : '#f59e0b'}; margin-left: 8px;">(${c.severity})</span>
+                                </div>
+                            `).join('')}
+                        ` : ''}
+                    `;
+                    loadComplaints();
+                } else {
+                    content.innerHTML = `<div style="color: #22c55e;">Scan complete - ${result.flagged_count || 0} patterns found</div>`;
+                }
+            } catch (err) {
+                content.innerHTML = `<span style="color: #ef4444;">Error: ${err.message}</span>`;
             }
         }
 
