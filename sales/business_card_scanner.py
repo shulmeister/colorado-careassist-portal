@@ -14,10 +14,6 @@ import httpx
 
 logger = logging.getLogger(__name__)
 
-# OpenAI API configuration for company name cleanup
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
-
 # Try to import numpy and OpenCV, but make them optional
 try:
     import numpy as np  # type: ignore
@@ -1371,45 +1367,39 @@ class BusinessCardScanner:
         return None
     
     def _cleanup_company_name_with_ai(self, raw_company: str) -> str:
-        """Use OpenAI to clean up OCR errors in company names"""
-        if not raw_company or not OPENAI_API_KEY:
+        """Use Gemini to clean up OCR errors in company names"""
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not raw_company or not gemini_api_key:
             return raw_company
         
         try:
-            # Use OpenAI to fix OCR errors
+            # Use Gemini to fix OCR errors
+            url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
             response = httpx.post(
-                OPENAI_API_URL,
+                url,
                 headers={
-                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                    "x-goog-api-key": gemini_api_key,
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "gpt-4o-mini",
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": "You are an OCR text correction assistant. Fix OCR errors in company names. Common issues: missing spaces between words (e.g. 'Cokidneycare' → 'CO Kidney Care'), missing letters (e.g. 'Sunri e Living' → 'Sunrise Living'), extra spaces within words (e.g. 'En ign ervice' → 'Ensign Services'). Return ONLY the corrected company name, nothing else."
-                        },
-                        {
-                            "role": "user",
-                            "content": f"Fix this company name: {raw_company}"
-                        }
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": 50
+                    "contents": [{
+                        "parts": [{
+                            "text": f"You are an OCR text correction assistant. Fix OCR errors in company names. Common issues: missing spaces between words (e.g. 'Cokidneycare' → 'CO Kidney Care'), missing letters (e.g. 'Sunri e Living' → 'Sunrise Living'), extra spaces within words (e.g. 'En ign ervice' → 'Ensign Services'). Return ONLY the corrected company name, nothing else. Fix this company name: {raw_company}"
+                        }]
+                    }]
                 },
                 timeout=5.0
             )
             
             if response.status_code == 200:
                 result = response.json()
-                cleaned = result['choices'][0]['message']['content'].strip()
+                cleaned = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '').strip()
                 # Remove quotes if present
                 cleaned = cleaned.strip('"\'')
                 logger.info(f"AI cleaned company name: '{raw_company}' → '{cleaned}'")
                 return cleaned
             else:
-                logger.warning(f"OpenAI API error: {response.status_code}")
+                logger.warning(f"Gemini API error: {response.status_code}")
                 return raw_company
                 
         except Exception as e:

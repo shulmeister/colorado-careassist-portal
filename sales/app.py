@@ -2851,9 +2851,10 @@ def _enrich_company_record(source) -> dict:
         source_type=source.source_type or "",
         notes=(source.notes or "")[:500],
     )
-    result = _call_openai_enrich(prompt)
+    # Use Gemini first (faster, cheaper), fallback to OpenAI
+    result = _call_gemini_enrich(prompt)
     if not result:
-        result = _call_gemini_enrich(prompt)
+        result = _call_openai_enrich(prompt)
     return result or {}
 
 
@@ -4088,7 +4089,7 @@ def _extract_business_card_ai(content: bytes, filename: str = "") -> Optional[Di
     """Extract business card data using AI Vision APIs.
     
     For HEIC files (iPhone photos): Try Gemini first as it handles HEIC better.
-    For other formats: Try OpenAI first for quality.
+    For other formats: Try Gemini first (faster/cheaper), then OpenAI for quality fallback.
     """
     is_heic = filename.lower().endswith(('.heic', '.heif'))
     
@@ -4102,11 +4103,11 @@ def _extract_business_card_ai(content: bytes, filename: str = "") -> Optional[Di
         logger.info("Gemini failed for HEIC, trying OpenAI with conversion")
         return _extract_business_card_openai(content, filename)
     else:
-        # Non-HEIC: OpenAI first for quality
-        result = _extract_business_card_openai(content, filename)
+        # Non-HEIC: Gemini first
+        result = _extract_business_card_gemini(content, filename)
         if result:
             return result
-        return _extract_business_card_gemini(content, filename)
+        return _extract_business_card_openai(content, filename)
 
 
 # In-memory job status storage for bulk processing
