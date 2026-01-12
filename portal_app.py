@@ -2101,8 +2101,108 @@ async def test_pinterest_connection():
     else:
         status["connection_successful"] = False
         status["error"] = "Pinterest not configured"
-    
+
     return JSONResponse(status)
+
+
+@app.get("/api/pinterest/auth")
+async def pinterest_oauth_start():
+    """Start Pinterest OAuth flow."""
+    import os
+
+    app_id = os.getenv("PINTEREST_APP_ID")
+    if not app_id:
+        return JSONResponse({
+            "success": False,
+            "error": "Pinterest App ID not configured"
+        })
+
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/pinterest/callback"
+    scopes = "boards:read,pins:read,user_accounts:read"
+
+    oauth_url = (
+        f"https://www.pinterest.com/oauth/?"
+        f"response_type=code&"
+        f"client_id={app_id}&"
+        f"redirect_uri={redirect_uri}&"
+        f"scope={scopes}&"
+        f"state=pinterest_auth"
+    )
+
+    return JSONResponse({
+        "success": True,
+        "oauth_url": oauth_url,
+        "message": "Visit the oauth_url to authorize Pinterest access"
+    })
+
+
+@app.get("/api/pinterest/callback")
+async def pinterest_oauth_callback(
+    code: Optional[str] = None,
+    state: Optional[str] = None,
+    error: Optional[str] = None,
+):
+    """Pinterest OAuth callback - exchange code for access token."""
+    import os
+    import base64
+
+    if error:
+        return JSONResponse({
+            "success": False,
+            "error": error
+        })
+
+    if not code:
+        return JSONResponse({
+            "success": False,
+            "error": "No authorization code received"
+        })
+
+    app_id = os.getenv("PINTEREST_APP_ID")
+    app_secret = os.getenv("PINTEREST_APP_SECRET")
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/pinterest/callback"
+
+    # Exchange code for token
+    try:
+        credentials = base64.b64encode(f"{app_id}:{app_secret}".encode()).decode()
+
+        response = requests.post(
+            "https://api.pinterest.com/v5/oauth/token",
+            headers={
+                "Authorization": f"Basic {credentials}",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri
+            },
+            timeout=30
+        )
+
+        if response.status_code == 200:
+            token_data = response.json()
+            return JSONResponse({
+                "success": True,
+                "message": "Pinterest authorized successfully!",
+                "access_token": token_data.get("access_token"),
+                "refresh_token": token_data.get("refresh_token"),
+                "expires_in": token_data.get("expires_in"),
+                "token_type": token_data.get("token_type"),
+                "scope": token_data.get("scope"),
+                "instructions": "Set this access_token as PINTEREST_ACCESS_TOKEN on Heroku"
+            })
+        else:
+            return JSONResponse({
+                "success": False,
+                "error": f"Token exchange failed: {response.status_code}",
+                "details": response.text
+            })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        })
 
 
 @app.get("/api/marketing/linkedin")
@@ -2112,7 +2212,7 @@ async def api_marketing_linkedin(
 ):
     """
     Fetch LinkedIn analytics and engagement metrics.
-    
+
     Returns post performance, impressions, clicks, and engagement data.
     """
     from services.marketing.linkedin_service import linkedin_service
