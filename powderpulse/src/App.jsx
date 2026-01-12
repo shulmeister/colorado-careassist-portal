@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom'
 import useWeatherStore from './stores/weatherStore'
 import Header from './components/Header'
 import ResortRow from './components/ResortRow'
+import ResortDetail from './pages/ResortDetail'
 import { RefreshCw, TrendingUp, MapPin, Snowflake } from 'lucide-react'
 
-function App() {
+function HomePage() {
   const {
     fetchWeather,
     filteredResorts,
@@ -17,6 +19,8 @@ function App() {
     weatherData
   } = useWeatherStore()
 
+  const navigate = useNavigate()
+
   useEffect(() => {
     fetchWeather()
     startAutoRefresh()
@@ -25,6 +29,10 @@ function App() {
 
   const handleRefresh = () => {
     fetchWeather()
+  }
+
+  const handleResortClick = (resortId) => {
+    navigate(`/resort/${resortId}`)
   }
 
   // Calculate some quick stats for the header
@@ -126,6 +134,7 @@ function App() {
             <ResortRow
               key={resort.id}
               resort={resort}
+              onClick={() => handleResortClick(resort.id)}
             />
           ))}
         </div>
@@ -145,6 +154,17 @@ function App() {
         </footer>
       </main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <Router basename="/powderpulse">
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/resort/:resortId" element={<ResortDetail />} />
+      </Routes>
+    </Router>
   )
 }
 

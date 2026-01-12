@@ -84,7 +84,7 @@ const groupIntoPeriods = (forecast) => {
   return periods
 }
 
-const ResortRow = ({ resort }) => {
+const ResortRow = ({ resort, onClick }) => {
   const { getResortWeather, getResortLiftStatus } = useWeatherStore()
   const weather = getResortWeather(resort.id)
   const liftStatus = getResortLiftStatus(resort.id)
@@ -97,7 +97,8 @@ const ResortRow = ({ resort }) => {
   // Get lift status color
   const liftStatusInfo = liftStatus ? getLiftStatusColor(liftStatus.lifts.percentage) : null
 
-  const scroll = (direction) => {
+  const scroll = (e, direction) => {
+    e.stopPropagation()
     if (scrollRef.current) {
       const scrollAmount = direction === 'left' ? -200 : 200
       scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' })
@@ -109,7 +110,10 @@ const ResortRow = ({ resort }) => {
   const next10DaysSnow = dailyForecast.slice(0, 10).reduce((sum, d) => sum + (d.snowfall || 0), 0)
 
   return (
-    <div className="bg-[#1e2536] rounded-lg overflow-hidden border border-slate-700/30">
+    <div
+      className="bg-[#1e2536] rounded-lg overflow-hidden border border-slate-700/30 cursor-pointer hover:border-slate-600/50 transition-colors"
+      onClick={onClick}
+    >
       {/* Header Row */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/30">
         {/* Left: Resort Info */}
@@ -294,13 +298,13 @@ const ResortRow = ({ resort }) => {
         <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-3">15-Day Forecast</div>
         <div className="relative">
           <button
-            onClick={() => scroll('left')}
+            onClick={(e) => scroll(e, 'left')}
             className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-slate-800/90 rounded-full hover:bg-slate-700 border border-slate-600"
           >
             <ChevronLeft className="w-4 h-4 text-slate-300" />
           </button>
           <button
-            onClick={() => scroll('right')}
+            onClick={(e) => scroll(e, 'right')}
             className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-slate-800/90 rounded-full hover:bg-slate-700 border border-slate-600"
           >
             <ChevronRight className="w-4 h-4 text-slate-300" />

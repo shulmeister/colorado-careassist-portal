@@ -11,8 +11,9 @@ export const fetchResortWeather = async (resort) => {
   const params = new URLSearchParams({
     latitude: resort.latitude,
     longitude: resort.longitude,
-    hourly: 'temperature_2m,precipitation,snowfall,snow_depth,wind_speed_10m,weather_code',
-    daily: 'temperature_2m_max,temperature_2m_min,snowfall_sum,precipitation_probability_max,weather_code',
+    current: 'temperature_2m,relative_humidity_2m,apparent_temperature,cloud_cover,wind_speed_10m,wind_gusts_10m,visibility,weather_code',
+    hourly: 'temperature_2m,precipitation,snowfall,snow_depth,wind_speed_10m,wind_gusts_10m,weather_code,relative_humidity_2m',
+    daily: 'temperature_2m_max,temperature_2m_min,snowfall_sum,precipitation_probability_max,weather_code,wind_speed_10m_max,wind_gusts_10m_max',
     forecast_days: 16,
     temperature_unit: 'fahrenheit',
     timezone: resort.timezone || 'America/Denver',
@@ -71,7 +72,7 @@ export const fetchAllResortsWeather = async (resorts) => {
 
 // Process raw API data into our format
 const processWeatherData = (resortId, data) => {
-  const { hourly, daily } = data
+  const { hourly, daily, current } = data
 
   // Calculate snow totals
   const snow24h = calculateSnowTotal(daily.snowfall_sum, 0, 1)
@@ -79,11 +80,11 @@ const processWeatherData = (resortId, data) => {
   const snow7Day = calculateSnowTotal(daily.snowfall_sum, 0, 7)
   const snow15Day = calculateSnowTotal(daily.snowfall_sum, 0, 15)
 
-  // Get current conditions from hourly data
+  // Get current conditions from current data or hourly data as fallback
   const currentHourIndex = findCurrentHourIndex(hourly.time)
-  const currentTemp = hourly.temperature_2m[currentHourIndex] || null
-  const currentSnowDepth = hourly.snow_depth[currentHourIndex] || 0
-  const currentWindSpeed = hourly.wind_speed_10m[currentHourIndex] || 0
+  const currentTemp = current?.temperature_2m ?? hourly.temperature_2m[currentHourIndex] ?? null
+  const currentSnowDepth = hourly.snow_depth?.[currentHourIndex] || 0
+  const currentWindSpeed = current?.wind_speed_10m ?? hourly.wind_speed_10m[currentHourIndex] ?? 0
 
   // Build daily forecast array
   const dailyForecast = daily.time.map((date, index) => ({
@@ -91,8 +92,10 @@ const processWeatherData = (resortId, data) => {
     tempMax: daily.temperature_2m_max[index],
     tempMin: daily.temperature_2m_min[index],
     snowfall: daily.snowfall_sum[index] || 0,
-    precipProb: daily.precipitation_probability_max[index] || 0,
+    precipProbability: daily.precipitation_probability_max[index] || 0,
     weatherCode: daily.weather_code[index],
+    windSpeed: daily.wind_speed_10m_max?.[index] || 0,
+    windGusts: daily.wind_gusts_10m_max?.[index] || 0,
     confidence: index < 7 ? 'high' : index < 12 ? 'medium' : 'low'
   }))
 
@@ -103,6 +106,8 @@ const processWeatherData = (resortId, data) => {
     snowfall: hourly.snowfall[index] || 0,
     precipitation: hourly.precipitation[index] || 0,
     windSpeed: hourly.wind_speed_10m[index],
+    windGusts: hourly.wind_gusts_10m?.[index] || 0,
+    humidity: hourly.relative_humidity_2m?.[index] || 0,
     weatherCode: hourly.weather_code[index]
   }))
 
@@ -114,8 +119,14 @@ const processWeatherData = (resortId, data) => {
     lastUpdated: new Date().toISOString(),
     current: {
       temp: currentTemp,
+      feelsLike: current?.apparent_temperature ?? currentTemp,
       snowDepth: currentSnowDepth,
-      windSpeed: currentWindSpeed
+      windSpeed: currentWindSpeed,
+      windGusts: current?.wind_gusts_10m || 0,
+      humidity: current?.relative_humidity_2m || hourly.relative_humidity_2m?.[currentHourIndex] || 0,
+      cloudCover: current?.cloud_cover || 0,
+      visibility: current?.visibility || 10000,
+      weatherCode: current?.weather_code || hourly.weather_code[currentHourIndex]
     },
     snow24h,
     snow48h,

@@ -12,15 +12,16 @@
     "node": "20.x"
   },
   "dependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "lucide-react": "^0.468.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.15.0",
-    "lucide-react": "^0.468.0",
-    "zustand": "^5.0.2",
-    "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^6.0.5",
+    "react-router-dom": "^7.12.0",
+    "recharts": "^2.15.4",
     "tailwindcss": "^4.0.0",
-    "@tailwindcss/vite": "^4.0.0",
-    "autoprefixer": "^10.4.20"
+    "vite": "^6.0.5",
+    "zustand": "^5.0.2"
   }
 }
