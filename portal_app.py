@@ -2237,6 +2237,86 @@ async def linkedin_oauth_callback(
 
 
 # ========================================
+# TikTok Marketing Endpoints
+# ========================================
+
+@app.get("/api/marketing/tiktok")
+async def api_marketing_tiktok(
+    from_date: Optional[str] = None,
+    to_date: Optional[str] = None,
+):
+    """
+    Fetch TikTok marketing metrics (ads and engagement).
+
+    Query params:
+        from_date: Start date (YYYY-MM-DD), defaults to 30 days ago
+        to_date: End date (YYYY-MM-DD), defaults to today
+    """
+    from services.marketing.tiktok_service import tiktok_service
+
+    end = date.today()
+    if to_date:
+        end = date.fromisoformat(to_date)
+
+    if from_date:
+        start = date.fromisoformat(from_date)
+    else:
+        start = end - timedelta(days=30)
+
+    try:
+        ad_metrics = tiktok_service.get_ad_metrics(start, end)
+        campaign_metrics = tiktok_service.get_campaign_metrics(start, end)
+        engagement_metrics = tiktok_service.get_engagement_metrics(start, end)
+
+        return JSONResponse({
+            "success": True,
+            "date_range": {
+                "from": start.isoformat(),
+                "to": end.isoformat(),
+            },
+            "data": {
+                "ads": ad_metrics,
+                "campaigns": campaign_metrics,
+                "engagement": engagement_metrics,
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error fetching TikTok metrics: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "data": tiktok_service._get_placeholder_metrics(start, end)
+        })
+
+
+@app.get("/api/marketing/test-tiktok")
+async def test_tiktok_connection():
+    """Test TikTok connection and return status."""
+    from services.marketing.tiktok_service import tiktok_service
+    import os
+
+    status = {
+        "client_key_configured": bool(os.getenv("TIKTOK_CLIENT_KEY")),
+        "client_secret_configured": bool(os.getenv("TIKTOK_CLIENT_SECRET")),
+        "access_token_configured": bool(os.getenv("TIKTOK_ACCESS_TOKEN")),
+        "advertiser_id": os.getenv("TIKTOK_ADVERTISER_ID"),
+    }
+
+    if tiktok_service.is_configured():
+        status["connection_successful"] = True
+        status["message"] = "TikTok Ads API is configured and ready"
+    elif os.getenv("TIKTOK_CLIENT_KEY") and os.getenv("TIKTOK_CLIENT_SECRET"):
+        status["connection_successful"] = False
+        status["needs_oauth"] = True
+        status["message"] = "TikTok credentials set. Need to complete OAuth flow to get access token."
+    else:
+        status["connection_successful"] = False
+        status["error"] = "TikTok credentials not configured"
+
+    return JSONResponse(status)
+
+
+# ========================================
 # Google Business Profile OAuth Endpoints
 # ========================================
 
