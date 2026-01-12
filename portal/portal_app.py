@@ -1205,6 +1205,118 @@ async def api_sync_surveys(
     return JSONResponse(result)
 
 
+# =============================================================================
+# RingCentral Chat Scanner API
+# =============================================================================
+
+@app.get("/api/client-satisfaction/ringcentral/status")
+async def api_ringcentral_status(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get RingCentral Team Messaging integration status"""
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+
+    status = ringcentral_messaging_service.get_status()
+    return JSONResponse(status)
+
+
+@app.get("/api/client-satisfaction/ringcentral/teams")
+async def api_ringcentral_teams(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """List available RingCentral teams/chats"""
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+
+    teams = ringcentral_messaging_service.list_teams()
+    return JSONResponse({
+        "success": True,
+        "teams": [{"id": t.get("id"), "name": t.get("name")} for t in teams]
+    })
+
+
+@app.post("/api/client-satisfaction/ringcentral/scan")
+async def api_ringcentral_scan(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Scan RingCentral team chat for client mentions and potential complaints.
+
+    Request body:
+        - chat_name: Name of chat to scan (defaults to 'New Scheduling')
+        - hours_back: How many hours back to scan (default 24)
+        - auto_create: If true, automatically create complaint records
+    """
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+
+    data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    chat_name = data.get("chat_name")
+    hours_back = data.get("hours_back", 24)
+    auto_create = data.get("auto_create", False)
+
+    # Scan the chat
+    scan_results = ringcentral_messaging_service.scan_chat_for_client_issues(
+        db,
+        chat_name=chat_name,
+        hours_back=hours_back
+    )
+
+    if not scan_results.get("success"):
+        return JSONResponse(scan_results, status_code=400)
+
+    # Auto-create complaints if requested
+    if auto_create and scan_results.get("potential_complaints"):
+        create_results = ringcentral_messaging_service.auto_create_complaints(
+            db, scan_results, auto_create=True
+        )
+        scan_results["auto_create_results"] = create_results
+
+    return JSONResponse(scan_results)
+
+
+@app.post("/api/client-satisfaction/ringcentral/preview")
+async def api_ringcentral_preview(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Preview what complaints would be created from chat scan (without creating them).
+
+    Request body:
+        - chat_name: Name of chat to scan (defaults to 'New Scheduling')
+        - hours_back: How many hours back to scan (default 24)
+    """
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+
+    data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    chat_name = data.get("chat_name")
+    hours_back = data.get("hours_back", 24)
+
+    # Scan the chat
+    scan_results = ringcentral_messaging_service.scan_chat_for_client_issues(
+        db,
+        chat_name=chat_name,
+        hours_back=hours_back
+    )
+
+    if not scan_results.get("success"):
+        return JSONResponse(scan_results, status_code=400)
+
+    # Preview what would be created (without actually creating)
+    preview_results = ringcentral_messaging_service.auto_create_complaints(
+        db, scan_results, auto_create=False
+    )
+
+    return JSONResponse({
+        **scan_results,
+        "preview": preview_results
+    })
+
+
 @app.get("/connections", response_class=HTMLResponse)
 async def connections_page(
     request: Request,

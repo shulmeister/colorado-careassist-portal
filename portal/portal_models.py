@@ -329,10 +329,12 @@ class ClientComplaint(Base):
     complaint_date = Column(Date, nullable=False, index=True)
 
     # Complaint details
-    category = Column(String(100), nullable=True)  # scheduling, caregiver, billing, communication, care_quality, other
+    category = Column(String(100), nullable=True)  # scheduling, caregiver, billing, communication, care_quality, other, auto_detected
     severity = Column(String(50), default="medium")  # low, medium, high, critical
     description = Column(Text, nullable=False)
+    details = Column(Text, nullable=True)  # Full message or additional context
     caregiver_involved = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)  # Internal notes, tracking IDs
 
     # Resolution
     status = Column(String(50), default="open", index=True)  # open, in_progress, resolved, closed
@@ -362,6 +364,8 @@ class ClientComplaint(Base):
             "category": self.category,
             "severity": self.severity,
             "description": self.description,
+            "details": self.details,
+            "notes": self.notes,
             "caregiver_involved": self.caregiver_involved,
             "status": self.status,
             "resolution_date": self.resolution_date.isoformat() if self.resolution_date else None,
