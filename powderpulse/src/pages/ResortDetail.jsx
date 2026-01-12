@@ -72,10 +72,12 @@ const getSnowColor = (inches) => {
 }
 
 // Format snow display
+// Format snow display - always show one decimal place for consistency
 const formatSnow = (inches) => {
   if (!inches || inches === 0) return '0"'
-  if (inches < 1) return `${inches.toFixed(1)}"`
-  return `${Math.round(inches)}"`
+  // Round to one decimal place for all values
+  const rounded = Math.round(inches * 10) / 10
+  return `${rounded.toFixed(1)}"`
 }
 
 // Custom tooltip for charts
@@ -84,11 +86,17 @@ const CustomTooltip = ({ active, payload, label }) => {
     return (
       <div className="bg-slate-800 border border-slate-600 rounded-lg p-3 shadow-lg">
         <p className="text-slate-300 text-sm mb-1">{label}</p>
-        {payload.map((entry, index) => (
-          <p key={index} style={{ color: entry.color }} className="text-sm font-medium">
-            {entry.name}: {entry.value}{entry.unit || ''}
-          </p>
-        ))}
+        {payload.map((entry, index) => {
+          // Round numeric values to one decimal place
+          const value = typeof entry.value === 'number'
+            ? (Math.round(entry.value * 10) / 10).toFixed(1)
+            : entry.value
+          return (
+            <p key={index} style={{ color: entry.color }} className="text-sm font-medium">
+              {entry.name}: {value}{entry.unit || ''}
+            </p>
+          )
+        })}
       </div>
     )
   }

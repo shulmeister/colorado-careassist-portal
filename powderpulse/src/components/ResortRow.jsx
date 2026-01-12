@@ -39,11 +39,12 @@ const getSnowBarHeight = (inches, maxInches = 12) => {
   return Math.max(8, percentage * 48)
 }
 
-// Format snow display
+// Format snow display - always show one decimal place for consistency
 const formatSnow = (inches) => {
   if (!inches || inches === 0) return '0"'
-  if (inches < 1) return `${inches.toFixed(1)}"`
-  return `${Math.round(inches)}"`
+  // Round to one decimal place for all values
+  const rounded = Math.round(inches * 10) / 10
+  return `${rounded.toFixed(1)}"`
 }
 
 // Weather icon component
