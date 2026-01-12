@@ -167,42 +167,6 @@ const ResortRow = ({ resort }) => {
         </div>
       </div>
 
-      {/* Compact Day Preview Bar */}
-      <div className="px-4 py-2 border-b border-slate-700/30 bg-[#1a1f2e]">
-        <div className="flex overflow-hidden">
-          {dailyForecast.slice(0, 15).map((day, i) => {
-            const date = new Date(day.date)
-            const dayLetter = date.toLocaleDateString('en-US', { weekday: 'narrow' })
-            const dayNum = date.getDate()
-            const isWeekend = date.getDay() === 0 || date.getDay() === 6
-            const snowColor = getSnowColor(day.snowfall)
-
-            return (
-              <div key={i} className="flex flex-col items-center min-w-[44px] px-1">
-                {/* Snow bar */}
-                <div className="h-8 w-6 flex items-end justify-center mb-1">
-                  <div
-                    className={`w-full rounded-t-sm ${snowColor.bg}`}
-                    style={{ height: `${getSnowBarHeight(day.snowfall) * 0.6}px` }}
-                  />
-                </div>
-                {/* Snow amount */}
-                <span className={`text-[10px] font-medium ${day.snowfall > 0 ? snowColor.text : 'text-slate-600'}`}>
-                  {day.snowfall > 0 ? Math.round(day.snowfall) : '0'}
-                </span>
-                {/* Day */}
-                <span className={`text-[10px] ${isWeekend ? 'text-yellow-500 font-medium' : 'text-slate-500'}`}>
-                  {dayLetter}
-                </span>
-                <span className={`text-[10px] ${isWeekend ? 'text-yellow-500' : 'text-slate-600'}`}>
-                  {dayNum}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
       {/* Details Grid */}
       <div className="px-4 py-3 grid grid-cols-4 gap-4 border-b border-slate-700/30 text-sm">
         {/* Current Conditions */}
