@@ -14,15 +14,17 @@ logger = logging.getLogger(__name__)
 
 PREDIS_AI_API_KEY = os.getenv("PREDIS_AI_API_KEY")
 PREDIS_AI_BASE_URL = "https://brain.predis.ai/predis_api/v1"
+PREDIS_BRAND_ID = os.getenv("PREDIS_BRAND_ID")
 
 
 class PredisAIService:
     """Service for interacting with Predis AI API"""
-    
-    def __init__(self, api_key: str = None):
+
+    def __init__(self, api_key: str = None, brand_id: str = None):
         self.api_key = api_key or PREDIS_AI_API_KEY
+        self.brand_id = brand_id or PREDIS_BRAND_ID
         self.base_url = PREDIS_AI_BASE_URL
-        
+
         if not self.api_key:
             logger.warning("Predis AI API key not configured")
     
@@ -66,22 +68,31 @@ class PredisAIService:
     def get_account_info(self) -> Dict[str, Any]:
         """
         Get Predis AI account information by testing API connectivity.
-        
+
         Returns:
             Account information dictionary
         """
-        # Test API connectivity by trying to get posts
-        data = self._make_api_request("/get_all_posts/")
-        
-        if data:
+        # Test API connectivity by getting brands
+        data = self._make_api_request("/get_brands/")
+
+        if data and data.get("message") == "ok":
+            brands = data.get("brand_details", [])
+            brand_name = None
+            if brands and self.brand_id:
+                for b in brands:
+                    if b.get("brand_id") == self.brand_id:
+                        brand_name = b.get("brand_name")
+                        break
             return {
                 "account_id": "Connected",
+                "brand_id": self.brand_id,
+                "brand_name": brand_name or (brands[0].get("brand_name") if brands else None),
+                "total_brands": len(brands),
                 "plan": "Active",
-                "credits_remaining": "Available", 
                 "status": "connected",
                 "api_working": True
             }
-        
+
         return {
             "account_id": None,
             "plan": "Not connected",
@@ -94,19 +105,19 @@ class PredisAIService:
     def generate_content(self, prompt: str, media_type: str = "single_image") -> Dict[str, Any]:
         """
         Generate social media content using Predis AI create_content endpoint.
-        
+
         Args:
-            prompt: Content generation prompt  
+            prompt: Content generation prompt
             media_type: Type of content (single_image, carousel, video, quote, meme)
-            
+
         Returns:
             Generated content data
         """
         data = {
             "text": prompt,
             "media_type": media_type,
-            "brand_id": "colorado_careassist",  # Your brand identifier
-            "model_version": "v1"
+            "brand_id": self.brand_id,
+            "model_version": "4"
         }
         
         result = self._make_api_request("/create_content/", method="POST", data=data)
@@ -159,30 +170,35 @@ class PredisAIService:
     
     def get_recent_creations(self, page: int = 1) -> List[Dict[str, Any]]:
         """
-        Get recently created content from Predis AI using get_all_posts endpoint.
-        
+        Get recently created content from Predis AI using get_posts endpoint.
+
         Args:
             page: Page number for pagination
-            
+
         Returns:
             List of recent content items
         """
-        data = self._make_api_request(f"/get_all_posts/?page={page}")
-        
+        endpoint = f"/get_posts/?page={page}"
+        if self.brand_id:
+            endpoint = f"/get_posts/?brand_id={self.brand_id}&page={page}"
+
+        data = self._make_api_request(endpoint)
+
         if data and "posts" in data:
             recent = []
             for item in data["posts"]:
+                text = item.get("text", "") or ""
                 recent.append({
-                    "id": item.get("id"),
-                    "text": item.get("text", "")[:100] + "..." if len(item.get("text", "")) > 100 else item.get("text", ""),
+                    "id": item.get("id") or item.get("post_id"),
+                    "text": text[:100] + "..." if len(text) > 100 else text,
                     "media_type": item.get("media_type"),
-                    "created_at": item.get("created_at"),
+                    "created_at": item.get("created_at") or item.get("createdAt"),
                     "status": item.get("status"),
-                    "media_url": item.get("media_url"),
+                    "media_url": item.get("media_url") or item.get("output", [{}])[0].get("url") if item.get("output") else None,
                     "brand_id": item.get("brand_id")
                 })
             return recent
-        
+
         return []
     
     def schedule_content(self, content_id: str, platform: str, scheduled_time: datetime) -> Dict[str, Any]:
