@@ -148,6 +148,32 @@ try:
 except Exception as e:
     logger.error(f"❌ Failed to mount PowderPulse: {e}")
 
+# ==================== LIFTIE API PROXY FOR POWDERPULSE ====================
+# Liftie API doesn't support CORS, so we proxy requests through our backend
+try:
+    import httpx
+
+    @app.get("/api/liftie/{resort_id}")
+    async def proxy_liftie(resort_id: str):
+        """Proxy requests to Liftie API to bypass CORS"""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"https://liftie.info/api/resort/{resort_id}",
+                    timeout=10.0
+                )
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"error": f"Liftie API returned {response.status_code}"}
+        except Exception as e:
+            logger.error(f"Liftie proxy error for {resort_id}: {e}")
+            return {"error": str(e)}
+
+    logger.info("✅ Added Liftie API proxy at /api/liftie/{resort_id}")
+except Exception as e:
+    logger.error(f"❌ Failed to set up Liftie proxy: {e}")
+
 logger.info("✅ Portal app configured with sales, recruiting, payroll, and powderpulse")
 
 if __name__ == "__main__":

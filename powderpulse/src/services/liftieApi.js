@@ -1,20 +1,27 @@
 // Liftie API service for lift status
-// https://liftie.info
+// Uses our backend proxy to bypass CORS restrictions
 
-const LIFTIE_BASE_URL = 'https://liftie.info/api/resort'
+// Use backend proxy instead of direct Liftie API
+const LIFTIE_PROXY_URL = '/api/liftie'
 
 // Fetch lift status for a single resort
 export const fetchLiftStatus = async (liftieId) => {
   if (!liftieId) return null
 
   try {
-    const response = await fetch(`${LIFTIE_BASE_URL}/${liftieId}`)
+    const response = await fetch(`${LIFTIE_PROXY_URL}/${liftieId}`)
     if (!response.ok) {
-      console.warn(`Liftie API error for ${liftieId}: ${response.status}`)
+      console.warn(`Liftie proxy error for ${liftieId}: ${response.status}`)
       return null
     }
 
     const data = await response.json()
+
+    // Check for proxy error response
+    if (data.error) {
+      console.warn(`Liftie API error for ${liftieId}: ${data.error}`)
+      return null
+    }
 
     return {
       isOpen: data.open,
