@@ -1,7 +1,7 @@
-import React, { useRef } from 'react'
-import { ChevronLeft, ChevronRight, Thermometer, Wind, Cloud, Sun, CloudSnow, CloudRain } from 'lucide-react'
+import React, { useState, useRef } from 'react'
+import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Thermometer, Wind, Droplets, Sun, Cloud, CloudSnow, CloudRain, Snowflake } from 'lucide-react'
 import useWeatherStore from '../stores/weatherStore'
-import { PASS_COLORS, REGIONS } from '../data/resorts'
+import { PASS_COLORS } from '../data/resorts'
 
 const REGION_FLAGS = {
   colorado: '🇺🇸',
@@ -21,31 +21,31 @@ const REGION_LABELS = {
   europe: 'Europe'
 }
 
-// Get snow bar color based on amount
-const getSnowBarColor = (inches) => {
-  if (inches >= 12) return 'bg-purple-500'
-  if (inches >= 6) return 'bg-blue-500'
-  if (inches >= 3) return 'bg-blue-400'
-  if (inches >= 1) return 'bg-blue-300'
-  if (inches > 0) return 'bg-slate-500'
-  return 'bg-transparent'
+// Get snow color based on amount (OpenSnow style)
+const getSnowColor = (inches) => {
+  if (inches >= 12) return { bg: 'bg-purple-600', text: 'text-purple-300', hex: '#9333ea' }
+  if (inches >= 8) return { bg: 'bg-blue-600', text: 'text-blue-300', hex: '#2563eb' }
+  if (inches >= 4) return { bg: 'bg-blue-500', text: 'text-blue-400', hex: '#3b82f6' }
+  if (inches >= 2) return { bg: 'bg-blue-400', text: 'text-blue-400', hex: '#60a5fa' }
+  if (inches > 0) return { bg: 'bg-slate-500', text: 'text-slate-400', hex: '#64748b' }
+  return { bg: 'bg-slate-700', text: 'text-slate-500', hex: '#334155' }
 }
 
-// Get snow bar height based on amount (max 40px)
-const getSnowBarHeight = (inches) => {
+// Get snow bar height (max 48px for better visibility)
+const getSnowBarHeight = (inches, maxInches = 12) => {
   if (inches <= 0) return 4
-  const height = Math.min(40, Math.max(8, inches * 4))
-  return height
+  const percentage = Math.min(inches / maxInches, 1)
+  return Math.max(8, percentage * 48)
 }
 
-// Format snow amount for display
+// Format snow display
 const formatSnow = (inches) => {
   if (!inches || inches === 0) return '0"'
   if (inches < 1) return `${inches.toFixed(1)}"`
   return `${Math.round(inches)}"`
 }
 
-// Get weather icon component
+// Weather icon component
 const WeatherIcon = ({ code, className = "w-5 h-5" }) => {
   if ([71, 73, 75, 77, 85, 86].includes(code)) {
     return <CloudSnow className={`${className} text-blue-300`} />
@@ -59,11 +59,39 @@ const WeatherIcon = ({ code, className = "w-5 h-5" }) => {
   return <Cloud className={`${className} text-slate-400`} />
 }
 
+// Group days into periods like OpenSnow
+const groupIntoPeriods = (forecast) => {
+  if (!forecast || forecast.length === 0) return []
+
+  const periods = []
+
+  // Next 1-5 Days
+  const next1to5 = forecast.slice(0, 5)
+  const next1to5Total = next1to5.reduce((sum, d) => sum + (d.snowfall || 0), 0)
+  periods.push({ label: 'Next 1-5 Days', total: next1to5Total, days: next1to5 })
+
+  // Next 6-10 Days
+  const next6to10 = forecast.slice(5, 10)
+  const next6to10Total = next6to10.reduce((sum, d) => sum + (d.snowfall || 0), 0)
+  periods.push({ label: 'Next 6-10 Days', total: next6to10Total, days: next6to10 })
+
+  // Next 11-15 Days
+  const next11to15 = forecast.slice(10, 15)
+  const next11to15Total = next11to15.reduce((sum, d) => sum + (d.snowfall || 0), 0)
+  periods.push({ label: 'Next 11-15 Days', total: next11to15Total, days: next11to15 })
+
+  return periods
+}
+
 const ResortRow = ({ resort, viewMode }) => {
   const { getResortWeather } = useWeatherStore()
   const weather = getResortWeather(resort.id)
+  const [isExpanded, setIsExpanded] = useState(false)
   const scrollRef = useRef(null)
   const passColor = PASS_COLORS[resort.pass] || PASS_COLORS.epic
+
+  const dailyForecast = weather?.dailyForecast || []
+  const periods = groupIntoPeriods(dailyForecast)
 
   const scroll = (direction) => {
     if (scrollRef.current) {
@@ -72,234 +100,293 @@ const ResortRow = ({ resort, viewMode }) => {
     }
   }
 
-  const dailyForecast = weather?.dailyForecast || []
+  // Calculate totals for display
+  const next5DaysSnow = dailyForecast.slice(0, 5).reduce((sum, d) => sum + (d.snowfall || 0), 0)
+  const next10DaysSnow = dailyForecast.slice(0, 10).reduce((sum, d) => sum + (d.snowfall || 0), 0)
 
   return (
-    <div className="bg-[#252d3d] rounded-lg overflow-hidden">
-      {/* Resort Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/50">
-        <div className="flex items-center gap-3">
-          {/* Flag/Logo placeholder */}
-          <div className="w-10 h-10 rounded bg-slate-700 flex items-center justify-center text-lg">
-            {REGION_FLAGS[resort.region]}
-          </div>
-          <div>
-            <h3 className="font-semibold text-white hover:text-blue-400 cursor-pointer">
-              {resort.name}
-            </h3>
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <span>{resort.elevation.toLocaleString()} ft</span>
-              <span>•</span>
-              <span className="text-blue-400">{REGION_LABELS[resort.region]}</span>
+    <div className="bg-[#1e2536] rounded-lg overflow-hidden border border-slate-700/30 hover:border-slate-600/50 transition-all">
+      {/* Main Row - Clickable */}
+      <div
+        className="cursor-pointer"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        {/* Resort Header */}
+        <div className="flex items-center px-4 py-3">
+          {/* Left: Resort Info */}
+          <div className="flex items-center gap-3 min-w-[200px]">
+            <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center text-xl">
+              {REGION_FLAGS[resort.region]}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-white hover:text-blue-400 transition-colors">
+                  {resort.name}
+                </h3>
+                <span
+                  className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase"
+                  style={{
+                    backgroundColor: passColor.bg,
+                    color: passColor.primary
+                  }}
+                >
+                  {resort.pass}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <span>{resort.elevation.toLocaleString()} ft</span>
+                <span className="text-slate-600">•</span>
+                <span className="text-blue-400">{REGION_LABELS[resort.region]}</span>
+              </div>
             </div>
           </div>
+
+          {/* Center: Snow Summary Periods */}
+          <div className="flex-1 flex items-center justify-center gap-1">
+            {/* Last 24 Hours - Highlighted */}
+            <div className="flex flex-col items-center px-4 py-2 bg-slate-700/40 rounded-lg min-w-[90px]">
+              <span className="text-[10px] text-slate-400 uppercase tracking-wide">Last 24h</span>
+              <span className={`text-2xl font-bold ${getSnowColor(weather?.snow24h || 0).text}`}>
+                {formatSnow(weather?.snow24h || 0)}
+              </span>
+            </div>
+
+            {/* Period Summaries */}
+            {periods.map((period, idx) => (
+              <div key={idx} className="flex flex-col items-center px-3 py-2 min-w-[80px]">
+                <span className="text-[10px] text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                  {period.label}
+                </span>
+                <span className={`text-xl font-bold ${getSnowColor(period.total).text}`}>
+                  {formatSnow(period.total)}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {/* Right: Expand/Collapse */}
+          <div className="flex items-center gap-2 ml-4">
+            {weather?.current && (
+              <div className="flex items-center gap-1 text-sm text-slate-400 mr-4">
+                <Thermometer className="w-4 h-4" />
+                <span>{Math.round(weather.current.temp)}°F</span>
+              </div>
+            )}
+            {isExpanded ? (
+              <ChevronUp className="w-5 h-5 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-5 h-5 text-slate-400" />
+            )}
+          </div>
         </div>
 
-        {/* Pass Badge */}
-        <span
-          className="px-2 py-1 rounded text-xs font-semibold uppercase"
-          style={{
-            backgroundColor: passColor.bg,
-            color: passColor.primary
-          }}
-        >
-          {resort.pass}
-        </span>
-      </div>
+        {/* Compact Day-by-Day Preview (always visible) */}
+        <div className="px-4 pb-3 relative">
+          <div className="flex overflow-hidden">
+            {dailyForecast.slice(0, 15).map((day, i) => {
+              const date = new Date(day.date)
+              const dayLetter = date.toLocaleDateString('en-US', { weekday: 'narrow' })
+              const dayNum = date.getDate()
+              const isWeekend = date.getDay() === 0 || date.getDay() === 6
+              const snowColor = getSnowColor(day.snowfall)
 
-      {/* Content based on view mode */}
-      <div className="relative">
-        {/* Scroll buttons */}
-        <button
-          onClick={() => scroll('left')}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-1 bg-slate-900/80 rounded-r hover:bg-slate-800"
-        >
-          <ChevronLeft className="w-5 h-5 text-slate-400" />
-        </button>
-        <button
-          onClick={() => scroll('right')}
-          className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-1 bg-slate-900/80 rounded-l hover:bg-slate-800"
-        >
-          <ChevronRight className="w-5 h-5 text-slate-400" />
-        </button>
-
-        {/* Scrollable forecast */}
-        <div
-          ref={scrollRef}
-          className="flex overflow-x-auto scrollbar-hide px-8 py-4"
-          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-        >
-          {viewMode === 'snow-summary' && (
-            <SnowSummaryView forecast={dailyForecast} snow24h={weather?.snow24h} />
-          )}
-          {viewMode === 'weather' && (
-            <WeatherView forecast={dailyForecast} current={weather?.current} />
-          )}
-          {viewMode === 'snow-forecast' && (
-            <SnowForecastView forecast={dailyForecast} />
-          )}
+              return (
+                <div key={i} className="flex flex-col items-center min-w-[44px] px-1">
+                  {/* Snow bar */}
+                  <div className="h-12 w-7 flex items-end justify-center mb-1">
+                    <div
+                      className={`w-full rounded-t-sm ${snowColor.bg} transition-all`}
+                      style={{ height: `${getSnowBarHeight(day.snowfall)}px` }}
+                    />
+                  </div>
+                  {/* Snow amount */}
+                  <span className={`text-xs font-medium ${day.snowfall > 0 ? snowColor.text : 'text-slate-600'}`}>
+                    {day.snowfall > 0 ? Math.round(day.snowfall) : '0'}
+                  </span>
+                  {/* Day */}
+                  <span className={`text-[10px] ${isWeekend ? 'text-yellow-500 font-medium' : 'text-slate-500'}`}>
+                    {dayLetter}
+                  </span>
+                  <span className={`text-[10px] ${isWeekend ? 'text-yellow-500' : 'text-slate-600'}`}>
+                    {dayNum}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
-    </div>
-  )
-}
 
-// Snow Summary View - Shows historical + forecast with center "Last 24 Hours"
-const SnowSummaryView = ({ forecast, snow24h }) => {
-  // Show 15 days
-  const days = forecast.slice(0, 15)
+      {/* Expanded Detail View */}
+      {isExpanded && (
+        <div className="border-t border-slate-700/50 bg-[#161b26]">
+          {/* Weather Details Grid */}
+          <div className="p-4 grid grid-cols-4 gap-4 border-b border-slate-700/30">
+            {/* Current Conditions */}
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <h4 className="text-xs text-slate-500 uppercase mb-2">Current</h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Temperature</span>
+                  <span className="text-white font-medium">
+                    {weather?.current?.temp ? `${Math.round(weather.current.temp)}°F` : '--'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Wind</span>
+                  <span className="text-white font-medium">
+                    {weather?.current?.windSpeed ? `${Math.round(weather.current.windSpeed)} mph` : '--'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Humidity</span>
+                  <span className="text-white font-medium">
+                    {weather?.current?.humidity ? `${weather.current.humidity}%` : '--'}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-  return (
-    <div className="flex items-end gap-1 min-w-max">
-      {/* Past periods (just show placeholders since we don't have historical data) */}
-      <div className="flex flex-col items-center px-3">
-        <span className="text-xs text-slate-500 mb-1">Prev 5 Days</span>
-        <span className="text-slate-500 text-lg">--</span>
-      </div>
+            {/* Snow Totals */}
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <h4 className="text-xs text-slate-500 uppercase mb-2">Snow Totals</h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Last 24h</span>
+                  <span className={`font-bold ${getSnowColor(weather?.snow24h || 0).text}`}>
+                    {formatSnow(weather?.snow24h || 0)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Next 5 days</span>
+                  <span className={`font-bold ${getSnowColor(next5DaysSnow).text}`}>
+                    {formatSnow(next5DaysSnow)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Next 10 days</span>
+                  <span className={`font-bold ${getSnowColor(next10DaysSnow).text}`}>
+                    {formatSnow(next10DaysSnow)}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-      {/* Last 24 Hours - Highlighted */}
-      <div className="flex flex-col items-center px-6 py-3 bg-slate-700/50 rounded-lg mx-2">
-        <span className="text-xs text-slate-300 mb-1">Last 24 Hours</span>
-        <span className="text-3xl font-bold text-white">{formatSnow(snow24h || 0)}</span>
-      </div>
+            {/* Resort Info */}
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <h4 className="text-xs text-slate-500 uppercase mb-2">Resort Info</h4>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Elevation</span>
+                  <span className="text-white font-medium">{resort.elevation.toLocaleString()} ft</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Region</span>
+                  <span className="text-white font-medium">{REGION_LABELS[resort.region]}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 text-sm">Pass</span>
+                  <span style={{ color: passColor.primary }} className="font-medium uppercase">
+                    {resort.pass}
+                  </span>
+                </div>
+              </div>
+            </div>
 
-      {/* Next 15 days forecast */}
-      {days.map((day, i) => {
-        const date = new Date(day.date)
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0)
-        const dayNum = date.getDate()
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6
+            {/* Quick Stats */}
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <h4 className="text-xs text-slate-500 uppercase mb-2">Forecast</h4>
+              <div className="space-y-2">
+                {dailyForecast.slice(0, 3).map((day, i) => {
+                  const date = new Date(day.date)
+                  const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+                  return (
+                    <div key={i} className="flex items-center justify-between">
+                      <span className="text-slate-400 text-sm">{dayName}</span>
+                      <div className="flex items-center gap-2">
+                        <WeatherIcon code={day.weatherCode} className="w-4 h-4" />
+                        <span className="text-white text-sm">
+                          {Math.round(day.tempMax)}° / {Math.round(day.tempMin)}°
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
 
-        return (
-          <div key={i} className="flex flex-col items-center min-w-[40px]">
-            {/* Snow amount */}
-            <span className={`text-xs mb-1 ${day.snowfall > 0 ? 'text-blue-300' : 'text-slate-500'}`}>
-              {day.snowfall > 0 ? Math.round(day.snowfall) : '0'}
-            </span>
+          {/* Extended Forecast */}
+          <div className="p-4">
+            <h4 className="text-xs text-slate-500 uppercase mb-3">15-Day Forecast</h4>
+            <div className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); scroll('left'); }}
+                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-slate-800/90 rounded-full hover:bg-slate-700 border border-slate-600"
+              >
+                <ChevronLeft className="w-4 h-4 text-slate-300" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); scroll('right'); }}
+                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-slate-800/90 rounded-full hover:bg-slate-700 border border-slate-600"
+              >
+                <ChevronRight className="w-4 h-4 text-slate-300" />
+              </button>
 
-            {/* Snow bar */}
-            <div className="h-10 w-6 flex items-end justify-center mb-1">
               <div
-                className={`w-full rounded-t ${getSnowBarColor(day.snowfall)}`}
-                style={{ height: `${getSnowBarHeight(day.snowfall)}px` }}
-              />
+                ref={scrollRef}
+                className="flex overflow-x-auto scrollbar-hide px-8 gap-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {dailyForecast.map((day, i) => {
+                  const date = new Date(day.date)
+                  const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
+                  const monthDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+                  const isWeekend = date.getDay() === 0 || date.getDay() === 6
+                  const snowColor = getSnowColor(day.snowfall)
+
+                  return (
+                    <div
+                      key={i}
+                      className={`flex flex-col items-center min-w-[70px] p-3 rounded-lg ${
+                        isWeekend ? 'bg-yellow-500/10' : 'bg-slate-800/30'
+                      }`}
+                    >
+                      <span className={`text-xs font-medium ${isWeekend ? 'text-yellow-500' : 'text-slate-400'}`}>
+                        {dayName}
+                      </span>
+                      <span className={`text-[10px] ${isWeekend ? 'text-yellow-500/70' : 'text-slate-500'}`}>
+                        {monthDay}
+                      </span>
+
+                      <div className="my-2">
+                        <WeatherIcon code={day.weatherCode} className="w-6 h-6" />
+                      </div>
+
+                      <div className="h-14 w-8 flex items-end justify-center mb-2">
+                        <div
+                          className={`w-full rounded-t ${snowColor.bg}`}
+                          style={{ height: `${getSnowBarHeight(day.snowfall)}px` }}
+                        />
+                      </div>
+
+                      <span className={`text-sm font-bold ${snowColor.text}`}>
+                        {formatSnow(day.snowfall)}
+                      </span>
+
+                      <div className="mt-2 text-xs text-center">
+                        <span className="text-white">{Math.round(day.tempMax)}°</span>
+                        <span className="text-slate-500"> / </span>
+                        <span className="text-slate-400">{Math.round(day.tempMin)}°</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
-
-            {/* Day label */}
-            <span className={`text-xs ${isWeekend ? 'text-yellow-500' : 'text-slate-400'}`}>
-              {dayName}
-            </span>
-            <span className={`text-xs ${isWeekend ? 'text-yellow-500' : 'text-slate-500'}`}>
-              {dayNum}
-            </span>
           </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// Weather View - Shows current conditions and daily forecast
-const WeatherView = ({ forecast, current }) => {
-  const days = forecast.slice(0, 10)
-
-  return (
-    <div className="flex items-center gap-1 min-w-max">
-      {/* Current conditions */}
-      <div className="flex items-center gap-6 pr-6 mr-4 border-r border-slate-600">
-        <div className="flex items-center gap-2">
-          <Thermometer className="w-5 h-5 text-slate-400" />
-          <span className="text-2xl font-semibold text-white">
-            {current?.temp ? `${Math.round(current.temp)}°F` : '--'}
-          </span>
         </div>
-        <div className="flex items-center gap-2">
-          <Wind className="w-5 h-5 text-slate-400" />
-          <span className="text-lg text-white">
-            {current?.windSpeed ? `${Math.round(current.windSpeed)} mph` : '--'}
-          </span>
-        </div>
-      </div>
-
-      {/* Daily forecast */}
-      {days.map((day, i) => {
-        const date = new Date(day.date)
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()
-        const dayNum = date.getDate()
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6
-
-        return (
-          <div key={i} className="flex flex-col items-center min-w-[70px] px-2">
-            {/* Day label */}
-            <span className={`text-xs font-medium ${isWeekend ? 'text-yellow-500' : 'text-slate-400'}`}>
-              {dayName} {dayNum}
-            </span>
-
-            {/* High/Low temps */}
-            <div className="text-center my-2">
-              <span className="text-white font-medium">{Math.round(day.tempMax)}°F</span>
-              <br />
-              <span className="text-slate-400 text-sm">{Math.round(day.tempMin)}°F</span>
-            </div>
-
-            {/* Weather icon */}
-            <WeatherIcon code={day.weatherCode} />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// Snow Forecast View - Shows daily snow with bars, temps, and dates
-const SnowForecastView = ({ forecast }) => {
-  const days = forecast.slice(0, 15)
-
-  return (
-    <div className="flex items-end gap-1 min-w-max">
-      {days.map((day, i) => {
-        const date = new Date(day.date)
-        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' })
-        const monthDay = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-        const isWeekend = date.getDay() === 0 || date.getDay() === 6
-        const hasSnow = day.snowfall > 0
-
-        return (
-          <div key={i} className="flex flex-col items-center min-w-[60px]">
-            {/* Snow range */}
-            <span className={`text-xs font-medium mb-1 ${hasSnow ? 'text-blue-300' : 'text-slate-500'}`}>
-              {hasSnow ? (
-                day.snowfall < 1 ? '0-1"' :
-                day.snowfall < 3 ? '1-3"' :
-                day.snowfall < 6 ? '3-6"' :
-                day.snowfall < 12 ? '6-12"' :
-                '12"+'
-              ) : '0"'}
-            </span>
-
-            {/* Snow bar */}
-            <div className="h-12 w-8 flex items-end justify-center mb-1">
-              <div
-                className={`w-full rounded-t transition-all ${getSnowBarColor(day.snowfall)}`}
-                style={{ height: `${getSnowBarHeight(day.snowfall)}px` }}
-              />
-            </div>
-
-            {/* Temperature */}
-            <span className="text-xs text-slate-400 mb-1">
-              {Math.round(day.tempMax)}°F
-            </span>
-
-            {/* Day */}
-            <span className={`text-xs ${isWeekend ? 'text-yellow-500' : 'text-slate-400'}`}>
-              {dayName}
-            </span>
-            <span className={`text-xs ${isWeekend ? 'text-yellow-500' : 'text-slate-500'}`}>
-              {date.getDate()}
-            </span>
-          </div>
-        )
-      })}
+      )}
     </div>
   )
 }

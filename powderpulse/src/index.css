@@ -3,9 +3,9 @@
 :root {
   --epic-blue: #0066CC;
   --ikon-red: #E31837;
-  --bg-primary: #1a1f2e;
-  --bg-secondary: #252d3d;
-  --bg-tertiary: #334155;
+  --bg-primary: #0f1219;
+  --bg-secondary: #1a1f2e;
+  --bg-tertiary: #1e2536;
   --text-primary: #F8FAFC;
   --text-secondary: #94A3B8;
   --text-muted: #64748B;
@@ -94,14 +94,40 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Resort row styling */
 .resort-row {
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .resort-row:hover {
-  background-color: #2a3345;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* Weekend highlight */
 .weekend {
   color: #EAB308;
+}
+
+/* Smooth expand/collapse animation */
+.expand-collapse {
+  transition: max-height 0.3s ease-out, opacity 0.2s ease-out;
+  overflow: hidden;
+}
+
+/* Snow bar animation */
+.snow-bar {
+  transition: height 0.3s ease-out;
+}
+
+/* Button hover effects */
+button {
+  transition: all 0.15s ease;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.2s ease;
+}
+
+.card-hover:hover {
+  background-color: rgba(255, 255, 255, 0.02);
 }
