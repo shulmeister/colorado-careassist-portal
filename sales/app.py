@@ -5417,6 +5417,13 @@ async def get_contacts(
                 parsed = json.loads(filter)
                 if isinstance(parsed, dict):
                     search_q = search_q or parsed.get("q")
+                    status = status or parsed.get("status")
+                    contact_type = contact_type or parsed.get("contact_type")
+                    if parsed.get("tags"):
+                        tags = tags or (parsed.get("tags") if isinstance(parsed.get("tags"), list) else [parsed.get("tags")])
+                    last_activity_gte = last_activity_gte or parsed.get("last_activity_gte") or parsed.get("last_activity@gte")
+                    last_activity_lte = last_activity_lte or parsed.get("last_activity_lte") or parsed.get("last_activity@lte")
+                    sales_id = sales_id or parsed.get("sales_id")
             except Exception:
                 pass
         
@@ -5884,8 +5891,20 @@ async def get_deals(
     range: Optional[str] = Query(default=None),
     created_at_gte: Optional[str] = Query(default=None, alias="created_at@gte"),
     created_at_lte: Optional[str] = Query(default=None, alias="created_at@lte"),
+    filter: Optional[str] = Query(default=None),
 ):
     try:
+        # Parse filter JSON if provided (React Admin sends filters this way)
+        if filter:
+            try:
+                parsed = json.loads(filter)
+                if isinstance(parsed, dict):
+                    stage = stage or parsed.get("stage")
+                    created_at_gte = created_at_gte or parsed.get("created_at_gte") or parsed.get("created_at@gte")
+                    created_at_lte = created_at_lte or parsed.get("created_at_lte") or parsed.get("created_at@lte")
+            except Exception:
+                pass
+
         range_header = request.headers.get("Range")
         range_param = range or (range_header.split("=")[1] if range_header else None)
         start, end = _parse_range(range_param)
