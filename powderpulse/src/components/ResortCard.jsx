@@ -1,16 +1,35 @@
 import React from 'react'
-import { MapPin, Thermometer, Mountain } from 'lucide-react'
+import { MapPin, Thermometer, Mountain, Globe } from 'lucide-react'
 import { AreaChart, Area, ResponsiveContainer } from 'recharts'
 import useWeatherStore from '../stores/weatherStore'
 import { PASS_COLORS } from '../data/resorts'
 import { formatSnowAmount, formatTemp, getSnowHexColor } from '../utils/helpers'
 
+const REGION_LABELS = {
+  colorado: 'CO',
+  utah: 'UT',
+  wyoming: 'WY',
+  canada: 'CAN',
+  japan: 'JPN',
+  europe: 'EU'
+}
+
+const REGION_FLAGS = {
+  colorado: '🇺🇸',
+  utah: '🇺🇸',
+  wyoming: '🇺🇸',
+  canada: '🇨🇦',
+  japan: '🇯🇵',
+  europe: '🇪🇺'
+}
+
 const ResortCard = ({ resort }) => {
   const { getResortWeather } = useWeatherStore()
   const weather = getResortWeather(resort.id)
 
-  const passColor = PASS_COLORS[resort.pass]
+  const passColor = PASS_COLORS[resort.pass] || PASS_COLORS.epic
   const isPowderDay = weather?.isPowderDay
+  const isInternational = !['colorado', 'utah', 'wyoming'].includes(resort.region)
 
   return (
     <div
@@ -27,8 +46,17 @@ const ResortCard = ({ resort }) => {
               {resort.name}
             </h3>
             <div className="flex items-center gap-2 text-slate-400 text-sm mt-1">
-              <MapPin className="w-3 h-3" />
-              <span>{resort.distanceFromBoulder} mi</span>
+              {isInternational ? (
+                <>
+                  <span>{REGION_FLAGS[resort.region]}</span>
+                  <span>{REGION_LABELS[resort.region]}</span>
+                </>
+              ) : (
+                <>
+                  <MapPin className="w-3 h-3" />
+                  <span>{resort.distanceFromBoulder} mi</span>
+                </>
+              )}
               <span className="text-slate-600">•</span>
               <Mountain className="w-3 h-3" />
               <span>{resort.elevation.toLocaleString()}'</span>

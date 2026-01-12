@@ -1,7 +1,10 @@
 // Open-Meteo API service for ski weather forecasts
-// Free API, no key required
+// Free API, no key required - but rate limited
 
 const BASE_URL = 'https://api.open-meteo.com/v1/forecast'
+
+// Delay helper
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 // Fetch weather data for a single resort
 export const fetchResortWeather = async (resort) => {
@@ -12,13 +15,23 @@ export const fetchResortWeather = async (resort) => {
     daily: 'temperature_2m_max,temperature_2m_min,snowfall_sum,precipitation_probability_max,weather_code',
     forecast_days: 16,
     temperature_unit: 'fahrenheit',
-    timezone: 'America/Denver',
+    timezone: resort.timezone || 'America/Denver',
     precipitation_unit: 'inch'
   })
 
   try {
     const response = await fetch(`${BASE_URL}?${params}`)
     if (!response.ok) {
+      if (response.status === 429) {
+        // Rate limited - wait and retry once
+        await delay(2000)
+        const retryResponse = await fetch(`${BASE_URL}?${params}`)
+        if (!retryResponse.ok) {
+          throw new Error(`Weather API error: ${retryResponse.status}`)
+        }
+        const data = await retryResponse.json()
+        return processWeatherData(resort.id, data)
+      }
       throw new Error(`Weather API error: ${response.status}`)
     }
     const data = await response.json()
@@ -29,17 +42,29 @@ export const fetchResortWeather = async (resort) => {
   }
 }
 
-// Fetch weather for all resorts in parallel
+// Fetch weather for all resorts with batching to avoid rate limits
 export const fetchAllResortsWeather = async (resorts) => {
-  const promises = resorts.map(resort => fetchResortWeather(resort))
-  const results = await Promise.allSettled(promises)
-
   const weatherData = {}
-  results.forEach((result, index) => {
-    if (result.status === 'fulfilled' && result.value) {
-      weatherData[resorts[index].id] = result.value
+  const BATCH_SIZE = 5 // Fetch 5 at a time
+  const BATCH_DELAY = 1000 // Wait 1s between batches
+
+  // Process in batches
+  for (let i = 0; i < resorts.length; i += BATCH_SIZE) {
+    const batch = resorts.slice(i, i + BATCH_SIZE)
+    const promises = batch.map(resort => fetchResortWeather(resort))
+    const results = await Promise.allSettled(promises)
+
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled' && result.value) {
+        weatherData[batch[index].id] = result.value
+      }
+    })
+
+    // Delay between batches (except for last batch)
+    if (i + BATCH_SIZE < resorts.length) {
+      await delay(BATCH_DELAY)
     }
-  })
+  }
 
   return weatherData
 }
@@ -49,7 +74,6 @@ const processWeatherData = (resortId, data) => {
   const { hourly, daily } = data
 
   // Calculate snow totals
-  const now = new Date()
   const snow24h = calculateSnowTotal(daily.snowfall_sum, 0, 1)
   const snow48h = calculateSnowTotal(daily.snowfall_sum, 0, 2)
   const snow7Day = calculateSnowTotal(daily.snowfall_sum, 0, 7)

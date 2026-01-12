@@ -8,8 +8,10 @@ import {
   getPowderAlertResorts
 } from '../utils/helpers'
 
-// Auto-refresh interval (30 minutes)
-const REFRESH_INTERVAL = 30 * 60 * 1000
+// Auto-refresh interval (15 minutes)
+const REFRESH_INTERVAL = 15 * 60 * 1000
+
+let refreshInterval = null
 
 const useWeatherStore = create((set, get) => ({
   // Weather data
@@ -20,7 +22,7 @@ const useWeatherStore = create((set, get) => ({
 
   // Filters and sorting
   passFilter: 'all', // 'all', 'epic', 'ikon'
-  sortBy: 'snow', // 'snow', 'distance', 'name', 'value'
+  sortBy: 'snow', // 'snow', 'distance', 'name', 'value', 'region'
 
   // Derived data
   filteredResorts: resorts,
@@ -86,23 +88,22 @@ const useWeatherStore = create((set, get) => ({
     }
   },
 
-  // Initialize and start auto-refresh
-  initialize: () => {
-    // Initial fetch
-    get().fetchWeather()
-
-    // Set up auto-refresh
-    const refreshInterval = setInterval(() => {
+  // Start auto-refresh
+  startAutoRefresh: () => {
+    if (refreshInterval) {
+      clearInterval(refreshInterval)
+    }
+    refreshInterval = setInterval(() => {
       get().fetchWeather()
     }, REFRESH_INTERVAL)
-
-    // Return cleanup function
-    return () => clearInterval(refreshInterval)
   },
 
-  // Manual refresh
-  refresh: () => {
-    get().fetchWeather()
+  // Stop auto-refresh
+  stopAutoRefresh: () => {
+    if (refreshInterval) {
+      clearInterval(refreshInterval)
+      refreshInterval = null
+    }
   },
 
   // Get weather for a specific resort
