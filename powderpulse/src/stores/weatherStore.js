@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { resorts, getResortsByPass, sortResorts } from '../data/resorts'
 import { fetchAllResortsWeather } from '../services/weatherApi'
+import { fetchAllLiftStatus } from '../services/liftieApi'
 import {
   findMostSnow,
   findClosestSnow,
@@ -16,6 +17,7 @@ let refreshInterval = null
 const useWeatherStore = create((set, get) => ({
   // Weather data
   weatherData: {},
+  liftStatus: {},
   isLoading: true,
   error: null,
   lastUpdated: null,
@@ -68,10 +70,15 @@ const useWeatherStore = create((set, get) => ({
     set({ isLoading: true, error: null })
 
     try {
-      const weatherData = await fetchAllResortsWeather(resorts)
+      // Fetch weather and lift status in parallel
+      const [weatherData, liftStatus] = await Promise.all([
+        fetchAllResortsWeather(resorts),
+        fetchAllLiftStatus(resorts)
+      ])
 
       set({
         weatherData,
+        liftStatus,
         lastUpdated: new Date().toISOString(),
         isLoading: false
       })
@@ -109,6 +116,11 @@ const useWeatherStore = create((set, get) => ({
   // Get weather for a specific resort
   getResortWeather: (resortId) => {
     return get().weatherData[resortId] || null
+  },
+
+  // Get lift status for a specific resort
+  getResortLiftStatus: (resortId) => {
+    return get().liftStatus[resortId] || null
   }
 }))
 

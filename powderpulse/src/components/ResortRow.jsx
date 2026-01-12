@@ -1,7 +1,8 @@
 import React, { useRef } from 'react'
-import { ChevronLeft, ChevronRight, Thermometer, Wind, Sun, Cloud, CloudSnow, CloudRain, Map } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Thermometer, Wind, Sun, Cloud, CloudSnow, CloudRain, Map, Gauge } from 'lucide-react'
 import useWeatherStore from '../stores/weatherStore'
 import { PASS_COLORS } from '../data/resorts'
+import { getLiftStatusColor } from '../services/liftieApi'
 
 const REGION_FLAGS = {
   colorado: '🇺🇸',
@@ -84,13 +85,17 @@ const groupIntoPeriods = (forecast) => {
 }
 
 const ResortRow = ({ resort }) => {
-  const { getResortWeather } = useWeatherStore()
+  const { getResortWeather, getResortLiftStatus } = useWeatherStore()
   const weather = getResortWeather(resort.id)
+  const liftStatus = getResortLiftStatus(resort.id)
   const scrollRef = useRef(null)
   const passColor = PASS_COLORS[resort.pass] || PASS_COLORS.epic
 
   const dailyForecast = weather?.dailyForecast || []
   const periods = groupIntoPeriods(dailyForecast)
+
+  // Get lift status color
+  const liftStatusInfo = liftStatus ? getLiftStatusColor(liftStatus.lifts.percentage) : null
 
   const scroll = (direction) => {
     if (scrollRef.current) {
@@ -126,6 +131,16 @@ const ResortRow = ({ resort }) => {
               >
                 {resort.pass}
               </span>
+              {/* Lift Status Indicator */}
+              {liftStatusInfo && (
+                <span
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${liftStatusInfo.bg} text-white`}
+                  title={`${Math.round(liftStatus.lifts.percentage)}% lifts open (${liftStatus.lifts.open}/${liftStatus.lifts.open + liftStatus.lifts.closed})`}
+                >
+                  <Gauge className="w-3 h-3" />
+                  {Math.round(liftStatus.lifts.percentage)}%
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <span>{resort.elevation.toLocaleString()} ft</span>

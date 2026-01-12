@@ -47,6 +47,7 @@ export const resorts = [
     elevation: 11570,
     distanceFromBoulder: 97,
     timezone: 'America/Denver',
+    liftieId: 'vail',
     description: 'Legendary terrain, back bowls'
   },
   {
@@ -59,6 +60,7 @@ export const resorts = [
     elevation: 11440,
     distanceFromBoulder: 107,
     timezone: 'America/Denver',
+    liftieId: 'beaver-creek',
     description: 'Luxury resort, great groomers'
   },
   {
@@ -71,6 +73,7 @@ export const resorts = [
     elevation: 12998,
     distanceFromBoulder: 80,
     timezone: 'America/Denver',
+    liftieId: 'breckenridge',
     description: 'Historic town, diverse terrain'
   },
   {
@@ -83,6 +86,7 @@ export const resorts = [
     elevation: 12408,
     distanceFromBoulder: 75,
     timezone: 'America/Denver',
+    liftieId: 'keystone',
     description: 'Night skiing, family friendly'
   },
   {
@@ -95,6 +99,7 @@ export const resorts = [
     elevation: 12162,
     distanceFromBoulder: 200,
     timezone: 'America/Denver',
+    liftieId: 'crested-butte',
     description: 'Extreme terrain, charming town'
   },
   {
@@ -107,6 +112,7 @@ export const resorts = [
     elevation: 13150,
     distanceFromBoulder: 330,
     timezone: 'America/Denver',
+    liftieId: 'telluride',
     description: 'Box canyon beauty, expert terrain'
   },
   // IKON PASS - COLORADO
@@ -120,6 +126,7 @@ export const resorts = [
     elevation: 12060,
     distanceFromBoulder: 67,
     timezone: 'America/Denver',
+    liftieId: 'winter-park',
     description: 'Mary Jane bumps, great value'
   },
   {
@@ -132,6 +139,7 @@ export const resorts = [
     elevation: 10568,
     distanceFromBoulder: 157,
     timezone: 'America/Denver',
+    liftieId: 'steamboat',
     description: 'Champagne powder, tree skiing'
   },
   {
@@ -144,6 +152,7 @@ export const resorts = [
     elevation: 12313,
     distanceFromBoulder: 83,
     timezone: 'America/Denver',
+    liftieId: 'copper-mountain',
     description: 'Naturally divided terrain'
   },
   {
@@ -156,6 +165,7 @@ export const resorts = [
     elevation: 13050,
     distanceFromBoulder: 65,
     timezone: 'America/Denver',
+    liftieId: 'arapahoe-basin',
     description: 'Longest season, expert terrain'
   },
   {
@@ -168,6 +178,7 @@ export const resorts = [
     elevation: 10800,
     distanceFromBoulder: 21,
     timezone: 'America/Denver',
+    liftieId: 'eldora',
     description: 'Closest resort, quick trips'
   },
   {
@@ -180,6 +191,7 @@ export const resorts = [
     elevation: 12510,
     distanceFromBoulder: 160,
     timezone: 'America/Denver',
+    liftieId: 'snowmass',
     description: 'Four mountains, world class'
   },
   {
@@ -192,6 +204,7 @@ export const resorts = [
     elevation: 11904,
     distanceFromBoulder: 280,
     timezone: 'America/Denver',
+    liftieId: null, // Not on Liftie
     description: 'Most snow in Colorado, no crowds'
   },
 
@@ -206,6 +219,7 @@ export const resorts = [
     elevation: 11000,
     distanceFromBoulder: 525,
     timezone: 'America/Denver',
+    liftieId: 'snowbird',
     description: 'Deep powder, steep terrain'
   },
   {
@@ -218,6 +232,7 @@ export const resorts = [
     elevation: 10550,
     distanceFromBoulder: 525,
     timezone: 'America/Denver',
+    liftieId: 'alta',
     description: 'Skiers only, legendary powder'
   },
 
@@ -232,6 +247,7 @@ export const resorts = [
     elevation: 10450,
     distanceFromBoulder: 450,
     timezone: 'America/Denver',
+    liftieId: 'jackson-hole',
     description: 'Expert terrain, Corbet\'s Couloir'
   },
 
@@ -246,6 +262,7 @@ export const resorts = [
     elevation: 7494,
     distanceFromBoulder: 1100,
     timezone: 'America/Vancouver',
+    liftieId: 'whistler-blackcomb',
     description: 'Largest in North America'
   },
   {
@@ -258,6 +275,7 @@ export const resorts = [
     elevation: 7300,
     distanceFromBoulder: 950,
     timezone: 'America/Vancouver',
+    liftieId: null, // Not on Liftie
     description: 'Longest vertical in NA, deep pow'
   },
   {
@@ -270,6 +288,7 @@ export const resorts = [
     elevation: 8033,
     distanceFromBoulder: 920,
     timezone: 'America/Edmonton',
+    liftieId: null, // Not on Liftie
     description: 'Champagne powder, big mountain'
   },
 
@@ -284,6 +303,7 @@ export const resorts = [
     elevation: 4291,
     distanceFromBoulder: 5800,
     timezone: 'Asia/Tokyo',
+    liftieId: 'niseko',
     description: 'Legendary powder, Japanese culture'
   },
 
@@ -298,6 +318,7 @@ export const resorts = [
     elevation: 12605,
     distanceFromBoulder: 5300,
     timezone: 'Europe/Paris',
+    liftieId: 'chamonix',
     description: 'Mont Blanc, extreme terrain'
   },
   {
@@ -310,6 +331,7 @@ export const resorts = [
     elevation: 10925,
     distanceFromBoulder: 5350,
     timezone: 'Europe/Zurich',
+    liftieId: 'verbier',
     description: 'Swiss Alps, freeride paradise'
   },
   {
@@ -322,6 +344,7 @@ export const resorts = [
     elevation: 9186,
     distanceFromBoulder: 5320,
     timezone: 'Europe/Paris',
+    liftieId: 'val-disere',
     description: 'French Alps, Olympic history'
   },
   {
@@ -334,6 +357,7 @@ export const resorts = [
     elevation: 9222,
     distanceFromBoulder: 5400,
     timezone: 'Europe/Vienna',
+    liftieId: 'st-anton-am-arlberg',
     description: 'Birthplace of alpine skiing'
   },
   {
@@ -346,6 +370,7 @@ export const resorts = [
     elevation: 11417,
     distanceFromBoulder: 5380,
     timezone: 'Europe/Rome',
+    liftieId: 'cervino-ski-paradise',
     description: 'Matterhorn views, high altitude'
   },
   {
@@ -358,6 +383,7 @@ export const resorts = [
     elevation: 9186,
     distanceFromBoulder: 5310,
     timezone: 'Europe/Rome',
+    liftieId: null, // Not on Liftie
     description: 'Mont Blanc, Italian charm'
   }
 ]
