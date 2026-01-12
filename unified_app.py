@@ -123,7 +123,32 @@ async def payroll_converter():
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Payroll converter not found")
 
-logger.info("✅ Portal app configured with sales, recruiting, and payroll")
+# ==================== MOUNT POWDERPULSE SKI WEATHER ====================
+try:
+    from fastapi.staticfiles import StaticFiles
+
+    powderpulse_dist = os.path.join(os.path.dirname(__file__), "powderpulse", "dist")
+    if os.path.exists(powderpulse_dist):
+        # Serve static assets (js, css, etc)
+        app.mount("/powderpulse/assets", StaticFiles(directory=os.path.join(powderpulse_dist, "assets")), name="powderpulse-assets")
+
+        # Serve index.html for the main route and any SPA routes
+        @app.get("/powderpulse")
+        @app.get("/powderpulse/{path:path}")
+        async def serve_powderpulse(path: str = ""):
+            index_file = os.path.join(powderpulse_dist, "index.html")
+            if os.path.exists(index_file):
+                return FileResponse(index_file)
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="PowderPulse not built. Run: cd powderpulse && npm run build")
+
+        logger.info("✅ Mounted PowderPulse at /powderpulse")
+    else:
+        logger.warning("⚠️  PowderPulse dist not found - run 'cd powderpulse && npm run build'")
+except Exception as e:
+    logger.error(f"❌ Failed to mount PowderPulse: {e}")
+
+logger.info("✅ Portal app configured with sales, recruiting, payroll, and powderpulse")
 
 if __name__ == "__main__":
     import uvicorn

@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+:root {
+  --epic-blue: #0066CC;
+  --ikon-red: #E31837;
+  --bg-primary: #0F172A;
+  --bg-secondary: #1E293B;
+  --bg-tertiary: #334155;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-muted: #64748B;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Snow amount color classes */
+.snow-none { color: #94A3B8; }
+.snow-light { color: #60A5FA; }
+.snow-moderate { color: #3B82F6; }
+.snow-heavy { color: #2563EB; }
+.snow-epic { color: #1D4ED8; }
+.snow-legendary { color: #7C3AED; }
+
+.bg-snow-none { background-color: #94A3B8; }
+.bg-snow-light { background-color: #60A5FA; }
+.bg-snow-moderate { background-color: #3B82F6; }
+.bg-snow-heavy { background-color: #2563EB; }
+.bg-snow-epic { background-color: #1D4ED8; }
+.bg-snow-legendary { background-color: #7C3AED; }
+
+/* Pass colors */
+.border-epic { border-left-color: var(--epic-blue); }
+.border-ikon { border-left-color: var(--ikon-red); }
+.text-epic { color: var(--epic-blue); }
+.text-ikon { color: var(--ikon-red); }
+.bg-epic { background-color: var(--epic-blue); }
+.bg-ikon { background-color: var(--ikon-red); }
+
+/* Animation for powder alert */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(124, 58, 237, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(124, 58, 237, 0.6); }
+}
+
+.powder-alert-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Sparkline container */
+.sparkline-container {
+  height: 40px;
+  width: 100%;
+}
+
+/* Card hover effect */
+.resort-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.resort-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Confidence indicator fade */
+.confidence-high { opacity: 1; }
+.confidence-medium { opacity: 0.7; }
+.confidence-low { opacity: 0.5; }
