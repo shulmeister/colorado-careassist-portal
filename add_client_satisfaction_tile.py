@@ -9,10 +9,8 @@ load_dotenv()
 db = db_manager.get_session()
 
 CLIENT_SAT_NAME = "Client Satisfaction"
-CLIENT_SAT_URL = os.getenv(
-    "CLIENT_SATISFACTION_URL",
-    "https://client-satisfaction-15d412babc2f.herokuapp.com/",
-)
+# Now using internal route instead of external Heroku app
+CLIENT_SAT_URL = "/client-satisfaction"
 
 try:
     tool = db.query(PortalTool).filter(PortalTool.name == CLIENT_SAT_NAME).first()

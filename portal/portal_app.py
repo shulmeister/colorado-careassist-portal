@@ -905,37 +905,304 @@ async def recruitment_dashboard_embedded(
 
 
 @app.get("/client-satisfaction", response_class=HTMLResponse)
-async def client_satisfaction_embedded(
+async def client_satisfaction_dashboard(
     request: Request,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Embedded Client Satisfaction tracker (iframe)"""
-    tracker_url = CLIENT_SATISFACTION_APP_URL
+    """Client Satisfaction Dashboard - native implementation"""
+    from services.client_satisfaction_service import client_satisfaction_service
 
-    session_token = request.cookies.get("session_token", "")
-    if session_token:
-        separator = "&" if "?" in tracker_url else "?"
-        encoded_token = quote_plus(session_token)
-        encoded_email = quote_plus(current_user.get("email", ""))
-        tracker_url_with_auth = (
-            f"{tracker_url}{separator}portal_token={encoded_token}&portal_user_email={encoded_email}"
-        )
-        logger.info(
-            "Passing portal token to Client Satisfaction tracker for user: %s",
-            current_user.get("email"),
-        )
-    else:
-        logger.warning("No session token found - Client Satisfaction tracker will require login")
-        tracker_url_with_auth = tracker_url
+    # Get dashboard summary
+    summary = client_satisfaction_service.get_dashboard_summary(db, days=30)
 
     return templates.TemplateResponse(
-        "client_satisfaction_embedded.html",
+        "client_satisfaction.html",
         {
             "request": request,
             "user": current_user,
-            "tracker_url": tracker_url_with_auth,
+            "summary": summary,
         },
     )
+
+
+# ============================================================================
+# Client Satisfaction API Endpoints
+# ============================================================================
+
+@app.get("/api/client-satisfaction/summary")
+async def api_client_satisfaction_summary(
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get client satisfaction dashboard summary"""
+    from services.client_satisfaction_service import client_satisfaction_service
+
+    summary = client_satisfaction_service.get_dashboard_summary(db, days=days)
+    return JSONResponse({"success": True, "data": summary})
+
+
+@app.get("/api/client-satisfaction/surveys")
+async def api_get_surveys(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get survey responses"""
+    from portal_models import ClientSurveyResponse
+
+    surveys = db.query(ClientSurveyResponse).order_by(
+        ClientSurveyResponse.survey_date.desc()
+    ).offset(offset).limit(limit).all()
+
+    return JSONResponse({
+        "success": True,
+        "data": [s.to_dict() for s in surveys],
+        "count": len(surveys)
+    })
+
+
+@app.post("/api/client-satisfaction/surveys")
+async def api_create_survey(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Create a new survey response (manual entry)"""
+    from portal_models import ClientSurveyResponse
+
+    data = await request.json()
+
+    survey = ClientSurveyResponse(
+        client_name=data.get("client_name"),
+        client_id=data.get("client_id"),
+        survey_date=datetime.strptime(data.get("survey_date", datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d").date(),
+        overall_satisfaction=data.get("overall_satisfaction"),
+        caregiver_satisfaction=data.get("caregiver_satisfaction"),
+        communication_rating=data.get("communication_rating"),
+        reliability_rating=data.get("reliability_rating"),
+        would_recommend=data.get("would_recommend"),
+        feedback_comments=data.get("feedback_comments"),
+        improvement_suggestions=data.get("improvement_suggestions"),
+        source="manual",
+        caregiver_name=data.get("caregiver_name"),
+        respondent_relationship=data.get("respondent_relationship"),
+        created_by=current_user.get("email"),
+    )
+    db.add(survey)
+    db.commit()
+    db.refresh(survey)
+
+    return JSONResponse({"success": True, "data": survey.to_dict()})
+
+
+@app.get("/api/client-satisfaction/complaints")
+async def api_get_complaints(
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get complaints"""
+    from portal_models import ClientComplaint
+
+    query = db.query(ClientComplaint)
+    if status:
+        query = query.filter(ClientComplaint.status == status)
+
+    complaints = query.order_by(ClientComplaint.complaint_date.desc()).limit(limit).all()
+
+    return JSONResponse({
+        "success": True,
+        "data": [c.to_dict() for c in complaints],
+        "count": len(complaints)
+    })
+
+
+@app.post("/api/client-satisfaction/complaints")
+async def api_create_complaint(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Create a new complaint"""
+    from portal_models import ClientComplaint
+
+    data = await request.json()
+
+    complaint = ClientComplaint(
+        client_name=data.get("client_name"),
+        client_id=data.get("client_id"),
+        complaint_date=datetime.strptime(data.get("complaint_date", datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d").date(),
+        category=data.get("category"),
+        severity=data.get("severity", "medium"),
+        description=data.get("description"),
+        caregiver_involved=data.get("caregiver_involved"),
+        status="open",
+        source=data.get("source", "manual"),
+        reported_by=data.get("reported_by"),
+        created_by=current_user.get("email"),
+    )
+    db.add(complaint)
+    db.commit()
+    db.refresh(complaint)
+
+    return JSONResponse({"success": True, "data": complaint.to_dict()})
+
+
+@app.put("/api/client-satisfaction/complaints/{complaint_id}")
+async def api_update_complaint(
+    complaint_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Update a complaint (e.g., resolve it)"""
+    from portal_models import ClientComplaint
+
+    complaint = db.query(ClientComplaint).filter(ClientComplaint.id == complaint_id).first()
+    if not complaint:
+        raise HTTPException(status_code=404, detail="Complaint not found")
+
+    data = await request.json()
+
+    if "status" in data:
+        complaint.status = data["status"]
+    if "resolution_notes" in data:
+        complaint.resolution_notes = data["resolution_notes"]
+    if "resolved_by" in data:
+        complaint.resolved_by = data["resolved_by"]
+    if data.get("status") in ("resolved", "closed") and not complaint.resolution_date:
+        complaint.resolution_date = date.today()
+
+    db.commit()
+    db.refresh(complaint)
+
+    return JSONResponse({"success": True, "data": complaint.to_dict()})
+
+
+@app.get("/api/client-satisfaction/quality-visits")
+async def api_get_quality_visits(
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get quality visits"""
+    from portal_models import QualityVisit
+
+    visits = db.query(QualityVisit).order_by(
+        QualityVisit.visit_date.desc()
+    ).limit(limit).all()
+
+    return JSONResponse({
+        "success": True,
+        "data": [v.to_dict() for v in visits],
+        "count": len(visits)
+    })
+
+
+@app.post("/api/client-satisfaction/quality-visits")
+async def api_create_quality_visit(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Create a new quality visit"""
+    from portal_models import QualityVisit
+
+    data = await request.json()
+
+    visit = QualityVisit(
+        client_name=data.get("client_name"),
+        client_id=data.get("client_id"),
+        visit_date=datetime.strptime(data.get("visit_date", datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d").date(),
+        visit_type=data.get("visit_type", "routine"),
+        conducted_by=data.get("conducted_by", current_user.get("name")),
+        caregiver_present=data.get("caregiver_present"),
+        home_environment_score=data.get("home_environment_score"),
+        care_quality_score=data.get("care_quality_score"),
+        client_wellbeing_score=data.get("client_wellbeing_score"),
+        caregiver_performance_score=data.get("caregiver_performance_score"),
+        care_plan_adherence_score=data.get("care_plan_adherence_score"),
+        observations=data.get("observations"),
+        concerns_identified=data.get("concerns_identified"),
+        recommendations=data.get("recommendations"),
+        follow_up_required=data.get("follow_up_required", False),
+        status="completed",
+        created_by=current_user.get("email"),
+    )
+    db.add(visit)
+    db.commit()
+    db.refresh(visit)
+
+    return JSONResponse({"success": True, "data": visit.to_dict()})
+
+
+@app.get("/api/client-satisfaction/reviews")
+async def api_get_reviews(
+    platform: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get external reviews"""
+    from portal_models import ClientReview
+
+    query = db.query(ClientReview)
+    if platform:
+        query = query.filter(ClientReview.platform == platform)
+
+    reviews = query.order_by(ClientReview.review_date.desc()).limit(limit).all()
+
+    return JSONResponse({
+        "success": True,
+        "data": [r.to_dict() for r in reviews],
+        "count": len(reviews)
+    })
+
+
+@app.post("/api/client-satisfaction/reviews")
+async def api_create_review(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Add an external review"""
+    from portal_models import ClientReview
+
+    data = await request.json()
+
+    review = ClientReview(
+        platform=data.get("platform", "google"),
+        review_date=datetime.strptime(data.get("review_date", datetime.now().strftime("%Y-%m-%d")), "%Y-%m-%d").date(),
+        reviewer_name=data.get("reviewer_name"),
+        rating=data.get("rating"),
+        review_text=data.get("review_text"),
+        review_url=data.get("review_url"),
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+
+    return JSONResponse({"success": True, "data": review.to_dict()})
+
+
+@app.post("/api/client-satisfaction/sync-surveys")
+async def api_sync_surveys(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Sync survey responses from Google Sheets"""
+    from services.client_satisfaction_service import client_satisfaction_service
+
+    data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+    sheet_id = data.get("sheet_id")
+
+    result = client_satisfaction_service.sync_survey_responses(db, sheet_id)
+    return JSONResponse(result)
 
 
 @app.get("/connections", response_class=HTMLResponse)

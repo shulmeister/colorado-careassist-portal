@@ -265,3 +265,290 @@ class OAuthToken(Base):
             return False
         return datetime.utcnow() >= self.expires_at
 
+
+# ============================================================================
+# Client Satisfaction Models
+# ============================================================================
+
+class ClientSurveyResponse(Base):
+    """Client satisfaction survey responses (from Google Forms or manual entry)"""
+    __tablename__ = "client_survey_responses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_name = Column(String(255), nullable=False, index=True)
+    client_id = Column(String(100), nullable=True, index=True)  # WellSky client ID if available
+    survey_date = Column(Date, nullable=False, index=True)
+
+    # Satisfaction ratings (1-5 scale)
+    overall_satisfaction = Column(Integer, nullable=True)  # 1-5
+    caregiver_satisfaction = Column(Integer, nullable=True)  # 1-5
+    communication_rating = Column(Integer, nullable=True)  # 1-5
+    reliability_rating = Column(Integer, nullable=True)  # 1-5
+    would_recommend = Column(Boolean, nullable=True)  # NPS-style
+
+    # Open-ended feedback
+    feedback_comments = Column(Text, nullable=True)
+    improvement_suggestions = Column(Text, nullable=True)
+
+    # Metadata
+    source = Column(String(50), default="manual")  # google_form, manual, phone, email
+    google_form_response_id = Column(String(255), nullable=True, unique=True)
+    caregiver_name = Column(String(255), nullable=True)
+    respondent_relationship = Column(String(100), nullable=True)  # client, family_member, poa
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    created_by = Column(String(255), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "client_name": self.client_name,
+            "client_id": self.client_id,
+            "survey_date": self.survey_date.isoformat() if self.survey_date else None,
+            "overall_satisfaction": self.overall_satisfaction,
+            "caregiver_satisfaction": self.caregiver_satisfaction,
+            "communication_rating": self.communication_rating,
+            "reliability_rating": self.reliability_rating,
+            "would_recommend": self.would_recommend,
+            "feedback_comments": self.feedback_comments,
+            "improvement_suggestions": self.improvement_suggestions,
+            "source": self.source,
+            "caregiver_name": self.caregiver_name,
+            "respondent_relationship": self.respondent_relationship,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class ClientComplaint(Base):
+    """Track client complaints and resolution"""
+    __tablename__ = "client_complaints"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_name = Column(String(255), nullable=False, index=True)
+    client_id = Column(String(100), nullable=True, index=True)
+    complaint_date = Column(Date, nullable=False, index=True)
+
+    # Complaint details
+    category = Column(String(100), nullable=True)  # scheduling, caregiver, billing, communication, care_quality, other
+    severity = Column(String(50), default="medium")  # low, medium, high, critical
+    description = Column(Text, nullable=False)
+    caregiver_involved = Column(String(255), nullable=True)
+
+    # Resolution
+    status = Column(String(50), default="open", index=True)  # open, in_progress, resolved, closed
+    resolution_date = Column(Date, nullable=True)
+    resolution_notes = Column(Text, nullable=True)
+    resolved_by = Column(String(255), nullable=True)
+
+    # Follow-up
+    follow_up_required = Column(Boolean, default=False)
+    follow_up_date = Column(Date, nullable=True)
+    follow_up_notes = Column(Text, nullable=True)
+
+    # Metadata
+    source = Column(String(50), default="manual")  # phone, email, in_person, wellsky, manual
+    reported_by = Column(String(255), nullable=True)  # Who reported the complaint
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(String(255), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "client_name": self.client_name,
+            "client_id": self.client_id,
+            "complaint_date": self.complaint_date.isoformat() if self.complaint_date else None,
+            "category": self.category,
+            "severity": self.severity,
+            "description": self.description,
+            "caregiver_involved": self.caregiver_involved,
+            "status": self.status,
+            "resolution_date": self.resolution_date.isoformat() if self.resolution_date else None,
+            "resolution_notes": self.resolution_notes,
+            "resolved_by": self.resolved_by,
+            "follow_up_required": self.follow_up_required,
+            "follow_up_date": self.follow_up_date.isoformat() if self.follow_up_date else None,
+            "source": self.source,
+            "reported_by": self.reported_by,
+            "days_open": self._days_open(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def _days_open(self):
+        if self.status in ("resolved", "closed") and self.resolution_date:
+            return (self.resolution_date - self.complaint_date).days
+        from datetime import date
+        return (date.today() - self.complaint_date).days if self.complaint_date else None
+
+
+class QualityVisit(Base):
+    """Quality assurance visits to clients"""
+    __tablename__ = "quality_visits"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_name = Column(String(255), nullable=False, index=True)
+    client_id = Column(String(100), nullable=True, index=True)
+    visit_date = Column(Date, nullable=False, index=True)
+
+    # Visit details
+    visit_type = Column(String(100), default="routine")  # routine, follow_up, complaint_response, initial
+    conducted_by = Column(String(255), nullable=True)
+    caregiver_present = Column(String(255), nullable=True)
+
+    # Assessment scores (1-5 scale)
+    home_environment_score = Column(Integer, nullable=True)
+    care_quality_score = Column(Integer, nullable=True)
+    client_wellbeing_score = Column(Integer, nullable=True)
+    caregiver_performance_score = Column(Integer, nullable=True)
+    care_plan_adherence_score = Column(Integer, nullable=True)
+
+    # Observations
+    observations = Column(Text, nullable=True)
+    concerns_identified = Column(Text, nullable=True)
+    recommendations = Column(Text, nullable=True)
+
+    # Follow-up
+    follow_up_required = Column(Boolean, default=False)
+    follow_up_date = Column(Date, nullable=True)
+    follow_up_notes = Column(Text, nullable=True)
+
+    # Status
+    status = Column(String(50), default="completed")  # scheduled, completed, cancelled, rescheduled
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_by = Column(String(255), nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "client_name": self.client_name,
+            "client_id": self.client_id,
+            "visit_date": self.visit_date.isoformat() if self.visit_date else None,
+            "visit_type": self.visit_type,
+            "conducted_by": self.conducted_by,
+            "caregiver_present": self.caregiver_present,
+            "home_environment_score": self.home_environment_score,
+            "care_quality_score": self.care_quality_score,
+            "client_wellbeing_score": self.client_wellbeing_score,
+            "caregiver_performance_score": self.caregiver_performance_score,
+            "care_plan_adherence_score": self.care_plan_adherence_score,
+            "average_score": self._average_score(),
+            "observations": self.observations,
+            "concerns_identified": self.concerns_identified,
+            "recommendations": self.recommendations,
+            "follow_up_required": self.follow_up_required,
+            "status": self.status,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def _average_score(self):
+        scores = [s for s in [
+            self.home_environment_score,
+            self.care_quality_score,
+            self.client_wellbeing_score,
+            self.caregiver_performance_score,
+            self.care_plan_adherence_score
+        ] if s is not None]
+        return round(sum(scores) / len(scores), 1) if scores else None
+
+
+class ClientReview(Base):
+    """External reviews (Google, Facebook, etc.)"""
+    __tablename__ = "client_reviews"
+
+    id = Column(Integer, primary_key=True, index=True)
+    platform = Column(String(50), nullable=False, index=True)  # google, facebook, yelp, caring_com
+    review_date = Column(Date, nullable=False, index=True)
+
+    # Review details
+    reviewer_name = Column(String(255), nullable=True)
+    rating = Column(Integer, nullable=False)  # 1-5 stars
+    review_text = Column(Text, nullable=True)
+
+    # Response
+    responded = Column(Boolean, default=False)
+    response_date = Column(Date, nullable=True)
+    response_text = Column(Text, nullable=True)
+    responded_by = Column(String(255), nullable=True)
+
+    # Metadata
+    external_review_id = Column(String(255), nullable=True, unique=True)
+    review_url = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "platform": self.platform,
+            "review_date": self.review_date.isoformat() if self.review_date else None,
+            "reviewer_name": self.reviewer_name,
+            "rating": self.rating,
+            "review_text": self.review_text,
+            "responded": self.responded,
+            "response_date": self.response_date.isoformat() if self.response_date else None,
+            "response_text": self.response_text,
+            "review_url": self.review_url,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class CarePlanStatus(Base):
+    """Track care plan status and updates"""
+    __tablename__ = "care_plan_statuses"
+
+    id = Column(Integer, primary_key=True, index=True)
+    client_name = Column(String(255), nullable=False, index=True)
+    client_id = Column(String(100), nullable=True, index=True)
+
+    # Care plan details
+    care_plan_date = Column(Date, nullable=False)  # Date of current care plan
+    next_review_date = Column(Date, nullable=True, index=True)
+    status = Column(String(50), default="current", index=True)  # current, pending_review, expired, updated
+
+    # Services
+    services_authorized = Column(Text, nullable=True)  # JSON list of services
+    hours_per_week = Column(Float, nullable=True)
+
+    # Changes
+    last_updated = Column(Date, nullable=True)
+    update_reason = Column(Text, nullable=True)
+    updated_by = Column(String(255), nullable=True)
+
+    # Notes
+    notes = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        services = []
+        if self.services_authorized:
+            try:
+                services = json.loads(self.services_authorized)
+            except Exception:
+                services = [self.services_authorized]
+        return {
+            "id": self.id,
+            "client_name": self.client_name,
+            "client_id": self.client_id,
+            "care_plan_date": self.care_plan_date.isoformat() if self.care_plan_date else None,
+            "next_review_date": self.next_review_date.isoformat() if self.next_review_date else None,
+            "status": self.status,
+            "services_authorized": services,
+            "hours_per_week": self.hours_per_week,
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None,
+            "update_reason": self.update_reason,
+            "days_until_review": self._days_until_review(),
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+    def _days_until_review(self):
+        if not self.next_review_date:
+            return None
+        from datetime import date
+        return (self.next_review_date - date.today()).days
+

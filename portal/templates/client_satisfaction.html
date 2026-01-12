@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Client Satisfaction Dashboard - Colorado CareAssist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 24px 16px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            margin-bottom: 32px;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .sidebar-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 16px;
+            transition: background 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #2563eb;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+            padding: 0 12px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: #334155;
+            color: #f8fafc;
+        }
+
+        .nav-item.active {
+            background: #3b82f6;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            padding: 32px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .page-subtitle {
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .metric-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .metric-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .metric-icon.green { background: rgba(34, 197, 94, 0.15); }
+        .metric-icon.blue { background: rgba(59, 130, 246, 0.15); }
+        .metric-icon.orange { background: rgba(249, 115, 22, 0.15); }
+        .metric-icon.purple { background: rgba(168, 85, 247, 0.15); }
+        .metric-icon.red { background: rgba(239, 68, 68, 0.15); }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .metric-detail {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        .content-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .section-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .section-content {
+            padding: 20px 24px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .list-item-info {
+            flex: 1;
+        }
+
+        .list-item-title {
+            font-weight: 500;
+            color: #f8fafc;
+        }
+
+        .list-item-subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-green { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+        .badge-yellow { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+        .badge-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .badge-blue { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+
+        .star-rating {
+            color: #fbbf24;
+            font-size: 14px;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #e2e8f0;
+            margin-bottom: 8px;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .rating-input {
+            display: flex;
+            gap: 8px;
+        }
+
+        .rating-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #94a3b8;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .rating-btn:hover, .rating-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #334155;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        @media (max-width: 1024px) {
+            .content-sections {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Colorado CareAssist</div>
+                <div class="sidebar-subtitle">Client Satisfaction</div>
+                <a href="/" class="back-btn">← Back to Portal</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-label">Dashboard</div>
+                <div class="nav-item active" data-view="overview">
+                    <span>Overview</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-label">Data Entry</div>
+                <div class="nav-item" onclick="openModal('surveyModal')">
+                    <span>+ Add Survey Response</span>
+                </div>
+                <div class="nav-item" onclick="openModal('complaintModal')">
+                    <span>+ Log Complaint</span>
+                </div>
+                <div class="nav-item" onclick="openModal('visitModal')">
+                    <span>+ Quality Visit</span>
+                </div>
+                <div class="nav-item" onclick="openModal('reviewModal')">
+                    <span>+ Add Review</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-label">Import</div>
+                <div class="nav-item" onclick="syncSurveys()">
+                    <span>Sync Google Form</span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div class="page-header">
+                <div>
+                    <h1 class="page-title">Client Satisfaction</h1>
+                    <p class="page-subtitle">Last 30 days overview</p>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="refreshDashboard()">Refresh</button>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon green">⭐</div>
+                    </div>
+                    <div class="metric-value" id="avgSatisfaction">{{ summary.surveys.average_satisfaction or '—' }}</div>
+                    <div class="metric-label">Avg Satisfaction (1-5)</div>
+                    <div class="metric-detail">{{ summary.surveys.total }} survey responses</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon blue">👍</div>
+                    </div>
+                    <div class="metric-value" id="recommendRate">{{ summary.surveys.recommend_rate }}%</div>
+                    <div class="metric-label">Would Recommend</div>
+                    <div class="metric-detail">NPS indicator</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon orange">⚠️</div>
+                    </div>
+                    <div class="metric-value" id="openComplaints">{{ summary.complaints.open }}</div>
+                    <div class="metric-label">Open Complaints</div>
+                    <div class="metric-detail">{{ summary.complaints.total }} total this period</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon purple">✅</div>
+                    </div>
+                    <div class="metric-value" id="qualityScore">{{ summary.quality_visits.average_score or '—' }}</div>
+                    <div class="metric-label">Avg Quality Score</div>
+                    <div class="metric-detail">{{ summary.quality_visits.total }} visits completed</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon green">⭐</div>
+                    </div>
+                    <div class="metric-value" id="avgReview">{{ summary.reviews.average_rating or '—' }}</div>
+                    <div class="metric-label">Avg Review Rating</div>
+                    <div class="metric-detail">{{ summary.reviews.total }} reviews</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon red">📋</div>
+                    </div>
+                    <div class="metric-value" id="carePlansDue">{{ summary.care_plans.due_for_review }}</div>
+                    <div class="metric-label">Care Plans Due Review</div>
+                    <div class="metric-detail">{{ summary.care_plans.total_active }} active plans</div>
+                </div>
+            </div>
+
+            <div class="content-sections">
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title">Recent Complaints</div>
+                        <button class="btn btn-secondary" onclick="openModal('complaintModal')">+ New</button>
+                    </div>
+                    <div class="section-content" id="complaintsSection">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <p>No complaints recorded yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title">Recent Reviews</div>
+                        <button class="btn btn-secondary" onclick="openModal('reviewModal')">+ Add</button>
+                    </div>
+                    <div class="section-content" id="reviewsSection">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⭐</div>
+                            <p>No reviews tracked yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Survey Modal -->
+    <div class="modal-overlay" id="surveyModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Add Survey Response</div>
+                <button class="modal-close" onclick="closeModal('surveyModal')">&times;</button>
+            </div>
+            <form id="surveyForm" onsubmit="submitSurvey(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Client Name *</label>
+                        <input type="text" class="form-input" name="client_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Survey Date</label>
+                        <input type="date" class="form-input" name="survey_date" value="{{ summary.generated_at[:10] if summary.generated_at else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Overall Satisfaction (1-5)</label>
+                        <div class="rating-input" data-field="overall_satisfaction">
+                            <button type="button" class="rating-btn" data-value="1">1</button>
+                            <button type="button" class="rating-btn" data-value="2">2</button>
+                            <button type="button" class="rating-btn" data-value="3">3</button>
+                            <button type="button" class="rating-btn" data-value="4">4</button>
+                            <button type="button" class="rating-btn" data-value="5">5</button>
+                        </div>
+                        <input type="hidden" name="overall_satisfaction">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Caregiver Satisfaction (1-5)</label>
+                        <div class="rating-input" data-field="caregiver_satisfaction">
+                            <button type="button" class="rating-btn" data-value="1">1</button>
+                            <button type="button" class="rating-btn" data-value="2">2</button>
+                            <button type="button" class="rating-btn" data-value="3">3</button>
+                            <button type="button" class="rating-btn" data-value="4">4</button>
+                            <button type="button" class="rating-btn" data-value="5">5</button>
+                        </div>
+                        <input type="hidden" name="caregiver_satisfaction">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Would Recommend?</label>
+                        <select class="form-select" name="would_recommend">
+                            <option value="">Select...</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Comments</label>
+                        <textarea class="form-textarea" name="feedback_comments"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('surveyModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Survey</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Complaint Modal -->
+    <div class="modal-overlay" id="complaintModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Log Complaint</div>
+                <button class="modal-close" onclick="closeModal('complaintModal')">&times;</button>
+            </div>
+            <form id="complaintForm" onsubmit="submitComplaint(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Client Name *</label>
+                        <input type="text" class="form-input" name="client_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" name="category">
+                            <option value="scheduling">Scheduling</option>
+                            <option value="caregiver">Caregiver Issue</option>
+                            <option value="billing">Billing</option>
+                            <option value="communication">Communication</option>
+                            <option value="care_quality">Care Quality</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Severity</label>
+                        <select class="form-select" name="severity">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description *</label>
+                        <textarea class="form-textarea" name="description" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Caregiver Involved</label>
+                        <input type="text" class="form-input" name="caregiver_involved">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('complaintModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Complaint</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Quality Visit Modal -->
+    <div class="modal-overlay" id="visitModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Quality Visit</div>
+                <button class="modal-close" onclick="closeModal('visitModal')">&times;</button>
+            </div>
+            <form id="visitForm" onsubmit="submitVisit(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Client Name *</label>
+                        <input type="text" class="form-input" name="client_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Visit Date</label>
+                        <input type="date" class="form-input" name="visit_date">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Visit Type</label>
+                        <select class="form-select" name="visit_type">
+                            <option value="routine">Routine</option>
+                            <option value="follow_up">Follow-up</option>
+                            <option value="complaint_response">Complaint Response</option>
+                            <option value="initial">Initial Assessment</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Care Quality Score (1-5)</label>
+                        <div class="rating-input" data-field="care_quality_score">
+                            <button type="button" class="rating-btn" data-value="1">1</button>
+                            <button type="button" class="rating-btn" data-value="2">2</button>
+                            <button type="button" class="rating-btn" data-value="3">3</button>
+                            <button type="button" class="rating-btn" data-value="4">4</button>
+                            <button type="button" class="rating-btn" data-value="5">5</button>
+                        </div>
+                        <input type="hidden" name="care_quality_score">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Observations</label>
+                        <textarea class="form-textarea" name="observations"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('visitModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Visit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Review Modal -->
+    <div class="modal-overlay" id="reviewModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Add Review</div>
+                <button class="modal-close" onclick="closeModal('reviewModal')">&times;</button>
+            </div>
+            <form id="reviewForm" onsubmit="submitReview(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Platform</label>
+                        <select class="form-select" name="platform">
+                            <option value="google">Google</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="yelp">Yelp</option>
+                            <option value="caring_com">Caring.com</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Review Date</label>
+                        <input type="date" class="form-input" name="review_date">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Reviewer Name</label>
+                        <input type="text" class="form-input" name="reviewer_name">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rating (1-5 stars) *</label>
+                        <div class="rating-input" data-field="rating">
+                            <button type="button" class="rating-btn" data-value="1">1</button>
+                            <button type="button" class="rating-btn" data-value="2">2</button>
+                            <button type="button" class="rating-btn" data-value="3">3</button>
+                            <button type="button" class="rating-btn" data-value="4">4</button>
+                            <button type="button" class="rating-btn" data-value="5">5</button>
+                        </div>
+                        <input type="hidden" name="rating" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Review Text</label>
+                        <textarea class="form-textarea" name="review_text"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Review URL</label>
+                        <input type="url" class="form-input" name="review_url" placeholder="https://...">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('reviewModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Review</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Initialize rating buttons
+        document.querySelectorAll('.rating-input').forEach(container => {
+            const field = container.dataset.field;
+            const hiddenInput = container.parentElement.querySelector(`input[name="${field}"]`);
+
+            container.querySelectorAll('.rating-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    container.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    if (hiddenInput) hiddenInput.value = btn.dataset.value;
+                });
+            });
+        });
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        async function submitSurvey(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            if (data.would_recommend) data.would_recommend = data.would_recommend === 'true';
+            if (data.overall_satisfaction) data.overall_satisfaction = parseInt(data.overall_satisfaction);
+            if (data.caregiver_satisfaction) data.caregiver_satisfaction = parseInt(data.caregiver_satisfaction);
+
+            try {
+                const response = await fetch('/api/client-satisfaction/surveys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('surveyModal');
+                    form.reset();
+                    refreshDashboard();
+                    alert('Survey saved successfully!');
+                } else {
+                    alert('Error saving survey');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function submitComplaint(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/api/client-satisfaction/complaints', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('complaintModal');
+                    form.reset();
+                    refreshDashboard();
+                    loadComplaints();
+                    alert('Complaint logged successfully!');
+                } else {
+                    alert('Error logging complaint');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function submitVisit(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            if (data.care_quality_score) data.care_quality_score = parseInt(data.care_quality_score);
+
+            try {
+                const response = await fetch('/api/client-satisfaction/quality-visits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('visitModal');
+                    form.reset();
+                    refreshDashboard();
+                    alert('Quality visit saved!');
+                } else {
+                    alert('Error saving visit');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function submitReview(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            if (data.rating) data.rating = parseInt(data.rating);
+
+            try {
+                const response = await fetch('/api/client-satisfaction/reviews', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('reviewModal');
+                    form.reset();
+                    refreshDashboard();
+                    loadReviews();
+                    alert('Review added!');
+                } else {
+                    alert('Error adding review');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function syncSurveys() {
+            try {
+                const response = await fetch('/api/client-satisfaction/sync-surveys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const result = await response.json();
+                alert(result.message || 'Sync completed');
+                refreshDashboard();
+            } catch (err) {
+                alert('Sync error: ' + err.message);
+            }
+        }
+
+        async function loadComplaints() {
+            try {
+                const response = await fetch('/api/client-satisfaction/complaints?limit=5');
+                const result = await response.json();
+                const container = document.getElementById('complaintsSection');
+
+                if (result.data && result.data.length > 0) {
+                    container.innerHTML = result.data.map(c => `
+                        <div class="list-item">
+                            <div class="list-item-info">
+                                <div class="list-item-title">${c.client_name}</div>
+                                <div class="list-item-subtitle">${c.category} - ${c.complaint_date}</div>
+                            </div>
+                            <span class="badge badge-${c.status === 'open' ? 'red' : c.status === 'resolved' ? 'green' : 'yellow'}">${c.status}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error('Error loading complaints:', err);
+            }
+        }
+
+        async function loadReviews() {
+            try {
+                const response = await fetch('/api/client-satisfaction/reviews?limit=5');
+                const result = await response.json();
+                const container = document.getElementById('reviewsSection');
+
+                if (result.data && result.data.length > 0) {
+                    container.innerHTML = result.data.map(r => `
+                        <div class="list-item">
+                            <div class="list-item-info">
+                                <div class="list-item-title">${r.reviewer_name || 'Anonymous'}</div>
+                                <div class="list-item-subtitle">${r.platform} - ${r.review_date}</div>
+                            </div>
+                            <span class="star-rating">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error('Error loading reviews:', err);
+            }
+        }
+
+        function refreshDashboard() {
+            window.location.reload();
+        }
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadComplaints();
+            loadReviews();
+        });
+    </script>
+</body>
+</html>
