@@ -2785,7 +2785,7 @@ Respond ONLY with valid JSON (no markdown):
 """
 
 
-def _call_openai_enrich(prompt: str) -> dict | None:
+def _call_openai_enrich(prompt: str) -> Optional[dict]:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return None
@@ -2812,7 +2812,7 @@ def _call_openai_enrich(prompt: str) -> dict | None:
         return None
 
 
-def _call_gemini_enrich(prompt: str) -> dict | None:
+def _call_gemini_enrich(prompt: str) -> Optional[dict]:
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return None

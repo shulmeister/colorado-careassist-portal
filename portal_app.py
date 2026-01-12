@@ -2177,7 +2177,7 @@ async def test_linkedin_connection():
         status["connection_successful"] = False
         status["needs_oauth"] = True
         status["oauth_url"] = linkedin_service.get_oauth_url(
-            "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/linkedin/callback"
+            "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/linkedin/callback"
         )
         status["message"] = "Visit the oauth_url to authorize LinkedIn access"
     else:
@@ -2216,7 +2216,7 @@ async def linkedin_oauth_callback(
         })
     
     # Exchange code for token
-    redirect_uri = "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/linkedin/callback"
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/linkedin/callback"
     token_data = linkedin_service.exchange_code_for_token(code, redirect_uri)
     
     if token_data and "access_token" in token_data:
