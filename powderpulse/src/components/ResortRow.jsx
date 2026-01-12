@@ -1,5 +1,5 @@
 import React, { useRef } from 'react'
-import { ChevronLeft, ChevronRight, Thermometer, Wind, Sun, Cloud, CloudSnow, CloudRain } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Thermometer, Wind, Sun, Cloud, CloudSnow, CloudRain, Map } from 'lucide-react'
 import useWeatherStore from '../stores/weatherStore'
 import { PASS_COLORS } from '../data/resorts'
 
@@ -131,6 +131,17 @@ const ResortRow = ({ resort }) => {
               <span>{resort.elevation.toLocaleString()} ft</span>
               <span className="text-slate-600">•</span>
               <span className="text-blue-400">{REGION_LABELS[resort.region]}</span>
+              <span className="text-slate-600">•</span>
+              <a
+                href={`https://openskimap.org/#14/${resort.latitude}/${resort.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Map className="w-3 h-3" />
+                <span>Trail Map</span>
+              </a>
             </div>
           </div>
         </div>
