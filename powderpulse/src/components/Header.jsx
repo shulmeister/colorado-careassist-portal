@@ -1,83 +1,58 @@
 import React from 'react'
-import { Snowflake, MapPin, RefreshCw } from 'lucide-react'
+import { Snowflake, Filter } from 'lucide-react'
 import useWeatherStore from '../stores/weatherStore'
-import { getTimeSinceUpdate } from '../utils/helpers'
+import { PASS_COLORS } from '../data/resorts'
 
 const Header = () => {
-  const {
-    passFilter,
-    setPassFilter,
-    lastUpdated,
-    isLoading,
-    refresh
-  } = useWeatherStore()
+  const { passFilter, setPassFilter, filteredResorts } = useWeatherStore()
+
+  const filters = [
+    { id: 'all', label: 'All' },
+    { id: 'epic', label: 'Epic', color: PASS_COLORS.epic.primary },
+    { id: 'ikon', label: 'Ikon', color: PASS_COLORS.ikon.primary }
+  ]
 
   return (
-    <header className="sticky top-0 z-50 bg-[#0F172A]/95 backdrop-blur-sm border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 py-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          {/* Logo and location */}
+    <header className="bg-[#1a1f2e] border-b border-slate-700/50 sticky top-0 z-50">
+      <div className="max-w-6xl mx-auto px-4">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
-              <Snowflake className="w-6 h-6 text-white" />
+            <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <Snowflake className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
+              <h1 className="text-xl font-bold text-white" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                 PowderPulse
               </h1>
-              <div className="flex items-center gap-1 text-slate-400 text-sm">
-                <MapPin className="w-3 h-3" />
-                <span>Boulder, CO</span>
-              </div>
             </div>
           </div>
 
-          {/* Pass filter toggle */}
-          <div className="flex items-center gap-3">
-            <div className="flex bg-slate-800 rounded-lg p-1">
-              <button
-                onClick={() => setPassFilter('all')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  passFilter === 'all'
-                    ? 'bg-slate-700 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                All
-              </button>
-              <button
-                onClick={() => setPassFilter('epic')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  passFilter === 'epic'
-                    ? 'bg-[#0066CC] text-white'
-                    : 'text-slate-400 hover:text-[#0066CC]'
-                }`}
-              >
-                Epic
-              </button>
-              <button
-                onClick={() => setPassFilter('ikon')}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                  passFilter === 'ikon'
-                    ? 'bg-[#E31837] text-white'
-                    : 'text-slate-400 hover:text-[#E31837]'
-                }`}
-              >
-                Ikon
-              </button>
+          {/* Pass Filter */}
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-slate-500" />
+            <div className="flex bg-slate-800/50 rounded-lg p-1">
+              {filters.map(filter => (
+                <button
+                  key={filter.id}
+                  onClick={() => setPassFilter(filter.id)}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                    passFilter === filter.id
+                      ? 'bg-slate-700 text-white'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  style={passFilter === filter.id && filter.color ? {
+                    backgroundColor: filter.color,
+                    color: 'white'
+                  } : {}}
+                >
+                  {filter.label}
+                </button>
+              ))}
             </div>
-
-            {/* Refresh button */}
-            <button
-              onClick={refresh}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-300 transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">
-                {isLoading ? 'Updating...' : getTimeSinceUpdate(lastUpdated)}
-              </span>
-            </button>
+            <span className="text-sm text-slate-500 ml-2">
+              {filteredResorts.length} resorts
+            </span>
           </div>
         </div>
       </div>

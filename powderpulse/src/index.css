@@ -3,8 +3,8 @@
 :root {
   --epic-blue: #0066CC;
   --ikon-red: #E31837;
-  --bg-primary: #0F172A;
-  --bg-secondary: #1E293B;
+  --bg-primary: #1a1f2e;
+  --bg-secondary: #252d3d;
   --bg-tertiary: #334155;
   --text-primary: #F8FAFC;
   --text-secondary: #94A3B8;
@@ -30,7 +30,17 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Space Grotesk', sans-serif;
 }
 
-/* Custom scrollbar */
+/* Hide scrollbar for horizontal scroll */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Custom scrollbar for main page */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
@@ -82,23 +92,16 @@ h1, h2, h3, h4, h5, h6 {
   animation: pulse-glow 2s ease-in-out infinite;
 }
 
-/* Sparkline container */
-.sparkline-container {
-  height: 40px;
-  width: 100%;
+/* Resort row styling */
+.resort-row {
+  transition: background-color 0.2s ease;
 }
 
-/* Card hover effect */
-.resort-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+.resort-row:hover {
+  background-color: #2a3345;
 }
 
-.resort-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+/* Weekend highlight */
+.weekend {
+  color: #EAB308;
 }
-
-/* Confidence indicator fade */
-.confidence-high { opacity: 1; }
-.confidence-medium { opacity: 0.7; }
-.confidence-low { opacity: 0.5; }
