@@ -33,6 +33,24 @@ class PinterestService:
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json",
         }
+
+    def _is_configured(self) -> bool:
+        """Check if Pinterest API is configured"""
+        return bool(self.access_token)
+
+    def get_user_account(self) -> Dict[str, Any]:
+        """Fetch basic user account info"""
+        if not self.access_token:
+            return {"error": "Not configured"}
+
+        try:
+            url = f"{PINTEREST_API_BASE}/user_account"
+            response = requests.get(url, headers=self._get_headers(), timeout=30)
+            if response.status_code == 200:
+                return response.json()
+            return {"error": f"API returned {response.status_code}"}
+        except Exception as e:
+            return {"error": str(e)}
     
     def get_user_metrics(self, start_date: date, end_date: date) -> Dict[str, Any]:
         """

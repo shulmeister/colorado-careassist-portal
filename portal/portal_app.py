@@ -1730,7 +1730,7 @@ async def api_marketing_engagement(
         gbp_data = gbp_service.get_gbp_metrics(start, end)
         
         # Pinterest metrics
-        pinterest_data = pinterest_service.get_user_analytics(start, end)
+        pinterest_data = pinterest_service.get_user_metrics(start, end)
         
         # LinkedIn metrics
         linkedin_data = linkedin_service.get_metrics(start, end)
@@ -1969,7 +1969,7 @@ async def api_marketing_pinterest(
         start = end - timedelta(days=30)
     
     try:
-        data = pinterest_service.get_metrics(start, end)
+        data = pinterest_service.get_user_metrics(start, end)
         return JSONResponse({
             "success": True,
             "date_range": {
