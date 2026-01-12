@@ -11,11 +11,13 @@ export const fetchResortWeather = async (resort) => {
   const params = new URLSearchParams({
     latitude: resort.latitude,
     longitude: resort.longitude,
-    current: 'temperature_2m,relative_humidity_2m,apparent_temperature,cloud_cover,wind_speed_10m,wind_gusts_10m,visibility,weather_code',
-    hourly: 'temperature_2m,precipitation,snowfall,snow_depth,wind_speed_10m,wind_gusts_10m,weather_code,relative_humidity_2m',
-    daily: 'temperature_2m_max,temperature_2m_min,snowfall_sum,precipitation_probability_max,weather_code,wind_speed_10m_max,wind_gusts_10m_max',
+    models: 'best_match',
+    current: 'temperature_2m,relative_humidity_2m,apparent_temperature,cloud_cover,wind_speed_10m,wind_gusts_10m,wind_direction_10m,snowfall,visibility,weather_code',
+    hourly: 'temperature_2m,precipitation_probability,precipitation,snowfall,snow_depth,wind_speed_10m,wind_gusts_10m,weather_code,relative_humidity_2m',
+    daily: 'snowfall_sum,temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code,wind_speed_10m_max,wind_gusts_10m_max',
     forecast_days: 16,
     temperature_unit: 'fahrenheit',
+    wind_speed_unit: 'mph',
     timezone: resort.timezone || 'America/Denver',
     precipitation_unit: 'inch'
   })
@@ -100,11 +102,13 @@ const processWeatherData = (resortId, data) => {
   }))
 
   // Build hourly forecast for next 48 hours
+  // Note: hourly snowfall is instantaneous rate, NOT cumulative
   const hourlyForecast = hourly.time.slice(0, 48).map((time, index) => ({
     time,
     temp: hourly.temperature_2m[index],
-    snowfall: hourly.snowfall[index] || 0,
+    snowfall: hourly.snowfall[index] || 0,  // Hourly snowfall rate (not cumulative)
     precipitation: hourly.precipitation[index] || 0,
+    precipProbability: hourly.precipitation_probability?.[index] || 0,
     windSpeed: hourly.wind_speed_10m[index],
     windGusts: hourly.wind_gusts_10m?.[index] || 0,
     humidity: hourly.relative_humidity_2m?.[index] || 0,
@@ -121,8 +125,10 @@ const processWeatherData = (resortId, data) => {
       temp: currentTemp,
       feelsLike: current?.apparent_temperature ?? currentTemp,
       snowDepth: currentSnowDepth,
+      snowfallRate: current?.snowfall || 0,  // Current snowfall rate
       windSpeed: currentWindSpeed,
       windGusts: current?.wind_gusts_10m || 0,
+      windDirection: current?.wind_direction_10m || 0,
       humidity: current?.relative_humidity_2m || hourly.relative_humidity_2m?.[currentHourIndex] || 0,
       cloudCover: current?.cloud_cover || 0,
       visibility: current?.visibility || 10000,
