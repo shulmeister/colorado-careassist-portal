@@ -2055,6 +2055,7 @@ async def pinterest_oauth_callback(
     """Pinterest OAuth callback - exchange code for access token."""
     import os
     import base64
+    import requests
 
     if error:
         return JSONResponse({
