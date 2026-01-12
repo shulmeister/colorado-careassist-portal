@@ -264,15 +264,16 @@ def test_gbp() -> Dict[str, Any]:
     try:
         from services.marketing.gbp_service import gbp_service
         
-        if not gbp_service.service:
-            results["errors"].append("GBP service not initialized")
-            print_status("  Service initialized", False, "Service is None")
+        if not (gbp_service.credentials or gbp_service.access_token):
+            results["errors"].append("GBP service not initialized (no credentials or token)")
+            print_status("  Service initialized", False, "No credentials/token")
             return results
         
         print_status("  Service initialized", True, "")
         
-        # Test location info
-        locations = gbp_service.get_location_info()
+        # Test location info (this method exists in the service)
+        # It internally calls get_accounts -> get_locations
+        locations = gbp_service.get_locations()
         results["connection_test"] = True
         print_status("  Location access", True, f"Found {len(locations)} locations")
         
