@@ -118,8 +118,8 @@ def main():
                         
                     updated_count += 1
                     
-                    # Rate limiting
-                    time.sleep(4) # 4 seconds to be safe
+                    # Rate limiting (strict 10 RPM limit = 1 request every 6 seconds minimum)
+                    time.sleep(10) # 10 seconds to be very safe
                 else:
                     print("   Skipping update (name match or failed)")
             else:
