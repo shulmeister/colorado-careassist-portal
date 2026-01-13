@@ -39,12 +39,14 @@ const Header = () => {
                   className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
                     passFilter === filter.id
                       ? 'text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
+                      : ''
                   }`}
                   style={passFilter === filter.id ? {
                     backgroundColor: filter.color || '#3b82f6',
                     color: 'white'
-                  } : {}}
+                  } : {
+                    color: filter.color || '#94a3b8'
+                  }}
                 >
                   {filter.label}
                 </button>
