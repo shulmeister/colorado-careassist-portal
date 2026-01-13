@@ -208,9 +208,9 @@ const ResortRow = ({ resort, onClick }) => {
       </div>
 
       {/* Details Grid */}
-      <div className="px-3 sm:px-4 lg:px-6 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 lg:gap-8 xl:gap-12 border-b border-slate-700/30 text-xs sm:text-sm">
+      <div className="px-3 sm:px-4 lg:px-6 py-3 flex flex-wrap sm:flex-nowrap justify-between gap-4 sm:gap-6 border-b border-slate-700/30 text-xs sm:text-sm">
         {/* Current Conditions */}
-        <div>
+        <div className="w-[calc(50%-0.5rem)] sm:w-auto sm:flex-1">
           <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-2">Current</div>
           <div className="space-y-1">
             <div className="flex justify-between">
@@ -235,7 +235,7 @@ const ResortRow = ({ resort, onClick }) => {
         </div>
 
         {/* Snow Totals */}
-        <div>
+        <div className="w-[calc(50%-0.5rem)] sm:w-auto sm:flex-1">
           <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-2">Snow Totals</div>
           <div className="space-y-1">
             <div className="flex justify-between">
@@ -260,7 +260,7 @@ const ResortRow = ({ resort, onClick }) => {
         </div>
 
         {/* Resort Info */}
-        <div>
+        <div className="w-[calc(50%-0.5rem)] sm:w-auto sm:flex-1">
           <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-2">Resort Info</div>
           <div className="space-y-1">
             <div className="flex justify-between">
@@ -281,7 +281,7 @@ const ResortRow = ({ resort, onClick }) => {
         </div>
 
         {/* 3-Day Forecast Preview */}
-        <div>
+        <div className="w-[calc(50%-0.5rem)] sm:w-auto sm:flex-1">
           <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-2">Forecast</div>
           <div className="space-y-1">
             {dailyForecast.slice(0, 3).map((day, i) => {
@@ -322,7 +322,7 @@ const ResortRow = ({ resort, onClick }) => {
 
           <div
             ref={scrollRef}
-            className="flex overflow-x-auto scrollbar-hide px-6 sm:px-8 gap-1.5 sm:gap-2"
+            className="flex overflow-x-auto scrollbar-hide px-6 sm:px-8 gap-1.5 sm:gap-2 w-full"
           >
             {dailyForecast.map((day, i) => {
               const date = new Date(day.date)
