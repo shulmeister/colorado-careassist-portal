@@ -116,19 +116,19 @@ const ResortRow = ({ resort, onClick }) => {
       onClick={onClick}
     >
       {/* Header Row */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700/30">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 sm:px-4 py-3 border-b border-slate-700/30 gap-3 sm:gap-0">
         {/* Left: Resort Info */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-slate-700/50 flex items-center justify-center text-xl">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-slate-700/50 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">
             {REGION_FLAGS[resort.region]}
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-white">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <h3 className="font-semibold text-white text-sm sm:text-base truncate">
                 {resort.name}
               </h3>
               <span
-                className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase"
+                className="px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-bold uppercase flex-shrink-0"
                 style={{
                   backgroundColor: passColor.bg,
                   color: passColor.primary
@@ -139,7 +139,7 @@ const ResortRow = ({ resort, onClick }) => {
               {/* Lift Status Indicator */}
               {liftStatusInfo && (
                 <span
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${liftStatusInfo.bg} text-white`}
+                  className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded text-[9px] sm:text-[10px] font-bold ${liftStatusInfo.bg} text-white flex-shrink-0`}
                   title={`${Math.round(liftStatus.lifts.percentage)}% lifts open (${liftStatus.lifts.open}/${liftStatus.lifts.open + liftStatus.lifts.closed})`}
                 >
                   <Gauge className="w-3 h-3" />
@@ -147,10 +147,10 @@ const ResortRow = ({ resort, onClick }) => {
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
+            <div className="flex items-center gap-1.5 sm:gap-2 text-[10px] sm:text-xs text-slate-400 flex-wrap">
               <span>{resort.elevation.toLocaleString()} ft</span>
-              <span className="text-slate-600">•</span>
-              <span className="text-blue-400">{REGION_LABELS[resort.region]}</span>
+              <span className="text-slate-600 hidden sm:inline">•</span>
+              <span className="text-blue-400 hidden sm:inline">{REGION_LABELS[resort.region]}</span>
               <span className="text-slate-600">•</span>
               <a
                 href={`https://openskimap.org/#14/${resort.latitude}/${resort.longitude}`}
@@ -167,30 +167,39 @@ const ResortRow = ({ resort, onClick }) => {
         </div>
 
         {/* Center: Snow Period Summaries */}
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-3 sm:gap-6 overflow-x-auto scrollbar-hide">
           {/* Last 24 Hours */}
-          <div className="text-center">
-            <div className="text-[10px] text-slate-500 uppercase tracking-wide">Last 24h</div>
-            <div className={`text-2xl font-bold ${getSnowColor(weather?.snow24h || 0).text}`}>
+          <div className="text-center flex-shrink-0">
+            <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide">24h</div>
+            <div className={`text-lg sm:text-2xl font-bold ${getSnowColor(weather?.snow24h || 0).text}`}>
               {formatSnow(weather?.snow24h || 0)}
             </div>
           </div>
 
           {/* Period Summaries */}
           {periods.map((period, idx) => (
-            <div key={idx} className="text-center">
-              <div className="text-[10px] text-slate-500 uppercase tracking-wide whitespace-nowrap">
-                {period.label}
+            <div key={idx} className="text-center flex-shrink-0">
+              <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide whitespace-nowrap">
+                <span className="hidden sm:inline">{period.label}</span>
+                <span className="sm:hidden">{idx === 0 ? '1-5d' : idx === 1 ? '6-10d' : '11-15d'}</span>
               </div>
-              <div className={`text-xl font-bold ${getSnowColor(period.total).text}`}>
+              <div className={`text-base sm:text-xl font-bold ${getSnowColor(period.total).text}`}>
                 {formatSnow(period.total)}
               </div>
             </div>
           ))}
+
+          {/* Current Temp - moved inline on mobile */}
+          <div className="flex items-center gap-1 text-slate-400 flex-shrink-0 sm:hidden">
+            <Thermometer className="w-3 h-3" />
+            <span className="text-sm font-medium text-white">
+              {weather?.current?.temp ? `${Math.round(weather.current.temp)}°` : '--'}
+            </span>
+          </div>
         </div>
 
-        {/* Right: Current Temp */}
-        <div className="flex items-center gap-1 text-slate-400">
+        {/* Right: Current Temp - desktop only */}
+        <div className="hidden sm:flex items-center gap-1 text-slate-400">
           <Thermometer className="w-4 h-4" />
           <span className="text-lg font-medium text-white">
             {weather?.current?.temp ? `${Math.round(weather.current.temp)}°F` : '--'}
@@ -199,7 +208,7 @@ const ResortRow = ({ resort, onClick }) => {
       </div>
 
       {/* Details Grid */}
-      <div className="px-4 py-3 grid grid-cols-4 gap-4 border-b border-slate-700/30 text-sm">
+      <div className="px-3 sm:px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 border-b border-slate-700/30 text-xs sm:text-sm">
         {/* Current Conditions */}
         <div>
           <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-2">Current</div>
@@ -295,25 +304,25 @@ const ResortRow = ({ resort, onClick }) => {
       </div>
 
       {/* 15-Day Forecast */}
-      <div className="px-4 py-3">
-        <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-3">15-Day Forecast</div>
+      <div className="px-3 sm:px-4 py-3">
+        <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide mb-2 sm:mb-3">15-Day Forecast</div>
         <div className="relative">
           <button
             onClick={(e) => scroll(e, 'left')}
-            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-slate-800/90 rounded-full hover:bg-slate-700 border border-slate-600"
+            className="absolute left-0 top-1/2 -translate-y-1/2 z-10 p-1 sm:p-1.5 bg-slate-800/90 rounded-full hover:bg-slate-700 border border-slate-600"
           >
-            <ChevronLeft className="w-4 h-4 text-slate-300" />
+            <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4 text-slate-300" />
           </button>
           <button
             onClick={(e) => scroll(e, 'right')}
-            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-1.5 bg-slate-800/90 rounded-full hover:bg-slate-700 border border-slate-600"
+            className="absolute right-0 top-1/2 -translate-y-1/2 z-10 p-1 sm:p-1.5 bg-slate-800/90 rounded-full hover:bg-slate-700 border border-slate-600"
           >
-            <ChevronRight className="w-4 h-4 text-slate-300" />
+            <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-slate-300" />
           </button>
 
           <div
             ref={scrollRef}
-            className="flex overflow-x-auto scrollbar-hide px-8 gap-2"
+            className="flex overflow-x-auto scrollbar-hide px-6 sm:px-8 gap-1.5 sm:gap-2"
           >
             {dailyForecast.map((day, i) => {
               const date = new Date(day.date)
@@ -325,33 +334,33 @@ const ResortRow = ({ resort, onClick }) => {
               return (
                 <div
                   key={i}
-                  className={`flex flex-col items-center min-w-[70px] p-3 rounded-lg ${
+                  className={`flex flex-col items-center min-w-[56px] sm:min-w-[70px] p-2 sm:p-3 rounded-lg ${
                     isWeekend ? 'bg-yellow-500/10' : 'bg-slate-800/30'
                   }`}
                 >
-                  <span className={`text-xs font-medium ${isWeekend ? 'text-yellow-500' : 'text-slate-400'}`}>
+                  <span className={`text-[10px] sm:text-xs font-medium ${isWeekend ? 'text-yellow-500' : 'text-slate-400'}`}>
                     {dayName}
                   </span>
-                  <span className={`text-[10px] ${isWeekend ? 'text-yellow-500/70' : 'text-slate-500'}`}>
+                  <span className={`text-[9px] sm:text-[10px] ${isWeekend ? 'text-yellow-500/70' : 'text-slate-500'}`}>
                     {monthDay}
                   </span>
 
-                  <div className="my-2">
-                    <WeatherIcon code={day.weatherCode} />
+                  <div className="my-1.5 sm:my-2">
+                    <WeatherIcon code={day.weatherCode} className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
 
-                  <div className="h-12 w-8 flex items-end justify-center mb-2">
+                  <div className="h-10 sm:h-12 w-6 sm:w-8 flex items-end justify-center mb-1.5 sm:mb-2">
                     <div
                       className={`w-full rounded-t ${snowColor.bg}`}
                       style={{ height: `${getSnowBarHeight(day.snowfall)}px` }}
                     />
                   </div>
 
-                  <span className={`text-sm font-bold ${snowColor.text}`}>
+                  <span className={`text-xs sm:text-sm font-bold ${snowColor.text}`}>
                     {formatSnow(day.snowfall)}
                   </span>
 
-                  <div className="mt-2 text-xs text-center">
+                  <div className="mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-center">
                     <span className="text-white">{Math.round(day.tempMax)}°</span>
                     <span className="text-slate-500"> / </span>
                     <span className="text-slate-400">{Math.round(day.tempMin)}°</span>

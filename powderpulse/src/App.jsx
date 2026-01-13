@@ -47,10 +47,10 @@ function HomePage() {
     <div className="min-h-screen bg-[#0f1219]">
       <Header />
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="w-full px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
         {/* Quick Stats Bar */}
-        <div className="flex items-center justify-between mb-6 bg-[#1a1f2e] rounded-lg p-4 border border-slate-700/30">
-          <div className="flex items-center gap-8">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 sm:mb-6 bg-[#1a1f2e] rounded-lg p-3 sm:p-4 border border-slate-700/30">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-8">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
                 <Snowflake className="w-4 h-4 text-blue-400" />
@@ -69,14 +69,16 @@ function HomePage() {
                 <div>
                   <div className="text-xs text-slate-500">Most Snow (24h)</div>
                   <div className="text-lg font-bold text-white">
-                    {stats.mostSnow.name} - {Math.round(weatherData[stats.mostSnow.id]?.snow24h || 0)}"
+                    <span className="hidden sm:inline">{stats.mostSnow.name} - </span>
+                    <span className="sm:hidden">{stats.mostSnow.name.split(' ')[0]} </span>
+                    {Math.round(weatherData[stats.mostSnow.id]?.snow24h || 0)}"
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 self-end sm:self-auto">
             {lastUpdated && (
               <span className="text-xs text-slate-500">
                 Updated {new Date(lastUpdated).toLocaleTimeString()}

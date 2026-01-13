@@ -188,24 +188,24 @@ const ResortDetail = () => {
     <div className="min-h-screen bg-[#0f1219]">
       {/* Header */}
       <header className="bg-[#1a1f2e] border-b border-slate-700/30">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="w-full px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <button
                 onClick={() => navigate('/')}
-                className="p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 transition-colors"
+                className="p-1.5 sm:p-2 rounded-lg bg-slate-800/50 hover:bg-slate-700 transition-colors"
               >
-                <ArrowLeft className="w-5 h-5 text-slate-300" />
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-slate-300" />
               </button>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-slate-700/50 flex items-center justify-center text-2xl">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-slate-700/50 flex items-center justify-center text-xl sm:text-2xl flex-shrink-0">
                   {REGION_FLAGS[resort.region]}
                 </div>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h1 className="text-2xl font-bold text-white">{resort.name}</h1>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                    <h1 className="text-lg sm:text-2xl font-bold text-white truncate">{resort.name}</h1>
                     <span
-                      className="px-2 py-1 rounded text-xs font-bold uppercase"
+                      className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-bold uppercase flex-shrink-0"
                       style={{
                         backgroundColor: passColor.bg,
                         color: passColor.primary
@@ -215,16 +215,16 @@ const ResortDetail = () => {
                     </span>
                     {liftStatusInfo && (
                       <span
-                        className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-bold ${liftStatusInfo.bg} text-white`}
+                        className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-bold ${liftStatusInfo.bg} text-white flex-shrink-0`}
                       >
                         <Gauge className="w-3 h-3" />
-                        {Math.round(liftStatus.lifts.percentage)}% Open
+                        {Math.round(liftStatus.lifts.percentage)}%<span className="hidden sm:inline"> Open</span>
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-slate-400 mt-1">
+                  <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-400 mt-1">
                     <span className="flex items-center gap-1">
-                      <Mountain className="w-4 h-4" />
+                      <Mountain className="w-3 h-3 sm:w-4 sm:h-4" />
                       {resort.elevation.toLocaleString()} ft
                     </span>
                     <span>•</span>
@@ -234,7 +234,7 @@ const ResortDetail = () => {
                       rel="noopener noreferrer"
                       className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 transition-colors"
                     >
-                      <Map className="w-4 h-4" />
+                      <Map className="w-3 h-3 sm:w-4 sm:h-4" />
                       Trail Map
                     </a>
                   </div>
@@ -246,7 +246,7 @@ const ResortDetail = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="w-full px-3 sm:px-4 lg:px-6 py-4 sm:py-6">
         {/* Loading State */}
         {isLoading && !weather && (
           <div className="flex items-center justify-center py-20">
@@ -260,7 +260,7 @@ const ResortDetail = () => {
         {weather && (
           <>
             {/* Hero Stats Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
               {/* Current Temperature */}
               <div className="bg-gradient-to-br from-orange-500/20 to-red-500/20 rounded-xl p-6 border border-orange-500/30">
                 <div className="flex items-center gap-2 text-orange-400 mb-2">
@@ -373,7 +373,7 @@ const ResortDetail = () => {
             )}
 
             {/* Charts Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
               {/* Snow Accumulation Chart */}
               <div className="bg-[#1e2536] rounded-xl p-6 border border-slate-700/30">
                 <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
@@ -600,7 +600,7 @@ const ResortDetail = () => {
             </div>
 
             {/* Snow Totals Summary */}
-            <div className="mt-6 grid grid-cols-4 gap-4">
+            <div className="mt-4 sm:mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4">
               <div className="bg-[#1e2536] rounded-xl p-4 border border-slate-700/30 text-center">
                 <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Last 24h</div>
                 <div className={`text-3xl font-bold ${getSnowColor(snow24h).text}`}>
