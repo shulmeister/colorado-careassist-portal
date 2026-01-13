@@ -116,7 +116,7 @@ const ResortRow = ({ resort, onClick }) => {
       onClick={onClick}
     >
       {/* Header Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 sm:px-4 py-3 border-b border-slate-700/30 gap-3 sm:gap-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between px-3 sm:px-4 lg:px-6 py-3 border-b border-slate-700/30 gap-3 sm:gap-0">
         {/* Left: Resort Info */}
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-slate-700/50 flex items-center justify-center text-lg sm:text-xl flex-shrink-0">
@@ -167,7 +167,7 @@ const ResortRow = ({ resort, onClick }) => {
         </div>
 
         {/* Center: Snow Period Summaries */}
-        <div className="flex items-center gap-3 sm:gap-6 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-3 sm:gap-6 lg:gap-8 xl:gap-10 overflow-x-auto scrollbar-hide">
           {/* Last 24 Hours */}
           <div className="text-center flex-shrink-0">
             <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide">24h</div>
@@ -208,7 +208,7 @@ const ResortRow = ({ resort, onClick }) => {
       </div>
 
       {/* Details Grid */}
-      <div className="px-3 sm:px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 border-b border-slate-700/30 text-xs sm:text-sm">
+      <div className="px-3 sm:px-4 lg:px-6 py-3 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 lg:gap-8 xl:gap-12 border-b border-slate-700/30 text-xs sm:text-sm">
         {/* Current Conditions */}
         <div>
           <div className="text-[10px] text-slate-500 uppercase tracking-wide mb-2">Current</div>
@@ -304,7 +304,7 @@ const ResortRow = ({ resort, onClick }) => {
       </div>
 
       {/* 15-Day Forecast */}
-      <div className="px-3 sm:px-4 py-3">
+      <div className="px-3 sm:px-4 lg:px-6 py-3">
         <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide mb-2 sm:mb-3">15-Day Forecast</div>
         <div className="relative">
           <button
