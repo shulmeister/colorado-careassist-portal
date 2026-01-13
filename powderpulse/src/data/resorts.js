@@ -285,6 +285,32 @@ export const resorts = [
     liftieId: 'palisades-tahoe',
     description: 'Olympic history, Lake Tahoe views'
   },
+  {
+    id: 'kirkwood',
+    name: 'Kirkwood',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.CALIFORNIA,
+    latitude: 38.6850,
+    longitude: -120.0653,
+    elevation: 9800,
+    distanceFromBoulder: 900,
+    timezone: 'America/Los_Angeles',
+    liftieId: 'kirkwood',
+    description: 'Steep chutes, deep snow, no crowds'
+  },
+  {
+    id: 'sugar-bowl',
+    name: 'Sugar Bowl',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.CALIFORNIA,
+    latitude: 39.3048,
+    longitude: -120.3344,
+    elevation: 8383,
+    distanceFromBoulder: 920,
+    timezone: 'America/Los_Angeles',
+    liftieId: 'sugar-bowl',
+    description: 'Historic Tahoe resort, classic skiing'
+  },
 
   // ==================== IDAHO ====================
   {
