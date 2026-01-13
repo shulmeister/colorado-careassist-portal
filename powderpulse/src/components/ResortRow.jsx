@@ -6,9 +6,15 @@ import { getLiftStatusColor } from '../services/liftieApi'
 
 const REGION_FLAGS = {
   colorado: '🇺🇸',
+  'new-mexico': '🇺🇸',
   utah: '🇺🇸',
+  california: '🇺🇸',
   idaho: '🇺🇸',
   wyoming: '🇺🇸',
+  montana: '🇺🇸',
+  alaska: '🇺🇸',
+  maine: '🇺🇸',
+  vermont: '🇺🇸',
   canada: '🇨🇦',
   japan: '🇯🇵',
   europe: '🇪🇺'
@@ -16,9 +22,15 @@ const REGION_FLAGS = {
 
 const REGION_LABELS = {
   colorado: 'Colorado',
+  'new-mexico': 'New Mexico',
   utah: 'Utah',
+  california: 'California',
   idaho: 'Idaho',
   wyoming: 'Wyoming',
+  montana: 'Montana',
+  alaska: 'Alaska',
+  maine: 'Maine',
+  vermont: 'Vermont',
   canada: 'Canada',
   japan: 'Japan',
   europe: 'Europe'

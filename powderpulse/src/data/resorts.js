@@ -9,9 +9,15 @@ export const PASS_TYPES = {
 
 export const REGIONS = {
   COLORADO: 'colorado',
+  NEW_MEXICO: 'new-mexico',
   UTAH: 'utah',
+  CALIFORNIA: 'california',
   IDAHO: 'idaho',
   WYOMING: 'wyoming',
+  MONTANA: 'montana',
+  ALASKA: 'alaska',
+  MAINE: 'maine',
+  VERMONT: 'vermont',
   CANADA: 'canada',
   JAPAN: 'japan',
   EUROPE: 'europe'
@@ -209,6 +215,21 @@ export const resorts = [
     description: 'Most snow in Colorado, no crowds'
   },
 
+  // ==================== NEW MEXICO ====================
+  {
+    id: 'taos',
+    name: 'Taos Ski Valley',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.NEW_MEXICO,
+    latitude: 36.5967,
+    longitude: -105.4544,
+    elevation: 12481,
+    distanceFromBoulder: 280,
+    timezone: 'America/Denver',
+    liftieId: 'taos-ski-valley',
+    description: 'Steep terrain, authentic culture'
+  },
+
   // ==================== UTAH ====================
   {
     id: 'snowbird',
@@ -235,6 +256,34 @@ export const resorts = [
     timezone: 'America/Denver',
     liftieId: 'alta',
     description: 'Skiers only, legendary powder'
+  },
+
+  // ==================== CALIFORNIA ====================
+  {
+    id: 'mammoth',
+    name: 'Mammoth Mountain',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.CALIFORNIA,
+    latitude: 37.6308,
+    longitude: -119.0326,
+    elevation: 11053,
+    distanceFromBoulder: 850,
+    timezone: 'America/Los_Angeles',
+    liftieId: 'mammoth-mountain',
+    description: 'Longest season in CA, massive terrain'
+  },
+  {
+    id: 'palisades-tahoe',
+    name: 'Palisades Tahoe',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.CALIFORNIA,
+    latitude: 39.1969,
+    longitude: -120.2358,
+    elevation: 9050,
+    distanceFromBoulder: 900,
+    timezone: 'America/Los_Angeles',
+    liftieId: 'palisades-tahoe',
+    description: 'Olympic history, Lake Tahoe views'
   },
 
   // ==================== IDAHO ====================
@@ -265,6 +314,66 @@ export const resorts = [
     timezone: 'America/Denver',
     liftieId: 'jackson-hole',
     description: 'Expert terrain, Corbet\'s Couloir'
+  },
+
+  // ==================== MONTANA ====================
+  {
+    id: 'big-sky',
+    name: 'Big Sky',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.MONTANA,
+    latitude: 45.2857,
+    longitude: -111.4018,
+    elevation: 11166,
+    distanceFromBoulder: 650,
+    timezone: 'America/Denver',
+    liftieId: 'big-sky',
+    description: 'Biggest skiing in America, uncrowded'
+  },
+
+  // ==================== ALASKA ====================
+  {
+    id: 'alyeska',
+    name: 'Alyeska',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.ALASKA,
+    latitude: 60.9697,
+    longitude: -149.0981,
+    elevation: 3939,
+    distanceFromBoulder: 2800,
+    timezone: 'America/Anchorage',
+    liftieId: 'alyeska',
+    description: 'Ocean views, extreme terrain, deep snow'
+  },
+
+  // ==================== MAINE ====================
+  {
+    id: 'sugarloaf',
+    name: 'Sugarloaf',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.MAINE,
+    latitude: 45.0314,
+    longitude: -70.3131,
+    elevation: 4237,
+    distanceFromBoulder: 2100,
+    timezone: 'America/New_York',
+    liftieId: 'sugarloaf',
+    description: 'Biggest skiing in the East, above treeline'
+  },
+
+  // ==================== VERMONT ====================
+  {
+    id: 'jay-peak',
+    name: 'Jay Peak',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.VERMONT,
+    latitude: 44.9279,
+    longitude: -72.5046,
+    elevation: 3968,
+    distanceFromBoulder: 2000,
+    timezone: 'America/New_York',
+    liftieId: 'jay-peak',
+    description: 'Most snow in the East, glades galore'
   },
 
   // ==================== CANADA ====================
@@ -447,7 +556,7 @@ export const sortResorts = (resortList, sortBy, weatherData = {}) => {
       })
     case 'region':
       return sorted.sort((a, b) => {
-        const regionOrder = ['colorado', 'utah', 'idaho', 'wyoming', 'canada', 'japan', 'europe']
+        const regionOrder = ['colorado', 'new-mexico', 'utah', 'california', 'idaho', 'wyoming', 'montana', 'alaska', 'maine', 'vermont', 'canada', 'japan', 'europe']
         return regionOrder.indexOf(a.region) - regionOrder.indexOf(b.region)
       })
     default:
