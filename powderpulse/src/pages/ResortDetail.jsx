@@ -41,6 +41,7 @@ import { getLiftStatusColor } from '../services/liftieApi'
 const REGION_FLAGS = {
   colorado: '🇺🇸',
   utah: '🇺🇸',
+  idaho: '🇺🇸',
   wyoming: '🇺🇸',
   canada: '🇨🇦',
   japan: '🇯🇵',

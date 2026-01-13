@@ -10,6 +10,7 @@ export const PASS_TYPES = {
 export const REGIONS = {
   COLORADO: 'colorado',
   UTAH: 'utah',
+  IDAHO: 'idaho',
   WYOMING: 'wyoming',
   CANADA: 'canada',
   JAPAN: 'japan',
@@ -236,6 +237,21 @@ export const resorts = [
     description: 'Skiers only, legendary powder'
   },
 
+  // ==================== IDAHO ====================
+  {
+    id: 'sun-valley',
+    name: 'Sun Valley',
+    pass: PASS_TYPES.IKON,
+    region: REGIONS.IDAHO,
+    latitude: 43.6808,
+    longitude: -114.3514,
+    elevation: 9150,
+    distanceFromBoulder: 580,
+    timezone: 'America/Boise',
+    liftieId: 'sun-valley',
+    description: 'Historic resort, world-class grooming'
+  },
+
   // ==================== WYOMING ====================
   {
     id: 'jackson-hole',
@@ -431,7 +447,7 @@ export const sortResorts = (resortList, sortBy, weatherData = {}) => {
       })
     case 'region':
       return sorted.sort((a, b) => {
-        const regionOrder = ['colorado', 'utah', 'wyoming', 'canada', 'japan', 'europe']
+        const regionOrder = ['colorado', 'utah', 'idaho', 'wyoming', 'canada', 'japan', 'europe']
         return regionOrder.indexOf(a.region) - regionOrder.indexOf(b.region)
       })
     default:
