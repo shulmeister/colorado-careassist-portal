@@ -9724,6 +9724,308 @@ async def get_lead_activities(lead_id: int, db: Session = Depends(get_db), curre
 # End of Lead Pipeline API Endpoints
 # ============================================================================
 
+# ============================================================================
+# Shift Filling API Endpoints (POC)
+# ============================================================================
+
+from shift_filling import (
+    shift_filling_engine, wellsky_mock, sms_service,
+    CaregiverMatcher, OutreachStatus
+)
+
+
+class CalloffRequest(BaseModel):
+    shift_id: str
+    caregiver_id: str
+    reason: str = ""
+
+
+class SMSResponseRequest(BaseModel):
+    campaign_id: str
+    phone: str
+    message_text: str
+
+
+@app.get("/api/shift-filling/status")
+async def shift_filling_status(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Get shift filling engine status"""
+    return JSONResponse({
+        "status": "active",
+        "sms_enabled": sms_service.is_enabled(),
+        "active_campaigns": len(shift_filling_engine.active_campaigns),
+        "service": "AI-Powered Shift Filling POC"
+    })
+
+
+@app.get("/api/shift-filling/open-shifts")
+async def get_open_shifts(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Get all open shifts from WellSky mock"""
+    shifts = wellsky_mock.get_open_shifts()
+    return JSONResponse([{
+        "id": s.id,
+        "client_id": s.client_id,
+        "client_name": s.client.full_name if s.client else "Unknown",
+        "client_city": s.client.city if s.client else "",
+        "date": s.date.isoformat(),
+        "start_time": s.start_time.strftime("%H:%M"),
+        "end_time": s.end_time.strftime("%H:%M"),
+        "duration_hours": s.duration_hours,
+        "is_urgent": s.is_urgent,
+        "hours_until_start": s.hours_until_start,
+        "status": s.status,
+        "original_caregiver_id": s.original_caregiver_id
+    } for s in shifts])
+
+
+@app.get("/api/shift-filling/caregivers")
+async def get_caregivers(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Get all caregivers from WellSky mock"""
+    caregivers = list(wellsky_mock.caregivers.values())
+    return JSONResponse([{
+        "id": c.id,
+        "name": c.full_name,
+        "phone": c.phone,
+        "city": c.city,
+        "hours_available": c.hours_available,
+        "is_near_overtime": c.is_near_overtime,
+        "avg_rating": c.avg_rating,
+        "reliability_score": c.reliability_score,
+        "response_rate": c.response_rate,
+        "is_active": c.is_active
+    } for c in caregivers if c.is_active])
+
+
+@app.get("/api/shift-filling/match/{shift_id}")
+async def match_caregivers_for_shift(
+    shift_id: str,
+    max_results: int = 20,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Find and rank replacement caregivers for a shift"""
+    shift = wellsky_mock.get_shift(shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    matcher = CaregiverMatcher(wellsky_mock)
+    matches = matcher.find_replacements(shift, max_results=max_results)
+
+    return JSONResponse({
+        "shift": {
+            "id": shift.id,
+            "client_name": shift.client.full_name if shift.client else "Unknown",
+            "date": shift.date.isoformat(),
+            "time": shift.to_display_time()
+        },
+        "matches": [{
+            "caregiver_id": m.caregiver.id,
+            "caregiver_name": m.caregiver.full_name,
+            "phone": m.caregiver.phone,
+            "score": m.score,
+            "tier": m.tier,
+            "reasons": m.reasons
+        } for m in matches],
+        "total_matches": len(matches),
+        "tier_breakdown": {
+            "tier_1": sum(1 for m in matches if m.tier == 1),
+            "tier_2": sum(1 for m in matches if m.tier == 2),
+            "tier_3": sum(1 for m in matches if m.tier == 3)
+        }
+    })
+
+
+@app.post("/api/shift-filling/calloff")
+async def process_calloff(
+    request: CalloffRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Process a caregiver calloff and start shift filling"""
+    campaign = shift_filling_engine.process_calloff(
+        shift_id=request.shift_id,
+        caregiver_id=request.caregiver_id,
+        reason=request.reason,
+        reported_by=current_user.get("email", "system")
+    )
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    return JSONResponse({
+        "success": True,
+        "campaign_id": campaign.id,
+        "status": campaign.status.value,
+        "total_contacted": campaign.total_contacted,
+        "message": f"Outreach campaign started with {campaign.total_contacted} caregivers"
+    })
+
+
+@app.post("/api/shift-filling/response")
+async def process_sms_response(
+    request: SMSResponseRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Process an SMS response from a caregiver"""
+    result = shift_filling_engine.process_response(
+        campaign_id=request.campaign_id,
+        phone=request.phone,
+        message_text=request.message_text
+    )
+
+    return JSONResponse(result)
+
+
+@app.get("/api/shift-filling/campaigns")
+async def get_active_campaigns(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Get all active shift filling campaigns"""
+    campaigns = shift_filling_engine.get_all_active_campaigns()
+    return JSONResponse({
+        "active_campaigns": campaigns,
+        "total": len(campaigns)
+    })
+
+
+@app.get("/api/shift-filling/campaign/{campaign_id}")
+async def get_campaign_details(
+    campaign_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get details of a specific campaign"""
+    campaign = shift_filling_engine.active_campaigns.get(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    return JSONResponse({
+        **campaign.to_dict(),
+        "outreach_details": [{
+            "caregiver_id": o.caregiver_id,
+            "caregiver_name": o.caregiver.full_name if o.caregiver else "Unknown",
+            "phone": o.phone,
+            "sent_at": o.sent_at.isoformat() if o.sent_at else None,
+            "response_type": o.response_type.value,
+            "response_text": o.response_text,
+            "match_score": o.match_score,
+            "tier": o.tier,
+            "is_winner": o.is_winner
+        } for o in campaign.caregivers_contacted]
+    })
+
+
+@app.post("/api/shift-filling/demo")
+async def run_demo(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Run a full demonstration of the shift filling process"""
+    result = shift_filling_engine.simulate_demo()
+    return JSONResponse(result)
+
+
+@app.get("/api/shift-filling/sms-log")
+async def get_sms_log(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Get log of sent SMS messages (mock service only)"""
+    if hasattr(sms_service, 'sent_messages'):
+        return JSONResponse({
+            "messages": [{
+                "id": m["id"],
+                "to": m["to"],
+                "text": m["text"][:100] + "..." if len(m["text"]) > 100 else m["text"],
+                "sent_at": m["sent_at"].isoformat()
+            } for m in sms_service.sent_messages[-50:]]  # Last 50
+        })
+    return JSONResponse({"messages": [], "note": "Real SMS service - no log available"})
+
+
+@app.post("/api/shift-filling/webhook/sms")
+async def ringcentral_sms_webhook(request: Request):
+    """
+    Webhook endpoint for RingCentral SMS notifications.
+
+    RingCentral sends POST requests here when SMS messages are received.
+    This is a public endpoint (no auth) as it's called by RingCentral.
+    """
+    try:
+        body = await request.json()
+
+        # Handle RingCentral webhook validation
+        validation_token = request.headers.get("Validation-Token")
+        if validation_token:
+            # This is a webhook validation request from RingCentral
+            return JSONResponse(
+                content={"status": "validated"},
+                headers={"Validation-Token": validation_token}
+            )
+
+        # Process the incoming SMS notification
+        event = body.get("event", "")
+
+        if "/message-store/instant" in event:
+            # This is an instant message notification
+            message_body = body.get("body", {})
+            message_type = message_body.get("type", "")
+
+            if message_type == "SMS":
+                from_number = message_body.get("from", {}).get("phoneNumber", "")
+                message_text = message_body.get("subject", "")  # SMS text is in subject
+
+                logger.info(f"Received SMS from {from_number}: {message_text[:50]}")
+
+                # Try to match to an active campaign
+                import re
+                clean_from = re.sub(r'[^\d]', '', from_number)[-10:]
+
+                for campaign_id, campaign in shift_filling_engine.active_campaigns.items():
+                    if campaign.status != OutreachStatus.IN_PROGRESS:
+                        continue
+
+                    # Check if this phone matches any outreach
+                    for outreach in campaign.caregivers_contacted:
+                        clean_outreach = re.sub(r'[^\d]', '', outreach.phone)[-10:]
+                        if clean_from == clean_outreach:
+                            # Found a match! Process the response
+                            result = shift_filling_engine.process_response(
+                                campaign_id=campaign_id,
+                                phone=from_number,
+                                message_text=message_text
+                            )
+                            logger.info(f"Processed response for campaign {campaign_id}: {result}")
+                            return JSONResponse({
+                                "status": "processed",
+                                "campaign_id": campaign_id,
+                                "result": result
+                            })
+
+                logger.info(f"No matching campaign found for SMS from {from_number}")
+
+        return JSONResponse({"status": "received"})
+
+    except Exception as e:
+        logger.error(f"Error processing SMS webhook: {e}", exc_info=True)
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.post("/api/shift-filling/simulate-response")
+async def simulate_sms_response(
+    request: SMSResponseRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Simulate an SMS response for testing the POC.
+
+    This endpoint allows testing the response flow without
+    actual SMS being received.
+    """
+    result = shift_filling_engine.process_response(
+        campaign_id=request.campaign_id,
+        phone=request.phone,
+        message_text=request.message_text
+    )
+
+    return JSONResponse({
+        "simulated": True,
+        **result
+    })
+
+
+# ============================================================================
+# End of Shift Filling API Endpoints
+# ============================================================================
+
 @app.get("/favicon.ico")
 async def favicon():
     """Serve favicon"""

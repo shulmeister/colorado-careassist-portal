@@ -2943,6 +2943,203 @@ async def gbp_status():
     return JSONResponse(status)
 
 
+# ============================================================================
+# Shift Filling API Endpoints (Operations Dashboard)
+# ============================================================================
+
+# Add the sales directory to the path for shift_filling imports
+import sys
+sales_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sales')
+if sales_dir not in sys.path:
+    sys.path.insert(0, sales_dir)
+
+try:
+    from shift_filling import (
+        shift_filling_engine, wellsky_mock, sms_service,
+        CaregiverMatcher, OutreachStatus
+    )
+    SHIFT_FILLING_AVAILABLE = True
+    logger.info("Shift filling module loaded successfully")
+except ImportError as e:
+    SHIFT_FILLING_AVAILABLE = False
+    logger.warning(f"Shift filling module not available: {e}")
+
+
+@app.get("/api/shift-filling/status")
+async def shift_filling_status():
+    """Get shift filling engine status"""
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse({"status": "unavailable", "error": "Module not loaded"})
+
+    return JSONResponse({
+        "status": "active",
+        "sms_enabled": sms_service.is_enabled(),
+        "active_campaigns": len(shift_filling_engine.active_campaigns),
+        "service": "AI-Powered Shift Filling POC"
+    })
+
+
+@app.get("/api/shift-filling/open-shifts")
+async def get_open_shifts():
+    """Get all open shifts from WellSky mock"""
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse([])
+
+    shifts = wellsky_mock.get_open_shifts()
+    return JSONResponse([{
+        "id": s.id,
+        "client_id": s.client_id,
+        "client_name": s.client.full_name if s.client else "Unknown",
+        "client_city": s.client.city if s.client else "",
+        "date": s.date.isoformat(),
+        "start_time": s.start_time.strftime("%H:%M"),
+        "end_time": s.end_time.strftime("%H:%M"),
+        "duration_hours": s.duration_hours,
+        "is_urgent": s.is_urgent,
+        "hours_until_start": s.hours_until_start,
+        "status": s.status,
+        "original_caregiver_id": s.original_caregiver_id
+    } for s in shifts])
+
+
+@app.get("/api/shift-filling/caregivers")
+async def get_caregivers():
+    """Get all caregivers from WellSky mock"""
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse([])
+
+    from datetime import date
+    caregivers = wellsky_mock.get_available_caregivers(date.today())
+    return JSONResponse([{
+        "id": c.id,
+        "name": c.full_name,
+        "phone": c.phone,
+        "city": c.city,
+        "hours_available": c.hours_available,
+        "is_near_overtime": c.is_near_overtime,
+        "avg_rating": c.avg_rating,
+        "reliability_score": c.reliability_score,
+        "response_rate": c.response_rate,
+        "is_active": c.is_active
+    } for c in caregivers if c.is_active])
+
+
+@app.get("/api/shift-filling/match/{shift_id}")
+async def match_caregivers_for_shift(shift_id: str, max_results: int = 20):
+    """Find and rank replacement caregivers for a shift"""
+    if not SHIFT_FILLING_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Shift filling not available")
+
+    shift = wellsky_mock.get_shift(shift_id)
+    if not shift:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    matcher = CaregiverMatcher(wellsky_mock)
+    matches = matcher.find_replacements(shift, max_results=max_results)
+
+    return JSONResponse({
+        "shift": {
+            "id": shift.id,
+            "client_name": shift.client.full_name if shift.client else "Unknown",
+            "date": shift.date.isoformat(),
+            "time": shift.to_display_time()
+        },
+        "matches": [{
+            "caregiver_id": m.caregiver.id,
+            "caregiver_name": m.caregiver.full_name,
+            "phone": m.caregiver.phone,
+            "score": m.score,
+            "tier": m.tier,
+            "reasons": m.reasons
+        } for m in matches],
+        "total_matches": len(matches),
+        "tier_breakdown": {
+            "tier_1": sum(1 for m in matches if m.tier == 1),
+            "tier_2": sum(1 for m in matches if m.tier == 2),
+            "tier_3": sum(1 for m in matches if m.tier == 3)
+        }
+    })
+
+
+@app.post("/api/shift-filling/calloff")
+async def process_calloff(request: Request):
+    """Process a caregiver calloff and start shift filling"""
+    if not SHIFT_FILLING_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Shift filling not available")
+
+    data = await request.json()
+    shift_id = data.get("shift_id")
+    caregiver_id = data.get("caregiver_id")
+    reason = data.get("reason", "")
+
+    if not shift_id or not caregiver_id:
+        raise HTTPException(status_code=400, detail="shift_id and caregiver_id required")
+
+    campaign = shift_filling_engine.process_calloff(
+        shift_id=shift_id,
+        caregiver_id=caregiver_id,
+        reason=reason,
+        reported_by="portal"
+    )
+
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Shift not found")
+
+    return JSONResponse({
+        "success": True,
+        "campaign_id": campaign.id,
+        "status": campaign.status.value,
+        "total_contacted": campaign.total_contacted,
+        "message": f"Outreach campaign started with {campaign.total_contacted} caregivers"
+    })
+
+
+@app.get("/api/shift-filling/campaigns")
+async def get_active_campaigns():
+    """Get all active shift filling campaigns"""
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse({"active_campaigns": [], "total": 0})
+
+    campaigns = shift_filling_engine.get_all_active_campaigns()
+    return JSONResponse({
+        "active_campaigns": campaigns,
+        "total": len(campaigns)
+    })
+
+
+@app.post("/api/shift-filling/demo")
+async def run_demo():
+    """Run a full demonstration of the shift filling process"""
+    if not SHIFT_FILLING_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Shift filling not available")
+
+    result = shift_filling_engine.simulate_demo()
+    return JSONResponse(result)
+
+
+@app.get("/api/shift-filling/sms-log")
+async def get_sms_log():
+    """Get log of sent SMS messages (mock service only)"""
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse({"messages": []})
+
+    if hasattr(sms_service, 'sent_messages'):
+        return JSONResponse({
+            "messages": [{
+                "id": m["id"],
+                "to": m["to"],
+                "text": m["text"][:100] + "..." if len(m["text"]) > 100 else m["text"],
+                "sent_at": m["sent_at"].isoformat()
+            } for m in sms_service.sent_messages[-50:]]  # Last 50
+        })
+    return JSONResponse({"messages": [], "note": "Real SMS service - no log available"})
+
+
+# ============================================================================
+# End of Shift Filling API Endpoints
+# ============================================================================
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

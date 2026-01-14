@@ -1,0 +1,690 @@
+{
+  "analysis": {
+    "total_messages": 4956,
+    "inbound": 2238,
+    "outbound": 2718,
+    "unique_conversations": 172,
+    "shift_related_count": 752,
+    "acceptance_count": 574,
+    "decline_count": 373,
+    "ambiguous_count": 1291
+  },
+  "patterns": {
+    "acceptance_patterns": [
+      "yes ...llm here",
+      "hello, janna and",
+      "yes i can.",
+      "sure!",
+      "hi ms. amy",
+      "good morning yes",
+      "sure can!",
+      "im on my",
+      "good morning it's",
+      "yes, just that",
+      "okay thanks, so",
+      "sounds good ill",
+      "i can for",
+      "i can work",
+      "okay thanks",
+      "yes, but would",
+      "okie dokie talk",
+      "i forgot to",
+      "oh my goodness",
+      "got it! thanks",
+      "yeah",
+      "m a r",
+      "and you had",
+      "it's ok i",
+      "monday it was",
+      "i will do",
+      "spoke to your",
+      "ok",
+      "hi, am ok",
+      "yes, i plan",
+      "ohh ok",
+      "im doing ok,",
+      "i spoke to",
+      "sure i can",
+      "i will make",
+      "just spoke with",
+      "yes, please",
+      "i cant i",
+      "i meant i",
+      "yes i could",
+      "okay yes i",
+      "i'm going to",
+      "can you tell",
+      "i have clinical",
+      "yes, i will",
+      "okay very good",
+      "yes ....",
+      "ok, thank you!",
+      "for sure",
+      "yes!! csn u"
+    ],
+    "decline_patterns": [
+      "i don't have",
+      "jason so nice",
+      "no visit today.",
+      "i'm sorry. i",
+      "good morning i",
+      "i got 2",
+      "liza* sorry",
+      "not available today,",
+      "i am so",
+      "clocking out now",
+      "im here 20",
+      "i have not",
+      "can't submit application",
+      "they were not",
+      "i would have",
+      "im leaving ms",
+      "good morning. im",
+      "sgit, sorry been",
+      "i forgot to",
+      "oh my goodness",
+      "not yet i'll",
+      "not tonight sorry",
+      "i think so",
+      "sounds great. i",
+      "i wouldn't mind",
+      "im sorry. i",
+      "i certainly can",
+      "im so sorry,",
+      "about my car...so",
+      "so sorry today's",
+      "hello i went",
+      "sorry that was",
+      "im doin well,",
+      "no your amazing",
+      "hi jason-just wanted",
+      "ps still no",
+      "this is zingage-",
+      "good afternoon. i",
+      "not able to",
+      "hello i am",
+      "hello i got",
+      "good morning sue",
+      "oh just wonderful",
+      "when you get",
+      "you know i'm",
+      "thank you she",
+      "im still sick.",
+      "am i doing",
+      "hi there...would you",
+      "unfortunately i won't"
+    ],
+    "top_responses": {
+      "thank you": 47,
+      "yes": 45,
+      "": 33,
+      "thanks": 27,
+      "ok": 26,
+      "okay": 18,
+      "okay, thanks": 16,
+      "yes i can": 13,
+      "ok thank you": 9,
+      "no problem": 9,
+      "you're welcome": 9,
+      "u r welcome": 8,
+      "no": 7,
+      "thank you!": 7,
+      "your welcome": 7,
+      "\ud83d\udc4d": 6,
+      "\ud83d\udc9a": 6,
+      "okay, thanks \ud83d\udc4d": 6,
+      "okay thank you": 6,
+      "k": 6,
+      "thanks so much": 6,
+      "yes i can.": 5,
+      "thank you.": 5,
+      "you're welcome!": 4,
+      "u r welcome!": 4,
+      "thank you so much": 4,
+      "no problem!": 4,
+      "yw": 4,
+      "yes, thank you": 4,
+      "yes please": 4,
+      "\ud83d\ude01": 4,
+      "starting this friday": 4,
+      "\u2764\ufe0f": 4,
+      "\ud83e\ude75": 4,
+      "ok, thank you": 3,
+      "sorry i can't": 3,
+      "my pleasure!": 3,
+      "thank u": 3,
+      "of course": 3,
+      "thank you very much": 3,
+      "yes i can!": 3,
+      "unavailable tomorrow": 3,
+      "thanks! \ud83d\ude42": 2,
+      "\ud83e\udd2a": 2,
+      "sure": 2,
+      "you\u2019re welcome!": 2,
+      "ok ty": 2,
+      "no i can't": 2,
+      "thx": 2,
+      "no, thank you": 2,
+      "got it": 2,
+      "yes \ud83d\udc4d": 2,
+      "sorry not available": 2,
+      "i'm sorry i can't": 2,
+      "yes that's correct": 2,
+      "\ud83d\ude0a": 2,
+      "yeah": 2,
+      "i'm sorry i can not": 2,
+      "i am available m-f 7am-2pm": 2,
+      "can u pls clock me in at 11am with herbert burley?": 2,
+      "thanks \ud83d\ude4f": 2,
+      "great!": 2,
+      "thanks!": 2,
+      "test": 2,
+      "who is this?": 2,
+      "u 2": 2,
+      "can u pls clock me in at 7pm with susan duchin?": 2,
+      "u r welcome.": 2,
+      "thank you so much!": 2,
+      "you, too!": 2,
+      "thank you \ud83d\ude42": 2,
+      "i got it": 2,
+      "yes i will": 2,
+      "gloria": 2,
+      "ty": 2,
+      "ok thanks": 2,
+      "correct": 2,
+      "emeka fredrick ezeani \n1st bank 379 166 0068": 2,
+      "\ud83d\udc9c": 2,
+      "yup": 2,
+      "okay, will do": 2,
+      "sounds good": 2,
+      "okay thank you.": 2,
+      "you too!": 2,
+      "okay, thank you": 2,
+      "yes ma'am": 2,
+      "okay thank you so much!": 2,
+      "i'm going to omaha after i get home from pres's. i have to go to the airport at 10:30 tomorrow. that's why i took thursday and saturday off.": 1,
+      "yes i can pick up this shift \ud83e\udd17": 1,
+      "i just left robert's, i forgot to clock out": 1,
+      "awe so sad": 1,
+      "ok, thank you, i was confused": 1,
+      "jean clocking out i did her whole kitchen i mopped and swept all her floors downstairs and vacuumed and i did a bathroom and a couple windows okay thank you i'm happy to be home haha": 1,
+      "i got 2 emails one for jan 14th and another  one for 16th. that's why i asked": 1,
+      "sorry, i forgot to clock out and back in at pres's this morning.": 1,
+      "absolutely": 1,
+      "yes i believe i can assist": 1,
+      "does she still smoke in her house and needs to be carried to the bathroom?": 1,
+      "what's her name": 1,
+      "i got an email  saying iania shift is canceled today": 1
+    }
+  },
+  "sample_acceptances": [
+    "I'm going to Omaha after I get home from Pres's. I have to go to the airport at 10:30 tomorrow. That's why I took Thursday and Saturday off.",
+    "Yes I can pick up this shift \ud83e\udd17",
+    "Ok, thank you, I was confused ",
+    "Jean clocking out I did her whole kitchen I mopped and swept all her floors downstairs and vacuumed and I did a bathroom and a couple Windows okay thank you I'm happy to be home haha",
+    "Absolutely ",
+    "Yes I believe I can assist",
+    "Does she still smoke in her house and needs to be carried to the bathroom? ",
+    "Ok, thank you. I just seen she spoke Ukrainian ",
+    "Ok thank you ",
+    "Can you fix my time for yesterday? I clocked out at 2:15pm Thanks",
+    "Ok, thank you ",
+    "Yes i can.",
+    "I can take this shift ",
+    "Hi this is Yuliya Waters for my mom Ianina Rybitska, just wanted to confirm that the caregiver is coming tomorrow from 1-3 also was wondering if I can swap Friday for Saturday with Karen from 12-2",
+    "Yes, just that day",
+    "Good morning is there anyway possible way I can get a copy of my pay stubs to provide to my caseworker please ",
+    "Ok thank you. I can definitely help with groceries ",
+    "Yes",
+    "Yes I can ",
+    "Got it! Thanks"
+  ],
+  "sample_declines": [
+    "I got 2 emails one for Jan 14th and another  one for 16th. That's why I asked",
+    "Sorry, I forgot to clock out and back in at Pres's this morning. ",
+    "No",
+    "No I am sorry I only have availability on Thursday from 930a - 2p",
+    "Liked \u201cThank you for letting us know. Will check with Karen if she can cover this Sat 1/17, 12 pm - 2 pm..\u201d",
+    "I thought I clocked out, but I left at like 2:15pm. Sorry about that ",
+    "I have to cancel with Leslie on Thursday,  u just got a Dr appointment  i have been waiting for. Now I'm waiting on an MRI, wish that appointment  would hurry up",
+    "680954 is your confirmation code. For your security, do not share this code.",
+    "Sorry, just waking up. I was up almost 36hrs, I could not sleep from pain.  I could not even function this morning ",
+    "There is no way, I'll be able to make shift at Leslie today",
+    "I totally  forgot to clock out, sorry I was talking with sine when I left. I tried to clock out down the road but it wouldn't  let me",
+    "You know I'm not aware of all the details but maybe she has some other type of insurance that might cover this for her",
+    "Liked \u201cThank you for confirming tonight 1/9, 7 pm- 12 am shift with Susan.. I'll update that for you.. for now Sat through Mon is covered but anything opens will update you.\u201d",
+    "About my car...so I don't know if it will be ready for next week...",
+    "Sorry, I'm doing a shift in Boulder today",
+    "Hello.  I just noticed it said till 4 for Mr Duncan but he changed the time due to some plans the Duncan's had.  Today's shift is till 3 pm today.\nThank you!",
+    "Good afternoon, I wanted to let you know I have a open week next week except for Saturday and Sunday ",
+    "Good morning Sue and Ronnie were wondering if I could work for them like once or twice a month and they pay me cash until there are paperwork comes back in order which will not be until April like will I be violating any contract with your company I left a message with Jason but he has not responded thank you",
+    "Can't submit application the dates of employment week going out of wack. My 4th attempt. Trying to correct it leave the page.",
+    "This is Melissa Romero. I forgot to clock out at 2:00. So sorry thank you"
+  ],
+  "sample_ambiguous": [
+    "You're welcome!",
+    "i just left robert's, i forgot to clock out",
+    "Awe so sad",
+    "Thanks! \ud83d\ude42",
+    "Thanks",
+    "What's her name",
+    "I got an email  saying Iania shift is canceled today",
+    "\ud83d\udc4d",
+    "I have school from 7-4 each of those days",
+    "Could you clock me in ...got here at 11;11",
+    "What times ? ",
+    "I would have loved to but I won't be able to this weekend.",
+    "Does Iania speak any English? ",
+    "Thanks",
+    "Hi there...I'll be at Judy at 11:15 ...would you please update my shift...thanks ",
+    "Thanks",
+    "Liked \u201cGood Morning Yuliya. I hope you're doing well.. As per your request Karen will cover Sat 1/17, 12 pm-2 pm for Ianina. Thank you.\u201d",
+    "Good morning Jean clocking in at Sue and Rodney 9:00 to 12:00 thank you",
+    "U r welcome!",
+    "I got to work at my other job that day"
+  ],
+  "shift_related_messages": [
+    {
+      "text": "I'm going to Omaha after I get home from Pres's. I have to go to the airport at 10:30 tomorrow. That's why I took Thursday and Saturday off.",
+      "from": "3036185717",
+      "time": "2026-01-14T19:13:00.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Yes I can pick up this shift \ud83e\udd17",
+      "from": "7202758181",
+      "time": "2026-01-14T19:11:50.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Sorry, I forgot to clock out and back in at Pres's this morning. ",
+      "from": "3036185717",
+      "time": "2026-01-14T19:03:56.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Does she still smoke in her house and needs to be carried to the bathroom? ",
+      "from": "3035642193",
+      "time": "2026-01-14T18:52:53.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "I got an email  saying Iania shift is canceled today",
+      "from": "4235390510",
+      "time": "2026-01-14T18:41:24.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "What times ? ",
+      "from": "7208006360",
+      "time": "2026-01-14T18:16:10.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Hi there...I'll be at Judy at 11:15 ...would you please update my shift...thanks ",
+      "from": "3039178832",
+      "time": "2026-01-14T17:28:03.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Can you fix my time for yesterday? I clocked out at 2:15pm Thanks",
+      "from": "7193235120",
+      "time": "2026-01-14T17:20:26.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Liked \u201cGood Morning Yuliya. I hope you're doing well.. As per your request Karen will cover Sat 1/17, 12 pm-2 pm for Ianina. Thank you.\u201d",
+      "from": "9705815032",
+      "time": "2026-01-14T16:08:16.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Good morning Jean clocking in at Sue and Rodney 9:00 to 12:00 thank you",
+      "from": "7193067941",
+      "time": "2026-01-14T16:02:05.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "I got to work at my other job that day",
+      "from": "7197448843",
+      "time": "2026-01-14T00:43:18.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "I can take this shift ",
+      "from": "9892905003",
+      "time": "2026-01-13T23:38:19.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Liked \u201cThank you for letting us know. Will check with Karen if she can cover this Sat 1/17, 12 pm - 2 pm..\u201d",
+      "from": "9705815032",
+      "time": "2026-01-13T23:10:48.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Hi this is Yuliya Waters for my mom Ianina Rybitska, just wanted to confirm that the caregiver is coming tomorrow from 1-3 also was wondering if I can swap Friday for Saturday with Karen from 12-2",
+      "from": "9705815032",
+      "time": "2026-01-13T22:57:56.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "I have to cancel with Leslie on Thursday,  u just got a Dr appointment  i have been waiting for. Now I'm waiting on an MRI, wish that appointment  would hurry up",
+      "from": "4235390510",
+      "time": "2026-01-13T22:40:56.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Today Jean clocking out from Jo-ann's I did all her upstairs floors wipe down her kitchen did a couple Windows hung a shower curtain mopped and vacuumed floors of course thank you darling",
+      "from": "7193067941",
+      "time": "2026-01-13T21:53:26.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Good morning is there anyway possible way I can get a copy of my pay stubs to provide to my caseworker please ",
+      "from": "5313295967",
+      "time": "2026-01-13T19:28:50.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Oh I thought it was today. Thank you for telling me that!",
+      "from": "4235390510",
+      "time": "2026-01-13T19:08:54.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "I'll let you know about Ianina, after today. Not sure how he will be. Also I can do Charles on Friday B ut it would have to be at 11",
+      "from": "4235390510",
+      "time": "2026-01-13T19:02:44.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Sorry, just waking up. I was up almost 36hrs, I could not sleep from pain.  I could not even function this morning ",
+      "from": "4235390510",
+      "time": "2026-01-12T20:06:43.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "What times for both days ? ",
+      "from": "7208006360",
+      "time": "2026-01-12T19:10:04.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Hello, \nI am reaching out to schedule my first shadow shift. ",
+      "from": "7208006360",
+      "time": "2026-01-12T18:49:26.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "There is no way, I'll be able to make shift at Leslie today",
+      "from": "4235390510",
+      "time": "2026-01-12T12:36:01.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Hey, I'm having a hard time logging into the app. Can you please clock me out for 759 with Mary?",
+      "from": "8082205894",
+      "time": "2026-01-11T03:00:24.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "My car is ready...so I can do Mr shanbauer and Susan shift ...but not Monday ...I have doctor's appointment in Denver ",
+      "from": "3039178832",
+      "time": "2026-01-10T16:13:27.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Gerald called and don't want a visit today. Thanks ",
+      "from": "7193235120",
+      "time": "2026-01-10T14:53:51.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Is there anyway to work for janna tomorrow or Monday for today? Im still scared to drive on the streets its still bad on some of them ",
+      "from": "3082251913",
+      "time": "2026-01-10T14:43:41.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "You know I'm not aware of all the details but maybe she has some other type of insurance that might cover this for her",
+      "from": "7193067941",
+      "time": "2026-01-09T22:23:17.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Thank you that's why I hope this works out",
+      "from": "7193067941",
+      "time": "2026-01-09T22:21:12.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Also thr since asked me to come at 4pm tomorrow instead of 5pm and stay until 11pm",
+      "from": "4235390510",
+      "time": "2026-01-09T22:19:18.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Of course I get it she would need to call you and because she doesn't have that insurance coverage or whatever she'd have to pay directly out of pocket correct I'll tell her to call you and see how things work out",
+      "from": "7193067941",
+      "time": "2026-01-09T22:16:21.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "If there is any more shifts with Ralph, I will take him since he's like 7mins from me",
+      "from": "4235390510",
+      "time": "2026-01-09T22:11:50.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Oh well that's a crappy deal all right I already booked an appointment with her but I'll call her back and tell her it's not going to work I guess I don't know what she has to do to get back on board with Colorado care is there a heads up or something I can tell her what she needs to do",
+      "from": "7193067941",
+      "time": "2026-01-09T22:03:09.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Good day Joanne needs to reschedule Tuesday the 13th 12:00 until 3:00 also I'm going to go ahead and book Sue and Rodney I can't see any reason why I wouldn't be allowed to work for them until they get their paperwork back on track thank you enjoy your day I hope you're warm and safe\ud83e\ude75",
+      "from": "7193067941",
+      "time": "2026-01-09T21:47:03.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Liked \u201cThank you for confirming tonight 1/9, 7 pm- 12 am shift with Susan.. I'll update that for you.. for now Sat through Mon is covered but anything opens will update you.\u201d",
+      "from": "7197559698",
+      "time": "2026-01-09T20:57:00.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Are there any client shifts Saturday through Monday?",
+      "from": "7197559698",
+      "time": "2026-01-09T20:49:08.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Also i talked to mr. Burley. Will do shift tomorrow 11-12. Ok?",
+      "from": "6093040413",
+      "time": "2026-01-09T18:54:59.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "And I have doctor's appointment...so I won't be able to cover that shift...",
+      "from": "3039178832",
+      "time": "2026-01-09T18:09:06.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "I will have to check to see what time Ruth has her dentist appointment on Tuesday if it's early morning yes but if it's in that time, I can't I have to be there",
+      "from": "7207376150",
+      "time": "2026-01-09T17:30:15.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Sorry, I'm doing a shift in Boulder today",
+      "from": "7207376150",
+      "time": "2026-01-09T17:26:44.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Can you call me ",
+      "from": "7193235120",
+      "time": "2026-01-09T14:59:13.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "It looks like my clock out didn't go through. Can you please clock me out? I got out of there at 3",
+      "from": "7202457543",
+      "time": "2026-01-08T22:39:22.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Hello.  I just noticed it said till 4 for Mr Duncan but he changed the time due to some plans the Duncan's had.  Today's shift is till 3 pm today.\nThank you!",
+      "from": "7196759441",
+      "time": "2026-01-08T21:58:44.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Good afternoon, I wanted to let you know I have a open week next week except for Saturday and Sunday ",
+      "from": "9892905003",
+      "time": "2026-01-08T21:05:40.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "Hey also she said she would be home at 2:30 or 3 on some days and I wouldn't need to stay until 4 do I call or text someone when I am done early or is it a must stay until the schedule time?",
+      "from": "5313295967",
+      "time": "2026-01-08T20:01:21.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Yes starting on 1/27- I can confirm going forward I can take those hours on Tuesday and Thursdays.....in February Saturdays I can work the 7th 21st and the 28th...",
+      "from": "5313295967",
+      "time": "2026-01-08T19:52:44.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "Good morning just wondering if you found someone to cover Grant after the 20th? I found someone to watch my kids hopefully she doesn't change her mind then I can work the 9-4. but with the Saturday schedule would I be able to do every other Saturday for the kids activities I'm waiting on the coaches to send out the schedule then I'll have better idea for Saturdays",
+      "from": "5313295967",
+      "time": "2026-01-08T19:32:48.000Z",
+      "category": "accept"
+    },
+    {
+      "text": "That's fine, I had a feeling I was going to work until 11pm, I did last week",
+      "from": "4235390510",
+      "time": "2026-01-08T17:27:58.000Z",
+      "category": "ambiguous"
+    },
+    {
+      "text": "Good morning Sue and Ronnie were wondering if I could work for them like once or twice a month and they pay me cash until there are paperwork comes back in order which will not be until April like will I be violating any contract with your company I left a message with Jason but he has not responded thank you",
+      "from": "7193067941",
+      "time": "2026-01-08T17:05:08.000Z",
+      "category": "decline"
+    },
+    {
+      "text": "hello could you please clock me out this morning? thankyou!",
+      "from": "7205461981",
+      "time": "2026-01-08T14:47:30.000Z",
+      "category": "ambiguous"
+    }
+  ],
+  "top_responders": {
+    "7193067941": {
+      "responses": 250,
+      "accepts": 49,
+      "declines": 50
+    },
+    "6093040413": {
+      "responses": 125,
+      "accepts": 31,
+      "declines": 8
+    },
+    "3035642193": {
+      "responses": 115,
+      "accepts": 34,
+      "declines": 15
+    },
+    "3039178832": {
+      "responses": 105,
+      "accepts": 27,
+      "declines": 13
+    },
+    "4235390510": {
+      "responses": 104,
+      "accepts": 33,
+      "declines": 21
+    },
+    "7198396190": {
+      "responses": 88,
+      "accepts": 41,
+      "declines": 11
+    },
+    "7193235120": {
+      "responses": 66,
+      "accepts": 17,
+      "declines": 9
+    },
+    "7206683536": {
+      "responses": 64,
+      "accepts": 23,
+      "declines": 5
+    },
+    "7152260514": {
+      "responses": 63,
+      "accepts": 26,
+      "declines": 5
+    },
+    "8082205894": {
+      "responses": 61,
+      "accepts": 18,
+      "declines": 19
+    },
+    "7206614321": {
+      "responses": 59,
+      "accepts": 22,
+      "declines": 5
+    },
+    "7197559698": {
+      "responses": 55,
+      "accepts": 11,
+      "declines": 9
+    },
+    "7196759441": {
+      "responses": 50,
+      "accepts": 8,
+      "declines": 13
+    },
+    "9168032079": {
+      "responses": 49,
+      "accepts": 6,
+      "declines": 7
+    },
+    "5399950611": {
+      "responses": 47,
+      "accepts": 5,
+      "declines": 7
+    },
+    "7194995376": {
+      "responses": 46,
+      "accepts": 12,
+      "declines": 7
+    },
+    "3038681678": {
+      "responses": 42,
+      "accepts": 10,
+      "declines": 5
+    },
+    "6189751604": {
+      "responses": 39,
+      "accepts": 6,
+      "declines": 9
+    },
+    "3036185717": {
+      "responses": 36,
+      "accepts": 10,
+      "declines": 5
+    },
+    "7207376150": {
+      "responses": 33,
+      "accepts": 6,
+      "declines": 4
+    }
+  }
+}

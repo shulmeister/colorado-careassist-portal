@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Client Satisfaction Dashboard - Colorado CareAssist</title>
+    <title>Operations Dashboard - Colorado CareAssist</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -437,14 +437,24 @@
         <aside class="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-title">Colorado CareAssist</div>
-                <div class="sidebar-subtitle">Client Satisfaction</div>
+                <div class="sidebar-subtitle">Operations Dashboard</div>
                 <a href="/" class="back-btn">← Back to Portal</a>
             </div>
 
             <div class="nav-section">
-                <div class="nav-label">Dashboard</div>
-                <div class="nav-item active" data-view="overview">
-                    <span>Overview</span>
+                <div class="nav-label">Shift Filling</div>
+                <div class="nav-item" data-view="shift-filling" onclick="showView('shift-filling')">
+                    <span>🚀 Open Shifts</span>
+                </div>
+                <div class="nav-item" data-view="sms-log" onclick="showView('sms-log')">
+                    <span>📱 SMS Log</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-label">Client Satisfaction</div>
+                <div class="nav-item active" data-view="overview" onclick="showView('overview')">
+                    <span>📊 Overview</span>
                 </div>
             </div>
 
@@ -473,15 +483,152 @@
         </aside>
 
         <main class="main-content">
-            <div class="page-header">
-                <div>
-                    <h1 class="page-title">Client Satisfaction</h1>
-                    <p class="page-subtitle">Last 30 days overview</p>
+            <!-- Shift Filling View -->
+            <div id="shift-filling-view" class="view-section" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">AI-Powered Shift Filling</h1>
+                        <p class="page-subtitle">Automatically find replacement caregivers</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="runShiftFillingDemo()">▶️ Run Demo</button>
+                        <button class="btn btn-secondary" onclick="refreshShiftFilling()">Refresh</button>
+                    </div>
                 </div>
-                <div class="header-actions">
-                    <button class="btn btn-secondary" onclick="refreshDashboard()">Refresh</button>
+
+                <!-- Status Cards -->
+                <div class="metrics-grid" id="shift-status-cards">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon blue">🤖</div>
+                        </div>
+                        <div class="metric-value" id="sfEngineStatus">—</div>
+                        <div class="metric-label">Engine Status</div>
+                        <div class="metric-detail">AI shift filling</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon green">📱</div>
+                        </div>
+                        <div class="metric-value" id="sfSmsStatus">—</div>
+                        <div class="metric-label">SMS Service</div>
+                        <div class="metric-detail">RingCentral</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon orange">📋</div>
+                        </div>
+                        <div class="metric-value" id="sfOpenShifts">—</div>
+                        <div class="metric-label">Open Shifts</div>
+                        <div class="metric-detail">Needing coverage</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon purple">🚀</div>
+                        </div>
+                        <div class="metric-value" id="sfActiveCampaigns">—</div>
+                        <div class="metric-label">Active Campaigns</div>
+                        <div class="metric-detail">In progress</div>
+                    </div>
+                </div>
+
+                <!-- Demo Result Alert -->
+                <div id="demoResultAlert" style="display: none; background: rgba(34, 197, 94, 0.1); border: 1px solid #22c55e; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+                    <div style="font-weight: 600; color: #22c55e; margin-bottom: 8px;">✅ Demo Completed!</div>
+                    <div id="demoResultContent" style="color: #cbd5e1;"></div>
+                </div>
+
+                <!-- Two Column Layout -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                    <!-- Open Shifts -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Open Shifts</h2>
+                            <p style="color: #94a3b8; font-size: 13px;">Shifts needing coverage</p>
+                        </div>
+                        <div id="openShiftsList" style="padding: 16px;">
+                            <div style="color: #94a3b8; text-align: center; padding: 24px;">Loading shifts...</div>
+                        </div>
+                    </div>
+
+                    <!-- Caregiver Matches -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Caregiver Matches</h2>
+                            <p id="matchesSubtitle" style="color: #94a3b8; font-size: 13px;">Select a shift to find matches</p>
+                        </div>
+                        <div id="caregiverMatchesList" style="padding: 16px;">
+                            <div style="color: #94a3b8; text-align: center; padding: 24px;">Select a shift to see matching caregivers</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Campaigns -->
+                <div class="card" id="activeCampaignsCard" style="display: none;">
+                    <div class="card-header">
+                        <h2 class="card-title">Active Campaigns</h2>
+                        <p style="color: #94a3b8; font-size: 13px;">Ongoing outreach campaigns</p>
+                    </div>
+                    <div id="activeCampaignsList" style="padding: 16px;"></div>
+                </div>
+
+                <!-- Available Caregivers -->
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <h2 class="card-title">Available Caregivers</h2>
+                        <p style="color: #94a3b8; font-size: 13px;">Active caregivers in the system</p>
+                    </div>
+                    <div id="availableCaregiversList" style="padding: 16px;">
+                        <div style="color: #94a3b8; text-align: center; padding: 24px;">Loading caregivers...</div>
+                    </div>
                 </div>
             </div>
+
+            <!-- SMS Log View -->
+            <div id="sms-log-view" class="view-section" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">SMS Log</h1>
+                        <p class="page-subtitle">Shift filling outreach messages</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="refreshSmsLog()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Sent Messages</h2>
+                        <p style="color: #94a3b8; font-size: 13px;">Recent SMS outreach</p>
+                    </div>
+                    <div id="smsLogList" style="padding: 16px;">
+                        <div style="color: #94a3b8; text-align: center; padding: 24px;">Loading messages...</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <h2 class="card-title">About SMS Service</h2>
+                    </div>
+                    <div style="padding: 16px; color: #94a3b8; font-size: 14px; line-height: 1.6;">
+                        <p style="margin-bottom: 12px;"><strong style="color: #f8fafc;">Mock Mode:</strong> During POC testing, SMS messages are simulated. No actual messages are sent.</p>
+                        <p style="margin-bottom: 12px;"><strong style="color: #f8fafc;">Production Mode:</strong> When configured with RingCentral credentials, messages will be sent via the RingCentral SMS API.</p>
+                        <p><strong style="color: #f8fafc;">Monitoring:</strong> Incoming SMS from 719-428-3999 will be scanned for calloff patterns to auto-trigger shift filling.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client Satisfaction Overview (existing content) -->
+            <div id="overview-view" class="view-section">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Client Satisfaction</h1>
+                        <p class="page-subtitle">Last 30 days overview</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="refreshDashboard()">Refresh</button>
+                    </div>
+                </div>
 
             <div class="metrics-grid">
                 <div class="metric-card">
@@ -615,6 +762,7 @@
                     </div>
                 </div>
             </div>
+            </div><!-- End overview-view -->
         </main>
     </div>
 
@@ -833,6 +981,368 @@
     </div>
 
     <script>
+        // ============================================
+        // View Switching
+        // ============================================
+        function showView(viewName) {
+            // Hide all view sections
+            document.querySelectorAll('.view-section').forEach(section => {
+                section.style.display = 'none';
+            });
+
+            // Show selected view
+            const targetView = document.getElementById(viewName + '-view');
+            if (targetView) {
+                targetView.style.display = 'block';
+            }
+
+            // Update nav items
+            document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.view === viewName) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Load data for the view
+            if (viewName === 'shift-filling') {
+                refreshShiftFilling();
+            } else if (viewName === 'sms-log') {
+                refreshSmsLog();
+            }
+        }
+
+        // ============================================
+        // Shift Filling Functions
+        // ============================================
+        let selectedShiftId = null;
+        let activeCampaigns = [];
+
+        async function refreshShiftFilling() {
+            try {
+                // Fetch status, shifts, caregivers, and campaigns in parallel
+                const [statusRes, shiftsRes, caregiversRes, campaignsRes] = await Promise.all([
+                    fetch('/api/shift-filling/status'),
+                    fetch('/api/shift-filling/open-shifts'),
+                    fetch('/api/shift-filling/caregivers'),
+                    fetch('/api/shift-filling/campaigns')
+                ]);
+
+                // Update status cards
+                if (statusRes.ok) {
+                    const status = await statusRes.json();
+                    document.getElementById('sfEngineStatus').textContent = status.status === 'active' ? 'Active' : 'Inactive';
+                    document.getElementById('sfEngineStatus').style.color = status.status === 'active' ? '#22c55e' : '#ef4444';
+                    document.getElementById('sfSmsStatus').textContent = status.sms_enabled ? 'Connected' : 'Mock';
+                    document.getElementById('sfSmsStatus').style.color = status.sms_enabled ? '#22c55e' : '#f59e0b';
+                    document.getElementById('sfActiveCampaigns').textContent = status.active_campaigns;
+                }
+
+                // Update open shifts
+                if (shiftsRes.ok) {
+                    const shifts = await shiftsRes.json();
+                    document.getElementById('sfOpenShifts').textContent = shifts.length;
+                    renderOpenShifts(shifts);
+                }
+
+                // Update caregivers
+                if (caregiversRes.ok) {
+                    const caregivers = await caregiversRes.json();
+                    renderCaregivers(caregivers);
+                }
+
+                // Update campaigns
+                if (campaignsRes.ok) {
+                    const data = await campaignsRes.json();
+                    activeCampaigns = data.active_campaigns || [];
+                    renderCampaigns(activeCampaigns);
+                }
+            } catch (err) {
+                console.error('Error refreshing shift filling:', err);
+            }
+        }
+
+        function renderOpenShifts(shifts) {
+            const container = document.getElementById('openShiftsList');
+            if (shifts.length === 0) {
+                container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">No open shifts at this time</div>';
+                return;
+            }
+
+            container.innerHTML = shifts.map(shift => `
+                <div class="shift-card ${shift.is_urgent ? 'urgent' : ''}" style="background: ${shift.is_urgent ? 'rgba(239, 68, 68, 0.1)' : '#1e293b'}; border: 1px solid ${shift.is_urgent ? '#ef4444' : '#334155'}; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <div style="font-weight: 600; color: #f8fafc;">
+                                ${shift.client_name}
+                                ${shift.is_urgent ? '<span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">URGENT</span>' : ''}
+                            </div>
+                            <div style="color: #94a3b8; font-size: 13px; margin-top: 4px;">
+                                ${shift.client_city} • ${shift.date}
+                            </div>
+                            <div style="color: #94a3b8; font-size: 13px;">
+                                ${shift.start_time} - ${shift.end_time} (${shift.duration_hours}h)
+                            </div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="findMatches('${shift.id}')">
+                                Find Matches
+                            </button>
+                            <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="processCalloff('${shift.id}')">
+                                Process Calloff
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function findMatches(shiftId) {
+            selectedShiftId = shiftId;
+            const container = document.getElementById('caregiverMatchesList');
+            container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">⏳ Finding matches...</div>';
+
+            try {
+                const response = await fetch(`/api/shift-filling/match/${shiftId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('matchesSubtitle').textContent = `for ${data.shift.client_name}`;
+                    renderMatches(data.matches);
+                }
+            } catch (err) {
+                container.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 24px;">Error: ${err.message}</div>`;
+            }
+        }
+
+        function renderMatches(matches) {
+            const container = document.getElementById('caregiverMatchesList');
+            if (matches.length === 0) {
+                container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">No matches found</div>';
+                return;
+            }
+
+            container.innerHTML = matches.map((match, idx) => `
+                <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 18px; font-weight: 700; color: #64748b;">#${idx + 1}</span>
+                            <div>
+                                <span style="font-weight: 600; color: #f8fafc;">${match.caregiver_name}</span>
+                                <span style="background: ${match.tier === 1 ? '#22c55e' : match.tier === 2 ? '#f59e0b' : '#64748b'}; color: ${match.tier === 1 ? 'white' : match.tier === 2 ? '#1e293b' : 'white'}; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">
+                                    Tier ${match.tier}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 20px; font-weight: 700; color: #f8fafc;">${match.score.toFixed(0)}</div>
+                            <div style="width: 60px; height: 6px; background: #334155; border-radius: 3px; margin-top: 4px;">
+                                <div style="width: ${match.score}%; height: 100%; background: #3b82f6; border-radius: 3px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="color: #64748b; font-size: 12px; margin-top: 4px;">${match.phone}</div>
+                    <div style="margin-top: 8px;">
+                        ${match.reasons.slice(0, 3).map(r => `<div style="color: #94a3b8; font-size: 12px;">${r}</div>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderCaregivers(caregivers) {
+            const container = document.getElementById('availableCaregiversList');
+            if (caregivers.length === 0) {
+                container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">No caregivers available</div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #334155;">
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Name</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">City</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Hours Avail</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Rating</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Reliability</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Response</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${caregivers.map(cg => `
+                            <tr style="border-bottom: 1px solid #334155;">
+                                <td style="padding: 12px; color: #f8fafc; font-weight: 500;">${cg.name}</td>
+                                <td style="padding: 12px; color: #cbd5e1;">${cg.city}</td>
+                                <td style="padding: 12px; color: #cbd5e1;">
+                                    ${cg.hours_available.toFixed(0)}h
+                                    ${cg.is_near_overtime ? '<span style="background: #f59e0b; color: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 4px;">Near OT</span>' : ''}
+                                </td>
+                                <td style="padding: 12px; color: #cbd5e1;">⭐ ${cg.avg_rating.toFixed(1)}</td>
+                                <td style="padding: 12px; color: #cbd5e1;">${(cg.reliability_score * 100).toFixed(0)}%</td>
+                                <td style="padding: 12px; color: #cbd5e1;">${(cg.response_rate * 100).toFixed(0)}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function renderCampaigns(campaigns) {
+            const card = document.getElementById('activeCampaignsCard');
+            const container = document.getElementById('activeCampaignsList');
+
+            if (campaigns.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+
+            card.style.display = 'block';
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #334155;">
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Campaign</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Shift</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Status</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Contacted</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Responded</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Winner</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${campaigns.map(c => `
+                            <tr style="border-bottom: 1px solid #334155;">
+                                <td style="padding: 12px; color: #64748b; font-family: monospace; font-size: 12px;">${c.id.substring(0, 8)}...</td>
+                                <td style="padding: 12px; color: #f8fafc;">${c.shift_id}</td>
+                                <td style="padding: 12px;">
+                                    <span style="background: ${c.status === 'filled' ? '#22c55e' : c.status === 'in_progress' ? '#3b82f6' : '#ef4444'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+                                        ${c.status}
+                                    </span>
+                                </td>
+                                <td style="padding: 12px; color: #cbd5e1;">${c.total_contacted}</td>
+                                <td style="padding: 12px; color: #cbd5e1;">${c.total_responded}</td>
+                                <td style="padding: 12px; color: #22c55e; font-weight: 500;">${c.winning_caregiver_name || '—'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function processCalloff(shiftId) {
+            const caregiverId = prompt('Enter caregiver ID who called off:');
+            if (!caregiverId) return;
+
+            const reason = prompt('Reason for calloff (optional):') || '';
+
+            try {
+                const response = await fetch('/api/shift-filling/calloff', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        shift_id: shiftId,
+                        caregiver_id: caregiverId,
+                        reason: reason
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Campaign started! ${result.total_contacted} caregivers contacted.`);
+                    refreshShiftFilling();
+                } else {
+                    alert('Error processing calloff');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function runShiftFillingDemo() {
+            const alert = document.getElementById('demoResultAlert');
+            const content = document.getElementById('demoResultContent');
+            alert.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/shift-filling/demo', {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert.style.display = 'block';
+                    content.innerHTML = `
+                        Shift for <strong>${result.shift?.client || 'Unknown'}</strong> on ${result.shift?.date || 'N/A'}
+                        was filled by <strong>${result.winner || 'N/A'}</strong>.
+                        <br><span style="color: #94a3b8; font-size: 13px;">
+                            ${result.matches_found} matches found, ${result.caregivers_contacted} contacted.
+                        </span>
+                    `;
+                    refreshShiftFilling();
+                }
+            } catch (err) {
+                console.error('Error running demo:', err);
+            }
+        }
+
+        // ============================================
+        // SMS Log Functions
+        // ============================================
+        async function refreshSmsLog() {
+            const container = document.getElementById('smsLogList');
+            container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">Loading messages...</div>';
+
+            try {
+                const response = await fetch('/api/shift-filling/sms-log');
+                if (response.ok) {
+                    const data = await response.json();
+                    renderSmsLog(data.messages || []);
+                }
+            } catch (err) {
+                container.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 24px;">Error: ${err.message}</div>`;
+            }
+        }
+
+        function renderSmsLog(messages) {
+            const container = document.getElementById('smsLogList');
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 32px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                        <div style="color: #94a3b8;">No SMS messages sent yet</div>
+                        <div style="color: #64748b; font-size: 13px; margin-top: 8px;">
+                            Run a demo or process a calloff to see messages here
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #334155;">
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600; width: 150px;">Time</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600; width: 130px;">To</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${messages.map(msg => `
+                            <tr style="border-bottom: 1px solid #334155;">
+                                <td style="padding: 12px; color: #64748b; font-size: 12px;">${new Date(msg.sent_at).toLocaleString()}</td>
+                                <td style="padding: 12px; color: #cbd5e1; font-family: monospace; font-size: 13px;">${msg.to}</td>
+                                <td style="padding: 12px; color: #cbd5e1; font-size: 13px; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${msg.text}">${msg.text}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // ============================================
+        // Original Functions
+        // ============================================
+
         // Initialize rating buttons
         document.querySelectorAll('.rating-input').forEach(container => {
             const field = container.dataset.field;
