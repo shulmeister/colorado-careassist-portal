@@ -3,7 +3,7 @@
   "version": "3.0.0",
   "description": "Colorado CareAssist Unified Portal with PowderPulse",
   "scripts": {
-    "heroku-postbuild": "cd powderpulse && npm install && npm run build && cd ../sales/frontend && npm install --ignore-scripts && npm run build",
+    "heroku-postbuild": "cd powderpulse && npm install && npm run build && cd ../sales/frontend && npm install --ignore-scripts && npx vite build",
     "build:powderpulse": "cd powderpulse && npm install && npm run build",
     "build:sales": "cd sales/frontend && npm install && npm run build"
   },
