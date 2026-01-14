@@ -14,7 +14,17 @@ try:
         "GoFormz": "/static/logos/goformz.png",
         "QuickBooks": "/static/logos/quickbooks-online.png",
         "QuickBooks Online": "/static/logos/quickbooks-online.png",
+        "Quickbooks Online": "/static/logos/quickbooks-online.png",
         "Google Ads": "/static/logos/google-ads-icon.png",
+        "Google Ads Manager": "/static/logos/google-ads-icon.png",
+        # Additional logos
+        "Adams Keegan Efficenter": "/static/logos/adams-keegan.png",
+        "Adams Keegan": "/static/logos/adams-keegan.png",
+        "Meta Business Suite": "/static/logos/meta-business-suite.webp",
+        "Facebook Ads Manager": "/static/logos/facebook-ads-manager.jpeg",
+        "Facebook Ads": "/static/logos/facebook-ads-manager.jpeg",
+        "Predis.ai": "/static/logos/predis.webp",
+        "Predis": "/static/logos/predis.webp",
     }
 
     updated_count = 0
