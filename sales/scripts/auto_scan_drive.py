@@ -615,6 +615,21 @@ def main():
         except Exception as e:
             logger.error(f"❌ Gmail sync error: {e}")
 
+        # Sync RingCentral call logs
+        logger.info("\n" + "="*60)
+        logger.info("SYNCING RINGCENTRAL CALLS")
+        logger.info("="*60)
+        try:
+            from ringcentral_service import RingCentralService
+            rc_service = RingCentralService()
+            if rc_service.enabled:
+                synced = rc_service.sync_call_logs_to_activities(db, since_minutes=1440)  # Last 24 hours
+                logger.info(f"✅ RingCentral sync completed: {synced} calls")
+            else:
+                logger.info("⏭️ RingCentral service not enabled, skipping")
+        except Exception as e:
+            logger.error(f"❌ RingCentral sync error: {e}")
+
         db.close()
 
         return all_results
