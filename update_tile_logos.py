@@ -12,19 +12,12 @@ try:
         "Google Business Profile": "/static/logos/google-business-profile.png",
         "Hostinger": "/static/logos/hostinger-new.avif",
         "GoFormz": "/static/logos/goformz.png",
-        "QuickBooks": "/static/logos/quickbooks-online.png",
-        "QuickBooks Online": "/static/logos/quickbooks-online.png",
-        "Quickbooks Online": "/static/logos/quickbooks-online.png",
-        "Google Ads": "/static/logos/google-ads-icon.png",
-        "Google Ads Manager": "/static/logos/google-ads-icon.png",
-        # Additional logos
-        "Adams Keegan Efficenter": "/static/logos/adams-keegan.png",
+        # QuickBooks (named "Intuit" in database)
+        "Intuit": "/static/logos/quickbooks-online.png",
+        # Adams Keegan
         "Adams Keegan": "/static/logos/adams-keegan.png",
-        "Meta Business Suite": "/static/logos/meta-business-suite.webp",
-        "Facebook Ads Manager": "/static/logos/facebook-ads-manager.jpeg",
-        "Facebook Ads": "/static/logos/facebook-ads-manager.jpeg",
+        # Predis.ai
         "Predis.ai": "/static/logos/predis.webp",
-        "Predis": "/static/logos/predis.webp",
     }
 
     updated_count = 0
@@ -40,6 +33,25 @@ try:
             print(f"   New: {logo_url}")
         else:
             print(f"Not found: {tool_name}")
+
+    # Handle Meta tiles by current icon URL (they have same name "Meta")
+    ICON_UPDATES = {
+        # Meta Business Suite
+        "https://static.xx.fbcdn.net/rsrc.php/v3/yJ/r/8dK8qmqxzpA.png": "/static/logos/meta-business-suite.webp",
+        # Facebook Ads Manager
+        "https://static.xx.fbcdn.net/rsrc.php/v3/yZ/r/OTB6Bkrf2Ah.png": "/static/logos/facebook-ads-manager.jpeg",
+    }
+
+    for old_icon, new_icon in ICON_UPDATES.items():
+        tool = db.query(PortalTool).filter(PortalTool.icon == old_icon).first()
+        if tool:
+            tool.icon = new_icon
+            updated_count += 1
+            print(f"Updated by icon: {tool.name}")
+            print(f"   Old: {old_icon}")
+            print(f"   New: {new_icon}")
+        else:
+            print(f"Not found by icon: {old_icon[:50]}...")
 
     db.commit()
     print(f"\nUpdated {updated_count} logos!")
