@@ -12,8 +12,8 @@ try:
         "Google Business Profile": "/static/logos/google-business-profile.png",
         "Hostinger": "/static/logos/hostinger-new.avif",
         "GoFormz": "/static/logos/goformz.png",
-        # QuickBooks (named "Intuit" in database)
-        "Intuit": "/static/logos/quickbooks-online.png",
+        # QuickBooks (named "Intuit" in database) - smaller version
+        "Intuit": "/static/logos/quickbooks-online-small.png",
         # Adams Keegan
         "Adams Keegan": "/static/logos/adams-keegan.png",
         # Predis.ai
@@ -34,12 +34,14 @@ try:
         else:
             print(f"Not found: {tool_name}")
 
-    # Handle Meta tiles by current icon URL (they have same name "Meta")
+    # Handle tiles by current icon URL (when they share generic names like "Meta" or "Google")
     ICON_UPDATES = {
         # Meta Business Suite
         "https://static.xx.fbcdn.net/rsrc.php/v3/yJ/r/8dK8qmqxzpA.png": "/static/logos/meta-business-suite.webp",
         # Facebook Ads Manager
         "https://static.xx.fbcdn.net/rsrc.php/v3/yZ/r/OTB6Bkrf2Ah.png": "/static/logos/facebook-ads-manager.jpeg",
+        # Google Ads (named "Google" in database)
+        "https://www.gstatic.com/ads-frontend/compass_icons/compass_icon_192.png": "/static/logos/google-ads-icon.webp",
     }
 
     for old_icon, new_icon in ICON_UPDATES.items():
