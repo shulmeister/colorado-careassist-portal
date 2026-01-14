@@ -1308,29 +1308,40 @@
                 container.innerHTML = `
                     <div style="text-align: center; padding: 32px;">
                         <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
-                        <div style="color: #94a3b8;">No SMS messages sent yet</div>
+                        <div style="color: #94a3b8;">No SMS messages in the last 24 hours</div>
                         <div style="color: #64748b; font-size: 13px; margin-top: 8px;">
-                            Run a demo or process a calloff to see messages here
+                            Messages to/from 719-428-3999 will appear here
                         </div>
                     </div>
                 `;
                 return;
             }
 
+            const formatPhone = (phone) => {
+                if (!phone || phone.length !== 10) return phone;
+                return `(${phone.slice(0,3)}) ${phone.slice(3,6)}-${phone.slice(6)}`;
+            };
+
             container.innerHTML = `
                 <table style="width: 100%; border-collapse: collapse;">
                     <thead>
                         <tr style="border-bottom: 1px solid #334155;">
                             <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600; width: 150px;">Time</th>
-                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600; width: 130px;">To</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600; width: 80px;">Direction</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600; width: 130px;">Caregiver</th>
                             <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Message</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${messages.map(msg => `
                             <tr style="border-bottom: 1px solid #334155;">
-                                <td style="padding: 12px; color: #64748b; font-size: 12px;">${new Date(msg.sent_at).toLocaleString()}</td>
-                                <td style="padding: 12px; color: #cbd5e1; font-family: monospace; font-size: 13px;">${msg.to}</td>
+                                <td style="padding: 12px; color: #64748b; font-size: 12px;">${new Date(msg.time).toLocaleString()}</td>
+                                <td style="padding: 12px;">
+                                    <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; ${msg.direction === 'Inbound' ? 'background: #166534; color: #86efac;' : 'background: #1e40af; color: #93c5fd;'}">
+                                        ${msg.direction === 'Inbound' ? '← IN' : '→ OUT'}
+                                    </span>
+                                </td>
+                                <td style="padding: 12px; color: #cbd5e1; font-family: monospace; font-size: 13px;">${formatPhone(msg.phone)}</td>
                                 <td style="padding: 12px; color: #cbd5e1; font-size: 13px; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${msg.text}">${msg.text}</td>
                             </tr>
                         `).join('')}

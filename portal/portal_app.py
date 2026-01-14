@@ -3118,21 +3118,92 @@ async def run_demo():
 
 
 @app.get("/api/shift-filling/sms-log")
-async def get_sms_log():
-    """Get log of sent SMS messages (mock service only)"""
-    if not SHIFT_FILLING_AVAILABLE:
-        return JSONResponse({"messages": []})
+async def get_sms_log(hours: int = 24):
+    """Get SMS message log from RingCentral for 719-428-3999"""
+    import requests
+    from datetime import datetime, timedelta
+    import re
 
-    if hasattr(sms_service, 'sent_messages'):
+    # RingCentral credentials
+    client_id = os.getenv("RINGCENTRAL_CLIENT_ID")
+    client_secret = os.getenv("RINGCENTRAL_CLIENT_SECRET")
+    jwt_token = os.getenv("RINGCENTRAL_JWT_TOKEN")
+    server = os.getenv("RINGCENTRAL_SERVER", "https://platform.ringcentral.com")
+
+    if not all([client_id, client_secret, jwt_token]):
+        return JSONResponse({"messages": [], "error": "RingCentral credentials not configured"})
+
+    try:
+        # Get access token
+        auth_response = requests.post(
+            f"{server}/restapi/oauth/token",
+            auth=(client_id, client_secret),
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                "assertion": jwt_token
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=30
+        )
+
+        if auth_response.status_code != 200:
+            return JSONResponse({"messages": [], "error": "Authentication failed"})
+
+        access_token = auth_response.json().get("access_token")
+
+        # Fetch SMS messages
+        date_from = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+        messages_response = requests.get(
+            f"{server}/restapi/v1.0/account/~/extension/~/message-store",
+            headers={"Authorization": f"Bearer {access_token}"},
+            params={
+                "dateFrom": date_from,
+                "messageType": "SMS",
+                "perPage": 100
+            },
+            timeout=60
+        )
+
+        if messages_response.status_code != 200:
+            return JSONResponse({"messages": [], "error": "Failed to fetch messages"})
+
+        records = messages_response.json().get("records", [])
+
+        # Filter for 719-428-3999 (caregiver line) and format
+        target_phone = "7194283999"
+        filtered_messages = []
+
+        for msg in records:
+            from_number = msg.get("from", {}).get("phoneNumber", "")
+            to_numbers = [t.get("phoneNumber", "") for t in msg.get("to", [])]
+
+            from_clean = re.sub(r'[^\d]', '', from_number)[-10:]
+            to_clean = [re.sub(r'[^\d]', '', t)[-10:] for t in to_numbers]
+
+            # Include if target number is involved
+            if target_phone in from_clean or target_phone in to_clean:
+                direction = msg.get("direction", "")
+                other_party = from_clean if direction == "Inbound" else (to_clean[0] if to_clean else "")
+
+                filtered_messages.append({
+                    "id": msg.get("id"),
+                    "direction": direction,
+                    "phone": other_party,
+                    "text": msg.get("subject", "")[:150] + ("..." if len(msg.get("subject", "")) > 150 else ""),
+                    "time": msg.get("creationTime"),
+                    "status": msg.get("messageStatus", "")
+                })
+
         return JSONResponse({
-            "messages": [{
-                "id": m["id"],
-                "to": m["to"],
-                "text": m["text"][:100] + "..." if len(m["text"]) > 100 else m["text"],
-                "sent_at": m["sent_at"].isoformat()
-            } for m in sms_service.sent_messages[-50:]]  # Last 50
+            "messages": filtered_messages[:50],
+            "total": len(filtered_messages),
+            "hours": hours
         })
-    return JSONResponse({"messages": [], "note": "Real SMS service - no log available"})
+
+    except Exception as e:
+        logger.error(f"SMS log fetch error: {e}")
+        return JSONResponse({"messages": [], "error": str(e)})
 
 
 # ============================================================================
