@@ -172,6 +172,26 @@ def link_contacts_to_companies(db):
     return linked
 
 
+def format_phone_e164(phone):
+    """Format phone number to E.164 format for Brevo"""
+    if not phone:
+        return ""
+
+    # Remove all non-digits
+    digits = re.sub(r'[^\d]', '', phone)
+
+    # Handle US numbers
+    if len(digits) == 10:
+        return f"+1{digits}"
+    elif len(digits) == 11 and digits[0] == '1':
+        return f"+{digits}"
+    elif len(digits) > 10:
+        return f"+{digits}"
+
+    # Invalid phone number
+    return ""
+
+
 def sync_to_brevo(db):
     """Sync all contacts with email to Brevo"""
     print("\n=== SYNCING TO BREVO ===")
@@ -201,15 +221,21 @@ def sync_to_brevo(db):
             if company:
                 company_name = company.name or ""
 
-        # Prepare Brevo contact data
+        # Format phone number for Brevo (E.164 format)
+        formatted_phone = format_phone_e164(c.phone)
+
+        # Prepare Brevo contact data - only include SMS if valid phone
+        attributes = {
+            "FIRSTNAME": c.first_name or "",
+            "LASTNAME": c.last_name or "",
+            "COMPANY": company_name
+        }
+        if formatted_phone:
+            attributes["SMS"] = formatted_phone
+
         payload = {
             "email": c.email.lower().strip(),
-            "attributes": {
-                "FIRSTNAME": c.first_name or "",
-                "LASTNAME": c.last_name or "",
-                "COMPANY": company_name,
-                "SMS": c.phone or ""
-            },
+            "attributes": attributes,
             "updateEnabled": True
         }
 
