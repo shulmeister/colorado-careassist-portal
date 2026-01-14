@@ -114,9 +114,10 @@ def mark_file_processed(db, drive_file_id: str, filename: str, folder_type: str,
 
 
 def process_business_card(db, content: bytes, filename: str, file_id: str) -> Dict[str, Any]:
-    """Process a business card image and create Contact + Company"""
+    """Process a business card image and create Contact + Company + Activity log"""
     from models import Contact, ReferralSource, ProcessedDriveFile
     from ai_document_parser import ai_parser
+    from activity_logger import ActivityLogger
 
     result = ai_parser.parse_business_card(content, filename)
 
@@ -218,6 +219,20 @@ def process_business_card(db, content: bytes, filename: str, file_id: str) -> Di
         contact_id = new_contact.id
         contact_created = True
 
+    # Log the business card scan as an activity
+    if contact_id and contact_created:
+        try:
+            ActivityLogger.log_business_card_scan(
+                db=db,
+                contact_id=contact_id,
+                user_email=DEFAULT_USER,
+                contact_name=f"{first_name} {last_name}".strip(),
+                filename=filename,
+                commit=False  # We'll commit at the end
+            )
+        except Exception as e:
+            logger.warning(f"Failed to log business card scan activity: {e}")
+
     db.commit()
 
     return {
@@ -233,9 +248,10 @@ def process_business_card(db, content: bytes, filename: str, file_id: str) -> Di
 
 
 def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[str, Any]:
-    """Process a MyWay route PDF and create Visits + Mileage entry"""
-    from models import Visit, FinancialEntry
+    """Process a MyWay route PDF and create Visits + Mileage entry + Activity logs"""
+    from models import Visit, FinancialEntry, ReferralSource, Contact
     from ai_document_parser import ai_parser
+    from activity_logger import ActivityLogger
 
     result = ai_parser.parse_myway_pdf(content, filename)
 
@@ -252,6 +268,7 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[s
     # Check for duplicate visits (same date + stop number + business name)
     saved_count = 0
     skipped_count = 0
+    activities_logged = 0
 
     for visit_data in visits:
         visit_date = visit_data.get('visit_date') or pdf_date or datetime.utcnow()
@@ -286,7 +303,46 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[s
             created_at=datetime.utcnow()
         )
         db.add(new_visit)
+        db.flush()  # Get the visit ID
         saved_count += 1
+
+        # Find matching company (ReferralSource) by name
+        company_id = None
+        contact_id = None
+        if business_name and business_name != 'Unknown':
+            # Try to find company by name match
+            company = db.query(ReferralSource).filter(
+                ReferralSource.name.ilike(f'%{business_name[:30]}%')
+            ).first()
+            if not company:
+                # Try organization field
+                company = db.query(ReferralSource).filter(
+                    ReferralSource.organization.ilike(f'%{business_name[:30]}%')
+                ).first()
+            if company:
+                company_id = company.id
+                # Find a contact at this company
+                contact = db.query(Contact).filter(
+                    Contact.company_id == company_id
+                ).first()
+                if contact:
+                    contact_id = contact.id
+
+        # Log the visit as an activity
+        try:
+            ActivityLogger.log_visit(
+                db=db,
+                visit_id=new_visit.id,
+                business_name=business_name,
+                user_email=DEFAULT_USER,
+                visit_date=visit_date if isinstance(visit_date, datetime) else datetime.combine(visit_date, datetime.min.time()),
+                contact_id=contact_id,
+                company_id=company_id,
+                commit=False  # We'll commit at the end
+            )
+            activities_logged += 1
+        except Exception as e:
+            logger.warning(f"Failed to log visit activity: {e}")
 
     # Save mileage to FinancialEntry
     mileage_saved = False
@@ -335,6 +391,7 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[s
         'success': True,
         'visits_saved': saved_count,
         'visits_skipped': skipped_count,
+        'activities_logged': activities_logged,
         'mileage': mileage,
         'mileage_saved': mileage_saved,
         'date': pdf_date.isoformat() if pdf_date else None
@@ -542,6 +599,21 @@ def main():
         logger.info("-"*60)
         logger.info(f"TOTAL: {total_new} new files, {total_success} successful, {total_errors} errors")
         logger.info("="*60)
+
+        # Sync Gmail activities (emails sent to/from contacts)
+        logger.info("\n" + "="*60)
+        logger.info("SYNCING GMAIL ACTIVITIES")
+        logger.info("="*60)
+        try:
+            from gmail_activity_sync import GmailActivitySync
+            gmail_sync = GmailActivitySync()
+            if gmail_sync.gmail_service.enabled:
+                gmail_sync.sync_recent_emails(db, max_results=100, since_minutes=1440)  # Last 24 hours
+                logger.info("✅ Gmail activity sync completed")
+            else:
+                logger.info("⏭️ Gmail service not enabled, skipping")
+        except Exception as e:
+            logger.error(f"❌ Gmail sync error: {e}")
 
         db.close()
 
