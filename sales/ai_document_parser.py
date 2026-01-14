@@ -56,6 +56,8 @@ class AIDocumentParser:
         
         prompt = """Analyze this MyWay route PDF and extract ALL the information.
 
+This is a sales route for a home care company visiting healthcare facilities (nursing homes, assisted living, rehab centers, hospitals, etc).
+
 Return a JSON object with this EXACT structure:
 {
     "date": "YYYY-MM-DD format or null if not found",
@@ -63,7 +65,7 @@ Return a JSON object with this EXACT structure:
     "visits": [
         {
             "stop_number": 1,
-            "business_name": "Full business/facility name",
+            "business_name": "Full healthcare facility/business name",
             "address": "Street address",
             "city": "City name",
             "notes": "Any notes or status like SKIPPED",
@@ -72,10 +74,17 @@ Return a JSON object with this EXACT structure:
     ]
 }
 
-IMPORTANT:
+CRITICAL - BUSINESS NAME IDENTIFICATION:
+- MyWay often shows only addresses without business names
+- You MUST identify the healthcare facility at each address using your knowledge
+- These are typically: nursing homes, skilled nursing facilities, assisted living, memory care, rehab hospitals, hospice, senior living communities
+- Example: "2101 S Blackhawk St, Aurora CO" → "The Medical Center of Aurora"
+- Example: "1000 Southpark Dr, Littleton CO" → "Littleton Adventist Hospital"
+- If you cannot identify the facility, use the address but TRY to identify it first
+- Do NOT just copy the address as the business name if you can identify the actual facility
+
+OTHER REQUIREMENTS:
 - Extract EVERY stop/visit listed, even if marked as SKIPPED
-- For "Address Only" entries, use the street address as business_name
-- Include the full business name when available
 - Set skipped=true for entries marked SKIPPED
 - Extract the route date from the header
 - Extract total mileage if shown
