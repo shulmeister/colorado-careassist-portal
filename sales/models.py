@@ -692,3 +692,29 @@ class Expense(Base):
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None
         }
+
+
+class ProcessedDriveFile(Base):
+    """Track processed Google Drive files to avoid duplicates during auto-scanning"""
+    __tablename__ = "processed_drive_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    drive_file_id = Column(String(255), nullable=False, unique=True, index=True)
+    filename = Column(String(500), nullable=True)
+    folder_type = Column(String(50), nullable=False)  # 'business_cards', 'myway_routes', 'expenses'
+    processed_at = Column(DateTime, default=datetime.utcnow)
+    result_type = Column(String(50), nullable=True)  # 'contact', 'visit', 'expense', 'error'
+    result_id = Column(Integer, nullable=True)  # ID of created record if applicable
+    error_message = Column(Text, nullable=True)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "drive_file_id": self.drive_file_id,
+            "filename": self.filename,
+            "folder_type": self.folder_type,
+            "processed_at": self.processed_at.isoformat() if self.processed_at else None,
+            "result_type": self.result_type,
+            "result_id": self.result_id,
+            "error_message": self.error_message
+        }

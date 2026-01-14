@@ -32,7 +32,7 @@ except ImportError:
 from ai_document_parser import ai_parser
 from google_sheets import GoogleSheetsManager
 from database import get_db, db_manager
-from models import Visit, TimeEntry, Contact, ActivityNote, FinancialEntry, SalesBonus, DashboardSummary, EmailCount, ActivityLog, Deal, Expense, Lead, ReferralSource, ContactTask, DealTask, CompanyTask
+from models import Visit, TimeEntry, Contact, ActivityNote, FinancialEntry, SalesBonus, DashboardSummary, EmailCount, ActivityLog, Deal, Expense, Lead, ReferralSource, ContactTask, DealTask, CompanyTask, ProcessedDriveFile
 from analytics import AnalyticsEngine
 from migrate_data import GoogleSheetsMigrator
 from business_card_scanner import BusinessCardScanner
@@ -4329,8 +4329,275 @@ def _get_cached_folder_files(folder_url: str, drive_service) -> List[Dict[str, A
         "timestamp": now
     }
     logger.info(f"Cached {len(files)} files from folder")
-    
+
     return files
+
+
+# ==================== AUTO-SCAN DRIVE FOLDERS ====================
+# Pre-configured folders for Jacob's business cards, routes, and expenses
+AUTO_SCAN_FOLDERS = {
+    'business_cards': '1aGO6vxe50yA-1UcanPDEVlIFrXOMRYK4',
+    'myway_routes': '1IHiYvGxOaA6nyjd1Ecvgt1FbB114P5mB',
+    'expenses': '16OmBFwNzEKzVBBjmDtSTdM21pb3wGhSb'
+}
+
+
+@app.post("/api/auto-scan")
+async def trigger_auto_scan(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """
+    Trigger auto-scan of all three Google Drive folders.
+    Scans for new files only (tracks processed files to avoid duplicates).
+    """
+    from models import ProcessedDriveFile, Contact, ReferralSource, Visit, FinancialEntry, Expense
+    from ai_document_parser import ai_parser
+
+    drive_service = GoogleDriveService()
+    if not drive_service.enabled:
+        raise HTTPException(status_code=400, detail="Google Drive API not configured. Set GOOGLE_SERVICE_ACCOUNT_KEY.")
+
+    # Ensure ProcessedDriveFile table exists
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS processed_drive_files (
+                id SERIAL PRIMARY KEY,
+                drive_file_id VARCHAR(255) NOT NULL UNIQUE,
+                filename VARCHAR(500),
+                folder_type VARCHAR(50) NOT NULL,
+                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                result_type VARCHAR(50),
+                result_id INTEGER,
+                error_message TEXT
+            )
+        """))
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Table may already exist: {e}")
+        db.rollback()
+
+    results = {
+        'business_cards': {'new': 0, 'processed': 0, 'contacts_created': 0, 'companies_created': 0, 'errors': []},
+        'myway_routes': {'new': 0, 'processed': 0, 'visits_created': 0, 'errors': []},
+        'expenses': {'new': 0, 'processed': 0, 'expenses_created': 0, 'errors': []}
+    }
+
+    default_user = 'jacob@coloradocareassist.com'
+    mileage_rate = 0.70
+
+    for folder_type, folder_id in AUTO_SCAN_FOLDERS.items():
+        try:
+            # Get already processed file IDs
+            processed_query = db.query(ProcessedDriveFile.drive_file_id).filter(
+                ProcessedDriveFile.folder_type == folder_type
+            ).all()
+            processed_ids = {r[0] for r in processed_query}
+
+            # List files in folder
+            folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
+            image_only = folder_type in ['business_cards', 'expenses']
+            files = drive_service.list_files_in_folder(folder_url, image_only=image_only, recursive=True)
+
+            # Filter to new files
+            new_files = [f for f in files if f.get('id') not in processed_ids]
+            results[folder_type]['new'] = len(new_files)
+
+            logger.info(f"Auto-scan {folder_type}: {len(new_files)} new files of {len(files)} total")
+
+            for file_info in new_files[:20]:  # Limit to 20 per folder per request
+                file_id = file_info.get('id')
+                filename = file_info.get('name', 'unknown')
+
+                try:
+                    # Download file
+                    download_result = drive_service.download_file_by_id(file_id)
+                    if not download_result:
+                        results[folder_type]['errors'].append(f"{filename}: download failed")
+                        continue
+
+                    content, _, _ = download_result
+                    drive_url = f"https://drive.google.com/file/d/{file_id}/view"
+
+                    # Process based on folder type
+                    if folder_type == 'business_cards':
+                        card_data = ai_parser.parse_business_card(content, filename)
+                        if card_data.get('success'):
+                            first_name = (card_data.get('first_name') or '').strip()
+                            last_name = (card_data.get('last_name') or '').strip()
+                            company_name = (card_data.get('company') or '').strip()
+                            email = (card_data.get('email') or '').strip()
+
+                            # Create company if needed
+                            company_id = None
+                            if company_name:
+                                existing_co = db.query(ReferralSource).filter(
+                                    ReferralSource.organization.ilike(f'%{company_name}%')
+                                ).first()
+                                if existing_co:
+                                    company_id = existing_co.id
+                                else:
+                                    new_co = ReferralSource(
+                                        name=company_name,
+                                        organization=company_name,
+                                        source_type="Healthcare Facility",
+                                        status="incoming"
+                                    )
+                                    db.add(new_co)
+                                    db.flush()
+                                    company_id = new_co.id
+                                    results[folder_type]['companies_created'] += 1
+
+                            # Create contact
+                            new_contact = Contact(
+                                first_name=first_name,
+                                last_name=last_name,
+                                name=f"{first_name} {last_name}".strip(),
+                                company=company_name,
+                                company_id=company_id,
+                                email=email,
+                                phone=card_data.get('phone'),
+                                title=card_data.get('title'),
+                                address=card_data.get('address'),
+                                status="cold",
+                                account_manager=default_user,
+                                source="Auto-Scan",
+                                created_at=datetime.utcnow()
+                            )
+                            db.add(new_contact)
+                            results[folder_type]['contacts_created'] += 1
+
+                        result_type = 'contact' if card_data.get('success') else 'error'
+
+                    elif folder_type == 'myway_routes':
+                        route_data = ai_parser.parse_myway_pdf(content, filename)
+                        if route_data.get('success'):
+                            visits = route_data.get('visits', [])
+                            pdf_date = route_data.get('date')
+                            mileage = route_data.get('mileage')
+
+                            for v in visits:
+                                new_visit = Visit(
+                                    stop_number=v.get('stop_number', 0),
+                                    business_name=v.get('business_name', 'Unknown'),
+                                    address=v.get('address', ''),
+                                    city=v.get('city', ''),
+                                    notes=v.get('notes', ''),
+                                    visit_date=v.get('visit_date') or pdf_date or datetime.utcnow(),
+                                    user_email=default_user,
+                                    created_at=datetime.utcnow()
+                                )
+                                db.add(new_visit)
+                                results[folder_type]['visits_created'] += 1
+
+                            # Save mileage
+                            if mileage and pdf_date:
+                                new_entry = FinancialEntry(
+                                    date=pdf_date,
+                                    hours_worked=0,
+                                    labor_cost=0,
+                                    miles_driven=mileage,
+                                    mileage_cost=mileage * mileage_rate,
+                                    materials_cost=0,
+                                    total_daily_cost=mileage * mileage_rate,
+                                    user_email=default_user,
+                                    created_at=datetime.utcnow()
+                                )
+                                db.add(new_entry)
+
+                        result_type = 'visit' if route_data.get('success') else 'error'
+
+                    elif folder_type == 'expenses':
+                        receipt_data = ai_parser.parse_receipt(content, filename)
+                        if receipt_data.get('success') and receipt_data.get('amount', 0) > 0:
+                            expense_date = datetime.utcnow()
+                            if receipt_data.get('date'):
+                                try:
+                                    expense_date = datetime.strptime(receipt_data['date'], '%Y-%m-%d')
+                                except:
+                                    pass
+
+                            new_expense = Expense(
+                                user_email=default_user,
+                                amount=receipt_data.get('amount'),
+                                description=f"{receipt_data.get('vendor', 'Unknown')}: {receipt_data.get('description', '')}".strip(': '),
+                                category=receipt_data.get('category', 'Other'),
+                                date=expense_date,
+                                receipt_url=drive_url,
+                                status='pending',
+                                created_at=datetime.utcnow()
+                            )
+                            db.add(new_expense)
+                            results[folder_type]['expenses_created'] += 1
+
+                        result_type = 'expense' if receipt_data.get('success') else 'error'
+
+                    # Mark file as processed
+                    processed_record = ProcessedDriveFile(
+                        drive_file_id=file_id,
+                        filename=filename,
+                        folder_type=folder_type,
+                        result_type=result_type
+                    )
+                    db.add(processed_record)
+                    results[folder_type]['processed'] += 1
+
+                    # Commit batch
+                    db.commit()
+
+                    # Small delay
+                    time.sleep(0.3)
+
+                except Exception as file_error:
+                    logger.error(f"Error processing {filename}: {file_error}")
+                    results[folder_type]['errors'].append(f"{filename}: {str(file_error)}")
+                    db.rollback()
+
+        except Exception as folder_error:
+            logger.error(f"Error scanning {folder_type}: {folder_error}")
+            results[folder_type]['errors'].append(str(folder_error))
+
+    return JSONResponse({
+        "success": True,
+        "message": "Auto-scan complete",
+        "results": results
+    })
+
+
+@app.get("/api/auto-scan/status")
+async def get_auto_scan_status(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Get status of processed files by folder type"""
+    from models import ProcessedDriveFile
+
+    try:
+        # Count processed files by folder type
+        counts = {}
+        for folder_type in AUTO_SCAN_FOLDERS.keys():
+            count = db.query(ProcessedDriveFile).filter(
+                ProcessedDriveFile.folder_type == folder_type
+            ).count()
+            counts[folder_type] = count
+
+        # Get recent processing
+        recent = db.query(ProcessedDriveFile).order_by(
+            ProcessedDriveFile.processed_at.desc()
+        ).limit(10).all()
+
+        return JSONResponse({
+            "success": True,
+            "processed_counts": counts,
+            "recent": [r.to_dict() for r in recent]
+        })
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "processed_counts": {},
+            "recent": []
+        })
 
 
 @app.post("/bulk-business-cards")
