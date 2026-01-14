@@ -1,0 +1,1834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operations Dashboard - Colorado CareAssist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 260px;
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 24px 16px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+        }
+
+        .sidebar-header {
+            margin-bottom: 32px;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .sidebar-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 16px;
+            transition: background 0.2s;
+        }
+
+        .back-btn:hover {
+            background: #2563eb;
+        }
+
+        .nav-section {
+            margin-bottom: 24px;
+        }
+
+        .nav-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+            padding: 0 12px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            color: #cbd5e1;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: #334155;
+            color: #f8fafc;
+        }
+
+        .nav-item.active {
+            background: #3b82f6;
+        }
+
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            padding: 32px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .page-subtitle {
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+        }
+
+        .btn-secondary {
+            background: #334155;
+            color: #e2e8f0;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .metric-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .metric-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .metric-icon.green { background: rgba(34, 197, 94, 0.15); }
+        .metric-icon.blue { background: rgba(59, 130, 246, 0.15); }
+        .metric-icon.orange { background: rgba(249, 115, 22, 0.15); }
+        .metric-icon.purple { background: rgba(168, 85, 247, 0.15); }
+        .metric-icon.red { background: rgba(239, 68, 68, 0.15); }
+
+        .metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .metric-label {
+            font-size: 14px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        .metric-detail {
+            font-size: 13px;
+            color: #64748b;
+            margin-top: 8px;
+        }
+
+        .content-sections {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        .section-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .section-content {
+            padding: 20px 24px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .list-item-info {
+            flex: 1;
+        }
+
+        .list-item-title {
+            font-weight: 500;
+            color: #f8fafc;
+        }
+
+        .list-item-subtitle {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        .badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-green { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+        .badge-yellow { background: rgba(234, 179, 8, 0.15); color: #eab308; }
+        .badge-red { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .badge-blue { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+
+        .star-rating {
+            color: #fbbf24;
+            font-size: 14px;
+        }
+
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: #e2e8f0;
+            margin-bottom: 8px;
+        }
+
+        .form-input, .form-select, .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+
+        .form-input:focus, .form-select:focus, .form-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .rating-input {
+            display: flex;
+            gap: 8px;
+        }
+
+        .rating-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #94a3b8;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .rating-btn:hover, .rating-btn.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            border-top: 1px solid #334155;
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        @media (max-width: 1024px) {
+            .content-sections {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Colorado CareAssist</div>
+                <div class="sidebar-subtitle">Operations Dashboard</div>
+                <a href="/" class="back-btn">← Back to Portal</a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-label">Shift Filling</div>
+                <div class="nav-item" data-view="shift-filling" onclick="showView('shift-filling')">
+                    <span>🚀 Open Shifts</span>
+                </div>
+                <div class="nav-item" data-view="sms-log" onclick="showView('sms-log')">
+                    <span>📱 SMS Log</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-label">Client Satisfaction</div>
+                <div class="nav-item active" data-view="overview" onclick="showView('overview')">
+                    <span>📊 Overview</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-label">Data Entry</div>
+                <div class="nav-item" onclick="openModal('surveyModal')">
+                    <span>+ Add Survey Response</span>
+                </div>
+                <div class="nav-item" onclick="openModal('complaintModal')">
+                    <span>+ Log Complaint</span>
+                </div>
+                <div class="nav-item" onclick="openModal('visitModal')">
+                    <span>+ Quality Visit</span>
+                </div>
+                <div class="nav-item" onclick="openModal('reviewModal')">
+                    <span>+ Add Review</span>
+                </div>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-label">Import</div>
+                <div class="nav-item" onclick="syncSurveys()">
+                    <span>Sync Google Form</span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <!-- Shift Filling View -->
+            <div id="shift-filling-view" class="view-section" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">AI-Powered Shift Filling</h1>
+                        <p class="page-subtitle">Automatically find replacement caregivers</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-primary" onclick="runShiftFillingDemo()">▶️ Run Demo</button>
+                        <button class="btn btn-secondary" onclick="refreshShiftFilling()">Refresh</button>
+                    </div>
+                </div>
+
+                <!-- Status Cards -->
+                <div class="metrics-grid" id="shift-status-cards">
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon blue">🤖</div>
+                        </div>
+                        <div class="metric-value" id="sfEngineStatus">—</div>
+                        <div class="metric-label">Engine Status</div>
+                        <div class="metric-detail">AI shift filling</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon green">📱</div>
+                        </div>
+                        <div class="metric-value" id="sfSmsStatus">—</div>
+                        <div class="metric-label">SMS Service</div>
+                        <div class="metric-detail">RingCentral</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon orange">📋</div>
+                        </div>
+                        <div class="metric-value" id="sfOpenShifts">—</div>
+                        <div class="metric-label">Open Shifts</div>
+                        <div class="metric-detail">Needing coverage</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-header">
+                            <div class="metric-icon purple">🚀</div>
+                        </div>
+                        <div class="metric-value" id="sfActiveCampaigns">—</div>
+                        <div class="metric-label">Active Campaigns</div>
+                        <div class="metric-detail">In progress</div>
+                    </div>
+                </div>
+
+                <!-- Demo Result Alert -->
+                <div id="demoResultAlert" style="display: none; background: rgba(34, 197, 94, 0.1); border: 1px solid #22c55e; border-radius: 12px; padding: 16px; margin-bottom: 24px;">
+                    <div style="font-weight: 600; color: #22c55e; margin-bottom: 8px;">✅ Demo Completed!</div>
+                    <div id="demoResultContent" style="color: #cbd5e1;"></div>
+                </div>
+
+                <!-- Two Column Layout -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
+                    <!-- Open Shifts -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Open Shifts</h2>
+                            <p style="color: #94a3b8; font-size: 13px;">Shifts needing coverage</p>
+                        </div>
+                        <div id="openShiftsList" style="padding: 16px;">
+                            <div style="color: #94a3b8; text-align: center; padding: 24px;">Loading shifts...</div>
+                        </div>
+                    </div>
+
+                    <!-- Caregiver Matches -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Caregiver Matches</h2>
+                            <p id="matchesSubtitle" style="color: #94a3b8; font-size: 13px;">Select a shift to find matches</p>
+                        </div>
+                        <div id="caregiverMatchesList" style="padding: 16px;">
+                            <div style="color: #94a3b8; text-align: center; padding: 24px;">Select a shift to see matching caregivers</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Campaigns -->
+                <div class="card" id="activeCampaignsCard" style="display: none;">
+                    <div class="card-header">
+                        <h2 class="card-title">Active Campaigns</h2>
+                        <p style="color: #94a3b8; font-size: 13px;">Ongoing outreach campaigns</p>
+                    </div>
+                    <div id="activeCampaignsList" style="padding: 16px;"></div>
+                </div>
+
+                <!-- Available Caregivers -->
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <h2 class="card-title">Available Caregivers</h2>
+                        <p style="color: #94a3b8; font-size: 13px;">Active caregivers in the system</p>
+                    </div>
+                    <div id="availableCaregiversList" style="padding: 16px;">
+                        <div style="color: #94a3b8; text-align: center; padding: 24px;">Loading caregivers...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SMS Log View -->
+            <div id="sms-log-view" class="view-section" style="display: none;">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">SMS Log</h1>
+                        <p class="page-subtitle">Shift filling outreach messages</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="refreshSmsLog()">Refresh</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Sent Messages</h2>
+                        <p style="color: #94a3b8; font-size: 13px;">Recent SMS outreach</p>
+                    </div>
+                    <div id="smsLogList" style="padding: 16px;">
+                        <div style="color: #94a3b8; text-align: center; padding: 24px;">Loading messages...</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top: 24px;">
+                    <div class="card-header">
+                        <h2 class="card-title">About SMS Service</h2>
+                    </div>
+                    <div style="padding: 16px; color: #94a3b8; font-size: 14px; line-height: 1.6;">
+                        <p style="margin-bottom: 12px;"><strong style="color: #f8fafc;">Mock Mode:</strong> During POC testing, SMS messages are simulated. No actual messages are sent.</p>
+                        <p style="margin-bottom: 12px;"><strong style="color: #f8fafc;">Production Mode:</strong> When configured with RingCentral credentials, messages will be sent via the RingCentral SMS API.</p>
+                        <p><strong style="color: #f8fafc;">Monitoring:</strong> Incoming SMS from 719-428-3999 will be scanned for calloff patterns to auto-trigger shift filling.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Client Satisfaction Overview (existing content) -->
+            <div id="overview-view" class="view-section">
+                <div class="page-header">
+                    <div>
+                        <h1 class="page-title">Client Satisfaction</h1>
+                        <p class="page-subtitle">Last 30 days overview</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn btn-secondary" onclick="refreshDashboard()">Refresh</button>
+                    </div>
+                </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon green">⭐</div>
+                    </div>
+                    <div class="metric-value" id="avgSatisfaction">{{ summary.surveys.average_satisfaction or '—' }}</div>
+                    <div class="metric-label">Avg Satisfaction (1-5)</div>
+                    <div class="metric-detail">{{ summary.surveys.total }} survey responses</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon blue">👍</div>
+                    </div>
+                    <div class="metric-value" id="recommendRate">{{ summary.surveys.recommend_rate }}%</div>
+                    <div class="metric-label">Would Recommend</div>
+                    <div class="metric-detail">NPS indicator</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon orange">⚠️</div>
+                    </div>
+                    <div class="metric-value" id="openComplaints">{{ summary.complaints.open }}</div>
+                    <div class="metric-label">Open Complaints</div>
+                    <div class="metric-detail">{{ summary.complaints.total }} total this period</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon purple">✅</div>
+                    </div>
+                    <div class="metric-value" id="qualityScore">{{ summary.quality_visits.average_score or '—' }}</div>
+                    <div class="metric-label">Avg Quality Score</div>
+                    <div class="metric-detail">{{ summary.quality_visits.total }} visits completed</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon green">⭐</div>
+                    </div>
+                    <div class="metric-value" id="avgReview">{{ summary.reviews.average_rating or '—' }}</div>
+                    <div class="metric-label">Avg Review Rating</div>
+                    <div class="metric-detail">{{ summary.reviews.total }} reviews</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-header">
+                        <div class="metric-icon red">📋</div>
+                    </div>
+                    <div class="metric-value" id="carePlansDue">{{ summary.care_plans.due_for_review }}</div>
+                    <div class="metric-label">Care Plans Due Review</div>
+                    <div class="metric-detail">{{ summary.care_plans.total_active }} active plans</div>
+                </div>
+            </div>
+
+            <div class="content-sections">
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title">Recent Complaints</div>
+                        <button class="btn btn-secondary" onclick="openModal('complaintModal')">+ New</button>
+                    </div>
+                    <div class="section-content" id="complaintsSection">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📋</div>
+                            <p>No complaints recorded yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <div class="section-header">
+                        <div class="section-title">Recent Reviews</div>
+                        <button class="btn btn-secondary" onclick="openModal('reviewModal')">+ Add</button>
+                    </div>
+                    <div class="section-content" id="reviewsSection">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">⭐</div>
+                            <p>No reviews tracked yet</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card" style="grid-column: 1 / -1;">
+                    <div class="section-header">
+                        <div class="section-title">RingCentral Chat Scanner</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" onclick="previewChatScan()">Preview</button>
+                            <button class="btn btn-primary" onclick="runChatScan(true)">Scan & Create</button>
+                        </div>
+                    </div>
+                    <div class="section-content" id="ringcentralSection">
+                        <div id="ringcentralStatus" style="padding: 12px; background: #1e293b; border-radius: 8px; margin-bottom: 16px;">
+                            <span style="color: #94a3b8;">Checking RingCentral status...</span>
+                        </div>
+                        <div id="scanResults" style="display: none;">
+                            <div style="font-weight: 600; margin-bottom: 8px;">Chat Scan Results</div>
+                            <div id="scanResultsContent"></div>
+                        </div>
+                        <p style="color: #64748b; font-size: 12px; margin-top: 12px;">
+                            Scans the "New Scheduling" chat for client mentions with potential complaints.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="section-card" style="grid-column: 1 / -1;">
+                    <div class="section-header">
+                        <div class="section-title">Call Pattern Monitor</div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="callQueueSelect" style="background: #334155; border: 1px solid #475569; color: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 13px;">
+                                <option value="">All Queues</option>
+                            </select>
+                            <select id="callDaysSelect" style="background: #334155; border: 1px solid #475569; color: #e2e8f0; padding: 6px 10px; border-radius: 6px; font-size: 13px;">
+                                <option value="3">Last 3 days</option>
+                                <option value="7" selected>Last 7 days</option>
+                                <option value="14">Last 14 days</option>
+                            </select>
+                            <button class="btn btn-secondary" onclick="previewCallPatterns()">Preview</button>
+                            <button class="btn btn-primary" onclick="scanCallPatterns(true)">Scan & Flag</button>
+                        </div>
+                    </div>
+                    <div class="section-content" id="callPatternSection">
+                        <div id="callPatternResults" style="display: none;">
+                            <div id="callPatternContent"></div>
+                        </div>
+                        <p style="color: #64748b; font-size: 12px;">
+                            Detects concerning call patterns: repeat callers, short/hang-up calls, missed calls, frequent support calls.
+                            Matches phone numbers to client records when possible.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            </div><!-- End overview-view -->
+        </main>
+    </div>
+
+    <!-- Survey Modal -->
+    <div class="modal-overlay" id="surveyModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Add Survey Response</div>
+                <button class="modal-close" onclick="closeModal('surveyModal')">&times;</button>
+            </div>
+            <form id="surveyForm" onsubmit="submitSurvey(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Client Name *</label>
+                        <input type="text" class="form-input" name="client_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Survey Date</label>
+                        <input type="date" class="form-input" name="survey_date" value="{{ summary.generated_at[:10] if summary.generated_at else '' }}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Overall Satisfaction (1-5)</label>
+                        <div class="rating-input" data-field="overall_satisfaction">
+                            <button type="button" class="rating-btn" data-value="1">1</button>
+                            <button type="button" class="rating-btn" data-value="2">2</button>
+                            <button type="button" class="rating-btn" data-value="3">3</button>
+                            <button type="button" class="rating-btn" data-value="4">4</button>
+                            <button type="button" class="rating-btn" data-value="5">5</button>
+                        </div>
+                        <input type="hidden" name="overall_satisfaction">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Caregiver Satisfaction (1-5)</label>
+                        <div class="rating-input" data-field="caregiver_satisfaction">
+                            <button type="button" class="rating-btn" data-value="1">1</button>
+                            <button type="button" class="rating-btn" data-value="2">2</button>
+                            <button type="button" class="rating-btn" data-value="3">3</button>
+                            <button type="button" class="rating-btn" data-value="4">4</button>
+                            <button type="button" class="rating-btn" data-value="5">5</button>
+                        </div>
+                        <input type="hidden" name="caregiver_satisfaction">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Would Recommend?</label>
+                        <select class="form-select" name="would_recommend">
+                            <option value="">Select...</option>
+                            <option value="true">Yes</option>
+                            <option value="false">No</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Comments</label>
+                        <textarea class="form-textarea" name="feedback_comments"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('surveyModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Survey</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Complaint Modal -->
+    <div class="modal-overlay" id="complaintModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Log Complaint</div>
+                <button class="modal-close" onclick="closeModal('complaintModal')">&times;</button>
+            </div>
+            <form id="complaintForm" onsubmit="submitComplaint(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Client Name *</label>
+                        <input type="text" class="form-input" name="client_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <select class="form-select" name="category">
+                            <option value="scheduling">Scheduling</option>
+                            <option value="caregiver">Caregiver Issue</option>
+                            <option value="billing">Billing</option>
+                            <option value="communication">Communication</option>
+                            <option value="care_quality">Care Quality</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Severity</label>
+                        <select class="form-select" name="severity">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                            <option value="critical">Critical</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description *</label>
+                        <textarea class="form-textarea" name="description" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Caregiver Involved</label>
+                        <input type="text" class="form-input" name="caregiver_involved">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('complaintModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Complaint</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Quality Visit Modal -->
+    <div class="modal-overlay" id="visitModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Quality Visit</div>
+                <button class="modal-close" onclick="closeModal('visitModal')">&times;</button>
+            </div>
+            <form id="visitForm" onsubmit="submitVisit(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Client Name *</label>
+                        <input type="text" class="form-input" name="client_name" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Visit Date</label>
+                        <input type="date" class="form-input" name="visit_date">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Visit Type</label>
+                        <select class="form-select" name="visit_type">
+                            <option value="routine">Routine</option>
+                            <option value="follow_up">Follow-up</option>
+                            <option value="complaint_response">Complaint Response</option>
+                            <option value="initial">Initial Assessment</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Care Quality Score (1-5)</label>
+                        <div class="rating-input" data-field="care_quality_score">
+                            <button type="button" class="rating-btn" data-value="1">1</button>
+                            <button type="button" class="rating-btn" data-value="2">2</button>
+                            <button type="button" class="rating-btn" data-value="3">3</button>
+                            <button type="button" class="rating-btn" data-value="4">4</button>
+                            <button type="button" class="rating-btn" data-value="5">5</button>
+                        </div>
+                        <input type="hidden" name="care_quality_score">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Observations</label>
+                        <textarea class="form-textarea" name="observations"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('visitModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Visit</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Review Modal -->
+    <div class="modal-overlay" id="reviewModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">Add Review</div>
+                <button class="modal-close" onclick="closeModal('reviewModal')">&times;</button>
+            </div>
+            <form id="reviewForm" onsubmit="submitReview(event)">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Platform</label>
+                        <select class="form-select" name="platform">
+                            <option value="google">Google</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="yelp">Yelp</option>
+                            <option value="caring_com">Caring.com</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Review Date</label>
+                        <input type="date" class="form-input" name="review_date">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Reviewer Name</label>
+                        <input type="text" class="form-input" name="reviewer_name">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Rating (1-5 stars) *</label>
+                        <div class="rating-input" data-field="rating">
+                            <button type="button" class="rating-btn" data-value="1">1</button>
+                            <button type="button" class="rating-btn" data-value="2">2</button>
+                            <button type="button" class="rating-btn" data-value="3">3</button>
+                            <button type="button" class="rating-btn" data-value="4">4</button>
+                            <button type="button" class="rating-btn" data-value="5">5</button>
+                        </div>
+                        <input type="hidden" name="rating" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Review Text</label>
+                        <textarea class="form-textarea" name="review_text"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Review URL</label>
+                        <input type="url" class="form-input" name="review_url" placeholder="https://...">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('reviewModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Review</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // View Switching
+        // ============================================
+        function showView(viewName) {
+            // Hide all view sections
+            document.querySelectorAll('.view-section').forEach(section => {
+                section.style.display = 'none';
+            });
+
+            // Show selected view
+            const targetView = document.getElementById(viewName + '-view');
+            if (targetView) {
+                targetView.style.display = 'block';
+            }
+
+            // Update nav items
+            document.querySelectorAll('.nav-item[data-view]').forEach(item => {
+                item.classList.remove('active');
+                if (item.dataset.view === viewName) {
+                    item.classList.add('active');
+                }
+            });
+
+            // Load data for the view
+            if (viewName === 'shift-filling') {
+                refreshShiftFilling();
+            } else if (viewName === 'sms-log') {
+                refreshSmsLog();
+            }
+        }
+
+        // ============================================
+        // Shift Filling Functions
+        // ============================================
+        let selectedShiftId = null;
+        let activeCampaigns = [];
+
+        async function refreshShiftFilling() {
+            try {
+                // Fetch status, shifts, caregivers, and campaigns in parallel
+                const [statusRes, shiftsRes, caregiversRes, campaignsRes] = await Promise.all([
+                    fetch('/api/shift-filling/status'),
+                    fetch('/api/shift-filling/open-shifts'),
+                    fetch('/api/shift-filling/caregivers'),
+                    fetch('/api/shift-filling/campaigns')
+                ]);
+
+                // Update status cards
+                if (statusRes.ok) {
+                    const status = await statusRes.json();
+                    document.getElementById('sfEngineStatus').textContent = status.status === 'active' ? 'Active' : 'Inactive';
+                    document.getElementById('sfEngineStatus').style.color = status.status === 'active' ? '#22c55e' : '#ef4444';
+                    document.getElementById('sfSmsStatus').textContent = status.sms_enabled ? 'Connected' : 'Mock';
+                    document.getElementById('sfSmsStatus').style.color = status.sms_enabled ? '#22c55e' : '#f59e0b';
+                    document.getElementById('sfActiveCampaigns').textContent = status.active_campaigns;
+                }
+
+                // Update open shifts
+                if (shiftsRes.ok) {
+                    const shifts = await shiftsRes.json();
+                    document.getElementById('sfOpenShifts').textContent = shifts.length;
+                    renderOpenShifts(shifts);
+                }
+
+                // Update caregivers
+                if (caregiversRes.ok) {
+                    const caregivers = await caregiversRes.json();
+                    renderCaregivers(caregivers);
+                }
+
+                // Update campaigns
+                if (campaignsRes.ok) {
+                    const data = await campaignsRes.json();
+                    activeCampaigns = data.active_campaigns || [];
+                    renderCampaigns(activeCampaigns);
+                }
+            } catch (err) {
+                console.error('Error refreshing shift filling:', err);
+            }
+        }
+
+        function renderOpenShifts(shifts) {
+            const container = document.getElementById('openShiftsList');
+            if (shifts.length === 0) {
+                container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">No open shifts at this time</div>';
+                return;
+            }
+
+            container.innerHTML = shifts.map(shift => `
+                <div class="shift-card ${shift.is_urgent ? 'urgent' : ''}" style="background: ${shift.is_urgent ? 'rgba(239, 68, 68, 0.1)' : '#1e293b'}; border: 1px solid ${shift.is_urgent ? '#ef4444' : '#334155'}; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <div style="font-weight: 600; color: #f8fafc;">
+                                ${shift.client_name}
+                                ${shift.is_urgent ? '<span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">URGENT</span>' : ''}
+                            </div>
+                            <div style="color: #94a3b8; font-size: 13px; margin-top: 4px;">
+                                ${shift.client_city} • ${shift.date}
+                            </div>
+                            <div style="color: #94a3b8; font-size: 13px;">
+                                ${shift.start_time} - ${shift.end_time} (${shift.duration_hours}h)
+                            </div>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 6px;">
+                            <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" onclick="findMatches('${shift.id}')">
+                                Find Matches
+                            </button>
+                            <button class="btn btn-primary" style="padding: 6px 12px; font-size: 12px;" onclick="processCalloff('${shift.id}')">
+                                Process Calloff
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function findMatches(shiftId) {
+            selectedShiftId = shiftId;
+            const container = document.getElementById('caregiverMatchesList');
+            container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">⏳ Finding matches...</div>';
+
+            try {
+                const response = await fetch(`/api/shift-filling/match/${shiftId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('matchesSubtitle').textContent = `for ${data.shift.client_name}`;
+                    renderMatches(data.matches);
+                }
+            } catch (err) {
+                container.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 24px;">Error: ${err.message}</div>`;
+            }
+        }
+
+        function renderMatches(matches) {
+            const container = document.getElementById('caregiverMatchesList');
+            if (matches.length === 0) {
+                container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">No matches found</div>';
+                return;
+            }
+
+            container.innerHTML = matches.map((match, idx) => `
+                <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 12px; margin-bottom: 12px;">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <span style="font-size: 18px; font-weight: 700; color: #64748b;">#${idx + 1}</span>
+                            <div>
+                                <span style="font-weight: 600; color: #f8fafc;">${match.caregiver_name}</span>
+                                <span style="background: ${match.tier === 1 ? '#22c55e' : match.tier === 2 ? '#f59e0b' : '#64748b'}; color: ${match.tier === 1 ? 'white' : match.tier === 2 ? '#1e293b' : 'white'}; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px;">
+                                    Tier ${match.tier}
+                                </span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 20px; font-weight: 700; color: #f8fafc;">${match.score.toFixed(0)}</div>
+                            <div style="width: 60px; height: 6px; background: #334155; border-radius: 3px; margin-top: 4px;">
+                                <div style="width: ${match.score}%; height: 100%; background: #3b82f6; border-radius: 3px;"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="color: #64748b; font-size: 12px; margin-top: 4px;">${match.phone}</div>
+                    <div style="margin-top: 8px;">
+                        ${match.reasons.slice(0, 3).map(r => `<div style="color: #94a3b8; font-size: 12px;">${r}</div>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderCaregivers(caregivers) {
+            const container = document.getElementById('availableCaregiversList');
+            if (caregivers.length === 0) {
+                container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">No caregivers available</div>';
+                return;
+            }
+
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #334155;">
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Name</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">City</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Hours Avail</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Rating</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Reliability</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Response</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${caregivers.map(cg => `
+                            <tr style="border-bottom: 1px solid #334155;">
+                                <td style="padding: 12px; color: #f8fafc; font-weight: 500;">${cg.name}</td>
+                                <td style="padding: 12px; color: #cbd5e1;">${cg.city}</td>
+                                <td style="padding: 12px; color: #cbd5e1;">
+                                    ${cg.hours_available.toFixed(0)}h
+                                    ${cg.is_near_overtime ? '<span style="background: #f59e0b; color: #1e293b; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin-left: 4px;">Near OT</span>' : ''}
+                                </td>
+                                <td style="padding: 12px; color: #cbd5e1;">⭐ ${cg.avg_rating.toFixed(1)}</td>
+                                <td style="padding: 12px; color: #cbd5e1;">${(cg.reliability_score * 100).toFixed(0)}%</td>
+                                <td style="padding: 12px; color: #cbd5e1;">${(cg.response_rate * 100).toFixed(0)}%</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function renderCampaigns(campaigns) {
+            const card = document.getElementById('activeCampaignsCard');
+            const container = document.getElementById('activeCampaignsList');
+
+            if (campaigns.length === 0) {
+                card.style.display = 'none';
+                return;
+            }
+
+            card.style.display = 'block';
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #334155;">
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Campaign</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Shift</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Status</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Contacted</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Responded</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Winner</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${campaigns.map(c => `
+                            <tr style="border-bottom: 1px solid #334155;">
+                                <td style="padding: 12px; color: #64748b; font-family: monospace; font-size: 12px;">${c.id.substring(0, 8)}...</td>
+                                <td style="padding: 12px; color: #f8fafc;">${c.shift_id}</td>
+                                <td style="padding: 12px;">
+                                    <span style="background: ${c.status === 'filled' ? '#22c55e' : c.status === 'in_progress' ? '#3b82f6' : '#ef4444'}; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px;">
+                                        ${c.status}
+                                    </span>
+                                </td>
+                                <td style="padding: 12px; color: #cbd5e1;">${c.total_contacted}</td>
+                                <td style="padding: 12px; color: #cbd5e1;">${c.total_responded}</td>
+                                <td style="padding: 12px; color: #22c55e; font-weight: 500;">${c.winning_caregiver_name || '—'}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        async function processCalloff(shiftId) {
+            const caregiverId = prompt('Enter caregiver ID who called off:');
+            if (!caregiverId) return;
+
+            const reason = prompt('Reason for calloff (optional):') || '';
+
+            try {
+                const response = await fetch('/api/shift-filling/calloff', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        shift_id: shiftId,
+                        caregiver_id: caregiverId,
+                        reason: reason
+                    })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Campaign started! ${result.total_contacted} caregivers contacted.`);
+                    refreshShiftFilling();
+                } else {
+                    alert('Error processing calloff');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function runShiftFillingDemo() {
+            const alert = document.getElementById('demoResultAlert');
+            const content = document.getElementById('demoResultContent');
+            alert.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/shift-filling/demo', {
+                    method: 'POST'
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert.style.display = 'block';
+                    content.innerHTML = `
+                        Shift for <strong>${result.shift?.client || 'Unknown'}</strong> on ${result.shift?.date || 'N/A'}
+                        was filled by <strong>${result.winner || 'N/A'}</strong>.
+                        <br><span style="color: #94a3b8; font-size: 13px;">
+                            ${result.matches_found} matches found, ${result.caregivers_contacted} contacted.
+                        </span>
+                    `;
+                    refreshShiftFilling();
+                }
+            } catch (err) {
+                console.error('Error running demo:', err);
+            }
+        }
+
+        // ============================================
+        // SMS Log Functions
+        // ============================================
+        async function refreshSmsLog() {
+            const container = document.getElementById('smsLogList');
+            container.innerHTML = '<div style="color: #94a3b8; text-align: center; padding: 24px;">Loading messages...</div>';
+
+            try {
+                const response = await fetch('/api/shift-filling/sms-log');
+                if (response.ok) {
+                    const data = await response.json();
+                    renderSmsLog(data.messages || []);
+                }
+            } catch (err) {
+                container.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 24px;">Error: ${err.message}</div>`;
+            }
+        }
+
+        function renderSmsLog(messages) {
+            const container = document.getElementById('smsLogList');
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 32px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                        <div style="color: #94a3b8;">No SMS messages sent yet</div>
+                        <div style="color: #64748b; font-size: 13px; margin-top: 8px;">
+                            Run a demo or process a calloff to see messages here
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #334155;">
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600; width: 150px;">Time</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600; width: 130px;">To</th>
+                            <th style="text-align: left; padding: 12px; color: #94a3b8; font-size: 12px; font-weight: 600;">Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${messages.map(msg => `
+                            <tr style="border-bottom: 1px solid #334155;">
+                                <td style="padding: 12px; color: #64748b; font-size: 12px;">${new Date(msg.sent_at).toLocaleString()}</td>
+                                <td style="padding: 12px; color: #cbd5e1; font-family: monospace; font-size: 13px;">${msg.to}</td>
+                                <td style="padding: 12px; color: #cbd5e1; font-size: 13px; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${msg.text}">${msg.text}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // ============================================
+        // Original Functions
+        // ============================================
+
+        // Initialize rating buttons
+        document.querySelectorAll('.rating-input').forEach(container => {
+            const field = container.dataset.field;
+            const hiddenInput = container.parentElement.querySelector(`input[name="${field}"]`);
+
+            container.querySelectorAll('.rating-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    container.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    if (hiddenInput) hiddenInput.value = btn.dataset.value;
+                });
+            });
+        });
+
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.remove('active');
+        }
+
+        async function submitSurvey(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            if (data.would_recommend) data.would_recommend = data.would_recommend === 'true';
+            if (data.overall_satisfaction) data.overall_satisfaction = parseInt(data.overall_satisfaction);
+            if (data.caregiver_satisfaction) data.caregiver_satisfaction = parseInt(data.caregiver_satisfaction);
+
+            try {
+                const response = await fetch('/api/client-satisfaction/surveys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('surveyModal');
+                    form.reset();
+                    refreshDashboard();
+                    alert('Survey saved successfully!');
+                } else {
+                    alert('Error saving survey');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function submitComplaint(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            try {
+                const response = await fetch('/api/client-satisfaction/complaints', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('complaintModal');
+                    form.reset();
+                    refreshDashboard();
+                    loadComplaints();
+                    alert('Complaint logged successfully!');
+                } else {
+                    alert('Error logging complaint');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function submitVisit(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            if (data.care_quality_score) data.care_quality_score = parseInt(data.care_quality_score);
+
+            try {
+                const response = await fetch('/api/client-satisfaction/quality-visits', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('visitModal');
+                    form.reset();
+                    refreshDashboard();
+                    alert('Quality visit saved!');
+                } else {
+                    alert('Error saving visit');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function submitReview(event) {
+            event.preventDefault();
+            const form = event.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData);
+
+            if (data.rating) data.rating = parseInt(data.rating);
+
+            try {
+                const response = await fetch('/api/client-satisfaction/reviews', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) {
+                    closeModal('reviewModal');
+                    form.reset();
+                    refreshDashboard();
+                    loadReviews();
+                    alert('Review added!');
+                } else {
+                    alert('Error adding review');
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function syncSurveys() {
+            try {
+                const response = await fetch('/api/client-satisfaction/sync-surveys', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const result = await response.json();
+                alert(result.message || 'Sync completed');
+                refreshDashboard();
+            } catch (err) {
+                alert('Sync error: ' + err.message);
+            }
+        }
+
+        async function loadComplaints() {
+            try {
+                const response = await fetch('/api/client-satisfaction/complaints?limit=5');
+                const result = await response.json();
+                const container = document.getElementById('complaintsSection');
+
+                if (result.data && result.data.length > 0) {
+                    container.innerHTML = result.data.map(c => `
+                        <div class="list-item">
+                            <div class="list-item-info">
+                                <div class="list-item-title">${c.client_name}</div>
+                                <div class="list-item-subtitle">${c.category} - ${c.complaint_date}</div>
+                            </div>
+                            <span class="badge badge-${c.status === 'open' ? 'red' : c.status === 'resolved' ? 'green' : 'yellow'}">${c.status}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error('Error loading complaints:', err);
+            }
+        }
+
+        async function loadReviews() {
+            try {
+                const response = await fetch('/api/client-satisfaction/reviews?limit=5');
+                const result = await response.json();
+                const container = document.getElementById('reviewsSection');
+
+                if (result.data && result.data.length > 0) {
+                    container.innerHTML = result.data.map(r => `
+                        <div class="list-item">
+                            <div class="list-item-info">
+                                <div class="list-item-title">${r.reviewer_name || 'Anonymous'}</div>
+                                <div class="list-item-subtitle">${r.platform} - ${r.review_date}</div>
+                            </div>
+                            <span class="star-rating">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error('Error loading reviews:', err);
+            }
+        }
+
+        function refreshDashboard() {
+            window.location.reload();
+        }
+
+        // RingCentral Chat Scanner Functions
+        async function checkRingCentralStatus() {
+            try {
+                const response = await fetch('/api/client-satisfaction/ringcentral/status');
+                const status = await response.json();
+                const container = document.getElementById('ringcentralStatus');
+
+                if (status.api_connected) {
+                    container.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color: #22c55e;">●</span>
+                            <span style="color: #22c55e;">Connected</span>
+                            <span style="color: #64748b; margin-left: 16px;">Target: ${status.target_chat}</span>
+                        </div>
+                        ${status.teams_available.length > 0 ? `
+                            <div style="margin-top: 8px; color: #94a3b8; font-size: 12px;">
+                                Teams: ${status.teams_available.join(', ')}
+                            </div>
+                        ` : ''}
+                    `;
+
+                    // Populate call queues dropdown
+                    if (status.call_queues && status.call_queues.length > 0) {
+                        const select = document.getElementById('callQueueSelect');
+                        status.call_queues.forEach(q => {
+                            const option = document.createElement('option');
+                            option.value = q.id;
+                            option.textContent = `${q.name} (Ext ${q.ext})`;
+                            select.appendChild(option);
+                        });
+                    }
+                } else if (status.configured) {
+                    container.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color: #f59e0b;">●</span>
+                            <span style="color: #f59e0b;">Authentication Error</span>
+                        </div>
+                        <div style="margin-top: 8px; color: #94a3b8; font-size: 12px;">
+                            ${status.error || 'Check RingCentral API credentials'}
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = `
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="color: #ef4444;">●</span>
+                            <span style="color: #ef4444;">Not Configured</span>
+                        </div>
+                        <div style="margin-top: 8px; color: #94a3b8; font-size: 12px;">
+                            Set RINGCENTRAL_CLIENT_SECRET and RINGCENTRAL_JWT_TOKEN in environment variables.
+                            <br>Enable JWT auth in RingCentral Developer Console.
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                document.getElementById('ringcentralStatus').innerHTML = `
+                    <span style="color: #ef4444;">Error checking status: ${err.message}</span>
+                `;
+            }
+        }
+
+        async function previewChatScan() {
+            const container = document.getElementById('scanResults');
+            const content = document.getElementById('scanResultsContent');
+            container.style.display = 'block';
+            content.innerHTML = '<span style="color: #94a3b8;">Scanning chat...</span>';
+
+            try {
+                const response = await fetch('/api/client-satisfaction/ringcentral/preview', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hours_back: 24 })
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    content.innerHTML = `<span style="color: #ef4444;">Error: ${result.error}</span>`;
+                    return;
+                }
+
+                if (result.potential_complaints && result.potential_complaints.length > 0) {
+                    content.innerHTML = `
+                        <div style="margin-bottom: 8px; color: #22c55e;">
+                            Found ${result.potential_complaints.length} potential issue(s)
+                        </div>
+                        ${result.potential_complaints.map(c => `
+                            <div style="background: #334155; padding: 12px; border-radius: 6px; margin-bottom: 8px;">
+                                <div style="font-weight: 600; color: ${c.severity === 'high' ? '#ef4444' : c.severity === 'medium' ? '#f59e0b' : '#94a3b8'};">
+                                    ${c.client_name || 'Unknown Client'}
+                                    <span style="font-weight: normal; font-size: 12px;">(${c.severity})</span>
+                                </div>
+                                <div style="color: #94a3b8; font-size: 12px; margin-top: 4px;">
+                                    Keywords: ${c.matched_keywords.join(', ')}
+                                </div>
+                                <div style="color: #cbd5e1; font-size: 13px; margin-top: 8px;">
+                                    "${c.message_text.substring(0, 150)}${c.message_text.length > 150 ? '...' : ''}"
+                                </div>
+                            </div>
+                        `).join('')}
+                        <div style="margin-top: 12px; color: #64748b; font-size: 12px;">
+                            Scanned ${result.messages_scanned} messages from last ${result.scan_period_hours} hours
+                        </div>
+                    `;
+                } else {
+                    content.innerHTML = `
+                        <div style="color: #22c55e;">No issues detected</div>
+                        <div style="color: #64748b; font-size: 12px; margin-top: 4px;">
+                            Scanned ${result.messages_scanned || 0} messages from last 24 hours
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                content.innerHTML = `<span style="color: #ef4444;">Scan error: ${err.message}</span>`;
+            }
+        }
+
+        async function runChatScan(autoCreate) {
+            if (autoCreate && !confirm('This will create complaint records for detected issues. Continue?')) {
+                return;
+            }
+
+            const container = document.getElementById('scanResults');
+            const content = document.getElementById('scanResultsContent');
+            container.style.display = 'block';
+            content.innerHTML = '<span style="color: #94a3b8;">Scanning and creating records...</span>';
+
+            try {
+                const response = await fetch('/api/client-satisfaction/ringcentral/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ hours_back: 24, auto_create: autoCreate })
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    content.innerHTML = `<span style="color: #ef4444;">Error: ${result.error}</span>`;
+                    return;
+                }
+
+                const createResult = result.auto_create_results;
+                if (createResult) {
+                    content.innerHTML = `
+                        <div style="color: #22c55e; margin-bottom: 8px;">
+                            Scan complete! Created ${createResult.created_count} complaint(s), skipped ${createResult.skipped_count}
+                        </div>
+                        ${createResult.created.length > 0 ? `
+                            <div style="font-weight: 600; margin-bottom: 4px;">Created:</div>
+                            ${createResult.created.map(c => `
+                                <div style="color: #cbd5e1; font-size: 13px; padding: 4px 0;">
+                                    - ${c.client_name} (${c.severity}): ${c.keywords.join(', ')}
+                                </div>
+                            `).join('')}
+                        ` : ''}
+                    `;
+                    // Refresh complaints list
+                    loadComplaints();
+                } else {
+                    content.innerHTML = `<div style="color: #22c55e;">Scan complete - ${result.potential_complaints?.length || 0} items found</div>`;
+                }
+            } catch (err) {
+                content.innerHTML = `<span style="color: #ef4444;">Scan error: ${err.message}</span>`;
+            }
+        }
+
+        // Call Pattern Monitor Functions
+        async function previewCallPatterns() {
+            const container = document.getElementById('callPatternResults');
+            const content = document.getElementById('callPatternContent');
+            container.style.display = 'block';
+            content.innerHTML = '<span style="color: #94a3b8;">Analyzing call patterns...</span>';
+
+            const queueId = document.getElementById('callQueueSelect').value;
+            const daysBack = document.getElementById('callDaysSelect').value;
+
+            try {
+                const response = await fetch('/api/client-satisfaction/ringcentral/preview-calls', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ days_back: parseInt(daysBack), queue_id: queueId || null })
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    content.innerHTML = `<span style="color: #ef4444;">Error: ${result.error || 'Unknown error'}</span>`;
+                    return;
+                }
+
+                if (result.flagged_patterns && result.flagged_patterns.length > 0) {
+                    content.innerHTML = `
+                        <div style="margin-bottom: 12px;">
+                            <span style="color: #22c55e;">Found ${result.flagged_count} flagged pattern(s)</span>
+                            <span style="color: #64748b; margin-left: 16px;">${result.total_calls} calls from ${result.unique_callers} callers</span>
+                        </div>
+                        ${result.flagged_patterns.map(p => `
+                            <div style="background: #334155; padding: 12px; border-radius: 6px; margin-bottom: 8px;">
+                                <div style="display: flex; justify-content: space-between; align-items: start;">
+                                    <div>
+                                        <div style="font-weight: 600; color: ${p.severity === 'high' ? '#ef4444' : p.severity === 'medium' ? '#f59e0b' : '#94a3b8'};">
+                                            ${p.client_name || p.phone}
+                                            <span style="font-weight: normal; font-size: 12px; margin-left: 8px;">(${p.severity})</span>
+                                        </div>
+                                        ${p.client_name ? `<div style="color: #64748b; font-size: 12px;">${p.phone}</div>` : ''}
+                                    </div>
+                                    <div style="text-align: right; font-size: 12px; color: #94a3b8;">
+                                        ${p.call_count} calls
+                                    </div>
+                                </div>
+                                <div style="margin-top: 8px;">
+                                    ${p.issues.map(i => `<span style="background: #1e293b; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-right: 4px;">${i}</span>`).join('')}
+                                </div>
+                                <div style="margin-top: 8px; color: #64748b; font-size: 11px;">
+                                    Short: ${p.short_calls} | Missed: ${p.missed_calls} | To Support: ${p.to_support_queue}
+                                </div>
+                            </div>
+                        `).join('')}
+                    `;
+                } else {
+                    content.innerHTML = `
+                        <div style="color: #22c55e;">No concerning patterns detected</div>
+                        <div style="color: #64748b; font-size: 12px; margin-top: 4px;">
+                            Analyzed ${result.total_calls || 0} calls from ${result.unique_callers || 0} callers over ${daysBack} days
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                content.innerHTML = `<span style="color: #ef4444;">Error: ${err.message}</span>`;
+            }
+        }
+
+        async function scanCallPatterns(autoCreate) {
+            if (autoCreate && !confirm('This will create complaint records for flagged call patterns. Continue?')) {
+                return;
+            }
+
+            const container = document.getElementById('callPatternResults');
+            const content = document.getElementById('callPatternContent');
+            container.style.display = 'block';
+            content.innerHTML = '<span style="color: #94a3b8;">Scanning and creating records...</span>';
+
+            const queueId = document.getElementById('callQueueSelect').value;
+            const daysBack = document.getElementById('callDaysSelect').value;
+
+            try {
+                const response = await fetch('/api/client-satisfaction/ringcentral/scan-calls', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        days_back: parseInt(daysBack),
+                        queue_id: queueId || null,
+                        auto_create: autoCreate,
+                        min_severity: 'medium'
+                    })
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    content.innerHTML = `<span style="color: #ef4444;">Error: ${result.error || 'Unknown error'}</span>`;
+                    return;
+                }
+
+                const createResult = result.auto_create_results;
+                if (createResult) {
+                    content.innerHTML = `
+                        <div style="color: #22c55e; margin-bottom: 12px;">
+                            Scan complete! Created ${createResult.created_count} complaint(s), skipped ${createResult.skipped_count}
+                        </div>
+                        ${createResult.created.length > 0 ? `
+                            <div style="font-weight: 600; margin-bottom: 8px;">Created:</div>
+                            ${createResult.created.map(c => `
+                                <div style="background: #334155; padding: 8px 12px; border-radius: 6px; margin-bottom: 4px;">
+                                    <span style="font-weight: 600;">${c.client_name}</span>
+                                    <span style="color: #64748b; margin-left: 8px;">${c.phone}</span>
+                                    <span style="color: ${c.severity === 'high' ? '#ef4444' : '#f59e0b'}; margin-left: 8px;">(${c.severity})</span>
+                                </div>
+                            `).join('')}
+                        ` : ''}
+                    `;
+                    loadComplaints();
+                } else {
+                    content.innerHTML = `<div style="color: #22c55e;">Scan complete - ${result.flagged_count || 0} patterns found</div>`;
+                }
+            } catch (err) {
+                content.innerHTML = `<span style="color: #ef4444;">Error: ${err.message}</span>`;
+            }
+        }
+
+        // Load data on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadComplaints();
+            loadReviews();
+            checkRingCentralStatus();
+        });
+    </script>
+</body>
+</html>
