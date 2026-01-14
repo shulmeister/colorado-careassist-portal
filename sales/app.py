@@ -8791,8 +8791,8 @@ async def get_pay_period_summary(
     """
     try:
         # Pay period logic
-        # Start date: Dec 1, 2025 (Monday)
-        start_date = datetime(2025, 12, 1)
+        # Start date: Dec 2, 2025 (aligns with Jan 13-26 biweekly Mondays)
+        start_date = datetime(2025, 12, 2)
         now = datetime.utcnow()
         
         # Calculate days since start
