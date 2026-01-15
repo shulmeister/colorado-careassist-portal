@@ -927,9 +927,9 @@ async def upload_file(
                             address=contact_data.get('address'),
                             website=contact_data.get('website'),
                             notes=f"Scanned from business card (PDF) on {datetime.now().strftime('%Y-%m-%d')}",
-                            contact_type="prospect",
+                            contact_type="referral",
                             status="cold",
-                            tags=_serialize_tags(["Scanned"]),
+                            tags=_serialize_tags(["Referral Source", "Scanned"]),
                             scanned_date=datetime.utcnow(),
                             created_at=datetime.utcnow(),
                             updated_at=datetime.utcnow()
@@ -1293,7 +1293,7 @@ async def upload_file(
                         notes=f"Scanned from business card on {datetime.now().strftime('%Y-%m-%d')}",
                         contact_type="referral",  # Business cards are referral sources
                         status="cold",  # Default to cold
-                        tags=_serialize_tags(["Scanned"]),
+                        tags=_serialize_tags(["Referral Source", "Scanned"]),
                         scanned_date=datetime.utcnow(),
                         created_at=datetime.utcnow(),
                         updated_at=datetime.utcnow()
