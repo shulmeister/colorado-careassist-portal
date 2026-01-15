@@ -25,7 +25,7 @@ export const SMSLog = () => {
   const fetchMessages = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/shift-filling/sms-log", {
+      const res = await fetch("/sales/api/shift-filling/sms-log", {
         credentials: "include",
       });
       if (res.ok) {

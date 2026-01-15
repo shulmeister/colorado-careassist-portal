@@ -71,7 +71,7 @@ export const ExpenseTracker = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`/api/expenses/pay-period-summary?period_offset=${periodOffset}`, {
+        const response = await fetch(`/sales/api/expenses/pay-period-summary?period_offset=${periodOffset}`, {
           credentials: "include",
         });
         if (!response.ok) {

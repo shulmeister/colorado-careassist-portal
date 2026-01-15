@@ -82,7 +82,7 @@ export const NewsletterList = () => {
 
   const checkConnection = async () => {
     try {
-      const response = await fetch("api/brevo/test", {
+      const response = await fetch("/sales/api/brevo/test", {
         credentials: "include",
       });
       const data = await response.json();
@@ -102,7 +102,7 @@ export const NewsletterList = () => {
   const fetchLists = async () => {
     try {
       setLoading(true);
-      const response = await fetch("api/brevo/lists", {
+      const response = await fetch("/sales/api/brevo/lists", {
         credentials: "include",
       });
       if (!response.ok) {
@@ -124,7 +124,7 @@ export const NewsletterList = () => {
 
   const loadTemplate = async (template: NewsletterTemplate) => {
     try {
-      const response = await fetch(`/api/brevo/newsletter-template/${template.file}`, {
+      const response = await fetch(`/sales/api/brevo/newsletter-template/${template.file}`, {
         credentials: "include",
       });
       if (!response.ok) {
@@ -168,7 +168,7 @@ export const NewsletterList = () => {
 
     try {
       setSending(sendDialog.listId);
-      const response = await fetch("api/brevo/send-newsletter", {
+      const response = await fetch("/sales/api/brevo/send-newsletter", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

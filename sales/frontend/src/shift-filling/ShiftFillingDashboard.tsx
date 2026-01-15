@@ -114,10 +114,10 @@ export const ShiftFillingDashboard = () => {
   const fetchData = useCallback(async () => {
     try {
       const [statusRes, shiftsRes, caregiversRes, campaignsRes] = await Promise.all([
-        fetch("/api/shift-filling/status", { credentials: "include" }),
-        fetch("/api/shift-filling/open-shifts", { credentials: "include" }),
-        fetch("/api/shift-filling/caregivers", { credentials: "include" }),
-        fetch("/api/shift-filling/campaigns", { credentials: "include" }),
+        fetch("/sales/api/shift-filling/status", { credentials: "include" }),
+        fetch("/sales/api/shift-filling/open-shifts", { credentials: "include" }),
+        fetch("/sales/api/shift-filling/caregivers", { credentials: "include" }),
+        fetch("/sales/api/shift-filling/campaigns", { credentials: "include" }),
       ]);
 
       if (statusRes.ok) setEngineStatus(await statusRes.json());
@@ -144,7 +144,7 @@ export const ShiftFillingDashboard = () => {
     setMatches([]);
 
     try {
-      const res = await fetch(`/api/shift-filling/match/${shift.id}`, {
+      const res = await fetch(`/sales/api/shift-filling/match/${shift.id}`, {
         credentials: "include",
       });
       if (res.ok) {
@@ -163,7 +163,7 @@ export const ShiftFillingDashboard = () => {
     setProcessing(true);
 
     try {
-      const res = await fetch("/api/shift-filling/calloff", {
+      const res = await fetch("/sales/api/shift-filling/calloff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -196,7 +196,7 @@ export const ShiftFillingDashboard = () => {
     setDemoResult(null);
 
     try {
-      const res = await fetch("/api/shift-filling/demo", {
+      const res = await fetch("/sales/api/shift-filling/demo", {
         method: "POST",
         credentials: "include",
       });
@@ -218,7 +218,7 @@ export const ShiftFillingDashboard = () => {
     setProcessing(true);
 
     try {
-      const res = await fetch("/api/shift-filling/simulate-response", {
+      const res = await fetch("/sales/api/shift-filling/simulate-response", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
