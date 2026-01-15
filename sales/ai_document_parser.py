@@ -51,9 +51,105 @@ class AIDocumentParser:
                 logger.warning("openai not installed")
         return self._openai
 
+    def _looks_like_address(self, text: str) -> bool:
+        """Check if text looks like a street address rather than a business name"""
+        if not text:
+            return True
+        text = text.strip().lower()
+        # Common address patterns
+        address_indicators = [
+            r'^\d+\s+\w',  # Starts with number + space + word (123 Main St)
+            r'\bst\b',     # Street
+            r'\bave\b',    # Avenue
+            r'\bblvd\b',   # Boulevard
+            r'\bdr\b',     # Drive
+            r'\brd\b',     # Road
+            r'\bct\b',     # Court
+            r'\bpkwy\b',   # Parkway
+            r'\bln\b',     # Lane
+            r'\bway\b',    # Way
+            r'\bste\b',    # Suite
+            r'#\d+',       # Unit numbers
+        ]
+        for pattern in address_indicators:
+            if re.search(pattern, text, re.IGNORECASE):
+                return True
+        return False
+
+    def lookup_business_at_address(self, address: str, city: str = "") -> Optional[str]:
+        """Use Gemini to identify the healthcare business at an address"""
+        if not GEMINI_API_KEY or not address:
+            return None
+
+        httpx = self._get_httpx()
+        if not httpx:
+            return None
+
+        full_address = f"{address}, {city}" if city else address
+
+        prompt = f"""What healthcare facility or medical business is located at this address?
+
+Address: {full_address}
+
+This is likely a:
+- Nursing home / Skilled Nursing Facility (SNF)
+- Assisted Living facility
+- Memory Care facility
+- Rehabilitation hospital
+- Hospice
+- Senior living community
+- Medical office building
+- Hospital
+
+Return ONLY the business name (no explanation). If you cannot identify a specific healthcare facility at this address, return "UNKNOWN".
+
+Examples:
+- "2101 S Blackhawk St, Aurora CO" → "The Medical Center of Aurora"
+- "1400 Jackson St, Denver CO" → "National Jewish Health"
+- "4700 E Hale Pkwy, Denver CO" → "Kindred Hospital Denver"
+- "501 S Cherry St, Glendale CO" → "Cherry Creek Nursing Center"
+"""
+
+        try:
+            for model in GEMINI_MODELS:
+                try:
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                    resp = httpx.post(
+                        url,
+                        headers={
+                            "x-goog-api-key": GEMINI_API_KEY,
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "contents": [{
+                                "parts": [{"text": prompt}]
+                            }]
+                        },
+                        timeout=15.0,
+                    )
+
+                    if resp.status_code != 200:
+                        continue
+
+                    data = resp.json()
+                    text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "").strip()
+
+                    if text and text.upper() != "UNKNOWN" and not self._looks_like_address(text):
+                        logger.info(f"Gemini identified: {address} → {text}")
+                        return text
+
+                except Exception as e:
+                    continue
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Error looking up business at address: {e}")
+            return None
+
     def parse_myway_pdf(self, pdf_content: bytes, filename: str = "") -> Dict[str, Any]:
         """Parse MyWay route PDF using AI"""
-        
+
         prompt = """Analyze this MyWay route PDF and extract ALL the information.
 
 This is a sales route for a home care company visiting healthcare facilities (nursing homes, assisted living, rehab centers, hospitals, etc).
@@ -118,12 +214,25 @@ OTHER REQUIREMENTS:
             for v in data.get("visits", []):
                 if v.get("skipped"):
                     continue  # Skip visits marked as skipped
-                
+
+                business_name = v.get("business_name", "")
+                address = v.get("address", "")
+                city = v.get("city", "")
+
+                # If business_name looks like an address, try to enrich it
+                if self._looks_like_address(business_name):
+                    lookup_address = address or business_name
+                    enriched_name = self.lookup_business_at_address(lookup_address, city)
+                    if enriched_name:
+                        business_name = enriched_name
+                    elif not business_name:
+                        business_name = "Unknown"
+
                 visit = {
                     "stop_number": v.get("stop_number", len(visits) + 1),
-                    "business_name": v.get("business_name", "Unknown"),
-                    "address": v.get("address", ""),
-                    "city": v.get("city", ""),
+                    "business_name": business_name,
+                    "address": address,
+                    "city": city,
                     "notes": v.get("notes", ""),
                     "visit_date": pdf_date
                 }
