@@ -557,12 +557,55 @@ export const getResortsByRegion = (region) => {
 // Get unique regions
 export const getRegions = () => [...new Set(resorts.map(r => r.region))]
 
+// Helper to calculate snow for a day range
+const getSnowForRange = (weatherData, resortId, startDay, endDay) => {
+  const forecast = weatherData[resortId]?.dailyForecast || []
+  return forecast.slice(startDay, endDay).reduce((sum, d) => sum + (d.snowfall || 0), 0)
+}
+
 // Sort resorts
 export const sortResorts = (resortList, sortBy, weatherData = {}) => {
   const sorted = [...resortList]
 
   switch (sortBy) {
+    case 'snow24h':
+      return sorted.sort((a, b) => {
+        const aSnow = weatherData[a.id]?.snow24h || 0
+        const bSnow = weatherData[b.id]?.snow24h || 0
+        return bSnow - aSnow
+      })
+    case 'snow5':
+      return sorted.sort((a, b) => {
+        const aSnow = getSnowForRange(weatherData, a.id, 0, 5)
+        const bSnow = getSnowForRange(weatherData, b.id, 0, 5)
+        return bSnow - aSnow
+      })
+    case 'snow10':
+      return sorted.sort((a, b) => {
+        const aSnow = getSnowForRange(weatherData, a.id, 0, 10)
+        const bSnow = getSnowForRange(weatherData, b.id, 0, 10)
+        return bSnow - aSnow
+      })
+    case 'snow15':
+      return sorted.sort((a, b) => {
+        const aSnow = getSnowForRange(weatherData, a.id, 0, 15)
+        const bSnow = getSnowForRange(weatherData, b.id, 0, 15)
+        return bSnow - aSnow
+      })
+    case 'snow6to10':
+      return sorted.sort((a, b) => {
+        const aSnow = getSnowForRange(weatherData, a.id, 5, 10)
+        const bSnow = getSnowForRange(weatherData, b.id, 5, 10)
+        return bSnow - aSnow
+      })
+    case 'snow11to15':
+      return sorted.sort((a, b) => {
+        const aSnow = getSnowForRange(weatherData, a.id, 10, 15)
+        const bSnow = getSnowForRange(weatherData, b.id, 10, 15)
+        return bSnow - aSnow
+      })
     case 'snow':
+    case 'snow7':
       return sorted.sort((a, b) => {
         const aSnow = weatherData[a.id]?.snow7Day || 0
         const bSnow = weatherData[b.id]?.snow7Day || 0

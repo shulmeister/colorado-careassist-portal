@@ -24,7 +24,7 @@ const useWeatherStore = create((set, get) => ({
 
   // Filters and sorting
   passFilter: 'all', // 'all', 'epic', 'ikon'
-  sortBy: 'snow', // 'snow', 'distance', 'name', 'value', 'region'
+  sortBy: 'snow5', // 'snow24h', 'snow5', 'snow10', 'snow15', 'snow6to10', 'snow11to15', 'distance', 'name'
 
   // Derived data
   filteredResorts: resorts,
