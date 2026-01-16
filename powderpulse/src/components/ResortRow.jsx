@@ -1,5 +1,5 @@
 import React, { useRef } from 'react'
-import { ChevronLeft, ChevronRight, Thermometer, Wind, Sun, Cloud, CloudSnow, CloudRain, Map, Gauge } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Thermometer, Wind, Sun, Cloud, CloudSnow, CloudRain, Map, Gauge, Video } from 'lucide-react'
 import useWeatherStore from '../stores/weatherStore'
 import { PASS_COLORS } from '../data/resorts'
 import { getLiftStatusColor } from '../services/liftieApi'
@@ -196,6 +196,21 @@ const ResortRow = ({ resort, onClick }) => {
                 <Map className="w-3 h-3" />
                 <span>Trail Map</span>
               </a>
+              {resort.webcamUrl && (
+                <>
+                  <span className="text-slate-600">•</span>
+                  <a
+                    href={resort.webcamUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-purple-400 hover:text-purple-300 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <Video className="w-3 h-3" />
+                    <span>Webcam</span>
+                  </a>
+                </>
+              )}
               {/* Data Sources Indicator */}
               {weather?.sources && weather.sources.length > 0 && (
                 <>

@@ -55,6 +55,7 @@ export const resorts = [
     distanceFromBoulder: 97,
     timezone: 'America/Denver',
     liftieId: 'vail',
+    webcamUrl: 'https://www.vail.com/the-mountain/mountain-conditions/mountain-cams.aspx',
     description: 'Legendary terrain, back bowls'
   },
   {
@@ -68,6 +69,7 @@ export const resorts = [
     distanceFromBoulder: 107,
     timezone: 'America/Denver',
     liftieId: 'beaver-creek',
+    webcamUrl: 'https://www.beavercreek.com/the-mountain/mountain-conditions/mountain-cams.aspx',
     description: 'Luxury resort, great groomers'
   },
   {
@@ -81,6 +83,7 @@ export const resorts = [
     distanceFromBoulder: 80,
     timezone: 'America/Denver',
     liftieId: 'breckenridge',
+    webcamUrl: 'https://www.breckenridge.com/the-mountain/mountain-conditions/mountain-cams.aspx',
     description: 'Historic town, diverse terrain'
   },
   {
@@ -94,6 +97,7 @@ export const resorts = [
     distanceFromBoulder: 75,
     timezone: 'America/Denver',
     liftieId: 'keystone',
+    webcamUrl: 'https://www.keystoneresort.com/the-mountain/mountain-conditions/mountain-cams.aspx',
     description: 'Night skiing, family friendly'
   },
   {
@@ -107,6 +111,7 @@ export const resorts = [
     distanceFromBoulder: 200,
     timezone: 'America/Denver',
     liftieId: 'crested-butte',
+    webcamUrl: 'https://www.skicb.com/the-mountain/mountain-conditions/mountain-cams.aspx',
     description: 'Extreme terrain, charming town'
   },
   {
@@ -120,6 +125,7 @@ export const resorts = [
     distanceFromBoulder: 330,
     timezone: 'America/Denver',
     liftieId: 'telluride',
+    webcamUrl: 'https://www.tellurideskiresort.com/the-mountain/conditions-weather/webcams/',
     description: 'Box canyon beauty, expert terrain'
   },
   // IKON PASS - COLORADO
@@ -134,6 +140,7 @@ export const resorts = [
     distanceFromBoulder: 67,
     timezone: 'America/Denver',
     liftieId: 'winter-park',
+    webcamUrl: 'https://www.winterparkresort.com/the-mountain/mountain-report/web-cams',
     description: 'Mary Jane bumps, great value'
   },
   {
@@ -147,6 +154,7 @@ export const resorts = [
     distanceFromBoulder: 157,
     timezone: 'America/Denver',
     liftieId: 'steamboat',
+    webcamUrl: 'https://www.steamboat.com/the-mountain/live-cams',
     description: 'Champagne powder, tree skiing'
   },
   {
@@ -160,6 +168,7 @@ export const resorts = [
     distanceFromBoulder: 83,
     timezone: 'America/Denver',
     liftieId: 'copper-mountain',
+    webcamUrl: 'https://www.coppercolorado.com/the-mountain/conditions-weather/web-cams',
     description: 'Naturally divided terrain'
   },
   {
@@ -173,6 +182,7 @@ export const resorts = [
     distanceFromBoulder: 65,
     timezone: 'America/Denver',
     liftieId: 'arapahoe-basin',
+    webcamUrl: 'https://www.arapahoebasin.com/the-mountain/webcams/',
     description: 'Longest season, expert terrain'
   },
   {
@@ -186,6 +196,7 @@ export const resorts = [
     distanceFromBoulder: 21,
     timezone: 'America/Denver',
     liftieId: 'eldora',
+    webcamUrl: 'https://www.eldora.com/the-mountain/conditions-hours/webcams',
     description: 'Closest resort, quick trips'
   },
   {
@@ -199,6 +210,7 @@ export const resorts = [
     distanceFromBoulder: 160,
     timezone: 'America/Denver',
     liftieId: 'snowmass',
+    webcamUrl: 'https://www.aspensnowmass.com/four-mountains/mountain-conditions/webcams',
     description: 'Four mountains, world class'
   },
   {
@@ -211,7 +223,8 @@ export const resorts = [
     elevation: 11904,
     distanceFromBoulder: 280,
     timezone: 'America/Denver',
-    liftieId: null, // Not on Liftie
+    liftieId: null,
+    webcamUrl: 'https://wolfcreekski.com/snow-conditions/',
     description: 'Most snow in Colorado, no crowds'
   },
 
@@ -227,6 +240,7 @@ export const resorts = [
     distanceFromBoulder: 280,
     timezone: 'America/Denver',
     liftieId: 'taos-ski-valley',
+    webcamUrl: 'https://www.skitaos.com/conditions-cams/webcams',
     description: 'Steep terrain, authentic culture'
   },
 
@@ -242,6 +256,7 @@ export const resorts = [
     distanceFromBoulder: 525,
     timezone: 'America/Denver',
     liftieId: 'snowbird',
+    webcamUrl: 'https://www.snowbird.com/mountain-report/',
     description: 'Deep powder, steep terrain'
   },
   {
@@ -255,6 +270,7 @@ export const resorts = [
     distanceFromBoulder: 525,
     timezone: 'America/Denver',
     liftieId: 'alta',
+    webcamUrl: 'https://www.alta.com/conditions/webcams',
     description: 'Skiers only, legendary powder'
   },
 
@@ -270,6 +286,7 @@ export const resorts = [
     distanceFromBoulder: 850,
     timezone: 'America/Los_Angeles',
     liftieId: 'mammoth-mountain',
+    webcamUrl: 'https://www.mammothmountain.com/mountain-information/webcams',
     description: 'Longest season in CA, massive terrain'
   },
   {
@@ -283,6 +300,7 @@ export const resorts = [
     distanceFromBoulder: 900,
     timezone: 'America/Los_Angeles',
     liftieId: 'palisades-tahoe',
+    webcamUrl: 'https://www.palisadestahoe.com/mountain-information/webcams',
     description: 'Olympic history, Lake Tahoe views'
   },
   {
@@ -296,6 +314,7 @@ export const resorts = [
     distanceFromBoulder: 900,
     timezone: 'America/Los_Angeles',
     liftieId: 'kirkwood',
+    webcamUrl: 'https://www.kirkwood.com/the-mountain/mountain-conditions/mountain-cams.aspx',
     description: 'Steep chutes, deep snow, no crowds'
   },
   {
@@ -309,6 +328,7 @@ export const resorts = [
     distanceFromBoulder: 920,
     timezone: 'America/Los_Angeles',
     liftieId: 'sugar-bowl',
+    webcamUrl: 'https://www.sugarbowl.com/conditions',
     description: 'Historic Tahoe resort, classic skiing'
   },
 
@@ -324,6 +344,7 @@ export const resorts = [
     distanceFromBoulder: 580,
     timezone: 'America/Boise',
     liftieId: 'sun-valley',
+    webcamUrl: 'https://www.sunvalley.com/mountain/webcams',
     description: 'Historic resort, world-class grooming'
   },
 
@@ -339,6 +360,7 @@ export const resorts = [
     distanceFromBoulder: 450,
     timezone: 'America/Denver',
     liftieId: 'jackson-hole',
+    webcamUrl: 'https://www.jacksonhole.com/webcams',
     description: 'Expert terrain, Corbet\'s Couloir'
   },
 
@@ -354,6 +376,7 @@ export const resorts = [
     distanceFromBoulder: 650,
     timezone: 'America/Denver',
     liftieId: 'big-sky',
+    webcamUrl: 'https://bigskyresort.com/conditions-webcams',
     description: 'Biggest skiing in America, uncrowded'
   },
 
@@ -369,6 +392,7 @@ export const resorts = [
     distanceFromBoulder: 2800,
     timezone: 'America/Anchorage',
     liftieId: 'alyeska',
+    webcamUrl: 'https://alyeskaresort.com/mountain/webcams/',
     description: 'Ocean views, extreme terrain, deep snow'
   },
 
@@ -384,6 +408,7 @@ export const resorts = [
     distanceFromBoulder: 2100,
     timezone: 'America/New_York',
     liftieId: 'sugarloaf',
+    webcamUrl: 'https://www.sugarloaf.com/mountain-info/webcams',
     description: 'Biggest skiing in the East, above treeline'
   },
 
@@ -399,6 +424,7 @@ export const resorts = [
     distanceFromBoulder: 2000,
     timezone: 'America/New_York',
     liftieId: 'jay-peak',
+    webcamUrl: 'https://jaypeakresort.com/ski-ride/conditions/webcams',
     description: 'Most snow in the East, glades galore'
   },
 
@@ -414,6 +440,7 @@ export const resorts = [
     distanceFromBoulder: 1100,
     timezone: 'America/Vancouver',
     liftieId: 'whistler-blackcomb',
+    webcamUrl: 'https://www.whistlerblackcomb.com/the-mountain/mountain-conditions/mountain-cams.aspx',
     description: 'Largest in North America'
   },
   {
@@ -426,7 +453,8 @@ export const resorts = [
     elevation: 7300,
     distanceFromBoulder: 950,
     timezone: 'America/Vancouver',
-    liftieId: null, // Not on Liftie
+    liftieId: null,
+    webcamUrl: 'https://www.revelstokemountainresort.com/mountain/webcams/',
     description: 'Longest vertical in NA, deep pow'
   },
   {
@@ -439,7 +467,8 @@ export const resorts = [
     elevation: 8033,
     distanceFromBoulder: 920,
     timezone: 'America/Edmonton',
-    liftieId: null, // Not on Liftie
+    liftieId: null,
+    webcamUrl: 'https://kickinghorseresort.com/conditions/cams/',
     description: 'Champagne powder, big mountain'
   },
 
@@ -455,6 +484,7 @@ export const resorts = [
     distanceFromBoulder: 5800,
     timezone: 'Asia/Tokyo',
     liftieId: 'niseko',
+    webcamUrl: 'https://www.niseko.ne.jp/en/livecam/',
     description: 'Legendary powder, Japanese culture'
   },
 
@@ -470,6 +500,7 @@ export const resorts = [
     distanceFromBoulder: 5300,
     timezone: 'Europe/Paris',
     liftieId: 'chamonix',
+    webcamUrl: 'https://www.chamonix.com/webcams,106,en.html',
     description: 'Mont Blanc, extreme terrain'
   },
   {
@@ -483,6 +514,7 @@ export const resorts = [
     distanceFromBoulder: 5350,
     timezone: 'Europe/Zurich',
     liftieId: 'verbier',
+    webcamUrl: 'https://www.verbier.ch/en/webcams/',
     description: 'Swiss Alps, freeride paradise'
   },
   {
@@ -496,6 +528,7 @@ export const resorts = [
     distanceFromBoulder: 5320,
     timezone: 'Europe/Paris',
     liftieId: 'val-disere',
+    webcamUrl: 'https://www.valdisere.com/en/webcams/',
     description: 'French Alps, Olympic history'
   },
   {
@@ -509,6 +542,7 @@ export const resorts = [
     distanceFromBoulder: 5400,
     timezone: 'Europe/Vienna',
     liftieId: 'st-anton-am-arlberg',
+    webcamUrl: 'https://www.stantonamarlberg.com/en/winter/webcams',
     description: 'Birthplace of alpine skiing'
   },
   {
@@ -522,6 +556,7 @@ export const resorts = [
     distanceFromBoulder: 5380,
     timezone: 'Europe/Rome',
     liftieId: 'cervino-ski-paradise',
+    webcamUrl: 'https://www.cervinia.it/en/webcam',
     description: 'Matterhorn views, high altitude'
   },
   {
@@ -534,7 +569,8 @@ export const resorts = [
     elevation: 9186,
     distanceFromBoulder: 5310,
     timezone: 'Europe/Rome',
-    liftieId: null, // Not on Liftie
+    liftieId: null,
+    webcamUrl: 'https://www.courmayeur-montblanc.com/en/webcam',
     description: 'Mont Blanc, Italian charm'
   }
 ]
