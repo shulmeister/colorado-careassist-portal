@@ -41,24 +41,47 @@ const getSnowLiquidRatio = (tempF) => {
 
 /**
  * Elevation adjustment factor
- * Higher elevations typically get more snow due to orographic lift
+ * Higher elevations get significantly more snow due to orographic lift
+ * Research shows orographic enhancement can be 1.5-2x at summit levels
  */
 const getElevationMultiplier = (elevationFt) => {
-  if (elevationFt >= 11000) return 1.3   // Very high (11k+)
-  if (elevationFt >= 9000) return 1.2    // High (9k-11k)
-  if (elevationFt >= 7000) return 1.1    // Moderate (7k-9k)
-  if (elevationFt >= 5000) return 1.05   // Low mountain (5k-7k)
+  if (elevationFt >= 12000) return 1.5   // Ultra high (12k+) - serious orographic lift
+  if (elevationFt >= 11000) return 1.4   // Very high (11k-12k)
+  if (elevationFt >= 9000) return 1.3    // High (9k-11k)
+  if (elevationFt >= 7000) return 1.2    // Moderate (7k-9k)
+  if (elevationFt >= 5000) return 1.1    // Low mountain (5k-7k)
   return 1.0                              // Base level
 }
 
 /**
+ * Get the best weather model for a region
+ * Different models are more accurate for different parts of the world
+ */
+function getRegionalModel(region) {
+  switch (region) {
+    case 'japan':
+      return 'jma_seamless'  // Japanese Meteorological Agency - best for Japan
+    case 'europe':
+      return 'ecmwf_ifs04'   // European Centre - best for Europe/Alps
+    case 'canada':
+      return 'gem_seamless'  // Canadian model - good for BC/Alberta
+    default:
+      return 'gfs_seamless'  // US GFS model - good for North America
+  }
+}
+
+/**
  * Fetch from Open-Meteo (free, no key required)
+ * CRITICAL: snowfall_sum is in CENTIMETERS, must convert to inches!
  */
 async function fetchOpenMeteo(resort) {
+  // Use regional model for better accuracy
+  const model = getRegionalModel(resort.region)
+
   const params = new URLSearchParams({
     latitude: resort.latitude,
     longitude: resort.longitude,
-    models: 'best_match',
+    models: model,
     hourly: 'temperature_2m,precipitation,snowfall,precipitation_probability',
     daily: 'temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum,precipitation_probability_max,weather_code',
     forecast_days: 16,
@@ -74,12 +97,14 @@ async function fetchOpenMeteo(resort) {
 
     return {
       source: 'open-meteo',
+      model: model,
       daily: data.daily.time.map((date, i) => ({
         date,
         tempMax: data.daily.temperature_2m_max[i],
         tempMin: data.daily.temperature_2m_min[i],
         precipInches: data.daily.precipitation_sum[i] || 0,
-        snowfallRaw: data.daily.snowfall_sum[i] || 0,  // Open-Meteo's snow estimate
+        // CRITICAL FIX: Open-Meteo snowfall_sum is in CENTIMETERS, convert to inches!
+        snowfallRaw: (data.daily.snowfall_sum[i] || 0) / 2.54,
         precipProb: data.daily.precipitation_probability_max[i] || 0,
         weatherCode: data.daily.weather_code[i]
       }))
@@ -282,40 +307,51 @@ function ensembleForecasts(forecasts, resort) {
       const isStormEvent = avgPrecipProb > 60
 
       // Calculate snow estimates from each source
-      // IMPORTANT: Use calculated snow from precipitation as primary method
-      // Raw API snow values often underestimate mountain snowfall
+      // Now that Open-Meteo cm->inches conversion is fixed, trust the raw API values more
       const snowEstimates = data.precipValues.map((precip, i) => {
-        // Raw snow from API
+        // Raw snow from API (now properly converted from cm to inches)
         const rawSnow = data.snowValues[i] || 0
+
         // Calculated snow from precip with proper snow:liquid ratio
-        // This is the key to accurate mountain forecasting
+        // Used as a sanity check / enhancement for cold temps
         const calcSnow = avgTemp <= 35
           ? calculateSnowFromPrecip(precip, avgTemp, resort.elevation)
           : 0
-        // For cold temps, strongly prefer calculated snow (better for Japan powder!)
-        // For borderline temps, average them
-        if (avgTemp <= 25) {
-          return Math.max(calcSnow, rawSnow * 1.5)  // Cold = fluffy snow, trust calculation
-        } else if (avgTemp <= 32) {
-          return Math.max(calcSnow * 0.8 + rawSnow * 0.5, rawSnow)  // Blend
+
+        // Trust raw snow values more now that units are correct
+        // Only enhance with calculation if it significantly exceeds raw value
+        if (rawSnow > 0) {
+          // If calculated snow is much higher (like 2x+), use blend
+          // This helps catch cases where API underestimates fluffy powder
+          if (calcSnow > rawSnow * 1.5) {
+            return rawSnow * 0.6 + calcSnow * 0.4  // Blend toward higher
+          }
+          return rawSnow  // Trust API value
         }
-        return Math.max(rawSnow, calcSnow * 0.5)  // Warm = wet snow
+
+        // No raw snow but we have precip - calculate from precip
+        if (precip > 0 && avgTemp <= 32) {
+          return calcSnow * 0.8  // Use calculation but slightly conservative
+        }
+
+        return 0
       })
 
       // Ensemble strategy:
-      // - During storms: bias toward higher predictions (take 75th percentile)
-      // - Normal conditions: weighted average
+      // - During storms: bias toward higher predictions (take max of credible values)
+      // - Normal conditions: weighted average biased toward higher
       let ensembleSnow
       if (isStormEvent && snowEstimates.length > 1) {
-        // Sort and take 75th percentile during storms
-        const sorted = [...snowEstimates].sort((a, b) => a - b)
-        const p75Index = Math.floor(sorted.length * 0.75)
-        ensembleSnow = sorted[p75Index]
-      } else {
-        // Weighted average with slight bias toward higher values
+        // During storm events, trust the higher predictions
+        // Models often underestimate mountain snow during storms
         const maxSnow = Math.max(...snowEstimates)
         const avgSnow = average(snowEstimates)
-        ensembleSnow = avgSnow * 0.6 + maxSnow * 0.4
+        ensembleSnow = avgSnow * 0.4 + maxSnow * 0.6  // Bias toward max during storms
+      } else {
+        // Normal conditions: weighted average with moderate max bias
+        const maxSnow = Math.max(...snowEstimates)
+        const avgSnow = average(snowEstimates)
+        ensembleSnow = avgSnow * 0.5 + maxSnow * 0.5
       }
 
       // Confidence based on forecast distance and source agreement
