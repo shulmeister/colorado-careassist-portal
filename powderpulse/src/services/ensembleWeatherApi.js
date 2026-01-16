@@ -16,11 +16,13 @@
 // API Keys
 const TOMORROW_API_KEY = 'qyqlOXozeogt1fPFw6FIATxY5D1qOXqJ'
 const OPENWEATHER_API_KEY = '14fbd2e16392159424b09d4c8b26cec3'
+const RAPIDAPI_KEY = 'ce3b334075msh80fc4f61ed53886p1d70d8jsn943da04fc000'
 
 // API endpoints
 const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast'
 const TOMORROW_BASE = 'https://api.tomorrow.io/v4/timelines'
 const OPENWEATHER_BASE = 'https://api.openweathermap.org/data/3.0/onecall'
+const SNOW_FORECAST_BASE = 'https://ski-resort-forecast.p.rapidapi.com'
 
 // Delay helper for rate limiting
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -250,6 +252,180 @@ async function fetchOpenWeatherFallback(resort) {
 }
 
 /**
+ * Snow-forecast.com resort slug mapping
+ * This API provides excellent ski-specific forecasts
+ */
+const SNOW_FORECAST_SLUGS = {
+  // Colorado
+  'vail': 'Vail',
+  'beaver-creek': 'Beaver-Creek',
+  'breckenridge': 'Breckenridge',
+  'keystone': 'Keystone',
+  'crested-butte': 'Crested-Butte-Mountain-Resort',
+  'telluride': 'Telluride',
+  'park-city': 'Park-City',
+  'steamboat': 'Steamboat',
+  'aspen-snowmass': 'Snowmass',
+  'winter-park': 'Winter-Park-Resort',
+  'copper-mountain': 'Copper-Mountain',
+  'eldora': 'Eldora-Mountain-Resort',
+  'arapahoe-basin': 'Arapahoe-Basin',
+  'loveland': 'Loveland',
+  'purgatory': 'Purgatory',
+  'monarch': 'Monarch-Mountain',
+  'powderhorn': 'Powderhorn',
+  'sunlight': 'Sunlight-Mountain-Resort',
+  'wolf-creek': 'Wolf-Creek',
+  // Utah
+  'snowbird': 'Snowbird',
+  'alta': 'Alta',
+  'brighton': 'Brighton',
+  'solitude': 'Solitude',
+  'deer-valley': 'Deer-Valley',
+  'snowbasin': 'Snowbasin',
+  'sundance': 'Sundance',
+  // California
+  'mammoth': 'Mammoth',
+  'palisades-tahoe': 'Squaw-Valley',
+  'heavenly': 'Heavenly',
+  'kirkwood': 'Kirkwood',
+  'northstar': 'Northstar-at-Tahoe',
+  'big-bear': 'Big-Bear-Mountain',
+  // Wyoming/Montana/Idaho
+  'jackson-hole': 'Jackson-Hole',
+  'big-sky': 'Big-Sky',
+  'grand-targhee': 'Grand-Targhee',
+  'sun-valley': 'Sun-Valley',
+  'schweitzer': 'Schweitzer-Mountain',
+  'whitefish': 'Whitefish-Mountain-Resort',
+  // Pacific Northwest
+  'crystal-mountain': 'Crystal-Mountain',
+  'mt-bachelor': 'Mount-Bachelor',
+  'stevens-pass': 'Stevens-Pass',
+  'mt-baker': 'Mt-Baker',
+  // Canada
+  'whistler': 'Whistler-Blackcomb',
+  'revelstoke': 'Revelstoke-Mountain-Resort',
+  'lake-louise': 'Lake-Louise',
+  'sunshine-village': 'Sunshine-Village',
+  'kicking-horse': 'Kicking-Horse',
+  'big-white': 'Big-White',
+  'red-mountain': 'Red-Mountain',
+  'fernie': 'Fernie-Alpine',
+  // Japan
+  'niseko': 'Niseko',
+  'hakuba': 'Hakuba-Valley',
+  'myoko-kogen': 'Myoko-Kogen',
+  'nozawa-onsen': 'Nozawa-Onsen',
+  'shiga-kogen': 'Shiga-Kogen',
+  'furano': 'Furano',
+  'rusutsu': 'Rusutsu',
+  // Europe
+  'chamonix': 'Chamonix',
+  'zermatt': 'Zermatt',
+  'st-anton': 'St-Anton',
+  'val-disere': 'Val-d-Isere',
+  'verbier': 'Verbier',
+  'cervinia': 'Cervinia',
+  'cortina': 'Cortina-d-Ampezzo',
+  'lech-zurs': 'Lech',
+  'kitzbuhel': 'Kitzbuhel',
+  // East Coast
+  'killington': 'Killington',
+  'stowe': 'Stowe',
+  'sugarbush': 'Sugarbush',
+  'jay-peak': 'Jay-Peak',
+  'sugarloaf': 'Sugarloaf',
+  'sunday-river': 'Sunday-River',
+  // New Mexico
+  'taos': 'Taos-Ski-Valley',
+  // Alaska
+  'alyeska': 'Alyeska'
+}
+
+/**
+ * Fetch from Snow-Forecast.com via RapidAPI
+ * This is a ski-specific forecast source with excellent accuracy
+ */
+async function fetchSnowForecast(resort) {
+  const slug = SNOW_FORECAST_SLUGS[resort.id]
+  if (!slug) {
+    // Resort not in our mapping, skip this source
+    return null
+  }
+
+  try {
+    const response = await fetch(`${SNOW_FORECAST_BASE}/${slug}/forecast?units=i&el=top`, {
+      headers: {
+        'x-rapidapi-host': 'ski-resort-forecast.p.rapidapi.com',
+        'x-rapidapi-key': RAPIDAPI_KEY
+      }
+    })
+
+    if (!response.ok) {
+      if (response.status === 429) {
+        console.warn(`Snow-Forecast rate limited for ${resort.name}`)
+      }
+      return null
+    }
+
+    const data = await response.json()
+    const forecast5Day = data.forecast5Day || []
+
+    // Convert 5-day forecast (AM/PM/Night) to daily totals
+    const daily = forecast5Day.map(day => {
+      // Sum snow from AM + PM + Night
+      const amSnow = parseFloat(day.am?.snow?.replace('in', '') || 0)
+      const pmSnow = parseFloat(day.pm?.snow?.replace('in', '') || 0)
+      const nightSnow = parseFloat(day.night?.snow?.replace('in', '') || 0)
+      const totalSnow = amSnow + pmSnow + nightSnow
+
+      // Parse temperatures
+      const temps = [
+        parseFloat(day.am?.maxTemp?.replace('°F', '') || 0),
+        parseFloat(day.am?.minTemp?.replace('°F', '') || 0),
+        parseFloat(day.pm?.maxTemp?.replace('°F', '') || 0),
+        parseFloat(day.pm?.minTemp?.replace('°F', '') || 0),
+        parseFloat(day.night?.maxTemp?.replace('°F', '') || 0),
+        parseFloat(day.night?.minTemp?.replace('°F', '') || 0)
+      ].filter(t => !isNaN(t) && t !== 0)
+
+      const tempMax = temps.length > 0 ? Math.max(...temps) : 32
+      const tempMin = temps.length > 0 ? Math.min(...temps) : 20
+
+      // Calculate date from day of week
+      const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']
+      const today = new Date()
+      const todayDay = today.getDay()
+      const targetDay = dayNames.indexOf(day.dayOfWeek.toLowerCase())
+      let daysAhead = targetDay - todayDay
+      if (daysAhead < 0) daysAhead += 7
+      const targetDate = new Date(today)
+      targetDate.setDate(today.getDate() + daysAhead)
+      const dateStr = targetDate.toISOString().split('T')[0]
+
+      return {
+        date: dateStr,
+        tempMax,
+        tempMin,
+        precipInches: totalSnow * 0.1,  // Rough estimate: snow / 10 = water equiv
+        snowfallRaw: totalSnow,
+        precipProb: totalSnow > 0 ? 80 : 20,  // Estimate based on snow prediction
+        weatherCode: totalSnow > 2 ? 73 : (totalSnow > 0 ? 71 : 0)
+      }
+    })
+
+    return {
+      source: 'snow-forecast',
+      daily
+    }
+  } catch (error) {
+    console.error(`Snow-Forecast error for ${resort.name}:`, error)
+    return null
+  }
+}
+
+/**
  * Calculate snow from precipitation using temperature-based snow:liquid ratio
  */
 function calculateSnowFromPrecip(precipInches, avgTempF, elevationFt) {
@@ -398,14 +574,16 @@ function standardDeviation(arr) {
 export async function fetchEnsembleWeather(resort) {
   try {
     // Fetch from all sources in parallel
-    const [openMeteo, tomorrowIo, openWeather] = await Promise.all([
+    // Snow-Forecast.com is ski-specific and often most accurate
+    const [openMeteo, tomorrowIo, openWeather, snowForecast] = await Promise.all([
       fetchOpenMeteo(resort),
       fetchTomorrowIo(resort),
-      fetchOpenWeather(resort)
+      fetchOpenWeather(resort),
+      fetchSnowForecast(resort)
     ])
 
     // Filter out failed fetches
-    const validForecasts = [openMeteo, tomorrowIo, openWeather].filter(f => f !== null)
+    const validForecasts = [openMeteo, tomorrowIo, openWeather, snowForecast].filter(f => f !== null)
 
     if (validForecasts.length === 0) {
       console.error(`No weather data available for ${resort.name}`)

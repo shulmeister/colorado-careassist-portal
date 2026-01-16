@@ -77,6 +77,7 @@ const getSourceBadgeColor = (source) => {
     case 'open-meteo': return 'bg-blue-500/20 text-blue-400'
     case 'openweather': return 'bg-orange-500/20 text-orange-400'
     case 'openweather-5day': return 'bg-orange-500/20 text-orange-400'
+    case 'snow-forecast': return 'bg-cyan-500/20 text-cyan-400'  // Ski-specific source
     default: return 'bg-slate-500/20 text-slate-400'
   }
 }
