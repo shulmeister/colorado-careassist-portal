@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { resorts, getResortsByPass, sortResorts } from '../data/resorts'
-import { fetchAllResortsWeather } from '../services/weatherApi'
+import { fetchAllResortsEnsemble } from '../services/ensembleWeatherApi'
 import { fetchAllLiftStatus } from '../services/liftieApi'
 import {
   findMostSnow,
@@ -65,14 +65,14 @@ const useWeatherStore = create((set, get) => ({
     })
   },
 
-  // Fetch weather data for all resorts
+  // Fetch weather data for all resorts using ensemble API
   fetchWeather: async () => {
     set({ isLoading: true, error: null })
 
     try {
-      // Fetch weather and lift status in parallel
+      // Fetch weather (ensemble from multiple sources) and lift status in parallel
       const [weatherData, liftStatus] = await Promise.all([
-        fetchAllResortsWeather(resorts),
+        fetchAllResortsEnsemble(resorts),
         fetchAllLiftStatus(resorts)
       ])
 

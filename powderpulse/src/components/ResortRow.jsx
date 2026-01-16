@@ -61,6 +61,26 @@ const formatSnow = (inches) => {
   return `${rounded.toFixed(1)}"`
 }
 
+// Format snow range like OpenSnow (e.g., "4-8"")
+const formatSnowRange = (inches) => {
+  if (!inches || inches === 0) return '0"'
+  const low = Math.floor(inches * 0.7)
+  const high = Math.ceil(inches * 1.3)
+  if (low === high) return `${low}"`
+  return `${low}-${high}"`
+}
+
+// Get source badge color
+const getSourceBadgeColor = (source) => {
+  switch (source) {
+    case 'tomorrow.io': return 'bg-purple-500/20 text-purple-400'
+    case 'open-meteo': return 'bg-blue-500/20 text-blue-400'
+    case 'openweather': return 'bg-orange-500/20 text-orange-400'
+    case 'openweather-5day': return 'bg-orange-500/20 text-orange-400'
+    default: return 'bg-slate-500/20 text-slate-400'
+  }
+}
+
 // Weather icon component
 const WeatherIcon = ({ code, className = "w-6 h-6" }) => {
   if ([71, 73, 75, 77, 85, 86].includes(code)) {
@@ -176,6 +196,15 @@ const ResortRow = ({ resort, onClick }) => {
                 <Map className="w-3 h-3" />
                 <span>Trail Map</span>
               </a>
+              {/* Data Sources Indicator */}
+              {weather?.sources && weather.sources.length > 0 && (
+                <>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-slate-500" title={`Data from: ${weather.sources.join(', ')}`}>
+                    {weather.sources.length} sources
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>
