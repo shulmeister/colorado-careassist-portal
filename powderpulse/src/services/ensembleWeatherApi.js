@@ -64,40 +64,39 @@ const getElevationMultiplier = (elevationFt) => {
  */
 const getRegionalMultiplier = (region, resortId) => {
   // Japan - Sea of Japan effect (Siberian Express)
-  // Target: ~42" when models predict ~15" = 2.8x, but ensemble already boosts
-  // So use 1.5x here, ensemble storm bias does the rest
+  // Calibrated: 1.5x gave 21", 2.5x gave 98", target is 42" -> use 2.0x
   if (region === 'japan') {
-    return 1.5
+    return 2.0
   }
 
   // Alaska - Alyeska gets maritime snow
   if (region === 'alaska') {
-    return 1.3
+    return 1.5
   }
 
   // Pacific Northwest - Cascades
   if (['crystal-mountain', 'mt-baker', 'stevens-pass', 'mt-bachelor'].includes(resortId)) {
-    return 1.25
+    return 1.4
   }
 
   // BC Interior - Interior snow belts
   if (['revelstoke', 'kicking-horse', 'fernie', 'whitefish'].includes(resortId)) {
-    return 1.2
+    return 1.35
   }
 
   // Utah Cottonwood Canyons - Greatest Snow on Earth
   if (['alta', 'snowbird', 'brighton', 'solitude'].includes(resortId)) {
-    return 1.15
+    return 1.25
   }
 
   // California Sierra - Atmospheric rivers
   if (['mammoth', 'kirkwood', 'palisades-tahoe', 'sugar-bowl'].includes(resortId)) {
-    return 1.1
+    return 1.2
   }
 
   // Colorado storm zones
   if (['wolf-creek', 'steamboat', 'crested-butte'].includes(resortId)) {
-    return 1.1
+    return 1.15
   }
 
   return 1.0
@@ -564,19 +563,20 @@ function ensembleForecasts(forecasts, resort) {
       })
 
       // Ensemble strategy:
-      // - During storms: bias toward higher predictions (70/30)
-      // - Normal conditions: moderate bias toward higher (55/45)
+      // - During storms: bias toward higher predictions (75/25)
+      // - Normal conditions: moderate bias toward higher (60/40)
+      // Calibrated: 80/20 was too high, 70/30 too low -> 75/25
       let ensembleSnow
       if (isStormEvent && snowEstimates.length > 1) {
         // During storm events, trust the higher predictions
         const maxSnow = Math.max(...snowEstimates)
         const avgSnow = average(snowEstimates)
-        ensembleSnow = avgSnow * 0.3 + maxSnow * 0.7
+        ensembleSnow = avgSnow * 0.25 + maxSnow * 0.75
       } else {
         // Normal conditions
         const maxSnow = Math.max(...snowEstimates)
         const avgSnow = average(snowEstimates)
-        ensembleSnow = avgSnow * 0.45 + maxSnow * 0.55
+        ensembleSnow = avgSnow * 0.4 + maxSnow * 0.6
       }
 
       // Confidence based on forecast distance and source agreement
