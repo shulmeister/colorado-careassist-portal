@@ -56,6 +56,57 @@ const getElevationMultiplier = (elevationFt) => {
 }
 
 /**
+ * Regional snowfall multiplier
+ * Some regions get significantly more snow than weather models predict
+ * due to maritime effects, lake effect, or unique geography
+ *
+ * Weather models consistently underpredict snowfall in these areas:
+ * - Japan: Sea of Japan effect (Siberian Express) - models miss 50-70%
+ * - PNW Cascades: Pacific moisture - models miss 30-50%
+ * - Utah Cottonwoods: Great Salt Lake + terrain - models miss 20-40%
+ * - Alaska coastal: Maritime + orographic - models miss 40-60%
+ */
+const getRegionalMultiplier = (region, resortId) => {
+  // Japan - Sea of Japan effect is MASSIVE
+  // Niseko averages 15-20m (600-800") per year, models predict ~half
+  if (region === 'japan') {
+    return 2.5  // Models consistently underpredict Japan by 2-3x
+  }
+
+  // Alaska - Alyeska gets maritime snow bombs
+  if (region === 'alaska') {
+    return 1.8
+  }
+
+  // Pacific Northwest - Cascades get hammered
+  if (['crystal-mountain', 'mt-baker', 'stevens-pass', 'mt-bachelor'].includes(resortId)) {
+    return 1.6
+  }
+
+  // BC Interior - Interior snow belts
+  if (['revelstoke', 'kicking-horse', 'fernie', 'whitefish'].includes(resortId)) {
+    return 1.5
+  }
+
+  // Utah Cottonwood Canyons - Greatest Snow on Earth
+  if (['alta', 'snowbird', 'brighton', 'solitude'].includes(resortId)) {
+    return 1.4
+  }
+
+  // California Sierra - Atmospheric rivers
+  if (['mammoth', 'kirkwood', 'palisades-tahoe', 'sugar-bowl'].includes(resortId)) {
+    return 1.3
+  }
+
+  // Colorado - Models do OK but still underpredict in certain areas
+  if (['wolf-creek', 'steamboat', 'crested-butte'].includes(resortId)) {
+    return 1.25
+  }
+
+  return 1.0
+}
+
+/**
  * Get the best weather model for a region
  * Different models are more accurate for different parts of the world
  */
@@ -427,11 +478,13 @@ async function fetchSnowForecast(resort) {
 
 /**
  * Calculate snow from precipitation using temperature-based snow:liquid ratio
+ * Now includes regional multiplier for areas where models underpredict
  */
-function calculateSnowFromPrecip(precipInches, avgTempF, elevationFt) {
+function calculateSnowFromPrecip(precipInches, avgTempF, elevationFt, region, resortId) {
   const ratio = getSnowLiquidRatio(avgTempF)
   const elevationMult = getElevationMultiplier(elevationFt)
-  return precipInches * ratio * elevationMult
+  const regionalMult = getRegionalMultiplier(region, resortId)
+  return precipInches * ratio * elevationMult * regionalMult
 }
 
 /**
@@ -482,52 +535,63 @@ function ensembleForecasts(forecasts, resort) {
       const avgPrecipProb = average(data.precipProbs)
       const isStormEvent = avgPrecipProb > 60
 
+      // Get regional multiplier for this resort
+      const regionalMult = getRegionalMultiplier(resort.region, resort.id)
+
       // Calculate snow estimates from each source
-      // Now that Open-Meteo cm->inches conversion is fixed, trust the raw API values more
+      // Apply regional multiplier to account for model underprediction
       const snowEstimates = data.precipValues.map((precip, i) => {
-        // Raw snow from API (now properly converted from cm to inches)
-        const rawSnow = data.snowValues[i] || 0
+        // Raw snow from API (converted from cm to inches where applicable)
+        // Apply regional multiplier since models underpredict in certain areas
+        const rawSnow = (data.snowValues[i] || 0) * regionalMult
 
         // Calculated snow from precip with proper snow:liquid ratio
-        // Used as a sanity check / enhancement for cold temps
+        // Includes regional multiplier for cold temps
         const calcSnow = avgTemp <= 35
-          ? calculateSnowFromPrecip(precip, avgTemp, resort.elevation)
+          ? calculateSnowFromPrecip(precip, avgTemp, resort.elevation, resort.region, resort.id)
           : 0
 
-        // Trust raw snow values more now that units are correct
-        // Only enhance with calculation if it significantly exceeds raw value
+        // For regions with known underprediction, trust calculated values more
+        if (regionalMult >= 1.5) {
+          // High underprediction regions (Japan, Alaska, PNW)
+          // Use max of raw and calculated, then apply another 20% boost
+          const maxEstimate = Math.max(rawSnow, calcSnow)
+          return maxEstimate * 1.2
+        }
+
+        // Standard logic for other regions
         if (rawSnow > 0) {
-          // If calculated snow is much higher (like 2x+), use blend
-          // This helps catch cases where API underestimates fluffy powder
-          if (calcSnow > rawSnow * 1.5) {
-            return rawSnow * 0.6 + calcSnow * 0.4  // Blend toward higher
+          // If calculated snow is much higher, use blend toward higher
+          if (calcSnow > rawSnow * 1.3) {
+            return rawSnow * 0.4 + calcSnow * 0.6  // Stronger blend toward calculated
           }
-          return rawSnow  // Trust API value
+          return rawSnow
         }
 
         // No raw snow but we have precip - calculate from precip
         if (precip > 0 && avgTemp <= 32) {
-          return calcSnow * 0.8  // Use calculation but slightly conservative
+          return calcSnow * 0.9  // Less conservative
         }
 
         return 0
       })
 
       // Ensemble strategy:
-      // - During storms: bias toward higher predictions (take max of credible values)
-      // - Normal conditions: weighted average biased toward higher
+      // - During storms: STRONGLY bias toward higher predictions
+      // - Normal conditions: still bias toward higher (models underpredict)
       let ensembleSnow
       if (isStormEvent && snowEstimates.length > 1) {
-        // During storm events, trust the higher predictions
-        // Models often underestimate mountain snow during storms
+        // During storm events, heavily trust the higher predictions
+        // Models consistently underestimate mountain snow during storms
         const maxSnow = Math.max(...snowEstimates)
         const avgSnow = average(snowEstimates)
-        ensembleSnow = avgSnow * 0.4 + maxSnow * 0.6  // Bias toward max during storms
+        // 80% weight on max during storms (was 60%)
+        ensembleSnow = avgSnow * 0.2 + maxSnow * 0.8
       } else {
-        // Normal conditions: weighted average with moderate max bias
+        // Normal conditions: 65% weight on max (was 50%)
         const maxSnow = Math.max(...snowEstimates)
         const avgSnow = average(snowEstimates)
-        ensembleSnow = avgSnow * 0.5 + maxSnow * 0.5
+        ensembleSnow = avgSnow * 0.35 + maxSnow * 0.65
       }
 
       // Confidence based on forecast distance and source agreement
