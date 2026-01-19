@@ -41,10 +41,15 @@ export async function fetchOpenMeteoWeather(resort) {
   // Use summit coordinates (main lat/lng in resort data)
   const lat = resort.latitude
   const lng = resort.longitude
+  // Convert summit elevation from feet to meters for API
+  // This improves forecast accuracy for mountain locations
+  const elevationMeters = resort.elevation ? Math.round(resort.elevation * 0.3048) : null
 
   const params = new URLSearchParams({
     latitude: lat,
     longitude: lng,
+    // Pass actual summit elevation for accurate mountain weather (API uses 90m DEM by default)
+    ...(elevationMeters && { elevation: elevationMeters }),
     // Daily aggregates (ECMWF endpoint uses ECMWF models by default)
     daily: [
       'snowfall_sum',
