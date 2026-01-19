@@ -15,7 +15,7 @@
 
 import { fetchNWSWeather, fetchAllUSResortsWeather, isUSResort } from './nwsApi.js'
 import { fetchOpenMeteoWeather } from './ensembleWeatherApi.js'
-import { fetchWeatherUnlockedForResort } from './weatherUnlockedApi.js'
+import { fetchMeteoblueWeather } from './meteoblueApi.js'
 import { fetchMetNoForResort } from './metNoApi.js'
 
 // Delay helper
@@ -35,7 +35,7 @@ export function getWeatherSource(resort) {
     return 'open-meteo'  // Fallback for now
   }
   if (resort.region === 'japan') {
-    return 'weather-unlocked'  // Weather Unlocked has good Japan coverage
+    return 'meteoblue'  // Meteoblue has snowfraction data - accurate for Niseko
   }
   if (resort.region === 'europe') {
     return 'met-no'  // Norwegian Met Institute - excellent for Europe
@@ -64,11 +64,11 @@ export async function fetchResortWeather(resort) {
         }
         break
 
-      case 'weather-unlocked':
-        data = await fetchWeatherUnlockedForResort(resort)
-        // If Weather Unlocked fails, fall back to Open-Meteo
+      case 'meteoblue':
+        data = await fetchMeteoblueWeather(resort)
+        // If Meteoblue fails, fall back to Open-Meteo
         if (!data) {
-          console.log(`Weather Unlocked failed for ${resort.name}, falling back to Open-Meteo`)
+          console.log(`Meteoblue failed for ${resort.name}, falling back to Open-Meteo`)
           data = await fetchOpenMeteoWeather(resort)
           if (data) data.source = 'open-meteo-fallback'
         }
@@ -117,15 +117,15 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
   const europeResorts = resorts.filter(r => r.region === 'europe')
   const openMeteoResorts = resorts.filter(r => r.region !== 'japan' && r.region !== 'europe')
 
-  console.log(`Hybrid fetch: ${openMeteoResorts.length} US/Canada (Open-Meteo ECMWF), ${japanResorts.length} Japan (Weather Unlocked), ${europeResorts.length} Europe (met.no)`)
+  console.log(`Hybrid fetch: ${openMeteoResorts.length} US/Canada (Open-Meteo ECMWF), ${japanResorts.length} Japan (Meteoblue), ${europeResorts.length} Europe (met.no)`)
 
-  // Fetch Japan resorts with Weather Unlocked
+  // Fetch Japan resorts with Meteoblue (has snowfraction data)
   if (japanResorts.length > 0) {
     for (const resort of japanResorts) {
       try {
-        let data = await fetchWeatherUnlockedForResort(resort)
+        let data = await fetchMeteoblueWeather(resort)
         if (!data) {
-          console.log(`Weather Unlocked failed for ${resort.name}, using Open-Meteo fallback`)
+          console.log(`Meteoblue failed for ${resort.name}, using Open-Meteo fallback`)
           data = await fetchOpenMeteoWeather(resort)
           if (data) data.source = 'open-meteo-fallback'
         }
