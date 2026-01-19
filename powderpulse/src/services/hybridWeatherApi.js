@@ -15,6 +15,8 @@
 
 import { fetchNWSWeather, fetchAllUSResortsWeather, isUSResort } from './nwsApi.js'
 import { fetchOpenMeteoWeather } from './ensembleWeatherApi.js'
+import { fetchWeatherUnlockedForResort } from './weatherUnlockedApi.js'
+import { fetchMetNoForResort } from './metNoApi.js'
 
 // Delay helper
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -31,10 +33,12 @@ export function getWeatherSource(resort) {
     return 'open-meteo'  // Fallback for now
   }
   if (resort.region === 'japan') {
-    // TODO: JMA API
-    return 'open-meteo'  // Fallback for now
+    return 'weather-unlocked'  // Weather Unlocked has good Japan coverage
   }
-  // Europe and others
+  if (resort.region === 'europe') {
+    return 'met-no'  // Norwegian Met Institute - excellent for Europe
+  }
+  // Others (fallback)
   return 'open-meteo'
 }
 
@@ -53,6 +57,26 @@ export async function fetchResortWeather(resort) {
         // If NWS fails, fall back to Open-Meteo
         if (!data) {
           console.log(`NWS failed for ${resort.name}, falling back to Open-Meteo`)
+          data = await fetchOpenMeteoWeather(resort)
+          if (data) data.source = 'open-meteo-fallback'
+        }
+        break
+
+      case 'weather-unlocked':
+        data = await fetchWeatherUnlockedForResort(resort)
+        // If Weather Unlocked fails, fall back to Open-Meteo
+        if (!data) {
+          console.log(`Weather Unlocked failed for ${resort.name}, falling back to Open-Meteo`)
+          data = await fetchOpenMeteoWeather(resort)
+          if (data) data.source = 'open-meteo-fallback'
+        }
+        break
+
+      case 'met-no':
+        data = await fetchMetNoForResort(resort)
+        // If met.no fails, fall back to Open-Meteo
+        if (!data) {
+          console.log(`Met.no failed for ${resort.name}, falling back to Open-Meteo`)
           data = await fetchOpenMeteoWeather(resort)
           if (data) data.source = 'open-meteo-fallback'
         }
@@ -87,9 +111,11 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
 
   // Group resorts by source
   const usResorts = resorts.filter(r => isUSResort(r))
-  const otherResorts = resorts.filter(r => !isUSResort(r))
+  const japanResorts = resorts.filter(r => r.region === 'japan')
+  const europeResorts = resorts.filter(r => r.region === 'europe')
+  const otherResorts = resorts.filter(r => !isUSResort(r) && r.region !== 'japan' && r.region !== 'europe')
 
-  console.log(`Hybrid fetch: ${usResorts.length} US resorts (NWS), ${otherResorts.length} other resorts (Open-Meteo)`)
+  console.log(`Hybrid fetch: ${usResorts.length} US (NWS), ${japanResorts.length} Japan (Weather Unlocked), ${europeResorts.length} Europe (met.no), ${otherResorts.length} other (Open-Meteo)`)
 
   // Fetch US resorts with NWS (with fallback)
   if (usResorts.length > 0) {
@@ -115,6 +141,41 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
     }
 
     Object.assign(weatherData, nwsResults)
+  }
+
+  // Fetch Japan resorts with Weather Unlocked
+  if (japanResorts.length > 0) {
+    for (const resort of japanResorts) {
+      try {
+        let data = await fetchWeatherUnlockedForResort(resort)
+        if (!data) {
+          console.log(`Weather Unlocked failed for ${resort.name}, using Open-Meteo fallback`)
+          data = await fetchOpenMeteoWeather(resort)
+          if (data) data.source = 'open-meteo-fallback'
+        }
+        if (data) weatherData[resort.id] = data
+      } catch (e) {
+        console.error(`Japan fetch failed for ${resort.name}`)
+      }
+    }
+  }
+
+  // Fetch Europe resorts with met.no
+  if (europeResorts.length > 0) {
+    for (const resort of europeResorts) {
+      try {
+        let data = await fetchMetNoForResort(resort)
+        if (!data) {
+          console.log(`Met.no failed for ${resort.name}, using Open-Meteo fallback`)
+          data = await fetchOpenMeteoWeather(resort)
+          if (data) data.source = 'open-meteo-fallback'
+        }
+        if (data) weatherData[resort.id] = data
+        await delay(200) // Small delay to be nice to met.no
+      } catch (e) {
+        console.error(`Europe fetch failed for ${resort.name}`)
+      }
+    }
   }
 
   // Fetch other resorts with Open-Meteo

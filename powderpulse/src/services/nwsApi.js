@@ -31,9 +31,10 @@ async function getGridPoint(lat, lng) {
   }
 
   try {
+    // Note: User-Agent header cannot be set in browsers (forbidden header)
+    // NWS API should still work with browser's default User-Agent
     const response = await fetch(`${NWS_BASE}/points/${lat},${lng}`, {
       headers: {
-        'User-Agent': USER_AGENT,
         'Accept': 'application/geo+json'
       }
     })
@@ -70,7 +71,6 @@ async function fetchGridData(gridPoint) {
   try {
     const response = await fetch(gridPoint.forecastGridDataUrl, {
       headers: {
-        'User-Agent': USER_AGENT,
         'Accept': 'application/geo+json'
       }
     })
