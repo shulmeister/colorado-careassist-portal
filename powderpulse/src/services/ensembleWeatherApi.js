@@ -1,23 +1,24 @@
 /**
- * Weather API - Open-Meteo with ECMWF Models (Primary)
+ * Weather API - Open-Meteo Optimized for Ski Forecasting
  *
  * Strategy:
- * - PRIMARY: Open-Meteo with ECMWF models (free, unlimited, 16-day forecast + 7-day history)
- * - AUGMENTED: Tomorrow.io and Snow-Forecast only fetched on resort detail view
+ * - Use /v1/forecast endpoint (auto-selects best model per region)
+ * - HRRR for North America (high resolution)
+ * - ECMWF for Europe/global
+ * - Summit coordinates + elevation for accurate mountain weather
  *
- * This approach:
- * - Zero API rate limits for main resort list
- * - Uses summit GPS coordinates for accurate ski-area weather
- * - ECMWF is the gold standard for weather modeling
- * - Additional ski-specific data available on resort click
+ * Key ski parameters:
+ * - snowfall, snow_depth, freezing_level_height
+ * - temperature_2m, wind_speed_10m, wind_gusts_10m
+ * - precipitation_probability_max
  */
 
 // API Keys (only used for augmented detail data)
 const TOMORROW_API_KEY = 'qyqlOXozeogt1fPFw6FIATxY5D1qOXqJ'
 const RAPIDAPI_KEY = 'ce3b334075msh80fc4f61ed53886p1d70d8jsn943da04fc000'
 
-// Open-Meteo ECMWF endpoint (dedicated ECMWF API, best for European/global forecasts)
-const OPEN_METEO_ECMWF = 'https://api.open-meteo.com/v1/ecmwf'
+// Open-Meteo forecast endpoint (auto-selects best model: HRRR for US, ECMWF for EU)
+const OPEN_METEO_FORECAST = 'https://api.open-meteo.com/v1/forecast'
 
 // Delay helper for rate limiting
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -30,9 +31,9 @@ function getTimezone(resort) {
 }
 
 /**
- * PRIMARY FORECAST: Fetch from Open-Meteo with ECMWF models
- * Uses summit coordinates for accurate ski-area weather
- * Includes 7 days history + 16 days forecast
+ * OPTIMIZED SKI FORECAST: Fetch from Open-Meteo with auto-model selection
+ * Uses summit coordinates + elevation for accurate mountain weather
+ * Auto-selects best model: HRRR for North America, ECMWF for Europe
  *
  * @param {Object} resort - Resort object with summit coordinates
  * @returns {Object} Weather data with daily and hourly forecasts
@@ -42,71 +43,66 @@ export async function fetchOpenMeteoWeather(resort) {
   const lat = resort.latitude
   const lng = resort.longitude
   // Convert summit elevation from feet to meters for API
-  // This improves forecast accuracy for mountain locations
+  // Critical for accurate mountain weather - API uses 90m DEM by default
   const elevationMeters = resort.elevation ? Math.round(resort.elevation * 0.3048) : null
+
+  // Select best model for region
+  // JMA for Japan (much better for Japanese Alps)
+  // Default: auto (HRRR for US, ECMWF for EU)
+  const modelOverride = resort.region === 'japan' ? 'jma_seamless' : null
 
   const params = new URLSearchParams({
     latitude: lat,
     longitude: lng,
-    // Pass actual summit elevation for accurate mountain weather (API uses 90m DEM by default)
+    // Pass actual summit elevation for accurate mountain weather
     ...(elevationMeters && { elevation: elevationMeters }),
-    // Daily aggregates (ECMWF endpoint uses ECMWF models by default)
+    // Use JMA model for Japan, otherwise let Open-Meteo auto-select
+    ...(modelOverride && { models: modelOverride }),
+    // Daily aggregates - ski-optimized
     daily: [
       'snowfall_sum',
-      'rain_sum',
-      'showers_sum',
       'precipitation_sum',
-      'precipitation_hours',
       'precipitation_probability_max',
-      'wind_direction_10m_dominant',
-      'wind_gusts_10m_max',
       'wind_speed_10m_max',
+      'wind_gusts_10m_max',
       'temperature_2m_max',
       'temperature_2m_min',
       'weather_code'
     ].join(','),
-    // Hourly details for charts
+    // Hourly details - ski-critical parameters
     hourly: [
-      'temperature_2m',
-      'snowfall',
-      'snow_depth',
+      'snowfall',              // Hourly snowfall in cm (converted to inches)
+      'snow_depth',            // Total snow depth on ground
+      'freezing_level_height', // Critical: snow vs rain threshold
       'precipitation',
       'precipitation_probability',
-      'freezing_level_height',
-      'rain',
-      'showers',
-      'relative_humidity_2m',
+      'temperature_2m',
       'apparent_temperature',
-      'cloud_cover',
-      'visibility',
       'wind_speed_10m',
-      'wind_direction_10m',
-      'wind_gusts_10m'
+      'wind_gusts_10m',
+      'cloud_cover',
+      'visibility'
     ].join(','),
     // Current conditions
     current: [
       'temperature_2m',
       'wind_speed_10m',
-      'wind_direction_10m',
+      'wind_gusts_10m',
       'snowfall',
       'precipitation',
       'is_day',
-      'rain',
-      'showers',
-      'wind_gusts_10m',
       'cloud_cover',
       'weather_code'
     ].join(','),
     timezone: getTimezone(resort),
-    past_days: 7,
-    forecast_days: 16,
-    wind_speed_unit: 'mph',
+    forecast_days: 16,        // Full 16-day forecast
     temperature_unit: 'fahrenheit',
+    windspeed_unit: 'mph',
     precipitation_unit: 'inch'
   })
 
   try {
-    const response = await fetch(`${OPEN_METEO_ECMWF}?${params}`)
+    const response = await fetch(`${OPEN_METEO_FORECAST}?${params}`)
     if (!response.ok) {
       console.error(`Open-Meteo error for ${resort.name}: ${response.status}`)
       return null
@@ -114,40 +110,31 @@ export async function fetchOpenMeteoWeather(resort) {
 
     const data = await response.json()
 
-    // Process daily forecast
+    // Process daily forecast (16 days)
     const dailyForecast = data.daily.time.map((date, i) => ({
       date,
       tempMax: Math.round(data.daily.temperature_2m_max[i]),
       tempMin: Math.round(data.daily.temperature_2m_min[i]),
       snowfall: data.daily.snowfall_sum[i] || 0,
-      rain: data.daily.rain_sum[i] || 0,
       precipitation: data.daily.precipitation_sum[i] || 0,
-      precipHours: data.daily.precipitation_hours[i] || 0,
       precipProbability: data.daily.precipitation_probability_max[i] || 0,
       windSpeed: Math.round(data.daily.wind_speed_10m_max[i] || 0),
       windGusts: Math.round(data.daily.wind_gusts_10m_max[i] || 0),
-      windDirection: data.daily.wind_direction_10m_dominant[i] || 0,
-      weatherCode: data.daily.weather_code[i]
+      weatherCode: data.daily.weather_code[i],
+      source: 'open-meteo'
     }))
 
-    // Split into history and forecast
-    const historyDays = dailyForecast.slice(0, 7)
-    const forecastDays = dailyForecast.slice(7)
-
-    // Calculate snow totals from forecast (not history)
-    const snow24h = forecastDays[0]?.snowfall || 0
-    const snow48h = forecastDays.slice(0, 2).reduce((sum, d) => sum + d.snowfall, 0)
-    const snow5Day = forecastDays.slice(0, 5).reduce((sum, d) => sum + d.snowfall, 0)
-    const snow7Day = forecastDays.slice(0, 7).reduce((sum, d) => sum + d.snowfall, 0)
-    const snow10Day = forecastDays.slice(0, 10).reduce((sum, d) => sum + d.snowfall, 0)
-    const snow15Day = forecastDays.slice(0, 15).reduce((sum, d) => sum + d.snowfall, 0)
-
-    // Historical snow (last 7 days)
-    const snowLast7Days = historyDays.reduce((sum, d) => sum + d.snowfall, 0)
+    // Calculate snow totals
+    const snow24h = dailyForecast[0]?.snowfall || 0
+    const snow48h = dailyForecast.slice(0, 2).reduce((sum, d) => sum + d.snowfall, 0)
+    const snow5Day = dailyForecast.slice(0, 5).reduce((sum, d) => sum + d.snowfall, 0)
+    const snow7Day = dailyForecast.slice(0, 7).reduce((sum, d) => sum + d.snowfall, 0)
+    const snow10Day = dailyForecast.slice(0, 10).reduce((sum, d) => sum + d.snowfall, 0)
+    const snow15Day = dailyForecast.slice(0, 15).reduce((sum, d) => sum + d.snowfall, 0)
 
     // Find biggest snow day in forecast
-    const biggestDay = forecastDays.reduce((max, day) =>
-      day.snowfall > max.snowfall ? day : max, forecastDays[0] || { snowfall: 0, date: null })
+    const biggestDay = dailyForecast.reduce((max, day) =>
+      day.snowfall > max.snowfall ? day : max, dailyForecast[0] || { snowfall: 0, date: null })
 
     // Powder alert: 6"+ in next 48 hours
     const isPowderDay = snow48h >= 6
@@ -156,8 +143,7 @@ export async function fetchOpenMeteoWeather(resort) {
     const current = data.current ? {
       temp: Math.round(data.current.temperature_2m),
       windSpeed: Math.round(data.current.wind_speed_10m),
-      windGusts: Math.round(data.current.wind_gusts_10m),
-      windDirection: data.current.wind_direction_10m,
+      windGusts: Math.round(data.current.wind_gusts_10m || 0),
       snowfall: data.current.snowfall || 0,
       precipitation: data.current.precipitation || 0,
       cloudCover: data.current.cloud_cover,
@@ -165,7 +151,7 @@ export async function fetchOpenMeteoWeather(resort) {
       weatherCode: data.current.weather_code
     } : null
 
-    // Process hourly data (for charts)
+    // Process hourly data (for charts) - ski-critical parameters
     const hourlyForecast = data.hourly.time.map((time, i) => ({
       time,
       temp: Math.round(data.hourly.temperature_2m[i]),
@@ -173,34 +159,29 @@ export async function fetchOpenMeteoWeather(resort) {
       snowDepth: data.hourly.snow_depth[i] || 0,
       precipitation: data.hourly.precipitation[i] || 0,
       precipProbability: data.hourly.precipitation_probability[i] || 0,
-      freezingLevel: data.hourly.freezing_level_height[i],
-      humidity: data.hourly.relative_humidity_2m[i],
+      freezingLevel: data.hourly.freezing_level_height[i],  // Key for snow vs rain
       feelsLike: Math.round(data.hourly.apparent_temperature[i]),
       cloudCover: data.hourly.cloud_cover[i],
       visibility: data.hourly.visibility[i],
       windSpeed: Math.round(data.hourly.wind_speed_10m[i] || 0),
-      windDirection: data.hourly.wind_direction_10m[i],
       windGusts: Math.round(data.hourly.wind_gusts_10m[i] || 0)
     }))
 
     return {
       resortId: resort.id,
-      source: 'open-meteo-ecmwf',
+      source: 'open-meteo',
       lastUpdated: new Date().toISOString(),
       coordinates: { lat, lng },
       current,
-      // Snow totals (from forecast, not history)
+      // Snow totals
       snow24h: Math.round(snow24h * 10) / 10,
       snow48h: Math.round(snow48h * 10) / 10,
       snow5Day: Math.round(snow5Day * 10) / 10,
       snow7Day: Math.round(snow7Day * 10) / 10,
       snow10Day: Math.round(snow10Day * 10) / 10,
       snow15Day: Math.round(snow15Day * 10) / 10,
-      // Historical
-      snowLast7Days: Math.round(snowLast7Days * 10) / 10,
-      history: historyDays,
-      // Forecasts
-      dailyForecast: forecastDays,
+      // Forecasts (16 days)
+      dailyForecast,
       hourlyForecast,
       // Alerts
       isPowderDay,
@@ -209,7 +190,7 @@ export async function fetchOpenMeteoWeather(resort) {
         snowfall: Math.round(biggestDay.snowfall * 10) / 10
       } : null,
       // For sparkline charts
-      sparklineData: forecastDays.slice(0, 15).map(d => ({
+      sparklineData: dailyForecast.slice(0, 15).map(d => ({
         day: new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' }),
         date: d.date,
         snow: Math.round(d.snowfall * 10) / 10

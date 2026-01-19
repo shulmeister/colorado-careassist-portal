@@ -150,7 +150,7 @@ const ResortDetail = () => {
   const snow24h = weather?.snow24h || 0
   const snow48h = dailyForecast.slice(0, 2).reduce((sum, d) => sum + (d.snowfall || 0), 0)
   const snow7Day = dailyForecast.slice(0, 7).reduce((sum, d) => sum + (d.snowfall || 0), 0)
-  const snow10Day = dailyForecast.slice(0, 10).reduce((sum, d) => sum + (d.snowfall || 0), 0)
+  const snow15Day = dailyForecast.slice(0, 15).reduce((sum, d) => sum + (d.snowfall || 0), 0)
 
   // Prepare chart data
   const snowAccumulationData = dailyForecast.map((day, idx) => {
@@ -534,11 +534,11 @@ const ResortDetail = () => {
               </div>
             </div>
 
-            {/* 10-Day Forecast */}
+            {/* 15-Day Forecast */}
             <div className="bg-[#1e2536] rounded-xl p-6 border border-slate-700/30">
               <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-slate-400" />
-                10-Day Extended Forecast
+                15-Day Extended Forecast
               </h2>
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -627,9 +627,9 @@ const ResortDetail = () => {
                 </div>
               </div>
               <div className="bg-[#1e2536] rounded-xl p-4 border border-slate-700/30 text-center">
-                <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Next 10 Days</div>
-                <div className={`text-3xl font-bold ${getSnowColor(snow10Day).text}`}>
-                  {formatSnow(snow10Day)}
+                <div className="text-xs text-slate-500 uppercase tracking-wide mb-2">Next 15 Days</div>
+                <div className={`text-3xl font-bold ${getSnowColor(snow15Day).text}`}>
+                  {formatSnow(snow15Day)}
                 </div>
               </div>
             </div>

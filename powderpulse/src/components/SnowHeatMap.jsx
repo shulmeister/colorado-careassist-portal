@@ -29,7 +29,7 @@ const SnowHeatMap = () => {
   return (
     <div className="bg-slate-800/50 rounded-xl p-4 overflow-x-auto">
       <h3 className="text-lg font-bold mb-4" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
-        10-Day Snow Forecast
+        15-Day Snow Forecast
       </h3>
 
       <div className="min-w-[700px]">

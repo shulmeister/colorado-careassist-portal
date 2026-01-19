@@ -10,7 +10,9 @@ const Header = () => {
     { id: 'snow24h', label: 'Next 24 Hours' },
     { id: 'snow5', label: 'Next 5 Days' },
     { id: 'snow10', label: 'Next 10 Days' },
+    { id: 'snow15', label: 'Next 15 Days' },
     { id: 'snow6to10', label: 'Next 6-10 Days' },
+    { id: 'snow11to15', label: 'Next 11-15 Days' },
     { id: 'distance', label: 'Closest' },
     { id: 'name', label: 'A-Z' }
   ]
@@ -34,7 +36,7 @@ const Header = () => {
               <h1 className="text-lg sm:text-xl font-bold text-white tracking-tight" style={{ fontFamily: 'Space Grotesk, sans-serif' }}>
                 PowderPulse
               </h1>
-              <p className="text-[9px] sm:text-[10px] text-slate-500 -mt-0.5 hidden sm:block">10-Day Snow Forecast</p>
+              <p className="text-[9px] sm:text-[10px] text-slate-500 -mt-0.5 hidden sm:block">15-Day Snow Forecast</p>
             </div>
           </div>
 
