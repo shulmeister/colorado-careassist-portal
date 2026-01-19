@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { resorts, getResortsByPass, sortResorts } from '../data/resorts'
-import { fetchAllResortsEnsemble } from '../services/ensembleWeatherApi'
+import { fetchAllResortsWeatherHybrid, getSourceStats } from '../services/hybridWeatherApi'
 import { fetchAllLiftStatus } from '../services/liftieApi'
 import {
   findMostSnow,
@@ -65,16 +65,20 @@ const useWeatherStore = create((set, get) => ({
     })
   },
 
-  // Fetch weather data for all resorts using ensemble API
+  // Fetch weather data for all resorts using hybrid API (NWS for US, Open-Meteo for others)
   fetchWeather: async () => {
     set({ isLoading: true, error: null })
 
     try {
-      // Fetch weather (ensemble from multiple sources) and lift status in parallel
+      // Fetch weather (hybrid: NWS for US, Open-Meteo for others) and lift status in parallel
       const [weatherData, liftStatus] = await Promise.all([
-        fetchAllResortsEnsemble(resorts),
+        fetchAllResortsWeatherHybrid(resorts),
         fetchAllLiftStatus(resorts)
       ])
+
+      // Log source stats for debugging
+      const stats = getSourceStats(weatherData)
+      console.log('Weather source stats:', stats)
 
       set({
         weatherData,

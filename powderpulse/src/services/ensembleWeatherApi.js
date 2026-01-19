@@ -16,8 +16,8 @@
 const TOMORROW_API_KEY = 'qyqlOXozeogt1fPFw6FIATxY5D1qOXqJ'
 const RAPIDAPI_KEY = 'ce3b334075msh80fc4f61ed53886p1d70d8jsn943da04fc000'
 
-// Open-Meteo endpoint
-const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast'
+// Open-Meteo ECMWF endpoint (dedicated ECMWF API, best for European/global forecasts)
+const OPEN_METEO_ECMWF = 'https://api.open-meteo.com/v1/ecmwf'
 
 // Delay helper for rate limiting
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -45,9 +45,7 @@ export async function fetchOpenMeteoWeather(resort) {
   const params = new URLSearchParams({
     latitude: lat,
     longitude: lng,
-    // ECMWF IFS - the standard ECMWF model, most reliable
-    models: 'ecmwf_ifs',
-    // Daily aggregates
+    // Daily aggregates (ECMWF endpoint uses ECMWF models by default)
     daily: [
       'snowfall_sum',
       'rain_sum',
@@ -103,7 +101,7 @@ export async function fetchOpenMeteoWeather(resort) {
   })
 
   try {
-    const response = await fetch(`${OPEN_METEO_BASE}?${params}`)
+    const response = await fetch(`${OPEN_METEO_ECMWF}?${params}`)
     if (!response.ok) {
       console.error(`Open-Meteo error for ${resort.name}: ${response.status}`)
       return null
