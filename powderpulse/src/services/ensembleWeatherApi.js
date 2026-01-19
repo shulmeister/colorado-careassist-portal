@@ -1,24 +1,126 @@
 /**
- * Weather API - Open-Meteo Optimized for Ski Forecasting
+ * Weather API - Open-Meteo Regional Endpoints for Ski Forecasting
  *
  * Strategy:
- * - Use /v1/forecast endpoint (auto-selects best model per region)
- * - HRRR for North America (high resolution)
- * - ECMWF for Europe/global
- * - Summit coordinates + elevation for accurate mountain weather
+ * - Use dedicated regional endpoints for accuracy:
+ *   - /v1/jma for Japan (JMA model - 11 days)
+ *   - /v1/gem for Canada (GEM model - 16 days)
+ *   - /v1/gfs for US (GFS/HRRR model - 16 days)
+ *   - /v1/ecmwf for Europe (ECMWF model - 15 days)
+ * - Summit elevation parameter for accurate mountain weather
+ * - 10:1 precipitation-to-snow conversion when temp is below freezing
  *
  * Key ski parameters:
- * - snowfall, snow_depth, freezing_level_height
+ * - snowfall, precipitation, freezing_level_height
  * - temperature_2m, wind_speed_10m, wind_gusts_10m
- * - precipitation_probability_max
  */
+
+import { REGIONS } from '../data/resorts'
 
 // API Keys (only used for augmented detail data)
 const TOMORROW_API_KEY = 'qyqlOXozeogt1fPFw6FIATxY5D1qOXqJ'
 const RAPIDAPI_KEY = 'ce3b334075msh80fc4f61ed53886p1d70d8jsn943da04fc000'
 
-// Open-Meteo forecast endpoint (auto-selects best model: HRRR for US, ECMWF for EU)
-const OPEN_METEO_FORECAST = 'https://api.open-meteo.com/v1/forecast'
+// Regional Open-Meteo endpoints
+const OPEN_METEO_ENDPOINTS = {
+  jma: 'https://api.open-meteo.com/v1/jma',      // Japan - 11 days
+  gem: 'https://api.open-meteo.com/v1/gem',      // Canada - 16 days
+  gfs: 'https://api.open-meteo.com/v1/gfs',      // US - 16 days
+  ecmwf: 'https://api.open-meteo.com/v1/ecmwf'   // Europe - 15 days
+}
+
+// Open-Meteo utility APIs
+const OPEN_METEO_ELEVATION = 'https://api.open-meteo.com/v1/elevation'
+const OPEN_METEO_GEOCODING = 'https://geocoding-api.open-meteo.com/v1/search'
+
+// Cache for elevation lookups (avoid repeated API calls)
+const elevationCache = new Map()
+
+/**
+ * Get elevation at coordinates using Open-Meteo Elevation API
+ * 90-meter resolution Copernicus DEM
+ *
+ * @param {number} lat - Latitude
+ * @param {number} lng - Longitude
+ * @returns {number|null} Elevation in meters
+ */
+async function getElevationAtCoords(lat, lng) {
+  const cacheKey = `${lat},${lng}`
+  if (elevationCache.has(cacheKey)) {
+    return elevationCache.get(cacheKey)
+  }
+
+  try {
+    const response = await fetch(`${OPEN_METEO_ELEVATION}?latitude=${lat}&longitude=${lng}`)
+    if (!response.ok) return null
+
+    const data = await response.json()
+    const elevation = data.elevation?.[0]
+    if (elevation != null) {
+      elevationCache.set(cacheKey, elevation)
+      return elevation
+    }
+    return null
+  } catch (error) {
+    console.error('Elevation API error:', error)
+    return null
+  }
+}
+
+/**
+ * Search for a location using Open-Meteo Geocoding API
+ * Returns coordinates and elevation
+ *
+ * @param {string} name - Location name to search
+ * @returns {Object|null} { latitude, longitude, elevation, name }
+ */
+async function searchLocation(name) {
+  try {
+    const response = await fetch(`${OPEN_METEO_GEOCODING}?name=${encodeURIComponent(name)}&count=1`)
+    if (!response.ok) return null
+
+    const data = await response.json()
+    const result = data.results?.[0]
+    if (result) {
+      return {
+        latitude: result.latitude,
+        longitude: result.longitude,
+        elevation: result.elevation,
+        name: result.name,
+        country: result.country
+      }
+    }
+    return null
+  } catch (error) {
+    console.error('Geocoding API error:', error)
+    return null
+  }
+}
+
+// Map regions to endpoints
+function getEndpointForRegion(region) {
+  switch (region) {
+    case REGIONS.JAPAN:
+      return { endpoint: OPEN_METEO_ENDPOINTS.jma, maxDays: 11 }
+    case REGIONS.CANADA:
+      return { endpoint: OPEN_METEO_ENDPOINTS.gem, maxDays: 16 }
+    case REGIONS.EUROPE:
+      return { endpoint: OPEN_METEO_ENDPOINTS.ecmwf, maxDays: 15 }
+    // All US regions use GFS
+    case REGIONS.COLORADO:
+    case REGIONS.NEW_MEXICO:
+    case REGIONS.UTAH:
+    case REGIONS.CALIFORNIA:
+    case REGIONS.IDAHO:
+    case REGIONS.WYOMING:
+    case REGIONS.MONTANA:
+    case REGIONS.ALASKA:
+    case REGIONS.MAINE:
+    case REGIONS.VERMONT:
+    default:
+      return { endpoint: OPEN_METEO_ENDPOINTS.gfs, maxDays: 16 }
+  }
+}
 
 // Delay helper for rate limiting
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -31,9 +133,26 @@ function getTimezone(resort) {
 }
 
 /**
- * OPTIMIZED SKI FORECAST: Fetch from Open-Meteo with auto-model selection
+ * Convert precipitation to snow using 10:1 ratio
+ * Standard meteorological conversion: 10mm water = ~1 inch snow (or 25.4mm = 1 inch)
+ * In centimeters: 1cm precip = 10cm snow
+ *
+ * @param {number} precipInches - Precipitation in inches
+ * @param {number} tempF - Temperature in Fahrenheit
+ * @returns {number} - Snow in inches
+ */
+function precipToSnow(precipInches, tempF) {
+  // Only convert if temperature is below freezing (32°F)
+  // And if there's actual precipitation
+  if (precipInches > 0 && tempF <= 32) {
+    return precipInches * 10  // 10:1 ratio
+  }
+  return 0
+}
+
+/**
+ * REGIONAL SKI FORECAST: Fetch from Open-Meteo using dedicated regional endpoints
  * Uses summit coordinates + elevation for accurate mountain weather
- * Auto-selects best model: HRRR for North America, ECMWF for Europe
  *
  * @param {Object} resort - Resort object with summit coordinates
  * @returns {Object} Weather data with daily and hourly forecasts
@@ -42,22 +161,31 @@ export async function fetchOpenMeteoWeather(resort) {
   // Use summit coordinates (main lat/lng in resort data)
   const lat = resort.latitude
   const lng = resort.longitude
-  // Convert summit elevation from feet to meters for API
-  // Critical for accurate mountain weather - API uses 90m DEM by default
-  const elevationMeters = resort.elevation ? Math.round(resort.elevation * 0.3048) : null
 
-  // Select best model for region
-  // JMA for Japan (much better for Japanese Alps)
-  // Default: auto (HRRR for US, ECMWF for EU)
-  const modelOverride = resort.region === 'japan' ? 'jma_seamless' : null
+  // Get elevation in meters for accurate mountain weather
+  // Priority: 1) Resort's hardcoded summit elevation (converted from feet)
+  //           2) Elevation API lookup at coordinates (90m DEM)
+  let elevationMeters = null
+  if (resort.elevation) {
+    // Convert summit elevation from feet to meters
+    elevationMeters = Math.round(resort.elevation * 0.3048)
+  } else {
+    // Fallback: fetch from Elevation API
+    const apiElevation = await getElevationAtCoords(lat, lng)
+    if (apiElevation != null) {
+      elevationMeters = Math.round(apiElevation)
+      console.log(`${resort.name}: Using API elevation ${elevationMeters}m`)
+    }
+  }
+
+  // Get the appropriate regional endpoint
+  const { endpoint, maxDays } = getEndpointForRegion(resort.region)
 
   const params = new URLSearchParams({
     latitude: lat,
     longitude: lng,
     // Pass actual summit elevation for accurate mountain weather
     ...(elevationMeters && { elevation: elevationMeters }),
-    // Use JMA model for Japan, otherwise let Open-Meteo auto-select
-    ...(modelOverride && { models: modelOverride }),
     // Daily aggregates - ski-optimized
     daily: [
       'snowfall_sum',
@@ -95,34 +223,53 @@ export async function fetchOpenMeteoWeather(resort) {
       'weather_code'
     ].join(','),
     timezone: getTimezone(resort),
-    forecast_days: 16,        // Full 16-day forecast
+    forecast_days: maxDays,   // Use max days for this endpoint
     temperature_unit: 'fahrenheit',
     windspeed_unit: 'mph',
     precipitation_unit: 'inch'
   })
 
   try {
-    const response = await fetch(`${OPEN_METEO_FORECAST}?${params}`)
+    const response = await fetch(`${endpoint}?${params}`)
     if (!response.ok) {
-      console.error(`Open-Meteo error for ${resort.name}: ${response.status}`)
+      console.error(`Open-Meteo ${resort.region} error for ${resort.name}: ${response.status}`)
       return null
     }
 
     const data = await response.json()
 
-    // Process daily forecast (16 days)
-    const dailyForecast = data.daily.time.map((date, i) => ({
-      date,
-      tempMax: Math.round(data.daily.temperature_2m_max[i]),
-      tempMin: Math.round(data.daily.temperature_2m_min[i]),
-      snowfall: data.daily.snowfall_sum[i] || 0,
-      precipitation: data.daily.precipitation_sum[i] || 0,
-      precipProbability: data.daily.precipitation_probability_max[i] || 0,
-      windSpeed: Math.round(data.daily.wind_speed_10m_max[i] || 0),
-      windGusts: Math.round(data.daily.wind_gusts_10m_max[i] || 0),
-      weatherCode: data.daily.weather_code[i],
-      source: 'open-meteo'
-    }))
+    // Process daily forecast
+    const dailyForecast = data.daily.time.map((date, i) => {
+      const snowfall = data.daily.snowfall_sum[i] || 0
+      const precipitation = data.daily.precipitation_sum[i] || 0
+      const tempMax = Math.round(data.daily.temperature_2m_max[i])
+      const tempMin = Math.round(data.daily.temperature_2m_min[i])
+      const avgTemp = (tempMax + tempMin) / 2
+
+      // If snowfall is reported as 0 but there's precipitation and it's cold,
+      // use the 10:1 ratio to estimate snow
+      let finalSnowfall = snowfall
+      if (snowfall < 0.1 && precipitation > 0 && avgTemp <= 32) {
+        const estimatedSnow = precipToSnow(precipitation, avgTemp)
+        if (estimatedSnow > snowfall) {
+          finalSnowfall = estimatedSnow
+          console.log(`${resort.name} ${date}: Using 10:1 conversion - ${precipitation.toFixed(2)}" precip @ ${avgTemp}°F = ${estimatedSnow.toFixed(1)}" snow`)
+        }
+      }
+
+      return {
+        date,
+        tempMax,
+        tempMin,
+        snowfall: finalSnowfall,
+        precipitation,
+        precipProbability: data.daily.precipitation_probability_max[i] || 0,
+        windSpeed: Math.round(data.daily.wind_speed_10m_max[i] || 0),
+        windGusts: Math.round(data.daily.wind_gusts_10m_max[i] || 0),
+        weatherCode: data.daily.weather_code[i],
+        source: `open-meteo-${resort.region}`
+      }
+    })
 
     // Calculate snow totals
     const snow24h = dailyForecast[0]?.snowfall || 0
@@ -156,22 +303,24 @@ export async function fetchOpenMeteoWeather(resort) {
       time,
       temp: Math.round(data.hourly.temperature_2m[i]),
       snowfall: data.hourly.snowfall[i] || 0,
-      snowDepth: data.hourly.snow_depth[i] || 0,
+      snowDepth: data.hourly.snow_depth?.[i] || 0,
       precipitation: data.hourly.precipitation[i] || 0,
       precipProbability: data.hourly.precipitation_probability[i] || 0,
-      freezingLevel: data.hourly.freezing_level_height[i],  // Key for snow vs rain
+      freezingLevel: data.hourly.freezing_level_height?.[i],  // Key for snow vs rain
       feelsLike: Math.round(data.hourly.apparent_temperature[i]),
-      cloudCover: data.hourly.cloud_cover[i],
-      visibility: data.hourly.visibility[i],
+      cloudCover: data.hourly.cloud_cover?.[i],
+      visibility: data.hourly.visibility?.[i],
       windSpeed: Math.round(data.hourly.wind_speed_10m[i] || 0),
       windGusts: Math.round(data.hourly.wind_gusts_10m[i] || 0)
     }))
 
     return {
       resortId: resort.id,
-      source: 'open-meteo',
+      source: `open-meteo-${resort.region}`,
+      endpoint: endpoint,
       lastUpdated: new Date().toISOString(),
       coordinates: { lat, lng },
+      elevationMeters,
       current,
       // Snow totals
       snow24h: Math.round(snow24h * 10) / 10,
@@ -180,7 +329,7 @@ export async function fetchOpenMeteoWeather(resort) {
       snow7Day: Math.round(snow7Day * 10) / 10,
       snow10Day: Math.round(snow10Day * 10) / 10,
       snow15Day: Math.round(snow15Day * 10) / 10,
-      // Forecasts (16 days)
+      // Forecasts
       dailyForecast,
       hourlyForecast,
       // Alerts
@@ -203,8 +352,8 @@ export async function fetchOpenMeteoWeather(resort) {
 }
 
 /**
- * Fetch weather for ALL resorts using Open-Meteo
- * No rate limits - can fetch all 36 resorts simultaneously
+ * Fetch weather for ALL resorts using regional Open-Meteo endpoints
+ * No rate limits - can fetch all resorts simultaneously
  *
  * @param {Array} resorts - Array of resort objects
  * @returns {Object} Map of resortId -> weather data
