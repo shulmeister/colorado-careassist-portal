@@ -45,8 +45,8 @@ export async function fetchOpenMeteoWeather(resort) {
   const params = new URLSearchParams({
     latitude: lat,
     longitude: lng,
-    // ECMWF models - best accuracy for mountain weather
-    models: 'ecmwf_ifs,ecmwf_ifs025,ecmwf_aifs025_single',
+    // ECMWF IFS 0.25° - highest resolution ECMWF model, best for mountain weather
+    models: 'ecmwf_ifs025',
     // Daily aggregates
     daily: [
       'snowfall_sum',
