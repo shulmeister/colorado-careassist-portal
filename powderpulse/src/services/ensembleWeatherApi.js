@@ -7,7 +7,7 @@
  *
  * This approach:
  * - Zero API rate limits for main resort list
- * - Uses mid-mountain GPS coordinates for accurate ski-area weather
+ * - Uses summit GPS coordinates for accurate ski-area weather
  * - ECMWF is the gold standard for weather modeling
  * - Additional ski-specific data available on resort click
  */
@@ -31,22 +31,22 @@ function getTimezone(resort) {
 
 /**
  * PRIMARY FORECAST: Fetch from Open-Meteo with ECMWF models
- * Uses mid-mountain coordinates for accurate ski-area weather
+ * Uses summit coordinates for accurate ski-area weather
  * Includes 7 days history + 16 days forecast
  *
- * @param {Object} resort - Resort object with midMountain coordinates
+ * @param {Object} resort - Resort object with summit coordinates
  * @returns {Object} Weather data with daily and hourly forecasts
  */
 export async function fetchOpenMeteoWeather(resort) {
-  // Use mid-mountain coordinates if available, otherwise fall back to base
-  const lat = resort.midMountain?.lat || resort.latitude
-  const lng = resort.midMountain?.lng || resort.longitude
+  // Use summit coordinates (main lat/lng in resort data)
+  const lat = resort.latitude
+  const lng = resort.longitude
 
   const params = new URLSearchParams({
     latitude: lat,
     longitude: lng,
-    // ECMWF IFS 0.25° - highest resolution ECMWF model, best for mountain weather
-    models: 'ecmwf_ifs025',
+    // ECMWF IFS - the standard ECMWF model, most reliable
+    models: 'ecmwf_ifs',
     // Daily aggregates
     daily: [
       'snowfall_sum',
@@ -314,8 +314,8 @@ const SNOW_FORECAST_SLUGS = {
  * Great for storm tracking and marine/mountain weather
  */
 export async function fetchTomorrowIoDetail(resort) {
-  const lat = resort.midMountain?.lat || resort.latitude
-  const lng = resort.midMountain?.lng || resort.longitude
+  const lat = resort.latitude
+  const lng = resort.longitude
 
   const params = new URLSearchParams({
     location: `${lat},${lng}`,

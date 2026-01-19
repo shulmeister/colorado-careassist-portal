@@ -1,4 +1,5 @@
 // Resort data for Epic and Ikon pass mountains worldwide
+// Summit GPS coordinates for accurate weather forecasts
 // Distances calculated from Boulder, CO (40.0150, -105.2705)
 
 export const PASS_TYPES = {
@@ -44,16 +45,14 @@ export const PASS_COLORS = {
 export const resorts = [
   // ==================== COLORADO ====================
   // EPIC PASS
-  // Mid-mountain coordinates for more accurate weather forecasts
   {
     id: 'vail',
     name: 'Vail',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.COLORADO,
-    latitude: 39.6403,
-    longitude: -106.3742,
-    // Mid-mountain: Game Creek / Two Elk area (~10,350 ft)
-    midMountain: { lat: 39.6350, lng: -106.3850 },
+    // Summit: China Bowl summit (11,570 ft)
+    latitude: 39.6220,
+    longitude: -106.3890,
     elevation: 11570,
     baseElevation: 8120,
     distanceFromBoulder: 97,
@@ -67,10 +66,9 @@ export const resorts = [
     name: 'Beaver Creek',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.COLORADO,
-    latitude: 39.6042,
-    longitude: -106.5165,
-    // Mid-mountain: Spruce Saddle area (~10,000 ft)
-    midMountain: { lat: 39.5980, lng: -106.5220 },
+    // Summit: Birds of Prey (11,440 ft)
+    latitude: 39.5870,
+    longitude: -106.5320,
     elevation: 11440,
     baseElevation: 8100,
     distanceFromBoulder: 107,
@@ -84,10 +82,9 @@ export const resorts = [
     name: 'Breckenridge',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.COLORADO,
-    latitude: 39.4817,
-    longitude: -106.0384,
-    // Mid-mountain: Peak 8 mid-station (~11,000 ft)
-    midMountain: { lat: 39.4750, lng: -106.0550 },
+    // Summit: Imperial Express top (12,998 ft)
+    latitude: 39.4630,
+    longitude: -106.0750,
     elevation: 12998,
     baseElevation: 9600,
     distanceFromBoulder: 80,
@@ -101,10 +98,9 @@ export const resorts = [
     name: 'Keystone',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.COLORADO,
-    latitude: 39.6069,
-    longitude: -105.9438,
-    // Mid-mountain: Summit House area (~10,800 ft)
-    midMountain: { lat: 39.5950, lng: -105.9550 },
+    // Summit: The Outback top (12,408 ft)
+    latitude: 39.5770,
+    longitude: -105.9780,
     elevation: 12408,
     baseElevation: 9280,
     distanceFromBoulder: 75,
@@ -118,10 +114,9 @@ export const resorts = [
     name: 'Crested Butte',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.COLORADO,
-    latitude: 38.8986,
-    longitude: -106.9653,
-    // Mid-mountain: Paradise Bowl area (~10,800 ft)
-    midMountain: { lat: 38.8920, lng: -106.9700 },
+    // Summit: High Lift top (12,162 ft)
+    latitude: 38.8840,
+    longitude: -106.9780,
     elevation: 12162,
     baseElevation: 9375,
     distanceFromBoulder: 200,
@@ -135,10 +130,9 @@ export const resorts = [
     name: 'Telluride',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.COLORADO,
-    latitude: 37.9375,
-    longitude: -107.8123,
-    // Mid-mountain: See Forever / Prospect Bowl (~11,500 ft)
-    midMountain: { lat: 37.9320, lng: -107.8200 },
+    // Summit: Revelation Bowl (13,150 ft)
+    latitude: 37.9280,
+    longitude: -107.8350,
     elevation: 13150,
     baseElevation: 8725,
     distanceFromBoulder: 330,
@@ -153,10 +147,9 @@ export const resorts = [
     name: 'Winter Park',
     pass: PASS_TYPES.IKON,
     region: REGIONS.COLORADO,
-    latitude: 39.8841,
-    longitude: -105.7627,
-    // Mid-mountain: Sunspot / Mary Jane (~10,700 ft)
-    midMountain: { lat: 39.8750, lng: -105.7700 },
+    // Summit: Parsenn Bowl (12,060 ft)
+    latitude: 39.8670,
+    longitude: -105.7850,
     elevation: 12060,
     baseElevation: 9000,
     distanceFromBoulder: 67,
@@ -170,10 +163,9 @@ export const resorts = [
     name: 'Steamboat',
     pass: PASS_TYPES.IKON,
     region: REGIONS.COLORADO,
-    latitude: 40.4572,
-    longitude: -106.8045,
-    // Mid-mountain: Thunderhead Lodge (~9,080 ft)
-    midMountain: { lat: 40.4650, lng: -106.7800 },
+    // Summit: Mt. Werner summit (10,568 ft)
+    latitude: 40.4850,
+    longitude: -106.7720,
     elevation: 10568,
     baseElevation: 6900,
     distanceFromBoulder: 157,
@@ -187,10 +179,9 @@ export const resorts = [
     name: 'Copper Mountain',
     pass: PASS_TYPES.IKON,
     region: REGIONS.COLORADO,
-    latitude: 39.5022,
-    longitude: -106.1497,
-    // Mid-mountain: Solitude Station (~11,000 ft)
-    midMountain: { lat: 39.4950, lng: -106.1550 },
+    // Summit: Tucker Mountain (12,313 ft)
+    latitude: 39.4820,
+    longitude: -106.1680,
     elevation: 12313,
     baseElevation: 9712,
     distanceFromBoulder: 83,
@@ -204,10 +195,9 @@ export const resorts = [
     name: 'Arapahoe Basin',
     pass: PASS_TYPES.IKON,
     region: REGIONS.COLORADO,
-    latitude: 39.6426,
-    longitude: -105.8719,
-    // Mid-mountain: Black Mountain Lodge (~11,800 ft)
-    midMountain: { lat: 39.6380, lng: -105.8750 },
+    // Summit: Lenawee Mountain (13,050 ft)
+    latitude: 39.6380,
+    longitude: -105.8720,
     elevation: 13050,
     baseElevation: 10780,
     distanceFromBoulder: 65,
@@ -221,10 +211,9 @@ export const resorts = [
     name: 'Eldora',
     pass: PASS_TYPES.IKON,
     region: REGIONS.COLORADO,
-    latitude: 39.9372,
-    longitude: -105.5827,
-    // Mid-mountain: Indian Peaks area (~10,400 ft)
-    midMountain: { lat: 39.9400, lng: -105.5880 },
+    // Summit: Corona lift top (10,800 ft)
+    latitude: 39.9450,
+    longitude: -105.5920,
     elevation: 10800,
     baseElevation: 9200,
     distanceFromBoulder: 21,
@@ -238,10 +227,9 @@ export const resorts = [
     name: 'Aspen Snowmass',
     pass: PASS_TYPES.IKON,
     region: REGIONS.COLORADO,
-    latitude: 39.2084,
-    longitude: -106.9490,
-    // Mid-mountain: Big Burn area Snowmass (~10,500 ft)
-    midMountain: { lat: 39.2100, lng: -106.9580 },
+    // Summit: Snowmass High Alpine (12,510 ft)
+    latitude: 39.1880,
+    longitude: -106.9680,
     elevation: 12510,
     baseElevation: 8104,
     distanceFromBoulder: 160,
@@ -255,10 +243,9 @@ export const resorts = [
     name: 'Wolf Creek',
     pass: PASS_TYPES.IKON,
     region: REGIONS.COLORADO,
-    latitude: 37.4697,
-    longitude: -106.7934,
-    // Mid-mountain: Alberta Peak area (~11,000 ft)
-    midMountain: { lat: 37.4720, lng: -106.7980 },
+    // Summit: Alberta Peak (11,904 ft)
+    latitude: 37.4750,
+    longitude: -106.8030,
     elevation: 11904,
     baseElevation: 10300,
     distanceFromBoulder: 280,
@@ -274,10 +261,9 @@ export const resorts = [
     name: 'Taos Ski Valley',
     pass: PASS_TYPES.IKON,
     region: REGIONS.NEW_MEXICO,
-    latitude: 36.5967,
-    longitude: -105.4544,
-    // Mid-mountain: Kachina Peak area (~11,000 ft)
-    midMountain: { lat: 36.5920, lng: -105.4600 },
+    // Summit: Kachina Peak (12,481 ft)
+    latitude: 36.5850,
+    longitude: -105.4650,
     elevation: 12481,
     baseElevation: 9207,
     distanceFromBoulder: 280,
@@ -293,10 +279,9 @@ export const resorts = [
     name: 'Snowbird',
     pass: PASS_TYPES.IKON,
     region: REGIONS.UTAH,
-    latitude: 40.5830,
-    longitude: -111.6538,
-    // Mid-mountain: Mid-Gad area (~9,800 ft)
-    midMountain: { lat: 40.5750, lng: -111.6580 },
+    // Summit: Hidden Peak (11,000 ft)
+    latitude: 40.5600,
+    longitude: -111.6580,
     elevation: 11000,
     baseElevation: 7760,
     distanceFromBoulder: 525,
@@ -310,10 +295,9 @@ export const resorts = [
     name: 'Alta',
     pass: PASS_TYPES.IKON,
     region: REGIONS.UTAH,
-    latitude: 40.5884,
-    longitude: -111.6378,
-    // Mid-mountain: Collins / Wildcat area (~9,600 ft)
-    midMountain: { lat: 40.5880, lng: -111.6420 },
+    // Summit: Mt. Baldy (10,550 ft)
+    latitude: 40.5920,
+    longitude: -111.6350,
     elevation: 10550,
     baseElevation: 8530,
     distanceFromBoulder: 525,
@@ -329,10 +313,9 @@ export const resorts = [
     name: 'Mammoth Mountain',
     pass: PASS_TYPES.IKON,
     region: REGIONS.CALIFORNIA,
-    latitude: 37.6308,
-    longitude: -119.0326,
-    // Mid-mountain: McCoy Station area (~10,000 ft)
-    midMountain: { lat: 37.6400, lng: -119.0280 },
+    // Summit: Mammoth Mountain top (11,053 ft)
+    latitude: 37.6310,
+    longitude: -119.0370,
     elevation: 11053,
     baseElevation: 7953,
     distanceFromBoulder: 850,
@@ -346,10 +329,9 @@ export const resorts = [
     name: 'Palisades Tahoe',
     pass: PASS_TYPES.IKON,
     region: REGIONS.CALIFORNIA,
-    latitude: 39.1969,
-    longitude: -120.2358,
-    // Mid-mountain: High Camp area (~8,200 ft)
-    midMountain: { lat: 39.1980, lng: -120.2400 },
+    // Summit: Granite Chief (9,050 ft)
+    latitude: 39.2020,
+    longitude: -120.2550,
     elevation: 9050,
     baseElevation: 6200,
     distanceFromBoulder: 900,
@@ -363,10 +345,9 @@ export const resorts = [
     name: 'Kirkwood',
     pass: PASS_TYPES.IKON,
     region: REGIONS.CALIFORNIA,
-    latitude: 38.6850,
-    longitude: -120.0653,
-    // Mid-mountain: Cornice area (~8,800 ft)
-    midMountain: { lat: 38.6880, lng: -120.0700 },
+    // Summit: Thimble Peak (9,800 ft)
+    latitude: 38.6920,
+    longitude: -120.0750,
     elevation: 9800,
     baseElevation: 7800,
     distanceFromBoulder: 900,
@@ -380,10 +361,9 @@ export const resorts = [
     name: 'Sugar Bowl',
     pass: PASS_TYPES.IKON,
     region: REGIONS.CALIFORNIA,
-    latitude: 39.3048,
-    longitude: -120.3344,
-    // Mid-mountain: Mt. Lincoln area (~7,900 ft)
-    midMountain: { lat: 39.3080, lng: -120.3380 },
+    // Summit: Mt. Lincoln (8,383 ft)
+    latitude: 39.3120,
+    longitude: -120.3420,
     elevation: 8383,
     baseElevation: 6883,
     distanceFromBoulder: 920,
@@ -399,10 +379,9 @@ export const resorts = [
     name: 'Sun Valley',
     pass: PASS_TYPES.IKON,
     region: REGIONS.IDAHO,
-    latitude: 43.6808,
-    longitude: -114.3514,
-    // Mid-mountain: Roundhouse area (~8,500 ft)
-    midMountain: { lat: 43.6750, lng: -114.3600 },
+    // Summit: Bald Mountain summit (9,150 ft)
+    latitude: 43.6670,
+    longitude: -114.3680,
     elevation: 9150,
     baseElevation: 5750,
     distanceFromBoulder: 580,
@@ -418,10 +397,9 @@ export const resorts = [
     name: 'Jackson Hole',
     pass: PASS_TYPES.IKON,
     region: REGIONS.WYOMING,
-    latitude: 43.5875,
-    longitude: -110.8279,
-    // Mid-mountain: Bridger Gondola mid-station (~9,095 ft)
-    midMountain: { lat: 43.5950, lng: -110.8480 },
+    // Summit: Rendezvous Mountain top (10,450 ft)
+    latitude: 43.5980,
+    longitude: -110.8480,
     elevation: 10450,
     baseElevation: 6311,
     distanceFromBoulder: 450,
@@ -437,10 +415,9 @@ export const resorts = [
     name: 'Big Sky',
     pass: PASS_TYPES.IKON,
     region: REGIONS.MONTANA,
-    latitude: 45.2857,
-    longitude: -111.4018,
-    // Mid-mountain: Lone Peak Tram mid-area (~9,800 ft)
-    midMountain: { lat: 45.2800, lng: -111.4100 },
+    // Summit: Lone Peak (11,166 ft)
+    latitude: 45.2680,
+    longitude: -111.4180,
     elevation: 11166,
     baseElevation: 6800,
     distanceFromBoulder: 650,
@@ -456,10 +433,9 @@ export const resorts = [
     name: 'Alyeska',
     pass: PASS_TYPES.IKON,
     region: REGIONS.ALASKA,
-    latitude: 60.9697,
-    longitude: -149.0981,
-    // Mid-mountain: Glacier Bowl area (~2,500 ft)
-    midMountain: { lat: 60.9650, lng: -149.1050 },
+    // Summit: Mt. Alyeska top (3,939 ft)
+    latitude: 60.9630,
+    longitude: -149.1080,
     elevation: 3939,
     baseElevation: 250,
     distanceFromBoulder: 2800,
@@ -475,10 +451,9 @@ export const resorts = [
     name: 'Sugarloaf',
     pass: PASS_TYPES.IKON,
     region: REGIONS.MAINE,
-    latitude: 45.0314,
-    longitude: -70.3131,
-    // Mid-mountain: Bullwinkle's area (~3,500 ft)
-    midMountain: { lat: 45.0350, lng: -70.3080 },
+    // Summit: Sugarloaf Mountain (4,237 ft)
+    latitude: 45.0450,
+    longitude: -70.3080,
     elevation: 4237,
     baseElevation: 1417,
     distanceFromBoulder: 2100,
@@ -494,10 +469,9 @@ export const resorts = [
     name: 'Jay Peak',
     pass: PASS_TYPES.IKON,
     region: REGIONS.VERMONT,
-    latitude: 44.9279,
-    longitude: -72.5046,
-    // Mid-mountain: Tram mid-area (~3,200 ft)
-    midMountain: { lat: 44.9320, lng: -72.5020 },
+    // Summit: Jay Peak summit (3,968 ft)
+    latitude: 44.9350,
+    longitude: -72.4980,
     elevation: 3968,
     baseElevation: 1815,
     distanceFromBoulder: 2000,
@@ -513,10 +487,9 @@ export const resorts = [
     name: 'Whistler Blackcomb',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.CANADA,
-    latitude: 50.1163,
-    longitude: -122.9574,
-    // Mid-mountain: Roundhouse Lodge area (~6,000 ft / 1830m)
-    midMountain: { lat: 50.0770, lng: -122.9500 },
+    // Summit: Whistler Peak (7,494 ft / 2284m)
+    latitude: 50.0630,
+    longitude: -122.9350,
     elevation: 7494,
     baseElevation: 2140,
     distanceFromBoulder: 1100,
@@ -530,10 +503,9 @@ export const resorts = [
     name: 'Revelstoke',
     pass: PASS_TYPES.IKON,
     region: REGIONS.CANADA,
-    latitude: 51.0045,
-    longitude: -118.1590,
-    // Mid-mountain: Revelation Gondola mid (~5,500 ft)
-    midMountain: { lat: 51.0100, lng: -118.1650 },
+    // Summit: Mount Mackenzie top (7,300 ft / 2225m)
+    latitude: 51.0150,
+    longitude: -118.1550,
     elevation: 7300,
     baseElevation: 1680,
     distanceFromBoulder: 950,
@@ -547,10 +519,9 @@ export const resorts = [
     name: 'Kicking Horse',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.CANADA,
-    latitude: 51.2977,
-    longitude: -117.0479,
-    // Mid-mountain: Eagle's Eye area (~6,500 ft)
-    midMountain: { lat: 51.2950, lng: -117.0550 },
+    // Summit: Blue Heaven (8,033 ft / 2450m)
+    latitude: 51.2880,
+    longitude: -117.0550,
     elevation: 8033,
     baseElevation: 3900,
     distanceFromBoulder: 920,
@@ -566,10 +537,9 @@ export const resorts = [
     name: 'Niseko United',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.JAPAN,
-    latitude: 42.88,
-    longitude: 140.75,
-    // Mid-mountain: Hirafu mid-area (~2,600 ft / 800m)
-    midMountain: { lat: 42.8650, lng: 140.6980 },
+    // Summit: Mt. Annupuri top (4,291 ft / 1308m)
+    latitude: 42.87,
+    longitude: 140.679,
     elevation: 4291,
     baseElevation: 1640,
     distanceFromBoulder: 5800,
@@ -585,10 +555,9 @@ export const resorts = [
     name: 'Chamonix',
     pass: PASS_TYPES.IKON,
     region: REGIONS.EUROPE,
-    latitude: 45.9237,
-    longitude: 6.8694,
-    // Mid-mountain: Plan de l'Aiguille (~7,500 ft / 2300m)
-    midMountain: { lat: 45.9080, lng: 6.8880 },
+    // Summit: Aiguille du Midi area (12,605 ft / 3842m)
+    latitude: 45.8780,
+    longitude: 6.8870,
     elevation: 12605,
     baseElevation: 3396,
     distanceFromBoulder: 5300,
@@ -602,10 +571,9 @@ export const resorts = [
     name: 'Verbier',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.EUROPE,
-    latitude: 46.0967,
-    longitude: 7.2286,
-    // Mid-mountain: Ruinettes area (~7,500 ft / 2300m)
-    midMountain: { lat: 46.0920, lng: 7.2350 },
+    // Summit: Mont Fort (10,925 ft / 3330m)
+    latitude: 46.0820,
+    longitude: 7.2880,
     elevation: 10925,
     baseElevation: 4921,
     distanceFromBoulder: 5350,
@@ -619,10 +587,9 @@ export const resorts = [
     name: 'Val d\'Isère',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.EUROPE,
-    latitude: 45.4481,
-    longitude: 6.9769,
-    // Mid-mountain: Solaise area (~8,000 ft / 2450m)
-    midMountain: { lat: 45.4420, lng: 6.9850 },
+    // Summit: Rocher de Bellevarde (9,186 ft / 2800m)
+    latitude: 45.4230,
+    longitude: 6.9820,
     elevation: 9186,
     baseElevation: 6004,
     distanceFromBoulder: 5320,
@@ -636,10 +603,9 @@ export const resorts = [
     name: 'St. Anton',
     pass: PASS_TYPES.IKON,
     region: REGIONS.EUROPE,
-    latitude: 47.1297,
-    longitude: 10.2683,
-    // Mid-mountain: Galzig area (~7,200 ft / 2200m)
-    midMountain: { lat: 47.1250, lng: 10.2750 },
+    // Summit: Valluga (9,222 ft / 2811m)
+    latitude: 47.1580,
+    longitude: 10.2180,
     elevation: 9222,
     baseElevation: 4275,
     distanceFromBoulder: 5400,
@@ -653,10 +619,9 @@ export const resorts = [
     name: 'Cervinia',
     pass: PASS_TYPES.EPIC,
     region: REGIONS.EUROPE,
-    latitude: 45.9336,
-    longitude: 7.6319,
-    // Mid-mountain: Plan Maison area (~9,000 ft / 2750m)
-    midMountain: { lat: 45.9280, lng: 7.6380 },
+    // Summit: Plateau Rosa (11,417 ft / 3480m)
+    latitude: 45.9330,
+    longitude: 7.7080,
     elevation: 11417,
     baseElevation: 6726,
     distanceFromBoulder: 5380,
@@ -670,10 +635,9 @@ export const resorts = [
     name: 'Courmayeur',
     pass: PASS_TYPES.IKON,
     region: REGIONS.EUROPE,
-    latitude: 45.7967,
-    longitude: 6.9690,
-    // Mid-mountain: Maison Vieille area (~7,500 ft / 2300m)
-    midMountain: { lat: 45.8020, lng: 6.9580 },
+    // Summit: Cresta d'Arp (9,186 ft / 2800m)
+    latitude: 45.8120,
+    longitude: 6.9480,
     elevation: 9186,
     baseElevation: 4016,
     distanceFromBoulder: 5310,
