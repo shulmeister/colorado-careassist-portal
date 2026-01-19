@@ -96,7 +96,7 @@ const WeatherIcon = ({ code, className = "w-6 h-6" }) => {
   return <Cloud className={`${className} text-slate-400`} />
 }
 
-// Group days into periods like OpenSnow
+// Group days into periods (met.no provides 10 days)
 const groupIntoPeriods = (forecast) => {
   if (!forecast || forecast.length === 0) return []
 
@@ -111,11 +111,6 @@ const groupIntoPeriods = (forecast) => {
   const next6to10 = forecast.slice(5, 10)
   const next6to10Total = next6to10.reduce((sum, d) => sum + (d.snowfall || 0), 0)
   periods.push({ label: 'Next 6-10 Days', total: next6to10Total })
-
-  // Next 11-15 Days
-  const next11to15 = forecast.slice(10, 15)
-  const next11to15Total = next11to15.reduce((sum, d) => sum + (d.snowfall || 0), 0)
-  periods.push({ label: 'Next 11-15 Days', total: next11to15Total })
 
   return periods
 }
@@ -240,7 +235,7 @@ const ResortRow = ({ resort, onClick }) => {
             <div key={idx} className="text-center flex-shrink-0">
               <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide whitespace-nowrap">
                 <span className="hidden sm:inline">{period.label}</span>
-                <span className="sm:hidden">{idx === 0 ? '1-5d' : idx === 1 ? '6-10d' : '11-15d'}</span>
+                <span className="sm:hidden">{idx === 0 ? '1-5d' : '6-10d'}</span>
               </div>
               <div className={`text-base sm:text-xl font-bold ${getSnowColor(period.total).text}`}>
                 {formatSnow(period.total)}
@@ -362,9 +357,9 @@ const ResortRow = ({ resort, onClick }) => {
         </div>
       </div>
 
-      {/* 15-Day Forecast */}
+      {/* 10-Day Forecast */}
       <div className="px-3 sm:px-4 lg:px-6 py-3">
-        <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide mb-2 sm:mb-3">15-Day Forecast</div>
+        <div className="text-[9px] sm:text-[10px] text-slate-500 uppercase tracking-wide mb-2 sm:mb-3">10-Day Forecast</div>
         <div className="relative">
           <button
             onClick={(e) => scroll(e, 'left')}

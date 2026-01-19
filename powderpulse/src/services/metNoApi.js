@@ -51,6 +51,7 @@ function aggregateToDays(timeseries) {
   for (const entry of timeseries) {
     const date = entry.time.split('T')[0]
     const data = entry.data
+    const hour = parseInt(entry.time.split('T')[1].split(':')[0])
 
     if (!days[date]) {
       days[date] = {
@@ -59,7 +60,9 @@ function aggregateToDays(timeseries) {
         snowfall: 0,
         precipitation: 0,
         windSpeeds: [],
-        windGusts: []
+        windGusts: [],
+        cloudCover: [],
+        symbols: []
       }
     }
 
@@ -76,6 +79,19 @@ function aggregateToDays(timeseries) {
       days[date].windGusts.push(data.instant.details.wind_speed_of_gust)
     }
 
+    // Cloud cover
+    if (data.instant?.details?.cloud_area_fraction !== undefined) {
+      days[date].cloudCover.push(data.instant.details.cloud_area_fraction)
+    }
+
+    // Weather symbol (prefer midday 12:00 for daily icon)
+    const symbol = data.next_1_hours?.summary?.symbol_code ||
+                   data.next_6_hours?.summary?.symbol_code ||
+                   data.next_12_hours?.summary?.symbol_code
+    if (symbol) {
+      days[date].symbols.push({ hour, symbol })
+    }
+
     // Precipitation (next 1 or 6 hours)
     const precip1h = data.next_1_hours?.details?.precipitation_amount || 0
     const precip6h = data.next_6_hours?.details?.precipitation_amount || 0
@@ -83,6 +99,37 @@ function aggregateToDays(timeseries) {
   }
 
   return days
+}
+
+/**
+ * Convert met.no symbol code to WMO weather code for compatibility
+ * met.no symbols: clearsky, fair, partlycloudy, cloudy, rain, snow, sleet, fog, etc.
+ */
+function symbolToWeatherCode(symbol) {
+  if (!symbol) return 3 // Cloudy default
+
+  const s = symbol.toLowerCase()
+
+  // Snow conditions
+  if (s.includes('heavysnow')) return 75
+  if (s.includes('snow') && s.includes('shower')) return 85
+  if (s.includes('snow')) return 73
+  if (s.includes('sleet')) return 67
+
+  // Rain conditions
+  if (s.includes('heavyrain')) return 65
+  if (s.includes('rain') && s.includes('shower')) return 80
+  if (s.includes('lightrain')) return 61
+  if (s.includes('rain')) return 63
+
+  // Clear/Cloudy conditions
+  if (s.includes('clearsky')) return 0
+  if (s.includes('fair')) return 1
+  if (s.includes('partlycloudy')) return 2
+  if (s.includes('cloudy')) return 3
+  if (s.includes('fog')) return 45
+
+  return 3 // Default to cloudy
 }
 
 /**
@@ -125,6 +172,17 @@ export async function fetchMetNoForResort(resort) {
 
       const snowfall = estimateSnowfall(day.precipitation, avgTemp)
 
+      // Get best weather symbol (prefer midday hours 10-14)
+      const middaySymbol = day.symbols.find(s => s.hour >= 10 && s.hour <= 14)?.symbol
+        || day.symbols.find(s => s.hour >= 6 && s.hour <= 18)?.symbol
+        || day.symbols[0]?.symbol
+      const weatherCode = symbolToWeatherCode(middaySymbol)
+
+      // Average cloud cover
+      const avgCloudCover = day.cloudCover.length > 0
+        ? Math.round(day.cloudCover.reduce((a, b) => a + b, 0) / day.cloudCover.length)
+        : null
+
       return {
         date: day.date,
         tempMax: day.temps.length > 0 ? Math.round(Math.max(...day.temps) * 9/5 + 32) : null,
@@ -137,6 +195,9 @@ export async function fetchMetNoForResort(resort) {
         windGusts: day.windGusts.length > 0
           ? Math.round(Math.max(...day.windGusts) * 2.237)
           : 0,
+        weatherCode,
+        weatherSymbol: middaySymbol,
+        cloudCover: avgCloudCover,
         source: 'met-no'
       }
     })
