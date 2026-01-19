@@ -619,20 +619,24 @@ function standardDeviation(arr) {
 
 /**
  * Main function: Fetch and ensemble weather for a resort
+ *
+ * NOTE: OpenWeather One Call API 3.0 is DISABLED to stay within free tier limits.
+ * The ensemble works well with Open-Meteo (free) + Tomorrow.io + Snow-Forecast.
  */
 export async function fetchEnsembleWeather(resort) {
   try {
     // Fetch from all sources in parallel
+    // OpenWeather DISABLED - was exceeding 2000 calls/day free tier limit
     // Snow-Forecast.com is ski-specific and often most accurate
-    const [openMeteo, tomorrowIo, openWeather, snowForecast] = await Promise.all([
+    const [openMeteo, tomorrowIo, snowForecast] = await Promise.all([
       fetchOpenMeteo(resort),
       fetchTomorrowIo(resort),
-      fetchOpenWeather(resort),
+      // fetchOpenWeather(resort),  // DISABLED - API limit issues
       fetchSnowForecast(resort)
     ])
 
     // Filter out failed fetches
-    const validForecasts = [openMeteo, tomorrowIo, openWeather, snowForecast].filter(f => f !== null)
+    const validForecasts = [openMeteo, tomorrowIo, snowForecast].filter(f => f !== null)
 
     if (validForecasts.length === 0) {
       console.error(`No weather data available for ${resort.name}`)
