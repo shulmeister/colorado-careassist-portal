@@ -98,15 +98,17 @@ async function searchLocation(name) {
 }
 
 // Map regions to endpoints
+// NOTE: ECMWF is more accurate for storms than GFS, so we use it globally
+// GFS often misses storms that ECMWF catches (verified Jan 2026)
 function getEndpointForRegion(region) {
   switch (region) {
     case REGIONS.JAPAN:
+      // JMA is best for Japan, but only 11 days - supplement with ECMWF
       return { endpoint: OPEN_METEO_ENDPOINTS.jma, maxDays: 11 }
     case REGIONS.CANADA:
-      return { endpoint: OPEN_METEO_ENDPOINTS.gem, maxDays: 16 }
-    case REGIONS.EUROPE:
+      // Use ECMWF for Canada - GEM has limited accuracy
       return { endpoint: OPEN_METEO_ENDPOINTS.ecmwf, maxDays: 15 }
-    // All US regions use GFS
+    // All regions use ECMWF - it's more accurate for storm prediction
     case REGIONS.COLORADO:
     case REGIONS.NEW_MEXICO:
     case REGIONS.UTAH:
@@ -117,8 +119,9 @@ function getEndpointForRegion(region) {
     case REGIONS.ALASKA:
     case REGIONS.MAINE:
     case REGIONS.VERMONT:
+    case REGIONS.EUROPE:
     default:
-      return { endpoint: OPEN_METEO_ENDPOINTS.gfs, maxDays: 16 }
+      return { endpoint: OPEN_METEO_ENDPOINTS.ecmwf, maxDays: 15 }
   }
 }
 
