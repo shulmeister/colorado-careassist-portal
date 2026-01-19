@@ -1,93 +1,46 @@
 /**
  * Hybrid Weather API - Routes to best source per region
  *
- * Strategy:
- * - US Resorts (30): NWS API (most accurate for US, free)
- * - Canada (3): Environment Canada API (TODO) → fallback to Open-Meteo
- * - Japan (1): JMA API (TODO) → fallback to Open-Meteo
- * - Europe (6): Open-Meteo with ECMWF (gold standard for EU)
+ * Strategy (Updated 2026-01-19):
+ * - ALL REGIONS: yr.no / met.no (Norwegian Meteorological Institute)
+ *   - Free, no API key required
+ *   - Verified accurate for US, Japan, and Europe
+ *   - Uses ECMWF and other high-quality models
+ *   - Supports altitude parameter for mountain accuracy
  *
- * Benefits:
- * - NWS is significantly more accurate for mountain weather in the US
- * - ECMWF is the best global model, especially for Europe
- * - Free APIs with generous rate limits
+ * Fallback: Open-Meteo ECMWF if met.no fails
  */
 
-import { fetchNWSWeather, fetchAllUSResortsWeather, isUSResort } from './nwsApi.js'
-import { fetchOpenMeteoWeather } from './ensembleWeatherApi.js'
-import { fetchMeteoblueWeather } from './meteoblueApi.js'
 import { fetchMetNoForResort } from './metNoApi.js'
+import { fetchOpenMeteoWeather } from './ensembleWeatherApi.js'
 
 // Delay helper
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 /**
  * Determine the best weather source for a resort
+ * As of 2026-01-19: Using met.no (yr.no) for ALL regions
+ * - Verified accurate for US, Japan, and Europe
+ * - Free, no API key, supports altitude parameter
  */
 export function getWeatherSource(resort) {
-  if (isUSResort(resort)) {
-    // NWS API has issues from browser - use Open-Meteo ECMWF for now
-    // Open-Meteo with elevation parameter is still very accurate for US mountains
-    return 'open-meteo'
-  }
-  if (resort.region === 'canada') {
-    // TODO: Environment Canada API
-    return 'open-meteo'  // Fallback for now
-  }
-  if (resort.region === 'japan') {
-    return 'meteoblue'  // Meteoblue has snowfraction data - accurate for Niseko
-  }
-  if (resort.region === 'europe') {
-    return 'met-no'  // Norwegian Met Institute - excellent for Europe
-  }
-  // Others (fallback)
-  return 'open-meteo'
+  // Use met.no for all regions - verified most accurate
+  return 'met-no'
 }
 
 /**
- * Fetch weather for a single resort using the best source
+ * Fetch weather for a single resort using met.no (yr.no)
+ * Falls back to Open-Meteo if met.no fails
  */
 export async function fetchResortWeather(resort) {
-  const source = getWeatherSource(resort)
-
   try {
-    let data
+    // Primary: met.no (yr.no) - verified accurate for all regions
+    let data = await fetchMetNoForResort(resort)
 
-    switch (source) {
-      case 'nws':
-        data = await fetchNWSWeather(resort)
-        // If NWS fails, fall back to Open-Meteo
-        if (!data) {
-          console.log(`NWS failed for ${resort.name}, falling back to Open-Meteo`)
-          data = await fetchOpenMeteoWeather(resort)
-          if (data) data.source = 'open-meteo-fallback'
-        }
-        break
-
-      case 'meteoblue':
-        data = await fetchMeteoblueWeather(resort)
-        // If Meteoblue fails, fall back to Open-Meteo
-        if (!data) {
-          console.log(`Meteoblue failed for ${resort.name}, falling back to Open-Meteo`)
-          data = await fetchOpenMeteoWeather(resort)
-          if (data) data.source = 'open-meteo-fallback'
-        }
-        break
-
-      case 'met-no':
-        data = await fetchMetNoForResort(resort)
-        // If met.no fails, fall back to Open-Meteo
-        if (!data) {
-          console.log(`Met.no failed for ${resort.name}, falling back to Open-Meteo`)
-          data = await fetchOpenMeteoWeather(resort)
-          if (data) data.source = 'open-meteo-fallback'
-        }
-        break
-
-      case 'open-meteo':
-      default:
-        data = await fetchOpenMeteoWeather(resort)
-        break
+    if (!data) {
+      console.log(`Met.no failed for ${resort.name}, falling back to Open-Meteo`)
+      data = await fetchOpenMeteoWeather(resort)
+      if (data) data.source = 'open-meteo-fallback'
     }
 
     return data
@@ -105,76 +58,49 @@ export async function fetchResortWeather(resort) {
 }
 
 /**
- * Fetch weather for ALL resorts using hybrid routing
- * Groups resorts by source for efficient batch fetching
+ * Fetch weather for ALL resorts using met.no (yr.no)
+ * Uses met.no as primary source for all regions
+ * Falls back to Open-Meteo if met.no fails
  */
 export async function fetchAllResortsWeatherHybrid(resorts) {
   const weatherData = {}
 
-  // Group resorts by source
-  // US now uses Open-Meteo ECMWF (NWS has browser issues)
-  const japanResorts = resorts.filter(r => r.region === 'japan')
-  const europeResorts = resorts.filter(r => r.region === 'europe')
-  const openMeteoResorts = resorts.filter(r => r.region !== 'japan' && r.region !== 'europe')
+  console.log(`Fetching weather for ${resorts.length} resorts using met.no (yr.no)`)
 
-  console.log(`Hybrid fetch: ${openMeteoResorts.length} US/Canada (Open-Meteo ECMWF), ${japanResorts.length} Japan (Meteoblue), ${europeResorts.length} Europe (met.no)`)
+  // Fetch all resorts with met.no
+  // Small delay between requests to be respectful to the API
+  const DELAY_MS = 150
 
-  // Fetch Japan resorts with Meteoblue (has snowfraction data)
-  if (japanResorts.length > 0) {
-    for (const resort of japanResorts) {
+  for (const resort of resorts) {
+    try {
+      let data = await fetchMetNoForResort(resort)
+
+      if (!data) {
+        console.log(`Met.no failed for ${resort.name}, using Open-Meteo fallback`)
+        data = await fetchOpenMeteoWeather(resort)
+        if (data) data.source = 'open-meteo-fallback'
+      }
+
+      if (data) weatherData[resort.id] = data
+      await delay(DELAY_MS)
+    } catch (e) {
+      console.error(`Weather fetch failed for ${resort.name}:`, e.message)
+      // Try Open-Meteo fallback
       try {
-        let data = await fetchMeteoblueWeather(resort)
-        if (!data) {
-          console.log(`Meteoblue failed for ${resort.name}, using Open-Meteo fallback`)
-          data = await fetchOpenMeteoWeather(resort)
-          if (data) data.source = 'open-meteo-fallback'
+        const fallback = await fetchOpenMeteoWeather(resort)
+        if (fallback) {
+          fallback.source = 'open-meteo-fallback'
+          weatherData[resort.id] = fallback
         }
-        if (data) weatherData[resort.id] = data
-      } catch (e) {
-        console.error(`Japan fetch failed for ${resort.name}`)
+      } catch (e2) {
+        console.error(`Fallback also failed for ${resort.name}`)
       }
     }
   }
 
-  // Fetch Europe resorts with met.no
-  if (europeResorts.length > 0) {
-    for (const resort of europeResorts) {
-      try {
-        let data = await fetchMetNoForResort(resort)
-        if (!data) {
-          console.log(`Met.no failed for ${resort.name}, using Open-Meteo fallback`)
-          data = await fetchOpenMeteoWeather(resort)
-          if (data) data.source = 'open-meteo-fallback'
-        }
-        if (data) weatherData[resort.id] = data
-        await delay(200) // Small delay to be nice to met.no
-      } catch (e) {
-        console.error(`Europe fetch failed for ${resort.name}`)
-      }
-    }
-  }
-
-  // Fetch US/Canada resorts with Open-Meteo ECMWF
-  if (openMeteoResorts.length > 0) {
-    const BATCH_SIZE = 6
-    const BATCH_DELAY = 300
-
-    for (let i = 0; i < openMeteoResorts.length; i += BATCH_SIZE) {
-      const batch = openMeteoResorts.slice(i, i + BATCH_SIZE)
-      const promises = batch.map(resort => fetchOpenMeteoWeather(resort))
-      const results = await Promise.allSettled(promises)
-
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled' && result.value) {
-          weatherData[batch[index].id] = result.value
-        }
-      })
-
-      if (i + BATCH_SIZE < openMeteoResorts.length) {
-        await delay(BATCH_DELAY)
-      }
-    }
-  }
+  const metNoCount = Object.values(weatherData).filter(d => d.source === 'met-no').length
+  const fallbackCount = Object.values(weatherData).filter(d => d.source === 'open-meteo-fallback').length
+  console.log(`Weather fetch complete: ${metNoCount} met.no, ${fallbackCount} fallback, ${resorts.length - Object.keys(weatherData).length} failed`)
 
   return weatherData
 }
@@ -184,8 +110,7 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
  */
 export function getSourceStats(weatherData) {
   const stats = {
-    nws: 0,
-    'open-meteo-ecmwf': 0,
+    'met-no': 0,
     'open-meteo-fallback': 0,
     failed: 0
   }
