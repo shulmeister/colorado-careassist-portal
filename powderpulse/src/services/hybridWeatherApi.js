@@ -26,7 +26,9 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
  */
 export function getWeatherSource(resort) {
   if (isUSResort(resort)) {
-    return 'nws'
+    // NWS API has issues from browser - use Open-Meteo ECMWF for now
+    // Open-Meteo with elevation parameter is still very accurate for US mountains
+    return 'open-meteo'
   }
   if (resort.region === 'canada') {
     // TODO: Environment Canada API
@@ -110,38 +112,12 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
   const weatherData = {}
 
   // Group resorts by source
-  const usResorts = resorts.filter(r => isUSResort(r))
+  // US now uses Open-Meteo ECMWF (NWS has browser issues)
   const japanResorts = resorts.filter(r => r.region === 'japan')
   const europeResorts = resorts.filter(r => r.region === 'europe')
-  const otherResorts = resorts.filter(r => !isUSResort(r) && r.region !== 'japan' && r.region !== 'europe')
+  const openMeteoResorts = resorts.filter(r => r.region !== 'japan' && r.region !== 'europe')
 
-  console.log(`Hybrid fetch: ${usResorts.length} US (NWS), ${japanResorts.length} Japan (Weather Unlocked), ${europeResorts.length} Europe (met.no), ${otherResorts.length} other (Open-Meteo)`)
-
-  // Fetch US resorts with NWS (with fallback)
-  if (usResorts.length > 0) {
-    const nwsResults = await fetchAllUSResortsWeather(usResorts)
-
-    // Check for failures and retry with Open-Meteo
-    const failedResorts = usResorts.filter(r => !nwsResults[r.id])
-
-    if (failedResorts.length > 0) {
-      console.log(`NWS failed for ${failedResorts.length} resorts, using Open-Meteo fallback`)
-      for (const resort of failedResorts) {
-        try {
-          const fallbackData = await fetchOpenMeteoWeather(resort)
-          if (fallbackData) {
-            fallbackData.source = 'open-meteo-fallback'
-            nwsResults[resort.id] = fallbackData
-          }
-          await delay(200) // Small delay for Open-Meteo
-        } catch (e) {
-          console.error(`Fallback failed for ${resort.name}`)
-        }
-      }
-    }
-
-    Object.assign(weatherData, nwsResults)
-  }
+  console.log(`Hybrid fetch: ${openMeteoResorts.length} US/Canada (Open-Meteo ECMWF), ${japanResorts.length} Japan (Weather Unlocked), ${europeResorts.length} Europe (met.no)`)
 
   // Fetch Japan resorts with Weather Unlocked
   if (japanResorts.length > 0) {
@@ -178,13 +154,13 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
     }
   }
 
-  // Fetch other resorts with Open-Meteo
-  if (otherResorts.length > 0) {
+  // Fetch US/Canada resorts with Open-Meteo ECMWF
+  if (openMeteoResorts.length > 0) {
     const BATCH_SIZE = 6
-    const BATCH_DELAY = 500
+    const BATCH_DELAY = 300
 
-    for (let i = 0; i < otherResorts.length; i += BATCH_SIZE) {
-      const batch = otherResorts.slice(i, i + BATCH_SIZE)
+    for (let i = 0; i < openMeteoResorts.length; i += BATCH_SIZE) {
+      const batch = openMeteoResorts.slice(i, i + BATCH_SIZE)
       const promises = batch.map(resort => fetchOpenMeteoWeather(resort))
       const results = await Promise.allSettled(promises)
 
@@ -194,7 +170,7 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
         }
       })
 
-      if (i + BATCH_SIZE < otherResorts.length) {
+      if (i + BATCH_SIZE < openMeteoResorts.length) {
         await delay(BATCH_DELAY)
       }
     }
