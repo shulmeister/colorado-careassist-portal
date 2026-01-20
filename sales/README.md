@@ -32,6 +32,15 @@ A comprehensive full-stack sales CRM and activity tracking application for Color
 - Track deal amounts and probability
 - Associate deals with contacts and companies
 - Activity logging per deal
+- **Relationship Graph**: Multi-contact deals with roles (Decision Maker, Champion, Blocker, etc.)
+- **Time-in-Stage Tracking**: Automatic tracking of days in each stage with stale deal alerts (>30 days)
+- **Stage History**: Full audit trail of all stage transitions with duration metrics
+
+### 🤖 AI Enrichment (Gemini-Powered)
+- **Company Enrichment**: Auto-populate industry, employee count, facility type
+- **Contact Deduplication**: Detect duplicates by email, phone, or name+company
+- **Smart Merge**: Merge contacts while preserving all relationships and activities
+- **Interaction Summary**: AI-generated summaries of relationship history with sentiment analysis
 
 ### 📇 AI-Powered Document Scanning (Gemini)
 - **MyWay PDFs**: AI extracts visits, addresses, cities, mileage, dates
@@ -118,6 +127,40 @@ DELETE /admin/deals/{id}            # Delete
 GET    /api/dashboard/summary       # All KPIs
 GET    /api/visits                  # Visit list
 GET    /api/activity-logs           # Activity log
+GET    /api/deals/stale             # Deals stuck in stage >30 days
+GET    /api/analytics/stage-duration # Average time per stage
+```
+
+### Unified Timeline
+```
+GET    /api/timeline?contact_id=123       # Timeline for contact/company/deal
+POST   /api/timeline/note                  # Quick note creation
+```
+
+### Relationship Graph
+```
+GET    /api/deals/{id}/contacts           # Get contacts for deal with roles
+POST   /api/deals/{id}/contacts           # Add contact to deal
+DELETE /api/deals/{id}/contacts/{cid}     # Remove contact from deal
+GET    /api/contacts/{id}/deals           # Get all deals for a contact
+GET    /api/contacts/{id}/relationships   # Full relationship graph
+GET    /api/companies/{id}/relationships  # Company relationship graph
+```
+
+### Stage Tracking
+```
+GET    /api/deals/{id}/stage-history      # Full stage transition history
+PUT    /api/deals/{id}/stage              # Update stage (logs history)
+```
+
+### AI Enrichment
+```
+POST   /api/companies/{id}/enrich         # Enrich company with AI
+GET    /api/contacts/{id}/duplicates      # Find duplicate contacts
+GET    /api/contacts/duplicates/scan      # Scan all contacts for duplicates
+POST   /api/contacts/merge                # Merge duplicate contacts
+GET    /api/contacts/{id}/interaction-summary  # AI summary of interactions
+GET    /api/companies/{id}/interaction-summary # AI summary for company
 ```
 
 ### Business Card Scanning
@@ -255,7 +298,7 @@ git push heroku main
 ```
 sales-dashboard/
 ├── app.py                 # Main FastAPI application
-├── models.py              # SQLAlchemy models
+├── models.py              # SQLAlchemy models (with DealContact, DealStageHistory)
 ├── analytics.py           # Dashboard KPI calculations
 ├── ai_document_parser.py  # AI document parsing (Gemini)
 ├── brevo_service.py       # Brevo email marketing integration
@@ -264,6 +307,14 @@ sales-dashboard/
 ├── requirements.txt       # Python dependencies
 ├── Procfile              # Heroku process file
 ├── Aptfile               # System dependencies
+│
+├── services/             # Business logic services
+│   ├── activity_service.py    # Unified timeline & stage tracking
+│   ├── ai_enrichment_service.py # AI enrichment, deduplication, summaries
+│   └── auth_service.py        # Google OAuth authentication
+│
+├── scripts/              # Utility scripts
+│   └── migrate_attio_enhancements.py  # Database migration for new features
 │
 ├── frontend/             # React Admin CRM
 │   ├── src/
@@ -287,13 +338,19 @@ Tasks and activities can be assigned to:
 - cynthia@coloradocareassist.com
 - jason@coloradocareassist.com
 
-## Current Stats (as of Dec 2025)
+## Current Stats (as of Jan 2026)
 
-- **1,091 Contacts** in database
-- **87 Companies** tracked
-- **12 Active Deals** in pipeline
-- **744 Total Visits** logged (after cleanup)
+- **1,091+ Contacts** in database
+- **87+ Companies** tracked
+- **Active Deals** in pipeline
+- **744+ Total Visits** logged
 - **Brevo**: Unlimited contacts on free plan
+
+### New in Jan 2026 (Attio-Inspired Enhancements)
+- Relationship Graph: Multi-contact deals with roles
+- Time-in-Stage Tracking: Stale deal detection
+- Unified Activity Timeline: All interactions in one view
+- AI Enrichment: Company data, deduplication, interaction summaries
 
 ## Contributing
 
@@ -309,4 +366,4 @@ Tasks and activities can be assigned to:
 
 ## License
 
-Proprietary - Colorado CareAssist © 2025
+Proprietary - Colorado CareAssist © 2025-2026
