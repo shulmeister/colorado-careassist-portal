@@ -19,6 +19,14 @@ from services.marketing.metrics_service import (
     get_ads_metrics,
     get_email_metrics,
 )
+# Import client satisfaction service at module load time (before sales path takes precedence)
+try:
+    from services.client_satisfaction_service import client_satisfaction_service
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Client satisfaction service not available: {e}")
+    client_satisfaction_service = None
+
 from dotenv import load_dotenv
 from datetime import date
 from itsdangerous import URLSafeTimedSerializer
@@ -911,7 +919,8 @@ async def client_satisfaction_dashboard(
     db: Session = Depends(get_db)
 ):
     """Client Satisfaction Dashboard - native implementation"""
-    from services.client_satisfaction_service import client_satisfaction_service
+    if client_satisfaction_service is None:
+        raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
     # Get dashboard summary
     summary = client_satisfaction_service.get_dashboard_summary(db, days=30)
@@ -937,7 +946,8 @@ async def api_client_satisfaction_summary(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get client satisfaction dashboard summary"""
-    from services.client_satisfaction_service import client_satisfaction_service
+    if client_satisfaction_service is None:
+        raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
     summary = client_satisfaction_service.get_dashboard_summary(db, days=days)
     return JSONResponse({"success": True, "data": summary})
