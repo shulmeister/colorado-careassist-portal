@@ -57,15 +57,14 @@ try:
         sys.path.insert(0, sales_path)
         logger.info(f"✅ Added sales path: {sales_path}")
 
-        # Pre-import services modules before loading sales app
-        # This ensures they're in sys.modules when the import statements run
-        try:
-            import services.activity_service
-            import services.ai_enrichment_service
-            import services.auth_service
-            logger.info("✅ Pre-imported sales services modules")
-        except ImportError as e:
-            logger.warning(f"⚠️  Could not pre-import services: {e}")
+        # Clear any cached 'services' module to ensure we import from sales/services
+        # The root-level services/ directory may have been imported first by portal
+        if 'services' in sys.modules:
+            del sys.modules['services']
+        for mod_name in list(sys.modules.keys()):
+            if mod_name.startswith('services.'):
+                del sys.modules[mod_name]
+        logger.info("✅ Cleared cached services module")
 
         # Import sales app
         sales_app_file = os.path.join(sales_path, "app.py")
