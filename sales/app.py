@@ -10031,6 +10031,13 @@ async def simulate_sms_response(
 # Attio-Inspired CRM Enhancements API
 # ============================================================================
 
+# Handle imports for both standalone and mounted contexts
+import sys
+import os
+_sales_dir = os.path.dirname(os.path.abspath(__file__))
+if _sales_dir not in sys.path:
+    sys.path.insert(0, _sales_dir)
+
 from services.activity_service import (
     log_activity, update_deal_stage, get_timeline, get_stale_deals,
     get_deal_stage_history, get_stage_analytics, add_contact_to_deal,
