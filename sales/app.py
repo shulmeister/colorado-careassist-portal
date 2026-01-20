@@ -10504,6 +10504,238 @@ async def legacy_dashboard(request: Request, current_user: Dict[str, Any] = Depe
         }
     })
 
+
+# =============================================================================
+# WellSky Integration API - Sales Dashboard → WellSky Prospects
+# =============================================================================
+
+@app.get("/api/wellsky/sync/status")
+async def get_wellsky_sync_status(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get WellSky integration status and sync summary"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.wellsky_service import wellsky_service
+        from services.sales_wellsky_sync import sales_wellsky_sync
+
+        return JSONResponse({
+            "status": "ok",
+            "wellsky_configured": wellsky_service.is_configured,
+            "wellsky_mode": "live" if wellsky_service.is_configured else "mock",
+            "sync_log_entries": len(sales_wellsky_sync.get_sync_log()),
+            "recent_sync_log": sales_wellsky_sync.get_sync_log(limit=10),
+        })
+    except Exception as e:
+        logger.exception(f"Error getting WellSky sync status: {e}")
+        return JSONResponse({"status": "error", "error": str(e)}, status_code=500)
+
+
+@app.post("/api/wellsky/sync/deal/{deal_id}")
+async def sync_deal_to_wellsky(
+    deal_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Sync a single deal to WellSky as a prospect"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.sales_wellsky_sync import sales_wellsky_sync
+
+        # Get deal from database
+        deal = db.query(Deal).filter_by(id=deal_id).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="Deal not found")
+
+        deal_dict = deal.to_dict()
+
+        # Get primary contact if available
+        contact = None
+        if deal.primary_contact:
+            contact = deal.primary_contact.to_dict()
+
+        # Sync to WellSky
+        success, prospect, message = sales_wellsky_sync.sync_deal_to_prospect(
+            deal_dict, contact
+        )
+
+        return JSONResponse({
+            "success": success,
+            "message": message,
+            "deal_id": deal_id,
+            "prospect": prospect.to_dict() if prospect else None,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error syncing deal {deal_id} to WellSky: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.post("/api/wellsky/sync/all-deals")
+async def sync_all_deals_to_wellsky(
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Sync all active deals to WellSky as prospects (runs in background)"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.sales_wellsky_sync import sales_wellsky_sync
+
+        # Get all non-archived deals
+        deals = db.query(Deal).filter(Deal.archived_at.is_(None)).all()
+        deal_dicts = [d.to_dict() for d in deals]
+
+        # Build contacts lookup
+        contacts_by_id = {}
+        for deal in deals:
+            if deal.primary_contact:
+                contacts_by_id[deal.primary_contact.id] = deal.primary_contact.to_dict()
+
+        # Run sync
+        results = sales_wellsky_sync.sync_all_deals(deal_dicts, contacts_by_id)
+
+        return JSONResponse({
+            "success": True,
+            "results": results,
+        })
+    except Exception as e:
+        logger.exception(f"Error syncing all deals to WellSky: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/wellsky/deal/{deal_id}/sync-status")
+async def get_deal_wellsky_sync_status(
+    deal_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get WellSky sync status for a specific deal"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.sales_wellsky_sync import sales_wellsky_sync
+
+        # Check deal exists
+        deal = db.query(Deal).filter_by(id=deal_id).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="Deal not found")
+
+        # Get sync status
+        status = sales_wellsky_sync.get_sync_status(str(deal_id))
+
+        return JSONResponse(status)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting WellSky sync status for deal {deal_id}: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.post("/api/wellsky/deal/{deal_id}/stage-change")
+async def notify_wellsky_deal_stage_change(
+    deal_id: int,
+    new_stage: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Notify WellSky of a deal stage change"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.sales_wellsky_sync import sales_wellsky_sync
+
+        # Check deal exists
+        deal = db.query(Deal).filter_by(id=deal_id).first()
+        if not deal:
+            raise HTTPException(status_code=404, detail="Deal not found")
+
+        # Sync stage change
+        user_email = current_user.get("email", "unknown")
+        success, prospect, message = sales_wellsky_sync.sync_deal_stage_change(
+            str(deal_id), new_stage, changed_by=user_email
+        )
+
+        return JSONResponse({
+            "success": success,
+            "message": message,
+            "deal_id": deal_id,
+            "new_stage": new_stage,
+            "prospect": prospect.to_dict() if prospect else None,
+        })
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error syncing deal stage change to WellSky: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/wellsky/prospects")
+async def get_wellsky_prospects(
+    status: Optional[str] = None,
+    limit: int = Query(default=100, le=1000),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get prospects from WellSky"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.wellsky_service import wellsky_service, ProspectStatus
+
+        # Parse status if provided
+        prospect_status = None
+        if status:
+            try:
+                prospect_status = ProspectStatus(status.lower())
+            except ValueError:
+                pass
+
+        prospects = wellsky_service.get_prospects(status=prospect_status, limit=limit)
+
+        return JSONResponse({
+            "prospects": [p.to_dict() for p in prospects],
+            "count": len(prospects),
+            "wellsky_mode": "live" if wellsky_service.is_configured else "mock",
+        })
+    except Exception as e:
+        logger.exception(f"Error getting WellSky prospects: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # SPA catch-all route - must be last!
 # This catches all routes and serves the React app for client-side routing
 @app.get("/{full_path:path}", response_class=HTMLResponse)

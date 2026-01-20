@@ -78,6 +78,32 @@ class ShiftStatus(Enum):
     OPEN = "open"
 
 
+class ProspectStatus(Enum):
+    """WellSky prospect/sales pipeline status values"""
+    NEW = "new"
+    CONTACTED = "contacted"
+    ASSESSMENT_SCHEDULED = "assessment_scheduled"
+    ASSESSMENT_COMPLETED = "assessment_completed"
+    PROPOSAL_SENT = "proposal_sent"
+    NEGOTIATING = "negotiating"
+    WON = "won"
+    LOST = "lost"
+    ON_HOLD = "on_hold"
+
+
+class ApplicantStatus(Enum):
+    """WellSky applicant/recruiting status values"""
+    NEW = "new"
+    SCREENING = "screening"
+    PHONE_INTERVIEW = "phone_interview"
+    IN_PERSON_INTERVIEW = "in_person_interview"
+    BACKGROUND_CHECK = "background_check"
+    OFFER_EXTENDED = "offer_extended"
+    HIRED = "hired"
+    REJECTED = "rejected"
+    WITHDRAWN = "withdrawn"
+
+
 @dataclass
 class WellSkyClient:
     """Client profile from WellSky"""
@@ -290,6 +316,163 @@ class WellSkyFamilyActivity:
         return d
 
 
+@dataclass
+class WellSkyProspect:
+    """
+    Prospect record in WellSky - synced from Sales Dashboard.
+
+    Maps to Sales Dashboard deals before they become active clients.
+    Used for pipeline visibility and conversion tracking.
+    """
+    id: str
+    first_name: str
+    last_name: str
+    status: ProspectStatus = ProspectStatus.NEW
+    # Contact info
+    phone: str = ""
+    email: str = ""
+    address: str = ""
+    city: str = ""
+    state: str = "CO"
+    zip_code: str = ""
+    # Referral tracking
+    referral_source: str = ""
+    referral_date: Optional[date] = None
+    # Care needs assessment
+    care_needs: List[str] = field(default_factory=list)
+    estimated_hours_weekly: float = 0.0
+    payer_type: str = ""  # private_pay, medicaid, va, ltc_insurance
+    # Sales pipeline
+    sales_rep: str = ""
+    assessment_date: Optional[datetime] = None
+    assessment_notes: str = ""
+    proposal_amount: float = 0.0
+    proposal_date: Optional[date] = None
+    # Conversion tracking
+    won_date: Optional[date] = None
+    lost_date: Optional[date] = None
+    lost_reason: str = ""
+    converted_client_id: Optional[str] = None
+    # External IDs (for sync tracking)
+    sales_dashboard_deal_id: Optional[str] = None
+    goformz_submission_id: Optional[str] = None
+    # Metadata
+    notes: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.first_name} {self.last_name}"
+
+    @property
+    def is_open(self) -> bool:
+        return self.status not in (ProspectStatus.WON, ProspectStatus.LOST)
+
+    @property
+    def is_converted(self) -> bool:
+        return self.status == ProspectStatus.WON and self.converted_client_id is not None
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        d['status'] = self.status.value
+        d['referral_date'] = self.referral_date.isoformat() if self.referral_date else None
+        d['assessment_date'] = self.assessment_date.isoformat() if self.assessment_date else None
+        d['proposal_date'] = self.proposal_date.isoformat() if self.proposal_date else None
+        d['won_date'] = self.won_date.isoformat() if self.won_date else None
+        d['lost_date'] = self.lost_date.isoformat() if self.lost_date else None
+        d['created_at'] = self.created_at.isoformat() if self.created_at else None
+        d['updated_at'] = self.updated_at.isoformat() if self.updated_at else None
+        return d
+
+
+@dataclass
+class WellSkyApplicant:
+    """
+    Applicant/candidate record in WellSky - synced from Recruiting Dashboard.
+
+    Maps to Recruiting Dashboard leads before they become active caregivers.
+    Used for pipeline visibility and hire tracking.
+    """
+    id: str
+    first_name: str
+    last_name: str
+    status: ApplicantStatus = ApplicantStatus.NEW
+    # Contact info
+    phone: str = ""
+    email: str = ""
+    address: str = ""
+    city: str = ""
+    state: str = "CO"
+    zip_code: str = ""
+    # Application info
+    application_date: Optional[date] = None
+    source: str = ""  # indeed, referral, walk-in, etc.
+    position_applied: str = ""  # CNA, HHA, Companion
+    # Qualifications
+    certifications: List[str] = field(default_factory=list)
+    years_experience: int = 0
+    languages: List[str] = field(default_factory=lambda: ["English"])
+    available_days: List[str] = field(default_factory=list)
+    desired_hours_weekly: int = 0
+    # Recruiting pipeline
+    recruiter: str = ""
+    phone_screen_date: Optional[datetime] = None
+    phone_screen_notes: str = ""
+    interview_date: Optional[datetime] = None
+    interview_notes: str = ""
+    background_check_submitted: Optional[date] = None
+    background_check_cleared: Optional[date] = None
+    # Offer tracking
+    offer_date: Optional[date] = None
+    offer_hourly_rate: float = 0.0
+    offer_accepted_date: Optional[date] = None
+    start_date: Optional[date] = None
+    # Rejection/withdrawal
+    rejected_date: Optional[date] = None
+    rejected_reason: str = ""
+    withdrawn_date: Optional[date] = None
+    withdrawn_reason: str = ""
+    # Conversion tracking
+    converted_caregiver_id: Optional[str] = None
+    # External IDs (for sync tracking)
+    recruiting_dashboard_lead_id: Optional[str] = None
+    goformz_submission_id: Optional[str] = None
+    # Metadata
+    notes: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.first_name} {self.last_name}"
+
+    @property
+    def is_open(self) -> bool:
+        return self.status not in (ApplicantStatus.HIRED, ApplicantStatus.REJECTED, ApplicantStatus.WITHDRAWN)
+
+    @property
+    def is_hired(self) -> bool:
+        return self.status == ApplicantStatus.HIRED and self.converted_caregiver_id is not None
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = asdict(self)
+        d['status'] = self.status.value
+        d['application_date'] = self.application_date.isoformat() if self.application_date else None
+        d['phone_screen_date'] = self.phone_screen_date.isoformat() if self.phone_screen_date else None
+        d['interview_date'] = self.interview_date.isoformat() if self.interview_date else None
+        d['background_check_submitted'] = self.background_check_submitted.isoformat() if self.background_check_submitted else None
+        d['background_check_cleared'] = self.background_check_cleared.isoformat() if self.background_check_cleared else None
+        d['offer_date'] = self.offer_date.isoformat() if self.offer_date else None
+        d['offer_accepted_date'] = self.offer_accepted_date.isoformat() if self.offer_accepted_date else None
+        d['start_date'] = self.start_date.isoformat() if self.start_date else None
+        d['rejected_date'] = self.rejected_date.isoformat() if self.rejected_date else None
+        d['withdrawn_date'] = self.withdrawn_date.isoformat() if self.withdrawn_date else None
+        d['created_at'] = self.created_at.isoformat() if self.created_at else None
+        d['updated_at'] = self.updated_at.isoformat() if self.updated_at else None
+        return d
+
+
 # =============================================================================
 # WellSky API Service
 # =============================================================================
@@ -318,6 +501,8 @@ class WellSkyService:
         self._mock_shifts: Dict[str, WellSkyShift] = {}
         self._mock_care_plans: Dict[str, WellSkyCarePlan] = {}
         self._mock_family_activity: Dict[str, WellSkyFamilyActivity] = {}
+        self._mock_prospects: Dict[str, WellSkyProspect] = {}
+        self._mock_applicants: Dict[str, WellSkyApplicant] = {}
 
         if self.is_configured:
             logger.info(f"WellSky service initialized in {self.environment} mode")
@@ -875,6 +1060,502 @@ class WellSkyService:
         return results
 
     # =========================================================================
+    # Prospect Methods (Sales Pipeline Integration)
+    # =========================================================================
+
+    def get_prospects(
+        self,
+        status: Optional[ProspectStatus] = None,
+        sales_rep: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[WellSkyProspect]:
+        """Get prospects from WellSky (sales pipeline)"""
+        if self.is_mock_mode:
+            prospects = list(self._mock_prospects.values())
+            if status:
+                prospects = [p for p in prospects if p.status == status]
+            if sales_rep:
+                prospects = [p for p in prospects if p.sales_rep == sales_rep]
+            return prospects[offset:offset + limit]
+
+        params = {"limit": limit, "offset": offset}
+        if status:
+            params["status"] = status.value
+        if sales_rep:
+            params["sales_rep"] = sales_rep
+
+        success, data = self._make_request("GET", "/prospects", params=params)
+
+        if success and "prospects" in data:
+            return [self._parse_prospect(p) for p in data["prospects"]]
+        return []
+
+    def get_prospect(self, prospect_id: str) -> Optional[WellSkyProspect]:
+        """Get a single prospect by ID"""
+        if self.is_mock_mode:
+            return self._mock_prospects.get(prospect_id)
+
+        success, data = self._make_request("GET", f"/prospects/{prospect_id}")
+
+        if success:
+            return self._parse_prospect(data)
+        return None
+
+    def get_prospect_by_sales_deal_id(self, deal_id: str) -> Optional[WellSkyProspect]:
+        """Find prospect by Sales Dashboard deal ID"""
+        if self.is_mock_mode:
+            for prospect in self._mock_prospects.values():
+                if prospect.sales_dashboard_deal_id == deal_id:
+                    return prospect
+            return None
+
+        success, data = self._make_request(
+            "GET", "/prospects",
+            params={"sales_dashboard_deal_id": deal_id}
+        )
+
+        if success and data.get("prospects"):
+            return self._parse_prospect(data["prospects"][0])
+        return None
+
+    def create_prospect(self, prospect_data: Dict[str, Any]) -> Optional[WellSkyProspect]:
+        """
+        Create a new prospect in WellSky.
+
+        Called when a new deal is created in Sales Dashboard.
+        """
+        if self.is_mock_mode:
+            prospect_id = f"P{len(self._mock_prospects) + 1:03d}"
+            prospect = WellSkyProspect(
+                id=prospect_id,
+                first_name=prospect_data.get("first_name", ""),
+                last_name=prospect_data.get("last_name", ""),
+                status=ProspectStatus(prospect_data.get("status", "new")),
+                phone=prospect_data.get("phone", ""),
+                email=prospect_data.get("email", ""),
+                address=prospect_data.get("address", ""),
+                city=prospect_data.get("city", ""),
+                state=prospect_data.get("state", "CO"),
+                zip_code=prospect_data.get("zip_code", ""),
+                referral_source=prospect_data.get("referral_source", ""),
+                referral_date=self._parse_date(prospect_data.get("referral_date")),
+                care_needs=prospect_data.get("care_needs", []),
+                estimated_hours_weekly=float(prospect_data.get("estimated_hours_weekly", 0)),
+                payer_type=prospect_data.get("payer_type", ""),
+                sales_rep=prospect_data.get("sales_rep", ""),
+                sales_dashboard_deal_id=prospect_data.get("sales_dashboard_deal_id"),
+                notes=prospect_data.get("notes", ""),
+            )
+            prospect.created_at = datetime.utcnow()
+            prospect.updated_at = datetime.utcnow()
+            self._mock_prospects[prospect_id] = prospect
+            logger.info(f"Mock: Created prospect {prospect_id} ({prospect.full_name})")
+            return prospect
+
+        success, data = self._make_request("POST", "/prospects", data=prospect_data)
+
+        if success:
+            return self._parse_prospect(data)
+        return None
+
+    def update_prospect(
+        self,
+        prospect_id: str,
+        updates: Dict[str, Any]
+    ) -> Optional[WellSkyProspect]:
+        """Update an existing prospect"""
+        if self.is_mock_mode:
+            prospect = self._mock_prospects.get(prospect_id)
+            if not prospect:
+                return None
+
+            for key, value in updates.items():
+                if key == "status" and isinstance(value, str):
+                    value = ProspectStatus(value)
+                if hasattr(prospect, key):
+                    setattr(prospect, key, value)
+
+            prospect.updated_at = datetime.utcnow()
+            logger.info(f"Mock: Updated prospect {prospect_id}")
+            return prospect
+
+        success, data = self._make_request("PUT", f"/prospects/{prospect_id}", data=updates)
+
+        if success:
+            return self._parse_prospect(data)
+        return None
+
+    def update_prospect_status(
+        self,
+        prospect_id: str,
+        new_status: ProspectStatus,
+        notes: str = ""
+    ) -> Optional[WellSkyProspect]:
+        """Update prospect status (pipeline stage change)"""
+        updates = {"status": new_status.value}
+        if notes:
+            updates["status_change_notes"] = notes
+
+        # Handle special status transitions
+        now = datetime.utcnow()
+        if new_status == ProspectStatus.WON:
+            updates["won_date"] = now.date().isoformat()
+        elif new_status == ProspectStatus.LOST:
+            updates["lost_date"] = now.date().isoformat()
+            if notes:
+                updates["lost_reason"] = notes
+        elif new_status == ProspectStatus.ASSESSMENT_COMPLETED:
+            updates["assessment_date"] = now.isoformat()
+        elif new_status == ProspectStatus.PROPOSAL_SENT:
+            updates["proposal_date"] = now.date().isoformat()
+
+        return self.update_prospect(prospect_id, updates)
+
+    def convert_prospect_to_client(
+        self,
+        prospect_id: str,
+        client_data: Optional[Dict[str, Any]] = None
+    ) -> Optional[WellSkyClient]:
+        """
+        Convert a won prospect to an active client.
+
+        Called when GoFormz paperwork is completed and prospect becomes client.
+        """
+        prospect = self.get_prospect(prospect_id)
+        if not prospect:
+            logger.error(f"Prospect {prospect_id} not found for conversion")
+            return None
+
+        if prospect.status != ProspectStatus.WON:
+            logger.warning(f"Prospect {prospect_id} status is {prospect.status.value}, not 'won'")
+
+        # Merge prospect data with any additional client data
+        merged_data = {
+            "first_name": prospect.first_name,
+            "last_name": prospect.last_name,
+            "phone": prospect.phone,
+            "email": prospect.email,
+            "address": prospect.address,
+            "city": prospect.city,
+            "state": prospect.state,
+            "zip_code": prospect.zip_code,
+            "referral_source": prospect.referral_source,
+            "payer_source": prospect.payer_type,
+            "authorized_hours_weekly": prospect.estimated_hours_weekly,
+            "notes": prospect.notes,
+        }
+
+        if client_data:
+            merged_data.update(client_data)
+
+        # Create the client
+        client = self.create_client(merged_data)
+
+        if client:
+            # Update prospect with converted client ID
+            self.update_prospect(prospect_id, {
+                "status": ProspectStatus.WON.value,
+                "converted_client_id": client.id
+            })
+            logger.info(f"Converted prospect {prospect_id} to client {client.id}")
+
+        return client
+
+    def _parse_prospect(self, data: Dict) -> WellSkyProspect:
+        """Parse API response into WellSkyProspect object"""
+        return WellSkyProspect(
+            id=str(data.get("id", "")),
+            first_name=data.get("first_name", data.get("firstName", "")),
+            last_name=data.get("last_name", data.get("lastName", "")),
+            status=ProspectStatus(data.get("status", "new")),
+            phone=data.get("phone", ""),
+            email=data.get("email", ""),
+            address=data.get("address", ""),
+            city=data.get("city", ""),
+            state=data.get("state", "CO"),
+            zip_code=data.get("zip_code", data.get("zipCode", "")),
+            referral_source=data.get("referral_source", data.get("referralSource", "")),
+            referral_date=self._parse_date(data.get("referral_date", data.get("referralDate"))),
+            care_needs=data.get("care_needs", data.get("careNeeds", [])),
+            estimated_hours_weekly=float(data.get("estimated_hours_weekly", data.get("estimatedHoursWeekly", 0))),
+            payer_type=data.get("payer_type", data.get("payerType", "")),
+            sales_rep=data.get("sales_rep", data.get("salesRep", "")),
+            assessment_date=self._parse_datetime(data.get("assessment_date", data.get("assessmentDate"))),
+            assessment_notes=data.get("assessment_notes", data.get("assessmentNotes", "")),
+            proposal_amount=float(data.get("proposal_amount", data.get("proposalAmount", 0))),
+            proposal_date=self._parse_date(data.get("proposal_date", data.get("proposalDate"))),
+            won_date=self._parse_date(data.get("won_date", data.get("wonDate"))),
+            lost_date=self._parse_date(data.get("lost_date", data.get("lostDate"))),
+            lost_reason=data.get("lost_reason", data.get("lostReason", "")),
+            converted_client_id=data.get("converted_client_id", data.get("convertedClientId")),
+            sales_dashboard_deal_id=data.get("sales_dashboard_deal_id", data.get("salesDashboardDealId")),
+            goformz_submission_id=data.get("goformz_submission_id", data.get("goformzSubmissionId")),
+            notes=data.get("notes", ""),
+            created_at=self._parse_datetime(data.get("created_at", data.get("createdAt"))),
+            updated_at=self._parse_datetime(data.get("updated_at", data.get("updatedAt"))),
+        )
+
+    # =========================================================================
+    # Applicant Methods (Recruiting Pipeline Integration)
+    # =========================================================================
+
+    def get_applicants(
+        self,
+        status: Optional[ApplicantStatus] = None,
+        recruiter: Optional[str] = None,
+        limit: int = 100,
+        offset: int = 0
+    ) -> List[WellSkyApplicant]:
+        """Get applicants from WellSky (recruiting pipeline)"""
+        if self.is_mock_mode:
+            applicants = list(self._mock_applicants.values())
+            if status:
+                applicants = [a for a in applicants if a.status == status]
+            if recruiter:
+                applicants = [a for a in applicants if a.recruiter == recruiter]
+            return applicants[offset:offset + limit]
+
+        params = {"limit": limit, "offset": offset}
+        if status:
+            params["status"] = status.value
+        if recruiter:
+            params["recruiter"] = recruiter
+
+        success, data = self._make_request("GET", "/applicants", params=params)
+
+        if success and "applicants" in data:
+            return [self._parse_applicant(a) for a in data["applicants"]]
+        return []
+
+    def get_applicant(self, applicant_id: str) -> Optional[WellSkyApplicant]:
+        """Get a single applicant by ID"""
+        if self.is_mock_mode:
+            return self._mock_applicants.get(applicant_id)
+
+        success, data = self._make_request("GET", f"/applicants/{applicant_id}")
+
+        if success:
+            return self._parse_applicant(data)
+        return None
+
+    def get_applicant_by_recruiting_lead_id(self, lead_id: str) -> Optional[WellSkyApplicant]:
+        """Find applicant by Recruiting Dashboard lead ID"""
+        if self.is_mock_mode:
+            for applicant in self._mock_applicants.values():
+                if applicant.recruiting_dashboard_lead_id == lead_id:
+                    return applicant
+            return None
+
+        success, data = self._make_request(
+            "GET", "/applicants",
+            params={"recruiting_dashboard_lead_id": lead_id}
+        )
+
+        if success and data.get("applicants"):
+            return self._parse_applicant(data["applicants"][0])
+        return None
+
+    def create_applicant(self, applicant_data: Dict[str, Any]) -> Optional[WellSkyApplicant]:
+        """
+        Create a new applicant in WellSky.
+
+        Called when a new lead is created in Recruiting Dashboard.
+        """
+        if self.is_mock_mode:
+            applicant_id = f"A{len(self._mock_applicants) + 1:03d}"
+            applicant = WellSkyApplicant(
+                id=applicant_id,
+                first_name=applicant_data.get("first_name", ""),
+                last_name=applicant_data.get("last_name", ""),
+                status=ApplicantStatus(applicant_data.get("status", "new")),
+                phone=applicant_data.get("phone", ""),
+                email=applicant_data.get("email", ""),
+                address=applicant_data.get("address", ""),
+                city=applicant_data.get("city", ""),
+                state=applicant_data.get("state", "CO"),
+                zip_code=applicant_data.get("zip_code", ""),
+                application_date=self._parse_date(applicant_data.get("application_date")) or date.today(),
+                source=applicant_data.get("source", ""),
+                position_applied=applicant_data.get("position_applied", ""),
+                certifications=applicant_data.get("certifications", []),
+                years_experience=int(applicant_data.get("years_experience", 0)),
+                languages=applicant_data.get("languages", ["English"]),
+                available_days=applicant_data.get("available_days", []),
+                desired_hours_weekly=int(applicant_data.get("desired_hours_weekly", 0)),
+                recruiter=applicant_data.get("recruiter", ""),
+                recruiting_dashboard_lead_id=applicant_data.get("recruiting_dashboard_lead_id"),
+                notes=applicant_data.get("notes", ""),
+            )
+            applicant.created_at = datetime.utcnow()
+            applicant.updated_at = datetime.utcnow()
+            self._mock_applicants[applicant_id] = applicant
+            logger.info(f"Mock: Created applicant {applicant_id} ({applicant.full_name})")
+            return applicant
+
+        success, data = self._make_request("POST", "/applicants", data=applicant_data)
+
+        if success:
+            return self._parse_applicant(data)
+        return None
+
+    def update_applicant(
+        self,
+        applicant_id: str,
+        updates: Dict[str, Any]
+    ) -> Optional[WellSkyApplicant]:
+        """Update an existing applicant"""
+        if self.is_mock_mode:
+            applicant = self._mock_applicants.get(applicant_id)
+            if not applicant:
+                return None
+
+            for key, value in updates.items():
+                if key == "status" and isinstance(value, str):
+                    value = ApplicantStatus(value)
+                if hasattr(applicant, key):
+                    setattr(applicant, key, value)
+
+            applicant.updated_at = datetime.utcnow()
+            logger.info(f"Mock: Updated applicant {applicant_id}")
+            return applicant
+
+        success, data = self._make_request("PUT", f"/applicants/{applicant_id}", data=updates)
+
+        if success:
+            return self._parse_applicant(data)
+        return None
+
+    def update_applicant_status(
+        self,
+        applicant_id: str,
+        new_status: ApplicantStatus,
+        notes: str = ""
+    ) -> Optional[WellSkyApplicant]:
+        """Update applicant status (recruiting pipeline stage change)"""
+        updates = {"status": new_status.value}
+        if notes:
+            updates["status_change_notes"] = notes
+
+        # Handle special status transitions
+        now = datetime.utcnow()
+        if new_status == ApplicantStatus.PHONE_INTERVIEW:
+            updates["phone_screen_date"] = now.isoformat()
+        elif new_status == ApplicantStatus.IN_PERSON_INTERVIEW:
+            updates["interview_date"] = now.isoformat()
+        elif new_status == ApplicantStatus.BACKGROUND_CHECK:
+            updates["background_check_submitted"] = now.date().isoformat()
+        elif new_status == ApplicantStatus.OFFER_EXTENDED:
+            updates["offer_date"] = now.date().isoformat()
+        elif new_status == ApplicantStatus.HIRED:
+            updates["offer_accepted_date"] = now.date().isoformat()
+        elif new_status == ApplicantStatus.REJECTED:
+            updates["rejected_date"] = now.date().isoformat()
+            if notes:
+                updates["rejected_reason"] = notes
+        elif new_status == ApplicantStatus.WITHDRAWN:
+            updates["withdrawn_date"] = now.date().isoformat()
+            if notes:
+                updates["withdrawn_reason"] = notes
+
+        return self.update_applicant(applicant_id, updates)
+
+    def convert_applicant_to_caregiver(
+        self,
+        applicant_id: str,
+        caregiver_data: Optional[Dict[str, Any]] = None
+    ) -> Optional[WellSkyCaregiver]:
+        """
+        Convert a hired applicant to an active caregiver.
+
+        Called when GoFormz paperwork is completed and applicant becomes caregiver.
+        """
+        applicant = self.get_applicant(applicant_id)
+        if not applicant:
+            logger.error(f"Applicant {applicant_id} not found for conversion")
+            return None
+
+        if applicant.status != ApplicantStatus.HIRED:
+            logger.warning(f"Applicant {applicant_id} status is {applicant.status.value}, not 'hired'")
+
+        # Merge applicant data with any additional caregiver data
+        merged_data = {
+            "first_name": applicant.first_name,
+            "last_name": applicant.last_name,
+            "phone": applicant.phone,
+            "email": applicant.email,
+            "address": applicant.address,
+            "city": applicant.city,
+            "state": applicant.state,
+            "zip_code": applicant.zip_code,
+            "certifications": applicant.certifications,
+            "languages": applicant.languages,
+            "available_days": applicant.available_days,
+            "hire_date": applicant.start_date or date.today(),
+            "notes": applicant.notes,
+        }
+
+        if caregiver_data:
+            merged_data.update(caregiver_data)
+
+        # Create the caregiver
+        caregiver = self.create_caregiver(merged_data)
+
+        if caregiver:
+            # Update applicant with converted caregiver ID
+            self.update_applicant(applicant_id, {
+                "status": ApplicantStatus.HIRED.value,
+                "converted_caregiver_id": caregiver.id
+            })
+            logger.info(f"Converted applicant {applicant_id} to caregiver {caregiver.id}")
+
+        return caregiver
+
+    def _parse_applicant(self, data: Dict) -> WellSkyApplicant:
+        """Parse API response into WellSkyApplicant object"""
+        return WellSkyApplicant(
+            id=str(data.get("id", "")),
+            first_name=data.get("first_name", data.get("firstName", "")),
+            last_name=data.get("last_name", data.get("lastName", "")),
+            status=ApplicantStatus(data.get("status", "new")),
+            phone=data.get("phone", ""),
+            email=data.get("email", ""),
+            address=data.get("address", ""),
+            city=data.get("city", ""),
+            state=data.get("state", "CO"),
+            zip_code=data.get("zip_code", data.get("zipCode", "")),
+            application_date=self._parse_date(data.get("application_date", data.get("applicationDate"))),
+            source=data.get("source", ""),
+            position_applied=data.get("position_applied", data.get("positionApplied", "")),
+            certifications=data.get("certifications", []),
+            years_experience=int(data.get("years_experience", data.get("yearsExperience", 0))),
+            languages=data.get("languages", ["English"]),
+            available_days=data.get("available_days", data.get("availableDays", [])),
+            desired_hours_weekly=int(data.get("desired_hours_weekly", data.get("desiredHoursWeekly", 0))),
+            recruiter=data.get("recruiter", ""),
+            phone_screen_date=self._parse_datetime(data.get("phone_screen_date", data.get("phoneScreenDate"))),
+            phone_screen_notes=data.get("phone_screen_notes", data.get("phoneScreenNotes", "")),
+            interview_date=self._parse_datetime(data.get("interview_date", data.get("interviewDate"))),
+            interview_notes=data.get("interview_notes", data.get("interviewNotes", "")),
+            background_check_submitted=self._parse_date(data.get("background_check_submitted", data.get("backgroundCheckSubmitted"))),
+            background_check_cleared=self._parse_date(data.get("background_check_cleared", data.get("backgroundCheckCleared"))),
+            offer_date=self._parse_date(data.get("offer_date", data.get("offerDate"))),
+            offer_hourly_rate=float(data.get("offer_hourly_rate", data.get("offerHourlyRate", 0))),
+            offer_accepted_date=self._parse_date(data.get("offer_accepted_date", data.get("offerAcceptedDate"))),
+            start_date=self._parse_date(data.get("start_date", data.get("startDate"))),
+            rejected_date=self._parse_date(data.get("rejected_date", data.get("rejectedDate"))),
+            rejected_reason=data.get("rejected_reason", data.get("rejectedReason", "")),
+            withdrawn_date=self._parse_date(data.get("withdrawn_date", data.get("withdrawnDate"))),
+            withdrawn_reason=data.get("withdrawn_reason", data.get("withdrawnReason", "")),
+            converted_caregiver_id=data.get("converted_caregiver_id", data.get("convertedCaregiverId")),
+            recruiting_dashboard_lead_id=data.get("recruiting_dashboard_lead_id", data.get("recruitingDashboardLeadId")),
+            goformz_submission_id=data.get("goformz_submission_id", data.get("goformzSubmissionId")),
+            notes=data.get("notes", ""),
+            created_at=self._parse_datetime(data.get("created_at", data.get("createdAt"))),
+            updated_at=self._parse_datetime(data.get("updated_at", data.get("updatedAt"))),
+        )
+
+    # =========================================================================
     # Analytics / Dashboard Methods (for Client Satisfaction)
     # =========================================================================
 
@@ -1285,8 +1966,164 @@ class WellSkyService:
                 )
                 self._mock_family_activity[client.id] = activity
 
+        # Sample prospects (sales pipeline)
+        prospects_data = [
+            {"id": "P001", "first_name": "Harold", "last_name": "Thompson", "city": "Boulder",
+             "phone": "+13035551001", "email": "hthompson@email.com",
+             "status": ProspectStatus.ASSESSMENT_SCHEDULED, "referral_source": "physician",
+             "referral_date": date.today() - timedelta(days=10),
+             "care_needs": ["Personal Care", "Medication Management"],
+             "estimated_hours_weekly": 20, "payer_type": "private_pay",
+             "sales_rep": "Sarah Miller", "sales_dashboard_deal_id": "DEAL001"},
+            {"id": "P002", "first_name": "Margaret", "last_name": "Chen", "city": "Denver",
+             "phone": "+13035551002", "email": "mchen@email.com",
+             "status": ProspectStatus.PROPOSAL_SENT, "referral_source": "hospital_discharge",
+             "referral_date": date.today() - timedelta(days=21),
+             "care_needs": ["Companionship", "Light Housekeeping", "Meal Prep"],
+             "estimated_hours_weekly": 15, "payer_type": "ltc_insurance",
+             "sales_rep": "John Davis", "proposal_amount": 3600.0,
+             "proposal_date": date.today() - timedelta(days=3), "sales_dashboard_deal_id": "DEAL002"},
+            {"id": "P003", "first_name": "Richard", "last_name": "Anderson", "city": "Arvada",
+             "phone": "+13035551003", "email": "randerson@email.com",
+             "status": ProspectStatus.NEW, "referral_source": "website",
+             "referral_date": date.today() - timedelta(days=2),
+             "care_needs": ["Personal Care"],
+             "estimated_hours_weekly": 10, "payer_type": "medicaid",
+             "sales_rep": "", "sales_dashboard_deal_id": "DEAL003"},
+            {"id": "P004", "first_name": "Barbara", "last_name": "Williams", "city": "Lakewood",
+             "phone": "+13035551004", "email": "bwilliams@email.com",
+             "status": ProspectStatus.NEGOTIATING, "referral_source": "family_referral",
+             "referral_date": date.today() - timedelta(days=30),
+             "care_needs": ["Personal Care", "Dementia Care", "Overnight Care"],
+             "estimated_hours_weekly": 40, "payer_type": "private_pay",
+             "sales_rep": "Sarah Miller", "proposal_amount": 9600.0,
+             "assessment_date": datetime.now() - timedelta(days=14),
+             "proposal_date": date.today() - timedelta(days=7), "sales_dashboard_deal_id": "DEAL004"},
+            {"id": "P005", "first_name": "George", "last_name": "Martinez", "city": "Aurora",
+             "phone": "+13035551005", "email": "gmartinez@email.com",
+             "status": ProspectStatus.CONTACTED, "referral_source": "va_referral",
+             "referral_date": date.today() - timedelta(days=5),
+             "care_needs": ["Personal Care", "Transportation"],
+             "estimated_hours_weekly": 12, "payer_type": "va",
+             "sales_rep": "John Davis", "sales_dashboard_deal_id": "DEAL005"},
+        ]
+
+        for data in prospects_data:
+            prospect = WellSkyProspect(
+                id=data["id"],
+                first_name=data["first_name"],
+                last_name=data["last_name"],
+                status=data["status"],
+                phone=data.get("phone", ""),
+                email=data.get("email", ""),
+                city=data.get("city", ""),
+                referral_source=data.get("referral_source", ""),
+                referral_date=data.get("referral_date"),
+                care_needs=data.get("care_needs", []),
+                estimated_hours_weekly=data.get("estimated_hours_weekly", 0),
+                payer_type=data.get("payer_type", ""),
+                sales_rep=data.get("sales_rep", ""),
+                assessment_date=data.get("assessment_date"),
+                proposal_amount=data.get("proposal_amount", 0),
+                proposal_date=data.get("proposal_date"),
+                sales_dashboard_deal_id=data.get("sales_dashboard_deal_id"),
+            )
+            prospect.created_at = datetime.combine(data.get("referral_date", date.today()), datetime.min.time())
+            prospect.updated_at = datetime.utcnow()
+            self._mock_prospects[prospect.id] = prospect
+
+        # Sample applicants (recruiting pipeline)
+        applicants_data = [
+            {"id": "A001", "first_name": "Emily", "last_name": "Taylor", "city": "Denver",
+             "phone": "+13035552001", "email": "etaylor@email.com",
+             "status": ApplicantStatus.BACKGROUND_CHECK, "source": "indeed",
+             "application_date": date.today() - timedelta(days=14),
+             "position_applied": "CNA", "certifications": ["CNA", "CPR"],
+             "years_experience": 3, "languages": ["English", "Spanish"],
+             "available_days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+             "desired_hours_weekly": 40, "recruiter": "Lisa Brown",
+             "phone_screen_date": datetime.now() - timedelta(days=10),
+             "interview_date": datetime.now() - timedelta(days=5),
+             "background_check_submitted": date.today() - timedelta(days=2),
+             "recruiting_dashboard_lead_id": "LEAD001"},
+            {"id": "A002", "first_name": "Marcus", "last_name": "Johnson", "city": "Aurora",
+             "phone": "+13035552002", "email": "mjohnson@email.com",
+             "status": ApplicantStatus.IN_PERSON_INTERVIEW, "source": "referral",
+             "application_date": date.today() - timedelta(days=7),
+             "position_applied": "HHA", "certifications": ["HHA"],
+             "years_experience": 1, "languages": ["English"],
+             "available_days": ["Mon", "Wed", "Fri", "Sat"],
+             "desired_hours_weekly": 30, "recruiter": "Lisa Brown",
+             "phone_screen_date": datetime.now() - timedelta(days=4),
+             "recruiting_dashboard_lead_id": "LEAD002"},
+            {"id": "A003", "first_name": "Jennifer", "last_name": "Lee", "city": "Centennial",
+             "phone": "+13035552003", "email": "jlee@email.com",
+             "status": ApplicantStatus.NEW, "source": "indeed",
+             "application_date": date.today() - timedelta(days=1),
+             "position_applied": "Companion", "certifications": [],
+             "years_experience": 0, "languages": ["English", "Korean"],
+             "available_days": ["Tue", "Thu", "Sat", "Sun"],
+             "desired_hours_weekly": 20, "recruiter": "",
+             "recruiting_dashboard_lead_id": "LEAD003"},
+            {"id": "A004", "first_name": "Anthony", "last_name": "Garcia", "city": "Lakewood",
+             "phone": "+13035552004", "email": "agarcia@email.com",
+             "status": ApplicantStatus.OFFER_EXTENDED, "source": "walk_in",
+             "application_date": date.today() - timedelta(days=21),
+             "position_applied": "CNA", "certifications": ["CNA", "CPR", "First Aid"],
+             "years_experience": 5, "languages": ["English", "Spanish"],
+             "available_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+             "desired_hours_weekly": 40, "recruiter": "Mike Wilson",
+             "phone_screen_date": datetime.now() - timedelta(days=18),
+             "interview_date": datetime.now() - timedelta(days=14),
+             "background_check_submitted": date.today() - timedelta(days=10),
+             "background_check_cleared": date.today() - timedelta(days=3),
+             "offer_date": date.today() - timedelta(days=1),
+             "offer_hourly_rate": 18.50,
+             "recruiting_dashboard_lead_id": "LEAD004"},
+            {"id": "A005", "first_name": "Rachel", "last_name": "Kim", "city": "Boulder",
+             "phone": "+13035552005", "email": "rkim@email.com",
+             "status": ApplicantStatus.PHONE_INTERVIEW, "source": "linkedin",
+             "application_date": date.today() - timedelta(days=3),
+             "position_applied": "HHA", "certifications": ["HHA", "CPR"],
+             "years_experience": 2, "languages": ["English"],
+             "available_days": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+             "desired_hours_weekly": 35, "recruiter": "Mike Wilson",
+             "recruiting_dashboard_lead_id": "LEAD005"},
+        ]
+
+        for data in applicants_data:
+            applicant = WellSkyApplicant(
+                id=data["id"],
+                first_name=data["first_name"],
+                last_name=data["last_name"],
+                status=data["status"],
+                phone=data.get("phone", ""),
+                email=data.get("email", ""),
+                city=data.get("city", ""),
+                application_date=data.get("application_date"),
+                source=data.get("source", ""),
+                position_applied=data.get("position_applied", ""),
+                certifications=data.get("certifications", []),
+                years_experience=data.get("years_experience", 0),
+                languages=data.get("languages", ["English"]),
+                available_days=data.get("available_days", []),
+                desired_hours_weekly=data.get("desired_hours_weekly", 0),
+                recruiter=data.get("recruiter", ""),
+                phone_screen_date=data.get("phone_screen_date"),
+                interview_date=data.get("interview_date"),
+                background_check_submitted=data.get("background_check_submitted"),
+                background_check_cleared=data.get("background_check_cleared"),
+                offer_date=data.get("offer_date"),
+                offer_hourly_rate=data.get("offer_hourly_rate", 0),
+                recruiting_dashboard_lead_id=data.get("recruiting_dashboard_lead_id"),
+            )
+            applicant.created_at = datetime.combine(data.get("application_date", date.today()), datetime.min.time())
+            applicant.updated_at = datetime.utcnow()
+            self._mock_applicants[applicant.id] = applicant
+
         logger.info(f"Mock data initialized: {len(self._mock_clients)} clients, "
-                   f"{len(self._mock_caregivers)} caregivers, {len(self._mock_shifts)} shifts")
+                   f"{len(self._mock_caregivers)} caregivers, {len(self._mock_shifts)} shifts, "
+                   f"{len(self._mock_prospects)} prospects, {len(self._mock_applicants)} applicants")
 
 
 # =============================================================================

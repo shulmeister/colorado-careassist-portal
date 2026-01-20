@@ -4263,6 +4263,252 @@ try:
 except Exception as schema_error:
     print(f"Schema init warning: {schema_error}")
 
+# =============================================================================
+# WellSky Integration API - Recruiting Dashboard → WellSky Applicants
+# =============================================================================
+
+@app.route('/api/wellsky/sync/status')
+@require_auth
+def get_wellsky_sync_status():
+    """Get WellSky integration status and sync summary"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.wellsky_service import wellsky_service
+        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+
+        return jsonify({
+            'status': 'ok',
+            'wellsky_configured': wellsky_service.is_configured,
+            'wellsky_mode': 'live' if wellsky_service.is_configured else 'mock',
+            'sync_log_entries': len(recruiting_wellsky_sync.get_sync_log()),
+            'recent_sync_log': recruiting_wellsky_sync.get_sync_log(limit=10),
+        })
+    except Exception as e:
+        print(f"Error getting WellSky sync status: {e}")
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+
+@app.route('/api/wellsky/sync/lead/<int:lead_id>', methods=['POST'])
+@require_auth
+def sync_lead_to_wellsky(lead_id):
+    """Sync a single lead to WellSky as an applicant"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+
+        # Get lead from database
+        lead = Lead.query.get(lead_id)
+        if not lead:
+            return jsonify({'success': False, 'error': 'Lead not found'}), 404
+
+        lead_dict = {
+            'id': lead.id,
+            'name': lead.name,
+            'email': lead.email,
+            'phone': lead.phone,
+            'status': lead.status,
+            'notes': lead.notes,
+            'source': lead.source,
+            'assigned_to': lead.assigned_to,
+            'created_at': lead.created_at.isoformat() if lead.created_at else None,
+        }
+
+        # Sync to WellSky
+        success, applicant, message = recruiting_wellsky_sync.sync_lead_to_applicant(lead_dict)
+
+        return jsonify({
+            'success': success,
+            'message': message,
+            'lead_id': lead_id,
+            'applicant': applicant.to_dict() if applicant else None,
+        })
+    except Exception as e:
+        print(f"Error syncing lead {lead_id} to WellSky: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/wellsky/sync/all-leads', methods=['POST'])
+@require_auth
+def sync_all_leads_to_wellsky():
+    """Sync all active leads to WellSky as applicants"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+
+        # Get all leads (excluding terminal statuses)
+        leads = Lead.query.filter(
+            ~Lead.status.in_(['rejected', 'withdrawn', 'no_show', 'unresponsive'])
+        ).all()
+
+        lead_dicts = [{
+            'id': lead.id,
+            'name': lead.name,
+            'email': lead.email,
+            'phone': lead.phone,
+            'status': lead.status,
+            'notes': lead.notes,
+            'source': lead.source,
+            'assigned_to': lead.assigned_to,
+            'created_at': lead.created_at.isoformat() if lead.created_at else None,
+        } for lead in leads]
+
+        # Run sync
+        results = recruiting_wellsky_sync.sync_all_leads(lead_dicts)
+
+        return jsonify({
+            'success': True,
+            'results': results,
+        })
+    except Exception as e:
+        print(f"Error syncing all leads to WellSky: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/wellsky/lead/<int:lead_id>/sync-status')
+@require_auth
+def get_lead_wellsky_sync_status(lead_id):
+    """Get WellSky sync status for a specific lead"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+
+        # Check lead exists
+        lead = Lead.query.get(lead_id)
+        if not lead:
+            return jsonify({'error': 'Lead not found'}), 404
+
+        # Get sync status
+        status = recruiting_wellsky_sync.get_sync_status(str(lead_id))
+
+        return jsonify(status)
+    except Exception as e:
+        print(f"Error getting WellSky sync status for lead {lead_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/wellsky/lead/<int:lead_id>/status-change', methods=['POST'])
+@require_auth
+def notify_wellsky_lead_status_change(lead_id):
+    """Notify WellSky of a lead status change"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+
+        # Check lead exists
+        lead = Lead.query.get(lead_id)
+        if not lead:
+            return jsonify({'success': False, 'error': 'Lead not found'}), 404
+
+        data = request.get_json() or {}
+        new_status = data.get('status', lead.status)
+        notes = data.get('notes', '')
+
+        # Sync status change
+        success, applicant, message = recruiting_wellsky_sync.sync_lead_status_change(
+            str(lead_id), new_status, notes=notes
+        )
+
+        return jsonify({
+            'success': success,
+            'message': message,
+            'lead_id': lead_id,
+            'new_status': new_status,
+            'applicant': applicant.to_dict() if applicant else None,
+        })
+    except Exception as e:
+        print(f"Error syncing lead status change to WellSky: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/wellsky/applicants')
+@require_auth
+def get_wellsky_applicants():
+    """Get applicants from WellSky"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.wellsky_service import wellsky_service, ApplicantStatus
+
+        status = request.args.get('status')
+        limit = int(request.args.get('limit', 100))
+
+        # Parse status if provided
+        applicant_status = None
+        if status:
+            try:
+                applicant_status = ApplicantStatus(status.lower())
+            except ValueError:
+                pass
+
+        applicants = wellsky_service.get_applicants(status=applicant_status, limit=limit)
+
+        return jsonify({
+            'applicants': [a.to_dict() for a in applicants],
+            'count': len(applicants),
+            'wellsky_mode': 'live' if wellsky_service.is_configured else 'mock',
+        })
+    except Exception as e:
+        print(f"Error getting WellSky applicants: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/wellsky/pipeline-summary')
+@require_auth
+def get_wellsky_pipeline_summary():
+    """Get recruiting pipeline summary from WellSky"""
+    try:
+        # Add parent directory to path for services import
+        import sys as _sys
+        import os as _os
+        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        if parent_dir not in _sys.path:
+            _sys.path.insert(0, parent_dir)
+
+        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+
+        summary = recruiting_wellsky_sync.get_pipeline_summary()
+
+        return jsonify(summary)
+    except Exception as e:
+        print(f"Error getting WellSky pipeline summary: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/test')
 def test():
     return jsonify({'status': 'OK', 'message': 'Flask app is running!'})
