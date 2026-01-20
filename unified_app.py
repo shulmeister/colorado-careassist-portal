@@ -57,7 +57,17 @@ try:
         sys.path.insert(0, sales_path)
         logger.info(f"✅ Added sales path: {sales_path}")
 
-        # Import sales app - ensure services can be found
+        # Pre-import services modules before loading sales app
+        # This ensures they're in sys.modules when the import statements run
+        try:
+            import services.activity_service
+            import services.ai_enrichment_service
+            import services.auth_service
+            logger.info("✅ Pre-imported sales services modules")
+        except ImportError as e:
+            logger.warning(f"⚠️  Could not pre-import services: {e}")
+
+        # Import sales app
         sales_app_file = os.path.join(sales_path, "app.py")
         spec = importlib.util.spec_from_file_location("sales_app", sales_app_file)
         sales_module = importlib.util.module_from_spec(spec)
