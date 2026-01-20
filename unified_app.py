@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 # Import and set up the portal app as the main app
 try:
+    # Ensure root path is in sys.path first so portal can import root-level services
+    root_path = os.path.dirname(__file__)
+    if root_path not in sys.path:
+        sys.path.insert(0, root_path)
+
     portal_path = os.path.join(os.path.dirname(__file__), "portal")
     sys.path.insert(0, portal_path)
 
