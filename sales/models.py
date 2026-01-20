@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, DateTime, Text, Boolean, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -6,6 +6,68 @@ import uuid
 import json
 
 Base = declarative_base()
+
+
+# ============================================================================
+# Phase 1: Relationship Graph - Association Tables
+# ============================================================================
+
+class DealContact(Base):
+    """Association table for Deal <-> Contact many-to-many relationship with roles"""
+    __tablename__ = "deal_contacts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=False, index=True)
+    contact_id = Column(Integer, ForeignKey("contacts.id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String(100), nullable=True)  # "decision_maker", "influencer", "user", "champion", "blocker"
+    is_primary = Column(Boolean, default=False)  # Primary contact for this deal
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint('deal_id', 'contact_id', name='uq_deal_contact'),
+    )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "deal_id": self.deal_id,
+            "contact_id": self.contact_id,
+            "role": self.role,
+            "is_primary": self.is_primary,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+# ============================================================================
+# Phase 1: Time-in-Stage Tracking
+# ============================================================================
+
+class DealStageHistory(Base):
+    """Track every stage change for a deal - enables time-in-stage analytics"""
+    __tablename__ = "deal_stage_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    deal_id = Column(Integer, ForeignKey("deals.id", ondelete="CASCADE"), nullable=False, index=True)
+    from_stage = Column(String(100), nullable=True)  # NULL for initial stage
+    to_stage = Column(String(100), nullable=False)
+    changed_at = Column(DateTime, default=datetime.utcnow, index=True)
+    changed_by = Column(String(255), nullable=True)  # User email who made the change
+    duration_seconds = Column(Integer, nullable=True)  # Time spent in from_stage
+
+    # Relationship
+    deal = relationship("Deal", back_populates="stage_history")
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "deal_id": self.deal_id,
+            "from_stage": self.from_stage,
+            "to_stage": self.to_stage,
+            "changed_at": self.changed_at.isoformat() if self.changed_at else None,
+            "changed_by": self.changed_by,
+            "duration_seconds": self.duration_seconds,
+            "duration_days": round(self.duration_seconds / 86400, 1) if self.duration_seconds else None,
+        }
 
 class Visit(Base):
     """Visit records from MyWay route PDFs"""
@@ -62,7 +124,7 @@ class TimeEntry(Base):
 class Contact(Base):
     """Business contacts from scanned business cards"""
     __tablename__ = "contacts"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     first_name = Column(String(255), nullable=True)
     last_name = Column(String(255), nullable=True)
@@ -85,7 +147,23 @@ class Contact(Base):
     last_seen = Column(DateTime, nullable=True)  # Alias for last_activity for frontend
     account_manager = Column(String(255), nullable=True)
     source = Column(String(255), nullable=True)
-    
+
+    # Relationships (Phase 1: Relationship Graph)
+    company_rel = relationship("ReferralSource", back_populates="contacts", foreign_keys=[company_id])
+    deal_associations = relationship("DealContact", backref="contact", cascade="all, delete-orphan")
+    activities = relationship("ActivityLog", back_populates="contact", foreign_keys="ActivityLog.contact_id")
+    tasks = relationship("ContactTask", backref="contact_rel", cascade="all, delete-orphan")
+
+    @property
+    def deals(self):
+        """Get all deals this contact is associated with"""
+        return [assoc.deal for assoc in self.deal_associations if assoc.deal]
+
+    @property
+    def deals_count(self):
+        """Count of deals associated with this contact"""
+        return len(self.deal_associations)
+
     def to_dict(self):
         tag_list = []
         if self.tags:
@@ -179,10 +257,11 @@ class Deal(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
-    company_id = Column(Integer, nullable=True)
-    contact_ids = Column(Text, nullable=True)  # JSON array of contact ids
+    company_id = Column(Integer, ForeignKey("referral_sources.id"), nullable=True)  # FK to ReferralSource
+    contact_ids = Column(Text, nullable=True)  # JSON array of contact ids (legacy - use deal_contacts)
     category = Column(String(100), nullable=True)
     stage = Column(String(100), nullable=True, default="opportunity")
+    stage_entered_at = Column(DateTime, nullable=True)  # Phase 1: Time-in-stage tracking
     description = Column(Text, nullable=True)
     amount = Column(Float, nullable=True, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -193,7 +272,40 @@ class Deal(Base):
     index = Column(Integer, nullable=True)
     est_weekly_hours = Column(Float, nullable=True)
 
+    # Relationships (Phase 1: Relationship Graph)
+    company = relationship("ReferralSource", back_populates="deals", foreign_keys=[company_id])
+    contact_associations = relationship("DealContact", backref="deal", cascade="all, delete-orphan")
+    stage_history = relationship("DealStageHistory", back_populates="deal", order_by="DealStageHistory.changed_at", cascade="all, delete-orphan")
+    activities = relationship("ActivityLog", back_populates="deal", foreign_keys="ActivityLog.deal_id")
+
+    @property
+    def contacts(self):
+        """Get all contacts associated with this deal"""
+        return [assoc.contact for assoc in self.contact_associations if assoc.contact]
+
+    @property
+    def primary_contact(self):
+        """Get the primary contact for this deal"""
+        for assoc in self.contact_associations:
+            if assoc.is_primary and assoc.contact:
+                return assoc.contact
+        # Fallback to first contact
+        return self.contacts[0] if self.contacts else None
+
+    @property
+    def days_in_current_stage(self) -> int:
+        """Calculate days in current stage"""
+        if self.stage_entered_at:
+            return (datetime.utcnow() - self.stage_entered_at).days
+        return 0
+
+    @property
+    def is_stale(self) -> bool:
+        """Check if deal is stale (>30 days in same stage)"""
+        return self.days_in_current_stage > 30 and self.archived_at is None
+
     def to_dict(self):
+        # Legacy contact_ids support
         ids = []
         if self.contact_ids:
             try:
@@ -204,9 +316,15 @@ class Deal(Base):
             "id": self.id,
             "name": self.name,
             "company_id": self.company_id,
+            "company_name": self.company.name if self.company else None,
             "contact_ids": ids,
+            "contacts": [{"id": c.id, "name": c.name, "role": next((a.role for a in self.contact_associations if a.contact_id == c.id), None)} for c in self.contacts],
+            "primary_contact_id": self.primary_contact.id if self.primary_contact else None,
             "category": self.category,
             "stage": self.stage,
+            "stage_entered_at": self.stage_entered_at.isoformat() if self.stage_entered_at else None,
+            "days_in_stage": self.days_in_current_stage,
+            "is_stale": self.is_stale,
             "description": self.description,
             "amount": self.amount,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -305,66 +423,136 @@ class EmailCount(Base):
         }
 
 class ActivityLog(Base):
-    """Activity logs for contacts, deals, and companies - tracks all interactions"""
+    """Unified activity timeline for contacts, deals, and companies - tracks all interactions"""
     __tablename__ = "activity_logs"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    
+
     # Activity type and description
-    activity_type = Column(String(50), nullable=False)  # "card_scan", "visit", "call", "email", "note", "document", "task_created", "deal_stage_change"
+    # Types: note, card_scan, visit, email_sent, email_received, call_inbound, call_outbound,
+    #        call_missed, deal_created, deal_stage_change, deal_won, deal_lost,
+    #        contact_created, task_created, task_completed, document
+    activity_type = Column(String(50), nullable=False, index=True)
+    title = Column(String(255), nullable=True)  # Phase 2: Short title for timeline display
     description = Column(Text, nullable=True)  # Human-readable description
-    
+
     # Relationships (can link to multiple entities)
     contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=True, index=True)
-    deal_id = Column(Integer, ForeignKey("leads.id"), nullable=True, index=True)  # Links to leads table (deals)
-    company_id = Column(Integer, ForeignKey("referral_sources.id"), nullable=True, index=True)  # Links to referral_sources (companies)
-    
+    deal_id = Column(Integer, ForeignKey("deals.id"), nullable=True, index=True)  # Now links to deals table
+    company_id = Column(Integer, ForeignKey("referral_sources.id"), nullable=True, index=True)
+
     # User who performed the action
     user_email = Column(String(255), nullable=True, index=True)
-    
+
+    # Phase 2: Communication metadata
+    direction = Column(String(20), nullable=True)  # "inbound", "outbound"
+    duration_seconds = Column(Integer, nullable=True)  # Call duration
+    participants = Column(Text, nullable=True)  # JSON array of emails/phones
+    content = Column(Text, nullable=True)  # Full email body, note content, call transcript
+    attachments = Column(Text, nullable=True)  # JSON array of attachment info
+
+    # External references
+    external_id = Column(String(255), nullable=True, index=True)  # Gmail ID, RingCentral ID, Drive ID
+    external_url = Column(Text, nullable=True)  # Link to original (Gmail, Drive, etc.)
+
     # Legacy Google Drive fields (for backward compatibility)
     file_id = Column(String(255), nullable=True, unique=True, index=True)  # Google Drive file ID
-    name = Column(String(500), nullable=True)  # Document name (if available via API)
-    url = Column(Text, nullable=True)  # Original URL (Google Drive, email, etc.)
-    preview_url = Column(Text, nullable=True)  # Preview URL
-    edit_url = Column(Text, nullable=True)  # Edit URL
-    owner = Column(String(255), nullable=True)  # Owner email (if available)
-    modified_time = Column(DateTime, nullable=True)  # Last modified (if available via API)
-    created_time = Column(DateTime, nullable=True)  # Created time (if available via API)
-    manually_added = Column(Boolean, default=False)  # Flag to distinguish from automatic logs
-    
+    name = Column(String(500), nullable=True)  # Document name
+    url = Column(Text, nullable=True)  # Original URL
+    preview_url = Column(Text, nullable=True)
+    edit_url = Column(Text, nullable=True)
+    owner = Column(String(255), nullable=True)
+    modified_time = Column(DateTime, nullable=True)
+    created_time = Column(DateTime, nullable=True)
+    manually_added = Column(Boolean, default=False)
+
     # Additional metadata (JSON for flexibility)
-    extra_data = Column(Text, nullable=True)  # JSON-encoded metadata (email subject, call duration, etc.)
-    
+    extra_data = Column(Text, nullable=True)
+
+    # Phase 2: When the activity occurred (vs when it was logged)
+    occurred_at = Column(DateTime, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
+    # Relationships (Phase 1)
+    contact = relationship("Contact", back_populates="activities", foreign_keys=[contact_id])
+    deal = relationship("Deal", back_populates="activities", foreign_keys=[deal_id])
+    company = relationship("ReferralSource", back_populates="activities", foreign_keys=[company_id])
+
+    @property
+    def display_time(self):
+        """Get the most relevant time for display (occurred_at or created_at)"""
+        return self.occurred_at or self.created_at
+
+    @property
+    def icon(self):
+        """Get icon for activity type"""
+        icons = {
+            "note": "📝",
+            "card_scan": "📇",
+            "visit": "🚗",
+            "email_sent": "📧",
+            "email_received": "📥",
+            "call_inbound": "📞",
+            "call_outbound": "📱",
+            "call_missed": "📵",
+            "deal_created": "🎯",
+            "deal_stage_change": "🔄",
+            "deal_won": "🎉",
+            "deal_lost": "❌",
+            "contact_created": "👤",
+            "task_created": "✅",
+            "task_completed": "☑️",
+            "document": "📄",
+        }
+        return icons.get(self.activity_type, "📌")
+
     def to_dict(self):
         result = {
             "id": self.id,
             "activity_type": self.activity_type,
+            "icon": self.icon,
+            "title": self.title,
             "description": self.description,
             "contact_id": self.contact_id,
             "deal_id": self.deal_id,
             "company_id": self.company_id,
             "user_email": self.user_email,
-            "extra_data": self.extra_data,
+            "direction": self.direction,
+            "duration_seconds": self.duration_seconds,
+            "duration_display": f"{self.duration_seconds // 60}m {self.duration_seconds % 60}s" if self.duration_seconds else None,
+            "external_id": self.external_id,
+            "external_url": self.external_url or self.url,
+            "occurred_at": self.occurred_at.isoformat() if self.occurred_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "display_time": self.display_time.isoformat() if self.display_time else None,
         }
-        
+
+        # Parse extra_data if present
+        if self.extra_data:
+            try:
+                result["extra"] = json.loads(self.extra_data)
+            except json.JSONDecodeError:
+                result["extra"] = {}
+
         # Legacy fields (if present)
         if self.file_id:
             result["file_id"] = self.file_id
             result["name"] = self.name or f'Activity Log ({self.file_id[:8]}...)'
-            result["url"] = self.url
             result["preview_url"] = self.preview_url
             result["edit_url"] = self.edit_url
             result["owner"] = self.owner or 'Unknown'
             result["modified_time"] = self.modified_time.isoformat() if self.modified_time else None
-            result["created_time"] = self.created_time.isoformat() if self.created_time else None
             result["manually_added"] = self.manually_added
-        
+
+        # Include linked entity names if relationships loaded
+        if self.contact:
+            result["contact_name"] = self.contact.name
+        if self.company:
+            result["company_name"] = self.company.name
+        if self.deal:
+            result["deal_name"] = self.deal.name
+
         return result
 
 # ============================================================================
@@ -397,9 +585,9 @@ class PipelineStage(Base):
         }
 
 class ReferralSource(Base):
-    """Referral sources for tracking where leads come from"""
+    """Referral sources for tracking where leads come from (Companies)"""
     __tablename__ = "referral_sources"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)  # Person or organization name
     organization = Column(String(255), nullable=True)  # Organization name (if person is from org)
@@ -416,12 +604,36 @@ class ReferralSource(Base):
     logo_url = Column(Text, nullable=True)  # optional explicit logo/fav icon URL
     status = Column(String(50), nullable=False, default="active")  # "incoming", "ongoing", "active", "inactive"
     notes = Column(Text, nullable=True)
+    # AI Enrichment fields (Phase 3)
+    employee_count = Column(String(50), nullable=True)  # e.g., "50-200"
+    industry = Column(String(100), nullable=True)  # e.g., "Skilled Nursing"
+    enriched_at = Column(DateTime, nullable=True)  # When AI enrichment was last run
+    enrichment_confidence = Column(Float, nullable=True)  # 0.0-1.0 confidence score
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
-    # Relationship
+
+    # Relationships (Phase 1: Relationship Graph)
     leads = relationship("Lead", back_populates="referral_source")
-    
+    contacts = relationship("Contact", back_populates="company_rel", foreign_keys="Contact.company_id")
+    deals = relationship("Deal", back_populates="company", foreign_keys="Deal.company_id")
+    activities = relationship("ActivityLog", back_populates="company", foreign_keys="ActivityLog.company_id")
+    tasks = relationship("CompanyTask", backref="company_rel", cascade="all, delete-orphan")
+
+    @property
+    def contacts_count(self):
+        """Count of contacts at this company"""
+        return len(self.contacts) if self.contacts else 0
+
+    @property
+    def deals_count(self):
+        """Count of deals with this company"""
+        return len(self.deals) if self.deals else 0
+
+    @property
+    def active_deals_count(self):
+        """Count of active (non-archived) deals"""
+        return len([d for d in self.deals if d.archived_at is None]) if self.deals else 0
+
     def to_dict(self):
         return {
             "id": self.id,
@@ -439,7 +651,14 @@ class ReferralSource(Base):
             "logo_url": self.logo_url,
             "status": self.status,
             "notes": self.notes,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "employee_count": self.employee_count,
+            "industry": self.industry,
+            "enriched_at": self.enriched_at.isoformat() if self.enriched_at else None,
+            "enrichment_confidence": self.enrichment_confidence,
+            "contacts_count": self.contacts_count,
+            "deals_count": self.deals_count,
+            "active_deals_count": self.active_deals_count,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
 class Lead(Base):

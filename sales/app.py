@@ -10026,6 +10026,393 @@ async def simulate_sms_response(
 # End of Shift Filling API Endpoints
 # ============================================================================
 
+
+# ============================================================================
+# Attio-Inspired CRM Enhancements API
+# ============================================================================
+
+from services.activity_service import (
+    log_activity, update_deal_stage, get_timeline, get_stale_deals,
+    get_deal_stage_history, get_stage_analytics, add_contact_to_deal,
+    remove_contact_from_deal, get_deal_contacts, get_contact_deals, ActivityType
+)
+
+# --- Unified Timeline API ---
+
+@app.get("/api/timeline")
+async def get_unified_timeline(
+    contact_id: int = None,
+    company_id: int = None,
+    deal_id: int = None,
+    activity_type: str = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """
+    Get unified activity timeline for a contact, company, or deal.
+
+    Query params:
+    - contact_id, company_id, deal_id: Filter by entity (can combine)
+    - activity_type: Comma-separated list of types to filter
+    - limit, offset: Pagination
+    """
+    activity_types = activity_type.split(",") if activity_type else None
+
+    result = get_timeline(
+        db=db,
+        contact_id=contact_id,
+        company_id=company_id,
+        deal_id=deal_id,
+        activity_types=activity_types,
+        limit=limit,
+        offset=offset,
+    )
+
+    return JSONResponse(result)
+
+
+@app.post("/api/timeline/note")
+async def add_timeline_note(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Add a note to the timeline"""
+    data = await request.json()
+
+    activity = log_activity(
+        db=db,
+        activity_type=ActivityType.NOTE,
+        title=data.get("title", "Note"),
+        description=data.get("description") or data.get("content"),
+        content=data.get("content"),
+        contact_id=data.get("contact_id"),
+        deal_id=data.get("deal_id"),
+        company_id=data.get("company_id"),
+        user_email=current_user.get("email"),
+    )
+
+    db.commit()
+    return JSONResponse({"status": "success", "activity": activity.to_dict()})
+
+
+# --- Deal Stage Tracking API ---
+
+@app.get("/api/deals/stale")
+async def get_stale_deals_endpoint(
+    days: int = 30,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get deals that have been stuck in the same stage too long"""
+    deals = get_stale_deals(db, days_threshold=days, limit=limit)
+    return JSONResponse({
+        "stale_deals": [d.to_dict() for d in deals],
+        "threshold_days": days,
+        "count": len(deals),
+    })
+
+
+@app.get("/api/deals/{deal_id}/stage-history")
+async def get_deal_stage_history_endpoint(
+    deal_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get full stage change history for a deal"""
+    history = get_deal_stage_history(db, deal_id)
+    return JSONResponse({
+        "deal_id": deal_id,
+        "history": [h.to_dict() for h in history],
+    })
+
+
+@app.put("/api/deals/{deal_id}/stage")
+async def update_deal_stage_endpoint(
+    deal_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Update deal stage with history tracking"""
+    data = await request.json()
+    new_stage = data.get("stage")
+
+    if not new_stage:
+        raise HTTPException(status_code=400, detail="stage is required")
+
+    deal = db.query(Deal).filter_by(id=deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    history = update_deal_stage(
+        db=db,
+        deal=deal,
+        new_stage=new_stage,
+        user_email=current_user.get("email"),
+    )
+
+    db.commit()
+
+    return JSONResponse({
+        "status": "success",
+        "deal": deal.to_dict(),
+        "stage_changed": history is not None,
+    })
+
+
+@app.get("/api/analytics/stage-duration")
+async def get_stage_duration_analytics(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get analytics on average time spent in each stage"""
+    return JSONResponse(get_stage_analytics(db))
+
+
+# --- Deal-Contact Relationships API ---
+
+@app.get("/api/deals/{deal_id}/contacts")
+async def get_deal_contacts_endpoint(
+    deal_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get all contacts associated with a deal"""
+    contacts = get_deal_contacts(db, deal_id)
+    return JSONResponse({"deal_id": deal_id, "contacts": contacts})
+
+
+@app.post("/api/deals/{deal_id}/contacts")
+async def add_deal_contact_endpoint(
+    deal_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Add a contact to a deal"""
+    data = await request.json()
+    contact_id = data.get("contact_id")
+
+    if not contact_id:
+        raise HTTPException(status_code=400, detail="contact_id is required")
+
+    assoc = add_contact_to_deal(
+        db=db,
+        deal_id=deal_id,
+        contact_id=contact_id,
+        role=data.get("role"),
+        is_primary=data.get("is_primary", False),
+    )
+
+    db.commit()
+
+    return JSONResponse({
+        "status": "success",
+        "association": assoc.to_dict(),
+    })
+
+
+@app.delete("/api/deals/{deal_id}/contacts/{contact_id}")
+async def remove_deal_contact_endpoint(
+    deal_id: int,
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Remove a contact from a deal"""
+    removed = remove_contact_from_deal(db, deal_id, contact_id)
+    db.commit()
+
+    return JSONResponse({
+        "status": "success" if removed else "not_found",
+        "removed": removed,
+    })
+
+
+@app.get("/api/contacts/{contact_id}/deals")
+async def get_contact_deals_endpoint(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get all deals associated with a contact"""
+    deals = get_contact_deals(db, contact_id)
+    return JSONResponse({"contact_id": contact_id, "deals": deals})
+
+
+@app.get("/api/contacts/{contact_id}/relationships")
+async def get_contact_relationships(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get all relationships for a contact (company, deals, activities)"""
+    contact = db.query(Contact).filter_by(id=contact_id).first()
+    if not contact:
+        raise HTTPException(status_code=404, detail="Contact not found")
+
+    deals = get_contact_deals(db, contact_id)
+
+    # Get activity count
+    activity_count = db.query(ActivityLog).filter_by(contact_id=contact_id).count()
+
+    # Get pending tasks
+    from models import ContactTask
+    pending_tasks = db.query(ContactTask).filter_by(
+        contact_id=contact_id, status="pending"
+    ).count()
+
+    return JSONResponse({
+        "contact": contact.to_dict(),
+        "relationships": {
+            "company": contact.company_rel.to_dict() if contact.company_rel else None,
+            "deals": deals,
+            "activities_count": activity_count,
+            "tasks_pending": pending_tasks,
+        }
+    })
+
+
+@app.get("/api/companies/{company_id}/relationships")
+async def get_company_relationships(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get all relationships for a company (contacts, deals, activities)"""
+    company = db.query(ReferralSource).filter_by(id=company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Get contacts
+    contacts = [c.to_dict() for c in company.contacts] if company.contacts else []
+
+    # Get deals
+    deals = [d.to_dict() for d in company.deals] if company.deals else []
+
+    # Get activity count
+    activity_count = db.query(ActivityLog).filter_by(company_id=company_id).count()
+
+    return JSONResponse({
+        "company": company.to_dict(),
+        "relationships": {
+            "contacts": contacts,
+            "deals": deals,
+            "activities_count": activity_count,
+        }
+    })
+
+
+# --- AI Enrichment API ---
+
+@app.post("/api/companies/{company_id}/enrich")
+async def enrich_company_endpoint(
+    company_id: int,
+    force: bool = False,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Trigger AI enrichment for a company"""
+    from services.ai_enrichment_service import enrich_company
+
+    result = await enrich_company(db, company_id, force=force)
+    return JSONResponse(result)
+
+
+@app.get("/api/contacts/{contact_id}/duplicates")
+async def find_contact_duplicates(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Find potential duplicate contacts"""
+    from services.ai_enrichment_service import find_duplicate_contacts
+
+    duplicates = find_duplicate_contacts(db, contact_id=contact_id)
+    return JSONResponse({
+        "contact_id": contact_id,
+        "duplicates": duplicates,
+        "count": len(duplicates),
+    })
+
+
+@app.get("/api/contacts/duplicates/scan")
+async def scan_all_duplicates_endpoint(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Scan for all potential duplicate contacts"""
+    from services.ai_enrichment_service import scan_all_duplicates
+
+    groups = scan_all_duplicates(db, limit=limit)
+    return JSONResponse({
+        "duplicate_groups": groups,
+        "count": len(groups),
+    })
+
+
+@app.post("/api/contacts/merge")
+async def merge_contacts_endpoint(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Merge duplicate contacts"""
+    from services.ai_enrichment_service import merge_contacts
+
+    data = await request.json()
+    primary_id = data.get("primary_id")
+    duplicate_ids = data.get("duplicate_ids", [])
+
+    if not primary_id or not duplicate_ids:
+        raise HTTPException(status_code=400, detail="primary_id and duplicate_ids required")
+
+    result = merge_contacts(
+        db=db,
+        primary_id=primary_id,
+        duplicate_ids=duplicate_ids,
+        user_email=current_user.get("email"),
+    )
+
+    return JSONResponse(result)
+
+
+@app.get("/api/contacts/{contact_id}/interaction-summary")
+async def get_contact_interaction_summary(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get AI-generated summary of interactions with a contact"""
+    from services.ai_enrichment_service import summarize_interactions
+
+    result = await summarize_interactions(db, contact_id=contact_id)
+    return JSONResponse(result)
+
+
+@app.get("/api/companies/{company_id}/interaction-summary")
+async def get_company_interaction_summary(
+    company_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get AI-generated summary of interactions with a company"""
+    from services.ai_enrichment_service import summarize_interactions
+
+    result = await summarize_interactions(db, company_id=company_id)
+    return JSONResponse(result)
+
+
+# ============================================================================
+# End of Attio-Inspired CRM Enhancements
+# ============================================================================
+
+
 @app.get("/favicon.ico")
 async def favicon():
     """Serve favicon"""
