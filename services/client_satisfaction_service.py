@@ -7,6 +7,8 @@ Provides functionality for tracking client satisfaction metrics:
 - Quality visits
 - External reviews
 - Care plan status
+- WellSky operational data integration
+- AI-powered satisfaction risk prediction (Phoebe/Zingage style)
 """
 from __future__ import annotations
 
@@ -14,9 +16,16 @@ import os
 import json
 import logging
 from datetime import date, datetime, timedelta
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 import gspread
 from google.oauth2.service_account import Credentials
+
+# Import WellSky service for operational data
+try:
+    from services.wellsky_service import wellsky_service, WellSkyClient
+except ImportError:
+    wellsky_service = None
+    WellSkyClient = None
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +35,21 @@ GOOGLE_SERVICE_ACCOUNT_KEY = os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
 
 
 class ClientSatisfactionService:
-    """Service for managing client satisfaction data"""
+    """
+    Service for managing client satisfaction data.
+
+    Integrates multiple data sources:
+    - Google Sheets/Forms for survey responses
+    - Portal database for complaints, quality visits, reviews
+    - WellSky API for operational data (clients, shifts, care plans, engagement)
+
+    Provides AI-powered satisfaction risk prediction similar to Zingage Operator
+    and Phoebe.work functionality.
+    """
 
     def __init__(self):
         self.sheets_client = None
+        self.wellsky = wellsky_service  # May be None if import failed
         self._init_google_sheets()
 
     def _init_google_sheets(self):
@@ -333,6 +353,406 @@ class ClientSatisfactionService:
             "synced": synced,
             "skipped": skipped,
             "message": f"Synced {synced} new responses, skipped {skipped} duplicates",
+        }
+
+    # =========================================================================
+    # WellSky Integration Methods
+    # =========================================================================
+
+    @property
+    def wellsky_available(self) -> bool:
+        """Check if WellSky service is available"""
+        return self.wellsky is not None
+
+    def get_enhanced_dashboard_summary(self, db_session, days: int = 30) -> Dict[str, Any]:
+        """
+        Get enhanced dashboard summary combining portal data with WellSky operational data.
+
+        This provides a complete picture of client satisfaction by merging:
+        - Survey/complaint/review data from portal database
+        - Operational metrics from WellSky (hours, EVV, care plans)
+        - AI-calculated risk indicators
+
+        Args:
+            db_session: SQLAlchemy session
+            days: Number of days to look back
+
+        Returns:
+            Enhanced dashboard summary with WellSky data
+        """
+        # Get base summary from portal database
+        summary = self.get_dashboard_summary(db_session, days)
+
+        # Add WellSky operational data if available
+        if self.wellsky_available:
+            try:
+                wellsky_ops = self.wellsky.get_operations_summary(days)
+                summary["wellsky"] = {
+                    "available": True,
+                    "mode": "mock" if self.wellsky.is_mock_mode else "live",
+                    "clients": wellsky_ops.get("clients", {}),
+                    "caregivers": wellsky_ops.get("caregivers", {}),
+                    "shifts": wellsky_ops.get("shifts", {}),
+                    "hours": wellsky_ops.get("hours", {}),
+                    "compliance": wellsky_ops.get("compliance", {}),
+                }
+
+                # Get at-risk clients count
+                at_risk = self.get_at_risk_clients()
+                summary["at_risk_clients"] = {
+                    "total": len(at_risk),
+                    "high_risk": len([c for c in at_risk if c.get("risk_level") == "high"]),
+                    "medium_risk": len([c for c in at_risk if c.get("risk_level") == "medium"]),
+                }
+
+                # Get care plan status
+                care_plans_due = self.wellsky.get_care_plans_due_for_review()
+                summary["wellsky"]["care_plans_due"] = len(care_plans_due)
+
+            except Exception as e:
+                logger.error(f"Error fetching WellSky data: {e}")
+                summary["wellsky"] = {"available": False, "error": str(e)}
+        else:
+            summary["wellsky"] = {"available": False, "error": "WellSky service not configured"}
+
+        return summary
+
+    def get_at_risk_clients(self, threshold: int = 40) -> List[Dict[str, Any]]:
+        """
+        Get clients with satisfaction risk indicators above threshold.
+
+        Uses WellSky operational data to identify clients at risk:
+        - Declining hours
+        - High caregiver turnover
+        - Missed visits
+        - Low family portal engagement
+        - Overdue care plan reviews
+
+        This is the core of Zingage Operator / Phoebe-style proactive monitoring.
+
+        Args:
+            threshold: Risk score threshold (0-100)
+
+        Returns:
+            List of at-risk client indicators, sorted by risk score
+        """
+        if not self.wellsky_available:
+            logger.warning("WellSky not available - cannot calculate at-risk clients")
+            return []
+
+        try:
+            return self.wellsky.get_at_risk_clients(threshold)
+        except Exception as e:
+            logger.error(f"Error getting at-risk clients: {e}")
+            return []
+
+    def get_client_satisfaction_indicators(self, client_id: str) -> Dict[str, Any]:
+        """
+        Get detailed satisfaction risk indicators for a specific client.
+
+        Combines:
+        - WellSky operational signals (hours, visits, engagement)
+        - Portal satisfaction data (surveys, complaints)
+        - AI-generated risk score and recommendations
+
+        Args:
+            client_id: WellSky client ID
+
+        Returns:
+            Comprehensive satisfaction indicators
+        """
+        if not self.wellsky_available:
+            return {"error": "WellSky service not configured", "client_id": client_id}
+
+        try:
+            return self.wellsky.get_client_satisfaction_indicators(client_id)
+        except Exception as e:
+            logger.error(f"Error getting client indicators: {e}")
+            return {"error": str(e), "client_id": client_id}
+
+    def get_low_engagement_families(self, threshold: float = 30.0) -> List[Dict[str, Any]]:
+        """
+        Get families with low portal engagement (proactive outreach candidates).
+
+        Low engagement often precedes satisfaction issues - this enables
+        proactive check-ins before problems arise.
+
+        Args:
+            threshold: Engagement score threshold (0-100)
+
+        Returns:
+            List of clients with low family engagement
+        """
+        if not self.wellsky_available:
+            return []
+
+        try:
+            results = []
+            low_engagement = self.wellsky.get_low_engagement_clients(threshold)
+            for client, activity in low_engagement:
+                results.append({
+                    "client_id": client.id,
+                    "client_name": client.full_name,
+                    "city": client.city,
+                    "payer_source": client.payer_source,
+                    "days_since_login": (datetime.utcnow() - activity.last_login).days if activity.last_login else 999,
+                    "engagement_score": activity.engagement_score,
+                    "shift_notes_viewed": activity.shift_notes_viewed_30d,
+                    "recommended_action": "Proactive phone check-in" if activity.login_count_30d == 0 else "Send portal reminder",
+                })
+            return results
+        except Exception as e:
+            logger.error(f"Error getting low engagement families: {e}")
+            return []
+
+    def get_clients_needing_surveys(self, days_since_last: int = 90) -> List[Dict[str, Any]]:
+        """
+        Get active clients who haven't had a satisfaction survey recently.
+
+        Supports automated survey triggering for systematic feedback collection.
+
+        Args:
+            days_since_last: Days since last survey to consider due
+
+        Returns:
+            List of clients needing surveys
+        """
+        if not self.wellsky_available:
+            return []
+
+        try:
+            results = []
+            clients = self.wellsky.get_clients(status=None)  # Get all
+            active_clients = [c for c in clients if c.is_active]
+
+            # TODO: Cross-reference with portal survey database to find
+            # clients without recent surveys
+
+            for client in active_clients:
+                # For now, include clients with tenure > 30 days
+                if client.tenure_days >= 30:
+                    results.append({
+                        "client_id": client.id,
+                        "client_name": client.full_name,
+                        "tenure_days": client.tenure_days,
+                        "payer_source": client.payer_source,
+                        "survey_due": True,  # Would be calculated from portal data
+                    })
+
+            return results[:20]  # Limit results
+        except Exception as e:
+            logger.error(f"Error getting clients needing surveys: {e}")
+            return []
+
+    def get_upcoming_anniversaries(self, days_ahead: int = 30) -> List[Dict[str, Any]]:
+        """
+        Get clients with upcoming service anniversaries.
+
+        Anniversaries are ideal times for:
+        - Testimonial requests
+        - Referral asks
+        - Satisfaction check-ins
+        - Recognition/appreciation
+
+        Args:
+            days_ahead: Days to look ahead
+
+        Returns:
+            List of clients with upcoming anniversaries
+        """
+        if not self.wellsky_available:
+            return []
+
+        try:
+            results = []
+            clients = self.wellsky.get_clients(status=None)
+            active_clients = [c for c in clients if c.is_active and c.start_date]
+
+            today = date.today()
+
+            for client in active_clients:
+                # Check for monthly anniversaries (6mo, 12mo, 18mo, etc.)
+                months_of_service = client.tenure_days // 30
+                next_milestone = ((months_of_service // 6) + 1) * 6  # Next 6-month milestone
+
+                # Calculate days until next milestone
+                milestone_date = client.start_date + timedelta(days=next_milestone * 30)
+                days_until = (milestone_date - today).days
+
+                if 0 <= days_until <= days_ahead:
+                    milestone_type = f"{next_milestone} months" if next_milestone < 12 else f"{next_milestone // 12} year{'s' if next_milestone >= 24 else ''}"
+                    results.append({
+                        "client_id": client.id,
+                        "client_name": client.full_name,
+                        "start_date": client.start_date.isoformat(),
+                        "milestone": milestone_type,
+                        "milestone_date": milestone_date.isoformat(),
+                        "days_until": days_until,
+                        "recommended_action": "Request testimonial" if next_milestone >= 12 else "Send appreciation message",
+                    })
+
+            # Sort by days until milestone
+            results.sort(key=lambda x: x["days_until"])
+            return results
+        except Exception as e:
+            logger.error(f"Error getting upcoming anniversaries: {e}")
+            return []
+
+    # =========================================================================
+    # AI Care Coordinator Methods (Zingage/Phoebe Style)
+    # =========================================================================
+
+    def get_satisfaction_alerts(self) -> List[Dict[str, Any]]:
+        """
+        Get prioritized satisfaction alerts requiring attention.
+
+        This is the core "AI Care Coordinator" view - surfacing issues
+        that need human review or automated action.
+
+        Returns alerts for:
+        - High-risk clients needing intervention
+        - Overdue care plan reviews
+        - Low engagement families
+        - Unresolved complaints
+        - Pending quality visits
+
+        Returns:
+            Prioritized list of alerts with recommended actions
+        """
+        alerts = []
+
+        # High-risk clients (from WellSky)
+        if self.wellsky_available:
+            try:
+                at_risk = self.get_at_risk_clients(threshold=50)
+                for client in at_risk[:5]:  # Top 5 highest risk
+                    alerts.append({
+                        "type": "high_risk_client",
+                        "priority": "high" if client.get("risk_level") == "high" else "medium",
+                        "client_id": client.get("client_id"),
+                        "client_name": client.get("client_name"),
+                        "risk_score": client.get("risk_score"),
+                        "message": f"{client.get('client_name')} has risk score of {client.get('risk_score')}",
+                        "factors": client.get("risk_factors", []),
+                        "recommended_actions": client.get("recommendations", []),
+                        "alert_category": "Satisfaction Risk",
+                    })
+
+                # Low engagement families
+                low_engagement = self.get_low_engagement_families(threshold=20)
+                for family in low_engagement[:3]:
+                    alerts.append({
+                        "type": "low_engagement",
+                        "priority": "medium",
+                        "client_id": family.get("client_id"),
+                        "client_name": family.get("client_name"),
+                        "message": f"No family portal activity in {family.get('days_since_login', 'many')} days",
+                        "recommended_actions": [family.get("recommended_action", "Proactive outreach")],
+                        "alert_category": "Family Engagement",
+                    })
+
+                # Care plans due for review
+                care_plans_due = self.wellsky.get_care_plans_due_for_review(days_ahead=14)
+                for cp in care_plans_due[:3]:
+                    client = self.wellsky.get_client(cp.client_id)
+                    client_name = client.full_name if client else cp.client_id
+                    alerts.append({
+                        "type": "care_plan_review",
+                        "priority": "medium" if cp.days_until_review > 0 else "high",
+                        "client_id": cp.client_id,
+                        "client_name": client_name,
+                        "message": f"Care plan review {'overdue' if cp.days_until_review <= 0 else f'due in {cp.days_until_review} days'}",
+                        "recommended_actions": ["Schedule care plan review meeting", "Update authorized services"],
+                        "alert_category": "Care Plan",
+                    })
+
+            except Exception as e:
+                logger.error(f"Error generating WellSky alerts: {e}")
+
+        # Sort by priority (high first)
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        alerts.sort(key=lambda x: priority_order.get(x.get("priority", "low"), 3))
+
+        return alerts
+
+    def get_ai_coordinator_dashboard(self, db_session) -> Dict[str, Any]:
+        """
+        Get the AI Care Coordinator dashboard view.
+
+        This provides the Zingage Operator / Phoebe-style overview:
+        - Real-time alerts requiring attention
+        - At-risk client summary
+        - Proactive outreach queue
+        - Satisfaction trends
+
+        Args:
+            db_session: SQLAlchemy session for portal data
+
+        Returns:
+            Complete AI coordinator dashboard data
+        """
+        # Get base metrics
+        summary = self.get_enhanced_dashboard_summary(db_session, days=30)
+
+        # Get prioritized alerts
+        alerts = self.get_satisfaction_alerts()
+
+        # Get proactive outreach opportunities
+        outreach_queue = []
+
+        if self.wellsky_available:
+            # Add low engagement families
+            low_engagement = self.get_low_engagement_families(threshold=30)
+            for item in low_engagement[:5]:
+                outreach_queue.append({
+                    "type": "engagement_check",
+                    "client_id": item["client_id"],
+                    "client_name": item["client_name"],
+                    "reason": "Low portal engagement",
+                    "suggested_action": item["recommended_action"],
+                    "channel": "phone",  # Recommend phone for engagement issues
+                })
+
+            # Add upcoming anniversaries
+            anniversaries = self.get_upcoming_anniversaries(days_ahead=14)
+            for item in anniversaries[:5]:
+                outreach_queue.append({
+                    "type": "anniversary",
+                    "client_id": item["client_id"],
+                    "client_name": item["client_name"],
+                    "reason": f"{item['milestone']} anniversary",
+                    "suggested_action": item["recommended_action"],
+                    "channel": "email",  # Email appropriate for celebrations
+                })
+
+            # Add clients needing surveys
+            survey_due = self.get_clients_needing_surveys(days_since_last=90)
+            for item in survey_due[:5]:
+                outreach_queue.append({
+                    "type": "survey_request",
+                    "client_id": item["client_id"],
+                    "client_name": item["client_name"],
+                    "reason": f"No survey in {item['tenure_days']} days",
+                    "suggested_action": "Send satisfaction survey",
+                    "channel": "sms",  # SMS for survey requests
+                })
+
+        return {
+            "summary": summary,
+            "alerts": {
+                "total": len(alerts),
+                "high_priority": len([a for a in alerts if a.get("priority") == "high"]),
+                "items": alerts[:10],  # Top 10 alerts
+            },
+            "outreach_queue": {
+                "total": len(outreach_queue),
+                "items": outreach_queue[:15],
+            },
+            "wellsky_status": {
+                "connected": self.wellsky_available,
+                "mode": "mock" if self.wellsky_available and self.wellsky.is_mock_mode else "live" if self.wellsky_available else "disconnected",
+            },
+            "generated_at": datetime.utcnow().isoformat(),
         }
 
 

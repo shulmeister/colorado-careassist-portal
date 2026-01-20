@@ -27,6 +27,14 @@ except ImportError as e:
     logger.warning(f"Client satisfaction service not available: {e}")
     client_satisfaction_service = None
 
+# Import AI Care Coordinator service (Zingage/Phoebe style automation)
+try:
+    from services.ai_care_coordinator import ai_care_coordinator
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"AI Care Coordinator not available: {e}")
+    ai_care_coordinator = None
+
 from dotenv import load_dotenv
 from datetime import date
 from itsdangerous import URLSafeTimedSerializer
@@ -918,12 +926,15 @@ async def client_satisfaction_dashboard(
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Client Satisfaction Dashboard - native implementation"""
+    """Client Satisfaction Dashboard - native implementation with WellSky integration"""
     if client_satisfaction_service is None:
         raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
-    # Get dashboard summary
-    summary = client_satisfaction_service.get_dashboard_summary(db, days=30)
+    # Get enhanced dashboard summary with WellSky data
+    summary = client_satisfaction_service.get_enhanced_dashboard_summary(db, days=30)
+
+    # Get AI Care Coordinator dashboard data
+    ai_coordinator = client_satisfaction_service.get_ai_coordinator_dashboard(db)
 
     return templates.TemplateResponse(
         "client_satisfaction.html",
@@ -931,6 +942,8 @@ async def client_satisfaction_dashboard(
             "request": request,
             "user": current_user,
             "summary": summary,
+            "ai_coordinator": ai_coordinator,
+            "wellsky_available": client_satisfaction_service.wellsky_available,
         },
     )
 
@@ -945,12 +958,288 @@ async def api_client_satisfaction_summary(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get client satisfaction dashboard summary"""
+    """Get client satisfaction dashboard summary with WellSky data"""
     if client_satisfaction_service is None:
         raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
-    summary = client_satisfaction_service.get_dashboard_summary(db, days=days)
+    summary = client_satisfaction_service.get_enhanced_dashboard_summary(db, days=days)
     return JSONResponse({"success": True, "data": summary})
+
+
+@app.get("/api/client-satisfaction/ai-coordinator")
+async def api_ai_coordinator_dashboard(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get AI Care Coordinator dashboard (Zingage/Phoebe style)"""
+    if client_satisfaction_service is None:
+        raise HTTPException(status_code=503, detail="Client satisfaction service not available")
+
+    dashboard = client_satisfaction_service.get_ai_coordinator_dashboard(db)
+    return JSONResponse({"success": True, "data": dashboard})
+
+
+@app.get("/api/client-satisfaction/at-risk")
+async def api_at_risk_clients(
+    threshold: int = Query(40, ge=0, le=100),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get clients at risk of satisfaction issues (from WellSky data)"""
+    if client_satisfaction_service is None:
+        raise HTTPException(status_code=503, detail="Client satisfaction service not available")
+
+    at_risk = client_satisfaction_service.get_at_risk_clients(threshold=threshold)
+    return JSONResponse({
+        "success": True,
+        "data": at_risk,
+        "count": len(at_risk),
+        "threshold": threshold,
+    })
+
+
+@app.get("/api/client-satisfaction/client/{client_id}/indicators")
+async def api_client_indicators(
+    client_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get satisfaction risk indicators for a specific client"""
+    if client_satisfaction_service is None:
+        raise HTTPException(status_code=503, detail="Client satisfaction service not available")
+
+    indicators = client_satisfaction_service.get_client_satisfaction_indicators(client_id)
+    return JSONResponse({"success": True, "data": indicators})
+
+
+@app.get("/api/client-satisfaction/alerts")
+async def api_satisfaction_alerts(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get prioritized satisfaction alerts requiring attention"""
+    if client_satisfaction_service is None:
+        raise HTTPException(status_code=503, detail="Client satisfaction service not available")
+
+    alerts = client_satisfaction_service.get_satisfaction_alerts()
+    return JSONResponse({
+        "success": True,
+        "data": alerts,
+        "count": len(alerts),
+        "high_priority_count": len([a for a in alerts if a.get("priority") == "high"]),
+    })
+
+
+@app.get("/api/client-satisfaction/outreach-queue")
+async def api_outreach_queue(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get proactive outreach queue (low engagement, anniversaries, survey due)"""
+    if client_satisfaction_service is None:
+        raise HTTPException(status_code=503, detail="Client satisfaction service not available")
+
+    # Combine different outreach types
+    outreach = []
+
+    low_engagement = client_satisfaction_service.get_low_engagement_families(threshold=30)
+    for item in low_engagement:
+        item["outreach_type"] = "engagement"
+        outreach.append(item)
+
+    anniversaries = client_satisfaction_service.get_upcoming_anniversaries(days_ahead=30)
+    for item in anniversaries:
+        item["outreach_type"] = "anniversary"
+        outreach.append(item)
+
+    surveys_due = client_satisfaction_service.get_clients_needing_surveys(days_since_last=90)
+    for item in surveys_due:
+        item["outreach_type"] = "survey"
+        outreach.append(item)
+
+    return JSONResponse({
+        "success": True,
+        "data": outreach,
+        "count": len(outreach),
+    })
+
+
+@app.get("/api/wellsky/status")
+async def api_wellsky_status(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Check WellSky API connection status"""
+    if client_satisfaction_service is None:
+        return JSONResponse({
+            "success": True,
+            "connected": False,
+            "mode": "unavailable",
+            "message": "Client satisfaction service not available"
+        })
+
+    wellsky = client_satisfaction_service.wellsky
+    if wellsky is None:
+        return JSONResponse({
+            "success": True,
+            "connected": False,
+            "mode": "unavailable",
+            "message": "WellSky service not configured"
+        })
+
+    return JSONResponse({
+        "success": True,
+        "connected": True,
+        "mode": "mock" if wellsky.is_mock_mode else "live",
+        "environment": wellsky.environment,
+        "message": "WellSky service connected (mock mode)" if wellsky.is_mock_mode else "WellSky API connected"
+    })
+
+
+# ============================================================================
+# AI Care Coordinator API Endpoints (Zingage/Phoebe Style)
+# ============================================================================
+
+@app.get("/api/ai-coordinator/status")
+async def api_ai_coordinator_status(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get AI Care Coordinator status"""
+    if ai_care_coordinator is None:
+        return JSONResponse({
+            "success": True,
+            "enabled": False,
+            "message": "AI Care Coordinator not available"
+        })
+
+    status = ai_care_coordinator.get_status()
+    return JSONResponse({"success": True, "data": status})
+
+
+@app.get("/api/ai-coordinator/dashboard")
+async def api_ai_coordinator_dashboard(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get AI Care Coordinator dashboard data"""
+    if ai_care_coordinator is None:
+        return JSONResponse({
+            "success": False,
+            "error": "AI Care Coordinator not available"
+        })
+
+    dashboard = ai_care_coordinator.get_dashboard_data()
+    return JSONResponse({"success": True, "data": dashboard})
+
+
+@app.get("/api/ai-coordinator/alerts")
+async def api_ai_coordinator_alerts(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get active satisfaction alerts"""
+    if ai_care_coordinator is None:
+        return JSONResponse({"success": False, "error": "AI Care Coordinator not available"})
+
+    alerts = ai_care_coordinator.get_active_alerts()
+    return JSONResponse({
+        "success": True,
+        "data": [a.to_dict() for a in alerts],
+        "count": len(alerts)
+    })
+
+
+@app.post("/api/ai-coordinator/alerts/generate")
+async def api_generate_alerts(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Manually trigger alert generation (normally runs on schedule)"""
+    if ai_care_coordinator is None:
+        return JSONResponse({"success": False, "error": "AI Care Coordinator not available"})
+
+    alerts = ai_care_coordinator.generate_alerts()
+    return JSONResponse({
+        "success": True,
+        "data": [a.to_dict() for a in alerts],
+        "generated_count": len(alerts)
+    })
+
+
+@app.post("/api/ai-coordinator/alerts/{alert_id}/acknowledge")
+async def api_acknowledge_alert(
+    alert_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Acknowledge an alert"""
+    if ai_care_coordinator is None:
+        return JSONResponse({"success": False, "error": "AI Care Coordinator not available"})
+
+    success = ai_care_coordinator.acknowledge_alert(alert_id, user=current_user.get("email", "unknown"))
+    return JSONResponse({"success": success})
+
+
+@app.post("/api/ai-coordinator/alerts/{alert_id}/resolve")
+async def api_resolve_alert(
+    alert_id: str,
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Resolve an alert"""
+    if ai_care_coordinator is None:
+        return JSONResponse({"success": False, "error": "AI Care Coordinator not available"})
+
+    data = await request.json()
+    notes = data.get("notes", "")
+
+    success = ai_care_coordinator.resolve_alert(
+        alert_id,
+        user=current_user.get("email", "unknown"),
+        notes=notes
+    )
+    return JSONResponse({"success": success})
+
+
+@app.get("/api/ai-coordinator/outreach")
+async def api_ai_coordinator_outreach(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get pending outreach tasks"""
+    if ai_care_coordinator is None:
+        return JSONResponse({"success": False, "error": "AI Care Coordinator not available"})
+
+    tasks = ai_care_coordinator.get_pending_outreach()
+    return JSONResponse({
+        "success": True,
+        "data": [t.to_dict() for t in tasks],
+        "count": len(tasks)
+    })
+
+
+@app.post("/api/ai-coordinator/outreach/generate")
+async def api_generate_outreach(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Generate outreach queue based on current satisfaction data"""
+    if ai_care_coordinator is None:
+        return JSONResponse({"success": False, "error": "AI Care Coordinator not available"})
+
+    tasks = ai_care_coordinator.generate_outreach_queue()
+    return JSONResponse({
+        "success": True,
+        "data": [t.to_dict() for t in tasks],
+        "generated_count": len(tasks)
+    })
+
+
+@app.get("/api/ai-coordinator/action-log")
+async def api_ai_coordinator_action_log(
+    limit: int = Query(50, ge=1, le=500),
+    client_id: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get AI coordinator action log (audit trail)"""
+    if ai_care_coordinator is None:
+        return JSONResponse({"success": False, "error": "AI Care Coordinator not available"})
+
+    actions = ai_care_coordinator.get_action_log(limit=limit, client_id=client_id)
+    return JSONResponse({
+        "success": True,
+        "data": actions,
+        "count": len(actions)
+    })
 
 
 @app.get("/api/client-satisfaction/surveys")
