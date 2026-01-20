@@ -1,10 +1,12 @@
 import { required } from "ra-core";
 import { ArrayInput } from "@/components/admin/array-input";
+import { ReferenceInput } from "@/components/admin/reference-input";
 import { SelectInput } from "@/components/admin/select-input";
 import { SimpleFormIterator } from "@/components/admin/simple-form-iterator";
 import { TextInput } from "@/components/admin/text-input";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Avatar } from "./Avatar";
+import { AutocompleteCompanyInput } from "../companies/AutocompleteCompanyInput";
 
 const statusChoices = [
   { id: "hot", name: "Hot" },
@@ -27,7 +29,9 @@ export const ContactInputs = () => {
         <Avatar />
         <div className="flex-1 grid gap-4 md:grid-cols-2">
           <TextInput source="name" label="Name" validate={required()} />
-          <TextInput source="company" label="Company" />
+          <ReferenceInput source="company_id" reference="companies" label="Company">
+            <AutocompleteCompanyInput />
+          </ReferenceInput>
           <TextInput source="email" label="Email" type="email" />
           <TextInput source="phone" label="Phone" />
         </div>

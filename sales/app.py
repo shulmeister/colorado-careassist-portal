@@ -2628,8 +2628,32 @@ async def admin_get_companies(
         records = query.order_by(order_clause).offset(start).limit(end - start + 1).all()
         content_range = f"companies {start}-{start + len(records) - 1 if records else start}/{total}"
 
+        # Pre-calculate contact and deal counts for all companies in the result
+        company_ids = [r.id for r in records]
+        contact_counts = {}
+        deal_counts = {}
+        if company_ids:
+            # Count contacts per company
+            from sqlalchemy import func as sql_func
+            contact_results = (
+                db.query(Contact.company_id, sql_func.count(Contact.id))
+                .filter(Contact.company_id.in_(company_ids))
+                .group_by(Contact.company_id)
+                .all()
+            )
+            contact_counts = {cid: cnt for cid, cnt in contact_results}
+
+            # Count deals per company
+            deal_results = (
+                db.query(Deal.company_id, sql_func.count(Deal.id))
+                .filter(Deal.company_id.in_(company_ids))
+                .group_by(Deal.company_id)
+                .all()
+            )
+            deal_counts = {cid: cnt for cid, cnt in deal_results}
+
         return JSONResponse(
-            {"data": [_to_company_dict(r) for r in records], "total": total},
+            {"data": [_to_company_dict(r, nb_contacts=contact_counts.get(r.id, 0), nb_deals=deal_counts.get(r.id, 0)) for r in records], "total": total},
             headers={
                 "Content-Range": content_range,
                 "Access-Control-Expose-Headers": "Content-Range",
@@ -5993,13 +6017,22 @@ async def create_contact(
         
         contact_type = payload.get("contact_type")
         is_new_client = contact_type == "client"
-        
+
+        # Auto-populate company text from company_id if not provided
+        company_text = payload.get("company")
+        company_id = payload.get("company_id")
+        if company_id and not company_text:
+            from models import ReferralSource
+            company_record = db.query(ReferralSource).filter(ReferralSource.id == company_id).first()
+            if company_record:
+                company_text = company_record.organization or company_record.name
+
         contact = Contact(
             first_name=first_name,
             last_name=last_name,
             name=name,
-            company=payload.get("company"),
-            company_id=payload.get("company_id"),
+            company=company_text,
+            company_id=company_id,
             title=payload.get("title"),
             phone=payload.get("phone"),
             email=payload.get("email"),
@@ -6076,11 +6109,20 @@ async def update_contact(
             if not payload.get("name"):
                 contact.name = f"{first} {last}".strip()
         
+        # Handle company_id - auto-populate company text if changing company
+        if "company_id" in payload:
+            new_company_id = payload.get("company_id")
+            if new_company_id and new_company_id != contact.company_id:
+                from models import ReferralSource
+                company_record = db.query(ReferralSource).filter(ReferralSource.id == new_company_id).first()
+                if company_record:
+                    contact.company = company_record.organization or company_record.name
+            contact.company_id = new_company_id
+
         # Handle other fields
         for field in [
             "name",
             "company",
-            "company_id",
             "title",
             "phone",
             "email",
