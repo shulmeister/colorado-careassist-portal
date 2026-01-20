@@ -4270,7 +4270,11 @@ except Exception as schema_error:
 _root_wellsky_cache = {}
 
 def _get_root_wellsky_services():
-    """Load WellSky services from root directory (not recruiting local)"""
+    """Load WellSky services from root directory (not recruiting local)
+
+    Uses importlib.util to load modules directly by file path,
+    avoiding conflicts with recruiting local services modules.
+    """
     global _root_wellsky_cache
 
     if _root_wellsky_cache:
@@ -4278,30 +4282,38 @@ def _get_root_wellsky_services():
 
     import sys as _sys
     import os as _os
+    import importlib.util
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 
-    # Temporarily add root to sys.path and clear services module cache
+    # Load wellsky_service module directly by file path
+    wellsky_path = _os.path.join(root_dir, 'services', 'wellsky_service.py')
+    spec = importlib.util.spec_from_file_location("root_wellsky_service", wellsky_path)
+    wellsky_module = importlib.util.module_from_spec(spec)
+
+    # Add root to path temporarily so wellsky_service can find its dependencies
     original_path = _sys.path.copy()
     _sys.path.insert(0, root_dir)
 
-    # Clear any cached services modules to force fresh import from root
-    mods_to_remove = [k for k in _sys.modules.keys() if k == 'services' or k.startswith('services.')]
-    for mod in mods_to_remove:
-        del _sys.modules[mod]
-
     try:
-        # Now import from root services
-        from services.wellsky_service import wellsky_service, ApplicantStatus
-        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+        spec.loader.exec_module(wellsky_module)
+
+        # Now load recruiting_wellsky_sync which depends on wellsky_service
+        # First make wellsky_service available for import
+        _sys.modules['services.wellsky_service'] = wellsky_module
+
+        sync_path = _os.path.join(root_dir, 'services', 'recruiting_wellsky_sync.py')
+        sync_spec = importlib.util.spec_from_file_location("root_recruiting_wellsky_sync", sync_path)
+        sync_module = importlib.util.module_from_spec(sync_spec)
+        sync_spec.loader.exec_module(sync_module)
 
         _root_wellsky_cache = {
-            'wellsky': wellsky_service,
-            'sync': recruiting_wellsky_sync,
-            'ApplicantStatus': ApplicantStatus
+            'wellsky': wellsky_module.wellsky_service,
+            'sync': sync_module.recruiting_wellsky_sync,
+            'ApplicantStatus': wellsky_module.ApplicantStatus
         }
 
-        return wellsky_service, recruiting_wellsky_sync, ApplicantStatus
+        return _root_wellsky_cache['wellsky'], _root_wellsky_cache['sync'], _root_wellsky_cache['ApplicantStatus']
     finally:
         # Restore original path
         _sys.path = original_path

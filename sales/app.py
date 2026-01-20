@@ -10512,7 +10512,11 @@ async def legacy_dashboard(request: Request, current_user: Dict[str, Any] = Depe
 _root_services_cache = {}
 
 def _get_root_services():
-    """Load WellSky services from root directory (not sales/services)"""
+    """Load WellSky services from root directory (not sales/services)
+
+    Uses importlib.util to load modules directly by file path,
+    avoiding conflicts with sales/services local modules.
+    """
     global _root_services_cache
 
     if _root_services_cache:
@@ -10520,30 +10524,38 @@ def _get_root_services():
 
     import sys as _sys
     import os as _os
+    import importlib.util
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 
-    # Temporarily add root to sys.path and clear services module cache
+    # Load wellsky_service module directly by file path
+    wellsky_path = _os.path.join(root_dir, 'services', 'wellsky_service.py')
+    spec = importlib.util.spec_from_file_location("root_wellsky_service", wellsky_path)
+    wellsky_module = importlib.util.module_from_spec(spec)
+
+    # Add root to path temporarily so wellsky_service can find its dependencies
     original_path = _sys.path.copy()
     _sys.path.insert(0, root_dir)
 
-    # Clear any cached services modules to force fresh import from root
-    mods_to_remove = [k for k in _sys.modules.keys() if k == 'services' or k.startswith('services.')]
-    for mod in mods_to_remove:
-        del _sys.modules[mod]
-
     try:
-        # Now import from root services
-        from services.wellsky_service import wellsky_service, ProspectStatus
-        from services.sales_wellsky_sync import sales_wellsky_sync
+        spec.loader.exec_module(wellsky_module)
+
+        # Now load sales_wellsky_sync which depends on wellsky_service
+        # First make wellsky_service available for import
+        _sys.modules['services.wellsky_service'] = wellsky_module
+
+        sync_path = _os.path.join(root_dir, 'services', 'sales_wellsky_sync.py')
+        sync_spec = importlib.util.spec_from_file_location("root_sales_wellsky_sync", sync_path)
+        sync_module = importlib.util.module_from_spec(sync_spec)
+        sync_spec.loader.exec_module(sync_module)
 
         _root_services_cache = {
-            'wellsky': wellsky_service,
-            'sync': sales_wellsky_sync,
-            'ProspectStatus': ProspectStatus
+            'wellsky': wellsky_module.wellsky_service,
+            'sync': sync_module.sales_wellsky_sync,
+            'ProspectStatus': wellsky_module.ProspectStatus
         }
 
-        return wellsky_service, sales_wellsky_sync, ProspectStatus
+        return _root_services_cache['wellsky'], _root_services_cache['sync'], _root_services_cache['ProspectStatus']
     finally:
         # Restore original path
         _sys.path = original_path
