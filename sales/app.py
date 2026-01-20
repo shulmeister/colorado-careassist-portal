@@ -6211,6 +6211,23 @@ async def get_deals(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# IMPORTANT: /api/deals/stale must come BEFORE /api/deals/{deal_id} for proper routing
+@app.get("/api/deals/stale")
+async def get_stale_deals_endpoint(
+    days: int = 30,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Get deals that have been stuck in the same stage too long"""
+    deals = get_stale_deals(db, days_threshold=days, limit=limit)
+    return JSONResponse({
+        "stale_deals": [d.to_dict() for d in deals],
+        "threshold_days": days,
+        "count": len(deals),
+    })
+
+
 @app.get("/api/deals/{deal_id}")
 async def get_deal(
     deal_id: int,
@@ -10107,22 +10124,6 @@ async def add_timeline_note(
 
 
 # --- Deal Stage Tracking API ---
-
-@app.get("/api/deals/stale")
-async def get_stale_deals_endpoint(
-    days: int = 30,
-    limit: int = 50,
-    db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
-):
-    """Get deals that have been stuck in the same stage too long"""
-    deals = get_stale_deals(db, days_threshold=days, limit=limit)
-    return JSONResponse({
-        "stale_deals": [d.to_dict() for d in deals],
-        "threshold_days": days,
-        "count": len(deals),
-    })
-
 
 @app.get("/api/deals/{deal_id}/stage-history")
 async def get_deal_stage_history_endpoint(
