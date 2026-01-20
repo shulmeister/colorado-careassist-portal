@@ -4267,26 +4267,44 @@ except Exception as schema_error:
 # WellSky Integration API - Recruiting Dashboard → WellSky Applicants
 # =============================================================================
 
+_root_wellsky_cache = {}
+
 def _get_root_wellsky_services():
     """Load WellSky services from root directory (not recruiting local)"""
-    import importlib.util
+    global _root_wellsky_cache
+
+    if _root_wellsky_cache:
+        return _root_wellsky_cache['wellsky'], _root_wellsky_cache['sync'], _root_wellsky_cache['ApplicantStatus']
+
+    import sys as _sys
     import os as _os
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 
-    # Load wellsky_service
-    ws_path = _os.path.join(root_dir, "services", "wellsky_service.py")
-    ws_spec = importlib.util.spec_from_file_location("root_wellsky_service", ws_path)
-    ws_module = importlib.util.module_from_spec(ws_spec)
-    ws_spec.loader.exec_module(ws_module)
+    # Temporarily add root to sys.path and clear services module cache
+    original_path = _sys.path.copy()
+    _sys.path.insert(0, root_dir)
 
-    # Load recruiting_wellsky_sync
-    rws_path = _os.path.join(root_dir, "services", "recruiting_wellsky_sync.py")
-    rws_spec = importlib.util.spec_from_file_location("root_recruiting_wellsky_sync", rws_path)
-    rws_module = importlib.util.module_from_spec(rws_spec)
-    rws_spec.loader.exec_module(rws_module)
+    # Clear any cached services modules to force fresh import from root
+    mods_to_remove = [k for k in _sys.modules.keys() if k == 'services' or k.startswith('services.')]
+    for mod in mods_to_remove:
+        del _sys.modules[mod]
 
-    return ws_module.wellsky_service, rws_module.recruiting_wellsky_sync, ws_module.ApplicantStatus
+    try:
+        # Now import from root services
+        from services.wellsky_service import wellsky_service, ApplicantStatus
+        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+
+        _root_wellsky_cache = {
+            'wellsky': wellsky_service,
+            'sync': recruiting_wellsky_sync,
+            'ApplicantStatus': ApplicantStatus
+        }
+
+        return wellsky_service, recruiting_wellsky_sync, ApplicantStatus
+    finally:
+        # Restore original path
+        _sys.path = original_path
 
 
 @app.route('/api/wellsky/sync/status')

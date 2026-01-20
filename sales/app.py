@@ -10509,26 +10509,44 @@ async def legacy_dashboard(request: Request, current_user: Dict[str, Any] = Depe
 # WellSky Integration API - Sales Dashboard → WellSky Prospects
 # =============================================================================
 
+_root_services_cache = {}
+
 def _get_root_services():
     """Load WellSky services from root directory (not sales/services)"""
-    import importlib.util
+    global _root_services_cache
+
+    if _root_services_cache:
+        return _root_services_cache['wellsky'], _root_services_cache['sync'], _root_services_cache['ProspectStatus']
+
+    import sys as _sys
     import os as _os
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 
-    # Load wellsky_service
-    ws_path = _os.path.join(root_dir, "services", "wellsky_service.py")
-    ws_spec = importlib.util.spec_from_file_location("root_wellsky_service", ws_path)
-    ws_module = importlib.util.module_from_spec(ws_spec)
-    ws_spec.loader.exec_module(ws_module)
+    # Temporarily add root to sys.path and clear services module cache
+    original_path = _sys.path.copy()
+    _sys.path.insert(0, root_dir)
 
-    # Load sales_wellsky_sync
-    sws_path = _os.path.join(root_dir, "services", "sales_wellsky_sync.py")
-    sws_spec = importlib.util.spec_from_file_location("root_sales_wellsky_sync", sws_path)
-    sws_module = importlib.util.module_from_spec(sws_spec)
-    sws_spec.loader.exec_module(sws_module)
+    # Clear any cached services modules to force fresh import from root
+    mods_to_remove = [k for k in _sys.modules.keys() if k == 'services' or k.startswith('services.')]
+    for mod in mods_to_remove:
+        del _sys.modules[mod]
 
-    return ws_module.wellsky_service, sws_module.sales_wellsky_sync, ws_module.ProspectStatus
+    try:
+        # Now import from root services
+        from services.wellsky_service import wellsky_service, ProspectStatus
+        from services.sales_wellsky_sync import sales_wellsky_sync
+
+        _root_services_cache = {
+            'wellsky': wellsky_service,
+            'sync': sales_wellsky_sync,
+            'ProspectStatus': ProspectStatus
+        }
+
+        return wellsky_service, sales_wellsky_sync, ProspectStatus
+    finally:
+        # Restore original path
+        _sys.path = original_path
 
 
 @app.get("/api/wellsky/sync/status")
