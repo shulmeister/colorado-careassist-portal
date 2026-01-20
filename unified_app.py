@@ -51,12 +51,23 @@ try:
 
     sales_path = os.path.join(os.path.dirname(__file__), "sales")
     if os.path.exists(sales_path):
+        # Add sales path to front of sys.path for the services imports
+        if sales_path in sys.path:
+            sys.path.remove(sales_path)
         sys.path.insert(0, sales_path)
         logger.info(f"✅ Added sales path: {sales_path}")
 
-        # Import sales app
-        spec = importlib.util.spec_from_file_location("sales_app", os.path.join(sales_path, "app.py"))
+        # Import sales app - ensure services can be found
+        sales_app_file = os.path.join(sales_path, "app.py")
+        spec = importlib.util.spec_from_file_location("sales_app", sales_app_file)
         sales_module = importlib.util.module_from_spec(spec)
+
+        # Set __file__ explicitly for the module so path detection works
+        sales_module.__file__ = sales_app_file
+
+        # Register the module before loading so submodule imports work
+        sys.modules["sales_app"] = sales_module
+
         spec.loader.exec_module(sales_module)
         sales_app = sales_module.app
 
