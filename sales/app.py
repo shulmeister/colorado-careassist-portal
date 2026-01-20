@@ -10509,21 +10509,35 @@ async def legacy_dashboard(request: Request, current_user: Dict[str, Any] = Depe
 # WellSky Integration API - Sales Dashboard → WellSky Prospects
 # =============================================================================
 
+def _get_root_services():
+    """Load WellSky services from root directory (not sales/services)"""
+    import importlib.util
+    import os as _os
+
+    root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+
+    # Load wellsky_service
+    ws_path = _os.path.join(root_dir, "services", "wellsky_service.py")
+    ws_spec = importlib.util.spec_from_file_location("root_wellsky_service", ws_path)
+    ws_module = importlib.util.module_from_spec(ws_spec)
+    ws_spec.loader.exec_module(ws_module)
+
+    # Load sales_wellsky_sync
+    sws_path = _os.path.join(root_dir, "services", "sales_wellsky_sync.py")
+    sws_spec = importlib.util.spec_from_file_location("root_sales_wellsky_sync", sws_path)
+    sws_module = importlib.util.module_from_spec(sws_spec)
+    sws_spec.loader.exec_module(sws_module)
+
+    return ws_module.wellsky_service, sws_module.sales_wellsky_sync, ws_module.ProspectStatus
+
+
 @app.get("/api/wellsky/sync/status")
 async def get_wellsky_sync_status(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get WellSky integration status and sync summary"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.wellsky_service import wellsky_service
-        from services.sales_wellsky_sync import sales_wellsky_sync
+        wellsky_service, sales_wellsky_sync, _ = _get_root_services()
 
         return JSONResponse({
             "status": "ok",
@@ -10545,14 +10559,7 @@ async def sync_deal_to_wellsky(
 ):
     """Sync a single deal to WellSky as a prospect"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.sales_wellsky_sync import sales_wellsky_sync
+        _, sales_wellsky_sync, _ = _get_root_services()
 
         # Get deal from database
         deal = db.query(Deal).filter_by(id=deal_id).first()
@@ -10592,14 +10599,7 @@ async def sync_all_deals_to_wellsky(
 ):
     """Sync all active deals to WellSky as prospects (runs in background)"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.sales_wellsky_sync import sales_wellsky_sync
+        _, sales_wellsky_sync, _ = _get_root_services()
 
         # Get all non-archived deals
         deals = db.query(Deal).filter(Deal.archived_at.is_(None)).all()
@@ -10631,14 +10631,7 @@ async def get_deal_wellsky_sync_status(
 ):
     """Get WellSky sync status for a specific deal"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.sales_wellsky_sync import sales_wellsky_sync
+        _, sales_wellsky_sync, _ = _get_root_services()
 
         # Check deal exists
         deal = db.query(Deal).filter_by(id=deal_id).first()
@@ -10665,14 +10658,7 @@ async def notify_wellsky_deal_stage_change(
 ):
     """Notify WellSky of a deal stage change"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.sales_wellsky_sync import sales_wellsky_sync
+        _, sales_wellsky_sync, _ = _get_root_services()
 
         # Check deal exists
         deal = db.query(Deal).filter_by(id=deal_id).first()
@@ -10707,14 +10693,7 @@ async def get_wellsky_prospects(
 ):
     """Get prospects from WellSky"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.wellsky_service import wellsky_service, ProspectStatus
+        wellsky_service, _, ProspectStatus = _get_root_services()
 
         # Parse status if provided
         prospect_status = None

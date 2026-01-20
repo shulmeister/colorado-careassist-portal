@@ -4267,20 +4267,34 @@ except Exception as schema_error:
 # WellSky Integration API - Recruiting Dashboard → WellSky Applicants
 # =============================================================================
 
+def _get_root_wellsky_services():
+    """Load WellSky services from root directory (not recruiting local)"""
+    import importlib.util
+    import os as _os
+
+    root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+
+    # Load wellsky_service
+    ws_path = _os.path.join(root_dir, "services", "wellsky_service.py")
+    ws_spec = importlib.util.spec_from_file_location("root_wellsky_service", ws_path)
+    ws_module = importlib.util.module_from_spec(ws_spec)
+    ws_spec.loader.exec_module(ws_module)
+
+    # Load recruiting_wellsky_sync
+    rws_path = _os.path.join(root_dir, "services", "recruiting_wellsky_sync.py")
+    rws_spec = importlib.util.spec_from_file_location("root_recruiting_wellsky_sync", rws_path)
+    rws_module = importlib.util.module_from_spec(rws_spec)
+    rws_spec.loader.exec_module(rws_module)
+
+    return ws_module.wellsky_service, rws_module.recruiting_wellsky_sync, ws_module.ApplicantStatus
+
+
 @app.route('/api/wellsky/sync/status')
 @require_auth
 def get_wellsky_sync_status():
     """Get WellSky integration status and sync summary"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.wellsky_service import wellsky_service
-        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+        wellsky_service, recruiting_wellsky_sync, _ = _get_root_wellsky_services()
 
         return jsonify({
             'status': 'ok',
@@ -4299,14 +4313,7 @@ def get_wellsky_sync_status():
 def sync_lead_to_wellsky(lead_id):
     """Sync a single lead to WellSky as an applicant"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+        _, recruiting_wellsky_sync, _ = _get_root_wellsky_services()
 
         # Get lead from database
         lead = Lead.query.get(lead_id)
@@ -4344,14 +4351,7 @@ def sync_lead_to_wellsky(lead_id):
 def sync_all_leads_to_wellsky():
     """Sync all active leads to WellSky as applicants"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+        _, recruiting_wellsky_sync, _ = _get_root_wellsky_services()
 
         # Get all leads (excluding terminal statuses)
         leads = Lead.query.filter(
@@ -4387,14 +4387,7 @@ def sync_all_leads_to_wellsky():
 def get_lead_wellsky_sync_status(lead_id):
     """Get WellSky sync status for a specific lead"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+        _, recruiting_wellsky_sync, _ = _get_root_wellsky_services()
 
         # Check lead exists
         lead = Lead.query.get(lead_id)
@@ -4415,14 +4408,7 @@ def get_lead_wellsky_sync_status(lead_id):
 def notify_wellsky_lead_status_change(lead_id):
     """Notify WellSky of a lead status change"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+        _, recruiting_wellsky_sync, _ = _get_root_wellsky_services()
 
         # Check lead exists
         lead = Lead.query.get(lead_id)
@@ -4455,14 +4441,7 @@ def notify_wellsky_lead_status_change(lead_id):
 def get_wellsky_applicants():
     """Get applicants from WellSky"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.wellsky_service import wellsky_service, ApplicantStatus
+        wellsky_service, _, ApplicantStatus = _get_root_wellsky_services()
 
         status = request.args.get('status')
         limit = int(request.args.get('limit', 100))
@@ -4492,14 +4471,7 @@ def get_wellsky_applicants():
 def get_wellsky_pipeline_summary():
     """Get recruiting pipeline summary from WellSky"""
     try:
-        # Add parent directory to path for services import
-        import sys as _sys
-        import os as _os
-        parent_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        if parent_dir not in _sys.path:
-            _sys.path.insert(0, parent_dir)
-
-        from services.recruiting_wellsky_sync import recruiting_wellsky_sync
+        _, recruiting_wellsky_sync, _ = _get_root_wellsky_services()
 
         summary = recruiting_wellsky_sync.get_pipeline_summary()
 
