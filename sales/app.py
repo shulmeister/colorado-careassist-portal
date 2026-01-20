@@ -1,3 +1,11 @@
+# CRITICAL: Ensure sales directory is in Python path for services imports
+# This is needed when the app is mounted via unified_app.py
+import sys as _sys
+import os as _os
+_sales_dir = _os.path.dirname(_os.path.abspath(__file__))
+if _sales_dir not in _sys.path:
+    _sys.path.insert(0, _sales_dir)
+
 # CRITICAL: Register HEIF opener BEFORE any module imports PIL
 # This enables HEIC image support for iPhone photos
 try:
@@ -10030,13 +10038,6 @@ async def simulate_sms_response(
 # ============================================================================
 # Attio-Inspired CRM Enhancements API
 # ============================================================================
-
-# Handle imports for both standalone and mounted contexts
-import sys
-import os
-_sales_dir = os.path.dirname(os.path.abspath(__file__))
-if _sales_dir not in sys.path:
-    sys.path.insert(0, _sales_dir)
 
 from services.activity_service import (
     log_activity, update_deal_stage, get_timeline, get_stale_deals,
