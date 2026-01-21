@@ -35,6 +35,14 @@ except ImportError as e:
     logger.warning(f"AI Care Coordinator not available: {e}")
     ai_care_coordinator = None
 
+# Import GoFormz → WellSky sync service for webhook processing
+try:
+    from services.goformz_wellsky_sync import goformz_wellsky_sync as _goformz_wellsky_sync_module
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"GoFormz-WellSky sync service not available: {e}")
+    _goformz_wellsky_sync_module = None
+
 from dotenv import load_dotenv
 from datetime import date
 from itsdangerous import URLSafeTimedSerializer
@@ -1095,66 +1103,20 @@ async def api_wellsky_status(
 # GoFormz → WellSky Webhook Endpoint
 # ============================================================================
 
-_goformz_wellsky_sync_cache = None
-_goformz_wellsky_sync_error = None
-
 def _get_goformz_wellsky_sync():
-    """Load goformz_wellsky_sync from root services directory."""
-    global _goformz_wellsky_sync_cache, _goformz_wellsky_sync_error
-    if _goformz_wellsky_sync_cache is not None:
-        return _goformz_wellsky_sync_cache
-
-    import sys as _sys
-    import os as _os
-    import types
-    import traceback
-
-    try:
-        root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-        services_dir = _os.path.join(root_dir, 'services')
-        sync_path = _os.path.join(services_dir, 'goformz_wellsky_sync.py')
-
-        if not _os.path.exists(sync_path):
-            _goformz_wellsky_sync_error = f"File not found: {sync_path}"
-            logger.warning(_goformz_wellsky_sync_error)
-            return None
-
-        # Add root to sys.path so 'from services.X import Y' works
-        if root_dir not in _sys.path:
-            _sys.path.insert(0, root_dir)
-
-        # Ensure services package exists in sys.modules with correct path
-        if 'services' not in _sys.modules:
-            services_pkg = types.ModuleType('services')
-            services_pkg.__path__ = [services_dir]
-            _sys.modules['services'] = services_pkg
-        elif not hasattr(_sys.modules['services'], '__path__'):
-            # If services exists but isn't a package, fix it
-            _sys.modules['services'].__path__ = [services_dir]
-
-        # Now we can import normally
-        from services.goformz_wellsky_sync import goformz_wellsky_sync
-        _goformz_wellsky_sync_cache = goformz_wellsky_sync
-        _goformz_wellsky_sync_error = None
-        return goformz_wellsky_sync
-    except Exception as e:
-        _goformz_wellsky_sync_error = f"{e}\n{traceback.format_exc()}"
-        logger.exception(f"Failed to load goformz_wellsky_sync: {e}")
-        return None
+    """Get the goformz_wellsky_sync service (loaded at module import time)."""
+    return _goformz_wellsky_sync_module
 
 
 @app.get("/api/goformz/wellsky-sync/debug")
 async def goformz_wellsky_sync_debug():
-    """Debug endpoint to check why goformz_wellsky_sync might not be loading."""
+    """Debug endpoint to check goformz_wellsky_sync service status."""
     import sys as _sys
     import os as _os
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
     services_dir = _os.path.join(root_dir, 'services')
     sync_path = _os.path.join(services_dir, 'goformz_wellsky_sync.py')
-
-    # Try loading it
-    service = _get_goformz_wellsky_sync()
 
     return JSONResponse({
         "root_dir": root_dir,
@@ -1163,9 +1125,8 @@ async def goformz_wellsky_sync_debug():
         "sync_file_exists": _os.path.exists(sync_path),
         "services_in_sys_modules": 'services' in _sys.modules,
         "root_in_sys_path": root_dir in _sys.path,
-        "service_loaded": service is not None,
-        "cached": _goformz_wellsky_sync_cache is not None,
-        "last_error": _goformz_wellsky_sync_error
+        "service_loaded": _goformz_wellsky_sync_module is not None,
+        "service_type": str(type(_goformz_wellsky_sync_module)) if _goformz_wellsky_sync_module else None
     })
 
 
