@@ -15,6 +15,10 @@ class SearchService:
         # We don't need persistent connections, just URLs to create engines on demand
         
     def _get_engine(self, url):
+        # Fix for SQLAlchemy 1.4+ requiring postgresql:// instead of postgres://
+        if url and url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql://", 1)
+            
         try:
             return create_engine(url)
         except Exception as e:
