@@ -1360,8 +1360,8 @@
                 }
                 
                 // Regular tool card
-                const isOperationsDashboard = tool.name === "Client Satisfaction" || tool.name === "Operations" || tool.name === "Operations Dashboard";
-                const linkHref = isOperationsDashboard ? "/client-satisfaction" : tool.url;
+                const isOperationsDashboard = tool.name === "Client Satisfaction" || tool.name === "Operations" || tool.name === "Operations Dashboard" || tool.name === "Client Operations Dashboard";
+                const linkHref = isOperationsDashboard ? "/operations" : tool.url;
                 const isLargeLogo = ['RingCentral', 'QuickBooks', 'Google Ads', 'Adams Keegan Efficenter'].includes(tool.name);
                 const logoClass = isLargeLogo ? 'large-logo' : '';
                 

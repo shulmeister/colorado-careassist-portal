@@ -43,6 +43,14 @@ except ImportError as e:
     logger.warning(f"GoFormz-WellSky sync service not available: {e}")
     _goformz_wellsky_sync_module = None
 
+# Import WellSky service directly for Operations Dashboard
+try:
+    from services.wellsky_service import wellsky_service
+except ImportError as e:
+    logger = logging.getLogger(__name__)
+    logger.warning(f"WellSky service not available: {e}")
+    wellsky_service = None
+
 from dotenv import load_dotenv
 from datetime import date
 from itsdangerous import URLSafeTimedSerializer
@@ -928,13 +936,22 @@ async def recruitment_dashboard_embedded(
     })
 
 
-@app.get("/client-satisfaction", response_class=HTMLResponse)
-async def client_satisfaction_dashboard(
+@app.get("/client-satisfaction")
+async def client_satisfaction_redirect(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Redirect old client-satisfaction URL to new operations dashboard"""
+    return RedirectResponse(url="/operations", status_code=302)
+
+
+@app.get("/client-satisfaction-old", response_class=HTMLResponse)
+async def client_satisfaction_dashboard_legacy(
     request: Request,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Client Satisfaction Dashboard - native implementation with WellSky integration"""
+    """Client Satisfaction Dashboard - legacy implementation (kept for reference)"""
     if client_satisfaction_service is None:
         raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
@@ -1097,6 +1114,189 @@ async def api_wellsky_status(
         "environment": wellsky.environment,
         "message": "WellSky service connected (mock mode)" if wellsky.is_mock_mode else "WellSky API connected"
     })
+
+
+# ============================================================================
+# Operations Dashboard (Client Operations with WellSky Integration)
+# ============================================================================
+
+@app.get("/operations", response_class=HTMLResponse)
+async def operations_dashboard(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Operations Dashboard - client operations with WellSky integration"""
+    return templates.TemplateResponse(
+        "operations.html",
+        {
+            "request": request,
+            "user": current_user,
+        },
+    )
+
+
+@app.get("/api/operations/summary")
+async def api_operations_summary(
+    days: int = Query(30, ge=1, le=365),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get operations dashboard summary metrics from WellSky"""
+    if wellsky_service is None:
+        raise HTTPException(status_code=503, detail="WellSky service not available")
+
+    try:
+        summary = wellsky_service.get_operations_summary(days=days)
+        # Add weekly shift data for chart
+        summary["shifts_by_day"] = _get_weekly_shift_data()
+        summary["wellsky_connected"] = not wellsky_service.is_mock_mode
+        return JSONResponse(summary)
+    except Exception as e:
+        logger.error(f"Error getting operations summary: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _get_weekly_shift_data() -> Dict[str, List[int]]:
+    """Get shift counts by day of week for the chart"""
+    if wellsky_service is None:
+        return {"scheduled": [0]*7, "open": [0]*7}
+
+    from datetime import date, timedelta
+    today = date.today()
+    # Get start of current week (Monday)
+    start_of_week = today - timedelta(days=today.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+
+    try:
+        shifts = wellsky_service.get_open_shifts(start_of_week, end_of_week)
+        scheduled = [0]*7
+        open_shifts = [0]*7
+
+        for shift in shifts:
+            shift_date = shift.date if hasattr(shift, 'date') else None
+            if shift_date:
+                day_idx = (shift_date - start_of_week).days
+                if 0 <= day_idx < 7:
+                    if shift.status.value == 'open':
+                        open_shifts[day_idx] += 1
+                    else:
+                        scheduled[day_idx] += 1
+
+        return {"scheduled": scheduled, "open": open_shifts}
+    except Exception as e:
+        logger.error(f"Error getting weekly shift data: {e}")
+        return {"scheduled": [0]*7, "open": [0]*7}
+
+
+@app.get("/api/operations/clients")
+async def api_operations_clients(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get client list with risk indicators from WellSky"""
+    if wellsky_service is None:
+        raise HTTPException(status_code=503, detail="WellSky service not available")
+
+    try:
+        clients = wellsky_service.get_clients(status="active")
+        client_list = []
+        for client in clients:
+            # Get risk indicators for each client
+            indicators = wellsky_service.get_client_satisfaction_indicators(client.id)
+            client_list.append({
+                "id": client.id,
+                "name": client.name,
+                "status": client.status.value if hasattr(client.status, 'value') else str(client.status),
+                "hours_per_week": getattr(client, 'hours_per_week', None),
+                "payer": getattr(client, 'payer_type', 'N/A'),
+                "risk_score": indicators.get("risk_score", 0) if indicators else 0,
+                "last_visit": getattr(client, 'last_visit_date', None),
+            })
+        return JSONResponse({"clients": client_list})
+    except Exception as e:
+        logger.error(f"Error getting operations clients: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/operations/care-plans")
+async def api_operations_care_plans(
+    days: int = Query(30, ge=1, le=365),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get care plans due for review from WellSky"""
+    if wellsky_service is None:
+        raise HTTPException(status_code=503, detail="WellSky service not available")
+
+    try:
+        plans = wellsky_service.get_care_plans_due_for_review(days_ahead=days)
+        plan_list = []
+        for plan in plans:
+            days_until = (plan.review_date - date.today()).days if plan.review_date else None
+            plan_list.append({
+                "id": plan.id,
+                "client_id": plan.client_id,
+                "client_name": plan.client_name,
+                "status": plan.status.value if hasattr(plan.status, 'value') else str(plan.status),
+                "review_date": plan.review_date.isoformat() if plan.review_date else None,
+                "days_until_review": days_until,
+                "authorized_hours": getattr(plan, 'authorized_hours_per_week', None),
+            })
+        return JSONResponse({"care_plans": plan_list})
+    except Exception as e:
+        logger.error(f"Error getting care plans: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/operations/open-shifts")
+async def api_operations_open_shifts(
+    days: int = Query(14, ge=1, le=60),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get open shifts that need coverage from WellSky"""
+    if wellsky_service is None:
+        raise HTTPException(status_code=503, detail="WellSky service not available")
+
+    try:
+        from datetime import date, timedelta
+        date_from = date.today()
+        date_to = date_from + timedelta(days=days)
+
+        shifts = wellsky_service.get_open_shifts(date_from, date_to)
+        # Filter to only open shifts
+        open_shifts = [s for s in shifts if s.status.value == 'open']
+
+        shift_list = []
+        for shift in open_shifts:
+            shift_list.append({
+                "id": shift.id,
+                "date": shift.date.isoformat() if shift.date else None,
+                "start_time": shift.start_time.strftime("%I:%M %p") if shift.start_time else None,
+                "end_time": shift.end_time.strftime("%I:%M %p") if shift.end_time else None,
+                "client_id": shift.client_id,
+                "client_name": shift.client_name,
+                "location": getattr(shift, 'location', None),
+                "hours": getattr(shift, 'hours', None),
+                "status": "open",
+            })
+        return JSONResponse({"shifts": shift_list})
+    except Exception as e:
+        logger.error(f"Error getting open shifts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/operations/at-risk")
+async def api_operations_at_risk(
+    threshold: int = Query(40, ge=0, le=100),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get at-risk clients from WellSky"""
+    if wellsky_service is None:
+        raise HTTPException(status_code=503, detail="WellSky service not available")
+
+    try:
+        at_risk = wellsky_service.get_at_risk_clients(threshold=threshold)
+        return JSONResponse({"clients": at_risk, "threshold": threshold})
+    except Exception as e:
+        logger.error(f"Error getting at-risk clients: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ============================================================================
