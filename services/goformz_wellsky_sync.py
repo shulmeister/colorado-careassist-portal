@@ -887,16 +887,16 @@ class GoFormzWellSkySyncService:
                 result["client_id"] = prospect.converted_client_id
                 return result
 
-            # Convert prospect to client
-            success, message = self._process_client_packet_match(
-                prospect, submission_id
+            # Convert prospect to client using the manual conversion method
+            success, client, message = self.manually_convert_prospect_to_client(
+                prospect.id,
+                goformz_submission_id=submission_id,
+                notes=f"Converted via GoFormz webhook ({form_name})"
             )
             result["success"] = success
             result["message"] = message
-            if success:
-                # Refresh to get client ID
-                prospect = self.wellsky.get_prospect(prospect.id)
-                result["client_id"] = prospect.converted_client_id if prospect else None
+            if success and client:
+                result["client_id"] = client.id
 
         except Exception as e:
             logger.exception(f"Error processing client packet {submission_id}: {e}")
@@ -961,16 +961,16 @@ class GoFormzWellSkySyncService:
                 result["caregiver_id"] = applicant.converted_caregiver_id
                 return result
 
-            # Convert applicant to caregiver
-            success, message = self._process_employee_packet_match(
-                applicant, submission_id
+            # Convert applicant to caregiver using the manual conversion method
+            success, caregiver, message = self.manually_convert_applicant_to_caregiver(
+                applicant.id,
+                goformz_submission_id=submission_id,
+                notes=f"Converted via GoFormz webhook ({form_name})"
             )
             result["success"] = success
             result["message"] = message
-            if success:
-                # Refresh to get caregiver ID
-                applicant = self.wellsky.get_applicant(applicant.id)
-                result["caregiver_id"] = applicant.converted_caregiver_id if applicant else None
+            if success and caregiver:
+                result["caregiver_id"] = caregiver.id
 
         except Exception as e:
             logger.exception(f"Error processing employee packet {submission_id}: {e}")
