@@ -59,6 +59,10 @@ ON_CALL_MANAGER_PHONE = os.getenv("ON_CALL_MANAGER_PHONE", "+13037571777")    # 
 # SMS Auto-Reply Toggle (set to "false" to disable Gigi auto-replies)
 SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() != "false"
 
+# Operations SMS Toggle (set to "true" to enable SMS from call-out operations)
+# DEFAULT IS OFF - Must be explicitly enabled when WellSky is fully connected
+OPERATIONS_SMS_ENABLED = os.getenv("GIGI_OPERATIONS_SMS_ENABLED", "false").lower() == "true"
+
 # RingCentral credentials (backup SMS provider)
 RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID", "cqaJllTcFyndtgsussicsd")
 RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET", "1PwhkkpeFYEcaHcZmQ3cCialR3hQ79DnDfVSpRPOUqYT")
@@ -681,13 +685,20 @@ async def execute_caregiver_call_out(
                 f"shift starting in {int(time_until_shift * 60)} minutes! Reason: {reason}. "
                 f"Requires immediate manager attention."
             )
-            await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, urgent_message)
+            # Only send SMS if operations are enabled (disabled by default until WellSky connected)
+            if OPERATIONS_SMS_ENABLED:
+                await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, urgent_message)
+                manager_notified = True
+            else:
+                logger.info(f"[DISABLED] Would send urgent SMS to {ON_CALL_MANAGER_PHONE}: {urgent_message}")
+                manager_notified = False
 
             return {
                 "success": False,
                 "requires_manual_handoff": True,
                 "time_until_shift_hours": round(time_until_shift, 2),
-                "manager_notified": True,
+                "manager_notified": manager_notified,
+                "operations_sms_enabled": OPERATIONS_SMS_ENABLED,
                 "message": (
                     f"Since this shift with {shift.client_name} starts very soon, "
                     f"I'm going to connect you directly to our on-call manager to ensure "
@@ -826,13 +837,17 @@ async def execute_caregiver_call_out(
         result["errors"].append(f"Step C: {error_msg}")
         logger.error(error_msg)
 
-    # Also send direct notification to On-Call Manager
+    # Also send direct notification to On-Call Manager (only if operations SMS is enabled)
     sms_message = (
         f"CALL-OUT: {caregiver_name} called out for {client_name} "
         f"({shift_time}). Reason: {reason}. "
         f"Replacement blast sent. Logged by Gigi at {datetime.now().strftime('%I:%M %p')}."
     )
-    await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
+    if OPERATIONS_SMS_ENABLED:
+        await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
+        logger.info(f"SMS notification sent to on-call manager")
+    else:
+        logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
 
     # =========================================================================
     # Build final result and message for Gigi to speak
@@ -924,7 +939,7 @@ async def report_call_out(
     except Exception as e:
         logger.error(f"Error posting call-out to portal: {e}")
 
-    # Send urgent SMS to On-Call Manager
+    # Send urgent SMS to On-Call Manager (only if operations SMS is enabled)
     sms_message = (
         f"URGENT CALL-OUT: {caregiver_name} called out for {client_name} shift "
         f"({shift_time}). Reason: {reason}. "
@@ -932,7 +947,11 @@ async def report_call_out(
         f"Coverage needed!"
     )
 
-    sms_sent = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
+    if OPERATIONS_SMS_ENABLED:
+        sms_sent = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
+    else:
+        logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
+        sms_sent = False
 
     # Build confirmation message for Gigi to read
     if sms_sent:
