@@ -6259,7 +6259,7 @@ async def get_stale_deals_endpoint(
     days: int = 30,
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get deals that have been stuck in the same stage too long"""
     deals = get_stale_deals(db, days_threshold=days, limit=limit)
@@ -10115,7 +10115,7 @@ async def get_unified_timeline(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get unified activity timeline for a contact, company, or deal.
@@ -10171,7 +10171,7 @@ async def add_timeline_note(
 async def get_deal_stage_history_endpoint(
     deal_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get full stage change history for a deal"""
     history = get_deal_stage_history(db, deal_id)
@@ -10218,7 +10218,7 @@ async def update_deal_stage_endpoint(
 @app.get("/api/analytics/stage-duration")
 async def get_stage_duration_analytics(
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get analytics on average time spent in each stage"""
     return JSONResponse(get_stage_analytics(db))
@@ -10230,7 +10230,7 @@ async def get_stage_duration_analytics(
 async def get_deal_contacts_endpoint(
     deal_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get all contacts associated with a deal"""
     contacts = get_deal_contacts(db, deal_id)
@@ -10288,7 +10288,7 @@ async def remove_deal_contact_endpoint(
 async def get_contact_deals_endpoint(
     contact_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get all deals associated with a contact"""
     deals = get_contact_deals(db, contact_id)
@@ -10299,7 +10299,7 @@ async def get_contact_deals_endpoint(
 async def get_contact_relationships(
     contact_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get all relationships for a contact (company, deals, activities)"""
     contact = db.query(Contact).filter_by(id=contact_id).first()
@@ -10332,7 +10332,7 @@ async def get_contact_relationships(
 async def get_company_relationships(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get all relationships for a company (contacts, deals, activities)"""
     company = db.query(ReferralSource).filter_by(id=company_id).first()
@@ -10378,7 +10378,7 @@ async def enrich_company_endpoint(
 async def find_contact_duplicates(
     contact_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Find potential duplicate contacts"""
     from services.ai_enrichment_service import find_duplicate_contacts
@@ -10437,7 +10437,7 @@ async def merge_contacts_endpoint(
 async def get_contact_interaction_summary(
     contact_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get AI-generated summary of interactions with a contact"""
     from services.ai_enrichment_service import summarize_interactions
@@ -10450,7 +10450,7 @@ async def get_contact_interaction_summary(
 async def get_company_interaction_summary(
     company_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get AI-generated summary of interactions with a company"""
     from services.ai_enrichment_service import summarize_interactions
@@ -10698,7 +10698,7 @@ async def sync_all_deals_to_wellsky(
 async def get_deal_wellsky_sync_status(
     deal_id: int,
     db: Session = Depends(get_db),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get WellSky sync status for a specific deal"""
     try:
@@ -10760,7 +10760,7 @@ async def notify_wellsky_deal_stage_change(
 async def get_wellsky_prospects(
     status: Optional[str] = None,
     limit: int = Query(default=100, le=1000),
-    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get prospects from WellSky"""
     try:

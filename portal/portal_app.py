@@ -106,6 +106,22 @@ if not PORTAL_SECRET:
 PORTAL_SSO_SERIALIZER = URLSafeTimedSerializer(PORTAL_SECRET)
 PORTAL_SSO_TOKEN_TTL = int(os.getenv("PORTAL_SSO_TOKEN_TTL", "300"))
 
+# Admin users list - comma-separated email addresses
+ADMIN_EMAILS = os.getenv("PORTAL_ADMIN_EMAILS", "jason@coloradocareassist.com").split(",")
+
+def is_admin(user: Dict[str, Any]) -> bool:
+    """Check if user has admin privileges"""
+    email = user.get("email", "").lower()
+    return email in [e.strip().lower() for e in ADMIN_EMAILS]
+
+def require_admin(user: Dict[str, Any]) -> None:
+    """Raise exception if user is not an admin"""
+    if not is_admin(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required"
+        )
+
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
 
 # Add session middleware for OAuth state management
@@ -309,12 +325,10 @@ async def create_tool(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Create new tool (admin only)"""
+    require_admin(current_user)
     try:
         data = await request.json()
-        
-        # Check if user is admin (for now, allow all authenticated users)
-        # In production, you might want to add an admin check
-        
+
         tool = PortalTool(
             name=data.get("name"),
             url=data.get("url"),
@@ -349,9 +363,10 @@ async def update_tool(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Update tool (admin only)"""
+    require_admin(current_user)
     try:
         data = await request.json()
-        
+
         tool = db.query(PortalTool).filter(PortalTool.id == tool_id).first()
         if not tool:
             raise HTTPException(status_code=404, detail="Tool not found")
@@ -397,6 +412,7 @@ async def delete_tool(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Delete tool (admin only)"""
+    require_admin(current_user)
     try:
         tool = db.query(PortalTool).filter(PortalTool.id == tool_id).first()
         if not tool:

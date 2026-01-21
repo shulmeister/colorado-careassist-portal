@@ -3763,14 +3763,13 @@ def get_beetexting_access_token():
     }
     
     print(f"Requesting OAuth token from BeeTexting...")
+    # SECURITY: Don't log sensitive credentials
     print(f"Token URL: {token_url}")
-    print(f"Client ID: {client_id[:10]}...")
-    print(f"API Key: {api_key[:10]}...")
-    
+
     response = requests.post(token_url, data=token_data, headers=headers, timeout=10)
-    
+
     print(f"Token response status: {response.status_code}")
-    print(f"Token response body: {response.text[:500]}")
+    # SECURITY: Don't log full response body as it may contain tokens
     
     if response.status_code == 200:
         token_info = response.json()
@@ -3926,12 +3925,9 @@ def send_beetexting_message():
             'text': message
         }
         
-        print(f"Sending text from {from_number} to {clean_phone} via {api_url}/message/sendsms")
-        print(f"Using token: {access_token[:20]}...")
-        print(f"API Key: {api_key[:10]}...")
-        print(f"Request URL: {api_url}/message/sendsms")
-        print(f"Request params: {params}")
-        
+        # SECURITY: Don't log tokens or API keys
+        print(f"Sending text from {from_number} to {clean_phone}")
+
         # Send to BeeTexting API
         response = requests.post(
             f'{api_url}/message/sendsms',
@@ -3939,9 +3935,8 @@ def send_beetexting_message():
             params=params,
             timeout=10
         )
-        
+
         print(f"BeeTexting API response: {response.status_code}")
-        print(f"Response body: {response.text[:500]}")
         
         if response.status_code == 200:
             result = response.json()
