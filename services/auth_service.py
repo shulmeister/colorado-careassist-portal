@@ -185,33 +185,49 @@ class GoogleOAuthManager:
 # Apps should instantiate their own with specific redirect URIs if needed for generating auth URLs
 # But for verification, the secret key is shared so this instance works.
 oauth_manager = GoogleOAuthManager()
-DEMO_BYPASS = os.getenv("DEMO_BYPASS", "false").lower() == "true"
+
+# SECURITY: Demo bypass only allowed in explicit development environment
+_is_development = os.getenv("ENVIRONMENT", "production").lower() in ("development", "dev", "local")
+DEMO_BYPASS = _is_development and os.getenv("DEMO_BYPASS", "false").lower() == "true"
+if DEMO_BYPASS:
+    logger.warning("SECURITY: DEMO_BYPASS enabled - authentication is bypassed!")
 
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Dict[str, Any]:
     """Dependency to get current authenticated user. Supports Portal headers and Session tokens."""
-    
+
     if DEMO_BYPASS:
+        logger.warning("Demo bypass used for request")
         return {
             "email": "demo@careassist.local",
             "name": "Demo User",
             "domain": "demo",
             "via_portal": False
         }
-    
+
     # CHECK PORTAL AUTHENTICATION FIRST (highest priority)
     # When accessed through portal proxy, trust portal's authentication
-    PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
+    # SECURITY: Portal secret MUST be set via environment variable
+    PORTAL_SECRET = os.getenv("PORTAL_SECRET")
     portal_secret = request.headers.get("X-Portal-Secret")
-    
-    if portal_secret and portal_secret == PORTAL_SECRET:
+
+    if portal_secret and PORTAL_SECRET and portal_secret == PORTAL_SECRET:
+        # SECURITY: Validate that the email looks legitimate
+        portal_email = request.headers.get("X-Portal-User-Email", "")
+        portal_name = request.headers.get("X-Portal-User-Name", "Portal User")
+
+        # Reject obviously fake or empty emails
+        if not portal_email or "@" not in portal_email:
+            logger.warning(f"Portal auth rejected: invalid email format: {portal_email}")
+            raise HTTPException(status_code=401, detail="Invalid portal authentication")
+
         # Valid portal request - return user info from portal headers
         return {
-            "email": request.headers.get("X-Portal-User-Email", "portal-user@coloradocareassist.com"),
-            "name": request.headers.get("X-Portal-User-Name", "Portal User"),
-            "domain": "coloradocareassist.com",
+            "email": portal_email,
+            "name": portal_name,
+            "domain": portal_email.split("@")[1] if "@" in portal_email else "unknown",
             "via_portal": True
         }
     

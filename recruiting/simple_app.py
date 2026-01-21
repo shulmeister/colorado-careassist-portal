@@ -823,7 +823,8 @@ def test():
 if __name__ == '__main__':
     with app.app_context():
         create_tables()
-    app.run(debug=True)
+    # SECURITY: Debug mode controlled by environment variable
+    app.run(debug=os.getenv("FLASK_DEBUG", "false").lower() == "true")
 
 
 

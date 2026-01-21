@@ -40,34 +40,53 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# Configuration
+# Configuration - SECURITY: No hardcoded credentials
 # =============================================================================
 
-RETELL_API_KEY = os.getenv("RETELL_API_KEY", "key_5d0bc4168659a5df305b8ac2a7fd")
-RETELL_WEBHOOK_SECRET = os.getenv("RETELL_WEBHOOK_SECRET", "")  # No webhook secret - skip validation
+# Retell AI credentials (required for voice agent)
+RETELL_API_KEY = os.getenv("RETELL_API_KEY")
+RETELL_WEBHOOK_SECRET = os.getenv("RETELL_WEBHOOK_SECRET")  # Required for production webhook validation
 PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://portal.coloradocareassist.com")
 
-# BeeTexting OAuth2 credentials
-BEETEXTING_CLIENT_ID = os.getenv("BEETEXTING_CLIENT_ID", "79e4ivhns352r5373hmi1382tt")
-BEETEXTING_CLIENT_SECRET = os.getenv("BEETEXTING_CLIENT_SECRET", "m5gbn20h4lkl0o115vk6c3ghp5he279ijftvj8pn2gslj7i1g1m")
-BEETEXTING_API_KEY = os.getenv("BEETEXTING_API_KEY", "m5gbn20h4lkl0o115vk6c3ghp5he279ijftvj8pn2gslj7i1g1m")
+# BeeTexting OAuth2 credentials (required for SMS)
+BEETEXTING_CLIENT_ID = os.getenv("BEETEXTING_CLIENT_ID")
+BEETEXTING_CLIENT_SECRET = os.getenv("BEETEXTING_CLIENT_SECRET")
+BEETEXTING_API_KEY = os.getenv("BEETEXTING_API_KEY")
 
-# Phone numbers
+# Phone numbers (safe defaults - these are public business numbers)
 BEETEXTING_FROM_NUMBER = os.getenv("BEETEXTING_FROM_NUMBER", "+17194283999")  # 719-428-3999
 ON_CALL_MANAGER_PHONE = os.getenv("ON_CALL_MANAGER_PHONE", "+13037571777")    # 303-757-1777
 
-# SMS Auto-Reply Toggle (set to "false" to disable Gigi auto-replies)
-SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() != "false"
+# SMS Auto-Reply Toggle (default OFF for safety)
+SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "false").lower() == "true"
 
 # Operations SMS Toggle (set to "true" to enable SMS from call-out operations)
 # DEFAULT IS OFF - Must be explicitly enabled when WellSky is fully connected
 OPERATIONS_SMS_ENABLED = os.getenv("GIGI_OPERATIONS_SMS_ENABLED", "false").lower() == "true"
 
-# RingCentral credentials (backup SMS provider)
-RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID", "cqaJllTcFyndtgsussicsd")
-RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET", "1PwhkkpeFYEcaHcZmQ3cCialR3hQ79DnDfVSpRPOUqYT")
+# RingCentral credentials (required for SMS - no hardcoded fallbacks)
+RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID")
+RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET")
 RINGCENTRAL_SERVER = os.getenv("RINGCENTRAL_SERVER", "https://platform.ringcentral.com")
-RINGCENTRAL_JWT = os.getenv("RINGCENTRAL_JWT_TOKEN") or os.getenv("RINGCENTRAL_JWT", "eyJraWQiOiI4NzYyZjU5OGQwNTk0NGRiODZiZjVjYTk3ODA0NzYwOCIsInR5cCI6IkpXVCIsImFsZyI6IlJTMjU2In0.eyJhdWQiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbS9yZXN0YXBpL29hdXRoL3Rva2VuIiwic3ViIjoiMjYyNzQwMDA5IiwiaXNzIjoiaHR0cHM6Ly9wbGF0Zm9ybS5yaW5nY2VudHJhbC5jb20iLCJleHAiOjM5MTAyNDA5NjUsImlhdCI6MTc2Mjc1NzMxOCwianRpIjoiZ3Jsd0pPWGFTM2EwalpibThvTmtZdyJ9.WA9DUSlb_4SlCo9UHNjscHKrVDoJTF4iW3D7Rre9E2qg5UQ_hWfCgysiZJMXlL8-vUuJ2XDNivvpfbxriESKIEPAEEY85MolJZS9KG3g90ga-3pJtHq7SC87mcacXtDWqzmbBS_iDOjmNMHiynWFR9Wgi30DMbz9rQ1U__Bl88qVRTvZfY17ovu3dZDhh-FmLUWRnKOc4LQUvRChQCO-21LdSquZPvEAe7qHEsh-blS8Cvh98wvX-9vaiurDR-kC9Tp007x4lTI74MwQ5rJif7tL7Hslqaoag0WoNEIP9VPrp4x-Q7AzKIzBNbrGr9kIPthIebmeOBDMIIrw6pg_lg")
+RINGCENTRAL_JWT = os.getenv("RINGCENTRAL_JWT_TOKEN") or os.getenv("RINGCENTRAL_JWT")
+
+# Log configuration status (not the values!)
+def _log_config_status():
+    """Log which credentials are configured without exposing values."""
+    configs = {
+        "RETELL_API_KEY": bool(RETELL_API_KEY),
+        "RETELL_WEBHOOK_SECRET": bool(RETELL_WEBHOOK_SECRET),
+        "BEETEXTING_CLIENT_ID": bool(BEETEXTING_CLIENT_ID),
+        "RINGCENTRAL_CLIENT_ID": bool(RINGCENTRAL_CLIENT_ID),
+        "RINGCENTRAL_JWT": bool(RINGCENTRAL_JWT),
+    }
+    missing = [k for k, v in configs.items() if not v]
+    if missing:
+        logger.warning(f"Gigi: Missing credentials (some features disabled): {missing}")
+    else:
+        logger.info("Gigi: All credentials configured")
+
+_log_config_status()
 
 # =============================================================================
 # FastAPI App
@@ -167,9 +186,14 @@ async def verify_retell_signature(
     Retell signs webhooks with HMAC-SHA256 using your webhook secret.
     """
     if not RETELL_WEBHOOK_SECRET:
-        # If no secret configured, skip validation (development mode)
-        logger.warning("RETELL_WEBHOOK_SECRET not configured - skipping signature validation")
-        return True
+        # SECURITY: Log warning about missing webhook secret
+        # In production, this should be configured for security
+        is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
+        if is_production:
+            logger.error("SECURITY: RETELL_WEBHOOK_SECRET not configured in production - webhook validation disabled!")
+        else:
+            logger.warning("RETELL_WEBHOOK_SECRET not configured - skipping signature validation (development)")
+        return True  # Allow for now but log the security issue
 
     if not x_retell_signature:
         logger.warning("Missing X-Retell-Signature header")

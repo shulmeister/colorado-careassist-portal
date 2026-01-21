@@ -4525,4 +4525,5 @@ if __name__ == '__main__':
         create_tables()
         # Start automatic lead fetching scheduler
         start_auto_scheduler()
-    app.run(debug=True)
+    # SECURITY: Debug mode controlled by environment variable
+    app.run(debug=os.getenv("FLASK_DEBUG", "false").lower() == "true")

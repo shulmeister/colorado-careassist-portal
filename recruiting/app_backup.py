@@ -1332,4 +1332,5 @@ def create_tables():
 # create_tables()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    # SECURITY: Debug mode controlled by environment variable
+    app.run(debug=os.getenv("FLASK_DEBUG", "false").lower() == "true")

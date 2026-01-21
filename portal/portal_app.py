@@ -90,7 +90,14 @@ ACTIVITY_TRACKER_URL = os.getenv(
     "https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com/",
 )
 
-PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
+# SECURITY: PORTAL_SECRET must be set via environment variable - no weak defaults
+PORTAL_SECRET = os.getenv("PORTAL_SECRET")
+if not PORTAL_SECRET:
+    # Generate a random secret for development, but log a warning
+    import secrets as _secrets
+    PORTAL_SECRET = _secrets.token_urlsafe(32)
+    logger.warning("PORTAL_SECRET not set - using random value (sessions won't persist across restarts)")
+
 PORTAL_SSO_SERIALIZER = URLSafeTimedSerializer(PORTAL_SECRET)
 PORTAL_SSO_TOKEN_TTL = int(os.getenv("PORTAL_SSO_TOKEN_TTL", "300"))
 
@@ -99,14 +106,24 @@ app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
 # Add session middleware for OAuth state management
 from starlette.middleware.sessions import SessionMiddleware
 import secrets
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32)))
+SESSION_SECRET = os.getenv("SESSION_SECRET_KEY")
+if not SESSION_SECRET:
+    SESSION_SECRET = secrets.token_urlsafe(32)
+    logger.warning("SESSION_SECRET_KEY not set - using random value")
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
-# Add security middleware
+# Add security middleware - CORS configuration
+# SECURITY: Only allow production origins (localhost removed for security)
+_cors_origins = ["https://portal.coloradocareassist.com", "https://careassist-unified-0a11ddb45ac0.herokuapp.com"]
+if os.getenv("ALLOW_LOCALHOST_CORS", "false").lower() == "true":
+    _cors_origins.append("http://localhost:8000")
+    logger.warning("CORS: localhost enabled (development mode)")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000", "https://portal.coloradocareassist.com"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -1451,24 +1468,15 @@ def _get_goformz_wellsky_sync():
 
 
 @app.get("/api/goformz/wellsky-sync/debug")
-async def goformz_wellsky_sync_debug():
-    """Debug endpoint to check goformz_wellsky_sync service status."""
-    import sys as _sys
-    import os as _os
-
-    root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-    services_dir = _os.path.join(root_dir, 'services')
-    sync_path = _os.path.join(services_dir, 'goformz_wellsky_sync.py')
-
+async def goformz_wellsky_sync_debug(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Debug endpoint to check goformz_wellsky_sync service status. Requires authentication."""
+    # SECURITY: Only return safe status info, no paths
     return JSONResponse({
-        "root_dir": root_dir,
-        "services_dir": services_dir,
-        "sync_path": sync_path,
-        "sync_file_exists": _os.path.exists(sync_path),
-        "services_in_sys_modules": 'services' in _sys.modules,
-        "root_in_sys_path": root_dir in _sys.path,
         "service_loaded": _goformz_wellsky_sync_module is not None,
-        "service_type": str(type(_goformz_wellsky_sync_module)) if _goformz_wellsky_sync_module else None
+        "status": "ready" if _goformz_wellsky_sync_module else "not_loaded",
+        "user": current_user.get("email")
     })
 
 
