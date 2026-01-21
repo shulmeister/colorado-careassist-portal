@@ -20,7 +20,7 @@ from typing import Optional, Dict, Any, List, Literal
 from enum import Enum
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Header
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 import httpx
 
@@ -1142,6 +1142,82 @@ async def beetexting_webhook(request: Request):
 
     except Exception as e:
         logger.exception(f"Error in Beetexting webhook: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.post("/webhook/ringcentral-sms")
+async def ringcentral_sms_webhook(request: Request):
+    """
+    Webhook endpoint for RingCentral inbound SMS notifications.
+
+    Handles RingCentral's webhook validation (echoes Validation-Token)
+    and processes inbound SMS messages for auto-reply.
+    """
+    # Handle RingCentral validation request
+    validation_token = request.headers.get("Validation-Token")
+    if validation_token:
+        logger.info(f"RingCentral webhook validation request received")
+        return Response(
+            content=validation_token,
+            headers={"Validation-Token": validation_token},
+            status_code=200
+        )
+
+    try:
+        body = await request.json()
+        logger.info(f"RingCentral SMS webhook received: {json.dumps(body)[:500]}")
+
+        # RingCentral notification structure
+        # body contains: uuid, event, timestamp, subscriptionId, body (message data)
+        event = body.get("event", "")
+        message_body = body.get("body", {})
+
+        # Only process inbound SMS
+        if "message-store" not in event:
+            logger.info(f"Ignoring non-message event: {event}")
+            return JSONResponse({"status": "ok", "action": "ignored_event_type"})
+
+        # Extract message details from RingCentral format
+        direction = message_body.get("direction", "").lower()
+        if direction != "inbound":
+            logger.info(f"Skipping {direction} message")
+            return JSONResponse({"status": "ok", "action": "skipped_outbound"})
+
+        # Get phone numbers from RingCentral format
+        from_info = message_body.get("from", {})
+        to_info = message_body.get("to", [{}])[0] if message_body.get("to") else {}
+
+        from_number = from_info.get("phoneNumber") or from_info.get("extensionNumber")
+        to_number = to_info.get("phoneNumber") or to_info.get("extensionNumber")
+
+        # Get message text - RingCentral uses "subject" for SMS content
+        message = message_body.get("subject") or message_body.get("text", "")
+
+        # Get contact name if available
+        contact_name = from_info.get("name")
+
+        if not from_number or not message:
+            logger.warning(f"Missing from_number or message in RingCentral payload")
+            return JSONResponse({"status": "error", "message": "Missing required fields"}, status_code=400)
+
+        # Handle the inbound SMS
+        sms = InboundSMS(
+            from_number=from_number,
+            to_number=to_number or "+17194283999",
+            message=message,
+            contact_name=contact_name
+        )
+
+        result = await handle_inbound_sms(sms)
+
+        return JSONResponse({
+            "status": "ok",
+            "reply_sent": result.reply_sent,
+            "reply_preview": result.reply_text[:50] + "..." if result.reply_text else None
+        })
+
+    except Exception as e:
+        logger.exception(f"Error in RingCentral SMS webhook: {e}")
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
 
 
