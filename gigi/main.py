@@ -56,6 +56,9 @@ BEETEXTING_API_KEY = os.getenv("BEETEXTING_API_KEY", "m5gbn20h4lkl0o115vk6c3ghp5
 BEETEXTING_FROM_NUMBER = os.getenv("BEETEXTING_FROM_NUMBER", "+17194283999")  # 719-428-3999
 ON_CALL_MANAGER_PHONE = os.getenv("ON_CALL_MANAGER_PHONE", "+13037571777")    # 303-757-1777
 
+# SMS Auto-Reply Toggle (set to "false" to disable Gigi auto-replies)
+SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() != "false"
+
 # RingCentral credentials (backup SMS provider)
 RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID", "cqaJllTcFyndtgsussicsd")
 RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET", "1PwhkkpeFYEcaHcZmQ3cCialR3hQ79DnDfVSpRPOUqYT")
@@ -1156,6 +1159,18 @@ async def handle_inbound_sms(sms: InboundSMS):
     4. Generate a response that confirms the action
     """
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
+
+    # Check if SMS auto-reply is disabled
+    if not SMS_AUTOREPLY_ENABLED:
+        logger.info("SMS auto-reply is DISABLED (GIGI_SMS_AUTOREPLY_ENABLED=false). Skipping reply.")
+        return SMSResponse(
+            from_number=sms.from_number,
+            original_message=sms.message,
+            caller_type="unknown",
+            caller_name=None,
+            generated_reply="[Auto-reply disabled - message logged for office follow-up]",
+            reply_sent=False
+        )
 
     try:
         # Look up caller info
