@@ -87,21 +87,16 @@ try:
         spec.loader.exec_module(sales_module)
         sales_app = sales_module.app
 
-        # Create middleware to rewrite redirect URLs
-        class PrefixRedirectMiddleware(BaseHTTPMiddleware):
-            """Middleware to add /sales prefix to relative redirects"""
-            async def dispatch(self, request, call_next):
-                response = await call_next(request)
-                if response.status_code in (301, 302, 303, 307, 308):
-                    location = response.headers.get("location", "")
-                    if location.startswith("/") and not location.startswith("/sales"):
-                        response.headers["location"] = f"/sales{location}"
-                        logger.info(f"🔄 Rewrote redirect: {location} -> /sales{location}")
-                return response
+        # Use include_router for reliable routing
+        app.include_router(sales_app.router, prefix="/sales")
+        
+        # Mount sales static files explicitly
+        sales_static_path = os.path.join(sales_path, "static")
+        if os.path.exists(sales_static_path):
+             from fastapi.staticfiles import StaticFiles
+             app.mount("/sales/static", StaticFiles(directory=sales_static_path), name="sales_static")
 
-        sales_app.add_middleware(PrefixRedirectMiddleware)
-        app.mount("/sales", sales_app)
-        logger.info("✅ Mounted Sales Dashboard at /sales")
+        logger.info("✅ Included Sales Dashboard routes at /sales")
     else:
         logger.warning("⚠️  Sales dashboard not found")
 except Exception as e:
@@ -218,9 +213,9 @@ try:
         spec.loader.exec_module(gigi_module)
         gigi_app = gigi_module.app
 
-        # Mount Gigi at /gigi
-        app.mount("/gigi", gigi_app)
-        logger.info("✅ Mounted Gigi AI Agent at /gigi")
+        # Use include_router for Gigi
+        app.include_router(gigi_app.router, prefix="/gigi")
+        logger.info("✅ Included Gigi AI Agent routes at /gigi")
         logger.info("   Retell webhook: /gigi/webhook/retell")
         logger.info("   Health check: /gigi/health")
     else:
