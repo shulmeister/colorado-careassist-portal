@@ -86,21 +86,25 @@ try:
 
         spec.loader.exec_module(sales_module)
         sales_app = sales_module.app
+        
+        # Debug: Log sales routes
+        logger.info(f"=== Sales App Routes ({len(sales_app.routes)}) ===")
+        for r in sales_app.routes:
+             logger.info(f"Sales Route: {r.path if hasattr(r, 'path') else r}")
 
         # Create middleware to rewrite redirect URLs
         # class PrefixRedirectMiddleware(BaseHTTPMiddleware):
-        #     """Middleware to add /sales prefix to relative redirects"""
-        #     async def dispatch(self, request, call_next):
-        #         response = await call_next(request)
-        #         if response.status_code in (301, 302, 303, 307, 308):
-        #             location = response.headers.get("location", "")
-        #             if location.startswith("/") and not location.startswith("/sales"):
-        #                 response.headers["location"] = f"/sales{location}"
-        #                 logger.info(f"🔄 Rewrote redirect: {location} -> /sales{location}")
-        #         return response
-
-        # sales_app.add_middleware(PrefixRedirectMiddleware)
+        # ...
+        
         app.mount("/sales", sales_app)
+        
+        # Test Mount
+        from fastapi import FastAPI
+        test_sub = FastAPI()
+        @test_sub.get("/ping")
+        def test_ping(): return {"pong": True}
+        app.mount("/test-mount", test_sub)
+        
         logger.info("✅ Mounted Sales Dashboard at /sales")
     else:
         logger.warning("⚠️  Sales dashboard not found")
