@@ -4,7 +4,7 @@
       "type": "function",
       "function": {
         "name": "verify_caller",
-        "description": "ALWAYS call this FIRST when a call starts. Identifies whether the caller is a Caregiver or Client by looking up their phone number in the WellSky system. The result determines which conversation path to follow - caregiver call-out flow or client service flow.",
+        "description": "ALWAYS call this FIRST when a call starts. Identifies whether the caller is a 'caregiver', 'client', or 'unknown' by looking up their phone number in WellSky. The result determines which conversation path to follow.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -20,8 +20,8 @@
     {
       "type": "function",
       "function": {
-        "name": "get_shift_details",
-        "description": "Gets the next scheduled shift for a caregiver. Use this after verify_caller returns a caregiver to see what shift they might be calling about. Returns shift time, client name, client address, and hours.",
+        "name": "get_active_shifts",
+        "description": "Gets all shifts for a caregiver in the next 24 hours. Returns a list with shift_id, client_name, and start_time for each shift. Use this after verify_caller to see the caregiver's upcoming schedule.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -37,8 +37,51 @@
     {
       "type": "function",
       "function": {
+        "name": "get_shift_details",
+        "description": "Gets detailed information about the caregiver's next scheduled shift including client name, address, and times.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "person_id": {
+              "type": "string",
+              "description": "The caregiver's ID returned from verify_caller."
+            }
+          },
+          "required": ["person_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "execute_caregiver_call_out",
+        "description": "AUTONOMOUS CALL-OUT HANDLER - Use when a caregiver calls out sick. SAFETY RULES: (1) Only works for shifts starting within 24 hours. (2) If shift starts in less than 2 hours, returns requires_manual_handoff=true - you must tell them: 'Since this shift starts very soon, I'm going to connect you directly to our on-call manager to ensure we can get coverage immediately.' For valid call-outs, performs THREE actions: (A) Updates WellSky to 'Open', (B) Logs to Portal, (C) Triggers Replacement Blast. On success, say: 'I've updated the system and we are already looking for a replacement. Feel better.'",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "caregiver_id": {
+              "type": "string",
+              "description": "The caregiver's ID from verify_caller"
+            },
+            "shift_id": {
+              "type": "string",
+              "description": "The shift ID from get_active_shifts or get_shift_details"
+            },
+            "reason": {
+              "type": "string",
+              "enum": ["sick", "emergency", "car_trouble", "family", "other"],
+              "description": "Reason for call-out. Default to 'sick' if caller says they're ill."
+            }
+          },
+          "required": ["caregiver_id", "shift_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
         "name": "report_call_out",
-        "description": "Reports a caregiver call-out. This is a HIGH-PRIORITY action that logs the call-out to the Client Ops Portal and sends an urgent SMS to the on-call manager. Only use after confirming the caregiver wants to call out and getting their reason.",
+        "description": "Legacy call-out tool. PREFER execute_caregiver_call_out for full automation. This only logs and notifies, doesn't update WellSky or trigger replacement blast.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -48,11 +91,11 @@
             },
             "shift_id": {
               "type": "string",
-              "description": "The shift ID from get_shift_details that the caregiver is calling out from."
+              "description": "The shift ID from get_shift_details."
             },
             "reason": {
               "type": "string",
-              "description": "The reason for the call-out. Common reasons: sick, family emergency, car trouble, personal emergency, injured."
+              "description": "The reason for the call-out."
             }
           },
           "required": ["caregiver_id", "shift_id", "reason"]
@@ -63,34 +106,35 @@
       "type": "function",
       "function": {
         "name": "log_client_issue",
-        "description": "Logs a client concern, service request, or feedback to the Client Satisfaction Portal. Use this for any client issue that needs follow-up during business hours.",
+        "description": "Logs a client service issue, complaint, or feedback to the portal. Use for any client concern that needs follow-up.",
         "parameters": {
           "type": "object",
           "properties": {
             "client_id": {
               "type": "string",
-              "description": "The client's ID from verify_caller."
+              "description": "The client's ID from verify_caller. Use null for unknown callers."
             },
             "note": {
               "type": "string",
-              "description": "Detailed description of the client's concern or request. Include what they said and any relevant context."
+              "description": "Description of the issue or request."
             },
             "issue_type": {
               "type": "string",
-              "enum": ["general", "complaint", "schedule", "feedback", "urgent"],
-              "description": "Type of issue. Use 'urgent' only for safety concerns or immediate needs."
+              "enum": ["general", "complaint", "schedule", "feedback", "emergency"],
+              "description": "Type of issue."
             },
             "priority": {
               "type": "string",
               "enum": ["low", "normal", "high", "urgent"],
-              "description": "Priority level. 'urgent' should only be used for safety or immediate care concerns."
+              "description": "Priority level. Use 'urgent' for safety concerns."
             }
           },
-          "required": ["client_id", "note"]
+          "required": ["note"]
         }
       }
     }
   ],
   "webhook_url": "https://portal.coloradocareassist.com/gigi/webhook/retell",
-  "timeout_ms": 30000
+  "timeout_ms": 30000,
+  "system_prompt": "You are Gigi, the after-hours AI assistant for Colorado Care Assist, a non-medical home care agency in Colorado.\n\nCALL FLOW:\n1. FIRST: Call verify_caller with the caller's phone number to identify them.\n2. IF CAREGIVER calling out:\n   - Call get_active_shifts to see their upcoming shifts\n   - Confirm which shift and why (sick, emergency, etc.)\n   - Call execute_caregiver_call_out with caregiver_id, shift_id, and reason\n   - CHECK THE RESPONSE:\n     * If requires_manual_handoff=true: Say the message from the response (about connecting to on-call manager)\n     * If success=true: Say 'I've updated the system and we are already looking for a replacement. Feel better.'\n     * If success=false (other error): Explain and suggest calling back during business hours\n3. IF CLIENT with issue:\n   - Listen to their concern\n   - Call log_client_issue with details\n   - Assure them the care team will follow up during business hours\n\nSAFETY RULES:\n- Call-outs only work for shifts starting within 24 hours\n- If shift starts in less than 2 hours, manual handoff is required\n\nTONE: Warm, empathetic, professional. Many callers are sick or dealing with emergencies.\n\nHOURS: You handle after-hours calls (evenings after 5pm, weekends, holidays). Business hours are Mon-Fri 8am-5pm MT."
 }

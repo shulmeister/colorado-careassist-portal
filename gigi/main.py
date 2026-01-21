@@ -565,6 +565,304 @@ async def get_shift_details(person_id: str) -> Optional[ShiftDetails]:
     )
 
 
+async def get_active_shifts(person_id: str) -> List[Dict[str, Any]]:
+    """
+    TOOL: get_active_shifts(person_id)
+
+    Pulls the caller's next 24 hours of shifts from WellSky.
+    Returns shift_id, client_name, and start_time for each shift.
+
+    Args:
+        person_id: The caregiver's ID from verify_caller
+
+    Returns:
+        List of shifts with shift_id, client_name, start_time
+    """
+    logger.info(f"get_active_shifts called for person_id: {person_id}")
+
+    shifts = await _get_caregiver_shifts(person_id)
+
+    if not shifts:
+        return []
+
+    # Filter to next 24 hours
+    now = datetime.now()
+    cutoff = now + timedelta(hours=24)
+    active_shifts = []
+
+    for shift in shifts:
+        try:
+            start_time_str = shift.get("start_time", "")
+            start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+
+            # Include shifts starting in next 24 hours
+            if now <= start_time <= cutoff:
+                active_shifts.append({
+                    "shift_id": shift.get("id", ""),
+                    "client_name": shift.get("client_name", "Unknown Client"),
+                    "client_id": shift.get("client_id", ""),
+                    "start_time": start_time.strftime("%I:%M %p"),
+                    "start_time_iso": start_time_str,
+                    "end_time": shift.get("end_time", ""),
+                    "status": shift.get("status", "scheduled"),
+                    "client_address": shift.get("client_address", "")
+                })
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Error parsing shift date: {e}")
+            continue
+
+    # Sort by start time
+    active_shifts.sort(key=lambda x: x.get("start_time_iso", ""))
+
+    logger.info(f"Found {len(active_shifts)} active shifts in next 24 hours")
+    return active_shifts
+
+
+async def execute_caregiver_call_out(
+    caregiver_id: str,
+    shift_id: str,
+    reason: str = "sick"
+) -> Dict[str, Any]:
+    """
+    TOOL: execute_caregiver_call_out(caregiver_id, shift_id)
+
+    AUTONOMOUS CALL-OUT HANDLER - This is Gigi's main action tool.
+
+    SAFETY RULES:
+    - Only allows call-outs for shifts starting within 24 hours
+    - If shift starts in less than 2 hours, triggers MANUAL HANDOFF to on-call manager
+
+    When a caregiver calls out, this function:
+    - STEP A: Updates WellSky shift status to 'Open' (Unassigned)
+    - STEP B: Logs the call-out event to Client Ops Portal
+    - STEP C: Triggers Replacement Blast to notify available caregivers
+
+    Args:
+        caregiver_id: The caregiver's WellSky ID
+        shift_id: The shift ID they're calling out from
+        reason: Reason for call-out (sick, emergency, car_trouble, family, other)
+
+    Returns:
+        Dict with success status, steps completed, and message for Gigi to read
+    """
+    logger.info(f"execute_caregiver_call_out: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
+
+    # Get shift details first to validate time window
+    shift = await get_shift_details(caregiver_id)
+
+    # ==========================================================================
+    # TIME WINDOW VALIDATION
+    # ==========================================================================
+    if shift and shift.start_time:
+        now = datetime.now()
+        time_until_shift = (shift.start_time - now).total_seconds() / 3600  # hours
+
+        # RULE 1: Only allow unassigning shifts within 24 hours
+        if time_until_shift > 24:
+            logger.warning(f"Shift {shift_id} starts in {time_until_shift:.1f} hours - outside 24hr window")
+            return {
+                "success": False,
+                "requires_manual_handoff": False,
+                "message": (
+                    f"This shift doesn't start for another {int(time_until_shift)} hours. "
+                    f"For shifts more than 24 hours away, please contact the office during business hours "
+                    f"at 719-428-3999. They can help reschedule if needed."
+                ),
+                "errors": ["Shift outside 24-hour call-out window"]
+            }
+
+        # RULE 2: If shift starts in less than 2 hours, MANUAL HANDOFF required
+        if time_until_shift < 2:
+            logger.warning(f"Shift {shift_id} starts in {time_until_shift:.1f} hours - URGENT handoff required")
+
+            # Still log the call-out attempt for the manager
+            urgent_message = (
+                f"URGENT HANDOFF: {shift.caregiver_name} calling out for {shift.client_name} "
+                f"shift starting in {int(time_until_shift * 60)} minutes! Reason: {reason}. "
+                f"Requires immediate manager attention."
+            )
+            await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, urgent_message)
+
+            return {
+                "success": False,
+                "requires_manual_handoff": True,
+                "time_until_shift_hours": round(time_until_shift, 2),
+                "manager_notified": True,
+                "message": (
+                    f"Since this shift with {shift.client_name} starts very soon, "
+                    f"I'm going to connect you directly to our on-call manager to ensure "
+                    f"we can get coverage immediately. I've already alerted them about your call-out. "
+                    f"Please hold while I transfer you, or call the on-call line directly at 303-757-1777."
+                ),
+                "errors": ["Shift starts within 2 hours - requires manual handoff"]
+            }
+
+        logger.info(f"Shift {shift_id} starts in {time_until_shift:.1f} hours - within valid window")
+
+    result = {
+        "success": False,
+        "step_a_wellsky_updated": False,
+        "step_b_portal_logged": False,
+        "step_c_replacement_blast_sent": False,
+        "call_out_id": None,
+        "message": "",
+        "errors": []
+    }
+
+    # Get shift details for context
+    shift = await get_shift_details(caregiver_id)
+    caregiver_name = shift.caregiver_name if shift else f"Caregiver {caregiver_id}"
+    client_name = shift.client_name if shift else "Unknown Client"
+    client_id = shift.client_id if shift else None
+    shift_time = shift.start_time.strftime("%B %d at %I:%M %p") if shift else "Unknown Time"
+
+    # =========================================================================
+    # STEP A: Update WellSky shift status to 'Open' (Unassigned)
+    # =========================================================================
+    try:
+        async with httpx.AsyncClient() as client:
+            # PUT to WellSky shift update endpoint
+            wellsky_response = await client.put(
+                f"{PORTAL_BASE_URL}/api/wellsky/shifts/{shift_id}",
+                json={
+                    "status": "open",
+                    "caregiver_id": None,  # Unassign caregiver
+                    "call_out_reason": reason,
+                    "call_out_caregiver_id": caregiver_id,
+                    "call_out_time": datetime.now().isoformat(),
+                    "notes": f"Call-out via Gigi AI: {reason}"
+                },
+                timeout=15.0
+            )
+            if wellsky_response.status_code in (200, 201, 204):
+                result["step_a_wellsky_updated"] = True
+                logger.info(f"STEP A SUCCESS: WellSky shift {shift_id} updated to Open")
+            else:
+                error_msg = f"WellSky returned {wellsky_response.status_code}: {wellsky_response.text}"
+                result["errors"].append(f"Step A: {error_msg}")
+                logger.warning(error_msg)
+    except Exception as e:
+        error_msg = f"WellSky update failed: {str(e)}"
+        result["errors"].append(f"Step A: {error_msg}")
+        logger.error(error_msg)
+
+    # =========================================================================
+    # STEP B: Log call-out event to Client Ops Portal
+    # =========================================================================
+    call_out_data = {
+        "caregiver_id": caregiver_id,
+        "caregiver_name": caregiver_name,
+        "shift_id": shift_id,
+        "client_id": client_id,
+        "client_name": client_name,
+        "shift_time": shift_time,
+        "reason": reason,
+        "reported_at": datetime.now().isoformat(),
+        "reported_via": "gigi_ai_agent",
+        "priority": "high",
+        "status": "pending_coverage",
+        "wellsky_updated": result["step_a_wellsky_updated"]
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            portal_response = await client.post(
+                f"{PORTAL_BASE_URL}/api/operations/call-outs",
+                json=call_out_data,
+                timeout=10.0
+            )
+            if portal_response.status_code in (200, 201):
+                portal_result = portal_response.json()
+                result["call_out_id"] = portal_result.get("id")
+                result["step_b_portal_logged"] = True
+                logger.info(f"STEP B SUCCESS: Call-out logged to portal: {result['call_out_id']}")
+            else:
+                error_msg = f"Portal returned {portal_response.status_code}: {portal_response.text}"
+                result["errors"].append(f"Step B: {error_msg}")
+                logger.warning(error_msg)
+    except Exception as e:
+        error_msg = f"Portal logging failed: {str(e)}"
+        result["errors"].append(f"Step B: {error_msg}")
+        logger.error(error_msg)
+
+    # =========================================================================
+    # STEP C: Trigger Replacement Blast (notify available caregivers)
+    # =========================================================================
+    replacement_blast_data = {
+        "shift_id": shift_id,
+        "client_name": client_name,
+        "client_id": client_id,
+        "shift_time": shift_time,
+        "shift_start": shift.start_time.isoformat() if shift else None,
+        "shift_end": shift.end_time.isoformat() if shift else None,
+        "shift_hours": shift.hours if shift else None,
+        "client_address": shift.client_address if shift else None,
+        "call_out_caregiver_id": caregiver_id,
+        "call_out_caregiver_name": caregiver_name,
+        "reason": reason,
+        "urgency": "high",
+        "source": "gigi_ai_agent"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Trigger the Replacement Blast endpoint
+            blast_response = await client.post(
+                f"{PORTAL_BASE_URL}/api/operations/replacement-blast",
+                json=replacement_blast_data,
+                timeout=30.0  # Longer timeout for SMS sending
+            )
+            if blast_response.status_code in (200, 201):
+                blast_result = blast_response.json()
+                result["step_c_replacement_blast_sent"] = True
+                result["caregivers_notified"] = blast_result.get("caregivers_notified", 0)
+                logger.info(f"STEP C SUCCESS: Replacement blast sent to {result.get('caregivers_notified', 0)} caregivers")
+            else:
+                error_msg = f"Replacement blast returned {blast_response.status_code}: {blast_response.text}"
+                result["errors"].append(f"Step C: {error_msg}")
+                logger.warning(error_msg)
+    except Exception as e:
+        error_msg = f"Replacement blast failed: {str(e)}"
+        result["errors"].append(f"Step C: {error_msg}")
+        logger.error(error_msg)
+
+    # Also send direct notification to On-Call Manager
+    sms_message = (
+        f"CALL-OUT: {caregiver_name} called out for {client_name} "
+        f"({shift_time}). Reason: {reason}. "
+        f"Replacement blast sent. Logged by Gigi at {datetime.now().strftime('%I:%M %p')}."
+    )
+    await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
+
+    # =========================================================================
+    # Build final result and message for Gigi to speak
+    # =========================================================================
+    steps_completed = sum([
+        result["step_a_wellsky_updated"],
+        result["step_b_portal_logged"],
+        result["step_c_replacement_blast_sent"]
+    ])
+
+    result["success"] = steps_completed >= 2  # Success if at least 2 of 3 steps work
+
+    if result["success"]:
+        result["message"] = (
+            f"I've updated the system and we are already looking for a replacement. "
+            f"The shift with {client_name} has been marked as open, and I've notified "
+            f"available caregivers in the area. Feel better, and please keep us updated "
+            f"if anything changes."
+        )
+    else:
+        result["message"] = (
+            f"I've logged your call-out, but I had some trouble updating all systems. "
+            f"I've notified the on-call manager who will make sure coverage is handled. "
+            f"Please also try to contact the office directly if possible."
+        )
+
+    logger.info(f"execute_caregiver_call_out completed: success={result['success']}, steps={steps_completed}/3")
+    return result
+
+
 async def report_call_out(
     caregiver_id: str,
     shift_id: str,
@@ -802,6 +1100,20 @@ async def retell_webhook(request: Request):
                         "result": result.model_dump() if result else None
                     })
 
+                elif tool_name == "get_active_shifts":
+                    result = await get_active_shifts(**tool_args)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": {"shifts": result, "count": len(result)}
+                    })
+
+                elif tool_name == "execute_caregiver_call_out":
+                    result = await execute_caregiver_call_out(**tool_args)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": result
+                    })
+
                 elif tool_name == "report_call_out":
                     result = await report_call_out(**tool_args)
                     results.append({
@@ -859,6 +1171,14 @@ async def retell_function_call(function_name: str, request: Request):
         elif function_name == "get_shift_details":
             result = await get_shift_details(**args)
             return JSONResponse(result.model_dump() if result else {"shift": None})
+
+        elif function_name == "get_active_shifts":
+            result = await get_active_shifts(**args)
+            return JSONResponse({"shifts": result, "count": len(result)})
+
+        elif function_name == "execute_caregiver_call_out":
+            result = await execute_caregiver_call_out(**args)
+            return JSONResponse(result)
 
         elif function_name == "report_call_out":
             result = await report_call_out(**args)

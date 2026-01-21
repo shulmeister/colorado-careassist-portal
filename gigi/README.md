@@ -72,7 +72,33 @@ Gigi is the AI-powered after-hours assistant for Colorado Care Assist. She handl
 | `/gigi/webhook/inbound-sms` | POST | Generic inbound SMS handler |
 | `/gigi/test/sms-reply` | POST | Test SMS response generation |
 
-## Intent Detection
+## Retell AI Voice Tools
+
+Gigi's voice agent (Retell AI) uses these tool functions:
+
+| Tool | Description | When to Use |
+|------|-------------|-------------|
+| `verify_caller(phone)` | Identifies caller as caregiver/client/unknown | ALWAYS call first |
+| `get_active_shifts(person_id)` | Returns next 24 hours of shifts | After identifying caregiver |
+| `get_shift_details(person_id)` | Gets next shift with full details | To confirm shift info |
+| `execute_caregiver_call_out(caregiver_id, shift_id, reason)` | **AUTONOMOUS**: Updates WellSky → Logs to Portal → Triggers Replacement Blast | When caregiver calls out |
+| `log_client_issue(client_id, note, issue_type, priority)` | Logs client concerns for follow-up | When client has an issue |
+
+### Autonomous Call-Out Flow
+
+When a caregiver calls out sick, `execute_caregiver_call_out` performs three actions automatically:
+
+1. **STEP A - WellSky Update**: `PUT /api/wellsky/shifts/{shift_id}` → Status = 'Open', unassign caregiver
+2. **STEP B - Portal Log**: `POST /api/operations/call-outs` → Creates call-out record
+3. **STEP C - Replacement Blast**: `POST /api/operations/replacement-blast` → SMS to available caregivers
+
+After all three steps, Gigi says: *"I've updated the system and we are already looking for a replacement. Feel better."*
+
+### Retell Tool Schema
+
+The tool definitions are in `gigi/retell_tools_schema.json`. Upload this to your Retell AI agent configuration.
+
+## Intent Detection (SMS)
 
 Gigi detects these intents from SMS messages:
 

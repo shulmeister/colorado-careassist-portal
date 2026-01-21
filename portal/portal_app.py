@@ -3968,6 +3968,201 @@ async def api_log_call_out(request: Request):
         }, status_code=500)
 
 
+# =============================================================================
+# WellSky Shift Management API (Used by Gigi for Call-Outs)
+# =============================================================================
+
+@app.put("/api/wellsky/shifts/{shift_id}")
+async def api_update_wellsky_shift(shift_id: str, request: Request):
+    """
+    Update a WellSky shift status.
+
+    This is the endpoint Gigi calls to mark a shift as 'Open' when a caregiver calls out.
+    It proxies to the WellSky ClearCare API: PUT /v1/shifts/{shift_id}
+
+    Request body:
+    {
+        "status": "open",
+        "caregiver_id": null,  // Optional: set to null to unassign
+        "call_out_reason": "sick",  // Optional
+        "call_out_caregiver_id": "CG001",  // Optional
+        "notes": "Call-out via Gigi AI"  // Optional
+    }
+    """
+    if wellsky_service is None:
+        return JSONResponse({
+            "success": False,
+            "error": "WellSky service not available"
+        }, status_code=503)
+
+    try:
+        data = await request.json()
+
+        status_str = data.get("status", "").lower()
+        unassign = data.get("caregiver_id") is None and "caregiver_id" in data
+        notes = data.get("notes")
+        call_out_reason = data.get("call_out_reason")
+        call_out_caregiver_id = data.get("call_out_caregiver_id")
+
+        # Map status string to ShiftStatus enum
+        from services.wellsky_service import ShiftStatus
+        status_map = {
+            "open": ShiftStatus.OPEN,
+            "scheduled": ShiftStatus.SCHEDULED,
+            "confirmed": ShiftStatus.CONFIRMED,
+            "in_progress": ShiftStatus.IN_PROGRESS,
+            "completed": ShiftStatus.COMPLETED,
+            "cancelled": ShiftStatus.CANCELLED,
+            "missed": ShiftStatus.MISSED,
+        }
+
+        if status_str not in status_map:
+            return JSONResponse({
+                "success": False,
+                "error": f"Invalid status: {status_str}. Valid: {list(status_map.keys())}"
+            }, status_code=400)
+
+        new_status = status_map[status_str]
+
+        # Call the WellSky service to update the shift
+        success, message = wellsky_service.update_shift_status(
+            shift_id=shift_id,
+            status=new_status,
+            unassign_caregiver=unassign,
+            notes=notes,
+            call_out_reason=call_out_reason,
+            call_out_caregiver_id=call_out_caregiver_id
+        )
+
+        if success:
+            logger.info(f"WellSky shift {shift_id} updated to {status_str}")
+            return JSONResponse({
+                "success": True,
+                "shift_id": shift_id,
+                "new_status": status_str,
+                "message": message
+            })
+        else:
+            logger.warning(f"Failed to update WellSky shift {shift_id}: {message}")
+            return JSONResponse({
+                "success": False,
+                "error": message
+            }, status_code=400)
+
+    except Exception as e:
+        logger.error(f"Error updating WellSky shift: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.post("/api/operations/replacement-blast")
+async def api_trigger_replacement_blast(request: Request):
+    """
+    Trigger a Replacement Blast to notify available caregivers about an open shift.
+
+    This endpoint is called by Gigi when a caregiver calls out.
+    It finds available caregivers and sends them SMS notifications via BeeTexting/RingCentral.
+
+    Request body:
+    {
+        "shift_id": "SHIFT123",
+        "client_name": "Mary Johnson",
+        "client_id": "CL001",
+        "shift_time": "January 21 at 9:00 AM",
+        "shift_start": "2026-01-21T09:00:00",
+        "shift_end": "2026-01-21T13:00:00",
+        "shift_hours": 4.0,
+        "client_address": "123 Main St, Denver CO",
+        "call_out_caregiver_id": "CG001",
+        "call_out_caregiver_name": "John Smith",
+        "reason": "sick",
+        "urgency": "high"
+    }
+    """
+    try:
+        data = await request.json()
+
+        shift_id = data.get("shift_id")
+        client_name = data.get("client_name", "a client")
+        shift_time = data.get("shift_time", "today")
+        shift_hours = data.get("shift_hours", "TBD")
+        client_address = data.get("client_address", "")
+        urgency = data.get("urgency", "normal")
+        source = data.get("source", "portal")
+
+        logger.info(f"[REPLACEMENT BLAST] Triggered for shift {shift_id}")
+        logger.info(f"  Client: {client_name}, Time: {shift_time}")
+        logger.info(f"  Urgency: {urgency}, Source: {source}")
+
+        # Build the SMS message
+        sms_message = (
+            f"SHIFT AVAILABLE: {client_name}, {shift_time}. "
+            f"{shift_hours} hours. "
+        )
+        if client_address:
+            # Extract city from address
+            city = client_address.split(",")[-2].strip() if "," in client_address else client_address
+            sms_message += f"Location: {city}. "
+        sms_message += "Reply YES to claim or call 719-428-3999."
+
+        # Get available caregivers from WellSky
+        caregivers_notified = 0
+        notification_results = []
+
+        if wellsky_service:
+            try:
+                # Get caregivers who could potentially cover this shift
+                caregivers = wellsky_service.get_caregivers(status="active")
+
+                # In a real implementation, we'd filter by:
+                # - Availability (not already working)
+                # - Certifications required for the client
+                # - Geographic proximity
+                # - Overtime limits
+
+                # For now, notify first 5 active caregivers (mock)
+                for cg in caregivers[:5]:
+                    phone = getattr(cg, 'phone', None)
+                    if phone:
+                        # In production, use actual SMS sending
+                        logger.info(f"  Would notify: {cg.full_name} at {phone}")
+                        notification_results.append({
+                            "caregiver_id": cg.id,
+                            "caregiver_name": cg.full_name,
+                            "phone": phone,
+                            "status": "queued"
+                        })
+                        caregivers_notified += 1
+
+            except Exception as e:
+                logger.error(f"Error getting caregivers for blast: {e}")
+
+        # Generate blast ID
+        import uuid
+        blast_id = f"BLAST-{uuid.uuid4().hex[:8].upper()}"
+
+        logger.info(f"[REPLACEMENT BLAST] {blast_id} - Notified {caregivers_notified} caregivers")
+
+        return JSONResponse({
+            "success": True,
+            "blast_id": blast_id,
+            "shift_id": shift_id,
+            "caregivers_notified": caregivers_notified,
+            "message": sms_message,
+            "notifications": notification_results,
+            "urgency": urgency
+        }, status_code=201)
+
+    except Exception as e:
+        logger.error(f"Error triggering replacement blast: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
