@@ -80,19 +80,28 @@ def check_portal_auth_legacy():
     """Legacy function - use portal_auth_middleware.check_portal_auth() instead"""
     return check_portal_auth()
 
-# Authentication decorator - NO AUTH REQUIRED (portal handles it)
+# Authentication decorator - uses portal auth middleware
 def require_auth(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # No authentication required - portal handles auth
+        # SECURITY: Verify request is from portal or has valid auth
+        if not check_portal_auth():
+            # Allow if in development mode with explicit bypass
+            if os.getenv("ALLOW_UNAUTHENTICATED", "false").lower() == "true":
+                return f(*args, **kwargs)
+            return jsonify({"error": "Authentication required"}), 401
         return f(*args, **kwargs)
     return decorated_function
 
-# Admin-only decorator - NO AUTH REQUIRED (portal handles it)
+# Admin-only decorator - uses portal auth middleware
 def require_admin(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # No authentication required - portal handles auth
+        # SECURITY: Verify request is from portal or has valid auth
+        if not check_portal_auth():
+            if os.getenv("ALLOW_UNAUTHENTICATED", "false").lower() == "true":
+                return f(*args, **kwargs)
+            return jsonify({"error": "Admin authentication required"}), 401
         return f(*args, **kwargs)
     return decorated_function
 

@@ -170,7 +170,7 @@ except Exception as e:
 async def login(request: Request):
     """Redirect to Google OAuth login"""
     try:
-        auth_url = oauth_manager.get_authorization_url()
+        auth_url = oauth_manager.get_authorization_url(request=request)
         return RedirectResponse(url=auth_url)
     except Exception as e:
         logger.error(f"Login error: {str(e)}")
@@ -178,17 +178,18 @@ async def login(request: Request):
 
 @app.get("/auth/callback")
 @limiter.limit("10/minute")  # Stricter rate limit for auth
-async def auth_callback(request: Request, code: str = None, error: str = None):
+async def auth_callback(request: Request, code: str = None, state: str = None, error: str = None):
     """Handle Google OAuth callback"""
     if error:
         logger.error(f"OAuth error: {error}")
         raise HTTPException(status_code=400, detail=f"Authentication failed: {error}")
-    
+
     if not code:
         raise HTTPException(status_code=400, detail="Authorization code not provided")
-    
+
     try:
-        result = await oauth_manager.handle_callback(code, "")
+        # SECURITY: Pass state for CSRF validation
+        result = await oauth_manager.handle_callback(code, state or "", request=request)
         
         # Create response with session cookie
         response = RedirectResponse(url="/", status_code=302)
@@ -2571,7 +2572,8 @@ def _parse_date_param(value: Optional[str], fallback: date_cls) -> date_cls:
 async def api_marketing_social(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
-    compare: Optional[str] = Query(None)
+    compare: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Return social performance metrics (placeholder until APIs wired)."""
     end_default = datetime.utcnow().date()
@@ -2642,7 +2644,8 @@ async def google_ads_webhook(request: Request):
 async def api_marketing_ads(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
-    compare: Optional[str] = Query(None)
+    compare: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Return ads performance metrics from Google Ads Scripts or API."""
     end_default = datetime.utcnow().date()
@@ -2794,6 +2797,7 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
 async def api_marketing_email(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Return email marketing metrics (Brevo + Mailchimp) using hybrid model (webhooks + API)."""
     end_default = datetime.utcnow().date()
@@ -2821,7 +2825,8 @@ async def api_marketing_email(
 @app.get("/api/marketing/website")
 async def api_marketing_website(
     from_date: Optional[str] = Query(None, alias="from"),
-    to_date: Optional[str] = Query(None, alias="to")
+    to_date: Optional[str] = Query(None, alias="to"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Return website and GBP metrics from GA4 and Google Business Profile."""
     from services.marketing.ga4_service import ga4_service
@@ -2865,7 +2870,9 @@ async def api_marketing_website(
 
 
 @app.get("/api/marketing/test-ga4")
-async def test_ga4_connection():
+async def test_ga4_connection(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Test GA4 connection and return status."""
     from services.marketing.ga4_service import ga4_service
     import os
@@ -2893,7 +2900,9 @@ async def test_ga4_connection():
 
 
 @app.get("/api/marketing/test-predis")
-async def test_predis_connection():
+async def test_predis_connection(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Test Predis AI connection and return status."""
     from services.marketing.predis_service import predis_service
     import os
@@ -2917,7 +2926,10 @@ async def test_predis_connection():
 
 
 @app.get("/api/marketing/predis/posts")
-async def get_predis_posts(page: int = 1):
+async def get_predis_posts(
+    page: int = 1,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Get recent Predis AI generated posts."""
     from services.marketing.predis_service import predis_service
     
@@ -2936,7 +2948,10 @@ async def get_predis_posts(page: int = 1):
 
 
 @app.post("/api/marketing/predis/generate")
-async def generate_predis_content(request: Request):
+async def generate_predis_content(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Generate new content using Predis AI."""
     from services.marketing.predis_service import predis_service
     
@@ -2962,7 +2977,10 @@ async def generate_predis_content(request: Request):
 
 
 @app.get("/api/marketing/predis/templates")
-async def get_predis_templates(page: int = 1):
+async def get_predis_templates(
+    page: int = 1,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Get Predis AI templates."""
     from services.marketing.predis_service import predis_service
     
@@ -2981,7 +2999,9 @@ async def get_predis_templates(page: int = 1):
 
 
 @app.get("/api/marketing/test-gbp")
-async def test_gbp_connection():
+async def test_gbp_connection(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Test GBP connection and return status."""
     from services.marketing.gbp_service import gbp_service
     import os
@@ -3022,6 +3042,7 @@ async def test_gbp_connection():
 async def api_marketing_engagement(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Aggregate engagement data from all marketing channels.
@@ -3287,6 +3308,7 @@ async def api_marketing_engagement(
 async def api_marketing_pinterest(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Fetch Pinterest analytics and engagement metrics.
@@ -3327,7 +3349,9 @@ async def api_marketing_pinterest(
 
 
 @app.get("/api/marketing/test-pinterest")
-async def test_pinterest_connection():
+async def test_pinterest_connection(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Test Pinterest connection and return status."""
     from services.marketing.pinterest_service import pinterest_service
     import os
@@ -3459,6 +3483,7 @@ async def pinterest_oauth_callback(
 async def api_marketing_linkedin(
     from_date: Optional[str] = Query(None, alias="from"),
     to_date: Optional[str] = Query(None, alias="to"),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Fetch LinkedIn analytics and engagement metrics.
@@ -3499,7 +3524,9 @@ async def api_marketing_linkedin(
 
 
 @app.get("/api/marketing/test-linkedin")
-async def test_linkedin_connection():
+async def test_linkedin_connection(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Test LinkedIn connection and return status."""
     from services.marketing.linkedin_service import linkedin_service
     import os
@@ -3594,6 +3621,7 @@ async def linkedin_oauth_callback(
 async def api_marketing_tiktok(
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
     Fetch TikTok marketing metrics (ads and engagement).
@@ -3640,7 +3668,9 @@ async def api_marketing_tiktok(
 
 
 @app.get("/api/marketing/test-tiktok")
-async def test_tiktok_connection():
+async def test_tiktok_connection(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Test TikTok connection and return status."""
     from services.marketing.tiktok_service import tiktok_service
     import os
@@ -3815,7 +3845,9 @@ except ImportError as e:
 
 
 @app.get("/api/shift-filling/status")
-async def shift_filling_status():
+async def shift_filling_status(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Get shift filling engine status"""
     if not SHIFT_FILLING_AVAILABLE:
         return JSONResponse({"status": "unavailable", "error": "Module not loaded"})
@@ -3829,7 +3861,9 @@ async def shift_filling_status():
 
 
 @app.get("/api/shift-filling/open-shifts")
-async def get_open_shifts():
+async def get_open_shifts(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Get all open shifts from WellSky mock"""
     if not SHIFT_FILLING_AVAILABLE:
         return JSONResponse([])
@@ -3852,7 +3886,9 @@ async def get_open_shifts():
 
 
 @app.get("/api/shift-filling/caregivers")
-async def get_caregivers():
+async def get_caregivers(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Get all caregivers from WellSky mock"""
     if not SHIFT_FILLING_AVAILABLE:
         return JSONResponse([])
@@ -3874,7 +3910,11 @@ async def get_caregivers():
 
 
 @app.get("/api/shift-filling/match/{shift_id}")
-async def match_caregivers_for_shift(shift_id: str, max_results: int = 20):
+async def match_caregivers_for_shift(
+    shift_id: str,
+    max_results: int = 20,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Find and rank replacement caregivers for a shift"""
     if not SHIFT_FILLING_AVAILABLE:
         raise HTTPException(status_code=503, detail="Shift filling not available")
@@ -3911,7 +3951,10 @@ async def match_caregivers_for_shift(shift_id: str, max_results: int = 20):
 
 
 @app.post("/api/shift-filling/calloff")
-async def process_calloff(request: Request):
+async def process_calloff(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Process a caregiver calloff and start shift filling"""
     if not SHIFT_FILLING_AVAILABLE:
         raise HTTPException(status_code=503, detail="Shift filling not available")
@@ -3944,7 +3987,9 @@ async def process_calloff(request: Request):
 
 
 @app.get("/api/shift-filling/campaigns")
-async def get_active_campaigns():
+async def get_active_campaigns(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Get all active shift filling campaigns"""
     if not SHIFT_FILLING_AVAILABLE:
         return JSONResponse({"active_campaigns": [], "total": 0})
@@ -3957,7 +4002,9 @@ async def get_active_campaigns():
 
 
 @app.post("/api/shift-filling/demo")
-async def run_demo():
+async def run_demo(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Run a full demonstration of the shift filling process"""
     if not SHIFT_FILLING_AVAILABLE:
         raise HTTPException(status_code=503, detail="Shift filling not available")
@@ -3967,7 +4014,10 @@ async def run_demo():
 
 
 @app.get("/api/shift-filling/sms-log")
-async def get_sms_log(hours: int = 24):
+async def get_sms_log(
+    hours: int = 24,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
     """Get SMS message log from RingCentral for 719-428-3999"""
     import requests
     from datetime import datetime, timedelta

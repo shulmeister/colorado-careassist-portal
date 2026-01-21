@@ -10,9 +10,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-PORTAL_SECRET = os.getenv("PORTAL_SECRET", "change-me-in-production")
+# SECURITY: Portal secret must be set via environment variable - no weak defaults
+PORTAL_SECRET = os.getenv("PORTAL_SECRET")
+if not PORTAL_SECRET:
+    logger.warning("PORTAL_SECRET not set - portal authentication will fail")
+
 # Use same secret key as portal for token validation
-APP_SECRET_KEY = os.getenv("APP_SECRET_KEY", os.getenv("SECRET_KEY", "change-me-in-production"))
+APP_SECRET_KEY = os.getenv("APP_SECRET_KEY") or os.getenv("SECRET_KEY")
+if not APP_SECRET_KEY:
+    logger.warning("APP_SECRET_KEY/SECRET_KEY not set - token validation will fail")
 
 def verify_portal_request():
     """Check if request is from portal via header secret"""
