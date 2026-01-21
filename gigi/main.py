@@ -648,7 +648,7 @@ async def report_call_out(
 
 
 async def log_client_issue(
-    client_id: str,
+    client_id: Optional[str],
     note: str,
     issue_type: str = "general",
     priority: str = "normal"
@@ -663,7 +663,7 @@ async def log_client_issue(
     - General questions that need follow-up
 
     Args:
-        client_id: The client's ID from verify_caller
+        client_id: The client's ID from verify_caller (can be None or "UNKNOWN" for unverified callers)
         note: Description of the issue or request
         issue_type: Type of issue (general, complaint, schedule, feedback)
         priority: Priority level (low, normal, high, urgent)
@@ -671,10 +671,12 @@ async def log_client_issue(
     Returns:
         ClientIssueReport with success status and confirmation
     """
-    logger.info(f"log_client_issue called: client={client_id}, type={issue_type}")
+    # Handle None or missing client_id
+    effective_client_id = client_id if client_id else "UNKNOWN"
+    logger.info(f"log_client_issue called: client={effective_client_id}, type={issue_type}")
 
     issue_data = {
-        "client_id": client_id,
+        "client_id": effective_client_id,
         "note": note,
         "issue_type": issue_type,
         "priority": priority,

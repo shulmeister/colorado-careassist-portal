@@ -3658,6 +3658,116 @@ async def get_sms_log(hours: int = 24):
 # ============================================================================
 
 
+# ============================================================================
+# Gigi AI Agent API Endpoints (After-Hours Support)
+# ============================================================================
+
+@app.post("/api/client-satisfaction/issues")
+async def api_log_client_issue(request: Request):
+    """
+    Log a client issue from Gigi AI agent.
+    This endpoint does NOT require authentication as it's called by Gigi.
+    """
+    try:
+        data = await request.json()
+
+        client_id = data.get("client_id")
+        note = data.get("note", "")
+        issue_type = data.get("issue_type", "general")
+        priority = data.get("priority", "normal")
+        source = data.get("source", "unknown")
+
+        # Generate issue ID
+        import uuid
+        issue_id = f"ISS-{uuid.uuid4().hex[:8].upper()}"
+
+        # Log the issue
+        logger.info(f"[GIGI] Client issue logged: {issue_id}")
+        logger.info(f"  Client ID: {client_id}")
+        logger.info(f"  Type: {issue_type}, Priority: {priority}")
+        logger.info(f"  Note: {note[:200]}...")
+        logger.info(f"  Source: {source}")
+
+        # TODO: Store in database or Google Sheets
+        # For now, we log and return success
+
+        return JSONResponse({
+            "success": True,
+            "id": issue_id,
+            "message": "Issue logged successfully",
+            "data": {
+                "issue_id": issue_id,
+                "client_id": client_id,
+                "issue_type": issue_type,
+                "priority": priority,
+                "created_at": datetime.now().isoformat()
+            }
+        }, status_code=201)
+
+    except Exception as e:
+        logger.error(f"Error logging client issue: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.post("/api/operations/call-outs")
+async def api_log_call_out(request: Request):
+    """
+    Log a caregiver call-out from Gigi AI agent.
+    This endpoint does NOT require authentication as it's called by Gigi.
+    """
+    try:
+        data = await request.json()
+
+        caregiver_id = data.get("caregiver_id")
+        caregiver_name = data.get("caregiver_name", "Unknown")
+        shift_id = data.get("shift_id")
+        client_name = data.get("client_name", "Unknown")
+        shift_time = data.get("shift_time", "Unknown")
+        reason = data.get("reason", "")
+        reported_via = data.get("reported_via", "unknown")
+        priority = data.get("priority", "normal")
+
+        # Generate call-out ID
+        import uuid
+        call_out_id = f"CO-{uuid.uuid4().hex[:8].upper()}"
+
+        # Log the call-out
+        logger.warning(f"[GIGI] CALL-OUT LOGGED: {call_out_id}")
+        logger.warning(f"  Caregiver: {caregiver_name} ({caregiver_id})")
+        logger.warning(f"  Shift: {shift_id} - {client_name} at {shift_time}")
+        logger.warning(f"  Reason: {reason}")
+        logger.warning(f"  Priority: {priority}")
+        logger.warning(f"  Reported via: {reported_via}")
+
+        # TODO: Store in database, notify scheduling team
+        # For now, we log and return success
+
+        return JSONResponse({
+            "success": True,
+            "id": call_out_id,
+            "message": "Call-out logged successfully",
+            "data": {
+                "call_out_id": call_out_id,
+                "caregiver_id": caregiver_id,
+                "caregiver_name": caregiver_name,
+                "shift_id": shift_id,
+                "client_name": client_name,
+                "reason": reason,
+                "created_at": datetime.now().isoformat()
+            }
+        }, status_code=201)
+
+    except Exception as e:
+        logger.error(f"Error logging call-out: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
