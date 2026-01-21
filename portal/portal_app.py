@@ -1096,16 +1096,18 @@ async def api_wellsky_status(
 # ============================================================================
 
 _goformz_wellsky_sync_cache = None
+_goformz_wellsky_sync_error = None
 
 def _get_goformz_wellsky_sync():
     """Load goformz_wellsky_sync from root services directory."""
-    global _goformz_wellsky_sync_cache
+    global _goformz_wellsky_sync_cache, _goformz_wellsky_sync_error
     if _goformz_wellsky_sync_cache is not None:
         return _goformz_wellsky_sync_cache
 
     import sys as _sys
     import os as _os
     import types
+    import traceback
 
     try:
         root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
@@ -1113,7 +1115,8 @@ def _get_goformz_wellsky_sync():
         sync_path = _os.path.join(services_dir, 'goformz_wellsky_sync.py')
 
         if not _os.path.exists(sync_path):
-            logger.warning(f"goformz_wellsky_sync.py not found at {sync_path}")
+            _goformz_wellsky_sync_error = f"File not found: {sync_path}"
+            logger.warning(_goformz_wellsky_sync_error)
             return None
 
         # Add root to sys.path so 'from services.X import Y' works
@@ -1132,10 +1135,38 @@ def _get_goformz_wellsky_sync():
         # Now we can import normally
         from services.goformz_wellsky_sync import goformz_wellsky_sync
         _goformz_wellsky_sync_cache = goformz_wellsky_sync
+        _goformz_wellsky_sync_error = None
         return goformz_wellsky_sync
     except Exception as e:
+        _goformz_wellsky_sync_error = f"{e}\n{traceback.format_exc()}"
         logger.exception(f"Failed to load goformz_wellsky_sync: {e}")
         return None
+
+
+@app.get("/api/goformz/wellsky-sync/debug")
+async def goformz_wellsky_sync_debug():
+    """Debug endpoint to check why goformz_wellsky_sync might not be loading."""
+    import sys as _sys
+    import os as _os
+
+    root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    services_dir = _os.path.join(root_dir, 'services')
+    sync_path = _os.path.join(services_dir, 'goformz_wellsky_sync.py')
+
+    # Try loading it
+    service = _get_goformz_wellsky_sync()
+
+    return JSONResponse({
+        "root_dir": root_dir,
+        "services_dir": services_dir,
+        "sync_path": sync_path,
+        "sync_file_exists": _os.path.exists(sync_path),
+        "services_in_sys_modules": 'services' in _sys.modules,
+        "root_in_sys_path": root_dir in _sys.path,
+        "service_loaded": service is not None,
+        "cached": _goformz_wellsky_sync_cache is not None,
+        "last_error": _goformz_wellsky_sync_error
+    })
 
 
 @app.post("/api/goformz/wellsky-webhook")
