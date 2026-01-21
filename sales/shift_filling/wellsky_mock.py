@@ -358,21 +358,33 @@ class WellSkyMockService:
         logger.info(f"WellSky Mock: Assigned shift {shift_id} to {caregiver.full_name}")
         return True
 
-    def create_calloff(self, shift_id: str, reason: str = "") -> bool:
-        """Mark a shift as having a call-off"""
+    def create_calloff(self, shift_id: str, caregiver_id: str = None, reason: str = "") -> Optional[Shift]:
+        """
+        Mark a shift as having a call-off.
+
+        Args:
+            shift_id: ID of the shift
+            caregiver_id: ID of caregiver calling off (optional, used for logging)
+            reason: Reason for call-off
+
+        Returns:
+            The updated Shift object, or None if not found
+        """
         shift = self._shifts.get(shift_id)
         if not shift:
-            return False
+            logger.warning(f"WellSky Mock: Shift {shift_id} not found")
+            return None
 
-        shift.original_caregiver_id = shift.assigned_caregiver_id
+        # Store original caregiver info
+        shift.original_caregiver_id = shift.assigned_caregiver_id or caregiver_id
         shift.assigned_caregiver_id = None
         shift.assigned_caregiver = None
         shift.status = "open"
         shift.calloff_reason = reason
         shift.calloff_time = datetime.now()
 
-        logger.info(f"WellSky Mock: Call-off recorded for shift {shift_id}")
-        return True
+        logger.info(f"WellSky Mock: Call-off recorded for shift {shift_id} (caregiver: {caregiver_id}, reason: {reason})")
+        return shift
 
 
 # Singleton instance
