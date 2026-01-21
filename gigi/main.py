@@ -23,6 +23,17 @@ from fastapi import FastAPI, Request, HTTPException, Depends, Header
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 import httpx
+import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import WellSky service for shift management
+try:
+    from services.wellsky_service import WellSkyService, ShiftStatus
+    wellsky = WellSkyService()
+    WELLSKY_AVAILABLE = True
+except ImportError:
+    wellsky = None
+    WELLSKY_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -929,50 +940,49 @@ async def test_log_client_issue(client_id: str, note: str, issue_type: str = "ge
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyB-67dmnNUmfJfvbEznwqLYcnMZBMPam8o")
 
 # SMS Response prompt for Gigi
-SMS_SYSTEM_PROMPT = """You are Gigi, the after-hours AI assistant for Colorado Care Assist, a non-medical home care agency serving seniors and people with disabilities across Colorado.
+SMS_SYSTEM_PROMPT = """You are Gigi, the after-hours AI assistant for Colorado Care Assist, a non-medical home care agency.
 
-You are responding to TEXT MESSAGES from caregivers after hours. Keep responses:
-- Warm but professional
-- BRIEF - this is SMS, not email (2-3 sentences max)
-- Helpful and reassuring
-- Don't ask too many questions in one message
+You are responding to TEXT MESSAGES from caregivers. Keep responses:
+- BRIEF (2-3 sentences max) - this is SMS
+- Warm, helpful, action-oriented
+- USE THE SHIFT DATA PROVIDED - don't ask for info you already have
 
-COMMON SCENARIOS:
+CRITICAL: You have access to WellSky scheduling data. When shift context is provided, USE IT:
+- You KNOW their client name - say it
+- You KNOW their shift time - reference it
+- You CAN clock them in/out - confirm you did it
+- You CAN report call-outs - confirm the coverage team is notified
 
-1. CLOCK IN/OUT ISSUES (very common in rural Colorado):
-   - Reassure them their pay won't be affected
-   - Ask for the details: client name, date, actual time
-   - Tell them you'll log it for the office to fix in the morning
-   - Example: "No worries! I'll log that for you. What was the client name and your actual clock in/out time? The office will fix it in WellSky first thing tomorrow."
+SCENARIOS WITH SHIFT CONTEXT:
 
-2. CALLING OUT SICK:
-   - Express empathy
-   - Get the shift details (client name, time)
-   - Let them know you'll notify the team
-   - Example: "Sorry to hear that! I'll let the team know. Which shift are you calling out from?"
+1. CLOCK OUT ISSUES (you have their current shift):
+   - CONFIRM the client name from shift data
+   - TELL them you clocked them out (or will)
+   - Example: "Done! I clocked you out of your shift with Janna Segal at 3:45pm. You're all set!"
 
-3. RUNNING LATE:
-   - Acknowledge and log it
-   - Example: "Thanks for letting us know! I'll make a note. Hope you get there safely."
+2. CLOCK IN ISSUES:
+   - Same approach - confirm and act
+   - Example: "Got it! I logged your clock-in for the 9am shift with Robert Chen. Your hours are recorded."
 
-4. LOOKING FOR SHIFTS:
-   - Note their availability
-   - Example: "I'll note your availability for the scheduling team - they'll reach out when shifts open up!"
+3. CALLING OUT (you have their upcoming shift):
+   - Confirm WHICH shift (use the data)
+   - Tell them you're logging the call-out
+   - Coverage team will be notified
+   - Example: "I'm sorry to hear that. I've logged your call-out for tomorrow's 8am shift with Mary Johnson. The care team is being notified to find coverage. Feel better!"
 
-5. PAYROLL QUESTIONS:
-   - Pay stubs: www.adamskeegan.com
-   - Pay is bi-weekly
-   - Example: "Pay stubs are at adamskeegan.com. We pay bi-weekly. For specific questions, the office can help you in the morning."
+4. RUNNING LATE:
+   - Acknowledge
+   - Example: "Thanks for the heads up! I've noted it. Drive safe!"
 
-6. GENERAL QUESTIONS:
-   - Answer if you can from knowledge base
-   - Otherwise say office will follow up
-   - Example: "I've made a note - Cynthia or the office will get back to you first thing in the morning!"
+5. SCHEDULE QUESTIONS (you have their schedule):
+   - ANSWER with the actual data
+   - Example: "You have shifts tomorrow at 9am with Chen and 2pm with Segal."
 
-Office hours: Monday-Friday, 8 AM - 5 PM Mountain Time
-Office numbers: 719-428-3999 or 303-757-1777
+6. PAYROLL: Pay stubs at adamskeegan.com, bi-weekly pay.
 
-IMPORTANT: Never make promises about shift coverage or schedule changes - just log and reassure."""
+WITHOUT SHIFT CONTEXT: If no shift data provided, ask ONE clarifying question.
+
+Office hours: Mon-Fri 8AM-5PM MT | 719-428-3999 or 303-757-1777"""
 
 
 class InboundSMS(BaseModel):
@@ -992,16 +1002,35 @@ class SMSResponse(BaseModel):
     error: Optional[str] = None
 
 
-async def generate_sms_response(message: str, caller_info: Optional[CallerInfo] = None) -> str:
+async def generate_sms_response(
+    message: str,
+    caller_info: Optional[CallerInfo] = None,
+    shift_context: Optional[str] = None,
+    action_taken: Optional[str] = None
+) -> str:
     """
     Generate a thoughtful SMS response using Gemini AI.
+
+    Args:
+        message: The caregiver's text message
+        caller_info: Caller identification info
+        shift_context: WellSky shift details (client name, time, etc.)
+        action_taken: Description of action Gigi already performed (e.g., "Clocked out at 3:45pm")
     """
     # Build context
-    context = ""
-    if caller_info and caller_info.name:
-        context = f"The message is from {caller_info.name}, who is a {caller_info.caller_type.value}. "
+    context_parts = []
 
-    user_prompt = f"{context}Caregiver's text message: \"{message}\"\n\nWrite a brief, helpful SMS reply:"
+    if caller_info and caller_info.name:
+        context_parts.append(f"Caregiver: {caller_info.name}")
+
+    if shift_context:
+        context_parts.append(f"SHIFT DATA FROM WELLSKY:\n{shift_context}")
+
+    if action_taken:
+        context_parts.append(f"ACTION ALREADY TAKEN: {action_taken}")
+
+    context = "\n".join(context_parts)
+    user_prompt = f"{context}\n\nCaregiver's message: \"{message}\"\n\nWrite a brief SMS reply:"
 
     try:
         async with httpx.AsyncClient() as client:
@@ -1030,13 +1059,101 @@ async def generate_sms_response(message: str, caller_info: Optional[CallerInfo] 
     return "Thanks for reaching out! I've noted your message and someone from the office will get back to you first thing in the morning. Office hours are Mon-Fri 8 AM - 5 PM."
 
 
+def detect_sms_intent(message: str) -> str:
+    """
+    Detect the intent of an SMS message from a caregiver.
+
+    Returns one of: clock_out, clock_in, callout, schedule, payroll, general
+    """
+    msg_lower = message.lower()
+
+    # Clock out issues
+    if any(phrase in msg_lower for phrase in [
+        "clock out", "clockout", "cant clock out", "can't clock out",
+        "wont let me clock", "won't let me clock", "forgot to clock out",
+        "didnt clock out", "didn't clock out", "clock me out"
+    ]):
+        return "clock_out"
+
+    # Clock in issues
+    if any(phrase in msg_lower for phrase in [
+        "clock in", "clockin", "cant clock in", "can't clock in",
+        "forgot to clock in", "didnt clock in", "didn't clock in",
+        "clock me in"
+    ]):
+        return "clock_in"
+
+    # Call out / can't make shift
+    if any(phrase in msg_lower for phrase in [
+        "call out", "callout", "calling out", "can't make it",
+        "cant make it", "won't make it", "wont make it", "sick",
+        "can't come in", "cant come in", "not going to make",
+        "car broke", "emergency", "need to cancel"
+    ]):
+        return "callout"
+
+    # Schedule questions
+    if any(phrase in msg_lower for phrase in [
+        "my schedule", "when do i work", "what shifts", "next shift",
+        "shifts this week", "working tomorrow", "work tomorrow"
+    ]):
+        return "schedule"
+
+    # Payroll questions
+    if any(phrase in msg_lower for phrase in [
+        "pay stub", "paystub", "paycheck", "when do we get paid",
+        "paid", "payroll", "direct deposit"
+    ]):
+        return "payroll"
+
+    return "general"
+
+
+def format_shift_context(shift) -> str:
+    """Format a WellSky shift into context string for the AI."""
+    if not shift:
+        return ""
+
+    client_name = f"{shift.client_first_name} {shift.client_last_name}".strip()
+    if not client_name:
+        client_name = "Unknown Client"
+
+    parts = [f"Client: {client_name}"]
+
+    if shift.date:
+        parts.append(f"Date: {shift.date.strftime('%A, %B %d')}")
+
+    if shift.start_time:
+        parts.append(f"Start: {shift.start_time}")
+
+    if shift.end_time:
+        parts.append(f"End: {shift.end_time}")
+
+    if shift.address:
+        parts.append(f"Location: {shift.address}, {shift.city}")
+
+    if shift.clock_in_time:
+        parts.append(f"Clocked in: {shift.clock_in_time.strftime('%I:%M %p')}")
+
+    if shift.clock_out_time:
+        parts.append(f"Clocked out: {shift.clock_out_time.strftime('%I:%M %p')}")
+
+    status_str = shift.status.value if hasattr(shift.status, 'value') else str(shift.status)
+    parts.append(f"Status: {status_str}")
+
+    return "\n".join(parts)
+
+
 @app.post("/webhook/inbound-sms", response_model=SMSResponse)
 async def handle_inbound_sms(sms: InboundSMS):
     """
-    Handle inbound SMS messages and send AI-powered replies.
+    Handle inbound SMS messages with WellSky-aware intelligence.
 
-    This endpoint receives inbound SMS notifications from Beetexting
-    and generates thoughtful, context-aware responses using Gigi's AI.
+    Gigi will:
+    1. Look up the caregiver's shift info from WellSky
+    2. Detect what they need (clock out, call out, schedule, etc.)
+    3. Take action if possible (clock them out, report call-out)
+    4. Generate a response that confirms the action
     """
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
 
@@ -1044,8 +1161,86 @@ async def handle_inbound_sms(sms: InboundSMS):
         # Look up caller info
         caller_info = await verify_caller(sms.from_number)
 
-        # Generate AI response
-        reply_text = await generate_sms_response(sms.message, caller_info)
+        # Detect intent from message
+        intent = detect_sms_intent(sms.message)
+        logger.info(f"Detected intent: {intent} for {sms.from_number}")
+
+        # Look up shift data from WellSky
+        shift_context = None
+        action_taken = None
+        current_shift = None
+
+        if WELLSKY_AVAILABLE and wellsky:
+            try:
+                if intent == "clock_out":
+                    # Get their current shift (the one they're trying to clock out of)
+                    current_shift = wellsky.get_caregiver_current_shift(sms.from_number)
+                    if current_shift:
+                        shift_context = format_shift_context(current_shift)
+                        # Actually clock them out
+                        success, message = wellsky.clock_out_shift(
+                            current_shift.id,
+                            notes=f"Clocked out via Gigi SMS: {sms.message[:100]}"
+                        )
+                        if success:
+                            action_taken = message
+                            logger.info(f"Clocked out shift {current_shift.id}: {message}")
+
+                elif intent == "clock_in":
+                    # Get their upcoming shift
+                    current_shift = wellsky.get_caregiver_current_shift(sms.from_number)
+                    if current_shift:
+                        shift_context = format_shift_context(current_shift)
+                        # Clock them in
+                        success, message = wellsky.clock_in_shift(
+                            current_shift.id,
+                            notes=f"Clocked in via Gigi SMS: {sms.message[:100]}"
+                        )
+                        if success:
+                            action_taken = message
+                            logger.info(f"Clocked in shift {current_shift.id}: {message}")
+
+                elif intent == "callout":
+                    # Report the call-out
+                    success, message, affected_shift = wellsky.report_callout(
+                        sms.from_number,
+                        reason=sms.message[:200]
+                    )
+                    if success:
+                        action_taken = message
+                        current_shift = affected_shift
+                        if affected_shift:
+                            shift_context = format_shift_context(affected_shift)
+                        logger.info(f"Call-out reported: {message}")
+
+                elif intent == "schedule":
+                    # Get upcoming shifts
+                    shifts = wellsky.get_caregiver_upcoming_shifts(sms.from_number, days=7)
+                    if shifts:
+                        shift_lines = []
+                        for shift in shifts[:5]:  # Max 5 shifts
+                            client = f"{shift.client_first_name} {shift.client_last_name}".strip()
+                            date_str = shift.date.strftime("%a %m/%d") if shift.date else ""
+                            shift_lines.append(f"- {date_str} {shift.start_time}: {client}")
+                        shift_context = "UPCOMING SHIFTS:\n" + "\n".join(shift_lines)
+
+                else:
+                    # For general messages, still try to get context
+                    current_shift = wellsky.get_caregiver_current_shift(sms.from_number)
+                    if current_shift:
+                        shift_context = format_shift_context(current_shift)
+
+            except Exception as ws_error:
+                logger.warning(f"WellSky lookup failed: {ws_error}")
+                # Continue without WellSky data
+
+        # Generate AI response with shift context
+        reply_text = await generate_sms_response(
+            sms.message,
+            caller_info,
+            shift_context=shift_context,
+            action_taken=action_taken
+        )
 
         # Send reply via RingCentral SMS
         sms_sent = await _send_sms_ringcentral(sms.from_number, reply_text)

@@ -968,6 +968,263 @@ class WellSkyService:
         )
 
     # =========================================================================
+    # EVV / Clock In-Out Methods (Used by Gigi AI Agent)
+    # =========================================================================
+
+    def get_caregiver_shifts_today(self, phone: str) -> List[WellSkyShift]:
+        """
+        Get all shifts for a caregiver today, looked up by phone number.
+        Used by Gigi to know what shifts a caregiver has when they text/call.
+        """
+        caregiver = self.get_caregiver_by_phone(phone)
+        if not caregiver:
+            logger.warning(f"No caregiver found for phone {phone}")
+            return []
+
+        today = date.today()
+        return self.get_shifts(
+            caregiver_id=caregiver.id,
+            date_from=today,
+            date_to=today
+        )
+
+    def get_caregiver_current_shift(self, phone: str) -> Optional[WellSkyShift]:
+        """
+        Get the shift a caregiver is currently working or about to start.
+
+        Returns the shift that is:
+        1. In progress (clocked in but not out), OR
+        2. Scheduled/confirmed for today and starting within 2 hours
+
+        Used by Gigi when a caregiver says "I can't clock out" - she knows which shift.
+        """
+        shifts = self.get_caregiver_shifts_today(phone)
+        if not shifts:
+            return None
+
+        now = datetime.now()
+
+        # First, look for in-progress shift (clocked in, not clocked out)
+        for shift in shifts:
+            if shift.clock_in_time and not shift.clock_out_time:
+                return shift
+            if shift.status == ShiftStatus.IN_PROGRESS:
+                return shift
+
+        # Next, look for shift starting soon (within 2 hours)
+        for shift in shifts:
+            if shift.status in (ShiftStatus.SCHEDULED, ShiftStatus.CONFIRMED):
+                if shift.start_time and shift.date:
+                    try:
+                        start_dt = datetime.combine(
+                            shift.date,
+                            datetime.strptime(shift.start_time, "%H:%M").time()
+                        )
+                        if -30 <= (start_dt - now).total_seconds() / 60 <= 120:
+                            return shift
+                    except (ValueError, TypeError):
+                        pass
+
+        # Otherwise return the first shift of the day
+        return shifts[0] if shifts else None
+
+    def get_caregiver_upcoming_shifts(
+        self,
+        phone: str,
+        days: int = 7
+    ) -> List[WellSkyShift]:
+        """
+        Get upcoming shifts for a caregiver (next N days).
+        Used by Gigi when caregiver asks about their schedule.
+        """
+        caregiver = self.get_caregiver_by_phone(phone)
+        if not caregiver:
+            return []
+
+        return self.get_shifts(
+            caregiver_id=caregiver.id,
+            date_from=date.today(),
+            date_to=date.today() + timedelta(days=days)
+        )
+
+    def clock_in_shift(
+        self,
+        shift_id: str,
+        clock_in_time: Optional[datetime] = None,
+        notes: str = "",
+        lat: float = 0.0,
+        lon: float = 0.0
+    ) -> Tuple[bool, str]:
+        """
+        Clock a caregiver into a shift.
+
+        Returns (success, message) tuple.
+        Used by Gigi when caregiver says they forgot to clock in.
+        """
+        clock_in_time = clock_in_time or datetime.now()
+
+        if self.is_mock_mode:
+            shift = self._mock_shifts.get(shift_id)
+            if not shift:
+                return False, f"Shift {shift_id} not found"
+            if shift.clock_in_time:
+                return False, f"Shift already clocked in at {shift.clock_in_time.strftime('%I:%M %p')}"
+
+            shift.clock_in_time = clock_in_time
+            shift.clock_in_lat = lat
+            shift.clock_in_lon = lon
+            shift.status = ShiftStatus.IN_PROGRESS
+            if notes:
+                shift.caregiver_notes = f"[Clock-in via Gigi] {notes}"
+
+            logger.info(f"Mock: Clocked in shift {shift_id} at {clock_in_time}")
+            return True, f"Clocked in at {clock_in_time.strftime('%I:%M %p')}"
+
+        success, data = self._make_request(
+            "POST",
+            f"/shifts/{shift_id}/clock-in",
+            data={
+                "clock_in_time": clock_in_time.isoformat(),
+                "notes": notes,
+                "latitude": lat,
+                "longitude": lon,
+                "source": "gigi_sms"  # Track that this came from Gigi
+            }
+        )
+
+        if success:
+            return True, f"Clocked in at {clock_in_time.strftime('%I:%M %p')}"
+        return False, data.get("error", "Failed to clock in")
+
+    def clock_out_shift(
+        self,
+        shift_id: str,
+        clock_out_time: Optional[datetime] = None,
+        notes: str = ""
+    ) -> Tuple[bool, str]:
+        """
+        Clock a caregiver out of a shift.
+
+        Returns (success, message) tuple.
+        Used by Gigi when caregiver says they can't clock out or forgot.
+        """
+        clock_out_time = clock_out_time or datetime.now()
+
+        if self.is_mock_mode:
+            shift = self._mock_shifts.get(shift_id)
+            if not shift:
+                return False, f"Shift {shift_id} not found"
+            if shift.clock_out_time:
+                return False, f"Shift already clocked out at {shift.clock_out_time.strftime('%I:%M %p')}"
+            if not shift.clock_in_time:
+                return False, "Cannot clock out - shift was never clocked in"
+
+            shift.clock_out_time = clock_out_time
+            shift.status = ShiftStatus.COMPLETED
+            if notes:
+                shift.caregiver_notes = (shift.caregiver_notes or "") + f"\n[Clock-out via Gigi] {notes}"
+
+            logger.info(f"Mock: Clocked out shift {shift_id} at {clock_out_time}")
+            return True, f"Clocked out at {clock_out_time.strftime('%I:%M %p')}"
+
+        success, data = self._make_request(
+            "POST",
+            f"/shifts/{shift_id}/clock-out",
+            data={
+                "clock_out_time": clock_out_time.isoformat(),
+                "notes": notes,
+                "source": "gigi_sms"
+            }
+        )
+
+        if success:
+            return True, f"Clocked out at {clock_out_time.strftime('%I:%M %p')}"
+        return False, data.get("error", "Failed to clock out")
+
+    def report_callout(
+        self,
+        phone: str,
+        shift_id: Optional[str] = None,
+        reason: str = "",
+        notify_client: bool = True
+    ) -> Tuple[bool, str, Optional[WellSkyShift]]:
+        """
+        Report a caregiver call-out.
+
+        If shift_id not provided, finds their next upcoming shift.
+        Returns (success, message, affected_shift) tuple.
+
+        Used by Gigi when caregiver says they can't make their shift.
+        """
+        caregiver = self.get_caregiver_by_phone(phone)
+        if not caregiver:
+            return False, "Could not find your caregiver profile", None
+
+        # Find the shift if not specified
+        if not shift_id:
+            upcoming = self.get_caregiver_upcoming_shifts(phone, days=2)
+            # Find first non-completed shift
+            for shift in upcoming:
+                if shift.status not in (ShiftStatus.COMPLETED, ShiftStatus.CANCELLED):
+                    shift_id = shift.id
+                    break
+
+        if not shift_id:
+            return False, "No upcoming shifts found to call out from", None
+
+        if self.is_mock_mode:
+            shift = self._mock_shifts.get(shift_id)
+            if not shift:
+                return False, f"Shift {shift_id} not found", None
+
+            # Mark as cancelled/open for coverage
+            shift.status = ShiftStatus.OPEN
+            shift.caregiver_id = None
+            shift.notes = (shift.notes or "") + f"\n[CALL-OUT via Gigi] {caregiver.full_name}: {reason}"
+
+            client_name = f"{shift.client_first_name} {shift.client_last_name}".strip() or "the client"
+            shift_time = shift.start_time or "scheduled time"
+            shift_date = shift.date.strftime("%A, %B %d") if shift.date else "upcoming"
+
+            logger.info(f"Mock: Call-out reported for shift {shift_id} by {caregiver.full_name}")
+
+            message = (
+                f"Got it. I've logged your call-out for your shift with {client_name} "
+                f"on {shift_date} at {shift_time}. The care team will work on finding coverage. "
+                f"Feel better!"
+            )
+            return True, message, shift
+
+        # Production API call
+        success, data = self._make_request(
+            "POST",
+            f"/shifts/{shift_id}/callout",
+            data={
+                "caregiver_id": caregiver.id,
+                "reason": reason,
+                "notify_client": notify_client,
+                "source": "gigi_sms"
+            }
+        )
+
+        if success:
+            shift = self.get_shifts(caregiver_id=caregiver.id)
+            affected_shift = next((s for s in shift if s.id == shift_id), None)
+            return True, data.get("message", "Call-out recorded"), affected_shift
+
+        return False, data.get("error", "Failed to record call-out"), None
+
+    def get_shift_by_id(self, shift_id: str) -> Optional[WellSkyShift]:
+        """Get a single shift by ID"""
+        if self.is_mock_mode:
+            return self._mock_shifts.get(shift_id)
+
+        success, data = self._make_request("GET", f"/shifts/{shift_id}")
+        if success:
+            return self._parse_shift(data)
+        return None
+
+    # =========================================================================
     # Care Plan Methods
     # =========================================================================
 
