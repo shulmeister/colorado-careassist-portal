@@ -24,6 +24,7 @@ from services.marketing.metrics_service import (
     get_ads_metrics,
     get_email_metrics,
 )
+from services.search_service import search_service
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
     from services.client_satisfaction_service import client_satisfaction_service
@@ -317,6 +318,26 @@ async def get_tools(
     except Exception as e:
         logger.error(f"Error getting tools: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/search")
+async def global_search(
+    q: str = Query(..., min_length=2),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Global search across Sales, Recruiting, and Portal"""
+    try:
+        results = search_service.search(q)
+        return JSONResponse({
+            "success": True,
+            "results": results
+        })
+    except Exception as e:
+        logger.error(f"Search error: {e}")
+        return JSONResponse({
+            "success": False, 
+            "error": str(e),
+            "results": []
+        })
 
 @app.post("/api/tools")
 async def create_tool(
