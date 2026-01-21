@@ -93,6 +93,40 @@ GEMINI_API_KEY=AIzaSyxxxxx
 WELLSKY_API_KEY=xxxxx
 WELLSKY_API_SECRET=xxxxx
 WELLSKY_AGENCY_ID=xxxxx
+
+# Gigi Feature Toggles (default: false for safety)
+GIGI_SMS_AUTOREPLY_ENABLED=false    # Auto-reply to inbound SMS
+GIGI_OPERATIONS_SMS_ENABLED=false   # Send SMS for call-outs/coverage
+```
+
+### Gigi Control Panel
+
+Gigi can be controlled from the **Operations Dashboard** → **Gigi AI Agent** tab.
+
+| Control | Description | Default |
+|---------|-------------|---------|
+| SMS Auto-Reply | Automatically reply to inbound texts with AI responses | OFF |
+| Operations SMS | Send SMS notifications for call-outs and coverage alerts | OFF |
+
+**Safety**: Both toggles default to OFF until WellSky is fully connected and tested.
+
+**API Endpoints for Gigi Controls:**
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/gigi/settings` | GET | Get current toggle states |
+| `/api/gigi/settings` | PUT | Update toggles (logs who changed what) |
+| `/api/gigi/activity` | GET | Get recent Gigi activity log |
+| `/api/gigi/callouts` | GET | Get recent call-outs handled by Gigi |
+
+**Toggle via API:**
+```bash
+# Get current settings
+curl https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/gigi/settings
+
+# Enable SMS auto-reply (requires auth)
+curl -X PUT https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/gigi/settings \
+  -H "Content-Type: application/json" \
+  -d '{"sms_autoreply": true}'
 ```
 
 ### WellSky Integration Functions
@@ -184,6 +218,8 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 | Care Plans | Care plans due for review with days-until-review countdown |
 | Shifts & Coverage | Open shifts that need caregiver coverage |
 | At-Risk Clients | Clients flagged for attention based on satisfaction indicators |
+| Gigi AI Agent | Control panel for Gigi's SMS toggles, voice agent status, WellSky integration status |
+| Call-Out Log | Recent caregiver call-outs handled by Gigi with coverage status |
 
 **Operations API Endpoints:**
 | Endpoint | Description |
@@ -194,6 +230,10 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 | `GET /api/operations/care-plans` | Care plans due for review |
 | `GET /api/operations/open-shifts` | Open shifts needing coverage |
 | `GET /api/operations/at-risk` | At-risk clients above threshold |
+| `GET /api/gigi/settings` | Current Gigi toggle states |
+| `PUT /api/gigi/settings` | Update Gigi toggles |
+| `GET /api/gigi/activity` | Recent Gigi activity log |
+| `GET /api/gigi/callouts` | Recent call-outs handled by Gigi |
 
 **WellSky Integration:**
 - Uses `services/wellsky_service.py` for all data
@@ -359,4 +399,4 @@ There are duplicate folders in two locations:
 
 ---
 
-*Last Updated: January 21, 2026*
+*Last Updated: January 20, 2026*
