@@ -1338,7 +1338,7 @@ async def api_gigi_settings(
     return JSONResponse({
         "sms_autoreply": _gigi_settings["sms_autoreply"],
         "operations_sms": _gigi_settings["operations_sms"],
-        "wellsky_connected": wellsky_service is not None and wellsky_service.is_connected(),
+        "wellsky_connected": wellsky_service is not None and wellsky_service.is_configured,
     })
 
 
