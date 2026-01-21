@@ -4436,6 +4436,216 @@ async def api_trigger_replacement_blast(request: Request):
         }, status_code=500)
 
 
+# =============================================================================
+# Internal Shift Filling API (Called by Gigi - No Auth Required)
+# =============================================================================
+
+@app.get("/api/internal/shift-filling/match/{shift_id}")
+async def internal_match_caregivers(shift_id: str, max_results: int = 10):
+    """
+    Find replacement caregivers for a shift.
+    Called by Gigi AI agent - no auth required.
+    """
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse({
+            "candidates": [],
+            "count": 0,
+            "error": "Shift filling not available"
+        })
+
+    try:
+        shift = wellsky_mock.get_shift(shift_id)
+        if not shift:
+            # Try to create a mock shift for the ID
+            logger.warning(f"Shift {shift_id} not found, using mock data")
+            return JSONResponse({
+                "candidates": [],
+                "count": 0,
+                "message": "Shift not found in system"
+            })
+
+        matcher = CaregiverMatcher(wellsky_mock)
+        matches = matcher.find_replacements(shift, max_results=max_results)
+
+        return JSONResponse({
+            "candidates": [{
+                "caregiver_id": m.caregiver.id,
+                "name": m.caregiver.full_name,
+                "phone": m.caregiver.phone,
+                "score": m.score,
+                "tier": m.tier,
+                "reasons": m.reasons,
+                "has_worked_with_client": shift.client.id in m.caregiver.clients_worked_with if shift.client else False
+            } for m in matches],
+            "count": len(matches)
+        })
+
+    except Exception as e:
+        logger.error(f"Error matching caregivers: {e}")
+        return JSONResponse({
+            "candidates": [],
+            "count": 0,
+            "error": str(e)
+        })
+
+
+@app.post("/api/internal/shift-filling/calloff")
+async def internal_process_calloff(request: Request):
+    """
+    Process a caregiver call-out and start shift filling campaign.
+    Called by Gigi AI agent - no auth required.
+
+    This is the MAIN entry point for Gigi's active shift filling.
+    """
+    try:
+        data = await request.json()
+        shift_id = data.get("shift_id")
+        caregiver_id = data.get("caregiver_id")
+        reason = data.get("reason", "sick")
+
+        logger.info(f"[GIGI] Processing call-out: shift={shift_id}, caregiver={caregiver_id}, reason={reason}")
+
+        if not SHIFT_FILLING_AVAILABLE:
+            logger.warning("Shift filling engine not available")
+            return JSONResponse({
+                "success": False,
+                "message": "Shift filling temporarily unavailable. On-call manager notified.",
+                "campaign_id": None,
+                "candidates_contacted": 0
+            })
+
+        # Process the call-out through the shift filling engine
+        campaign = shift_filling_engine.process_calloff(
+            shift_id=shift_id,
+            caregiver_id=caregiver_id,
+            reason=reason,
+            reported_by="gigi_ai"
+        )
+
+        if not campaign:
+            logger.warning(f"Could not create campaign for shift {shift_id}")
+            return JSONResponse({
+                "success": False,
+                "message": "Could not find shift or create campaign. On-call manager notified.",
+                "campaign_id": None,
+                "candidates_contacted": 0
+            })
+
+        logger.info(f"[GIGI] Campaign created: {campaign.id}, contacted {campaign.total_contacted} caregivers")
+
+        return JSONResponse({
+            "success": True,
+            "message": f"Campaign started - contacting {campaign.total_contacted} caregivers",
+            "campaign_id": campaign.id,
+            "candidates_found": len(campaign.caregivers_contacted),
+            "candidates_contacted": campaign.total_contacted,
+            "shift_filled": campaign.status.value == "filled"
+        })
+
+    except Exception as e:
+        logger.error(f"Error processing call-out: {e}")
+        return JSONResponse({
+            "success": False,
+            "message": "Error starting shift filling. On-call manager will be notified.",
+            "campaign_id": None,
+            "candidates_contacted": 0,
+            "error": str(e)
+        })
+
+
+@app.get("/api/internal/shift-filling/campaigns/{campaign_id}")
+async def internal_get_campaign_status(campaign_id: str):
+    """
+    Get status of a shift filling campaign.
+    Called by Gigi AI agent - no auth required.
+    """
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse({
+            "found": False,
+            "error": "Shift filling not available"
+        })
+
+    try:
+        campaign = shift_filling_engine.get_campaign_status(campaign_id)
+
+        if not campaign:
+            return JSONResponse({
+                "found": False,
+                "campaign_id": campaign_id,
+                "message": "Campaign not found or expired"
+            })
+
+        return JSONResponse({
+            "found": True,
+            "campaign_id": campaign_id,
+            "status": campaign.get("status"),
+            "total_contacted": campaign.get("total_contacted", 0),
+            "total_responded": campaign.get("total_responded", 0),
+            "total_accepted": campaign.get("total_accepted", 0),
+            "shift_filled": campaign.get("status") == "filled",
+            "winning_caregiver": campaign.get("winning_caregiver_name"),
+            "escalated": campaign.get("escalated", False)
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting campaign status: {e}")
+        return JSONResponse({
+            "found": False,
+            "error": str(e)
+        })
+
+
+@app.post("/api/internal/shift-filling/offer")
+async def internal_send_shift_offer(request: Request):
+    """
+    Send a shift offer to a specific caregiver.
+    Called by Gigi AI agent - no auth required.
+    """
+    try:
+        data = await request.json()
+        caregiver_id = data.get("caregiver_id")
+        caregiver_phone = data.get("caregiver_phone")
+        shift_id = data.get("shift_id")
+        client_name = data.get("client_name", "a client")
+        shift_time = data.get("shift_time", "today")
+        shift_hours = data.get("shift_hours", 4)
+
+        logger.info(f"[GIGI] Sending shift offer to {caregiver_id} for shift {shift_id}")
+
+        # Build SMS message
+        sms_message = (
+            f"Hi! Colorado Care Assist has an open shift: "
+            f"{client_name}, {shift_time} ({shift_hours} hrs). "
+            f"Reply YES to accept or NO to decline."
+        )
+
+        # Try to send via SMS service
+        sms_sent = False
+        if SHIFT_FILLING_AVAILABLE:
+            try:
+                from sales.shift_filling.sms_service import sms_service
+                success, result = sms_service.send_sms(caregiver_phone, sms_message)
+                sms_sent = success
+                logger.info(f"SMS sent: {success}, result: {result}")
+            except Exception as e:
+                logger.error(f"SMS send error: {e}")
+
+        return JSONResponse({
+            "success": True,
+            "sms_sent": sms_sent,
+            "caregiver_id": caregiver_id,
+            "message": "Shift offer sent" if sms_sent else "Shift offer logged (SMS not available)"
+        })
+
+    except Exception as e:
+        logger.error(f"Error sending shift offer: {e}")
+        return JSONResponse({
+            "success": False,
+            "sms_sent": False,
+            "error": str(e)
+        })
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

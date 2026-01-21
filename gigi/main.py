@@ -1091,7 +1091,7 @@ async def find_replacement_caregivers(
         # Try to use the shift filling engine via the portal API
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/shift-filling/match/{shift_id}",
+                f"{PORTAL_BASE_URL}/api/internal/shift-filling/match/{shift_id}",
                 params={"max_results": max_results},
                 timeout=15.0
             )
@@ -1147,7 +1147,7 @@ async def start_shift_filling_campaign(
         async with httpx.AsyncClient() as client:
             # Trigger the shift filling engine via the portal API
             response = await client.post(
-                f"{PORTAL_BASE_URL}/api/shift-filling/calloff",
+                f"{PORTAL_BASE_URL}/api/internal/shift-filling/calloff",
                 json={
                     "shift_id": shift_id,
                     "caregiver_id": caregiver_id,
@@ -1308,7 +1308,7 @@ async def get_shift_filling_status(campaign_id: str) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/shift-filling/campaigns/{campaign_id}",
+                f"{PORTAL_BASE_URL}/api/internal/shift-filling/campaigns/{campaign_id}",
                 timeout=10.0
             )
 
