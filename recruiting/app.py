@@ -27,6 +27,30 @@ load_dotenv()
 
 app = Flask(__name__)
 
+def _log_portal_event(description, event_type="info", details=None, icon=None):
+    """Log event to the central portal activity stream"""
+    try:
+        # Determine URL
+        port = os.getenv("PORT", "8000")
+        portal_url = f"http://localhost:{port}"
+        
+        if os.getenv("HEROKU_APP_NAME"):
+            portal_url = f"https://{os.getenv('HEROKU_APP_NAME')}.herokuapp.com"
+            
+        requests.post(
+            f"{portal_url}/api/internal/event",
+            json={
+                "source": "Recruiting",
+                "description": description,
+                "event_type": event_type,
+                "details": details,
+                "icon": icon or "👥"
+            },
+            timeout=2.0
+        )
+    except Exception as e:
+        print(f"Failed to log portal event: {e}")
+
 # Security Configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', secrets.token_hex(32))
 app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS only
@@ -3093,6 +3117,17 @@ def create_lead():
         
         db.session.add(lead)
         db.session.commit()
+        
+        # Log to Portal
+        try:
+            _log_portal_event(
+                description=f"New Applicant: {lead.name}",
+                event_type="new_applicant",
+                details=f"Email: {lead.email}",
+                icon="📝"
+            )
+        except:
+            pass
         
         return jsonify({
             'success': True,

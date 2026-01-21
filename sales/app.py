@@ -62,6 +62,31 @@ logger = logging.getLogger(__name__)
 _COMPANY_LOGO_CACHE: Dict[int, Dict[str, Any]] = {}
 _COMPANY_LOGO_TTL_SECONDS = 86400  # 1 day
 
+async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None):
+    """Log event to the central portal activity stream"""
+    try:
+        # Determine URL
+        port = os.getenv("PORT", "8000")
+        portal_url = f"http://localhost:{port}"
+        
+        if os.getenv("HEROKU_APP_NAME"):
+            portal_url = f"https://{os.getenv('HEROKU_APP_NAME')}.herokuapp.com"
+            
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{portal_url}/api/internal/event",
+                json={
+                    "source": "Sales",
+                    "description": description,
+                    "event_type": event_type,
+                    "details": details,
+                    "icon": icon or "💰"
+                },
+                timeout=2.0
+            )
+    except Exception as e:
+        logger.warning(f"Failed to log portal event: {e}")
+
 
 def ensure_contact_schema():
     """Add new contact columns if they are missing (works for Postgres + SQLite)."""
@@ -6047,11 +6072,17 @@ async def create_contact(
             tags=_serialize_tags(payload.get("tags")),
             last_activity=_coerce_datetime(payload.get("last_activity"), now),
             account_manager=payload.get("account_manager"),
-            source=payload.get("source"),
-        )
         db.add(contact)
         db.commit()
         db.refresh(contact)
+        
+        # Log to Portal
+        await _log_portal_event(
+            description=f"New contact: {contact.name}",
+            event_type="new_contact",
+            details=f"Type: {contact.contact_type or 'Unknown'} | Company: {contact.company}",
+            icon="👤"
+        )
         
         # Sync to Brevo CRM in background
         import threading
@@ -6335,6 +6366,10 @@ async def update_deal(
         raise HTTPException(status_code=404, detail="Deal not found")
     try:
         payload = await request.json()
+        
+        # Capture old stage
+        old_stage = deal.stage
+        
         for field in [
             "name",
             "company_id",
@@ -6357,6 +6392,21 @@ async def update_deal(
         db.add(deal)
         db.commit()
         db.refresh(deal)
+        
+        # Log stage changes to portal
+        if payload.get("stage") and old_stage != deal.stage:
+            icon = "📈"
+            if deal.stage == "Closed Won":
+                icon = "🏆"
+            elif deal.stage == "Closed Lost":
+                icon = "📉"
+            
+            await _log_portal_event(
+                description=f"Deal Updated: {deal.name}",
+                event_type="deal_stage_change",
+                details=f"Stage: {old_stage} -> {deal.stage} | Amount: ${deal.amount or 0}",
+                icon=icon
+            )
         
         # Sync to Brevo CRM in background
         import threading

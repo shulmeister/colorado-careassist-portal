@@ -99,6 +99,32 @@ app = FastAPI(
     version="1.0.0"
 )
 
+async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None):
+    """Log event to the central portal activity stream"""
+    try:
+        # Determine URL - unified_app runs on localhost:8000 or defined PORT
+        port = os.getenv("PORT", "8000")
+        portal_url = f"http://localhost:{port}"
+        
+        # If external URL is preferred or required (e.g. strict SSL), use it
+        if os.getenv("HEROKU_APP_NAME"):
+            portal_url = f"https://{os.getenv('HEROKU_APP_NAME')}.herokuapp.com"
+            
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{portal_url}/api/internal/event",
+                json={
+                    "source": "Gigi",
+                    "description": description,
+                    "event_type": event_type,
+                    "details": details,
+                    "icon": icon or "🤖"
+                },
+                timeout=2.0
+            )
+    except Exception as e:
+        logger.warning(f"Failed to log portal event: {e}")
+
 
 # =============================================================================
 # Pydantic Models
@@ -1429,10 +1455,21 @@ async def retell_webhook(request: Request):
 
     elif event == "call_ended":
         transcript = body.get("transcript", "")
-        duration = body.get("end_timestamp", 0) - body.get("start_timestamp", 0)
-        logger.info(f"Call ended. Duration: {duration}ms")
+        duration_ms = body.get("end_timestamp", 0) - body.get("start_timestamp", 0)
+        duration_sec = duration_ms // 1000
+        logger.info(f"Call ended. Duration: {duration_ms}ms")
 
-        # Could log transcript to database here
+        # Log to Portal
+        analysis = body.get("call_analysis", {})
+        summary = analysis.get("call_summary", "Call completed")
+        
+        await _log_portal_event(
+            description=f"Call completed ({duration_sec}s)",
+            event_type="call_ended",
+            details=summary,
+            icon="📞"
+        )
+
         return JSONResponse({"status": "ok"})
 
     elif event == "tool_call":
@@ -2127,10 +2164,15 @@ async def beetexting_webhook(request: Request):
             to_number=to_number,
             message=message,
             contact_name=payload.get("contactName"),
-            agent_email=body.get("agentEmail")
-        )
-
         result = await handle_inbound_sms(sms)
+        
+        # Log to Portal
+        await _log_portal_event(
+            description=f"SMS from {from_number}",
+            event_type="sms_received",
+            details=f"Msg: {message[:50]}...\nReply: {'Yes' if result.reply_sent else 'No'}",
+            icon="💬"
+        )
 
         return JSONResponse({
             "status": "ok",
