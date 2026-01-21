@@ -1092,6 +1092,120 @@ async def api_wellsky_status(
 
 
 # ============================================================================
+# GoFormz → WellSky Webhook Endpoint
+# ============================================================================
+
+@app.post("/api/goformz/wellsky-webhook")
+async def goformz_wellsky_webhook(request: Request):
+    """
+    Webhook endpoint for GoFormz to trigger WellSky status updates.
+
+    When client/employee packets are completed in GoFormz:
+    - Client Packet → converts WellSky prospect to client
+    - Employee Packet → converts WellSky applicant to caregiver
+
+    This is the final step in the hub-and-spoke integration.
+    """
+    try:
+        from services.goformz_wellsky_sync import goformz_wellsky_sync
+    except ImportError:
+        return JSONResponse({
+            "success": False,
+            "error": "GoFormz-WellSky sync service not available"
+        }, status_code=500)
+
+    try:
+        payload = await request.json()
+        logger.info(f"GoFormz→WellSky webhook received: {payload.get('EventType', 'unknown')}")
+
+        # Extract event info from GoFormz payload
+        event_type = (
+            payload.get('EventType', '') or
+            payload.get('event', '') or
+            payload.get('eventType', '')
+        ).lower()
+
+        # Only process completion events
+        if event_type not in ['form.complete', 'completed', 'submitted', 'signed']:
+            return JSONResponse({
+                "success": True,
+                "message": f"Event type '{event_type}' not a completion - ignored"
+            })
+
+        # Extract form info
+        item = payload.get('Item', {})
+        submission_id = item.get('Id') or payload.get('submissionId') or payload.get('submission_id')
+        form_name = (
+            payload.get('formName', '') or
+            payload.get('FormName', '') or
+            payload.get('templateName', '')
+        ).lower()
+
+        if not submission_id:
+            return JSONResponse({
+                "success": False,
+                "error": "No submission ID in webhook payload"
+            }, status_code=400)
+
+        # Determine form type and process
+        result = {}
+        if any(kw in form_name for kw in ['client', 'patient', 'service agreement', 'care agreement']):
+            # Client packet - convert prospect to client
+            result = goformz_wellsky_sync.process_single_client_packet({
+                'submission_id': submission_id,
+                'form_name': form_name,
+                'payload': payload
+            })
+        elif any(kw in form_name for kw in ['employee', 'caregiver', 'new hire', 'onboarding']):
+            # Employee packet - convert applicant to caregiver
+            result = goformz_wellsky_sync.process_single_employee_packet({
+                'submission_id': submission_id,
+                'form_name': form_name,
+                'payload': payload
+            })
+        else:
+            # Unknown form type - log but don't fail
+            logger.warning(f"Unknown form type in GoFormz webhook: {form_name}")
+            return JSONResponse({
+                "success": True,
+                "message": f"Unknown form type '{form_name}' - no WellSky action taken"
+            })
+
+        return JSONResponse({
+            "success": True,
+            "submission_id": submission_id,
+            "form_type": form_name,
+            "result": result
+        })
+
+    except Exception as e:
+        logger.exception(f"Error processing GoFormz→WellSky webhook: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.get("/api/goformz/wellsky-sync/status")
+async def goformz_wellsky_sync_status(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get GoFormz→WellSky sync service status"""
+    try:
+        from services.goformz_wellsky_sync import goformz_wellsky_sync
+        return JSONResponse({
+            "success": True,
+            "sync_log_entries": len(goformz_wellsky_sync.get_sync_log()),
+            "recent_sync_log": goformz_wellsky_sync.get_sync_log(limit=10)
+        })
+    except ImportError:
+        return JSONResponse({
+            "success": False,
+            "error": "GoFormz-WellSky sync service not available"
+        })
+
+
+# ============================================================================
 # AI Care Coordinator API Endpoints (Zingage/Phoebe Style)
 # ============================================================================
 

@@ -828,6 +828,152 @@ class GoFormzWellSkySyncService:
         return results
 
     # =========================================================================
+    # Single Packet Processing (for Webhook Events)
+    # =========================================================================
+
+    def process_single_client_packet(
+        self,
+        packet_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Process a single client packet from a webhook event.
+
+        Args:
+            packet_info: Dict with submission_id, form_name, and optional payload
+
+        Returns:
+            Result dict with success status and details
+        """
+        submission_id = packet_info.get('submission_id')
+        form_name = packet_info.get('form_name', 'client packet')
+        payload = packet_info.get('payload', {})
+
+        result = {
+            "submission_id": submission_id,
+            "form_type": "client_packet",
+            "success": False,
+            "message": "",
+        }
+
+        try:
+            # Extract customer data from payload
+            item = payload.get('Item', {})
+            form_data = payload.get('formData', {}) or item.get('formData', {})
+
+            customer_data = self._extract_customer_data_from_form(form_data)
+            if not customer_data.get('email') and not customer_data.get('phone'):
+                # Try to get from payload directly
+                customer_data = {
+                    'email': payload.get('email', ''),
+                    'first_name': payload.get('firstName', '') or payload.get('first_name', ''),
+                    'last_name': payload.get('lastName', '') or payload.get('last_name', ''),
+                    'phone': payload.get('phone', ''),
+                }
+
+            # Find matching prospect
+            prospect = self._find_matching_prospect(customer_data, {'data': form_data})
+
+            if not prospect:
+                result["message"] = "No matching prospect found"
+                self._log_sync("client_packet_no_match", submission_id=submission_id)
+                return result
+
+            if prospect.is_converted:
+                result["success"] = True
+                result["message"] = f"Prospect already converted to client {prospect.converted_client_id}"
+                result["client_id"] = prospect.converted_client_id
+                return result
+
+            # Convert prospect to client
+            success, message = self._process_client_packet_match(
+                prospect, submission_id
+            )
+            result["success"] = success
+            result["message"] = message
+            if success:
+                # Refresh to get client ID
+                prospect = self.wellsky.get_prospect(prospect.id)
+                result["client_id"] = prospect.converted_client_id if prospect else None
+
+        except Exception as e:
+            logger.exception(f"Error processing client packet {submission_id}: {e}")
+            result["message"] = str(e)
+            result["error"] = str(e)
+
+        return result
+
+    def process_single_employee_packet(
+        self,
+        packet_info: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Process a single employee packet from a webhook event.
+
+        Args:
+            packet_info: Dict with submission_id, form_name, and optional payload
+
+        Returns:
+            Result dict with success status and details
+        """
+        submission_id = packet_info.get('submission_id')
+        form_name = packet_info.get('form_name', 'employee packet')
+        payload = packet_info.get('payload', {})
+
+        result = {
+            "submission_id": submission_id,
+            "form_type": "employee_packet",
+            "success": False,
+            "message": "",
+        }
+
+        try:
+            # Extract employee data from payload
+            item = payload.get('Item', {})
+            form_data = payload.get('formData', {}) or item.get('formData', {})
+
+            employee_data = self._extract_employee_data_from_form(form_data)
+            if not employee_data.get('email') and not employee_data.get('phone'):
+                # Try to get from payload directly
+                employee_data = {
+                    'email': payload.get('email', ''),
+                    'first_name': payload.get('firstName', '') or payload.get('first_name', ''),
+                    'last_name': payload.get('lastName', '') or payload.get('last_name', ''),
+                    'phone': payload.get('phone', ''),
+                }
+
+            # Find matching applicant
+            applicant = self._find_matching_applicant(employee_data, {'data': form_data})
+
+            if not applicant:
+                result["message"] = "No matching applicant found"
+                self._log_sync("employee_packet_no_match", submission_id=submission_id)
+                return result
+
+            if applicant.converted_caregiver_id:
+                result["success"] = True
+                result["message"] = f"Applicant already converted to caregiver {applicant.converted_caregiver_id}"
+                result["caregiver_id"] = applicant.converted_caregiver_id
+                return result
+
+            # Convert applicant to caregiver
+            success, message = self._process_employee_packet_match(
+                applicant, submission_id
+            )
+            result["success"] = success
+            result["message"] = message
+            if success:
+                # Refresh to get caregiver ID
+                applicant = self.wellsky.get_applicant(applicant.id)
+                result["caregiver_id"] = applicant.converted_caregiver_id if applicant else None
+
+        except Exception as e:
+            logger.exception(f"Error processing employee packet {submission_id}: {e}")
+            result["message"] = str(e)
+            result["error"] = str(e)
+
+        return result
+
+    # =========================================================================
     # Logging
     # =========================================================================
 
