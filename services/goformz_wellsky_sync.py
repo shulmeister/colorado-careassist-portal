@@ -860,7 +860,10 @@ class GoFormzWellSkySyncService:
             item = payload.get('Item', {})
             form_data = payload.get('formData', {}) or item.get('formData', {})
 
-            customer_data = self._extract_customer_data_from_form(form_data)
+            # Build submission-like dict for _extract_customer_data
+            submission = {'data': form_data}
+            customer_data = self._extract_customer_data(submission)
+
             if not customer_data.get('email') and not customer_data.get('phone'):
                 # Try to get from payload directly
                 customer_data = {
@@ -931,7 +934,10 @@ class GoFormzWellSkySyncService:
             item = payload.get('Item', {})
             form_data = payload.get('formData', {}) or item.get('formData', {})
 
-            employee_data = self._extract_employee_data_from_form(form_data)
+            # Build submission-like dict for _extract_employee_data
+            submission = {'data': form_data}
+            employee_data = self._extract_employee_data(submission)
+
             if not employee_data.get('email') and not employee_data.get('phone'):
                 # Try to get from payload directly
                 employee_data = {
