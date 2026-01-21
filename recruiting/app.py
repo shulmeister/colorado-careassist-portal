@@ -73,6 +73,8 @@ CORS(app, origins=[
     'http://localhost:5000'  # For development
 ])
 
+RECRUITING_REQUIRE_PORTAL_AUTH = os.getenv("RECRUITING_REQUIRE_PORTAL_AUTH", "false").lower() == "true"
+
 # Initialize Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)

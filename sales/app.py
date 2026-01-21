@@ -452,6 +452,11 @@ ensure_financial_entry_schema()
 PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
 PORTAL_SSO_SERIALIZER = URLSafeTimedSerializer(PORTAL_SECRET)
 PORTAL_SSO_TOKEN_TTL = int(os.getenv("PORTAL_SSO_TOKEN_TTL", "300"))
+SALES_ENABLE_TEST_ENDPOINTS = os.getenv("SALES_ENABLE_TEST_ENDPOINTS", "true").lower() == "true"
+
+def require_sales_test_endpoints_enabled():
+    if not SALES_ENABLE_TEST_ENDPOINTS:
+        raise HTTPException(status_code=404, detail="Not found")
 
 # Ring Central Embeddable configuration
 RINGCENTRAL_EMBED_CLIENT_ID = os.getenv("RINGCENTRAL_EMBED_CLIENT_ID")
@@ -5416,7 +5421,10 @@ async def append_to_sheet(request: Request, db: Session = Depends(get_db), curre
 
 # Dashboard API endpoints
 @app.get("/api/gmail/test")
-async def test_gmail_connection(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def test_gmail_connection(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    _test_ok: None = Depends(require_sales_test_endpoints_enabled)
+):
     """Test Gmail API connection"""
     try:
         from gmail_service import GmailService
@@ -5429,7 +5437,10 @@ async def test_gmail_connection(current_user: Dict[str, Any] = Depends(get_curre
         raise HTTPException(status_code=500, detail=f"Error testing Gmail: {str(e)}")
 
 @app.get("/api/mailchimp/test")
-async def test_mailchimp_connection(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def test_mailchimp_connection(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    _test_ok: None = Depends(require_sales_test_endpoints_enabled)
+):
     """Test Mailchimp API connection"""
     try:
         mailchimp_service = MailchimpService()
@@ -6718,7 +6729,9 @@ async def sync_brevo_contacts_endpoint(
 
 
 @app.get("/api/brevo/test")
-async def test_brevo_connection():
+async def test_brevo_connection(
+    _test_ok: None = Depends(require_sales_test_endpoints_enabled)
+):
     """Test Brevo API connection."""
     try:
         from brevo_service import BrevoService
@@ -7159,7 +7172,9 @@ heroku run "python3 -c 'from quickbooks_service import QuickBooksService; qb = Q
 
 
 @app.get("/api/quickbooks/test")
-async def test_quickbooks_connection():
+async def test_quickbooks_connection(
+    _test_ok: None = Depends(require_sales_test_endpoints_enabled)
+):
     """Test QuickBooks API connection."""
     try:
         from quickbooks_service import QuickBooksService
@@ -7220,7 +7235,9 @@ async def sync_quickbooks_to_brevo_endpoint(
 
 
 @app.get("/api/goformz/test")
-async def test_goformz_connection():
+async def test_goformz_connection(
+    _test_ok: None = Depends(require_sales_test_endpoints_enabled)
+):
     """Test GoFormz API connection."""
     try:
         from goformz_service import GoFormzService
@@ -7760,7 +7777,8 @@ async def goformz_webhook(request: Request):
 @app.post("/api/goformz/test-welcome-email")
 async def test_welcome_email(
     email: str,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    _test_ok: None = Depends(require_sales_test_endpoints_enabled)
 ):
     """Test endpoint to manually trigger welcome email for a contact."""
     try:

@@ -48,6 +48,11 @@ logger = logging.getLogger(__name__)
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
 RETELL_WEBHOOK_SECRET = os.getenv("RETELL_WEBHOOK_SECRET")  # Required for production webhook validation
 PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://portal.coloradocareassist.com")
+GIGI_ENABLE_TEST_ENDPOINTS = os.getenv("GIGI_ENABLE_TEST_ENDPOINTS", "true").lower() == "true"
+
+def require_gigi_test_endpoints_enabled():
+    if not GIGI_ENABLE_TEST_ENDPOINTS:
+        raise HTTPException(status_code=404, detail="Not found")
 
 # BeeTexting OAuth2 credentials (required for SMS)
 BEETEXTING_CLIENT_ID = os.getenv("BEETEXTING_CLIENT_ID")
@@ -1734,28 +1739,44 @@ async def root():
 # =============================================================================
 
 @app.post("/test/verify-caller")
-async def test_verify_caller(phone_number: str):
+async def test_verify_caller(
+    phone_number: str,
+    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+):
     """Test endpoint for verify_caller function."""
     result = await verify_caller(phone_number)
     return result.model_dump()
 
 
 @app.post("/test/get-shift-details")
-async def test_get_shift_details(person_id: str):
+async def test_get_shift_details(
+    person_id: str,
+    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+):
     """Test endpoint for get_shift_details function."""
     result = await get_shift_details(person_id)
     return result.model_dump() if result else {"shift": None}
 
 
 @app.post("/test/report-call-out")
-async def test_report_call_out(caregiver_id: str, shift_id: str, reason: str):
+async def test_report_call_out(
+    caregiver_id: str,
+    shift_id: str,
+    reason: str,
+    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+):
     """Test endpoint for report_call_out function."""
     result = await report_call_out(caregiver_id, shift_id, reason)
     return result.model_dump()
 
 
 @app.post("/test/log-client-issue")
-async def test_log_client_issue(client_id: str, note: str, issue_type: str = "general"):
+async def test_log_client_issue(
+    client_id: str,
+    note: str,
+    issue_type: str = "general",
+    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+):
     """Test endpoint for log_client_issue function."""
     result = await log_client_issue(client_id, note, issue_type)
     return result.model_dump()
@@ -2274,7 +2295,11 @@ async def ringcentral_sms_webhook(request: Request):
 
 
 @app.post("/test/sms-reply")
-async def test_sms_reply(from_number: str, message: str):
+async def test_sms_reply(
+    from_number: str,
+    message: str,
+    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+):
     """
     Test endpoint for SMS auto-reply.
 

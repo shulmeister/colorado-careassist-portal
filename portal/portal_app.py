@@ -107,6 +107,11 @@ if not PORTAL_SECRET:
 
 PORTAL_SSO_SERIALIZER = URLSafeTimedSerializer(PORTAL_SECRET)
 PORTAL_SSO_TOKEN_TTL = int(os.getenv("PORTAL_SSO_TOKEN_TTL", "300"))
+PORTAL_ENABLE_TEST_ENDPOINTS = os.getenv("PORTAL_ENABLE_TEST_ENDPOINTS", "true").lower() == "true"
+
+def require_portal_test_endpoints_enabled():
+    if not PORTAL_ENABLE_TEST_ENDPOINTS:
+        raise HTTPException(status_code=404, detail="Not found")
 
 # Admin users list - comma-separated email addresses
 ADMIN_EMAILS = os.getenv("PORTAL_ADMIN_EMAILS", "jason@coloradocareassist.com").split(",")
@@ -166,7 +171,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 templates = Jinja2Templates(directory="templates")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ==================== Module Mounting ====================
+# 
 
 # 1. Mount Tracker (FastAPI)
 try:
@@ -180,7 +185,7 @@ except Exception as e:
 # Recruiter dashboard is now mounted at /recruiting via unified_app.py
 # No mounting needed here - the Flask app is mounted at the unified_app level
 
-# =========================================================
+# 
 
 # Authentication endpoints
 @app.get("/auth/login")
@@ -975,7 +980,7 @@ async def get_sync_status(
         logger.error(f"Error getting sync status: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting status: {str(e)}")
 
-# ==================== Embedded Dashboards ====================
+# 
 
 # Sales dashboard is now mounted at /sales via unified_app.py
 # No redirect needed - the mounted FastAPI app handles /sales/* routes directly
@@ -1098,9 +1103,9 @@ async def client_satisfaction_dashboard_legacy(
     )
 
 
-# ============================================================================
+# 
 # Client Satisfaction API Endpoints
-# ============================================================================
+# 
 
 @app.get("/api/client-satisfaction/summary")
 async def api_client_satisfaction_summary(
@@ -1241,9 +1246,9 @@ async def api_wellsky_status(
     })
 
 
-# ============================================================================
+# 
 # Operations Dashboard (Client Operations with WellSky Integration)
-# ============================================================================
+# 
 
 @app.get("/operations", response_class=HTMLResponse)
 async def operations_dashboard(
@@ -1424,9 +1429,9 @@ async def api_operations_at_risk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ============================================================================
+# 
 # Gigi AI Agent Control API
-# ============================================================================
+# 
 
 # In-memory Gigi settings (defaults from environment, can be toggled at runtime)
 _gigi_settings = {
@@ -1565,9 +1570,9 @@ def is_gigi_sms_autoreply_enabled():
     return _gigi_settings.get("sms_autoreply", False)
 
 
-# ============================================================================
+# 
 # GoFormz → WellSky Webhook Endpoint
-# ============================================================================
+# 
 
 def _get_goformz_wellsky_sync():
     """Get the goformz_wellsky_sync service (loaded at module import time)."""
@@ -1714,9 +1719,9 @@ async def goformz_wellsky_sync_status(
     })
 
 
-# ============================================================================
+# 
 # AI Care Coordinator API Endpoints (Zingage/Phoebe Style)
-# ============================================================================
+# 
 
 @app.get("/api/ai-coordinator/status")
 async def api_ai_coordinator_status(
@@ -2127,9 +2132,9 @@ async def api_sync_surveys(
     return JSONResponse(result)
 
 
-# =============================================================================
+# 
 # RingCentral Chat Scanner API
-# =============================================================================
+# 
 
 @app.get("/api/client-satisfaction/ringcentral/status")
 async def api_ringcentral_status(
@@ -2239,9 +2244,9 @@ async def api_ringcentral_preview(
     })
 
 
-# =============================================================================
+# 
 # RingCentral Call Pattern Monitoring API
-# =============================================================================
+# 
 
 @app.get("/api/client-satisfaction/ringcentral/call-queues")
 async def api_ringcentral_call_queues(
@@ -2964,7 +2969,7 @@ async def api_marketing_website(
 
 @app.get("/api/marketing/test-ga4")
 async def test_ga4_connection(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test GA4 connection and return status."""
     from services.marketing.ga4_service import ga4_service
@@ -2994,7 +2999,7 @@ async def test_ga4_connection(
 
 @app.get("/api/marketing/test-predis")
 async def test_predis_connection(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test Predis AI connection and return status."""
     from services.marketing.predis_service import predis_service
@@ -3093,7 +3098,7 @@ async def get_predis_templates(
 
 @app.get("/api/marketing/test-gbp")
 async def test_gbp_connection(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test GBP connection and return status."""
     from services.marketing.gbp_service import gbp_service
@@ -3443,7 +3448,7 @@ async def api_marketing_pinterest(
 
 @app.get("/api/marketing/test-pinterest")
 async def test_pinterest_connection(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test Pinterest connection and return status."""
     from services.marketing.pinterest_service import pinterest_service
@@ -3618,7 +3623,7 @@ async def api_marketing_linkedin(
 
 @app.get("/api/marketing/test-linkedin")
 async def test_linkedin_connection(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test LinkedIn connection and return status."""
     from services.marketing.linkedin_service import linkedin_service
@@ -3706,9 +3711,9 @@ async def linkedin_oauth_callback(
         })
 
 
-# ========================================
+# 
 # TikTok Marketing Endpoints
-# ========================================
+# 
 
 @app.get("/api/marketing/tiktok")
 async def api_marketing_tiktok(
@@ -3762,7 +3767,7 @@ async def api_marketing_tiktok(
 
 @app.get("/api/marketing/test-tiktok")
 async def test_tiktok_connection(
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test TikTok connection and return status."""
     from services.marketing.tiktok_service import tiktok_service
@@ -3789,9 +3794,9 @@ async def test_tiktok_connection(
     return JSONResponse(status)
 
 
-# ========================================
+# 
 # Google Business Profile OAuth Endpoints
-# ========================================
+# 
 
 @app.get("/api/gbp/auth")
 async def gbp_oauth_start():
@@ -3915,9 +3920,9 @@ async def gbp_status():
     return JSONResponse(status)
 
 
-# ============================================================================
+# 
 # Shift Filling API Endpoints (Operations Dashboard)
-# ============================================================================
+# 
 
 # Add the sales directory to the path for shift_filling imports
 import sys
@@ -4198,14 +4203,14 @@ async def get_sms_log(
         return JSONResponse({"messages": [], "error": str(e)})
 
 
-# ============================================================================
+# 
 # End of Shift Filling API Endpoints
-# ============================================================================
+# 
 
 
-# ============================================================================
+# 
 # Gigi AI Agent API Endpoints (After-Hours Support)
-# ============================================================================
+# 
 
 @app.post("/api/client-satisfaction/issues")
 async def api_log_client_issue(request: Request):
@@ -4313,9 +4318,9 @@ async def api_log_call_out(request: Request):
         }, status_code=500)
 
 
-# =============================================================================
+# 
 # WellSky Shift Management API (Used by Gigi for Call-Outs)
-# =============================================================================
+# 
 
 @app.put("/api/wellsky/shifts/{shift_id}")
 async def api_update_wellsky_shift(shift_id: str, request: Request):
@@ -4513,9 +4518,9 @@ async def api_trigger_replacement_blast(request: Request):
         }, status_code=500)
 
 
-# =============================================================================
+# 
 # Internal Shift Filling API (Called by Gigi - No Auth Required)
-# =============================================================================
+# 
 
 @app.get("/api/internal/shift-filling/match/{shift_id}")
 async def internal_match_caregivers(shift_id: str, max_results: int = 10):
@@ -4726,4 +4731,3 @@ async def internal_send_shift_offer(request: Request):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
-
