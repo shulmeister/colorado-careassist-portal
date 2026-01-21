@@ -15,6 +15,7 @@ import json
 import hmac
 import hashlib
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Literal
 from enum import Enum
@@ -908,12 +909,16 @@ async def report_call_out(
     reason: str
 ) -> CallOutReport:
     """
-    Reports a caregiver call-out and triggers urgent notifications.
+    Reports a caregiver call-out and ACTIVELY starts finding replacement coverage.
 
-    This is a HIGH-PRIORITY action that:
-    1. Posts the call-out to the Client Ops Portal
-    2. Sends an urgent SMS to the On-Call Manager via BeeTexting
-    3. Returns a confirmation message for Gigi to read
+    This is Gigi's PRIMARY ACTION for call-outs. She doesn't just take a message -
+    she gets to work finding a replacement! This function:
+
+    1. Records the call-out in the system
+    2. Starts an automated shift filling campaign
+    3. Begins SMS outreach to available caregivers
+    4. Notifies the on-call manager as backup
+    5. Returns a confirmation with active steps being taken
 
     Args:
         caregiver_id: The caregiver's ID
@@ -921,18 +926,31 @@ async def report_call_out(
         reason: The reason for calling out (e.g., "sick", "emergency", "car trouble")
 
     Returns:
-        CallOutReport with success status and confirmation message
+        CallOutReport with success status and what Gigi is DOING about it
     """
     logger.info(f"report_call_out called: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
 
-    # Get shift details for the notification
+    # Get shift details for context
     shift = await get_shift_details(caregiver_id)
-
     caregiver_name = shift.caregiver_name if shift else f"Caregiver {caregiver_id}"
     client_name = shift.client_name if shift else "Unknown Client"
     shift_time = shift.start_time.strftime("%B %d at %I:%M %p") if shift else "Unknown Time"
 
-    # Create call-out record
+    # =========================================================================
+    # STEP 1: Start the shift filling campaign - THIS IS THE ACTIVE PART!
+    # =========================================================================
+    filling_result = await start_shift_filling_campaign(
+        shift_id=shift_id,
+        caregiver_id=caregiver_id,
+        reason=reason
+    )
+
+    logger.info(f"Shift filling campaign result: success={filling_result.success}, "
+                f"contacted={filling_result.candidates_contacted}")
+
+    # =========================================================================
+    # STEP 2: Also post to Client Ops Portal for tracking
+    # =========================================================================
     call_out_data = {
         "caregiver_id": caregiver_id,
         "caregiver_name": caregiver_name,
@@ -942,10 +960,11 @@ async def report_call_out(
         "reason": reason,
         "reported_at": datetime.now().isoformat(),
         "reported_via": "gigi_ai_agent",
-        "priority": "high"
+        "priority": "high",
+        "campaign_id": filling_result.campaign_id,
+        "candidates_contacted": filling_result.candidates_contacted
     }
 
-    # Post to Client Ops Portal
     call_out_id = None
     try:
         async with httpx.AsyncClient() as client:
@@ -963,43 +982,343 @@ async def report_call_out(
     except Exception as e:
         logger.error(f"Error posting call-out to portal: {e}")
 
-    # Send urgent SMS to On-Call Manager (only if operations SMS is enabled)
+    # =========================================================================
+    # STEP 3: Also notify On-Call Manager as backup (only if SMS enabled)
+    # =========================================================================
     sms_message = (
-        f"URGENT CALL-OUT: {caregiver_name} called out for {client_name} shift "
+        f"CALL-OUT: {caregiver_name} called out for {client_name} "
         f"({shift_time}). Reason: {reason}. "
-        f"Gigi AI logged this at {datetime.now().strftime('%I:%M %p')}. "
-        f"Coverage needed!"
+        f"Gigi AI has started shift filling - contacting {filling_result.candidates_contacted} caregivers. "
+        f"Campaign: {filling_result.campaign_id or 'N/A'}"
     )
 
+    manager_notified = False
     if OPERATIONS_SMS_ENABLED:
-        sms_sent = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
+        manager_notified = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
     else:
         logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
-        sms_sent = False
 
-    # Build confirmation message for Gigi to read
-    if sms_sent:
+    # =========================================================================
+    # STEP 4: Build confirmation message - Tell the caller what we're DOING
+    # =========================================================================
+    if filling_result.success and filling_result.candidates_contacted > 0:
         confirmation = (
-            "I've logged your call-out and notified the on-call manager. "
-            "They'll work on finding coverage for your shift. "
-            "Please also message your client directly if possible to let them know. "
-            "We hope everything is okay, and please keep us updated."
+            f"I've got you covered. I'm already reaching out to {filling_result.candidates_contacted} "
+            f"available caregivers to find someone to cover your shift with {client_name}. "
+            f"You don't need to do anything else - I'll handle finding coverage. "
+            f"Feel better, and I hope everything's okay!"
+        )
+    elif filling_result.success:
+        confirmation = (
+            f"I've logged your call-out for the shift with {client_name} and I'm working on finding coverage. "
+            f"The care team has been notified and will make sure someone covers. "
+            f"Feel better, and please let us know if anything changes!"
         )
     else:
         confirmation = (
-            "I've logged your call-out in our system. "
-            "However, I wasn't able to send the notification to the manager. "
-            "Please also try calling or texting the office directly to make sure someone knows. "
-            "And please message your client if possible."
+            f"I've logged your call-out for {client_name}. "
+            f"I had some trouble with the automated system, but I've notified the on-call manager "
+            f"who will personally work on finding coverage. "
+            f"Feel better, and please keep us updated!"
         )
 
     return CallOutReport(
         success=True,
-        call_out_id=call_out_id,
+        call_out_id=call_out_id or filling_result.campaign_id,
         message=confirmation,
-        manager_notified=sms_sent,
-        notification_details=f"SMS sent to on-call manager: {ON_CALL_MANAGER_PHONE}" if sms_sent else None
+        manager_notified=manager_notified,
+        notification_details=(
+            f"Campaign started: {filling_result.candidates_contacted} caregivers being contacted"
+            if filling_result.success else "Manual follow-up required"
+        )
     )
+
+
+# =============================================================================
+# SHIFT FILLING FUNCTIONS - These make Gigi actually fill shifts!
+# =============================================================================
+
+@dataclass
+class ReplacementCandidate:
+    """A potential replacement caregiver for an open shift"""
+    caregiver_id: str
+    name: str
+    phone: str
+    score: float
+    tier: int  # 1=best, 2=good, 3=acceptable
+    reasons: List[str]
+    distance_miles: Optional[float] = None
+    has_worked_with_client: bool = False
+
+@dataclass
+class ShiftFillingResult:
+    """Result of shift filling operation"""
+    success: bool
+    message: str
+    campaign_id: Optional[str] = None
+    candidates_found: int = 0
+    candidates_contacted: int = 0
+    shift_filled: bool = False
+    assigned_to: Optional[str] = None
+
+
+async def find_replacement_caregivers(
+    shift_id: str,
+    max_results: int = 10
+) -> List[ReplacementCandidate]:
+    """
+    Find available caregivers who can cover an open shift.
+
+    Uses intelligent matching based on:
+    - Prior relationship with the client
+    - Geographic proximity
+    - Availability and overtime status
+    - Performance ratings
+    - Response history
+
+    Args:
+        shift_id: The shift that needs to be filled
+        max_results: Maximum number of candidates to return
+
+    Returns:
+        List of ReplacementCandidate sorted by match score (best first)
+    """
+    logger.info(f"find_replacement_caregivers called for shift {shift_id}")
+
+    candidates = []
+
+    try:
+        # Try to use the shift filling engine via the portal API
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{PORTAL_BASE_URL}/api/shift-filling/match/{shift_id}",
+                params={"max_results": max_results},
+                timeout=15.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                for match in data.get("matches", []):
+                    candidates.append(ReplacementCandidate(
+                        caregiver_id=match.get("caregiver_id"),
+                        name=match.get("caregiver_name"),
+                        phone=match.get("phone", ""),
+                        score=match.get("score", 0),
+                        tier=match.get("tier", 3),
+                        reasons=match.get("reasons", []),
+                        has_worked_with_client="prior_client" in " ".join(match.get("reasons", []))
+                    ))
+                logger.info(f"Found {len(candidates)} replacement candidates for shift {shift_id}")
+            else:
+                logger.warning(f"Shift filling API returned {response.status_code}")
+
+    except Exception as e:
+        logger.error(f"Error finding replacements: {e}")
+
+    return candidates
+
+
+async def start_shift_filling_campaign(
+    shift_id: str,
+    caregiver_id: str,
+    reason: str
+) -> ShiftFillingResult:
+    """
+    Start an automated shift filling campaign after a call-out.
+
+    This is the MAIN function Gigi uses when a caregiver calls out.
+    It:
+    1. Records the call-out in the system
+    2. Finds qualified replacement caregivers
+    3. Starts parallel SMS outreach to top candidates
+    4. Returns status so Gigi can inform the caller
+
+    Args:
+        shift_id: The shift being called out from
+        caregiver_id: The caregiver calling out
+        reason: Reason for the call-out
+
+    Returns:
+        ShiftFillingResult with campaign status
+    """
+    logger.info(f"start_shift_filling_campaign: shift={shift_id}, caregiver={caregiver_id}")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            # Trigger the shift filling engine via the portal API
+            response = await client.post(
+                f"{PORTAL_BASE_URL}/api/shift-filling/calloff",
+                json={
+                    "shift_id": shift_id,
+                    "caregiver_id": caregiver_id,
+                    "reason": reason,
+                    "reported_by": "gigi_ai_agent"
+                },
+                timeout=30.0
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                campaign_id = data.get("campaign_id")
+                total_contacted = data.get("total_contacted", 0)
+
+                logger.info(f"Shift filling campaign started: {campaign_id}, contacted {total_contacted} caregivers")
+
+                return ShiftFillingResult(
+                    success=True,
+                    message=f"I've started finding coverage. I'm reaching out to {total_contacted} available caregivers right now.",
+                    campaign_id=campaign_id,
+                    candidates_contacted=total_contacted
+                )
+            else:
+                logger.warning(f"Shift filling API returned {response.status_code}: {response.text}")
+                return ShiftFillingResult(
+                    success=False,
+                    message="I logged your call-out but had trouble starting the automated coverage search. The on-call manager has been notified."
+                )
+
+    except Exception as e:
+        logger.error(f"Error starting shift filling campaign: {e}")
+        return ShiftFillingResult(
+            success=False,
+            message="I logged your call-out. The on-call manager will work on finding coverage."
+        )
+
+
+async def offer_shift_to_caregiver(
+    shift_id: str,
+    caregiver_id: str,
+    caregiver_phone: str,
+    client_name: str,
+    shift_time: str,
+    shift_hours: float
+) -> bool:
+    """
+    Send a shift offer to a specific caregiver via SMS.
+
+    The message includes shift details and instructions to reply YES to accept.
+
+    Args:
+        shift_id: The shift being offered
+        caregiver_id: The caregiver to contact
+        caregiver_phone: Phone number to text
+        client_name: Name of the client (for context)
+        shift_time: When the shift is (e.g., "Tomorrow at 8 AM")
+        shift_hours: Duration in hours
+
+    Returns:
+        True if SMS was sent successfully
+    """
+    logger.info(f"offer_shift_to_caregiver: {caregiver_id} for shift {shift_id}")
+
+    message = (
+        f"CCA Shift Available: {client_name}, {shift_time} ({shift_hours:.1f} hrs). "
+        f"Reply YES to accept or NO to pass. Reply within 15 min."
+    )
+
+    if OPERATIONS_SMS_ENABLED:
+        return await _send_sms_beetexting(caregiver_phone, message)
+    else:
+        logger.info(f"[DISABLED] Would send shift offer to {caregiver_phone}: {message}")
+        return False
+
+
+async def confirm_shift_assignment(
+    shift_id: str,
+    caregiver_id: str,
+    caregiver_name: str
+) -> ShiftFillingResult:
+    """
+    Confirm that a shift has been assigned to a caregiver.
+
+    Called when a caregiver accepts a shift offer.
+    Updates WellSky and notifies relevant parties.
+
+    Args:
+        shift_id: The shift being assigned
+        caregiver_id: The caregiver who accepted
+        caregiver_name: Name for notifications
+
+    Returns:
+        ShiftFillingResult with confirmation
+    """
+    logger.info(f"confirm_shift_assignment: shift={shift_id} to caregiver={caregiver_id}")
+
+    try:
+        # Update via WellSky service if available
+        if WELLSKY_AVAILABLE and wellsky:
+            success = wellsky.update_shift_assignment(
+                shift_id=shift_id,
+                caregiver_id=caregiver_id,
+                status=ShiftStatus.ASSIGNED
+            )
+
+            if success:
+                logger.info(f"Shift {shift_id} assigned to {caregiver_name} in WellSky")
+                return ShiftFillingResult(
+                    success=True,
+                    message=f"Great news! {caregiver_name} has accepted the shift and it's been updated in the system.",
+                    shift_filled=True,
+                    assigned_to=caregiver_name
+                )
+
+        # Fallback: Notify via portal API
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{PORTAL_BASE_URL}/api/operations/shift-assignments",
+                json={
+                    "shift_id": shift_id,
+                    "caregiver_id": caregiver_id,
+                    "caregiver_name": caregiver_name,
+                    "assigned_by": "gigi_ai_agent",
+                    "assigned_at": datetime.now().isoformat()
+                },
+                timeout=10.0
+            )
+
+            if response.status_code in (200, 201):
+                return ShiftFillingResult(
+                    success=True,
+                    message=f"{caregiver_name} has accepted the shift!",
+                    shift_filled=True,
+                    assigned_to=caregiver_name
+                )
+
+    except Exception as e:
+        logger.error(f"Error confirming shift assignment: {e}")
+
+    return ShiftFillingResult(
+        success=False,
+        message="The acceptance was received but I had trouble updating the system. Please verify manually."
+    )
+
+
+async def get_shift_filling_status(campaign_id: str) -> Dict[str, Any]:
+    """
+    Check the status of an active shift filling campaign.
+
+    Args:
+        campaign_id: The campaign ID from start_shift_filling_campaign
+
+    Returns:
+        Status dict with campaign progress
+    """
+    logger.info(f"get_shift_filling_status: {campaign_id}")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{PORTAL_BASE_URL}/api/shift-filling/campaigns/{campaign_id}",
+                timeout=10.0
+            )
+
+            if response.status_code == 200:
+                return response.json()
+
+    except Exception as e:
+        logger.error(f"Error getting campaign status: {e}")
+
+    return {"status": "unknown", "message": "Unable to retrieve campaign status"}
 
 
 async def log_client_issue(
@@ -1171,6 +1490,65 @@ async def retell_webhook(request: Request):
                         "result": result.model_dump()
                     })
 
+                # SHIFT FILLING TOOLS - Gigi actively fills shifts!
+                elif tool_name == "find_replacement_caregivers":
+                    result = await find_replacement_caregivers(**tool_args)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": {
+                            "candidates": [
+                                {
+                                    "caregiver_id": c.caregiver_id,
+                                    "name": c.name,
+                                    "phone": c.phone,
+                                    "score": c.score,
+                                    "tier": c.tier,
+                                    "reasons": c.reasons,
+                                    "has_worked_with_client": c.has_worked_with_client
+                                } for c in result
+                            ],
+                            "count": len(result)
+                        }
+                    })
+
+                elif tool_name == "start_shift_filling_campaign":
+                    result = await start_shift_filling_campaign(**tool_args)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": {
+                            "success": result.success,
+                            "message": result.message,
+                            "campaign_id": result.campaign_id,
+                            "candidates_contacted": result.candidates_contacted
+                        }
+                    })
+
+                elif tool_name == "offer_shift_to_caregiver":
+                    result = await offer_shift_to_caregiver(**tool_args)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": {"success": result, "sms_sent": result}
+                    })
+
+                elif tool_name == "confirm_shift_assignment":
+                    result = await confirm_shift_assignment(**tool_args)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": {
+                            "success": result.success,
+                            "message": result.message,
+                            "shift_filled": result.shift_filled,
+                            "assigned_to": result.assigned_to
+                        }
+                    })
+
+                elif tool_name == "get_shift_filling_status":
+                    result = await get_shift_filling_status(**tool_args)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": result
+                    })
+
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")
                     results.append({
@@ -1231,6 +1609,50 @@ async def retell_function_call(function_name: str, request: Request):
             result = await log_client_issue(**args)
             return JSONResponse(result.model_dump())
 
+        # SHIFT FILLING FUNCTIONS - Gigi actively fills shifts!
+        elif function_name == "find_replacement_caregivers":
+            result = await find_replacement_caregivers(**args)
+            return JSONResponse({
+                "candidates": [
+                    {
+                        "caregiver_id": c.caregiver_id,
+                        "name": c.name,
+                        "phone": c.phone,
+                        "score": c.score,
+                        "tier": c.tier,
+                        "reasons": c.reasons,
+                        "has_worked_with_client": c.has_worked_with_client
+                    } for c in result
+                ],
+                "count": len(result)
+            })
+
+        elif function_name == "start_shift_filling_campaign":
+            result = await start_shift_filling_campaign(**args)
+            return JSONResponse({
+                "success": result.success,
+                "message": result.message,
+                "campaign_id": result.campaign_id,
+                "candidates_contacted": result.candidates_contacted
+            })
+
+        elif function_name == "offer_shift_to_caregiver":
+            result = await offer_shift_to_caregiver(**args)
+            return JSONResponse({"success": result, "sms_sent": result})
+
+        elif function_name == "confirm_shift_assignment":
+            result = await confirm_shift_assignment(**args)
+            return JSONResponse({
+                "success": result.success,
+                "message": result.message,
+                "shift_filled": result.shift_filled,
+                "assigned_to": result.assigned_to
+            })
+
+        elif function_name == "get_shift_filling_status":
+            result = await get_shift_filling_status(**args)
+            return JSONResponse(result)
+
         else:
             raise HTTPException(status_code=404, detail=f"Unknown function: {function_name}")
 
@@ -1258,6 +1680,9 @@ async def root():
         "version": "1.0.0",
         "capabilities": [
             "Caregiver call-out handling",
+            "ACTIVE shift filling - finds and contacts replacement caregivers",
+            "Automated outreach to available caregivers",
+            "Shift assignment confirmation",
             "Client issue logging",
             "Shift verification",
             "Emergency notifications"

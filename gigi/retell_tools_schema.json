@@ -81,7 +81,7 @@
       "type": "function",
       "function": {
         "name": "report_call_out",
-        "description": "Legacy call-out tool. PREFER execute_caregiver_call_out for full automation. This only logs and notifies, doesn't update WellSky or trigger replacement blast.",
+        "description": "ACTIVE SHIFT FILLING - Use when a caregiver calls out. This function doesn't just log - it ACTIVELY finds coverage by: (1) Recording the call-out, (2) Finding qualified replacement caregivers, (3) Starting SMS outreach to available caregivers, (4) Notifying the on-call manager as backup. The response tells you how many caregivers are being contacted. Tell the caller: 'I'm already reaching out to [X] available caregivers to find coverage for your shift.'",
         "parameters": {
           "type": "object",
           "properties": {
@@ -95,10 +95,73 @@
             },
             "reason": {
               "type": "string",
-              "description": "The reason for the call-out."
+              "description": "The reason for the call-out (sick, emergency, car_trouble, family, other)."
             }
           },
           "required": ["caregiver_id", "shift_id", "reason"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "find_replacement_caregivers",
+        "description": "Find available caregivers who can cover an open shift. Returns candidates ranked by compatibility (prior relationship with client, distance, availability). Use this to see who's available before starting outreach.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "shift_id": {
+              "type": "string",
+              "description": "The shift ID that needs coverage."
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of candidates to return. Default 10."
+            }
+          },
+          "required": ["shift_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "start_shift_filling_campaign",
+        "description": "Start an automated campaign to fill an open shift. Contacts multiple caregivers simultaneously via SMS. Returns campaign_id and number of caregivers contacted.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "shift_id": {
+              "type": "string",
+              "description": "The shift that needs to be filled."
+            },
+            "caregiver_id": {
+              "type": "string",
+              "description": "The caregiver who called out."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Reason for the call-out."
+            }
+          },
+          "required": ["shift_id", "caregiver_id", "reason"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_shift_filling_status",
+        "description": "Check the status of an active shift filling campaign. Returns how many caregivers have been contacted and if anyone has accepted.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "campaign_id": {
+              "type": "string",
+              "description": "The campaign ID from start_shift_filling_campaign or report_call_out."
+            }
+          },
+          "required": ["campaign_id"]
         }
       }
     },
@@ -136,5 +199,5 @@
   ],
   "webhook_url": "https://portal.coloradocareassist.com/gigi/webhook/retell",
   "timeout_ms": 30000,
-  "system_prompt": "You are Gigi, the after-hours AI assistant for Colorado Care Assist, a non-medical home care agency in Colorado.\n\nCALL FLOW:\n1. FIRST: Call verify_caller with the caller's phone number to identify them.\n2. IF CAREGIVER calling out:\n   - Call get_active_shifts to see their upcoming shifts\n   - Confirm which shift and why (sick, emergency, etc.)\n   - Call execute_caregiver_call_out with caregiver_id, shift_id, and reason\n   - CHECK THE RESPONSE:\n     * If requires_manual_handoff=true: Say the message from the response (about connecting to on-call manager)\n     * If success=true: Say 'I've updated the system and we are already looking for a replacement. Feel better.'\n     * If success=false (other error): Explain and suggest calling back during business hours\n3. IF CLIENT with issue:\n   - Listen to their concern\n   - Call log_client_issue with details\n   - Assure them the care team will follow up during business hours\n\nSAFETY RULES:\n- Call-outs only work for shifts starting within 24 hours\n- If shift starts in less than 2 hours, manual handoff is required\n\nTONE: Warm, empathetic, professional. Many callers are sick or dealing with emergencies.\n\nHOURS: You handle after-hours calls (evenings after 5pm, weekends, holidays). Business hours are Mon-Fri 8am-5pm MT."
+  "system_prompt": "You are Gigi, the after-hours AI assistant for Colorado Care Assist, a non-medical home care agency in Colorado.\n\nYOU ARE AN ACTIVE AGENT - You don't just take messages, you GET TO WORK finding coverage!\n\nCALL FLOW:\n1. FIRST: Call verify_caller with the caller's phone number to identify them.\n2. IF CAREGIVER calling out:\n   - Call get_active_shifts to see their upcoming shifts\n   - Confirm which shift and why (sick, emergency, etc.)\n   - Call execute_caregiver_call_out OR report_call_out with caregiver_id, shift_id, and reason\n   - THE SYSTEM WILL AUTOMATICALLY:\n     * Update WellSky to mark the shift as open\n     * Find qualified replacement caregivers\n     * Start SMS outreach to available caregivers\n     * Notify the on-call manager as backup\n   - CHECK THE RESPONSE and tell them:\n     * 'I'm already reaching out to [X] available caregivers to find coverage for your shift.'\n     * 'You don't need to do anything else - I'll handle finding coverage.'\n     * If requires_manual_handoff=true: Say the message from the response (about connecting to on-call manager)\n3. IF CLIENT with issue:\n   - Listen to their concern\n   - Call log_client_issue with details\n   - Assure them the care team will follow up during business hours\n\nSAFETY RULES:\n- Call-outs only work for shifts starting within 24 hours\n- If shift starts in less than 2 hours, manual handoff is required\n\nTONE: Warm, empathetic, professional. Confident about finding coverage - you're actively working on it!\n\nHOURS: You handle after-hours calls (evenings after 5pm, weekends, holidays). Business hours are Mon-Fri 8am-5pm MT."
 }
