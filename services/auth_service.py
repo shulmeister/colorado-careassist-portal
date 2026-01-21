@@ -54,14 +54,14 @@ class GoogleOAuthManager:
         if not self.client_id or not self.client_secret:
             logger.warning("Google OAuth credentials not configured. Authentication will be disabled.")
     
-    def get_authorization_url(self) -> str:
-        """Get Google OAuth authorization URL"""
+    def get_authorization_url(self, request: Request = None) -> str:
+        """Get Google OAuth authorization URL with CSRF state"""
         if not self.client_id or not self.client_secret:
             raise HTTPException(
-                status_code=503, 
+                status_code=503,
                 detail="Google OAuth not configured"
             )
-        
+
         flow = Flow.from_client_config(
             {
                 "web": {
@@ -75,22 +75,39 @@ class GoogleOAuthManager:
             scopes=self.scopes
         )
         flow.redirect_uri = self.redirect_uri
-        
+
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true'
         )
-        
+
+        # SECURITY: Store state in session for CSRF validation
+        if request and hasattr(request, 'session'):
+            request.session['oauth_state'] = state
+            logger.debug(f"OAuth state stored in session: {state[:10]}...")
+
         return authorization_url
     
-    async def handle_callback(self, code: str, state: str) -> Dict[str, Any]:
+    async def handle_callback(self, code: str, state: str, request: Request = None) -> Dict[str, Any]:
         """Handle OAuth callback and create session"""
         if not self.client_id or not self.client_secret:
             raise HTTPException(
-                status_code=503, 
+                status_code=503,
                 detail="Google OAuth not configured"
             )
-        
+
+        # SECURITY: Validate OAuth state for CSRF protection
+        if request and hasattr(request, 'session'):
+            stored_state = request.session.get('oauth_state')
+            if stored_state:
+                if state != stored_state:
+                    logger.warning("OAuth state mismatch - potential CSRF attack")
+                    raise HTTPException(status_code=400, detail="Invalid OAuth state - please try logging in again")
+                # Clear the state after validation
+                del request.session['oauth_state']
+            else:
+                logger.warning("No stored OAuth state found - CSRF validation skipped")
+
         flow = Flow.from_client_config(
             {
                 "web": {
