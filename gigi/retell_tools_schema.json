@@ -1,0 +1,96 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "verify_caller",
+        "description": "ALWAYS call this FIRST when a call starts. Identifies whether the caller is a Caregiver or Client by looking up their phone number in the WellSky system. The result determines which conversation path to follow - caregiver call-out flow or client service flow.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "phone_number": {
+              "type": "string",
+              "description": "The caller's phone number. Use the from_number provided by Retell at call start."
+            }
+          },
+          "required": ["phone_number"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_shift_details",
+        "description": "Gets the next scheduled shift for a caregiver. Use this after verify_caller returns a caregiver to see what shift they might be calling about. Returns shift time, client name, client address, and hours.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "person_id": {
+              "type": "string",
+              "description": "The caregiver's ID returned from verify_caller."
+            }
+          },
+          "required": ["person_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "report_call_out",
+        "description": "Reports a caregiver call-out. This is a HIGH-PRIORITY action that logs the call-out to the Client Ops Portal and sends an urgent SMS to the on-call manager. Only use after confirming the caregiver wants to call out and getting their reason.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "caregiver_id": {
+              "type": "string",
+              "description": "The caregiver's ID from verify_caller."
+            },
+            "shift_id": {
+              "type": "string",
+              "description": "The shift ID from get_shift_details that the caregiver is calling out from."
+            },
+            "reason": {
+              "type": "string",
+              "description": "The reason for the call-out. Common reasons: sick, family emergency, car trouble, personal emergency, injured."
+            }
+          },
+          "required": ["caregiver_id", "shift_id", "reason"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "log_client_issue",
+        "description": "Logs a client concern, service request, or feedback to the Client Satisfaction Portal. Use this for any client issue that needs follow-up during business hours.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "client_id": {
+              "type": "string",
+              "description": "The client's ID from verify_caller."
+            },
+            "note": {
+              "type": "string",
+              "description": "Detailed description of the client's concern or request. Include what they said and any relevant context."
+            },
+            "issue_type": {
+              "type": "string",
+              "enum": ["general", "complaint", "schedule", "feedback", "urgent"],
+              "description": "Type of issue. Use 'urgent' only for safety concerns or immediate needs."
+            },
+            "priority": {
+              "type": "string",
+              "enum": ["low", "normal", "high", "urgent"],
+              "description": "Priority level. 'urgent' should only be used for safety or immediate care concerns."
+            }
+          },
+          "required": ["client_id", "note"]
+        }
+      }
+    }
+  ],
+  "webhook_url": "https://portal.coloradocareassist.com/gigi/webhook/retell",
+  "timeout_ms": 30000
+}

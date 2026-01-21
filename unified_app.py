@@ -7,6 +7,8 @@ Architecture:
 - /sales/*             → Sales CRM (FastAPI) - mounted inside portal
 - /recruiting/*        → Recruiter dashboard (Flask) - mounted inside portal
 - /payroll             → Payroll converter
+- /gigi/*              → Gigi AI Agent (Retell) - after-hours assistant
+- /powderpulse/*       → PowderPulse ski weather app
 """
 import os
 import sys
@@ -199,7 +201,36 @@ try:
 except Exception as e:
     logger.error(f"❌ Failed to set up Liftie proxy: {e}")
 
-logger.info("✅ Portal app configured with sales, recruiting, payroll, and powderpulse")
+# ==================== MOUNT GIGI AI AGENT ====================
+# Gigi is the after-hours AI assistant powered by Retell AI
+try:
+    gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
+    if os.path.exists(gigi_path):
+        sys.path.insert(0, gigi_path)
+        logger.info(f"✅ Added gigi path: {gigi_path}")
+
+        # Import Gigi FastAPI app
+        gigi_app_file = os.path.join(gigi_path, "main.py")
+        spec = importlib.util.spec_from_file_location("gigi_app", gigi_app_file)
+        gigi_module = importlib.util.module_from_spec(spec)
+        gigi_module.__file__ = gigi_app_file
+        sys.modules["gigi_app"] = gigi_module
+        spec.loader.exec_module(gigi_module)
+        gigi_app = gigi_module.app
+
+        # Mount Gigi at /gigi
+        app.mount("/gigi", gigi_app)
+        logger.info("✅ Mounted Gigi AI Agent at /gigi")
+        logger.info("   Retell webhook: /gigi/webhook/retell")
+        logger.info("   Health check: /gigi/health")
+    else:
+        logger.warning("⚠️  Gigi AI agent not found")
+except Exception as e:
+    logger.error(f"❌ Failed to mount Gigi AI agent: {e}")
+    import traceback
+    logger.error(traceback.format_exc())
+
+logger.info("✅ Portal app configured with sales, recruiting, payroll, powderpulse, and gigi")
 
 if __name__ == "__main__":
     import uvicorn
