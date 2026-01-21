@@ -1095,6 +1095,48 @@ async def api_wellsky_status(
 # GoFormz → WellSky Webhook Endpoint
 # ============================================================================
 
+def _get_goformz_wellsky_sync():
+    """Load goformz_wellsky_sync from root services directory."""
+    import importlib.util
+    import sys as _sys
+    import os as _os
+
+    root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    sync_path = _os.path.join(root_dir, 'services', 'goformz_wellsky_sync.py')
+
+    if not _os.path.exists(sync_path):
+        return None
+
+    # First ensure wellsky_service is loaded
+    wellsky_path = _os.path.join(root_dir, 'services', 'wellsky_service.py')
+    if _os.path.exists(wellsky_path):
+        spec = importlib.util.spec_from_file_location("services.wellsky_service", wellsky_path)
+        wellsky_module = importlib.util.module_from_spec(spec)
+
+        original_path = _sys.path.copy()
+        _sys.path.insert(0, root_dir)
+        try:
+            spec.loader.exec_module(wellsky_module)
+            _sys.modules['services.wellsky_service'] = wellsky_module
+        finally:
+            _sys.path = original_path
+
+    # Now load goformz_wellsky_sync
+    spec = importlib.util.spec_from_file_location("services.goformz_wellsky_sync", sync_path)
+    sync_module = importlib.util.module_from_spec(spec)
+
+    original_path = _sys.path.copy()
+    _sys.path.insert(0, root_dir)
+    try:
+        spec.loader.exec_module(sync_module)
+        return sync_module.goformz_wellsky_sync
+    except Exception as e:
+        logger.warning(f"Failed to load goformz_wellsky_sync: {e}")
+        return None
+    finally:
+        _sys.path = original_path
+
+
 @app.post("/api/goformz/wellsky-webhook")
 async def goformz_wellsky_webhook(request: Request):
     """
@@ -1106,9 +1148,8 @@ async def goformz_wellsky_webhook(request: Request):
 
     This is the final step in the hub-and-spoke integration.
     """
-    try:
-        from services.goformz_wellsky_sync import goformz_wellsky_sync
-    except ImportError:
+    goformz_wellsky_sync = _get_goformz_wellsky_sync()
+    if goformz_wellsky_sync is None:
         return JSONResponse({
             "success": False,
             "error": "GoFormz-WellSky sync service not available"
@@ -1191,18 +1232,18 @@ async def goformz_wellsky_sync_status(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get GoFormz→WellSky sync service status"""
-    try:
-        from services.goformz_wellsky_sync import goformz_wellsky_sync
-        return JSONResponse({
-            "success": True,
-            "sync_log_entries": len(goformz_wellsky_sync.get_sync_log()),
-            "recent_sync_log": goformz_wellsky_sync.get_sync_log(limit=10)
-        })
-    except ImportError:
+    goformz_wellsky_sync = _get_goformz_wellsky_sync()
+    if goformz_wellsky_sync is None:
         return JSONResponse({
             "success": False,
             "error": "GoFormz-WellSky sync service not available"
         })
+
+    return JSONResponse({
+        "success": True,
+        "sync_log_entries": len(goformz_wellsky_sync.get_sync_log()),
+        "recent_sync_log": goformz_wellsky_sync.get_sync_log(limit=10)
+    })
 
 
 # ============================================================================
