@@ -10510,6 +10510,7 @@ async def legacy_dashboard(request: Request, current_user: Dict[str, Any] = Depe
 # =============================================================================
 
 _root_services_cache = {}
+_root_services_error = None
 
 def _get_root_services():
     """Load WellSky services from root directory (not sales/services)
@@ -10517,7 +10518,7 @@ def _get_root_services():
     Uses importlib.util to load modules directly by file path,
     avoiding conflicts with sales/services local modules.
     """
-    global _root_services_cache
+    global _root_services_cache, _root_services_error
 
     if _root_services_cache:
         return _root_services_cache['wellsky'], _root_services_cache['sync'], _root_services_cache['ProspectStatus']
@@ -10525,40 +10526,75 @@ def _get_root_services():
     import sys as _sys
     import os as _os
     import importlib.util
+    import traceback
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 
-    # Load wellsky_service module directly by file path
-    wellsky_path = _os.path.join(root_dir, 'services', 'wellsky_service.py')
-    spec = importlib.util.spec_from_file_location("root_wellsky_service", wellsky_path)
-    wellsky_module = importlib.util.module_from_spec(spec)
+    try:
+        # Load wellsky_service module directly by file path
+        wellsky_path = _os.path.join(root_dir, 'services', 'wellsky_service.py')
+        spec = importlib.util.spec_from_file_location("root_wellsky_service", wellsky_path)
+        wellsky_module = importlib.util.module_from_spec(spec)
 
-    # Add root to path temporarily so wellsky_service can find its dependencies
-    original_path = _sys.path.copy()
-    _sys.path.insert(0, root_dir)
+        # Add root to path temporarily so wellsky_service can find its dependencies
+        original_path = _sys.path.copy()
+        _sys.path.insert(0, root_dir)
+
+        try:
+            spec.loader.exec_module(wellsky_module)
+
+            # Now load sales_wellsky_sync which depends on wellsky_service
+            # First make wellsky_service available for import
+            _sys.modules['services.wellsky_service'] = wellsky_module
+
+            sync_path = _os.path.join(root_dir, 'services', 'sales_wellsky_sync.py')
+            sync_spec = importlib.util.spec_from_file_location("root_sales_wellsky_sync", sync_path)
+            sync_module = importlib.util.module_from_spec(sync_spec)
+            sync_spec.loader.exec_module(sync_module)
+
+            _root_services_cache = {
+                'wellsky': wellsky_module.wellsky_service,
+                'sync': sync_module.sales_wellsky_sync,
+                'ProspectStatus': wellsky_module.ProspectStatus
+            }
+            _root_services_error = None
+
+            return _root_services_cache['wellsky'], _root_services_cache['sync'], _root_services_cache['ProspectStatus']
+        finally:
+            # Restore original path
+            _sys.path = original_path
+    except Exception as e:
+        _root_services_error = f"{e}\n{traceback.format_exc()}"
+        logger.exception(f"Failed to load root services: {e}")
+        raise
+
+
+@app.get("/api/wellsky/debug")
+async def wellsky_debug():
+    """Debug endpoint to check WellSky services loading status."""
+    import sys as _sys
+    import os as _os
+
+    root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    services_dir = _os.path.join(root_dir, 'services')
 
     try:
-        spec.loader.exec_module(wellsky_module)
+        wellsky, sync, status = _get_root_services()
+        service_loaded = True
+    except Exception as e:
+        service_loaded = False
 
-        # Now load sales_wellsky_sync which depends on wellsky_service
-        # First make wellsky_service available for import
-        _sys.modules['services.wellsky_service'] = wellsky_module
-
-        sync_path = _os.path.join(root_dir, 'services', 'sales_wellsky_sync.py')
-        sync_spec = importlib.util.spec_from_file_location("root_sales_wellsky_sync", sync_path)
-        sync_module = importlib.util.module_from_spec(sync_spec)
-        sync_spec.loader.exec_module(sync_module)
-
-        _root_services_cache = {
-            'wellsky': wellsky_module.wellsky_service,
-            'sync': sync_module.sales_wellsky_sync,
-            'ProspectStatus': wellsky_module.ProspectStatus
-        }
-
-        return _root_services_cache['wellsky'], _root_services_cache['sync'], _root_services_cache['ProspectStatus']
-    finally:
-        # Restore original path
-        _sys.path = original_path
+    return JSONResponse({
+        "root_dir": root_dir,
+        "services_dir": services_dir,
+        "wellsky_service_path": _os.path.join(services_dir, 'wellsky_service.py'),
+        "wellsky_service_exists": _os.path.exists(_os.path.join(services_dir, 'wellsky_service.py')),
+        "sync_service_path": _os.path.join(services_dir, 'sales_wellsky_sync.py'),
+        "sync_service_exists": _os.path.exists(_os.path.join(services_dir, 'sales_wellsky_sync.py')),
+        "services_cached": bool(_root_services_cache),
+        "services_loaded": service_loaded,
+        "last_error": _root_services_error
+    })
 
 
 @app.get("/api/wellsky/sync/status")
