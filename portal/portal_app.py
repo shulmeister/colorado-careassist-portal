@@ -25,6 +25,7 @@ from services.marketing.metrics_service import (
     get_email_metrics,
 )
 from services.search_service import search_service
+from services.activity_stream_service import activity_stream
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
     from services.client_satisfaction_service import client_satisfaction_service
@@ -338,6 +339,41 @@ async def global_search(
             "error": str(e),
             "results": []
         })
+
+@app.get("/api/activity-stream")
+async def get_activity_stream(
+    limit: int = 20,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get recent activity feed"""
+    activities = activity_stream.get_recent_activities(limit)
+    return JSONResponse({
+        "success": True,
+        "activities": activities
+    })
+
+@app.post("/api/internal/event")
+async def log_internal_event(
+    request: Request
+):
+    """Internal endpoint for spokes to log events"""
+    try:
+        data = await request.json()
+        if not all(k in data for k in ["source", "description"]):
+             raise HTTPException(status_code=400, detail="Missing source or description")
+             
+        activity_stream.log_activity(
+            source=data.get("source"),
+            description=data.get("description"),
+            event_type=data.get("event_type", "info"),
+            details=data.get("details"),
+            icon=data.get("icon"),
+            metadata=data.get("metadata")
+        )
+        return JSONResponse({"success": True})
+    except Exception as e:
+        logger.error(f"Error logging internal event: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/tools")
 async def create_tool(

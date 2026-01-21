@@ -1053,9 +1053,42 @@
             </div>
 
             <!-- Tools Grid View -->
-            <div id="toolsView">
-                <div class="tools-grid" id="toolsGrid">
-                    <!-- Tools will be loaded here -->
+            <style>
+                .tools-layout {
+                    display: grid; 
+                    grid-template-columns: 1fr 320px; 
+                    gap: 24px; 
+                    align-items: start;
+                }
+                @media (max-width: 1024px) {
+                    .tools-layout {
+                        grid-template-columns: 1fr;
+                    }
+                }
+            </style>
+            <div id="toolsView" class="tools-layout">
+                <div>
+                    <h2 style="font-size: 18px; font-weight: 600; color: #94a3b8; margin-bottom: 16px;">Apps & Tools</h2>
+                    <div class="tools-grid" id="toolsGrid">
+                        <!-- Tools will be loaded here -->
+                    </div>
+                </div>
+                
+                <!-- Activity Feed Widget -->
+                <div class="activity-feed-widget" style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; position: sticky; top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h3 style="font-size: 16px; font-weight: 600; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
+                            <span>⚡</span> Company Pulse
+                        </h3>
+                        <span style="font-size: 12px; color: #64748b; background: #0f172a; padding: 2px 8px; border-radius: 12px; border: 1px solid #334155;">Live</span>
+                    </div>
+                    <div id="activityFeedList" style="display: flex; flex-direction: column; gap: 0;">
+                        <!-- Items injected here -->
+                        <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">
+                            <div style="margin-bottom: 8px;">📡</div>
+                            Listening for events...
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2426,9 +2459,60 @@
                 case 'Sales': return '#3b82f6'; // Blue
                 case 'Recruiting': return '#10b981'; // Green
                 case 'Operations': return '#f59e0b'; // Amber
+                case 'Gigi': return '#ec4899'; // Pink
                 default: return '#64748b'; // Slate
             }
         }
+
+        // ==========================================
+        // Activity Feed Logic
+        // ==========================================
+        async function loadActivityFeed() {
+            try {
+                const response = await fetch('/api/activity-stream?limit=10');
+                const data = await response.json();
+                
+                if (data.success && data.activities) {
+                    renderActivityFeed(data.activities);
+                }
+            } catch (error) {
+                console.error('Error loading activity feed:', error);
+            }
+        }
+
+        function renderActivityFeed(activities) {
+            const container = document.getElementById('activityFeedList');
+            if (!container) return;
+            
+            if (activities.length === 0) {
+                container.innerHTML = `
+                    <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">
+                        No recent activity
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = activities.map(item => `
+                <div style="display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #334155;">
+                    <div style="font-size: 20px; background: #0f172a; width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #334155;">
+                        ${item.icon || '📌'}
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                        <div style="color: #f1f5f9; font-size: 14px; font-weight: 500; line-height: 1.4; word-wrap: break-word;">${item.description}</div>
+                        ${item.details ? `<div style="color: #94a3b8; font-size: 12px; margin-top: 2px;">${item.details}</div>` : ''}
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                            <div style="font-size: 11px; color: ${getBadgeColor(item.source)}; font-weight: 600;">${item.source}</div>
+                            <div style="font-size: 11px; color: #64748b;">${item.time_ago}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Initialize Activity Feed
+        loadActivityFeed();
+        setInterval(loadActivityFeed, 30000);
     </script>
 </body>
 </html>
