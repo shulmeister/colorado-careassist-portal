@@ -57,22 +57,27 @@ def verify_portal_token():
         return None
 
 def check_portal_auth():
-    """Check if request is authenticated via portal (header or token)"""
+    """Check if request is authenticated via portal (header, token, or session)"""
+    # Check if already authenticated via session (from previous token validation)
+    if session.get('portal_authenticated') and session.get('portal_user'):
+        logger.debug(f"Portal auth via existing session for: {session['portal_user'].get('email')}")
+        return True
+
     # Check header-based auth (for direct API calls)
     if verify_portal_request():
         logger.info("Portal auth verified via header")
         return True
-    
+
     # Check token-based auth (for iframe embedding)
     token_data = verify_portal_token()
     if token_data:
-        # Store in session so user is authenticated
+        # Store in session so user is authenticated for subsequent requests
         session['portal_user'] = token_data
         session['portal_authenticated'] = True
         logger.info(f"Portal auth verified via token for: {token_data.get('email')}")
         return True
-    
-    logger.debug("Portal auth check failed - no valid header or token")
+
+    logger.debug("Portal auth check failed - no valid header, token, or session")
     return False
 
 def portal_auth_required(f):
