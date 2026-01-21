@@ -1095,43 +1095,43 @@ async def api_wellsky_status(
 # GoFormz → WellSky Webhook Endpoint
 # ============================================================================
 
+_goformz_wellsky_sync_cache = None
+
 def _get_goformz_wellsky_sync():
     """Load goformz_wellsky_sync from root services directory."""
-    import importlib.util
+    global _goformz_wellsky_sync_cache
+    if _goformz_wellsky_sync_cache is not None:
+        return _goformz_wellsky_sync_cache
+
     import sys as _sys
     import os as _os
+    import types
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-    sync_path = _os.path.join(root_dir, 'services', 'goformz_wellsky_sync.py')
+    services_dir = _os.path.join(root_dir, 'services')
+    sync_path = _os.path.join(services_dir, 'goformz_wellsky_sync.py')
 
     if not _os.path.exists(sync_path):
+        logger.warning(f"goformz_wellsky_sync.py not found at {sync_path}")
         return None
 
-    # First ensure wellsky_service is loaded
-    wellsky_path = _os.path.join(root_dir, 'services', 'wellsky_service.py')
-    if _os.path.exists(wellsky_path):
-        spec = importlib.util.spec_from_file_location("services.wellsky_service", wellsky_path)
-        wellsky_module = importlib.util.module_from_spec(spec)
-
-        original_path = _sys.path.copy()
-        _sys.path.insert(0, root_dir)
-        try:
-            spec.loader.exec_module(wellsky_module)
-            _sys.modules['services.wellsky_service'] = wellsky_module
-        finally:
-            _sys.path = original_path
-
-    # Now load goformz_wellsky_sync
-    spec = importlib.util.spec_from_file_location("services.goformz_wellsky_sync", sync_path)
-    sync_module = importlib.util.module_from_spec(spec)
-
+    # Add root to sys.path so 'from services.X import Y' works
     original_path = _sys.path.copy()
     _sys.path.insert(0, root_dir)
+
     try:
-        spec.loader.exec_module(sync_module)
-        return sync_module.goformz_wellsky_sync
+        # Ensure services package exists in sys.modules
+        if 'services' not in _sys.modules:
+            services_pkg = types.ModuleType('services')
+            services_pkg.__path__ = [services_dir]
+            _sys.modules['services'] = services_pkg
+
+        # Now we can import normally
+        from services.goformz_wellsky_sync import goformz_wellsky_sync
+        _goformz_wellsky_sync_cache = goformz_wellsky_sync
+        return goformz_wellsky_sync
     except Exception as e:
-        logger.warning(f"Failed to load goformz_wellsky_sync: {e}")
+        logger.warning(f"Failed to load goformz_wellsky_sync: {e}", exc_info=True)
         return None
     finally:
         _sys.path = original_path
