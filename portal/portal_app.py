@@ -1107,34 +1107,35 @@ def _get_goformz_wellsky_sync():
     import os as _os
     import types
 
-    root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
-    services_dir = _os.path.join(root_dir, 'services')
-    sync_path = _os.path.join(services_dir, 'goformz_wellsky_sync.py')
-
-    if not _os.path.exists(sync_path):
-        logger.warning(f"goformz_wellsky_sync.py not found at {sync_path}")
-        return None
-
-    # Add root to sys.path so 'from services.X import Y' works
-    original_path = _sys.path.copy()
-    _sys.path.insert(0, root_dir)
-
     try:
-        # Ensure services package exists in sys.modules
+        root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+        services_dir = _os.path.join(root_dir, 'services')
+        sync_path = _os.path.join(services_dir, 'goformz_wellsky_sync.py')
+
+        if not _os.path.exists(sync_path):
+            logger.warning(f"goformz_wellsky_sync.py not found at {sync_path}")
+            return None
+
+        # Add root to sys.path so 'from services.X import Y' works
+        if root_dir not in _sys.path:
+            _sys.path.insert(0, root_dir)
+
+        # Ensure services package exists in sys.modules with correct path
         if 'services' not in _sys.modules:
             services_pkg = types.ModuleType('services')
             services_pkg.__path__ = [services_dir]
             _sys.modules['services'] = services_pkg
+        elif not hasattr(_sys.modules['services'], '__path__'):
+            # If services exists but isn't a package, fix it
+            _sys.modules['services'].__path__ = [services_dir]
 
         # Now we can import normally
         from services.goformz_wellsky_sync import goformz_wellsky_sync
         _goformz_wellsky_sync_cache = goformz_wellsky_sync
         return goformz_wellsky_sync
     except Exception as e:
-        logger.warning(f"Failed to load goformz_wellsky_sync: {e}", exc_info=True)
+        logger.exception(f"Failed to load goformz_wellsky_sync: {e}")
         return None
-    finally:
-        _sys.path = original_path
 
 
 @app.post("/api/goformz/wellsky-webhook")
