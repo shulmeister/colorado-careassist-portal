@@ -556,3 +556,55 @@ class CarePlanStatus(Base):
         from datetime import date
         return (self.next_review_date - date.today()).days
 
+
+class ActivityFeedItem(Base):
+    """
+    Centralized Activity Feed for the Portal Homepage.
+    Aggregates events from Gigi, Sales, and Recruiting.
+    """
+    __tablename__ = "activity_feed"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    source = Column(String(50), nullable=False, index=True) # Gigi, Sales, Recruiting, Portal
+    event_type = Column(String(100), nullable=False, index=True) # deal_won, call_out, new_lead
+    description = Column(String(255), nullable=False) # "John Doe closed a deal", "Gigi handled a call-out"
+    details = Column(Text, nullable=True) # Optional longer description
+    metadata_json_str = Column("metadata", Text, nullable=True) # JSON payload for extra data (link url, icon, etc) - aliased to avoid conflict with SQLAlchemy metadata
+    icon = Column(String(50), nullable=True) # Emoji or icon name
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    def get_metadata(self):
+        try:
+            return json.loads(self.metadata_json_str) if self.metadata_json_str else {}
+        except Exception:
+            return {}
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "source": self.source,
+            "event_type": self.event_type,
+            "description": self.description,
+            "details": self.details,
+            "metadata": self.get_metadata(),
+            "icon": self.icon,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "time_ago": self._time_ago()
+        }
+    
+    def _time_ago(self):
+        """Format relative time (e.g. '2 mins ago')"""
+        if not self.created_at:
+            return ""
+        diff = datetime.utcnow() - self.created_at
+        seconds = diff.total_seconds()
+        
+        if seconds < 60:
+            return "just now"
+        elif seconds < 3600:
+            return f"{int(seconds // 60)}m ago"
+        elif seconds < 86400:
+            return f"{int(seconds // 3600)}h ago"
+        else:
+            return f"{int(seconds // 86400)}d ago"
+
