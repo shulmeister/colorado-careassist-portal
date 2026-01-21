@@ -571,6 +571,10 @@ except Exception as e:
 
 app = FastAPI(title="Colorado CareAssist Sales Dashboard", version="2.0.0")
 
+@app.get("/health")
+def health_check():
+    return {"status": "ok", "service": "Sales Dashboard"}
+
 # Add security middleware
 app.add_middleware(
     CORSMiddleware,
