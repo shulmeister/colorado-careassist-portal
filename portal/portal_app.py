@@ -173,17 +173,9 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # 
 
-# 1. Mount Tracker (FastAPI)
-try:
-    from services.tracker.router import router as tracker_router
-    # Mount tracker router
-    app.include_router(tracker_router, prefix="/tracker", tags=["tracker"])
-    logger.info("Mounted Tracker module at /tracker")
-except Exception as e:
-    logger.error(f"Failed to mount Tracker module: {e}")
-
-# Recruiter dashboard is now mounted at /recruiting via unified_app.py
-# No mounting needed here - the Flask app is mounted at the unified_app level
+# Recruiter dashboard is mounted at /recruiting via unified_app.py
+# Sales dashboard is mounted at /sales via unified_app.py
+# Gigi AI agent is mounted at /gigi via unified_app.py
 
 # 
 
