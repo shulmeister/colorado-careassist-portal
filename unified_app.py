@@ -230,6 +230,17 @@ except Exception as e:
     import traceback
     logger.error(traceback.format_exc())
 
+# Debug: Log all routes
+logger.info("=== Registered Routes ===")
+for route in app.routes:
+    if hasattr(route, "path"):
+        logger.info(f"Route: {route.path}")
+    elif hasattr(route, "path_format"):
+        logger.info(f"Route: {route.path_format}")
+    else:
+        logger.info(f"Route (other): {route}")
+logger.info("=========================")
+
 logger.info("✅ Portal app configured with sales, recruiting, payroll, powderpulse, and gigi")
 
 if __name__ == "__main__":
