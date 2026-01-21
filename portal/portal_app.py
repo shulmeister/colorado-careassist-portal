@@ -45,11 +45,12 @@ except ImportError as e:
 
 # Import WellSky service directly for Operations Dashboard
 try:
-    from services.wellsky_service import wellsky_service
+    from services.wellsky_service import wellsky_service, ShiftStatus
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.warning(f"WellSky service not available: {e}")
     wellsky_service = None
+    ShiftStatus = None
 
 from dotenv import load_dotenv
 from datetime import date
@@ -4004,8 +4005,13 @@ async def api_update_wellsky_shift(shift_id: str, request: Request):
         call_out_reason = data.get("call_out_reason")
         call_out_caregiver_id = data.get("call_out_caregiver_id")
 
-        # Map status string to ShiftStatus enum
-        from services.wellsky_service import ShiftStatus
+        # Map status string to ShiftStatus enum (imported at module level)
+        if ShiftStatus is None:
+            return JSONResponse({
+                "success": False,
+                "error": "ShiftStatus enum not available"
+            }, status_code=503)
+
         status_map = {
             "open": ShiftStatus.OPEN,
             "scheduled": ShiftStatus.SCHEDULED,
