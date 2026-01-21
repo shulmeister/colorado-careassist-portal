@@ -52,3 +52,14 @@ venv.bak/
 # Logs
 *.log
 logs/
+
+# PII and sensitive data files - NEVER commit these
+recruiting/facebook_leads.csv
+recruiting/caregivers_list.txt
+**/leads*.csv
+**/caregivers*.txt
+**/contacts*.csv
+*.pem
+*.key
+credentials.json
+service-account*.json
