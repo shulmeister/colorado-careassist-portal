@@ -6,7 +6,8 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 
 | Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Heroku App / URL + Deploy Status                                                                 |
 |---------------------|-------------------------------------------|------------------------------------------------------|--------------------------------------------------------|---------------------------------------------------------------------------------------------------|
-| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `portal-coloradocareassist` → https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com (auto deploy ✅) |
+| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `careassist-unified` → https://careassist-unified-0a11ddb45ac0.herokuapp.com (auto deploy ✅) |
+| **Gigi AI Agent**   | (part of portal)                          | `gigi/`                                              | (same as portal)                                       | Ships with portal → https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/ |
 | Sales Dashboard     | `sales-dashboard`                         | `dashboards/sales`                                   | `shulmeister/sales-dashboard`                          | `careassist-tracker` / `cca-crm` (both auto deploy from GitHub `main` ✅)                          |
 | Activity Tracker    | `activity-tracker`                        | `dashboards/activity-tracker`                        | `shulmeister/Colorado-CareAssist-Route-Tracker`        | `cca-activity-tracker-6d9a1d8e3933` (auto deploy from GitHub `main` ✅)                             |
 | Recruiter Dashboard | `recruiter-dashboard`                     | `dashboards/recruitment`                             | `shulmeister/recruiter-dashboard`                      | `caregiver-lead-tracker-9d0e6a8c7c20` (auto deploy from GitHub `main` ✅)                           |
@@ -18,13 +19,37 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 
 **READ THIS FIRST – THIS IS A HUB-AND-SPOKE SYSTEM:**
 
-### THE HUB (Main Portal)
+### THE HUB (Main Portal + Gigi)
 - **Repository**: `colorado-careassist-portal`
 - **GitHub**: https://github.com/shulmeister/colorado-careassist-portal
-- **Heroku**: `portal-coloradocareassist` → `portal-coloradocareassist-3e1a4bb34793.herokuapp.com`
+- **Heroku**: `careassist-unified` → `careassist-unified-0a11ddb45ac0.herokuapp.com`
 - **Local Path**: `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal`
 - **Tech**: FastAPI, Jinja2, PostgreSQL
 - **Purpose**: Central launchpad with tiles that link to other apps
+
+### GIGI - After-Hours AI Agent
+
+Gigi is the AI-powered after-hours assistant that handles caregiver and client communications when the office is closed.
+
+- **Location**: `gigi/` folder within portal repo
+- **Live URL**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/
+- **Phone Numbers**: 719-428-3999 (primary), 303-757-1777 (secondary)
+- **Tech**: FastAPI, Retell AI (voice), RingCentral (SMS), Gemini AI, WellSky API
+
+**Capabilities:**
+| Channel | Feature | Status |
+|---------|---------|--------|
+| Voice (Retell AI) | Answer calls, identify callers, handle call-outs | ✅ Live |
+| SMS (RingCentral) | Auto-reply with AI-generated contextual responses | ✅ Live |
+| WellSky Integration | Look up shifts, clock in/out, report call-outs | ⏳ Ready for API key |
+
+**Key Files:**
+- `gigi/main.py` - FastAPI app (~1400 lines)
+- `gigi/knowledge_base.md` - Voice agent knowledge
+- `gigi/system_prompt.txt` - Voice personality
+- `services/wellsky_service.py` - WellSky API client
+
+See `gigi/README.md` for full technical documentation.
 
 ### SPOKES (Individual Apps)
 
@@ -119,6 +144,13 @@ git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
 ```
 colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 ├── .git/                            # Portal's git repo
+├── gigi/                            # GIGI AI AGENT (after-hours assistant)
+│   ├── main.py                      # FastAPI app (voice + SMS)
+│   ├── knowledge_base.md            # Voice agent knowledge base
+│   └── system_prompt.txt            # Voice agent personality
+├── services/
+│   ├── wellsky_service.py           # WellSky API client
+│   └── marketing/                   # Marketing API integrations
 ├── dashboards/
 │   ├── sales/
 │   │   ├── .git/                    # Sales Dashboard's OWN git repo
@@ -133,6 +165,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 │       ├── app.py                   # FastAPI + PDF/HEIC/OCR pipelines
 │       └── business_card_scanner.py, parser.py, etc.
 ├── templates/
+│   ├── portal.html                  # Portal homepage
 │   ├── marketing.html               # Marketing Dashboard (built into portal)
 │   └── ...
 └── portal_app.py                    # Main portal app
@@ -140,12 +173,12 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 
 **IMPORTANT**: Each dashboard (`sales` and `recruitment`) is a **nested git repository** with its own remotes. They are NOT submodules - they're independent repos that happen to live inside the portal directory.
 
-### 🔄 Syncing Status (Last Updated: December 29, 2025)
+### 🔄 Syncing Status (Last Updated: January 21, 2026)
 
 | Component | GitHub Repo | Heroku App / URL | Status |
 |-----------|-------------|------------------|--------|
-| Portal | `shulmeister/colorado-careassist-portal` | `portal-coloradocareassist` | ✅ Auto deploy on `main` |
-| Sales Dashboard | `shulmeister/sales-dashboard` | `careassist-tracker` / `cca-crm` | ✅ `sales-stable-2025-11-22` tagged & auto deploys |
+| Portal + Gigi | `shulmeister/colorado-careassist-portal` | `careassist-unified` | ✅ Auto deploy on `main` |
+| Sales Dashboard | `shulmeister/sales-dashboard` | `careassist-tracker` / `cca-crm` | ✅ Auto deploys on `main` |
 | Recruiter Dashboard | `shulmeister/recruiter-dashboard` | `caregiver-lead-tracker-9d0e6a8c7c20` | ✅ Auto deploy on `main` |
 | Activity Tracker | `shulmeister/Colorado-CareAssist-Route-Tracker` | `cca-activity-tracker-6d9a1d8e3933` | ✅ Auto deploy on `main` + portal SSO |
 | Marketing Dashboard | `shulmeister/marketing-dashboard` (embedded) | Ships with portal | ✅ Included in portal auto deploy |
@@ -194,6 +227,18 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
    RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
    # Marketing Dashboard APIs
    BREVO_API_KEY=your_brevo_api_key
+
+   # Gigi AI Agent
+   RETELL_API_KEY=key_xxxxx                    # Retell AI voice agent
+   GEMINI_API_KEY=AIzaSyxxxxx                  # Response generation
+   RINGCENTRAL_CLIENT_ID=your_client_id       # RingCentral SMS
+   RINGCENTRAL_CLIENT_SECRET=xxxxx
+   RINGCENTRAL_JWT_TOKEN=eyJxxxxx
+
+   # WellSky (add when API key available)
+   WELLSKY_API_KEY=xxxxx
+   WELLSKY_API_SECRET=xxxxx
+   WELLSKY_AGENCY_ID=xxxxx
    ```
    > ⚠️ Only the RingCentral browser app's client ID is used in the portal. Store your client secret securely and never commit it to source control.
 
@@ -296,12 +341,20 @@ Override the URLs via environment variables (`PORTAL_URL`, `SALES_DASHBOARD_URL`
 
 ```
 ├── portal_app.py          # Main FastAPI application
-├── portal_auth.py          # Google OAuth authentication
+├── portal_auth.py         # Google OAuth authentication
 ├── portal_database.py     # Database setup and connection
 ├── portal_models.py       # Database models (PortalTool)
 ├── portal_setup.py        # Setup script for default tools
+├── gigi/                  # Gigi AI Agent
+│   ├── main.py            # FastAPI app (voice + SMS)
+│   ├── knowledge_base.md  # Voice agent knowledge
+│   └── system_prompt.txt  # Voice personality
+├── services/
+│   ├── wellsky_service.py # WellSky API client
+│   └── marketing/         # Marketing API integrations
 ├── templates/
-│   └── portal.html        # Portal UI template
+│   ├── portal.html        # Portal UI template
+│   └── marketing.html     # Marketing Dashboard
 ├── Procfile               # Heroku process file
 ├── requirements.txt       # Python dependencies
 └── runtime.txt            # Python version
@@ -320,6 +373,13 @@ Override the URLs via environment variables (`PORTAL_URL`, `SALES_DASHBOARD_URL`
 - `POST /api/tools` - Create new tool (admin only)
 - `PUT /api/tools/{id}` - Update tool (admin only)
 - `DELETE /api/tools/{id}` - Delete tool (admin only)
+
+### Gigi AI Agent
+- `GET /gigi/` - Health check
+- `POST /gigi/retell-webhook` - Retell AI voice call events
+- `POST /gigi/webhook/ringcentral-sms` - RingCentral SMS notifications
+- `POST /gigi/webhook/beetexting` - Beetexting SMS (backup)
+- `POST /gigi/test/sms-reply` - Test SMS response generation
 
 ## Adding Tools
 
