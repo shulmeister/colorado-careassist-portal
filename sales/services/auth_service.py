@@ -185,25 +185,32 @@ class GoogleOAuthManager:
 # Apps should instantiate their own with specific redirect URIs if needed for generating auth URLs
 # But for verification, the secret key is shared so this instance works.
 oauth_manager = GoogleOAuthManager()
-DEMO_BYPASS = os.getenv("DEMO_BYPASS", "false").lower() == "true"
+
+# SECURITY: Demo bypass only allowed in explicit development environment
+_is_development = os.getenv("ENVIRONMENT", "production").lower() in ("development", "dev", "local")
+DEMO_BYPASS = _is_development and os.getenv("DEMO_BYPASS", "false").lower() == "true"
+if DEMO_BYPASS:
+    logger.warning("SECURITY: DEMO_BYPASS enabled - authentication is bypassed!")
 
 async def get_current_user(
     request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
 ) -> Dict[str, Any]:
     """Dependency to get current authenticated user. Supports Portal headers and Session tokens."""
-    
+
     if DEMO_BYPASS:
+        logger.warning("Demo bypass used for request")
         return {
             "email": "demo@careassist.local",
             "name": "Demo User",
             "domain": "demo",
             "via_portal": False
         }
-    
+
     # CHECK PORTAL AUTHENTICATION FIRST (highest priority)
     # When accessed through portal proxy, trust portal's authentication
-    PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
+    # SECURITY: Portal secret MUST be set via environment variable
+    PORTAL_SECRET = os.getenv("PORTAL_SECRET")
     portal_secret = request.headers.get("X-Portal-Secret")
     
     if portal_secret and portal_secret == PORTAL_SECRET:
