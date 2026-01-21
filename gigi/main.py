@@ -1736,6 +1736,15 @@ async def ringcentral_sms_webhook(request: Request):
             status_code=200
         )
 
+    # SECURITY: Verify RingCentral webhook signature if verification token is configured
+    rc_verification_token = os.getenv("RINGCENTRAL_WEBHOOK_VERIFICATION_TOKEN")
+    if rc_verification_token:
+        # RingCentral includes verification token in the payload or header
+        received_token = request.headers.get("X-RingCentral-Verification-Token")
+        if received_token and received_token != rc_verification_token:
+            logger.warning("RingCentral webhook: Invalid verification token")
+            return JSONResponse({"error": "Invalid verification token"}, status_code=401)
+
     try:
         body = await request.json()
         logger.info(f"RingCentral SMS webhook received: {json.dumps(body)[:500]}")

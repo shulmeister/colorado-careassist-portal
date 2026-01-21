@@ -11,6 +11,11 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date as date_cls
 import httpx
 from urllib.parse import urlencode, quote_plus, urljoin
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
 from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher, BrevoWebhookEvent
@@ -129,9 +134,15 @@ app.add_middleware(
 
 # Add trusted host middleware
 app.add_middleware(
-    TrustedHostMiddleware, 
+    TrustedHostMiddleware,
     allowed_hosts=["localhost", "127.0.0.1", "*.herokuapp.com", "portal.coloradocareassist.com"]
 )
+
+# Rate limiting configuration
+# Default: 100 requests per minute for general API, stricter for auth endpoints
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Mount static files and templates
 templates = Jinja2Templates(directory="templates")
@@ -155,7 +166,8 @@ except Exception as e:
 
 # Authentication endpoints
 @app.get("/auth/login")
-async def login():
+@limiter.limit("10/minute")  # Stricter rate limit for auth
+async def login(request: Request):
     """Redirect to Google OAuth login"""
     try:
         auth_url = oauth_manager.get_authorization_url()
@@ -165,6 +177,7 @@ async def login():
         raise HTTPException(status_code=500, detail="Authentication service unavailable")
 
 @app.get("/auth/callback")
+@limiter.limit("10/minute")  # Stricter rate limit for auth
 async def auth_callback(request: Request, code: str = None, error: str = None):
     """Handle Google OAuth callback"""
     if error:
@@ -1481,6 +1494,7 @@ async def goformz_wellsky_sync_debug(
 
 
 @app.post("/api/goformz/wellsky-webhook")
+@limiter.limit("30/minute")  # Rate limit webhooks
 async def goformz_wellsky_webhook(request: Request):
     """
     Webhook endpoint for GoFormz to trigger WellSky status updates.
@@ -1491,6 +1505,23 @@ async def goformz_wellsky_webhook(request: Request):
 
     This is the final step in the hub-and-spoke integration.
     """
+    # SECURITY: Verify webhook signature if secret is configured
+    goformz_secret = os.getenv("GOFORMZ_WEBHOOK_SECRET")
+    if goformz_secret:
+        import hmac
+        import hashlib
+        signature = request.headers.get("X-GoFormz-Signature") or request.headers.get("X-Webhook-Signature")
+        if not signature:
+            logger.warning("GoFormz webhook: Missing signature header")
+            return JSONResponse({"error": "Missing signature"}, status_code=401)
+        body = await request.body()
+        expected = hmac.new(goformz_secret.encode(), body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            logger.warning("GoFormz webhook: Invalid signature")
+            return JSONResponse({"error": "Invalid signature"}, status_code=401)
+    else:
+        logger.warning("GOFORMZ_WEBHOOK_SECRET not configured - webhook signature validation disabled")
+
     goformz_wellsky_sync = _get_goformz_wellsky_sync()
     if goformz_wellsky_sync is None:
         return JSONResponse({
@@ -2567,23 +2598,25 @@ async def api_marketing_social(
 
 
 @app.post("/api/marketing/google-ads/webhook")
+@limiter.limit("30/minute")  # Rate limit webhooks
 async def google_ads_webhook(request: Request):
     """
     Webhook endpoint to receive Google Ads metrics from Google Ads Scripts.
-    
+
     The script runs in Google Ads and POSTs data here periodically.
     """
-    import os
     import json
     from datetime import datetime
-    
-    # Optional: Verify webhook secret for security
+
+    # SECURITY: Verify webhook secret (required for security)
     webhook_secret = os.getenv("GOOGLE_ADS_WEBHOOK_SECRET")
     if webhook_secret:
         received_secret = request.headers.get("X-Webhook-Secret")
         if received_secret != webhook_secret:
             logger.warning("Google Ads webhook: Invalid secret")
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
+    else:
+        logger.warning("GOOGLE_ADS_WEBHOOK_SECRET not configured - webhook not secured")
     
     try:
         data = await request.json()
@@ -2645,13 +2678,32 @@ async def api_marketing_ads(
 
 
 @app.post("/api/marketing/brevo-webhook")
+@limiter.limit("60/minute")  # Rate limit webhooks
 async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db)):
     """
     Webhook endpoint for Brevo marketing email events.
     Stores events for real-time metrics aggregation (hybrid model: webhooks + API).
-    
+
     Events: delivered, opened, click, hardBounce, softBounce, spam, unsubscribed
     """
+    # SECURITY: Verify Brevo webhook signature if secret is configured
+    brevo_secret = os.getenv("BREVO_WEBHOOK_SECRET")
+    if brevo_secret:
+        import hmac
+        import hashlib
+        # Brevo uses X-Sib-Signature header
+        signature = request.headers.get("X-Sib-Signature")
+        if not signature:
+            logger.warning("Brevo webhook: Missing X-Sib-Signature header")
+            return JSONResponse({"error": "Missing signature"}, status_code=401)
+        body = await request.body()
+        expected = hmac.new(brevo_secret.encode(), body, hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(signature, expected):
+            logger.warning("Brevo webhook: Invalid signature")
+            return JSONResponse({"error": "Invalid signature"}, status_code=401)
+    else:
+        logger.debug("BREVO_WEBHOOK_SECRET not configured - signature validation disabled")
+
     try:
         data = await request.json()
         logger.info(f"Brevo marketing webhook received: {data.get('event', 'unknown')} for {data.get('email', 'unknown')}")
