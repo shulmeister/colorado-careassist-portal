@@ -1,1175 +1,122 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-    <title>Colorado CareAssist Portal</title>
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
-    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v=2">
-    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png?v=2">
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=2">
-    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=2">
-    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+{% extends "shared_shell.html" %}
+
+{% block head %}
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        .tools-layout {
+            display: grid; 
+            grid-template-columns: 1fr 320px; 
+            gap: 24px; 
+            align-items: start;
         }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: #0f172a;
-            color: #e2e8f0;
-            min-height: 100vh;
-            line-height: 1.5;
-        }
-
-        .dashboard-container {
-            display: grid;
-            grid-template-columns: 280px 1fr;
-            min-height: 100vh;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            background: #1e293b;
-            border-right: 1px solid #334155;
-            padding: 24px 0;
-            position: sticky;
-            top: 0;
-            height: 100vh;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .sidebar-header {
-            padding: 0 24px 32px;
-            border-bottom: 1px solid #334155;
-            margin-bottom: 24px;
-        }
-
-        .sidebar-title {
-            font-size: 20px;
-            font-weight: 700;
-            color: #f1f5f9;
-            margin-bottom: 8px;
-        }
-
-        .sidebar-subtitle {
-            font-size: 14px;
-            color: #94a3b8;
-        }
-
-        .nav-menu {
-            padding: 0 16px;
-        }
-
-        .sidebar-ringcentral {
-            margin: 16px 16px 0;
-            padding: 16px 14px 20px;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            background: rgba(15, 23, 42, 0.85);
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .sidebar-ringcentral-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .sidebar-ringcentral-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .sidebar-ringcentral-name {
-            font-size: 15px;
-            font-weight: 600;
-            color: #f1f5f9;
-            line-height: 1.2;
-        }
-
-        .sidebar-ringcentral-subtitle {
-            font-size: 12px;
-            color: #94a3b8;
-            line-height: 1.2;
-        }
-
-        .sidebar-ringcentral-expand {
-            background: #334155;
-            color: #e2e8f0;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.2s ease;
-            white-space: nowrap;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .sidebar-ringcentral-expand:hover {
-            background: #475569;
-        }
-
-        .sidebar-ringcentral-frame {
-            width: 100%;
-            min-height: 420px;
-            border: none;
-            border-radius: 10px;
-            background: #0f172a;
-            box-shadow: inset 0 0 0 1px #334155;
-            overflow: hidden;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            margin-bottom: 4px;
-            border-radius: 8px;
-            color: #94a3b8;
-            text-decoration: none;
-            transition: all 0.2s ease;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-        }
-
-        .nav-item:hover {
-            background: #334155;
-            color: #f1f5f9;
-        }
-
-        .nav-item.active {
-            background: #3b82f6;
-            color: white;
-        }
-
-        .nav-icon {
-            margin-right: 12px;
-            font-size: 16px;
-        }
-
-        /* World Clocks Section - Header Row */
-        .world-clocks-header {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-            padding: 16px 24px;
-            background: #1e293b;
-            border-bottom: 1px solid #334155;
-            margin-bottom: 24px;
-        }
-
-        .world-clocks-title {
-            font-size: 11px;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
-            margin-right: 8px;
-        }
-
-        .clocks-row {
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            flex: 1;
-        }
-
-        .clock-item {
-            display: flex;
-            flex-direction: row;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 14px;
-            border-radius: 8px;
-            background: rgba(30, 41, 59, 0.5);
-            border: 1px solid #334155;
-            min-width: 140px;
-        }
-
-        .clock-face-container {
-            flex-shrink: 0;
-            width: 32px;
-            height: 32px;
-        }
-
-        .clock-face {
-            width: 32px;
-            height: 32px;
-            border: 2px solid #475569;
-            border-radius: 50%;
-            background: #1e293b;
-            position: relative;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-        }
-
-        .clock-hand {
-            position: absolute;
-            background: #f1f5f9;
-            transform-origin: bottom center;
-            border-radius: 2px;
-            left: 50%;
-            bottom: 50%;
-        }
-
-        .clock-hand-hour {
-            width: 1.5px;
-            height: 10px;
-            margin-left: -0.75px;
-            background: #cbd5e1;
-        }
-
-        .clock-hand-minute {
-            width: 1px;
-            height: 12px;
-            margin-left: -0.5px;
-        }
-
-        .clock-center {
-            position: absolute;
-            width: 3px;
-            height: 3px;
-            background: #f1f5f9;
-            border-radius: 50%;
-            left: 50%;
-            top: 50%;
-            margin-left: -1.5px;
-            margin-top: -1.5px;
-            z-index: 10;
-        }
-
-        .clock-info {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            flex: 1;
-        }
-
-        .clock-city {
-            font-size: 10px;
-            color: #94a3b8;
-            font-weight: 600;
-        }
-
-        .clock-time {
-            font-size: 13px;
-            color: #f1f5f9;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .clock-date {
-            font-size: 9px;
-            color: #64748b;
-        }
-
-        .weather-icon {
-            font-size: 20px;
-            flex-shrink: 0;
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0.8;
-        }
-
-        .user-section {
-            margin-top: auto;
-            padding: 16px;
-            border-top: 1px solid #334155;
-        }
-
-        .user-info {
-            display: flex;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 600;
-            margin-right: 12px;
-            font-size: 14px;
-        }
-
-        .user-details h4 {
-            color: #f1f5f9;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-
-        .user-email {
-            color: #94a3b8;
-            font-size: 12px;
-        }
-
-        .logout-btn {
-            background: #dc2626;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 500;
-            transition: background 0.2s ease;
-            width: 100%;
-        }
-
-        .logout-btn:hover {
-            background: #b91c1c;
-        }
-
-        /* Main Content */
-        .main-content {
-            background: #0f172a;
-            padding: 24px;
-            overflow-y: auto;
-        }
-
-        .dashboard-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 32px;
-        }
-
-        .header-left h1 {
-            font-size: 24px;
-            font-weight: 700;
-            color: #f1f5f9;
-            margin-bottom: 6px;
-        }
-
-        .header-left p {
-            font-size: 16px;
-            color: #94a3b8;
-        }
-
-        .admin-btn {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s ease;
-        }
-
-        .admin-btn:hover {
-            background: #2563eb;
-            transform: translateY(-1px);
-        }
-
-        /* Tool Grid */
-        .tools-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: 16px;
-            margin-bottom: 32px;
-        }
-
-        .tool-card {
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 14px;
-            transition: all 0.2s ease;
-            cursor: pointer;
-            text-decoration: none;
-            display: block;
-            color: inherit;
-        }
-
-        .tool-card:hover {
-            border-color: #475569;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .tool-icon {
-            font-size: 32px;
-            margin-bottom: 10px;
-            display: block;
-            height: 64px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .tool-icon img {
-            width: 64px;
-            height: 64px;
-            object-fit: contain;
-            border-radius: 8px;
-            image-rendering: -webkit-optimize-contrast;
-            image-rendering: crisp-edges;
-            image-rendering: high-quality;
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
-            transition: transform 0.2s ease;
-        }
-
-        /* Larger logos for specific tools */
-        .tool-card[href*="ringcentral.com"] .tool-icon img,
-        .tool-card[href*="predis.ai"] .tool-icon img,
-        .tool-card[href*="intuit.com"] .tool-icon img,
-        .tool-card[href*="quickbooks"] .tool-icon img,
-        .tool-card[href*="ads.google.com"] .tool-icon img,
-        .tool-card[href*="adamskeegan.com"] .tool-icon img,
-        .tool-icon img.large-logo {
-            width: 120px;
-            height: 120px;
-        }
-
-        .tool-card:hover .tool-icon img {
-            transform: scale(1.05);
-        }
-
-        .tool-icon span {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 64px;
-        }
-
-        .tool-name {
-            font-size: 15px;
-            font-weight: 700;
-            color: #f1f5f9;
-            margin-bottom: 5px;
-        }
-
-        .tool-description {
-            font-size: 12px;
-            color: #94a3b8;
-            line-height: 1.3;
-        }
-
-        .tool-category {
-            font-size: 12px;
-            color: #64748b;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 12px;
-        }
-
-        /* AI Tools tile */
-        .ai-tools-card {
-            cursor: pointer;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .ai-tools-preview {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 6px;
-            margin-top: 12px;
-        }
-
-        .ai-tool-chip {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            color: #cbd5f5;
-            background: rgba(59, 130, 246, 0.12);
-            border: 1px solid rgba(59, 130, 246, 0.35);
-            backdrop-filter: blur(6px);
-        }
-
-        .ai-tools-hint {
-            margin-top: 14px;
-            font-size: 12px;
-            color: #60a5fa;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            opacity: 0.85;
-        }
-
-        .ai-tools-hint span {
-            font-size: 14px;
-        }
-
-        /* AI Tools modal */
-        .ai-tools-modal-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 16px;
-        }
-
-        .ai-tools-modal-card {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-            padding: 16px;
-            border-radius: 12px;
-            text-decoration: none;
-            color: #f1f5f9;
-            background: linear-gradient(145deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.85));
-            border: 1px solid rgba(96, 165, 250, 0.25);
-            transition: transform 0.2s ease, border-color 0.2s ease;
-        }
-
-        .ai-tools-modal-card:hover {
-            transform: translateY(-3px);
-            border-color: rgba(96, 165, 250, 0.65);
-        }
-
-        .ai-tools-modal-card span {
-            font-size: 30px;
-        }
-
-        .ai-tools-modal-card small {
-            font-size: 12px;
-            color: #94a3b8;
-        }
-
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.show {
-            display: flex;
-        }
-
-        .modal-content {
-            background: #1e293b;
-            border-radius: 12px;
-            padding: 0;
-            max-width: 600px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        }
-
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 24px;
-            border-bottom: 1px solid #334155;
-        }
-
-        .modal-header h2 {
-            margin: 0;
-            color: #f1f5f9;
-            font-size: 20px;
-            font-weight: 600;
-        }
-
-        .modal-close {
-            background: none;
-            border: none;
-            color: #94a3b8;
-            font-size: 28px;
-            cursor: pointer;
-            padding: 0;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 4px;
-        }
-
-        .modal-close:hover {
-            background: #334155;
-            color: #f1f5f9;
-        }
-
-        .modal-body {
-            padding: 24px;
-        }
-
-        .form-group {
-            margin-bottom: 16px;
-        }
-
-        .form-group label {
-            display: block;
-            color: #cbd5e1;
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 6px;
-        }
-
-        .form-group input,
-        .form-group textarea {
-            width: 100%;
-            padding: 10px 12px;
-            background: #0f172a;
-            border: 1px solid #334155;
-            border-radius: 6px;
-            color: #f1f5f9;
-            font-size: 14px;
-            font-family: inherit;
-            box-sizing: border-box;
-        }
-
-        .form-group input:focus,
-        .form-group textarea:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .form-group textarea {
-            resize: vertical;
-            min-height: 80px;
-        }
-
-        .modal-actions {
-            display: flex;
-            justify-content: flex-end;
-            gap: 12px;
-            padding: 20px 24px;
-            border-top: 1px solid #334155;
-            margin-top: 8px;
-        }
-
-        .btn {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.2s ease;
-        }
-
-        .btn:hover {
-            background: #2563eb;
-        }
-
-        .btn-danger {
-            background: #dc2626;
-        }
-
-        .btn-danger:hover {
-            background: #b91c1c;
-        }
-
-        .btn-secondary {
-            background: #64748b;
-        }
-
-        .btn-secondary:hover {
-            background: #475569;
-        }
-
-        .tools-list {
-            background: #1e293b;
-            border: 1px solid #334155;
-            border-radius: 12px;
-            padding: 24px;
-        }
-
-        .tool-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px;
-            border-bottom: 1px solid #334155;
-            cursor: move;
-            transition: background 0.2s ease;
-        }
-
-        .tool-item:hover {
-            background: #334155;
-        }
-
-        .tool-item.dragging {
-            opacity: 0.5;
-            background: #475569;
-        }
-
-        .tool-item.drag-over {
-            border-top: 2px solid #3b82f6;
-        }
-
-        .tool-item:last-child {
-            border-bottom: none;
-        }
-
-        .tool-item-info {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex: 1;
-        }
-
-        .drag-handle {
-            cursor: grab;
-            color: #64748b;
-            font-size: 18px;
-            margin-right: 8px;
-            user-select: none;
-        }
-
-        .drag-handle:active {
-            cursor: grabbing;
-        }
-
-        .tool-item-icon {
-            font-size: 20px;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .tool-item-icon img {
-            width: 32px;
-            height: 32px;
-            object-fit: contain;
-            border-radius: 4px;
-        }
-
-        .tool-item-details h3 {
-            color: #f1f5f9;
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 3px;
-        }
-
-        .tool-item-details p {
-            color: #94a3b8;
-            font-size: 12px;
-        }
-
-        .tool-item-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .btn-small {
-            padding: 6px 12px;
-            font-size: 12px;
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: #94a3b8;
-        }
-
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 16px;
-            opacity: 0.5;
-        }
-
-        .empty-state h3 {
-            color: #f1f5f9;
-            margin-bottom: 8px;
-        }
-
-        /* Responsive */
         @media (max-width: 1024px) {
-            .dashboard-container {
+            .tools-layout {
                 grid-template-columns: 1fr;
-            }
-            
-            .sidebar {
-                display: none;
-            }
-            
-            .tools-grid {
-                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            }
-        }
-
-        @media (max-width: 768px) {
-            .main-content {
-                padding: 16px;
-            }
-            
-            .tools-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .dashboard-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 16px;
             }
         }
     </style>
-    {% if ringcentral.enabled %}
-    <script>
-        window.RingCentralEmbeddable = {
-            config: {
-                defaultTab: "{{ ringcentral.default_tab }}",
-                hiddenTabs: [{% for tab in ringcentral.hidden_tabs_list %}"{{ tab }}"{% if not loop.last %}, {% endif %}{% endfor %}]
-            }
-        };
-        (function() {
-            var rcs = document.createElement("script");
-            var adapterSrc = "{{ ringcentral.adapter_url }}";
-            {% if ringcentral.query_string %}
-            adapterSrc += "?{{ ringcentral.query_string|safe }}";
-            {% endif %}
-            rcs.src = adapterSrc;
-            rcs.async = true;
-            var firstScript = document.getElementsByTagName("script")[0];
-            firstScript.parentNode.insertBefore(rcs, firstScript);
-        })();
+{% endblock %}
 
-        (function setupRingCentralAutoMinimize() {
-            var minimizeRequested = false;
-            function requestMinimize() {
-                if (minimizeRequested) {
-                    return;
-                }
-                minimizeRequested = true;
-                window.postMessage({
-                    type: "rc-adapter-syncMinimized",
-                    minimized: true
-                }, "*");
-            }
-
-            window.addEventListener("message", function(event) {
-                if (!event || !event.data || minimizeRequested) {
-                    return;
-                }
-                var evtType = event.data.type || "";
-                if (evtType === "rc-adapter-pushAdapterState" || evtType === "rc-login-status-notify") {
-                    requestMinimize();
-                }
-            });
-
-            window.addEventListener("load", function() {
-                setTimeout(requestMinimize, 3000);
-            });
-        })();
-    </script>
-    {% endif %}
-</head>
-<body>
-    <div class="dashboard-container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-title">Colorado CareAssist</div>
-                <div class="sidebar-subtitle">Portal</div>
-            </div>
-
-            <nav class="nav-menu">
-                <a href="#" class="nav-item active" data-view="tools" onclick="showToolsView(); return false;">
-                    <span class="nav-icon">🏠</span>
-                    <span class="nav-text">Home</span>
-                </a>
-                <a href="#" class="nav-item" data-view="analytics" onclick="showAnalyticsView(); return false;">
-                    <span class="nav-icon">📊</span>
-                    <span class="nav-text">Analytics</span>
-                </a>
-                <a href="#" class="nav-item" data-view="admin" onclick="showAdminView(); return false;" id="adminNavItem" style="display: none;">
-                    <span class="nav-icon">⚙️</span>
-                    <span class="nav-text">Manage Tools</span>
-                </a>
-            </nav>
-
-            {% if ringcentral.enabled %}
-            <div class="sidebar-ringcentral">
-                <div class="sidebar-ringcentral-header">
-                    <div class="sidebar-ringcentral-title">
-                        <span class="nav-icon">💬</span>
-                        <div>
-                            <div class="sidebar-ringcentral-name">RingCentral</div>
-                            <div class="sidebar-ringcentral-subtitle">Calls & SMS</div>
-                        </div>
-                    </div>
-                    <a
-                        class="sidebar-ringcentral-expand"
-                        href="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        Open App
-                    </a>
-                </div>
-                <iframe
-                    id="rc-widget-sidebar"
-                    class="sidebar-ringcentral-frame"
-                    allow="microphone; camera; autoplay; clipboard-write"
-                    loading="lazy"
-                    title="RingCentral Sidebar"
-                    src="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
-                ></iframe>
-            </div>
-            {% endif %}
-
-            <div class="user-section">
-                <div class="user-info">
-                    <div class="user-avatar" id="userAvatar">
-                        {{ user.name[0].upper() if user.name else 'U' }}
-                    </div>
-                    <div class="user-details">
-                        <h4 id="userName">{{ user.name or 'User' }}</h4>
-                        <div class="user-email" id="userEmail">{{ user.email }}</div>
-                    </div>
-                </div>
-                <button class="logout-btn" onclick="logout()">Logout</button>
+{% block content %}
+    <div id="toolsView" class="tools-layout">
+        <div>
+            <h2 style="font-size: 18px; font-weight: 600; color: #94a3b8; margin-bottom: 16px;">Apps & Tools</h2>
+            <div class="tools-grid" id="toolsGrid">
+                <!-- Tools will be loaded here -->
             </div>
         </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
-            <!-- World Clocks Header -->
-            <div class="world-clocks-header">
-                <div class="clocks-row">
-                    <div class="clock-item">
-                        <div class="clock-face-container">
-                            <div class="clock-face" id="clock-face-london">
-                                <div class="clock-hand clock-hand-hour" id="hour-hand-london"></div>
-                                <div class="clock-hand clock-hand-minute" id="minute-hand-london"></div>
-                                <div class="clock-center"></div>
-                            </div>
-                        </div>
-                        <div class="weather-icon" id="weather-icon-london">🌤️</div>
-                        <div class="clock-info">
-                            <div class="clock-city">London</div>
-                            <div class="clock-time" id="clock-london">--:--</div>
-                            <div class="clock-date" id="date-london">--</div>
-                        </div>
-                    </div>
-                    <div class="clock-item">
-                        <div class="clock-face-container">
-                            <div class="clock-face" id="clock-face-denver">
-                                <div class="clock-hand clock-hand-hour" id="hour-hand-denver"></div>
-                                <div class="clock-hand clock-hand-minute" id="minute-hand-denver"></div>
-                                <div class="clock-center"></div>
-                            </div>
-                        </div>
-                        <div class="weather-icon" id="weather-icon-denver">🌤️</div>
-                        <div class="clock-info">
-                            <div class="clock-city">Denver</div>
-                            <div class="clock-time" id="clock-denver">--:--</div>
-                            <div class="clock-date" id="date-denver">--</div>
-                        </div>
-                    </div>
-                    <div class="clock-item">
-                        <div class="clock-face-container">
-                            <div class="clock-face" id="clock-face-manila">
-                                <div class="clock-hand clock-hand-hour" id="hour-hand-manila"></div>
-                                <div class="clock-hand clock-hand-minute" id="minute-hand-manila"></div>
-                                <div class="clock-center"></div>
-                            </div>
-                        </div>
-                        <div class="weather-icon" id="weather-icon-manila">🌤️</div>
-                        <div class="clock-info">
-                            <div class="clock-city">Manila</div>
-                            <div class="clock-time" id="clock-manila">--:--</div>
-                            <div class="clock-date" id="date-manila">--</div>
-                        </div>
-                    </div>
-                    <div class="clock-item">
-                        <div class="clock-face-container">
-                            <div class="clock-face" id="clock-face-dhaka">
-                                <div class="clock-hand clock-hand-hour" id="hour-hand-dhaka"></div>
-                                <div class="clock-hand clock-hand-minute" id="minute-hand-dhaka"></div>
-                                <div class="clock-center"></div>
-                            </div>
-                        </div>
-                        <div class="weather-icon" id="weather-icon-dhaka">🌤️</div>
-                        <div class="clock-info">
-                            <div class="clock-city">Dhaka</div>
-                            <div class="clock-time" id="clock-dhaka">--:--</div>
-                            <div class="clock-date" id="date-dhaka">--</div>
-                        </div>
-                    </div>
-                </div>
-                <button class="admin-btn" id="adminBtn" onclick="showAdminView()" style="display: none; margin-left: auto;">
-                    ⚙️ Manage Tools
-                </button>
+        
+        <!-- Activity Feed Widget -->
+        <div class="activity-feed-widget" style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; position: sticky; top: 24px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                <h3 style="font-size: 16px; font-weight: 600; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
+                    <span>⚡</span> Company Pulse
+                </h3>
+                <span style="font-size: 12px; color: #64748b; background: #0f172a; padding: 2px 8px; border-radius: 12px; border: 1px solid #334155;">Live</span>
             </div>
-
-            <!-- Global Search -->
-            <div style="margin: 0 24px 24px 24px; position: relative;">
-                <div style="position: relative;">
-                    <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 18px;">🔍</span>
-                    <input type="text" id="globalSearchInput" placeholder="Search contacts, leads, companies... (Type 'Smith')" 
-                        style="width: 100%; padding: 14px 14px 14px 48px; border-radius: 12px; border: 1px solid #334155; background: #1e293b; color: #f1f5f9; font-size: 16px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;">
-                </div>
-                <div id="searchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1e293b; border: 1px solid #334155; border-radius: 12px; margin-top: 8px; z-index: 1000; max-height: 400px; overflow-y: auto; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
-                    <!-- Results will appear here -->
-                </div>
-            </div>
-
-            <div class="dashboard-header" style="display: none;">
-                <div class="header-left">
-                    <h1>Colorado CareAssist Portal</h1>
-                    <p>Access all your tools and platforms</p>
-                </div>
-                <button class="admin-btn" id="adminBtnOld" onclick="showAdminView()" style="display: none;">
-                    ⚙️ Manage Tools
-                </button>
-            </div>
-
-            <!-- Tools Grid View -->
-            <style>
-                .tools-layout {
-                    display: grid; 
-                    grid-template-columns: 1fr 320px; 
-                    gap: 24px; 
-                    align-items: start;
-                }
-                @media (max-width: 1024px) {
-                    .tools-layout {
-                        grid-template-columns: 1fr;
-                    }
-                }
-            </style>
-            <div id="toolsView" class="tools-layout">
-                <div>
-                    <h2 style="font-size: 18px; font-weight: 600; color: #94a3b8; margin-bottom: 16px;">Apps & Tools</h2>
-                    <div class="tools-grid" id="toolsGrid">
-                        <!-- Tools will be loaded here -->
-                    </div>
-                </div>
-                
-                <!-- Activity Feed Widget -->
-                <div class="activity-feed-widget" style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; position: sticky; top: 24px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h3 style="font-size: 16px; font-weight: 600; color: #f1f5f9; display: flex; align-items: center; gap: 8px;">
-                            <span>⚡</span> Company Pulse
-                        </h3>
-                        <span style="font-size: 12px; color: #64748b; background: #0f172a; padding: 2px 8px; border-radius: 12px; border: 1px solid #334155;">Live</span>
-                    </div>
-                    <div id="activityFeedList" style="display: flex; flex-direction: column; gap: 0;">
-                        <!-- Items injected here -->
-                        <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">
-                            <div style="margin-bottom: 8px;">📡</div>
-                            Listening for events...
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Analytics View -->
-            <div id="analyticsView" style="display: none;">
-                <div class="tools-list">
-                    <h2 style="color: #f1f5f9; font-size: 20px; margin-bottom: 24px;">Analytics</h2>
-                    
-                    <!-- Summary Stats -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 32px;">
-                        <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;">
-                            <div style="color: #94a3b8; font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Sessions</div>
-                            <div id="totalSessions" style="color: #f1f5f9; font-size: 32px; font-weight: 700;">-</div>
-                        </div>
-                        <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;">
-                            <div style="color: #94a3b8; font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Clicks</div>
-                            <div id="totalClicks" style="color: #f1f5f9; font-size: 32px; font-weight: 700;">-</div>
-                        </div>
-                        <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;">
-                            <div style="color: #94a3b8; font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Active Users</div>
-                            <div id="activeUsers" style="color: #f1f5f9; font-size: 32px; font-weight: 700;">-</div>
-                        </div>
-                    </div>
-
-                    <!-- Sessions Table -->
-                    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
-                        <h3 style="color: #f1f5f9; font-size: 18px; margin-bottom: 20px;">Recent Sessions</h3>
-                        <div style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <thead>
-                                    <tr style="border-bottom: 1px solid #334155;">
-                                        <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">User</th>
-                                        <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Login Time</th>
-                                        <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Duration</th>
-                                        <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="sessionsTableBody">
-                                    <tr><td colspan="4" style="padding: 20px; text-align: center; color: #94a3b8;">Loading...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Tool Clicks Table -->
-                    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px;">
-                        <h3 style="color: #f1f5f9; font-size: 18px; margin-bottom: 20px;">Tool Clicks</h3>
-                        <div style="overflow-x: auto;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <thead>
-                                    <tr style="border-bottom: 1px solid #334155;">
-                                        <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">User</th>
-                                        <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Tool</th>
-                                        <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Time</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="clicksTableBody">
-                                    <tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">Loading...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Admin View -->
-            <div id="adminView" style="display: none;">
-                <div class="tools-list">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
-                        <h2 style="color: #f1f5f9; font-size: 20px;">Manage Tools</h2>
-                        <button class="btn" onclick="showAddToolModal()">+ Add Tool</button>
-                    </div>
-                    <div id="toolsList">
-                        <!-- Tools list will be loaded here -->
-                    </div>
+            <div id="activityFeedList" style="display: flex; flex-direction: column; gap: 0;">
+                <!-- Items injected here -->
+                <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">
+                    <div style="margin-bottom: 8px;">📡</div>
+                    Listening for events...
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Add/Edit Tool Modal -->
+    <!-- Analytics View -->
+    <div id="analyticsView" style="display: none;">
+        <div class="tools-list">
+            <h2 style="color: #f1f5f9; font-size: 20px; margin-bottom: 24px;">Analytics</h2>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 32px;">
+                <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;">
+                    <div style="color: #94a3b8; font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Sessions</div>
+                    <div id="totalSessions" style="color: #f1f5f9; font-size: 32px; font-weight: 700;">-</div>
+                </div>
+                <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;">
+                    <div style="color: #94a3b8; font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Total Clicks</div>
+                    <div id="totalClicks" style="color: #f1f5f9; font-size: 32px; font-weight: 700;">-</div>
+                </div>
+                <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;">
+                    <div style="color: #94a3b8; font-size: 12px; text-transform: uppercase; margin-bottom: 8px;">Active Users</div>
+                    <div id="activeUsers" style="color: #f1f5f9; font-size: 32px; font-weight: 700;">-</div>
+                </div>
+            </div>
+
+            <!-- Table sections remain same -->
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+                <h3 style="color: #f1f5f9; font-size: 18px; margin-bottom: 20px;">Recent Sessions</h3>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #334155;">
+                                <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">User</th>
+                                <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Login Time</th>
+                                <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Duration</th>
+                                <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessionsTableBody">
+                            <tr><td colspan="4" style="padding: 20px; text-align: center; color: #94a3b8;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px;">
+                <h3 style="color: #f1f5f9; font-size: 18px; margin-bottom: 20px;">Tool Clicks</h3>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #334155;">
+                                <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">User</th>
+                                <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Tool</th>
+                                <th style="padding: 12px; text-align: left; color: #94a3b8; font-size: 12px; text-transform: uppercase;">Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clicksTableBody">
+                            <tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin View -->
+    <div id="adminView" style="display: none;">
+        <div class="tools-list">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                <h2 style="color: #f1f5f9; font-size: 20px;">Manage Tools</h2>
+                <button class="btn" onclick="showAddToolModal()">+ Add Tool</button>
+            </div>
+            <div id="toolsList">
+                <!-- Tools list will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals (Add/Edit Tool, Weather, AI Tools, Joke) -->
     <div id="toolModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -1188,8 +135,8 @@
                         <input type="url" id="toolUrl" required>
                     </div>
                     <div class="form-group">
-                        <label for="toolIcon">Icon (Emoji)</label>
-                        <input type="text" id="toolIcon" placeholder="🔗" maxlength="2">
+                        <label for="toolIcon">Icon (Emoji or URL)</label>
+                        <input type="text" id="toolIcon" placeholder="🔗">
                     </div>
                     <div class="form-group">
                         <label for="toolDescription">Description</label>
@@ -1197,17 +144,17 @@
                     </div>
                     <div class="form-group">
                         <label for="toolCategory">Category</label>
-                        <input type="text" id="toolCategory" placeholder="e.g., Analytics, Sales, etc.">
+                        <input type="text" id="toolCategory" placeholder="e.g., Analytics, Sales">
                     </div>
                     <div class="form-group">
-                        <label for="toolOrder">Display Order</label>
-                        <input type="number" id="toolOrder" value="0" min="0">
+                        <label for="toolDisplayOrder">Display Order</label>
+                        <input type="number" id="toolDisplayOrder" value="0">
                     </div>
                 </form>
             </div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeToolModal()">Cancel</button>
-                <button class="btn btn-danger" id="deleteBtn" onclick="deleteTool()" style="display: none;">Delete</button>
+                <button class="btn btn-danger" id="deleteBtn" style="display: none;" onclick="deleteTool()">Delete</button>
                 <button class="btn" onclick="saveTool()">Save</button>
             </div>
         </div>
@@ -1272,26 +219,26 @@
                 <p style="color: #94a3b8; margin-bottom: 20px;">
                     Pick an assistant to open in a new tab. Use the portal sidebar to jump back anytime.
                 </p>
-                <div class="ai-tools-modal-grid">
-                    <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" onclick="trackToolClick(0, 'ChatGPT', 'https://chatgpt.com/');">
-                        <span>💬</span>
-                        <strong>ChatGPT</strong>
-                        <small>OpenAI conversational assistant</small>
+                <div class="ai-tools-modal-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                    <a href="https://chatgpt.com/" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" style="background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px; text-decoration: none; color: inherit; display: block;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#334155'">
+                        <div style="font-size: 24px; margin-bottom: 8px;">💬</div>
+                        <strong style="display: block; color: #f1f5f9;">ChatGPT</strong>
+                        <small style="color: #94a3b8;">OpenAI conversational assistant</small>
                     </a>
-                    <a href="https://gemini.google.com/app" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" onclick="trackToolClick(0, 'Gemini', 'https://gemini.google.com/app');">
-                        <span>✨</span>
-                        <strong>Gemini</strong>
-                        <small>Google multimodal AI workspace</small>
+                    <a href="https://gemini.google.com/app" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" style="background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px; text-decoration: none; color: inherit; display: block;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#334155'">
+                        <div style="font-size: 24px; margin-bottom: 8px;">✨</div>
+                        <strong style="display: block; color: #f1f5f9;">Gemini</strong>
+                        <small style="color: #94a3b8;">Google multimodal AI workspace</small>
                     </a>
-                    <a href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" onclick="trackToolClick(0, 'Claude', 'https://claude.ai/new');">
-                        <span>🧠</span>
-                        <strong>Claude</strong>
-                        <small>Anthropic assistant for long docs</small>
+                    <a href="https://claude.ai/new" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" style="background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px; text-decoration: none; color: inherit; display: block;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#334155'">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🧠</div>
+                        <strong style="display: block; color: #f1f5f9;">Claude</strong>
+                        <small style="color: #94a3b8;">Anthropic assistant for long docs</small>
                     </a>
-                    <a href="https://grok.com/" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" onclick="trackToolClick(0, 'Grok', 'https://grok.com/');">
-                        <span>🚀</span>
-                        <strong>Grok</strong>
-                        <small>xAI real-time Grok answers</small>
+                    <a href="https://grok.com/" target="_blank" rel="noopener noreferrer" class="ai-tools-modal-card" style="background: #0f172a; border: 1px solid #334155; border-radius: 12px; padding: 16px; text-decoration: none; color: inherit; display: block;" onmouseover="this.style.borderColor='#3b82f6'" onmouseout="this.style.borderColor='#334155'">
+                        <div style="font-size: 24px; margin-bottom: 8px;">🚀</div>
+                        <strong style="display: block; color: #f1f5f9;">Grok</strong>
+                        <small style="color: #94a3b8;">xAI real-time Grok answers</small>
                     </a>
                 </div>
             </div>
@@ -1300,1220 +247,108 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
+{% block scripts %}
     <script>
         let currentTools = [];
-        let isAdmin = false; // In production, check user role
+        let isAdmin = false;
 
-        function setActiveNav(view) {
-            document.querySelectorAll('.nav-item').forEach(item => {
-                if (item.dataset && item.dataset.view === view) {
-                    item.classList.add('active');
-                } else {
-                    item.classList.remove('active');
-                }
-            });
+        function showDashboard() {
+            document.getElementById('toolsView').style.display = 'grid';
+            document.getElementById('analyticsView').style.display = 'none';
+            document.getElementById('adminView').style.display = 'none';
         }
 
-        // Check if user is admin (you can implement proper admin check)
-        async function checkAdminStatus() {
-            // For now, show admin for all users (you should implement proper role checking)
-            isAdmin = true;
-            if (isAdmin) {
-                document.getElementById('adminBtn').style.display = 'block';
-                document.getElementById('adminNavItem').style.display = 'block';
-            }
+        function showAnalytics() {
+            document.getElementById('toolsView').style.display = 'none';
+            document.getElementById('analyticsView').style.display = 'block';
+            document.getElementById('adminView').style.display = 'none';
+            loadAnalytics();
         }
 
-        // Load tools
+        function showAdminView() {
+            document.getElementById('toolsView').style.display = 'none';
+            document.getElementById('analyticsView').style.display = 'none';
+            document.getElementById('adminView').style.display = 'block';
+            renderToolsList();
+        }
+
         async function loadTools() {
             try {
-                const response = await fetch('/api/tools?t=' + new Date().getTime(), {
-                    credentials: 'include'
-                });
+                const response = await fetch('/api/tools?t=' + new Date().getTime());
                 const data = await response.json();
-                
                 if (data.success) {
                     currentTools = data.tools || [];
                     renderToolsGrid();
-                    if (isAdmin) {
-                        renderToolsList();
-                    }
                 }
-            } catch (error) {
-                console.error('Error loading tools:', error);
-            }
+            } catch (error) { console.error('Error loading tools:', error); }
         }
 
-        // Render tools grid
         function renderToolsGrid() {
             const grid = document.getElementById('toolsGrid');
-            
-            if (currentTools.length === 0) {
-                grid.innerHTML = `
-                    <div class="empty-state" style="grid-column: 1 / -1;">
-                        <div class="empty-state-icon">🔗</div>
-                        <h3>No tools available</h3>
-                        <p>Tools will appear here once they are added.</p>
-                    </div>
-                `;
-                return;
-            }
-
+            if (!grid) return;
             grid.innerHTML = currentTools.map(tool => {
-                // Special handling for AI Tools quick launcher
+                // Handling for special cards
                 if (tool.name === "AI Tools" && tool.url === "#ai-tools-dropdown") {
                     return `
-                        <div class="tool-card ai-tools-card" onclick="openAIToolsModal(); trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return false;">
-                            <div class="tool-icon"><span>${tool.icon || '🤖'}</span></div>
+                        <div class="tool-card ai-tools-card" onclick="openAIToolsModal(); trackToolClick(${tool.id}, '${tool.name}', '${tool.url}'); return false;" style="cursor: pointer;">
+                            <div class="tool-icon">${tool.icon || '🤖'}</div>
                             <div class="tool-name">${tool.name}</div>
-                            ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
-                            ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
-                            <div class="ai-tools-preview">
-                                <div class="ai-tool-chip"><span>💬</span>ChatGPT</div>
-                                <div class="ai-tool-chip"><span>✨</span>Gemini</div>
-                                <div class="ai-tool-chip"><span>🧠</span>Claude</div>
-                                <div class="ai-tool-chip"><span>🚀</span>Grok</div>
-                            </div>
-                            <div class="ai-tools-hint"><span>↗</span>Quick launcher</div>
+                            <div style="font-size: 12px; color: #94a3b8;">Quick launcher</div>
                         </div>
                     `;
                 }
-                
-                // Special handling for Joke of the Day
-                if (tool.name === "Joke of the Day" && tool.url === "#joke-of-the-day") {
-                    return `
-                        <div class="tool-card" onclick="showJokeModal(); trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return false;" style="cursor: pointer;">
-                            <div class="tool-icon"><span>${tool.icon || '😄'}</span></div>
-                            <div class="tool-name">${tool.name}</div>
-                            ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
-                            ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
-                        </div>
-                    `;
-                }
-                
-                // Special handling for Weather
-                if (tool.name === "Weather" && tool.url === "#weather") {
-                    return `
-                        <div class="tool-card" onclick="showWeatherModal(); trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return false;" style="cursor: pointer;">
-                            <div class="tool-icon"><span>${tool.icon || '🌤️'}</span></div>
-                            <div class="tool-name">${tool.name}</div>
-                            ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
-                            ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
-                        </div>
-                    `;
-                }
-                
-                // Regular tool card
-                const isClientSatisfaction = tool.name === "Client Satisfaction";
-                const linkHref = isClientSatisfaction ? "/client-satisfaction" : tool.url;
-                const isLargeLogo = ['RingCentral', 'QuickBooks', 'Google Ads', 'Adams Keegan Efficenter'].includes(tool.name);
-                const logoClass = isLargeLogo ? 'large-logo' : '';
-                
-                const iconHtml = tool.icon && tool.icon.startsWith('http') 
-                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" class="${logoClass}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
-                    : tool.icon && tool.icon.startsWith('/static/')
-                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" class="${logoClass}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
-                    : `<div class="tool-icon"><span>${tool.icon || '🔗'}</span></div>`;
-                
-                // Internal routes (start with /) should open in same window, external URLs in new tab
-                const isInternalRoute = linkHref.startsWith('/');
-                const targetAttr = isInternalRoute ? '' : 'target="_blank"';
-                
                 return `
-                    <a href="${linkHref}" ${targetAttr} class="tool-card" onclick="trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return true;">
-                        ${iconHtml}
+                    <a href="${tool.url}" class="tool-card" target="_blank" rel="noopener noreferrer" onclick="trackToolClick(${tool.id}, '${tool.name}', '${tool.url}')">
+                        <div class="tool-icon">${tool.icon || '🔗'}</div>
                         <div class="tool-name">${tool.name}</div>
-                        ${tool.description ? `<div class="tool-description">${tool.description}</div>` : ''}
-                        ${tool.category ? `<div class="tool-category">${tool.category}</div>` : ''}
+                        ${tool.description ? `<div class="tool-description" style="font-size: 12px; color: #94a3b8; margin-top: 4px;">${tool.description}</div>` : ''}
                     </a>
                 `;
             }).join('');
         }
 
-        // Render tools list for admin
-        function renderToolsList() {
-            const list = document.getElementById('toolsList');
-            
-            if (currentTools.length === 0) {
-                list.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🔗</div>
-                        <h3>No tools yet</h3>
-                        <p>Click "Add Tool" to get started.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            list.innerHTML = currentTools.map((tool, index) => {
-                // Handle icon display - show image if URL, otherwise show emoji/text
-                let iconHtml = '';
-                if (tool.icon && (tool.icon.startsWith('http') || tool.icon.startsWith('/static/'))) {
-                    iconHtml = `<img src="${tool.icon}" alt="${tool.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"><span style="display:none;">🔗</span>`;
-                } else {
-                    iconHtml = tool.icon || '🔗';
-                }
-                
-                return `
-                    <div class="tool-item" draggable="true" data-tool-id="${tool.id}" data-index="${index}">
-                        <div class="tool-item-info">
-                            <span class="drag-handle">☰</span>
-                            <span class="tool-item-icon">${iconHtml}</span>
-                            <div class="tool-item-details">
-                                <h3>${tool.name}</h3>
-                                <p>${tool.url}</p>
-                            </div>
-                        </div>
-                        <div class="tool-item-actions">
-                            <button class="btn btn-small" onclick="editTool(${tool.id})">Edit</button>
-                            <button class="btn btn-small btn-danger" onclick="confirmDeleteTool(${tool.id})">Delete</button>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            // Initialize drag and drop
-            initializeDragAndDrop();
-        }
-
-        // Show tools view
-        function showToolsView() {
-            document.getElementById('toolsView').style.display = 'block';
-            document.getElementById('adminView').style.display = 'none';
-            document.getElementById('analyticsView').style.display = 'none';
-            setActiveNav('tools');
-        }
-
-        // Show analytics view
-        function showAnalyticsView() {
-            document.getElementById('toolsView').style.display = 'none';
-            document.getElementById('adminView').style.display = 'none';
-            document.getElementById('analyticsView').style.display = 'block';
-            setActiveNav('analytics');
-            loadAnalytics();
-        }
-
-        // Show admin view
-        function showAdminView() {
-            document.getElementById('toolsView').style.display = 'none';
-            document.getElementById('adminView').style.display = 'block';
-            document.getElementById('analyticsView').style.display = 'none';
-            if (document.getElementById('adminNavItem')) {
-                setActiveNav('admin');
-            }
-            if (isAdmin) {
-                renderToolsList();
-            }
-        }
-
-        // Show add tool modal
-        function showAddToolModal() {
-            document.getElementById('modalTitle').textContent = 'Add Tool';
-            document.getElementById('toolForm').reset();
-            document.getElementById('toolId').value = '';
-            document.getElementById('deleteBtn').style.display = 'none';
-            document.getElementById('toolModal').classList.add('show');
-        }
-
-        // Show edit tool modal
-        function editTool(toolId) {
-            const tool = currentTools.find(t => t.id === toolId);
-            if (!tool) return;
-
-            document.getElementById('modalTitle').textContent = 'Edit Tool';
-            document.getElementById('toolId').value = tool.id;
-            document.getElementById('toolName').value = tool.name;
-            document.getElementById('toolUrl').value = tool.url;
-            document.getElementById('toolIcon').value = tool.icon || '';
-            document.getElementById('toolDescription').value = tool.description || '';
-            document.getElementById('toolCategory').value = tool.category || '';
-            document.getElementById('toolOrder').value = tool.display_order || 0;
-            document.getElementById('deleteBtn').style.display = 'block';
-            document.getElementById('toolModal').classList.add('show');
-        }
-
-        // Close tool modal
-        function closeToolModal() {
-            document.getElementById('toolModal').classList.remove('show');
-        }
-
-        // Joke of the Day functions
-        function showJokeModal() {
-            document.getElementById('jokeModal').classList.add('show');
-            getNewJoke();
-        }
-
-        function closeJokeModal() {
-            document.getElementById('jokeModal').classList.remove('show');
-        }
-
-        async function getNewJoke() {
-            const jokeContent = document.getElementById('jokeContent');
-            jokeContent.innerHTML = `
-                <div style="font-size: 48px; margin-bottom: 20px;">😄</div>
-                <div style="color: #94a3b8;">Loading joke...</div>
-            `;
-
-            try {
-                // Try multiple joke APIs for variety
-                const apis = [
-                    'https://v2.jokeapi.dev/joke/Any?type=single',
-                    'https://v2.jokeapi.dev/joke/Any?type=twopart',
-                    'https://official-joke-api.appspot.com/random_joke'
-                ];
-                
-                const api = apis[Math.floor(Math.random() * apis.length)];
-                const response = await fetch(api);
-                const data = await response.json();
-
-                let jokeHtml = '';
-                
-                if (data.type === 'twopart') {
-                    // Two-part joke
-                    jokeHtml = `
-                        <div style="font-size: 48px; margin-bottom: 24px;">😄</div>
-                        <div style="color: #f1f5f9; font-size: 18px; font-weight: 600; margin-bottom: 16px; line-height: 1.5;">
-                            ${data.setup}
-                        </div>
-                        <div style="color: #3b82f6; font-size: 16px; line-height: 1.5; font-style: italic;">
-                            ${data.delivery}
-                        </div>
-                    `;
-                } else if (data.setup && data.punchline) {
-                    // Two-part joke from official-joke-api
-                    jokeHtml = `
-                        <div style="font-size: 48px; margin-bottom: 24px;">😄</div>
-                        <div style="color: #f1f5f9; font-size: 18px; font-weight: 600; margin-bottom: 16px; line-height: 1.5;">
-                            ${data.setup}
-                        </div>
-                        <div style="color: #3b82f6; font-size: 16px; line-height: 1.5; font-style: italic; margin-top: 12px;">
-                            ${data.punchline}
-                        </div>
-                    `;
-                } else if (data.joke) {
-                    // Single joke from jokeapi
-                    jokeHtml = `
-                        <div style="font-size: 48px; margin-bottom: 24px;">😄</div>
-                        <div style="color: #f1f5f9; font-size: 18px; line-height: 1.5;">
-                            ${data.joke}
-                        </div>
-                    `;
-                } else {
-                    throw new Error('Unexpected joke format');
-                }
-
-                jokeContent.innerHTML = jokeHtml;
-            } catch (error) {
-                console.error('Error fetching joke:', error);
-                jokeContent.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 20px;">😅</div>
-                    <div style="color: #94a3b8;">Couldn't load a joke right now, but here's a smile! 😊</div>
-                    <div style="color: #64748b; font-size: 14px; margin-top: 12px;">Try again in a moment!</div>
-                `;
-            }
-        }
-
-        // Weather functions
-        function showWeatherModal() {
-            document.getElementById('weatherModal').classList.add('show');
-            // Auto-detect location when modal opens
-            getCurrentLocationWeather();
-        }
-
-        function closeWeatherModal() {
-            document.getElementById('weatherModal').classList.remove('show');
-        }
-
-        function openAIToolsModal() {
-            document.getElementById('aiToolsModal').classList.add('show');
-        }
-
-        function closeAIToolsModal() {
-            document.getElementById('aiToolsModal').classList.remove('show');
-        }
-
-        async function getCurrentLocationWeather() {
-            const weatherContent = document.getElementById('weatherContent');
-            weatherContent.innerHTML = `
-                <div style="font-size: 48px; margin-bottom: 16px;">🌤️</div>
-                <div style="color: #94a3b8;">Getting your location...</div>
-            `;
-
-            if (!navigator.geolocation) {
-                weatherContent.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 16px;">📍</div>
-                    <div style="color: #ef4444;">Geolocation is not supported by your browser</div>
-                    <div style="color: #64748b; font-size: 14px; margin-top: 12px;">Please search for a city or zip code instead</div>
-                `;
-                return;
-            }
-
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    await fetchWeatherByCoords(lat, lon);
-                },
-                (error) => {
-                    console.error('Geolocation error:', error);
-                    weatherContent.innerHTML = `
-                        <div style="font-size: 48px; margin-bottom: 16px;">📍</div>
-                        <div style="color: #ef4444;">Could not get your location</div>
-                        <div style="color: #64748b; font-size: 14px; margin-top: 12px;">Please search for a city or zip code instead</div>
-                    `;
-                }
-            );
-        }
-
-        async function searchWeather() {
-            const searchInput = document.getElementById('weatherSearch');
-            const query = searchInput.value.trim();
-            
-            if (!query) {
-                return;
-            }
-
-            const weatherContent = document.getElementById('weatherContent');
-            weatherContent.innerHTML = `
-                <div style="font-size: 48px; margin-bottom: 16px;">🌤️</div>
-                <div style="color: #94a3b8;">Searching for weather...</div>
-            `;
-
-            try {
-                const response = await fetch(`/api/weather?q=${encodeURIComponent(query)}`, {
-                    credentials: 'include'
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    displayWeather(data.weather);
-                } else {
-                    weatherContent.innerHTML = `
-                        <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
-                        <div style="color: #ef4444;">${data.error || 'Could not find weather for that location'}</div>
-                        <div style="color: #64748b; font-size: 14px; margin-top: 12px;">Please try a different city or zip code</div>
-                    `;
-                }
-            } catch (error) {
-                console.error('Error fetching weather:', error);
-                weatherContent.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
-                    <div style="color: #ef4444;">Error loading weather</div>
-                    <div style="color: #64748b; font-size: 14px; margin-top: 12px;">Please try again</div>
-                `;
-            }
-        }
-
-        async function fetchWeatherByCoords(lat, lon) {
-            const weatherContent = document.getElementById('weatherContent');
-            weatherContent.innerHTML = `
-                <div style="font-size: 48px; margin-bottom: 16px;">🌤️</div>
-                <div style="color: #94a3b8;">Loading weather...</div>
-            `;
-
-            try {
-                const response = await fetch(`/api/weather?lat=${lat}&lon=${lon}`, {
-                    credentials: 'include'
-                });
-                const data = await response.json();
-
-                if (data.success) {
-                    displayWeather(data.weather);
-                } else {
-                    weatherContent.innerHTML = `
-                        <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
-                        <div style="color: #ef4444;">${data.error || 'Could not load weather'}</div>
-                    `;
-                }
-            } catch (error) {
-                console.error('Error fetching weather:', error);
-                weatherContent.innerHTML = `
-                    <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
-                    <div style="color: #ef4444;">Error loading weather</div>
-                `;
-            }
-        }
-
-        function displayWeather(weather) {
-            const weatherContent = document.getElementById('weatherContent');
-            
-            // Get weather icon based on condition
-            const weatherIcons = {
-                'clear': '☀️',
-                'clouds': '☁️',
-                'rain': '🌧️',
-                'drizzle': '🌦️',
-                'thunderstorm': '⛈️',
-                'snow': '❄️',
-                'mist': '🌫️',
-                'fog': '🌫️',
-                'haze': '🌫️'
-            };
-
-            const mainCondition = weather.weather[0].main.toLowerCase();
-            const icon = weatherIcons[mainCondition] || '🌤️';
-            
-            // Get background gradient based on weather
-            const gradients = {
-                'clear': 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                'clouds': 'linear-gradient(135deg, #74b9ff 0%, #0984e3 100%)',
-                'rain': 'linear-gradient(135deg, #636e72 0%, #2d3436 100%)',
-                'drizzle': 'linear-gradient(135deg, #74b9ff 0%, #636e72 100%)',
-                'thunderstorm': 'linear-gradient(135deg, #2d3436 0%, #000000 100%)',
-                'snow': 'linear-gradient(135deg, #dfe6e9 0%, #b2bec3 100%)',
-                'mist': 'linear-gradient(135deg, #b2bec3 0%, #636e72 100%)',
-                'fog': 'linear-gradient(135deg, #b2bec3 0%, #636e72 100%)',
-                'haze': 'linear-gradient(135deg, #fdcb6e 0%, #e17055 100%)'
-            };
-
-            const gradient = gradients[mainCondition] || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-            const tempF = Math.round((weather.main.temp - 273.15) * 9/5 + 32);
-            const feelsLikeF = Math.round((weather.main.feels_like - 273.15) * 9/5 + 32);
-            const humidity = weather.main.humidity;
-            const windSpeed = Math.round(weather.wind.speed * 2.237); // Convert m/s to mph
-            const description = weather.weather[0].description.charAt(0).toUpperCase() + weather.weather[0].description.slice(1);
-
-            weatherContent.innerHTML = `
-                <div style="background: ${gradient}; border-radius: 16px; padding: 32px; margin-bottom: 20px; color: white;">
-                    <div style="font-size: 80px; margin-bottom: 16px; text-align: center;">${icon}</div>
-                    <div style="font-size: 48px; font-weight: 700; margin-bottom: 8px; text-align: center;">${tempF}°F</div>
-                    <div style="font-size: 18px; opacity: 0.9; margin-bottom: 16px; text-align: center;">${description}</div>
-                    <div style="font-size: 20px; font-weight: 600; text-align: center;">${weather.name}${weather.sys.country ? ', ' + weather.sys.country : ''}</div>
-                </div>
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
-                    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; text-align: center;">
-                        <div style="color: #94a3b8; font-size: 12px; margin-bottom: 4px;">Feels Like</div>
-                        <div style="color: #f1f5f9; font-size: 20px; font-weight: 600;">${feelsLikeF}°F</div>
-                    </div>
-                    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; text-align: center;">
-                        <div style="color: #94a3b8; font-size: 12px; margin-bottom: 4px;">Humidity</div>
-                        <div style="color: #f1f5f9; font-size: 20px; font-weight: 600;">${humidity}%</div>
-                    </div>
-                    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; text-align: center;">
-                        <div style="color: #94a3b8; font-size: 12px; margin-bottom: 4px;">Wind Speed</div>
-                        <div style="color: #f1f5f9; font-size: 20px; font-weight: 600;">${windSpeed} mph</div>
-                    </div>
-                    <div style="background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px; text-align: center;">
-                        <div style="color: #94a3b8; font-size: 12px; margin-bottom: 4px;">Pressure</div>
-                        <div style="color: #f1f5f9; font-size: 20px; font-weight: 600;">${weather.main.pressure} hPa</div>
-                    </div>
-                </div>
-            `;
-        }
-
-        // Close weather modal on outside click
-        document.getElementById('weatherModal')?.addEventListener('click', function(e) {
-            if (e.target.id === 'weatherModal') {
-                closeWeatherModal();
-            }
-        });
-
-        // Close joke modal on outside click
-        document.getElementById('jokeModal')?.addEventListener('click', function(e) {
-            if (e.target.id === 'jokeModal') {
-                closeJokeModal();
-            }
-        });
-
-        // Close AI tools modal on outside click
-        document.getElementById('aiToolsModal')?.addEventListener('click', function(e) {
-            if (e.target.id === 'aiToolsModal') {
-                closeAIToolsModal();
-            }
-        });
-
-        // Save tool
-        async function saveTool() {
-            const toolId = document.getElementById('toolId').value;
-            const toolData = {
-                name: document.getElementById('toolName').value,
-                url: document.getElementById('toolUrl').value,
-                icon: document.getElementById('toolIcon').value || '🔗',
-                description: document.getElementById('toolDescription').value,
-                category: document.getElementById('toolCategory').value,
-                display_order: parseInt(document.getElementById('toolOrder').value) || 0
-            };
-
-            try {
-                let response;
-                if (toolId) {
-                    // Update
-                    response = await fetch(`/api/tools/${toolId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify(toolData)
-                    });
-                } else {
-                    // Create
-                    response = await fetch('/api/tools', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify(toolData)
-                    });
-                }
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    closeToolModal();
-                    await loadTools();
-                } else {
-                    alert('Error: ' + (result.detail || 'Failed to save tool'));
-                }
-            } catch (error) {
-                console.error('Error saving tool:', error);
-                alert('Error saving tool: ' + error.message);
-            }
-        }
-
-        // Confirm delete tool
-        function confirmDeleteTool(toolId) {
-            const tool = currentTools.find(t => t.id === toolId);
-            if (!tool) return;
-
-            if (confirm(`Are you sure you want to delete "${tool.name}"?`)) {
-                deleteTool(toolId);
-            }
-        }
-
-        // Delete tool
-        async function deleteTool(toolId = null) {
-            const id = toolId || document.getElementById('toolId').value;
-            
-            try {
-                const response = await fetch(`/api/tools/${id}`, {
-                    method: 'DELETE',
-                    credentials: 'include'
-                });
-
-                const result = await response.json();
-                
-                if (result.success) {
-                    closeToolModal();
-                    await loadTools();
-                } else {
-                    alert('Error: ' + (result.detail || 'Failed to delete tool'));
-                }
-            } catch (error) {
-                console.error('Error deleting tool:', error);
-                alert('Error deleting tool: ' + error.message);
-            }
-        }
-
-        // Logout
-        async function logout() {
-            try {
-                await trackSessionEnd();
-                await fetch('/auth/logout', {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                window.location.href = '/auth/login';
-            } catch (error) {
-                console.error('Error logging out:', error);
-                window.location.href = '/auth/login';
-            }
-        }
-
-        // Close modal on outside click
-        document.getElementById('toolModal').addEventListener('click', function(e) {
-            if (e.target === this) {
-                closeToolModal();
-            }
-        });
-
-        // Track tool click
         async function trackToolClick(toolId, toolName, toolUrl) {
             try {
                 await fetch('/api/analytics/track-click', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        tool_id: toolId,
-                        tool_name: toolName,
-                        tool_url: toolUrl
-                    })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tool_id: toolId, tool_name: toolName, tool_url: toolUrl })
                 });
-            } catch (error) {
-                console.error('Error tracking click:', error);
-            }
+            } catch (e) {}
         }
 
-        // Load analytics data
-        async function loadAnalytics() {
-            try {
-                const response = await fetch('/api/analytics/summary', {
-                    credentials: 'include'
-                });
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Update summary stats
-                    document.getElementById('totalSessions').textContent = data.summary.total_sessions || 0;
-                    document.getElementById('totalClicks').textContent = data.summary.total_clicks || 0;
-                    document.getElementById('activeUsers').textContent = data.summary.active_users || 0;
-                    
-                    // Render sessions table
-                    const sessionsBody = document.getElementById('sessionsTableBody');
-                    if (data.sessions && data.sessions.length > 0) {
-                        sessionsBody.innerHTML = data.sessions.map(session => {
-                            const loginTime = new Date(session.login_time).toLocaleString();
-                            const duration = session.duration_formatted || (session.duration_seconds ? `${Math.floor(session.duration_seconds / 60)}m` : 'Active');
-                            const status = session.logout_time ? 'Completed' : '<span style="color: #10b981;">Active</span>';
-                            return `
-                                <tr style="border-bottom: 1px solid #334155;">
-                                    <td style="padding: 12px; color: #e2e8f0;">${session.user_name || session.user_email}</td>
-                                    <td style="padding: 12px; color: #94a3b8;">${loginTime}</td>
-                                    <td style="padding: 12px; color: #94a3b8;">${duration}</td>
-                                    <td style="padding: 12px; color: #94a3b8;">${status}</td>
-                                </tr>
-                            `;
-                        }).join('');
-                    } else {
-                        sessionsBody.innerHTML = '<tr><td colspan="4" style="padding: 20px; text-align: center; color: #94a3b8;">No sessions yet</td></tr>';
-                    }
-                    
-                    // Render clicks table
-                    const clicksBody = document.getElementById('clicksTableBody');
-                    if (data.clicks && data.clicks.length > 0) {
-                        clicksBody.innerHTML = data.clicks.map(click => {
-                            const clickTime = new Date(click.clicked_at).toLocaleString();
-                            return `
-                                <tr style="border-bottom: 1px solid #334155;">
-                                    <td style="padding: 12px; color: #e2e8f0;">${click.user_name || click.user_email}</td>
-                                    <td style="padding: 12px; color: #e2e8f0;">${click.tool_name}</td>
-                                    <td style="padding: 12px; color: #94a3b8;">${clickTime}</td>
-                                </tr>
-                            `;
-                        }).join('');
-                    } else {
-                        clicksBody.innerHTML = '<tr><td colspan="3" style="padding: 20px; text-align: center; color: #94a3b8;">No clicks yet</td></tr>';
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading analytics:', error);
-            }
-        }
-
-        // Track session start
-        let sessionStartTime = Date.now();
-        async function trackSessionStart() {
-            try {
-                await fetch('/api/analytics/track-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        action: 'login'
-                    })
-                });
-            } catch (error) {
-                console.error('Error tracking session:', error);
-            }
-        }
-
-        // Track session end
-        async function trackSessionEnd() {
-            try {
-                const duration = Math.floor((Date.now() - sessionStartTime) / 1000);
-                await fetch('/api/analytics/track-session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        action: 'logout',
-                        duration_seconds: duration
-                    })
-                });
-            } catch (error) {
-                console.error('Error tracking session end:', error);
-            }
-        }
-
-        // World Clocks
-        function updateWorldClocks() {
-            const timezones = [
-                { id: 'london', tz: 'Europe/London', city: 'London', weatherCity: 'London,GB' },
-                { id: 'denver', tz: 'America/Denver', city: 'Denver', weatherCity: 'Denver,US' },
-                { id: 'manila', tz: 'Asia/Manila', city: 'Manila', weatherCity: 'Manila,PH' },
-                { id: 'dhaka', tz: 'Asia/Dhaka', city: 'Dhaka', weatherCity: 'Dhaka,BD' }
-            ];
-
-            timezones.forEach(({ id, tz, city }) => {
-                try {
-                    const now = new Date();
-                    const formatter = new Intl.DateTimeFormat('en-US', {
-                        timeZone: tz,
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: false
-                    });
-                    const dateFormatter = new Intl.DateTimeFormat('en-US', {
-                        timeZone: tz,
-                        month: 'short',
-                        day: 'numeric',
-                        weekday: 'short'
-                    });
-                    
-                    // Get hours and minutes for clock hands
-                    const timeFormatter = new Intl.DateTimeFormat('en-US', {
-                        timeZone: tz,
-                        hour: 'numeric',
-                        minute: 'numeric',
-                        hour12: false
-                    });
-                    const parts = timeFormatter.formatToParts(now);
-                    const hour = parseInt(parts.find(p => p.type === 'hour').value);
-                    const minute = parseInt(parts.find(p => p.type === 'minute').value);
-
-                    const timeStr = formatter.format(now);
-                    const dateStr = dateFormatter.format(now);
-
-                    const timeEl = document.getElementById(`clock-${id}`);
-                    const dateEl = document.getElementById(`date-${id}`);
-                    if (timeEl) timeEl.textContent = timeStr;
-                    if (dateEl) dateEl.textContent = dateStr;
-
-                    // Update clock hands
-                    // Hour hand: 30 degrees per hour + 0.5 degrees per minute
-                    const hourAngle = (hour % 12) * 30 + minute * 0.5;
-                    // Minute hand: 6 degrees per minute
-                    const minuteAngle = minute * 6;
-
-                    const hourHand = document.getElementById(`hour-hand-${id}`);
-                    const minuteHand = document.getElementById(`minute-hand-${id}`);
-                    if (hourHand) {
-                        hourHand.style.transform = `rotate(${hourAngle}deg)`;
-                    }
-                    if (minuteHand) {
-                        minuteHand.style.transform = `rotate(${minuteAngle}deg)`;
-                    }
-                } catch (error) {
-                    console.error(`Error updating clock for ${city}:`, error);
-                }
-            });
-        }
-
-        // Update weather icons for clock cities
-        async function updateClockWeather() {
-            const cities = [
-                { id: 'london', query: 'London,GB' },
-                { id: 'denver', query: 'Denver,US' },
-                { id: 'manila', query: 'Manila,PH' },
-                { id: 'dhaka', query: 'Dhaka,BD' }
-            ];
-
-            // More detailed weather icon mapping based on OpenWeatherMap icon codes and descriptions
-            function getWeatherIcon(weatherData) {
-                if (!weatherData || !weatherData.weather || !weatherData.weather[0]) {
-                    return '🌤️';
-                }
-
-                const main = weatherData.weather[0].main.toLowerCase();
-                const description = weatherData.weather[0].description.toLowerCase();
-                const iconCode = weatherData.weather[0].icon;
-
-                // Use icon code for more accurate representation
-                // OpenWeatherMap icon codes: 01d/01n = clear, 02d/02n = few clouds, 03d/03n = scattered clouds,
-                // 04d/04n = broken clouds, 09d/09n = shower rain, 10d/10n = rain, 11d/11n = thunderstorm,
-                // 13d/13n = snow, 50d/50n = mist
-                
-                if (iconCode) {
-                    if (iconCode.startsWith('01')) {
-                        return '☀️'; // Clear sky
-                    } else if (iconCode.startsWith('02')) {
-                        return '🌤️'; // Few clouds / partly cloudy
-                    } else if (iconCode.startsWith('03')) {
-                        return '⛅'; // Scattered clouds
-                    } else if (iconCode.startsWith('04')) {
-                        return '☁️'; // Broken clouds / overcast
-                    } else if (iconCode.startsWith('09')) {
-                        return '🌦️'; // Shower rain
-                    } else if (iconCode.startsWith('10')) {
-                        return '🌧️'; // Rain
-                    } else if (iconCode.startsWith('11')) {
-                        return '⛈️'; // Thunderstorm
-                    } else if (iconCode.startsWith('13')) {
-                        return '❄️'; // Snow
-                    } else if (iconCode.startsWith('50')) {
-                        return '🌫️'; // Mist/Fog
-                    }
-                }
-
-                // Fallback to main condition if icon code not available
-                if (main === 'clear') {
-                    return '☀️';
-                } else if (main === 'clouds') {
-                    // Check description for more detail
-                    if (description.includes('few') || description.includes('scattered')) {
-                        return '🌤️'; // Partly cloudy
-                    } else if (description.includes('broken') || description.includes('overcast')) {
-                        return '☁️'; // Cloudy/Overcast
-                    }
-                    return '☁️'; // Default for clouds
-                } else if (main === 'rain') {
-                    if (description.includes('drizzle') || description.includes('light')) {
-                        return '🌦️';
-                    }
-                    return '🌧️';
-                } else if (main === 'drizzle') {
-                    return '🌦️';
-                } else if (main === 'thunderstorm') {
-                    return '⛈️';
-                } else if (main === 'snow') {
-                    return '❄️';
-                } else if (main === 'mist' || main === 'fog' || main === 'haze') {
-                    return '🌫️';
-                }
-
-                return '🌤️'; // Default
-            }
-
-            for (const { id, query } of cities) {
-                try {
-                    const response = await fetch(`/api/weather?q=${encodeURIComponent(query)}`, {
-                        credentials: 'include'
-                    });
-                    const data = await response.json();
-                    
-                    if (data.success && data.weather) {
-                        const icon = getWeatherIcon(data.weather);
-                        const weatherIconEl = document.getElementById(`weather-icon-${id}`);
-                        if (weatherIconEl) {
-                            weatherIconEl.textContent = icon;
-                        }
-                    } else {
-                        // If API key not configured or error, show default icon
-                        const weatherIconEl = document.getElementById(`weather-icon-${id}`);
-                        if (weatherIconEl) {
-                            weatherIconEl.textContent = '🌤️';
-                        }
-                    }
-                } catch (error) {
-                    console.error(`Error fetching weather for ${query}:`, error);
-                    // Keep default icon on error
-                    const weatherIconEl = document.getElementById(`weather-icon-${id}`);
-                    if (weatherIconEl) {
-                        weatherIconEl.textContent = '🌤️';
-                    }
-                }
-            }
-        }
-
-        // Update clocks immediately and then every minute
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                updateWorldClocks();
-                setInterval(updateWorldClocks, 60000);
-                // Update weather icons on load and every 30 minutes
-                updateClockWeather();
-                setInterval(updateClockWeather, 1800000); // 30 minutes
-            });
-        } else {
-            updateWorldClocks();
-            setInterval(updateWorldClocks, 60000);
-            updateClockWeather();
-            setInterval(updateClockWeather, 1800000); // 30 minutes
-        }
+        // Add stubs for modals
+        function openAIToolsModal() { document.getElementById('aiToolsModal').style.display = 'flex'; }
+        function closeAIToolsModal() { document.getElementById('aiToolsModal').style.display = 'none'; }
+        function closeToolModal() { document.getElementById('toolModal').style.display = 'none'; }
+        function closeJokeModal() { document.getElementById('jokeModal').style.display = 'none'; }
+        function closeWeatherModal() { document.getElementById('weatherModal').style.display = 'none'; }
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', async () => {
-            await checkAdminStatus();
-            await loadTools();
-            await trackSessionStart();
+        document.addEventListener('DOMContentLoaded', () => {
+            loadTools();
+            loadActivityFeed();
+            
+            // Check for view param in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const view = urlParams.get('view');
+            if (view === 'analytics') showAnalytics();
+            else if (view === 'admin') showAdminView();
         });
 
-        // Track session end on page unload
-        window.addEventListener('beforeunload', () => {
-            trackSessionEnd();
-        });
-
-        // Drag and drop functionality
-        let draggedElement = null;
-        let draggedIndex = null;
-
-        function initializeDragAndDrop() {
-            const toolItems = document.querySelectorAll('.tool-item');
-            
-            toolItems.forEach(item => {
-                item.addEventListener('dragstart', handleDragStart);
-                item.addEventListener('dragover', handleDragOver);
-                item.addEventListener('drop', handleDrop);
-                item.addEventListener('dragend', handleDragEnd);
-            });
-        }
-
-        function handleDragStart(e) {
-            draggedElement = this;
-            draggedIndex = parseInt(this.dataset.index);
-            this.classList.add('dragging');
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/html', this.innerHTML);
-        }
-
-        function handleDragOver(e) {
-            if (e.preventDefault) {
-                e.preventDefault();
-            }
-            e.dataTransfer.dropEffect = 'move';
-            
-            const afterElement = getDragAfterElement(document.getElementById('toolsList'), e.clientY);
-            const dragging = document.querySelector('.dragging');
-            
-            if (!dragging || dragging === afterElement) {
-                return false;
-            }
-            
-            if (afterElement == null) {
-                document.getElementById('toolsList').appendChild(dragging);
-            } else {
-                document.getElementById('toolsList').insertBefore(dragging, afterElement);
-            }
-            
-            return false;
-        }
-
-
-        function handleDrop(e) {
-            if (e.stopPropagation) {
-                e.stopPropagation();
-            }
-            
-            e.preventDefault();
-            
-            if (!draggedElement) {
-                return false;
-            }
-            
-            // Get the final order from the DOM after drag
-            const allItems = Array.from(document.querySelectorAll('.tool-item'));
-            const newOrder = allItems.map(item => parseInt(item.dataset.toolId));
-            
-            // Reorder currentTools array to match DOM order
-            const reorderedTools = [];
-            for (const toolId of newOrder) {
-                const tool = currentTools.find(t => t.id === toolId);
-                if (tool) {
-                    reorderedTools.push(tool);
-                }
-            }
-            
-            // Only update if order actually changed
-            const orderChanged = JSON.stringify(newOrder) !== JSON.stringify(currentTools.map(t => t.id));
-            
-            if (orderChanged) {
-                currentTools = reorderedTools;
-                // Update admin list view immediately
-                renderToolsList();
-                // Update display_order and save to server
-                updateToolOrder();
-            }
-            
-            return false;
-        }
-
-        function handleDragEnd(e) {
-            document.querySelectorAll('.tool-item').forEach(item => {
-                item.classList.remove('dragging', 'drag-over');
-            });
-        }
-
-        function getDragAfterElement(container, y) {
-            const draggableElements = [...container.querySelectorAll('.tool-item:not(.dragging)')];
-            
-            return draggableElements.reduce((closest, child) => {
-                const box = child.getBoundingClientRect();
-                const offset = y - box.top - box.height / 2;
-                
-                if (offset < 0 && offset > closest.offset) {
-                    return { offset: offset, element: child };
-                } else {
-                    return closest;
-                }
-            }, { offset: Number.NEGATIVE_INFINITY }).element;
-        }
-
-        async function updateToolOrder() {
+        // Placeholder for analytics loading
+        async function loadAnalytics() {
             try {
-                // Update display_order for all tools
-                const updates = currentTools.map((tool, index) => ({
-                    id: tool.id,
-                    display_order: index
-                }));
-                
-                // Update each tool's display_order
-                for (const update of updates) {
-                    await fetch(`/api/tools/${update.id}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        credentials: 'include',
-                        body: JSON.stringify({
-                            display_order: update.display_order
-                        })
-                    });
-                }
-                
-                // Reload tools to reflect new order
-                await loadTools();
-            } catch (error) {
-                console.error('Error updating tool order:', error);
-                alert('Error updating tool order. Please try again.');
-            }
-        }
-
-        // ==========================================
-        // Global Search Logic
-        // ==========================================
-        const searchInput = document.getElementById('globalSearchInput');
-        const searchResults = document.getElementById('searchResults');
-        let searchDebounce;
-
-        if (searchInput) {
-            searchInput.addEventListener('input', (e) => {
-                clearTimeout(searchDebounce);
-                const query = e.target.value.trim();
-                
-                if (query.length < 2) {
-                    searchResults.style.display = 'none';
-                    return;
-                }
-
-                searchDebounce = setTimeout(async () => {
-                    try {
-                        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-                        const data = await response.json();
-                        
-                        if (data.success && data.results.length > 0) {
-                            renderSearchResults(data.results);
-                        } else {
-                            renderSearchResults([], true);
-                        }
-                    } catch (error) {
-                        console.error('Search error:', error);
-                    }
-                }, 300);
-            });
-
-            // Close search on click outside
-            document.addEventListener('click', (e) => {
-                if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
-                    searchResults.style.display = 'none';
-                }
-            });
-
-            // Add focus listener to reopen results if query exists
-            searchInput.addEventListener('focus', () => {
-                if (searchInput.value.trim().length >= 2 && searchResults.innerHTML !== '') {
-                    searchResults.style.display = 'block';
-                }
-            });
-        }
-
-        function renderSearchResults(results, empty = false) {
-            if (!searchResults) return;
-            searchResults.style.display = 'block';
-            
-            if (empty) {
-                searchResults.innerHTML = `
-                    <div style="padding: 16px; text-align: center; color: #94a3b8;">
-                        No results found
-                    </div>
-                `;
-                return;
-            }
-
-            searchResults.innerHTML = results.map(item => `
-                <a href="${item.url}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #334155; text-decoration: none; color: inherit; transition: background 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='transparent'">
-                    <div>
-                        <div style="color: #f1f5f9; font-weight: 500;">${item.name}</div>
-                        <div style="color: #94a3b8; font-size: 13px;">${item.details}</div>
-                    </div>
-                    <div style="text-align: right;">
-                        <span style="background: ${getBadgeColor(item.source)}; color: white; padding: 2px 8px; border-radius: 999px; font-size: 11px; text-transform: uppercase; font-weight: 600;">
-                            ${item.source}
-                        </span>
-                        <div style="color: #64748b; font-size: 11px; margin-top: 4px;">${item.type}</div>
-                    </div>
-                </a>
-            `).join('');
-        }
-
-        function getBadgeColor(source) {
-            switch(source) {
-                case 'Sales': return '#3b82f6'; // Blue
-                case 'Recruiting': return '#10b981'; // Green
-                case 'Operations': return '#f59e0b'; // Amber
-                case 'Gigi': return '#ec4899'; // Pink
-                default: return '#64748b'; // Slate
-            }
-        }
-
-        // ==========================================
-        // Activity Feed Logic
-        // ==========================================
-        async function loadActivityFeed() {
-            try {
-                const response = await fetch('/api/activity-stream?limit=10');
+                const response = await fetch('/api/analytics/summary');
                 const data = await response.json();
-                
-                if (data.success && data.activities) {
-                    renderActivityFeed(data.activities);
+                if (data.success) {
+                    document.getElementById('totalSessions').textContent = data.summary.total_sessions;
+                    document.getElementById('totalClicks').textContent = data.summary.total_clicks;
+                    document.getElementById('activeUsers').textContent = data.summary.active_users;
                 }
-            } catch (error) {
-                console.error('Error loading activity feed:', error);
-            }
+            } catch (e) {}
         }
-
-        function renderActivityFeed(activities) {
-            const container = document.getElementById('activityFeedList');
-            if (!container) return;
-            
-            if (activities.length === 0) {
-                container.innerHTML = `
-                    <div style="color: #64748b; font-size: 13px; text-align: center; padding: 20px;">
-                        No recent activity
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = activities.map(item => `
-                <div style="display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid #334155;">
-                    <div style="font-size: 20px; background: #0f172a; width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: 1px solid #334155;">
-                        ${item.icon || '📌'}
-                    </div>
-                    <div style="flex: 1; min-width: 0;">
-                        <div style="color: #f1f5f9; font-size: 14px; font-weight: 500; line-height: 1.4; word-wrap: break-word;">${item.description}</div>
-                        ${item.details ? `<div style="color: #94a3b8; font-size: 12px; margin-top: 2px;">${item.details}</div>` : ''}
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
-                            <div style="font-size: 11px; color: ${getBadgeColor(item.source)}; font-weight: 600;">${item.source}</div>
-                            <div style="font-size: 11px; color: #64748b;">${item.time_ago}</div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        // Initialize Activity Feed
-        loadActivityFeed();
-        setInterval(loadActivityFeed, 30000);
     </script>
-</body>
-</html>
-
+{% endblock %}

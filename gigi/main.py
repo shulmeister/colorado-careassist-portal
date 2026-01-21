@@ -1765,7 +1765,10 @@ async def test_log_client_issue(client_id: str, note: str, issue_type: str = "ge
 # SMS Auto-Reply System
 # =============================================================================
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyB-67dmnNUmfJfvbEznwqLYcnMZBMPam8o")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    logger.warning("GEMINI_API_KEY not found in environment. AI features will be disabled.")
 
 # SMS Response prompt for Gigi
 SMS_SYSTEM_PROMPT = """You are Gigi, the after-hours AI assistant for Colorado Care Assist, a non-medical home care agency.
