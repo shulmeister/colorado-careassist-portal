@@ -33,7 +33,7 @@ def setup_default_tools():
             },
             {
                 "name": "Recruiter Dashboard",
-                "url": "/recruiting",
+                "url": "/go/recruiting",
                 "icon": "https://cdn-icons-png.flaticon.com/512/681/681443.png",
                 "description": "Manage applicants and recruiting pipeline",
                 "category": "HR",

@@ -993,6 +993,26 @@ async def client_satisfaction_redirect(
     return RedirectResponse(url="/operations", status_code=302)
 
 
+@app.get("/go/recruiting")
+async def go_recruiting(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Redirect to recruiting dashboard with portal token for SSO"""
+    session_token = request.cookies.get("session_token", "")
+
+    if session_token:
+        encoded_token = quote_plus(session_token)
+        encoded_email = quote_plus(current_user.get('email', ''))
+        redirect_url = f"/recruiting/?portal_token={encoded_token}&portal_user_email={encoded_email}"
+        logger.info(f"Redirecting to recruiting with token for: {current_user.get('email')}")
+    else:
+        redirect_url = "/recruiting/"
+        logger.warning("No session token - redirecting without auth")
+
+    return RedirectResponse(url=redirect_url, status_code=302)
+
+
 @app.get("/client-satisfaction-old", response_class=HTMLResponse)
 async def client_satisfaction_dashboard_legacy(
     request: Request,
