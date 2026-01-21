@@ -1,6 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
+{% extends "shared_shell.html" %}
+{% block head %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -1561,21 +1560,9 @@
             }
         }
     </style>
-</head>
-<body>
-    <div class="dashboard-container">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-header">
-                <div class="sidebar-title">Sales Dashboard</div>
-                <div class="sidebar-subtitle">Colorado CareAssist</div>
-        </div>
+{% endblock %}
 
-            <nav class="nav-menu">
-                <a href="/" class="nav-item" style="background: #3b82f6; color: white; font-weight: 600; margin-bottom: 16px;">
-                    <span class="nav-icon">←</span>
-                    Back to Portal
-                </a>
+{% block nav_items %}
                 <a href="#dashboard" class="nav-item active" onclick="showDashboardTab()">
                     <span class="nav-icon">📊</span>
                     Dashboard
@@ -1604,54 +1591,10 @@
                     <span class="nav-icon">⚙️</span>
                     Settings
                 </a>
-            </nav>
+{% endblock %}
 
-            {% if ringcentral.enabled %}
-            <div class="sidebar-ringcentral">
-                <div class="sidebar-ringcentral-header">
-                    <div class="sidebar-ringcentral-title">
-                        <span class="nav-icon">💬</span>
-                        <div>
-                            <div class="sidebar-ringcentral-name">RingCentral</div>
-                            <div class="sidebar-ringcentral-subtitle">Calls & SMS</div>
-                        </div>
-                    </div>
-                    <a
-                        class="sidebar-ringcentral-expand"
-                        href="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
-                        target="_blank"
-                        rel="noopener"
-                    >
-                        Open App
-                    </a>
-                </div>
-                <iframe
-                    id="rc-widget-sidebar"
-                    class="sidebar-ringcentral-frame"
-                    allow="microphone; camera; autoplay; clipboard-write"
-                    loading="lazy"
-                    title="RingCentral Sidebar"
-                    src="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
-                ></iframe>
-            </div>
-            {% endif %}
-            
-            <div class="user-section">
-                {% if user %}
-                <div class="user-info">
-                    <div class="user-avatar">{{ user.name[0] if user.name else 'U' }}</div>
-                    <div class="user-details">
-                        <h4>{{ user.name or 'User' }}</h4>
-                        <div class="user-email">{{ user.email or 'user@example.com' }}</div>
-                    </div>
-                </div>
-                <button class="logout-btn" onclick="logout()">Logout</button>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- Main Content -->
-        <div class="main-content">
+{% block content %}
+    <div class="main-content">
             <!-- Dashboard Tab Content -->
             <div id="dashboardTab" class="tab-content">
                 <div class="dashboard-header">
@@ -2171,7 +2114,9 @@
             </div>
         </div>
     </div>
+{% endblock %}
 
+{% block scripts %}
     <script>
         // Global variables to store current data
         let currentVisits = [];
@@ -4012,5 +3957,4 @@
             loadPipeline();
         };
     </script>
-</body>
-</html>
+{% endblock %}

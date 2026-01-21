@@ -22,10 +22,18 @@ import hashlib
 import hmac
 from functools import wraps
 from sqlalchemy import text
+import jinja2
 
 load_dotenv()
 
 app = Flask(__name__)
+
+# Configure Jinja to look in root templates too (for shared shell)
+my_loader = jinja2.ChoiceLoader([
+    app.jinja_loader,
+    jinja2.FileSystemLoader(os.path.join(os.path.dirname(__file__), '../templates')),
+])
+app.jinja_loader = my_loader
 
 def _log_portal_event(description, event_type="info", details=None, icon=None):
     """Log event to the central portal activity stream"""

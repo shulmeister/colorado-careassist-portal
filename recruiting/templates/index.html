@@ -1,6 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
+{% extends "shared_shell.html" %}
+{% block head %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Caregiver Recruiter Dashboard</title>
@@ -634,8 +633,8 @@
             }
         }
     </style>
-</head>
-<body>
+{% endblock %}
+{% block content %}
     <div id="root"></div>
 
     <script type="text/babel">
@@ -1984,5 +1983,4 @@
         // Render the app
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
-</body>
-</html>
+{% endblock %}

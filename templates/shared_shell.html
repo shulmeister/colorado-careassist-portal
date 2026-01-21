@@ -1,0 +1,1161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Colorado CareAssist Portal</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png?v=2">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png?v=2">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png?v=2">
+    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 280px 1fr;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 24px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 0 24px 32px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 24px;
+        }
+
+        .sidebar-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+
+        .nav-menu {
+            padding: 0 16px;
+        }
+
+        .sidebar-ringcentral {
+            margin: 16px 16px 0;
+            padding: 16px 14px 20px;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.85);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .sidebar-ringcentral-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .sidebar-ringcentral-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-ringcentral-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: #f1f5f9;
+            line-height: 1.2;
+        }
+
+        .sidebar-ringcentral-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.2;
+        }
+
+        .sidebar-ringcentral-expand {
+            background: #334155;
+            color: #e2e8f0;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            white-space: nowrap;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sidebar-ringcentral-expand:hover {
+            background: #475569;
+        }
+
+        .sidebar-ringcentral-frame {
+            width: 100%;
+            min-height: 420px;
+            border: none;
+            border-radius: 10px;
+            background: #0f172a;
+            box-shadow: inset 0 0 0 1px #334155;
+            overflow: hidden;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin-bottom: 4px;
+            border-radius: 8px;
+            color: #94a3b8;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .nav-item:hover {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .nav-item.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .nav-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+
+        /* World Clocks Section - Header Row */
+        .world-clocks-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 16px 24px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 24px;
+        }
+
+        .world-clocks-title {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+
+        .clocks-row {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex: 1;
+        }
+
+        .clock-item {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: rgba(30, 41, 59, 0.5);
+            border: 1px solid #334155;
+            min-width: 140px;
+        }
+
+        .clock-face-container {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+        }
+
+        .clock-face {
+            width: 32px;
+            height: 32px;
+            border: 2px solid #475569;
+            border-radius: 50%;
+            background: #1e293b;
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .clock-hand {
+            position: absolute;
+            background: #f1f5f9;
+            transform-origin: bottom center;
+            border-radius: 2px;
+            left: 50%;
+            bottom: 50%;
+        }
+
+        .clock-hand-hour {
+            width: 1.5px;
+            height: 10px;
+            margin-left: -0.75px;
+            background: #cbd5e1;
+        }
+
+        .clock-hand-minute {
+            width: 1px;
+            height: 12px;
+            margin-left: -0.5px;
+        }
+
+        .clock-center {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: #f1f5f9;
+            border-radius: 50%;
+            left: 50%;
+            top: 50%;
+            margin-left: -1.5px;
+            margin-top: -1.5px;
+            z-index: 10;
+        }
+
+        .clock-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex: 1;
+        }
+
+        .clock-city {
+            font-size: 10px;
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .clock-time {
+            font-size: 13px;
+            color: #f1f5f9;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .clock-date {
+            font-size: 9px;
+            color: #64748b;
+        }
+
+        .weather-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.8;
+        }
+
+        .user-section {
+            margin-top: auto;
+            padding: 16px;
+            border-top: 1px solid #334155;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            margin-right: 12px;
+            font-size: 14px;
+        }
+
+        .user-details h4 {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .user-email {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .logout-btn {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.2s ease;
+            width: 100%;
+        }
+
+        .logout-btn:hover {
+            background: #b91c1c;
+        }
+
+        /* Main Content */
+        .main-content {
+            background: #0f172a;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .header-left h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 6px;
+        }
+
+        .header-left p {
+            font-size: 16px;
+            color: #94a3b8;
+        }
+
+        .admin-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .admin-btn:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+        }
+
+        /* Tool Grid */
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .tool-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 14px;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            text-decoration: none;
+            display: block;
+            color: inherit;
+        }
+
+        .tool-card:hover {
+            border-color: #475569;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .tool-icon {
+            font-size: 32px;
+            margin-bottom: 10px;
+            display: block;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tool-icon img {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            border-radius: 8px;
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            image-rendering: high-quality;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+            transition: transform 0.2s ease;
+        }
+
+        /* Larger logos for specific tools */
+        .tool-card[href*="ringcentral.com"] .tool-icon img,
+        .tool-card[href*="predis.ai"] .tool-icon img,
+        .tool-card[href*="intuit.com"] .tool-icon img,
+        .tool-card[href*="quickbooks"] .tool-icon img,
+        .tool-card[href*="ads.google.com"] .tool-icon img,
+        .tool-card[href*="adamskeegan.com"] .tool-icon img,
+        .tool-icon img.large-logo {
+            width: 120px;
+            height: 120px;
+        }
+
+        .tool-card:hover .tool-icon img {
+            transform: scale(1.05);
+        }
+
+        .tool-icon span {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 64px;
+        }
+
+        .tool-name {
+            font-size: 15px;
+            font-weight: 700;
+            color: #f1f5f9;
+            margin-bottom: 5px;
+        }
+
+        .tool-description {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.3;
+        }
+
+        .tool-category {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 12px;
+        }
+
+        /* AI Tools tile */
+        .ai-tools-card {
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .ai-tools-preview {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .ai-tool-chip {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            color: #cbd5f5;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            backdrop-filter: blur(6px);
+        }
+
+        .ai-tools-hint {
+            margin-top: 14px;
+            font-size: 12px;
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0.85;
+        }
+
+        .ai-tools-hint span {
+            font-size: 14px;
+        }
+
+        /* AI Tools modal */
+        .ai-tools-modal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .ai-tools-modal-card {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding: 16px;
+            border-radius: 12px;
+            text-decoration: none;
+            color: #f1f5f9;
+            background: linear-gradient(145deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.85));
+            border: 1px solid rgba(96, 165, 250, 0.25);
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .ai-tools-modal-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(96, 165, 250, 0.65);
+        }
+
+        .ai-tools-modal-card span {
+            font-size: 30px;
+        }
+
+        .ai-tools-modal-card small {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 0;
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 24px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #f1f5f9;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+        }
+
+        .modal-close:hover {
+            background: #334155;
+            color: #f1f5f9;
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            color: #cbd5e1;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            color: #f1f5f9;
+            font-size: 14px;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            padding: 20px 24px;
+            border-top: 1px solid #334155;
+            margin-top: 8px;
+        }
+
+        .btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            background: #2563eb;
+        }
+
+        .btn-danger {
+            background: #dc2626;
+        }
+
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+
+        .btn-secondary {
+            background: #64748b;
+        }
+
+        .btn-secondary:hover {
+            background: #475569;
+        }
+
+        .tools-list {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+        }
+
+        .tool-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #334155;
+            cursor: move;
+            transition: background 0.2s ease;
+        }
+
+        .tool-item:hover {
+            background: #334155;
+        }
+
+        .tool-item.dragging {
+            opacity: 0.5;
+            background: #475569;
+        }
+
+        .tool-item.drag-over {
+            border-top: 2px solid #3b82f6;
+        }
+
+        .tool-item:last-child {
+            border-bottom: none;
+        }
+
+        .tool-item-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .drag-handle {
+            cursor: grab;
+            color: #64748b;
+            font-size: 18px;
+            margin-right: 8px;
+            user-select: none;
+        }
+
+        .drag-handle:active {
+            cursor: grabbing;
+        }
+
+        .tool-item-icon {
+            font-size: 20px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .tool-item-icon img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+
+        .tool-item-details h3 {
+            color: #f1f5f9;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .tool-item-details p {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .tool-item-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #94a3b8;
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .empty-state h3 {
+            color: #f1f5f9;
+            margin-bottom: 8px;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                display: none;
+            }
+            
+            .tools-grid {
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px;
+            }
+            
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+        }
+    </style>
+    {% if ringcentral.enabled %}
+    <script>
+        window.RingCentralEmbeddable = {
+            config: {
+                defaultTab: "{{ ringcentral.default_tab }}",
+                hiddenTabs: [{% for tab in ringcentral.hidden_tabs_list %}"{{ tab }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+            }
+        };
+        (function() {
+            var rcs = document.createElement("script");
+            var adapterSrc = "{{ ringcentral.adapter_url }}";
+            {% if ringcentral.query_string %}
+            adapterSrc += "?{{ ringcentral.query_string|safe }}";
+            {% endif %}
+            rcs.src = adapterSrc;
+            rcs.async = true;
+            var firstScript = document.getElementsByTagName("script")[0];
+            firstScript.parentNode.insertBefore(rcs, firstScript);
+        })();
+
+        (function setupRingCentralAutoMinimize() {
+            var minimizeRequested = false;
+            function requestMinimize() {
+                if (minimizeRequested) {
+                    return;
+                }
+                minimizeRequested = true;
+                window.postMessage({
+                    type: "rc-adapter-syncMinimized",
+                    minimized: true
+                }, "*");
+            }
+
+            window.addEventListener("message", function(event) {
+                if (!event || !event.data || minimizeRequested) {
+                    return;
+                }
+                var evtType = event.data.type || "";
+                if (evtType === "rc-adapter-pushAdapterState" || evtType === "rc-login-status-notify") {
+                    requestMinimize();
+                }
+            });
+
+            window.addEventListener("load", function() {
+                setTimeout(requestMinimize, 3000);
+            });
+        })();
+    </script>
+    {% endif %}
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Colorado CareAssist</div>
+                <div class="sidebar-subtitle">Portal</div>
+            </div>
+
+            <nav class="nav-menu">
+                <a href="/" class="nav-item {% if not active_page or active_page == 'home' %}active{% endif %}">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-text">Home</span>
+                </a>
+                
+                {% block nav_items %}{% endblock %}
+                
+                <a href="/?view=analytics" class="nav-item {% if active_page == 'analytics' %}active{% endif %}">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-text">Analytics</span>
+                </a>
+            </nav>
+
+            {% if ringcentral.enabled %}
+            <div class="sidebar-ringcentral">
+                <div class="sidebar-ringcentral-header">
+                    <div class="sidebar-ringcentral-title">
+                        <span class="nav-icon">💬</span>
+                        <div>
+                            <div class="sidebar-ringcentral-name">RingCentral</div>
+                            <div class="sidebar-ringcentral-subtitle">Calls & SMS</div>
+                        </div>
+                    </div>
+                    <a
+                        class="sidebar-ringcentral-expand"
+                        href="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
+                        target="_blank"
+                        rel="noopener"
+                    >
+                        Open App
+                    </a>
+                </div>
+                <iframe
+                    id="rc-widget-sidebar"
+                    class="sidebar-ringcentral-frame"
+                    allow="microphone; camera; autoplay; clipboard-write"
+                    loading="lazy"
+                    title="RingCentral Sidebar"
+                    src="{{ ringcentral.app_url }}{% if ringcentral.query_string %}?{{ ringcentral.query_string|safe }}{% endif %}"
+                ></iframe>
+            </div>
+            {% endif %}
+
+            <div class="user-section">
+                <div class="user-info">
+                    <div class="user-avatar" id="userAvatar">
+                        {{ user.name[0].upper() if user.name else 'U' }}
+                    </div>
+                    <div class="user-details">
+                        <h4 id="userName">{{ user.name or 'User' }}</h4>
+                        <div class="user-email" id="userEmail">{{ user.email }}</div>
+                    </div>
+                </div>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- World Clocks Header -->
+            <div class="world-clocks-header">
+                <div class="clocks-row">
+                    <div class="clock-item">
+                        <div class="clock-face-container">
+                            <div class="clock-face" id="clock-face-london">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-london"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-london"></div>
+                                <div class="clock-center"></div>
+                            </div>
+                        </div>
+                        <div class="weather-icon" id="weather-icon-london">🌤️</div>
+                        <div class="clock-info">
+                            <div class="clock-city">London</div>
+                            <div class="clock-time" id="clock-london">--:--</div>
+                            <div class="clock-date" id="date-london">--</div>
+                        </div>
+                    </div>
+                    <div class="clock-item">
+                        <div class="clock-face-container">
+                            <div class="clock-face" id="clock-face-denver">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-denver"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-denver"></div>
+                                <div class="clock-center"></div>
+                            </div>
+                        </div>
+                        <div class="weather-icon" id="weather-icon-denver">🌤️</div>
+                        <div class="clock-info">
+                            <div class="clock-city">Denver</div>
+                            <div class="clock-time" id="clock-denver">--:--</div>
+                            <div class="clock-date" id="date-denver">--</div>
+                        </div>
+                    </div>
+                    <div class="clock-item">
+                        <div class="clock-face-container">
+                            <div class="clock-face" id="clock-face-manila">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-manila"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-manila"></div>
+                                <div class="clock-center"></div>
+                            </div>
+                        </div>
+                        <div class="weather-icon" id="weather-icon-manila">🌤️</div>
+                        <div class="clock-info">
+                            <div class="clock-city">Manila</div>
+                            <div class="clock-time" id="clock-manila">--:--</div>
+                            <div class="clock-date" id="date-manila">--</div>
+                        </div>
+                    </div>
+                    <div class="clock-item">
+                        <div class="clock-face-container">
+                            <div class="clock-face" id="clock-face-dhaka">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-dhaka"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-dhaka"></div>
+                                <div class="clock-center"></div>
+                            </div>
+                        </div>
+                        <div class="weather-icon" id="weather-icon-dhaka">🌤️</div>
+                        <div class="clock-info">
+                            <div class="clock-city">Dhaka</div>
+                            <div class="clock-time" id="clock-dhaka">--:--</div>
+                            <div class="clock-date" id="date-dhaka">--</div>
+                        </div>
+                    </div>
+                </div>
+                <button class="admin-btn" id="adminBtn" onclick="showAdminView()" style="display: none; margin-left: auto;">
+                    ⚙️ Manage Tools
+                </button>
+            </div>
+
+            <!-- Global Search -->
+            <div style="margin: 0 24px 24px 24px; position: relative;">
+                <div style="position: relative;">
+                    <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); font-size: 18px;">🔍</span>
+                    <input type="text" id="globalSearchInput" placeholder="Search contacts, leads, companies... (Type 'Smith')" 
+                        style="width: 100%; padding: 14px 14px 14px 48px; border-radius: 12px; border: 1px solid #334155; background: #1e293b; color: #f1f5f9; font-size: 16px; outline: none; transition: border-color 0.2s, box-shadow 0.2s;">
+                </div>
+                <div id="searchResults" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: #1e293b; border: 1px solid #334155; border-radius: 12px; margin-top: 8px; z-index: 1000; max-height: 400px; overflow-y: auto; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);">
+                    <!-- Results will appear here -->
+                </div>
+            </div>
+
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script>
+        // ==========================================
+        // World Clocks Logic
+        // ==========================================
+        function updateClocks() {
+            const now = new Date();
+            const timezones = {'london': 'Europe/London', 'denver': 'America/Denver', 'manila': 'Asia/Manila', 'dhaka': 'Asia/Dhaka'};
+            for (const [city, timezone] of Object.entries(timezones)) {
+                try {
+                    const timeString = now.toLocaleTimeString('en-US', {timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false});
+                    const dateString = now.toLocaleDateString('en-US', {timeZone: timezone, month: 'short', day: 'numeric'});
+                    const timeEl = document.getElementById(`clock-${city}`);
+                    const dateEl = document.getElementById(`date-${city}`);
+                    if (timeEl) timeEl.textContent = timeString;
+                    if (dateEl) dateEl.textContent = dateString;
+                    updateAnalogClock(city, timezone);
+                } catch (e) { console.error(`Error updating clock for ${city}:`, e); }
+            }
+        }
+
+        function updateAnalogClock(city, timezone) {
+            const now = new Date();
+            const localTimeStr = now.toLocaleString('en-US', { timeZone: timezone });
+            const localTime = new Date(localTimeStr);
+            const seconds = localTime.getSeconds();
+            const minutes = localTime.getMinutes();
+            const hours = localTime.getHours();
+            const secondDegrees = ((seconds / 60) * 360) + 90;
+            const minuteDegrees = ((minutes / 60) * 360) + ((seconds/60)*6) + 90;
+            const hourDegrees = ((hours / 12) * 360) + ((minutes/60)*30) + 90;
+            const hourHand = document.getElementById(`hour-hand-${city}`);
+            const minuteHand = document.getElementById(`minute-hand-${city}`);
+            if (hourHand) hourHand.style.transform = `rotate(${hourDegrees}deg)`;
+            if (minuteHand) minuteHand.style.transform = `rotate(${minuteDegrees}deg)`;
+        }
+
+        // ==========================================
+        // Search Logic
+        // ==========================================
+        const searchInput = document.getElementById('globalSearchInput');
+        const searchResults = document.getElementById('searchResults');
+        let searchDebounce;
+
+        if (searchInput) {
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchDebounce);
+                const query = e.target.value.trim();
+                if (query.length < 2) {
+                    if (searchResults) searchResults.style.display = 'none';
+                    return;
+                }
+                searchDebounce = setTimeout(async () => {
+                    try {
+                        const response = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+                        const data = await response.json();
+                        if (data.success && data.results.length > 0) {
+                            renderSearchResults(data.results);
+                        } else {
+                            renderSearchResults([], true);
+                        }
+                    } catch (error) { console.error('Search error:', error); }
+                }, 300);
+            });
+            document.addEventListener('click', (e) => {
+                if (searchResults && !searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+                    searchResults.style.display = 'none';
+                }
+            });
+            searchInput.addEventListener('focus', () => {
+                if (searchResults && searchInput.value.trim().length >= 2 && searchResults.innerHTML !== '') {
+                    searchResults.style.display = 'block';
+                }
+            });
+        }
+
+        function renderSearchResults(results, empty = false) {
+            if (!searchResults) return;
+            searchResults.style.display = 'block';
+            if (empty) {
+                searchResults.innerHTML = `<div style="padding: 16px; text-align: center; color: #94a3b8;">No results found</div>`;
+                return;
+            }
+            searchResults.innerHTML = results.map(item => `
+                <a href="${item.url}" style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #334155; text-decoration: none; color: inherit; transition: background 0.2s;" onmouseover="this.style.background='#334155'" onmouseout="this.style.background='transparent'">
+                    <div>
+                        <div style="color: #f1f5f9; font-weight: 500;">${item.name}</div>
+                        <div style="color: #94a3b8; font-size: 13px;">${item.details}</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <span style="background: ${getBadgeColor(item.source)}; color: white; padding: 2px 8px; border-radius: 999px; font-size: 11px; text-transform: uppercase; font-weight: 600;">${item.source}</span>
+                        <div style="color: #64748b; font-size: 11px; margin-top: 4px;">${item.type}</div>
+                    </div>
+                </a>
+            `).join('');
+        }
+
+        function getBadgeColor(source) {
+            switch(source) {
+                case 'Sales': return '#3b82f6';
+                case 'Recruiting': return '#10b981';
+                case 'Operations': return '#f59e0b';
+                default: return '#64748b';
+            }
+        }
+
+        // Initialize Clocks
+        setInterval(updateClocks, 1000);
+        updateClocks();
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

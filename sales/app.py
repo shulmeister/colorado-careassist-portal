@@ -587,7 +587,11 @@ app.add_middleware(
 )
 
 # Mount static files and templates
-templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
+# Configure templates with access to shared shell
+templates = Jinja2Templates(directory=[
+    os.path.join(os.path.dirname(__file__), "templates"),
+    os.path.join(os.path.dirname(__file__), "../templates")
+])
 
 # Mount React frontend static assets
 frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
