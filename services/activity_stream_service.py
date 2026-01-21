@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 from portal_database import db_manager
-from portal_models import ActivityFeedItem
+# Use explicit import path to avoid conflicts between root and portal/ versions
+from portal.portal_models import ActivityFeedItem
 
 logger = logging.getLogger(__name__)
 
