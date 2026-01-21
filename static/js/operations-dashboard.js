@@ -16,6 +16,13 @@
         openShifts: [],
         atRiskClients: [],
         isLoading: false,
+        // Gigi state
+        gigiSettings: {
+            sms_autoreply: false,
+            operations_sms: false,
+        },
+        gigiActivity: [],
+        callOuts: [],
     };
 
     // Initialize on DOM ready
@@ -396,5 +403,275 @@
     // Global refresh function
     window.refreshData = function () {
         fetchAllData();
+    };
+
+    // ============================================
+    // GIGI AI AGENT CONTROL FUNCTIONS
+    // ============================================
+
+    // Fetch Gigi settings from API
+    async function fetchGigiSettings() {
+        try {
+            const response = await fetch('/api/gigi/settings');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            state.gigiSettings = data;
+            updateGigiToggles();
+            updateGigiStatus();
+        } catch (error) {
+            console.error('Failed to fetch Gigi settings:', error);
+        }
+    }
+
+    // Toggle a Gigi setting
+    window.toggleGigiSetting = async function(setting, enabled) {
+        const toggle = document.getElementById(`gigi-${setting.replace('_', '-')}`);
+        const originalState = toggle ? toggle.checked : !enabled;
+
+        try {
+            const response = await fetch('/api/gigi/settings', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ [setting]: enabled }),
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            state.gigiSettings = data.settings;
+
+            // Show success notification
+            showNotification(`Gigi ${setting.replace('_', ' ')} ${enabled ? 'enabled' : 'disabled'}`, 'success');
+            updateGigiStatus();
+        } catch (error) {
+            console.error('Failed to update Gigi setting:', error);
+            // Revert toggle on error
+            if (toggle) toggle.checked = originalState;
+            showNotification('Failed to update setting', 'error');
+        }
+    };
+
+    // Update toggle states from current settings
+    function updateGigiToggles() {
+        const smsToggle = document.getElementById('toggle-sms-autoreply');
+        const opsToggle = document.getElementById('toggle-ops-sms');
+
+        if (smsToggle) smsToggle.checked = state.gigiSettings.sms_autoreply;
+        if (opsToggle) opsToggle.checked = state.gigiSettings.operations_sms;
+    }
+
+    // Update Gigi status displays
+    function updateGigiStatus() {
+        // Update status indicator
+        const statusIndicator = document.getElementById('gigi-status-indicator');
+        const statusText = document.getElementById('gigi-status-text');
+
+        const anyEnabled = state.gigiSettings.sms_autoreply || state.gigiSettings.operations_sms;
+
+        if (statusIndicator) {
+            statusIndicator.classList.toggle('online', anyEnabled);
+            statusIndicator.classList.toggle('offline', !anyEnabled);
+        }
+        if (statusText) {
+            statusText.textContent = anyEnabled ? 'Active' : 'Disabled';
+        }
+
+        // Update WellSky status
+        const wellskyStatus = document.getElementById('wellsky-status');
+        const wellskyApiStatus = document.getElementById('wellsky-api-status');
+        if (wellskyStatus && state.gigiSettings) {
+            if (state.gigiSettings.wellsky_connected) {
+                wellskyStatus.classList.add('online');
+                wellskyStatus.classList.remove('partial', 'offline');
+                wellskyStatus.querySelector('span:last-child').textContent = 'Connected';
+                if (wellskyApiStatus) wellskyApiStatus.textContent = 'Live WellSky API connection';
+            } else {
+                wellskyStatus.classList.add('partial');
+                wellskyStatus.classList.remove('online', 'offline');
+                wellskyStatus.querySelector('span:last-child').textContent = 'Mock Mode';
+                if (wellskyApiStatus) wellskyApiStatus.textContent = 'Using mock data for testing';
+            }
+        }
+    }
+
+    // Fetch Gigi activity log
+    async function fetchGigiActivity() {
+        try {
+            const response = await fetch('/api/gigi/activity?limit=10');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            state.gigiActivity = data.activities || [];
+            updateGigiActivityTable();
+        } catch (error) {
+            console.error('Failed to fetch Gigi activity:', error);
+        }
+    }
+
+    // Update Gigi activity log
+    function updateGigiActivityTable() {
+        const activityLog = document.getElementById('gigi-activity-log');
+        if (!activityLog) return;
+
+        if (state.gigiActivity.length === 0) {
+            activityLog.innerHTML = '<div class="empty-state"><div class="icon">📭</div>No recent activity</div>';
+            return;
+        }
+
+        activityLog.innerHTML = state.gigiActivity.map((activity) => {
+            const typeIcon = getActivityIcon(activity.type);
+            const statusClass = activity.status === 'success' ? 'success' : activity.status === 'failed' ? 'error' : 'warning';
+            return `
+                <div class="activity-item">
+                    <div class="activity-icon">${typeIcon}</div>
+                    <div class="activity-content">
+                        <div class="activity-title">${escapeHtml(activity.type.replace('_', ' '))}</div>
+                        <div class="activity-desc">${escapeHtml(activity.description)}</div>
+                    </div>
+                    <div class="activity-meta">
+                        <span class="status-badge status-${statusClass}">${activity.status}</span>
+                        <span class="activity-time">${formatDateTime(activity.timestamp)}</span>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Fetch call-out log
+    async function fetchCallOuts() {
+        try {
+            const response = await fetch('/api/gigi/callouts?limit=20');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            state.callOuts = data.callouts || [];
+            updateCallOutsTable();
+        } catch (error) {
+            console.error('Failed to fetch call-outs:', error);
+        }
+    }
+
+    // Update call-outs table
+    function updateCallOutsTable() {
+        const tbody = document.getElementById('callouts-table-body');
+        if (!tbody) return;
+
+        if (state.callOuts.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">✅</div>No recent call-outs</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = state.callOuts.map((callout) => {
+            const statusClass = callout.status === 'covered' ? 'active' :
+                               callout.status === 'open' ? 'danger' : 'warning';
+            return `
+                <tr>
+                    <td>${formatDateTime(callout.timestamp)}</td>
+                    <td><strong>${escapeHtml(callout.caregiver_name)}</strong></td>
+                    <td>${escapeHtml(callout.client_name)}</td>
+                    <td>${formatDate(callout.shift_date)} ${callout.shift_time || ''}</td>
+                    <td>${escapeHtml(callout.reason)}</td>
+                    <td><span class="status-badge status-${statusClass}">${callout.status}</span></td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Helper functions for Gigi
+    function getActivityIcon(type) {
+        const icons = {
+            'sms_received': '📨',
+            'sms_sent': '📤',
+            'voice_call': '📞',
+            'callout': '🚨',
+            'clock_in': '🟢',
+            'clock_out': '🔴',
+            'shift_update': '📋',
+            'error': '⚠️',
+        };
+        return icons[type] || '📝';
+    }
+
+    function formatDateTime(dateStr) {
+        if (!dateStr) return '--';
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+        });
+    }
+
+    function showNotification(message, type = 'info') {
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `notification notification-${type}`;
+        notification.innerHTML = `
+            <span class="notification-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+            <span class="notification-message">${escapeHtml(message)}</span>
+        `;
+
+        // Add to page
+        document.body.appendChild(notification);
+
+        // Animate in
+        setTimeout(() => notification.classList.add('show'), 10);
+
+        // Remove after delay
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // Global Gigi refresh functions
+    window.refreshGigiActivity = function() {
+        fetchGigiActivity();
+    };
+
+    window.refreshCallOuts = function() {
+        fetchCallOuts();
+    };
+
+    // Load Gigi data when tab is activated
+    function loadGigiData() {
+        fetchGigiSettings();
+        fetchGigiActivity();
+    }
+
+    function loadCallOutData() {
+        fetchCallOuts();
+    }
+
+    // Extend tab navigation to load data on tab switch
+    const originalInitTabNavigation = initTabNavigation;
+    initTabNavigation = function() {
+        const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-link'));
+        const tabSections = Array.from(document.querySelectorAll('.tab-content'));
+
+        sidebarLinks.forEach((link) => {
+            link.addEventListener('click', (event) => {
+                event.preventDefault();
+                const tabId = link.getAttribute('data-tab');
+                if (!tabId) return;
+
+                // Update active states
+                sidebarLinks.forEach((l) => l.classList.remove('active'));
+                link.classList.add('active');
+
+                // Show corresponding tab
+                tabSections.forEach((section) => {
+                    section.classList.toggle('active', section.id === `tab-${tabId}`);
+                });
+
+                // Load data for specific tabs
+                if (tabId === 'gigi') {
+                    loadGigiData();
+                } else if (tabId === 'callouts') {
+                    loadCallOutData();
+                }
+            });
+        });
     };
 })();

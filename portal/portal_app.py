@@ -1301,6 +1301,147 @@ async def api_operations_at_risk(
 
 
 # ============================================================================
+# Gigi AI Agent Control API
+# ============================================================================
+
+# In-memory Gigi settings (defaults from environment, can be toggled at runtime)
+_gigi_settings = {
+    "sms_autoreply": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "false").lower() == "true",
+    "operations_sms": os.getenv("GIGI_OPERATIONS_SMS_ENABLED", "false").lower() == "true",
+}
+
+# In-memory activity log (recent Gigi actions)
+_gigi_activity_log = []
+MAX_ACTIVITY_LOG_SIZE = 100
+
+
+def log_gigi_activity(activity_type: str, description: str, status: str = "success"):
+    """Log a Gigi activity (called from various Gigi operations)"""
+    global _gigi_activity_log
+    entry = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "type": activity_type,
+        "description": description,
+        "status": status,
+    }
+    _gigi_activity_log.insert(0, entry)
+    # Keep log size bounded
+    if len(_gigi_activity_log) > MAX_ACTIVITY_LOG_SIZE:
+        _gigi_activity_log = _gigi_activity_log[:MAX_ACTIVITY_LOG_SIZE]
+
+
+@app.get("/api/gigi/settings")
+async def api_gigi_settings(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get current Gigi settings"""
+    return JSONResponse({
+        "sms_autoreply": _gigi_settings["sms_autoreply"],
+        "operations_sms": _gigi_settings["operations_sms"],
+        "wellsky_connected": wellsky_service is not None and wellsky_service.is_connected(),
+    })
+
+
+@app.put("/api/gigi/settings")
+async def api_gigi_settings_update(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Update Gigi settings"""
+    try:
+        body = await request.json()
+
+        changes = []
+        if "sms_autoreply" in body:
+            old_val = _gigi_settings["sms_autoreply"]
+            _gigi_settings["sms_autoreply"] = bool(body["sms_autoreply"])
+            if old_val != _gigi_settings["sms_autoreply"]:
+                changes.append(f"SMS auto-reply {'enabled' if _gigi_settings['sms_autoreply'] else 'disabled'}")
+
+        if "operations_sms" in body:
+            old_val = _gigi_settings["operations_sms"]
+            _gigi_settings["operations_sms"] = bool(body["operations_sms"])
+            if old_val != _gigi_settings["operations_sms"]:
+                changes.append(f"Operations SMS {'enabled' if _gigi_settings['operations_sms'] else 'disabled'}")
+
+        # Log the change
+        if changes:
+            user_email = current_user.get("email", "unknown")
+            log_gigi_activity(
+                "settings_change",
+                f"{user_email}: {', '.join(changes)}",
+                "success"
+            )
+            logger.info(f"Gigi settings updated by {user_email}: {changes}")
+
+        return JSONResponse({
+            "success": True,
+            "settings": _gigi_settings,
+            "message": "Settings updated" if changes else "No changes",
+        })
+    except Exception as e:
+        logger.error(f"Error updating Gigi settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/gigi/activity")
+async def api_gigi_activity(
+    limit: int = Query(10, ge=1, le=100),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get recent Gigi activity log"""
+    return JSONResponse({
+        "activities": _gigi_activity_log[:limit],
+        "total": len(_gigi_activity_log),
+    })
+
+
+@app.get("/api/gigi/callouts")
+async def api_gigi_callouts(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get recent call-outs handled by Gigi"""
+    # For now, return mock data - this will be populated from actual call-out handling
+    # In production, this would query a call_outs table in the database
+    mock_callouts = [
+        {
+            "timestamp": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
+            "caregiver_name": "Maria Garcia",
+            "client_name": "Johnson, Robert",
+            "shift_date": (date.today()).isoformat(),
+            "shift_time": "8:00 AM - 12:00 PM",
+            "reason": "Sick - flu symptoms",
+            "status": "covered",
+        },
+        {
+            "timestamp": (datetime.utcnow() - timedelta(hours=8)).isoformat(),
+            "caregiver_name": "James Wilson",
+            "client_name": "Martinez, Elena",
+            "shift_date": (date.today()).isoformat(),
+            "shift_time": "2:00 PM - 6:00 PM",
+            "reason": "Car trouble",
+            "status": "open",
+        },
+    ]
+    return JSONResponse({
+        "callouts": mock_callouts[:limit],
+        "total": len(mock_callouts),
+    })
+
+
+# Helper function for external code to check if operations SMS is enabled
+def is_gigi_operations_sms_enabled():
+    """Check if Gigi operations SMS is enabled (used by gigi/main.py)"""
+    return _gigi_settings.get("operations_sms", False)
+
+
+def is_gigi_sms_autoreply_enabled():
+    """Check if Gigi SMS auto-reply is enabled (used by gigi/main.py)"""
+    return _gigi_settings.get("sms_autoreply", False)
+
+
+# ============================================================================
 # GoFormz → WellSky Webhook Endpoint
 # ============================================================================
 
