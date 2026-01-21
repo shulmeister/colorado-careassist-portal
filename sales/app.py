@@ -6091,6 +6091,7 @@ async def create_contact(
             tags=_serialize_tags(payload.get("tags")),
             last_activity=_coerce_datetime(payload.get("last_activity"), now),
             account_manager=payload.get("account_manager"),
+        )
         db.add(contact)
         db.commit()
         db.refresh(contact)

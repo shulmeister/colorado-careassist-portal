@@ -2188,6 +2188,7 @@ async def beetexting_webhook(request: Request):
             to_number=to_number,
             message=message,
             contact_name=payload.get("contactName"),
+        )
         result = await handle_inbound_sms(sms)
         
         # Log to Portal

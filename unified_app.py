@@ -87,16 +87,10 @@ try:
         spec.loader.exec_module(sales_module)
         sales_app = sales_module.app
 
-        # Use include_router for reliable routing
-        app.include_router(sales_app.router, prefix="/sales")
-        
-        # Mount sales static files explicitly
-        sales_static_path = os.path.join(sales_path, "static")
-        if os.path.exists(sales_static_path):
-             from fastapi.staticfiles import StaticFiles
-             app.mount("/sales/static", StaticFiles(directory=sales_static_path), name="sales_static")
+        # Mount Sales as a sub-application (FastAPI apps don't have .router attribute)
+        app.mount("/sales", sales_app)
 
-        logger.info("✅ Included Sales Dashboard routes at /sales")
+        logger.info("✅ Mounted Sales Dashboard at /sales")
     else:
         logger.warning("⚠️  Sales dashboard not found")
 except Exception as e:
@@ -213,9 +207,9 @@ try:
         spec.loader.exec_module(gigi_module)
         gigi_app = gigi_module.app
 
-        # Use include_router for Gigi
-        app.include_router(gigi_app.router, prefix="/gigi")
-        logger.info("✅ Included Gigi AI Agent routes at /gigi")
+        # Mount Gigi as a sub-application (FastAPI apps don't have .router attribute)
+        app.mount("/gigi", gigi_app)
+        logger.info("✅ Mounted Gigi AI Agent at /gigi")
         logger.info("   Retell webhook: /gigi/webhook/retell")
         logger.info("   Health check: /gigi/health")
     else:
