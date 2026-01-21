@@ -923,6 +923,249 @@ async def test_log_client_issue(client_id: str, note: str, issue_type: str = "ge
 
 
 # =============================================================================
+# SMS Auto-Reply System
+# =============================================================================
+
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AIzaSyB-67dmnNUmfJfvbEznwqLYcnMZBMPam8o")
+
+# SMS Response prompt for Gigi
+SMS_SYSTEM_PROMPT = """You are Gigi, the after-hours AI assistant for Colorado Care Assist, a non-medical home care agency serving seniors and people with disabilities across Colorado.
+
+You are responding to TEXT MESSAGES from caregivers after hours. Keep responses:
+- Warm but professional
+- BRIEF - this is SMS, not email (2-3 sentences max)
+- Helpful and reassuring
+- Don't ask too many questions in one message
+
+COMMON SCENARIOS:
+
+1. CLOCK IN/OUT ISSUES (very common in rural Colorado):
+   - Reassure them their pay won't be affected
+   - Ask for the details: client name, date, actual time
+   - Tell them you'll log it for the office to fix in the morning
+   - Example: "No worries! I'll log that for you. What was the client name and your actual clock in/out time? The office will fix it in WellSky first thing tomorrow."
+
+2. CALLING OUT SICK:
+   - Express empathy
+   - Get the shift details (client name, time)
+   - Let them know you'll notify the team
+   - Example: "Sorry to hear that! I'll let the team know. Which shift are you calling out from?"
+
+3. RUNNING LATE:
+   - Acknowledge and log it
+   - Example: "Thanks for letting us know! I'll make a note. Hope you get there safely."
+
+4. LOOKING FOR SHIFTS:
+   - Note their availability
+   - Example: "I'll note your availability for the scheduling team - they'll reach out when shifts open up!"
+
+5. PAYROLL QUESTIONS:
+   - Pay stubs: www.adamskeegan.com
+   - Pay is bi-weekly
+   - Example: "Pay stubs are at adamskeegan.com. We pay bi-weekly. For specific questions, the office can help you in the morning."
+
+6. GENERAL QUESTIONS:
+   - Answer if you can from knowledge base
+   - Otherwise say office will follow up
+   - Example: "I've made a note - Cynthia or the office will get back to you first thing in the morning!"
+
+Office hours: Monday-Friday, 8 AM - 5 PM Mountain Time
+Office numbers: 719-428-3999 or 303-757-1777
+
+IMPORTANT: Never make promises about shift coverage or schedule changes - just log and reassure."""
+
+
+class InboundSMS(BaseModel):
+    """Inbound SMS message from Beetexting webhook."""
+    from_number: str = Field(..., description="Sender's phone number")
+    to_number: str = Field(default="+17194283999", description="Receiving number")
+    message: str = Field(..., description="Message content")
+    contact_name: Optional[str] = Field(None, description="Contact name if known")
+    agent_email: Optional[str] = Field(None, description="Beetexting agent email")
+
+
+class SMSResponse(BaseModel):
+    """Response for SMS auto-reply."""
+    success: bool
+    reply_sent: bool
+    reply_text: Optional[str] = None
+    error: Optional[str] = None
+
+
+async def generate_sms_response(message: str, caller_info: Optional[CallerInfo] = None) -> str:
+    """
+    Generate a thoughtful SMS response using Gemini AI.
+    """
+    # Build context
+    context = ""
+    if caller_info and caller_info.name:
+        context = f"The message is from {caller_info.name}, who is a {caller_info.caller_type.value}. "
+
+    user_prompt = f"{context}Caregiver's text message: \"{message}\"\n\nWrite a brief, helpful SMS reply:"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
+                json={
+                    "contents": [{"parts": [{"text": f"{SMS_SYSTEM_PROMPT}\n\n{user_prompt}"}]}],
+                    "generationConfig": {
+                        "maxOutputTokens": 150,
+                        "temperature": 0.7
+                    }
+                },
+                timeout=15.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                reply = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                if reply:
+                    return reply.strip()
+            else:
+                logger.error(f"Gemini API error: {response.status_code} - {response.text[:200]}")
+    except Exception as e:
+        logger.error(f"Gemini API error: {e}")
+
+    # Fallback to simple response if Gemini fails
+    return "Thanks for reaching out! I've noted your message and someone from the office will get back to you first thing in the morning. Office hours are Mon-Fri 8 AM - 5 PM."
+
+
+@app.post("/webhook/inbound-sms", response_model=SMSResponse)
+async def handle_inbound_sms(sms: InboundSMS):
+    """
+    Handle inbound SMS messages and send AI-powered replies.
+
+    This endpoint receives inbound SMS notifications from Beetexting
+    and generates thoughtful, context-aware responses using Gigi's AI.
+    """
+    logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
+
+    try:
+        # Look up caller info
+        caller_info = await verify_caller(sms.from_number)
+
+        # Generate AI response
+        reply_text = await generate_sms_response(sms.message, caller_info)
+
+        # Send reply via RingCentral SMS
+        sms_sent = await _send_sms_ringcentral(sms.from_number, reply_text)
+
+        if sms_sent:
+            logger.info(f"SMS reply sent to {sms.from_number}: {reply_text[:50]}...")
+            return SMSResponse(
+                success=True,
+                reply_sent=True,
+                reply_text=reply_text
+            )
+        else:
+            logger.warning(f"Failed to send SMS reply to {sms.from_number}")
+            return SMSResponse(
+                success=True,  # Message received OK
+                reply_sent=False,
+                reply_text=reply_text,
+                error="Failed to send SMS reply"
+            )
+
+    except Exception as e:
+        logger.exception(f"Error handling inbound SMS: {e}")
+        return SMSResponse(
+            success=False,
+            reply_sent=False,
+            error=str(e)
+        )
+
+
+@app.post("/webhook/beetexting")
+async def beetexting_webhook(request: Request):
+    """
+    Webhook endpoint for Beetexting inbound SMS.
+
+    Receives the webhook payload, extracts the message,
+    and triggers the auto-reply system.
+    """
+    try:
+        body = await request.json()
+        logger.info(f"Beetexting webhook received: {json.dumps(body)[:500]}")
+
+        # Extract message details from webhook payload
+        payload = body.get("payload", body)
+
+        # Get phone numbers
+        from_number = (
+            payload.get("from") or
+            payload.get("fromNumber") or
+            payload.get("mobileNumber") or
+            body.get("from")
+        )
+        to_number = payload.get("to") or payload.get("toNumber") or "+17194283999"
+
+        # Get message text
+        message = (
+            payload.get("text") or
+            payload.get("message") or
+            payload.get("body") or
+            body.get("text") or
+            body.get("message")
+        )
+
+        # Get direction - only auto-reply to inbound messages
+        direction = (
+            payload.get("direction") or
+            body.get("direction") or
+            "inbound"
+        ).lower()
+
+        if direction == "outbound":
+            logger.info("Skipping outbound message - no reply needed")
+            return JSONResponse({"status": "ok", "action": "skipped_outbound"})
+
+        if not from_number or not message:
+            logger.warning(f"Missing from_number or message in webhook payload")
+            return JSONResponse({"status": "error", "message": "Missing required fields"}, status_code=400)
+
+        # Handle the inbound SMS
+        sms = InboundSMS(
+            from_number=from_number,
+            to_number=to_number,
+            message=message,
+            contact_name=payload.get("contactName"),
+            agent_email=body.get("agentEmail")
+        )
+
+        result = await handle_inbound_sms(sms)
+
+        return JSONResponse({
+            "status": "ok",
+            "reply_sent": result.reply_sent,
+            "reply_preview": result.reply_text[:50] + "..." if result.reply_text else None
+        })
+
+    except Exception as e:
+        logger.exception(f"Error in Beetexting webhook: {e}")
+        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.post("/test/sms-reply")
+async def test_sms_reply(from_number: str, message: str):
+    """
+    Test endpoint for SMS auto-reply.
+
+    Use this to test how Gigi would respond to a message
+    without actually sending an SMS.
+    """
+    caller_info = await verify_caller(from_number)
+    reply = await generate_sms_response(message, caller_info)
+
+    return {
+        "from_number": from_number,
+        "original_message": message,
+        "caller_type": caller_info.caller_type.value,
+        "caller_name": caller_info.name,
+        "generated_reply": reply
+    }
+
+
+# =============================================================================
 # Run with Uvicorn
 # =============================================================================
 
