@@ -10541,6 +10541,9 @@ def _get_root_services():
         _sys.path.insert(0, root_dir)
 
         try:
+            # CRITICAL: Add module to sys.modules BEFORE exec_module
+            # This is required for @dataclass decorator to work properly
+            _sys.modules['root_wellsky_service'] = wellsky_module
             spec.loader.exec_module(wellsky_module)
 
             # Now load sales_wellsky_sync which depends on wellsky_service
@@ -10550,6 +10553,8 @@ def _get_root_services():
             sync_path = _os.path.join(root_dir, 'services', 'sales_wellsky_sync.py')
             sync_spec = importlib.util.spec_from_file_location("root_sales_wellsky_sync", sync_path)
             sync_module = importlib.util.module_from_spec(sync_spec)
+            # Also add to sys.modules before exec
+            _sys.modules['root_sales_wellsky_sync'] = sync_module
             sync_spec.loader.exec_module(sync_module)
 
             _root_services_cache = {
