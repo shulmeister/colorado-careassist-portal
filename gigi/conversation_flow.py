@@ -926,7 +926,7 @@ NEVER go back to caregiver_callout, caregiver_late, or client_complaint nodes. T
         "name": "Gigi - Colorado Care Assist",
         "model_choice": {
             "type": "cascading",
-            "model": "claude-4.5-sonnet"
+            "model": "gpt-5-mini"
         },
         "general_prompt": global_prompt,
         "nodes": nodes,
