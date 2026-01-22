@@ -1,41 +1,158 @@
 [
-  "Tim and Barbara Spencer",
-  "Nasim Vaghoo",
-  "Wayne Gill",
-  "Fred DeHerrera",
-  "Virginia Johnson",
-  "Susan Duchin",
-  "Ralph Schoenbauer",
-  "Ruth Ratynski",
-  "Robert Brown",
-  "Marthe Schwartz",
-  "William Crowley",
-  "Richard Northrop",
-  "Mark Diamond",
-  "Preston Hill",
-  "Jadwiga \"Geeg\" Kepa",
-  "Therese Schreiner",
-  "Gerald Hostetler",
-  "Leslie Capell",
-  "Gary Jackson",
-  "Janna Segal",
-  "Christine Brock - AAA",
-  "JoAnne Jones - AAA",
-  "Shirley Rosell - AAA",
-  "Herbert Burley AAA",
-  "Betty Jean Lipsey AAA",
-  "Margot Brown - AAA",
-  "Ronald Duncan",
-  "Ianina Rybitska - AAA",
-  "Barb Wolff",
-  "Grant Allred",
-  "Steve Kohli",
-  "Charles Besch - AAA",
-  "Nancy Jo Boggs",
-  "James Bolt",
-  "Richard Thompkins",
-  "Judy Tuetken AAA",
-  "Rodney Albertson",
-  "John Hartling",
-  "Don and Jane Martin"
+  {
+    "phone": "3158230607",
+    "name": "Peter Adasek",
+    "city": "Colorado Springs",
+    "address": "1642 Goldpeak Court"
+  },
+  {
+    "phone": "7193385835",
+    "name": "Mark Diamond",
+    "city": "Colorado Springs",
+    "address": "557 Vista Grande Dr"
+  },
+  {
+    "phone": "3038703708",
+    "name": "Wayne Gill",
+    "city": "Centennial",
+    "address": "3172 E Weaver Ave"
+  },
+  {
+    "phone": "3038812321",
+    "name": "Preston Hill",
+    "city": "Denver",
+    "address": "3910 S Hillcrest Drive"
+  },
+  {
+    "phone": "7194590115",
+    "name": "Margot Brown - AAA",
+    "city": "Colorado Springs",
+    "address": "5218 Borrego Dr"
+  },
+  {
+    "phone": "7192918016",
+    "name": "Nasim Vaghoo",
+    "city": "Colorado Springs",
+    "address": "1219 East San Rafael Street"
+  },
+  {
+    "phone": "7192312497",
+    "name": "Janna Segal",
+    "city": "Colorado Springs",
+    "address": "6905 Burroback Avenue"
+  },
+  {
+    "phone": "7203233907",
+    "name": "Susan Duchin",
+    "city": "Colorado Springs",
+    "address": "4450 Carriage House View"
+  },
+  {
+    "phone": "3037754875",
+    "name": "Ralph Schoenbauer",
+    "city": "Colorado Springs",
+    "address": "7313 Janice Place"
+  },
+  {
+    "phone": "7196409296",
+    "name": "Rodney Albertson",
+    "city": "Colorado Springs",
+    "address": "4813 Avondale Cir"
+  },
+  {
+    "phone": "3036194143",
+    "name": "Richard Northrop",
+    "city": "Broomfield",
+    "address": "1135 W 4TH AVE"
+  },
+  {
+    "phone": "7192336884",
+    "name": "Fred DeHerrera",
+    "city": "Colorado Springs",
+    "address": "4442 Frost Drive"
+  },
+  {
+    "phone": "7038197805",
+    "name": "Edward Witt",
+    "city": "Colorado Springs",
+    "address": "1028 Barbaro Terrace"
+  },
+  {
+    "phone": "7194325260",
+    "name": "Herbert Burley AAA",
+    "city": "Colorado Springs",
+    "address": "4734 Monica Dr"
+  },
+  {
+    "phone": "7196512526",
+    "name": "Jessica Whelehan Trow- Fletcher - AAA",
+    "city": "Colorado Springs",
+    "address": "6065 Del Paz Drive"
+  },
+  {
+    "phone": "7194327550",
+    "name": "Judy Tuetken AAA",
+    "city": "Colorado Springs",
+    "address": "401 Burlington Ave"
+  },
+  {
+    "phone": "3039976907",
+    "name": "Nancy Jo Boggs",
+    "city": "Littleton",
+    "address": "6148 South Balsam Way Aspen building, Apt. a104, Littleton,"
+  },
+  {
+    "phone": "7196519885",
+    "name": "Ronald Duncan",
+    "city": "Colorado Springs",
+    "address": "1126 FONTMORE RD APT A"
+  },
+  {
+    "phone": "6307320052",
+    "name": "Therese Schreiner",
+    "city": "Bennett",
+    "address": "690 Antelope Drive West"
+  },
+  {
+    "phone": "7193316192",
+    "name": "William Crowley",
+    "city": "Colorado Springs",
+    "address": "2710 W KIOWA ST"
+  },
+  {
+    "phone": "7194874896",
+    "name": "Leslie Capell",
+    "city": "Colorado Springs",
+    "address": "9550 Millard Way"
+  },
+  {
+    "phone": "7193102740",
+    "name": "Gary Jackson",
+    "city": "Colorado Springs",
+    "address": "5584 Sonnet Heights"
+  },
+  {
+    "phone": "7192135760",
+    "name": "Mary Poole AAA",
+    "city": "Colorado Springs",
+    "address": "5824 Brave Eagle Dr"
+  },
+  {
+    "phone": "7192710167",
+    "name": "Betty Jean Lipsey AAA",
+    "city": "Colorado Springs",
+    "address": "609 Bennett Ave #G"
+  },
+  {
+    "phone": "7195108623",
+    "name": "Rita LaBrecque",
+    "city": "Colorado Springs",
+    "address": "1764 w yampa street"
+  },
+  {
+    "phone": "9705815032",
+    "name": "Ianina Rybitska - AAA",
+    "city": "Colorado Springs",
+    "address": "5120 Alteza Drive Colorado Springs CO 80917"
+  }
 ]

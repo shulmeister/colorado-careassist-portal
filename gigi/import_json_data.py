@@ -107,20 +107,34 @@ def import_clients():
 
     print(f"Found {len(clients)} clients in file")
 
+    count = 0
     with gigi_db.get_session() as session:
         session.query(GigiClient).delete()
 
-        for i, name in enumerate(clients):
-            client = GigiClient(
-                phone=f"000000{i:04d}",  # Placeholder - need real export
-                name=name,
-                status="active",
-                location="Colorado"
-            )
+        for client_data in clients:
+            # Handle both old format (list of names) and new format (list of dicts)
+            if isinstance(client_data, str):
+                # Old format - just name
+                client = GigiClient(
+                    phone=f"000000{count:04d}",
+                    name=client_data,
+                    status="active",
+                    location="Colorado"
+                )
+            else:
+                # New format - dict with phone, name, city, address
+                client = GigiClient(
+                    phone=client_data.get("phone", f"000000{count:04d}"),
+                    name=client_data.get("name", "Unknown"),
+                    status="active",
+                    location=client_data.get("city", "Colorado"),
+                    address=client_data.get("address", "")
+                )
             session.add(client)
+            count += 1
 
-    print(f"Imported: {len(clients)} clients (placeholder phones)")
-    return len(clients)
+    print(f"Imported: {count} clients")
+    return count
 
 
 def import_unavailability():
