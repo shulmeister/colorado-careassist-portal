@@ -171,12 +171,16 @@ class CallOutReport(BaseModel):
     message: str
     manager_notified: bool = False
     notification_details: Optional[str] = None
+    action_completed: bool = True  # Signal to LLM that no further calls needed
+    next_step: str = "confirm_with_caller"  # Tell LLM what to do next
 
 
 class ClientIssueReport(BaseModel):
     success: bool
     issue_id: Optional[str] = None
     message: str
+    action_completed: bool = True  # Signal to LLM that no further calls needed
+    next_step: str = "confirm_with_caller"  # Tell LLM what to do next
 
 
 class RetellToolCall(BaseModel):
@@ -1308,6 +1312,10 @@ async def execute_caregiver_call_out(
             f"Please also try to contact the office directly if possible."
         )
 
+    # Critical: Signal to LLM that this action is complete
+    result["action_completed"] = True
+    result["next_step"] = "DO NOT call this tool again. Tell the caregiver it's handled and ask 'Is there anything else?'"
+
     logger.info(f"execute_caregiver_call_out completed: success={result['success']}, steps={steps_completed}/3")
     return result
 
@@ -1439,7 +1447,9 @@ async def report_call_out(
         notification_details=(
             f"Campaign started: {filling_result.candidates_contacted} caregivers being contacted"
             if filling_result.success else "Manual follow-up required"
-        )
+        ),
+        action_completed=True,
+        next_step="DO NOT call this tool again. Tell the caregiver it's handled and ask 'Is there anything else?'"
     )
 
 
@@ -1789,20 +1799,16 @@ async def log_client_issue(
         return ClientIssueReport(
             success=True,
             issue_id=issue_id,
-            message=(
-                "I've recorded your concern and our care team will follow up with you. "
-                "Someone will reach out during business hours to help resolve this. "
-                "Is there anything else I can help you with tonight?"
-            )
+            message="Issue logged successfully. Tell the caller it's recorded and someone will call back within 30 minutes. Then ask 'Is there anything else?'",
+            action_completed=True,
+            next_step="DO NOT call log_client_issue again. Confirm with caller and close."
         )
     else:
         return ClientIssueReport(
             success=False,
-            message=(
-                "I apologize, but I had trouble recording your concern in our system. "
-                "Please call back during business hours or try again. "
-                "Our office number is 719-428-3999."
-            )
+            message="Could not log issue. Apologize briefly and offer to take a message instead.",
+            action_completed=True,
+            next_step="DO NOT retry. Move on."
         )
 
 
