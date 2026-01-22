@@ -237,40 +237,7 @@ If the caregiver already said their shift time or reason, DO NOT ask again.
 
 DO NOT keep asking questions. Get the info, confirm, and end the call."""
             },
-            "tools": [
-                {
-                    "name": "get_active_shifts",
-                    "type": "custom",
-                    "description": "Get caregiver's shifts in next 24 hours",
-                    "url": f"{WEBHOOK_BASE}/get_active_shifts",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "person_id": {"type": "string", "description": "Caregiver ID from verify_caller"}
-                        },
-                        "required": ["person_id"]
-                    },
-                    "speak_during_execution": True,
-                    "execution_message_description": "Let me check your shifts."
-                },
-                {
-                    "name": "execute_caregiver_call_out",
-                    "type": "custom",
-                    "description": "CALL ONCE to report a call-out. Updates WellSky, logs the call-out, and starts finding replacement coverage. After success, confirm with caller and DO NOT call again.",
-                    "url": f"{WEBHOOK_BASE}/execute_caregiver_call_out",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "caregiver_id": {"type": "string", "description": "Caregiver ID"},
-                            "shift_id": {"type": "string", "description": "Shift ID"},
-                            "reason": {"type": "string", "enum": ["sick", "emergency", "car_trouble", "family", "other"]}
-                        },
-                        "required": ["caregiver_id", "shift_id"]
-                    },
-                    "speak_during_execution": True,
-                    "execution_message_description": "I'm logging your call-out and finding coverage now."
-                }
-            ],
+            "tools": [],
             "edges": [
                 {
                     "id": "callout_to_closing",
@@ -307,40 +274,7 @@ If they already said how late they'll be, DO NOT ask again.
 
 DO NOT keep asking questions. Get the ETA, confirm notification, and end."""
             },
-            "tools": [
-                {
-                    "name": "get_shift_details",
-                    "type": "custom",
-                    "description": "Get details of caregiver's current/next shift",
-                    "url": f"{WEBHOOK_BASE}/get_shift_details",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "person_id": {"type": "string", "description": "Caregiver ID"}
-                        },
-                        "required": ["person_id"]
-                    },
-                    "speak_during_execution": True,
-                    "execution_message_description": "Let me pull up your shift."
-                },
-                {
-                    "name": "report_late",
-                    "type": "custom",
-                    "description": "CALL ONCE to report running late. Notifies the client. After success, confirm and DO NOT call again.",
-                    "url": f"{WEBHOOK_BASE}/report_late",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "shift_id": {"type": "string"},
-                            "delay_minutes": {"type": "integer"},
-                            "reason": {"type": "string"}
-                        },
-                        "required": ["shift_id", "delay_minutes"]
-                    },
-                    "speak_during_execution": True,
-                    "execution_message_description": "I'm notifying the client now."
-                }
-            ],
+            "tools": [],
             "edges": [
                 {
                     "id": "late_to_closing",
@@ -395,21 +329,7 @@ Tell them their schedule, then close.
 
 Move to end_call after providing info or taking their callback number."""
             },
-            "tools": [
-                {
-                    "name": "get_active_shifts",
-                    "type": "custom",
-                    "description": "Get caregiver's upcoming shifts - only use for schedule questions",
-                    "url": f"{WEBHOOK_BASE}/get_active_shifts",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "person_id": {"type": "string"}
-                        },
-                        "required": ["person_id"]
-                    }
-                }
-            ],
+            "tools": [],
             "edges": [
                 {
                     "id": "other_to_end",
@@ -531,28 +451,11 @@ If they demand immediate resolution: "I understand you want this fixed now. I ca
 6. If they keep venting: "I understand. Everything is documented. Is there anything else tonight?"
 7. Close the call
 
-NEVER call log_client_issue more than once. After logging, reassure and close."""
+Say: "I've documented everything and marked this as urgent. Cynthia Pointe will call you tomorrow before 9 AM."
+
+NEVER use tools - just acknowledge verbally and give Cynthia's name."""
             },
-            "tools": [
-                {
-                    "name": "log_client_issue",
-                    "type": "custom",
-                    "description": "CALL ONCE to log issue. Use priority: urgent for no-shows/neglect/cancel threats, high for late/quality issues.",
-                    "url": f"{WEBHOOK_BASE}/log_client_issue",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "client_id": {"type": "string"},
-                            "note": {"type": "string", "description": "Full description including caller's concerns"},
-                            "issue_type": {"type": "string", "enum": ["general", "complaint", "schedule", "feedback", "emergency"]},
-                            "priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"]}
-                        },
-                        "required": ["note", "priority"]
-                    },
-                    "speak_during_execution": True,
-                    "execution_message_description": "I'm logging this as a priority issue now."
-                }
-            ],
+            "tools": [],
             "edges": [
                 {
                     "id": "complaint_to_end",
@@ -574,10 +477,10 @@ NEVER call log_client_issue more than once. After logging, reassure and close.""
             "name": "Client Schedule",
             "instruction": {
                 "type": "prompt",
-                "text": """Help the client check their schedule. Call get_client_schedule ONCE.
+                "text": """Help the client with their schedule question.
 
-After getting the schedule, tell them clearly:
-"Your next visit is [date] at [time] with [caregiver name]."
+Since you don't have schedule access tonight, say:
+"I don't have your schedule pulled up right now, but let me get Cynthia Pointe, our Care Manager, to call you within 15 minutes. She can check everything and make sure you're taken care of."
 
 CRITICAL: RECOGNIZE IMMEDIATE NEEDS
 If the client expresses ANY of these concerns, the schedule alone is NOT enough:
@@ -631,42 +534,7 @@ FLOW FOR ROUTINE SCHEDULE CHECKS:
 3. Reassure: "You're not forgotten."
 4. Close warmly when they're ready"""
             },
-            "tools": [
-                {
-                    "name": "get_client_schedule",
-                    "type": "custom",
-                    "description": "Get upcoming visits - CALL ONCE ONLY",
-                    "url": f"{WEBHOOK_BASE}/get_client_schedule",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "client_id": {"type": "string"},
-                            "days_ahead": {"type": "integer", "default": 7}
-                        },
-                        "required": ["client_id"]
-                    },
-                    "speak_during_execution": True,
-                    "execution_message_description": "Let me check your schedule."
-                },
-                {
-                    "name": "log_client_issue",
-                    "type": "custom",
-                    "description": "Log urgent request for same-day coverage",
-                    "url": f"{WEBHOOK_BASE}/log_client_issue",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "client_id": {"type": "string"},
-                            "note": {"type": "string"},
-                            "issue_type": {"type": "string", "enum": ["general", "complaint", "schedule", "feedback", "emergency"]},
-                            "priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"]}
-                        },
-                        "required": ["note", "priority"]
-                    },
-                    "speak_during_execution": True,
-                    "execution_message_description": "I'm logging this as urgent and getting our care team on it."
-                }
-            ],
+            "tools": [],
             "edges": [
                 {
                     "id": "schedule_to_end",
@@ -696,41 +564,12 @@ FLOW FOR ROUTINE SCHEDULE CHECKS:
 4. After success: "I've cancelled that visit. The caregiver will be notified."
 5. Ask: "Is there anything else?"
 
-IMPORTANT: Call cancel_client_visit exactly ONCE. After it succeeds, do NOT call it again."""
+Say: "I've noted your cancellation request. The caregiver will be notified and someone will confirm with you tomorrow."
+Ask: "Is there anything else?"
+
+NEVER use tools - just acknowledge verbally."""
             },
-            "tools": [
-                {
-                    "name": "get_client_schedule",
-                    "type": "custom",
-                    "description": "Get schedule to identify which visit to cancel",
-                    "url": f"{WEBHOOK_BASE}/get_client_schedule",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "client_id": {"type": "string"},
-                            "days_ahead": {"type": "integer"}
-                        },
-                        "required": ["client_id"]
-                    }
-                },
-                {
-                    "name": "cancel_client_visit",
-                    "type": "custom",
-                    "description": "CALL ONCE to cancel a visit. After success, confirm and DO NOT call again.",
-                    "url": f"{WEBHOOK_BASE}/cancel_client_visit",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "shift_id": {"type": "string"},
-                            "reason": {"type": "string"},
-                            "cancelled_by": {"type": "string", "enum": ["client", "family"]}
-                        },
-                        "required": ["shift_id", "reason"]
-                    },
-                    "speak_during_execution": True,
-                    "execution_message_description": "I'm cancelling that visit now."
-                }
-            ],
+            "tools": [],
             "edges": [
                 {
                     "id": "cancel_to_closing",
