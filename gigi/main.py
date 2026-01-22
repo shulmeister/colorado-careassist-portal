@@ -47,9 +47,11 @@ logger = logging.getLogger(__name__)
 
 # Retell AI credentials (required for voice agent)
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
-RETELL_WEBHOOK_SECRET = os.getenv("RETELL_WEBHOOK_SECRET")  # Required for production webhook validation
+# Note: Retell uses the API key itself for webhook signature verification (not a separate secret)
+# See: https://docs.retellai.com/features/secure-webhook
 PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://portal.coloradocareassist.com")
-GIGI_ENABLE_TEST_ENDPOINTS = os.getenv("GIGI_ENABLE_TEST_ENDPOINTS", "true").lower() == "true"
+# SECURITY: Test endpoints disabled by default in production
+GIGI_ENABLE_TEST_ENDPOINTS = os.getenv("GIGI_ENABLE_TEST_ENDPOINTS", "false").lower() == "true"
 
 def require_gigi_test_endpoints_enabled():
     if not GIGI_ENABLE_TEST_ENDPOINTS:
@@ -82,7 +84,6 @@ def _log_config_status():
     """Log which credentials are configured without exposing values."""
     configs = {
         "RETELL_API_KEY": bool(RETELL_API_KEY),
-        "RETELL_WEBHOOK_SECRET": bool(RETELL_WEBHOOK_SECRET),
         "BEETEXTING_CLIENT_ID": bool(BEETEXTING_CLIENT_ID),
         "RINGCENTRAL_CLIENT_ID": bool(RINGCENTRAL_CLIENT_ID),
         "RINGCENTRAL_JWT": bool(RINGCENTRAL_JWT),
@@ -287,17 +288,17 @@ async def verify_retell_signature(
     """
     Verify the Retell webhook signature to ensure request authenticity.
 
-    Retell signs webhooks with HMAC-SHA256 using your webhook secret.
+    Retell uses your API key for webhook signature verification.
+    See: https://docs.retellai.com/features/secure-webhook
     """
-    if not RETELL_WEBHOOK_SECRET:
-        # SECURITY: Log warning about missing webhook secret
-        # In production, this should be configured for security
+    if not RETELL_API_KEY:
+        # SECURITY: API key required for signature validation
         is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
         if is_production:
-            logger.error("SECURITY: RETELL_WEBHOOK_SECRET not configured in production - webhook validation disabled!")
+            logger.error("SECURITY: RETELL_API_KEY not configured - webhook validation disabled!")
         else:
-            logger.warning("RETELL_WEBHOOK_SECRET not configured - skipping signature validation (development)")
-        return True  # Allow for now but log the security issue
+            logger.warning("RETELL_API_KEY not configured - skipping signature validation (development)")
+        return True  # Allow for development but log the issue
 
     if not x_retell_signature:
         logger.warning("Missing X-Retell-Signature header")
@@ -305,14 +306,14 @@ async def verify_retell_signature(
 
     body = await request.body()
 
-    # Compute expected signature
+    # Retell uses API key for HMAC-SHA256 signature verification
     expected_signature = hmac.new(
-        RETELL_WEBHOOK_SECRET.encode('utf-8'),
+        RETELL_API_KEY.encode('utf-8'),
         body,
         hashlib.sha256
     ).hexdigest()
 
-    # Compare signatures
+    # Compare signatures (timing-safe comparison)
     is_valid = hmac.compare_digest(x_retell_signature, expected_signature)
 
     if not is_valid:
