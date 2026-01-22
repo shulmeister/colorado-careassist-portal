@@ -11,7 +11,7 @@ if not RETELL_API_KEY:
     print("ERROR: RETELL_API_KEY environment variable is required")
     sys.exit(1)
 RETELL_API_BASE = "https://api.retellai.com"
-CONVERSATION_FLOW_ID = "conversation_flow_7226ef696925"
+CONVERSATION_FLOW_ID = "conversation_flow_7226ef696925"  # Active flow used by agent
 
 sys.path.insert(0, os.path.dirname(__file__))
 from conversation_flow import get_conversation_flow_config
