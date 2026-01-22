@@ -58,20 +58,19 @@ try:
 
     sales_path = os.path.join(os.path.dirname(__file__), "sales")
     if os.path.exists(sales_path):
+        # Save root-level services modules (especially marketing) before sales modifies sys.path
+        # Sales has its own services/ but not services/marketing, so we preserve those
+        saved_services_modules = {}
+        for mod_name in list(sys.modules.keys()):
+            if mod_name == 'services' or mod_name.startswith('services.'):
+                saved_services_modules[mod_name] = sys.modules[mod_name]
+        logger.info(f"✅ Saved {len(saved_services_modules)} services modules")
+
         # Add sales path to front of sys.path for the services imports
         if sales_path in sys.path:
             sys.path.remove(sales_path)
         sys.path.insert(0, sales_path)
         logger.info(f"✅ Added sales path: {sales_path}")
-
-        # Clear any cached 'services' module to ensure we import from sales/services
-        # The root-level services/ directory may have been imported first by portal
-        if 'services' in sys.modules:
-            del sys.modules['services']
-        for mod_name in list(sys.modules.keys()):
-            if mod_name.startswith('services.'):
-                del sys.modules[mod_name]
-        logger.info("✅ Cleared cached services module")
 
         # Import sales app
         sales_app_file = os.path.join(sales_path, "app.py")
@@ -96,7 +95,10 @@ try:
         if root_path in sys.path:
             sys.path.remove(root_path)
         sys.path.insert(0, root_path)
-        logger.info("✅ Restored root path for services imports")
+
+        # Restore saved services modules (especially services.marketing.*)
+        sys.modules.update(saved_services_modules)
+        logger.info(f"✅ Restored {len(saved_services_modules)} services modules")
     else:
         logger.warning("⚠️  Sales dashboard not found")
 except Exception as e:
