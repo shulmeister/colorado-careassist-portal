@@ -1,25 +1,437 @@
 {
   "caregivers": {
-    "7194274853": {"name": "Halie Gutierrez", "status": "active"},
-    "7194270413": {"name": "Karen Lieljuris", "status": "active"},
-    "7194278832": {"name": "Dina Castaneda Ortega", "status": "active"},
-    "7194277941": {"name": "Jean Knoefler", "status": "active"},
-    "7194271739": {"name": "Anissa Loran", "status": "active"},
-    "7194277949": {"name": "Nicole Yonkers", "status": "active"},
-    "7194270510": {"name": "Michelle Kearney", "status": "active"},
-    "7194279874": {"name": "Beth Gourley", "status": "active"},
-    "7194279249": {"name": "Kandis Keys", "status": "active"},
-    "7194278822": {"name": "Karen Yu", "status": "active"},
-    "7194270188": {"name": "Mary Mosha", "status": "active"},
-    "7194273595": {"name": "Genet Kidane", "status": "active"},
-    "7194276150": {"name": "Christina Garcia", "status": "active"},
-    "7194275032": {"name": "Yuliya", "status": "active"},
-    "7194272423": {"name": "Brandy Edwards", "status": "active"},
-    "7194276360": {"name": "Arbay Mohamed", "status": "active"},
-    "7195555967": {"name": "JaNay Crawford", "status": "active"},
-    "3037706845": {"name": "Serenity Dorrance", "status": "active"},
-    "7194270188": {"name": "Elaine Kozloski", "status": "active"},
-    "7194278019": {"name": "Cynthia Pointe", "status": "active"}
+    "7192871648": {
+      "name": "Elaine Kozloski",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "elainejoy61@yahoo.com",
+      "can_sms": true
+    },
+    "6093040413": {
+      "name": "Karen Lieljuris",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": null,
+      "can_sms": true
+    },
+    "9707397949": {
+      "name": "Nicole Yonkers",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Peyton",
+      "email": "nicoleyonkers1010@gmail.com",
+      "can_sms": false
+    },
+    "3038650386": {
+      "name": "Christina Garcia",
+      "status": "active",
+      "location": "Denver",
+      "city": "Centennial",
+      "email": "christinacruz86@yahoo.com",
+      "can_sms": true
+    },
+    "7193235120": {
+      "name": "Liza Martinez",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "lizamartinez826@gmail.com",
+      "can_sms": true
+    },
+    "7193067941": {
+      "name": "Jean Knoefler",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "jeaneverlasting56@gmail.com",
+      "can_sms": true
+    },
+    "3039178832": {
+      "name": "Dina Castaneda Ortega",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "colorado springs",
+      "email": "dynamite.co3@gmail.com",
+      "can_sms": true
+    },
+    "7202850188": {
+      "name": "Mary Mosha",
+      "status": "active",
+      "location": "Denver",
+      "city": "Aurora",
+      "email": "marymosha56@yahoo.com",
+      "can_sms": true
+    },
+    "7194693418": {
+      "name": "Angela Oborne",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "La Junta",
+      "email": "babie_ole@yahoo.com",
+      "can_sms": true
+    },
+    "9514747017": {
+      "name": "Zipporah \"Lisa\" Wambugu",
+      "status": "active",
+      "location": "Denver",
+      "city": "Lakewood",
+      "email": "zipwambugu@gmail.com",
+      "can_sms": true
+    },
+    "3036185717": {
+      "name": "Kristin Sinatra",
+      "status": "active",
+      "location": NaN,
+      "city": "Aurora",
+      "email": "kristin.sinatra@yahoo.com",
+      "can_sms": true
+    },
+    "7202021829": {
+      "name": "Cynthia Pointe",
+      "status": "active",
+      "location": "Denver",
+      "city": "Littleton",
+      "email": "cyn1019@gmail.com",
+      "can_sms": true
+    },
+    "7205461981": {
+      "name": "Serenity Dorrance",
+      "status": "active",
+      "location": "Denver",
+      "city": "Aurora",
+      "email": "serenityfaith.xoxo@gmail.com",
+      "can_sms": true
+    },
+    "7202758181": {
+      "name": "Jennifer Clinkscales",
+      "status": "active",
+      "location": "Denver",
+      "city": "Denver",
+      "email": "clink.realty@gmail.com",
+      "can_sms": true
+    },
+    "6039971495": {
+      "name": "Jennifer Jeffers",
+      "status": "active",
+      "location": "Denver",
+      "city": "Boulder",
+      "email": "shulmeister@gmail.com",
+      "can_sms": false
+    },
+    "8082205894": {
+      "name": "Courtney Truesdell",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "courtneyetruesdell@gmail.com",
+      "can_sms": false
+    },
+    "7206947447": {
+      "name": "Sheila Sandoval",
+      "status": "active",
+      "location": "Denver",
+      "city": "Denver",
+      "email": "sheilasandoval9@gmail.com",
+      "can_sms": false
+    },
+    "7194403966": {
+      "name": "Andrea Boone",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "COLORADO SPRINGS",
+      "email": "abooneco@gmail.com",
+      "can_sms": false
+    },
+    "7152260514": {
+      "name": "Gloria Kvapil",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Rye",
+      "email": "gloria.cross.0926@gmail.com",
+      "can_sms": false
+    },
+    "9168032079": {
+      "name": "Diana Aldan-Muna",
+      "status": "active",
+      "location": "Denver",
+      "city": "Aurora",
+      "email": "dendeemuna67@yahoo.com",
+      "can_sms": false
+    },
+    "7198880441": {
+      "name": "Danielle Garcia",
+      "status": "active",
+      "location": "Denver",
+      "city": "Englewood",
+      "email": "dgskywalker83@gmail.com",
+      "can_sms": false
+    },
+    "9168029958": {
+      "name": "Dennis Muna",
+      "status": "active",
+      "location": "Denver",
+      "city": "Aurora",
+      "email": "dennis.muna@gmail.com",
+      "can_sms": false
+    },
+    "7196634853": {
+      "name": "Halie Gutierrez",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "halieanngutierrez69@icloud.com",
+      "can_sms": false
+    },
+    "7192003196": {
+      "name": "Heather Paillette",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "pailletteh@gmail.com",
+      "can_sms": false
+    },
+    "7194522834": {
+      "name": "Ann Marie Grant-Rose",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "annmariegrant156@gmail.com",
+      "can_sms": false
+    },
+    "7192292170": {
+      "name": "Kavitha Ramasamy",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "tarakaviram@gmail.com",
+      "can_sms": false
+    },
+    "9253498848": {
+      "name": "SIRIPRAPA PRATOOMCHAI",
+      "status": "active",
+      "location": "Denver",
+      "city": "Castle Rock",
+      "email": "siripratoomchai@gmail.com",
+      "can_sms": false
+    },
+    "7195885668": {
+      "name": "Stacey Widger",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Monte Vista",
+      "email": "staceywidger5668@gmail.com",
+      "can_sms": false
+    },
+    "7196468822": {
+      "name": "Karen Yu",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Peyton",
+      "email": "gnk2836@yahoo.com",
+      "can_sms": false
+    },
+    "7196759441": {
+      "name": "Beth Gourley",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "bethgourley13@gmail.com",
+      "can_sms": false
+    },
+    "7198396190": {
+      "name": "Addison Hairfield",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "addisonhairfield26@gmail.com",
+      "can_sms": false
+    },
+    "7197559698": {
+      "name": "Tamara Ritchie",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Pueblo",
+      "email": "tritc12@wgu.edu",
+      "can_sms": false
+    },
+    "7202457543": {
+      "name": "Destine Wood",
+      "status": "active",
+      "location": "Denver",
+      "city": "Aurora",
+      "email": "wooddestine1985@gmail.com",
+      "can_sms": false
+    },
+    "7192179249": {
+      "name": "Kandis Keys",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Spgs",
+      "email": "kandiskeys@icloud.com",
+      "can_sms": false
+    },
+    "7197472423": {
+      "name": "Brandy Edwards",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "COLORADO SPRINGS",
+      "email": "brandymedwards360@gmail.com",
+      "can_sms": false
+    },
+    "7197176698": {
+      "name": "Ladonna Damron",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "ladonna1989johnson@gmail.com",
+      "can_sms": false
+    },
+    "6189751604": {
+      "name": "Sarah Trujillo",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "trujillo1971@gmail.com",
+      "can_sms": false
+    },
+    "7194995376": {
+      "name": "Racheal Wambui",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado springs",
+      "email": "nimmohvalentine@gmail.com",
+      "can_sms": false
+    },
+    "7192019874": {
+      "name": "Beth Martin",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "bethadinamartin69@aol.com",
+      "can_sms": false
+    },
+    "8173176791": {
+      "name": "Angela Atteberry",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Pueblo",
+      "email": "atteberry1981@icloud.com",
+      "can_sms": false
+    },
+    "4235390510": {
+      "name": "Michelle Kearney",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "michellekearney72@gmail.com",
+      "can_sms": false
+    },
+    "7206614321": {
+      "name": "Emeka Ezeani",
+      "status": "active",
+      "location": "Denver",
+      "city": "Aurora",
+      "email": "emekaezeani97@gmail.com",
+      "can_sms": false
+    },
+    "7192914235": {
+      "name": "Chenelle Sandoval",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "herrin-family@msn.com",
+      "can_sms": false
+    },
+    "9892905003": {
+      "name": "Katelynn Bolick",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado springs",
+      "email": "kbolick2525@yahoo.com",
+      "can_sms": false
+    },
+    "3035642193": {
+      "name": "Melissa Romero",
+      "status": "active",
+      "location": "Denver",
+      "city": "Denver",
+      "email": "melorissa2015@gmail.com",
+      "can_sms": false
+    },
+    "7206293595": {
+      "name": "Genet Kidane",
+      "status": "active",
+      "location": "Denver",
+      "city": "Aurora",
+      "email": "kdngnt@yahoo.com",
+      "can_sms": false
+    },
+    "7196405409": {
+      "name": "Leslie Seidenstricker",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "leslieseidenstricker@gmail.com",
+      "can_sms": false
+    },
+    "7194124290": {
+      "name": "Tanisha Jones",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "iamlovejones222@gmail.com",
+      "can_sms": false
+    },
+    "7197448843": {
+      "name": "Adrienne Tolbert",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "vermell368@gmail.com",
+      "can_sms": false
+    },
+    "5313295967": {
+      "name": "JaNay Crawford",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "nay.crawford1989@icloud.com",
+      "can_sms": true
+    },
+    "3082251913": {
+      "name": "Lisa Keezer",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "auticummings1981@hotmail.com",
+      "can_sms": false
+    },
+    "7208006360": {
+      "name": "Arbay Mohamed",
+      "status": "active",
+      "location": "Denver",
+      "city": "ENGLEWOOD",
+      "email": "arbaym900@gmail.com",
+      "can_sms": true
+    },
+    "7192291739": {
+      "name": "Anissa Loran",
+      "status": "active",
+      "location": "Colorado Springs ",
+      "city": "Colorado Springs",
+      "email": "anissaloran803@gmail.com",
+      "can_sms": false
+    },
+    "7203646884": {
+      "name": "Helen Tesfaye",
+      "status": "active",
+      "location": "Denver",
+      "city": "Aurora",
+      "email": "helentesfaye@rocketmail.com",
+      "can_sms": true
+    }
   },
   "clients": {
     "7203018663": {
@@ -278,6 +690,6 @@
       "location": "Boulder"
     }
   },
-  "last_sync": "2026-01-21T23:00:00Z",
-  "notes": "Imported from WellSky export files"
+  "last_sync": "2026-01-21T21:27:51.762314",
+  "notes": "Caregivers with location data for shift filling. Clients from WellSky export."
 }
