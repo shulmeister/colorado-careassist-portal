@@ -324,6 +324,95 @@ def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _get_shifts_from_cache(caregiver_name: str = None, client_name: str = None) -> List[Dict[str, Any]]:
+    """
+    Look up shifts from the local cache.
+    Can filter by caregiver name or client name.
+    """
+    cache = _load_contacts_cache()
+    shifts = cache.get("shifts", [])
+
+    if not shifts:
+        return []
+
+    results = []
+    now = datetime.now()
+
+    for shift in shifts:
+        # Filter by caregiver if specified
+        if caregiver_name:
+            shift_cg = shift.get("caregiver_name", "").lower()
+            if caregiver_name.lower() not in shift_cg:
+                continue
+
+        # Filter by client if specified
+        if client_name:
+            shift_cl = shift.get("client_name", "").lower()
+            if client_name.lower() not in shift_cl:
+                continue
+
+        # Only include future shifts
+        try:
+            start_time = shift.get("start_time", "")
+            if start_time:
+                shift_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00").replace("+00:00", ""))
+                if shift_dt < now:
+                    continue
+        except (ValueError, TypeError):
+            pass
+
+        results.append(shift)
+
+    logger.info(f"Cache: Found {len(results)} shifts (caregiver={caregiver_name}, client={client_name})")
+    return results
+
+
+def _get_caregivers_by_location(location: str) -> List[Dict[str, Any]]:
+    """
+    Get all caregivers in a specific location/service area.
+    Used for shift filling to find nearby caregivers.
+    """
+    cache = _load_contacts_cache()
+    caregivers = cache.get("caregivers", {})
+
+    results = []
+    location_lower = location.lower().strip()
+
+    for phone, cg in caregivers.items():
+        cg_location = (cg.get("location") or cg.get("city") or "").lower()
+
+        # Match on location or city containing the search term
+        if location_lower in cg_location or cg_location in location_lower:
+            results.append({
+                "phone": phone,
+                "name": cg.get("name"),
+                "location": cg.get("location"),
+                "city": cg.get("city"),
+                "email": cg.get("email"),
+                "can_sms": cg.get("can_sms", False),
+                "status": cg.get("status", "active")
+            })
+
+    # Prioritize SMS-enabled caregivers for faster outreach
+    results.sort(key=lambda x: (not x.get("can_sms", False), x.get("name", "")))
+
+    logger.info(f"Cache: Found {len(results)} caregivers in location '{location}'")
+    return results
+
+
+def _get_client_location(client_name: str) -> Optional[str]:
+    """Get a client's location from cache for shift matching."""
+    cache = _load_contacts_cache()
+    clients = cache.get("clients", {})
+
+    client_lower = client_name.lower().strip()
+    for phone, cl in clients.items():
+        if client_lower in cl.get("name", "").lower():
+            return cl.get("location") or cl.get("city")
+
+    return None
+
+
 # =============================================================================
 # WellSky Integration Helpers (used as FALLBACK when not in cache)
 # =============================================================================
@@ -669,21 +758,58 @@ async def verify_caller(phone_number: str) -> CallerInfo:
     )
 
 
-async def get_shift_details(person_id: str) -> Optional[ShiftDetails]:
+async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optional[ShiftDetails]:
     """
-    Pulls the next scheduled shift from WellSky for a caregiver.
+    Pulls the next scheduled shift for a caregiver.
+
+    PERFORMANCE: Checks local cache FIRST (instant), falls back to WellSky API.
 
     Use this after identifying a caregiver to see their upcoming shift.
     This helps Gigi confirm which shift they're calling about.
 
     Args:
         person_id: The caregiver's ID from verify_caller
+        caregiver_name: Optional caregiver name for cache lookup
 
     Returns:
         ShiftDetails for the next upcoming shift, or None if no shifts scheduled
     """
-    logger.info(f"get_shift_details called for person_id: {person_id}")
+    logger.info(f"get_shift_details called for person_id: {person_id}, name: {caregiver_name}")
 
+    # =========================================================================
+    # STEP 1: Check local cache FIRST (instant, no API call)
+    # =========================================================================
+    if caregiver_name:
+        cached_shifts = _get_shifts_from_cache(caregiver_name=caregiver_name)
+        if cached_shifts:
+            next_shift = cached_shifts[0]  # Already sorted by time
+            try:
+                start_str = next_shift.get("start_time", "")
+                start_time = datetime.fromisoformat(start_str.replace("Z", "+00:00").replace("+00:00", ""))
+                # Estimate 3-hour shift if no end time
+                end_time = start_time + timedelta(hours=3)
+
+                logger.info(f"Cache HIT: Found shift for {caregiver_name}")
+                return ShiftDetails(
+                    shift_id=next_shift.get("shift_id", f"cache_{start_str}"),
+                    caregiver_id=person_id or "",
+                    caregiver_name=next_shift.get("caregiver_name", caregiver_name),
+                    client_id=next_shift.get("client_id", ""),
+                    client_name=next_shift.get("client_name", ""),
+                    client_address=next_shift.get("location", ""),
+                    start_time=start_time,
+                    end_time=end_time,
+                    hours=3.0,
+                    status=next_shift.get("status", "Scheduled"),
+                    notes=""
+                )
+            except Exception as e:
+                logger.warning(f"Cache shift parse error: {e}")
+
+    # =========================================================================
+    # STEP 2: Fall back to WellSky API
+    # =========================================================================
+    logger.info(f"Cache MISS for shifts, checking WellSky...")
     shifts = await _get_caregiver_shifts(person_id)
 
     if not shifts:
