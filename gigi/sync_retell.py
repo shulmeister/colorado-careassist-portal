@@ -88,12 +88,30 @@ def get_current_llm():
     return response.json()
 
 
+def get_time_of_day_greeting():
+    """Get the appropriate time-of-day greeting."""
+    from datetime import datetime
+    import pytz
+
+    mountain = pytz.timezone('America/Denver')
+    now = datetime.now(mountain)
+    hour = now.hour
+
+    if 3 <= hour < 12:
+        return "this morning"
+    elif 12 <= hour < 17:
+        return "this afternoon"
+    else:
+        return "tonight"
+
+
 def update_llm(system_prompt: str, tools: list):
     """Update the LLM configuration with prompt and tools."""
+    time_greeting = get_time_of_day_greeting()
     payload = {
         "general_prompt": system_prompt,
         "general_tools": tools,
-        "begin_message": "Hello, this is Gigi with Colorado Care Assist. How can I help you tonight?",
+        "begin_message": f"Hello, this is Gigi with Colorado Care Assist. How can I help you {time_greeting}?",
     }
 
     response = requests.patch(
@@ -143,7 +161,7 @@ def main():
     print(f"  - System prompt: {len(system_prompt)} chars")
     print(f"  - Tools: {len(tools)} functions")
     for tool in tools:
-        print(f"    • {tool['function']['name']}")
+        print(f"    • {tool['name']}")
 
     # Get current agent
     print("\n[2/5] Fetching current Retell agent...")
@@ -164,7 +182,7 @@ def main():
         current_tools = llm.get("general_tools", [])
         print(f"  - Current tools: {len(current_tools)}")
         for tool in current_tools:
-            print(f"    • {tool.get('function', {}).get('name', 'unknown')}")
+            print(f"    • {tool.get('name', 'unknown')}")
     except requests.exceptions.HTTPError as e:
         print(f"  WARNING: Could not fetch LLM: {e}")
 
