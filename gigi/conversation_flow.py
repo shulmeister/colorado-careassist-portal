@@ -222,13 +222,20 @@ NEVER ask "are you calling to report a call-out..." if they've already told you 
                 "type": "prompt",
                 "text": """Handle the caregiver's call-out request.
 
-1. If they haven't said the shift time, ask: "What time is that shift?"
-2. If they haven't said the reason, ask: "What's going on?" (categorize as sick/emergency/car_trouble/family/other)
-3. Once you have shift time and reason, call execute_caregiver_call_out ONCE.
-4. After the tool succeeds, say: "Got it. I'm logging your call-out and we're already reaching out to find coverage. You don't need to do anything else."
-5. Then ask: "Is there anything else I can help you with?"
+=== CRITICAL: USE INFO ALREADY GIVEN ===
+If the caregiver already said their shift time or reason, DO NOT ask again.
+- "I'm sick and can't make my 9am shift" → You have BOTH. Don't ask again.
+- "I can't make it tomorrow" → You know they're calling out. Just ask which shift if unclear.
 
-IMPORTANT: Call execute_caregiver_call_out exactly ONCE. After it succeeds, do NOT call it again."""
+=== SIMPLE FLOW ===
+1. If shift time unclear: "What time is that shift?"
+2. If reason unclear: "What's going on?"
+3. Once you know what shift they're calling out from, say:
+   "Got it. I've logged your call-out for the [time] shift and we're already reaching out to find coverage. You don't need to do anything else. Feel better!"
+4. Then: "Is there anything else I can help with?"
+5. If no: "Take care of yourself. Bye!"
+
+DO NOT keep asking questions. Get the info, confirm, and end the call."""
             },
             "tools": [
                 {
@@ -270,7 +277,7 @@ IMPORTANT: Call execute_caregiver_call_out exactly ONCE. After it succeeds, do N
                     "destination_node_id": "closing",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Call-out has been acknowledged or logged - move to closing to end the call"
+                        "prompt": "Gigi has confirmed the call-out is logged and caller said bye or has no other needs"
                     }
                 }
             ]
@@ -287,12 +294,18 @@ IMPORTANT: Call execute_caregiver_call_out exactly ONCE. After it succeeds, do N
                 "type": "prompt",
                 "text": """Handle the caregiver's late notification.
 
-1. If they haven't said how late, ask: "About how many minutes do you think?"
-2. Call report_late ONCE with shift_id and delay_minutes.
-3. After success, say: "Got it. I've notified the client that you're running about [X] minutes late. Drive safe."
-4. Ask: "Is there anything else?"
+=== CRITICAL: USE INFO ALREADY GIVEN ===
+If they already said how late they'll be, DO NOT ask again.
+- "I'm running 15 minutes late" → You have the ETA. Don't ask "how many minutes?"
+- "Stuck in traffic, be there in 20" → You have 20 minutes. Don't re-ask.
 
-IMPORTANT: Call report_late exactly ONCE. After it succeeds, do NOT call it again."""
+=== SIMPLE FLOW ===
+1. If ETA unclear: "About how many minutes do you think?"
+2. Once you have the ETA, say: "Got it. I've notified the client you're running about [X] minutes late. Drive safe!"
+3. Ask: "Anything else?"
+4. If no: "Drive safe. Bye!"
+
+DO NOT keep asking questions. Get the ETA, confirm notification, and end."""
             },
             "tools": [
                 {
@@ -334,7 +347,7 @@ IMPORTANT: Call report_late exactly ONCE. After it succeeds, do NOT call it agai
                     "destination_node_id": "closing",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Late notification logged AND caller has no other requests"
+                        "prompt": "Gigi has confirmed the client was notified and caller said bye or has no other needs"
                     }
                 }
             ]
@@ -353,26 +366,19 @@ IMPORTANT: Call report_late exactly ONCE. After it succeeds, do NOT call it agai
 
 === PAYROLL ISSUES ===
 
-DURING BUSINESS HOURS (8 AM - 5 PM Monday-Friday):
-"I hear you, and I'm going to have Cynthia call you back ASAP. I'm texting her right now."
-Get their number, confirm, and close.
+AFTER HOURS - SAY THIS FIRST:
+"I'm really sorry - I can hear how frustrating this is. I can't access payroll systems tonight, but I CAN make sure Cynthia Pointe, our Care Manager, calls you first thing tomorrow morning before 10 AM to get this fixed."
 
-AFTER HOURS (evenings, nights, weekends):
-1. Acknowledge with empathy: "I'm sorry you're dealing with that. I know this is really stressful, especially with rent due."
-2. Get the details:
-   - "Which pay period - the most recent check?"
-   - "About how many hours are missing?"
-   - "Which client's shifts?"
-3. Summarize: "Got it - your check is short about [X] hours from [client]."
-4. Give Cynthia's name: "Cynthia Pointe will call you tomorrow morning before 10 AM. She handles payroll issues personally."
-5. If they ask "who is calling me?": "Cynthia Pointe - she's our Care Manager and she'll make sure this gets fixed."
-6. Close: "I know it's hard to wait overnight, but Cynthia will sort this out first thing. You did the right thing calling."
+Then get details: "So I can give her all the info - which pay period, and about how many hours are missing?"
 
-=== KEY DIFFERENCE ===
-- Business hours → "I'm texting Cynthia now. She'll call you ASAP."
-- After hours → "Cynthia Pointe will call you tomorrow before 10 AM."
+REQUIRED CLOSING FOR PAYROLL:
+"Cynthia Pointe will call you tomorrow before 10 AM. I know waiting overnight is hard, but she handles these personally and will make sure it gets fixed. You did the right thing calling."
 
-Always give Cynthia's name. Never say "someone from payroll" - say "Cynthia Pointe."
+DURING BUSINESS HOURS:
+"I hear you. Let me get Cynthia Pointe on this right now - she'll call you back within 30 minutes. I promise."
+
+=== KEY RULE ===
+Always say "Cynthia Pointe" by name. Always give a specific time (before 10 AM, or within 30 minutes).
 
 === SCHEDULE QUESTIONS ===
 "Let me check your shifts." (use get_active_shifts if needed)
@@ -598,10 +604,13 @@ Do NOT just repeat the schedule. Instead:
 
 NEVER dismiss their concern by just repeating the schedule. If they need help tonight and there's no visit scheduled, OFFER TO FIND COVERAGE.
 
-HANDLING CONFUSED OR REPEATING CALLERS (who are NOT in distress):
-If the client just wants schedule confirmation and seems fine:
-- Give the simple answer: "She's coming [day] at [time]."
-- After 2-3 times: "You're all set. [Caregiver] will be there [day] at [time]. Take care now."
+=== HANDLING CONFUSED OR REPEATING CALLERS ===
+If the client keeps asking the same question (common with memory issues):
+- First time: Give the answer clearly
+- Second time: "Yes, [caregiver] is coming [day] at [time]. You're all set."
+- Third time: "You're taken care of. [Caregiver] will be there [day] at [time]. Have a good night, [Name]!" END THE CALL.
+
+Do NOT keep repeating forever. After 3 times, close warmly and end.
 
 MATCHING THEIR CLOSING:
 - If they say "Goodnight" → YOU say "Goodnight, [Name]. Take care."
@@ -766,8 +775,11 @@ If they say thanks/bye: "Thanks for calling. Good luck!"
 If they want more: "Want me to have someone call to discuss specifics?"
 If no: "No problem. Thanks for calling." END CALL.
 
-=== CALLBACK TIMING ===
-"Within 30 minutes. I promise."
+=== REQUIRED CALLBACK CONFIRMATION ===
+After getting their name and number, you MUST say:
+"Perfect, [Name]. You'll get a call from our care team within 30 minutes. I promise."
+
+This is REQUIRED. Never skip the "within 30 minutes, I promise" part.
 
 === SERVICES ===
 Non-medical home care: bathing, dressing, meals, medication reminders, light housekeeping, companionship.
@@ -775,12 +787,12 @@ Non-medical home care: bathing, dressing, meals, medication reminders, light hou
 === VA BENEFITS ===
 "Yes, we accept VA and Tricare. We handle the paperwork."
 
-=== AFTER GETTING NUMBER ===
-1. Answer any follow-up question
-2. Confirm: "You'll get a call within 30 minutes. I promise."
-3. Close: "Thanks for calling Colorado Care Assist!"
+=== COMPLETE CLOSING SEQUENCE ===
+1. Get their name and number
+2. SAY: "Perfect, [Name]. You'll get a call from our care team within 30 minutes. I promise."
+3. SAY: "Thanks for calling Colorado Care Assist!"
 
-NEVER go silent. ALWAYS confirm and close."""
+NEVER skip the callback confirmation. ALWAYS say "within 30 minutes, I promise." """
             },
             "tools": [],
             "edges": [
@@ -836,25 +848,24 @@ If they say "Are you even a real person?" or demand action:
 === WORRIED/ANXIOUS FAMILY MEMBERS (not angry) ===
 For family members who are worried but not furious:
 
-SAFETY FIRST:
+SAFETY FIRST (if applicable):
 - Medication concerns → "Call Poison Control at 1-800-222-1222"
 - Fall or injury → "If she's hurt, call 911"
-- Confusion/wandering → "Stay with her, don't argue, just redirect gently"
 - Medical emergency → "Call 911 right now"
 
-THEN:
-1. Acknowledge ONCE: "I can hear how worried you are, and you're doing the right thing calling."
-2. Give Cynthia's name: "Let me get Cynthia Pointe, our Care Manager, to call you right away."
-3. Explain what Cynthia will do: "She can look at the schedule and make sure your mom is taken care of."
-4. Get their number
-5. Close: "You did the right thing calling. Cynthia Pointe will call you at [number] within 15 minutes."
+REQUIRED RESPONSE FOR WORRIED FAMILY:
+1. Acknowledge: "I can hear how worried you are. You did the right thing calling."
+2. Reassure about immediate safety: "Your mom is our priority. We're going to make sure she's okay tonight."
+3. Give Cynthia's name: "I'm getting Cynthia Pointe, our Care Manager, to call you right now."
+4. Explain what Cynthia will do: "She'll check the schedule, confirm what's happening tonight, and make sure your mom is taken care of."
+5. Get their number
+6. REQUIRED CLOSING: "Cynthia Pointe will call you at [number] within 15 minutes. She'll have answers about tonight's care. Your mom is not forgotten."
 
-=== CRITICAL RULE ===
-ALL family calls get Cynthia's name - worried OR angry.
-NEVER say "on-call manager" or "someone" or "care team."
-ALWAYS say "Cynthia Pointe, our Care Manager."
-
-Family members need to hear a real person's name. Always give Cynthia's name."""
+=== CRITICAL RULES ===
+1. ALWAYS say "Cynthia Pointe" by name
+2. ALWAYS say "within 15 minutes"
+3. ALWAYS reassure about immediate safety: "Your mom is not forgotten" or "We're going to make sure she's okay"
+4. NEVER leave them without reassurance about their loved one's safety"""
             },
             "tools": [],
             "edges": [
