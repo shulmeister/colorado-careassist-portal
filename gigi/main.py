@@ -1807,6 +1807,294 @@ async def log_client_issue(
 
 
 # =============================================================================
+# NEW GIGI TOOLS - Production Readiness Features
+# =============================================================================
+
+@dataclass
+class NoteResult:
+    """Result of adding a note to WellSky."""
+    success: bool
+    message: str
+
+
+@dataclass
+class ClientScheduleResult:
+    """Result of getting client schedule."""
+    success: bool
+    shifts: List[Dict[str, Any]]
+    message: str
+
+
+@dataclass
+class ShiftActionResult:
+    """Result of a shift action (assign, cancel, late notification)."""
+    success: bool
+    message: str
+    shift_id: Optional[str] = None
+
+
+async def add_note_to_wellsky(
+    person_type: str,
+    person_id: str,
+    note: str,
+    note_type: str = "general"
+) -> NoteResult:
+    """
+    Add a note to a client or caregiver profile in WellSky.
+    CALL ONCE per conversation. After success, confirm and move on.
+
+    Args:
+        person_type: 'client' or 'caregiver'
+        person_id: The person's WellSky ID
+        note: The note content (summary of call, action taken, etc.)
+        note_type: Type of note (general, call, complaint, callout, late, schedule)
+
+    Returns:
+        NoteResult with success status
+    """
+    logger.info(f"add_note_to_wellsky: {person_type} {person_id}, type={note_type}")
+
+    endpoint = f"/api/internal/wellsky/notes/{person_type}/{person_id}"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{PORTAL_BASE_URL}{endpoint}",
+                json={
+                    "note": note,
+                    "note_type": note_type,
+                    "source": "gigi_ai"
+                },
+                timeout=15.0
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"Note added to {person_type} {person_id}")
+                return NoteResult(
+                    success=True,
+                    message=f"Note added to {person_type}'s profile."
+                )
+            else:
+                logger.warning(f"Failed to add note: {response.status_code}")
+                return NoteResult(
+                    success=False,
+                    message="Could not add note to profile."
+                )
+    except Exception as e:
+        logger.error(f"Error adding note: {e}")
+        return NoteResult(success=False, message=str(e))
+
+
+async def get_client_schedule(
+    client_id: str,
+    days_ahead: int = 7
+) -> ClientScheduleResult:
+    """
+    Get upcoming shifts for a client.
+    Use when a client asks 'When is my caregiver coming?'
+
+    Args:
+        client_id: The client's ID from verify_caller
+        days_ahead: Number of days to look ahead (default 7)
+
+    Returns:
+        ClientScheduleResult with list of upcoming shifts
+    """
+    logger.info(f"get_client_schedule: client={client_id}, days={days_ahead}")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/clients/{client_id}/shifts",
+                params={"days": days_ahead},
+                timeout=15.0
+            )
+            if response.status_code == 200:
+                data = response.json()
+                shifts = data.get("shifts", [])
+
+                if not shifts:
+                    return ClientScheduleResult(
+                        success=True,
+                        shifts=[],
+                        message="I don't see any visits scheduled in the next week. Would you like me to have someone from the office call you to schedule?"
+                    )
+
+                # Format the response nicely
+                next_shift = shifts[0]
+                shift_date = next_shift.get("date", "")
+                shift_time = next_shift.get("start_time", "")
+                caregiver = next_shift.get("caregiver_name", "your caregiver")
+
+                message = f"Your next visit is on {shift_date} at {shift_time} with {caregiver}."
+                if len(shifts) > 1:
+                    message += f" You have {len(shifts)} total visits scheduled this week."
+
+                return ClientScheduleResult(
+                    success=True,
+                    shifts=shifts,
+                    message=message
+                )
+            else:
+                logger.warning(f"Failed to get client schedule: {response.status_code}")
+                return ClientScheduleResult(
+                    success=False,
+                    shifts=[],
+                    message="I'm having trouble looking up your schedule. Let me take a message and have someone call you back."
+                )
+    except Exception as e:
+        logger.error(f"Error getting client schedule: {e}")
+        return ClientScheduleResult(
+            success=False,
+            shifts=[],
+            message="I'm having trouble looking up your schedule right now."
+        )
+
+
+async def report_late(
+    shift_id: str,
+    delay_minutes: int,
+    reason: str = ""
+) -> ShiftActionResult:
+    """
+    Report that a caregiver will be late and notify the client.
+    CALL ONCE. After success, confirm with caregiver.
+
+    Args:
+        shift_id: The shift ID
+        delay_minutes: How many minutes late (estimate)
+        reason: Optional reason (traffic, etc.)
+
+    Returns:
+        ShiftActionResult with status
+    """
+    logger.info(f"report_late: shift={shift_id}, delay={delay_minutes}min")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts/{shift_id}/late-notification",
+                json={
+                    "delay_minutes": delay_minutes,
+                    "reason": reason
+                },
+                timeout=15.0
+            )
+            if response.status_code in (200, 201):
+                data = response.json()
+                logger.info(f"Late notification sent for shift {shift_id}")
+                return ShiftActionResult(
+                    success=True,
+                    message=f"Got it. I've notified the client that you're running about {delay_minutes} minutes late. Drive safe.",
+                    shift_id=shift_id
+                )
+            else:
+                logger.warning(f"Failed to send late notification: {response.status_code}")
+                return ShiftActionResult(
+                    success=False,
+                    message="I had trouble notifying the client. Please call them directly if possible.",
+                    shift_id=shift_id
+                )
+    except Exception as e:
+        logger.error(f"Error reporting late: {e}")
+        return ShiftActionResult(success=False, message=str(e))
+
+
+async def cancel_client_visit(
+    shift_id: str,
+    reason: str,
+    cancelled_by: str = "client"
+) -> ShiftActionResult:
+    """
+    Cancel a client's scheduled visit.
+    CALL ONCE. After success, confirm the cancellation.
+
+    Args:
+        shift_id: The shift ID to cancel
+        reason: Reason for cancellation
+        cancelled_by: Who requested cancellation (client, family)
+
+    Returns:
+        ShiftActionResult with status
+    """
+    logger.info(f"cancel_client_visit: shift={shift_id}, by={cancelled_by}")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.put(
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts/{shift_id}/cancel",
+                json={
+                    "reason": reason,
+                    "cancelled_by": cancelled_by
+                },
+                timeout=15.0
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"Shift {shift_id} cancelled")
+                return ShiftActionResult(
+                    success=True,
+                    message="I've cancelled that visit. The caregiver will be notified. Is there anything else?",
+                    shift_id=shift_id
+                )
+            else:
+                logger.warning(f"Failed to cancel shift: {response.status_code}")
+                return ShiftActionResult(
+                    success=False,
+                    message="I had trouble cancelling that visit. Let me take a note and have someone call you back to confirm.",
+                    shift_id=shift_id
+                )
+    except Exception as e:
+        logger.error(f"Error cancelling visit: {e}")
+        return ShiftActionResult(success=False, message=str(e))
+
+
+async def assign_shift_to_caregiver(
+    shift_id: str,
+    caregiver_id: str
+) -> ShiftActionResult:
+    """
+    Assign a caregiver to an open shift.
+    Called when a caregiver accepts a shift offer via SMS.
+    CALL ONCE.
+
+    Args:
+        shift_id: The shift to fill
+        caregiver_id: The caregiver who accepted
+
+    Returns:
+        ShiftActionResult with status
+    """
+    logger.info(f"assign_shift_to_caregiver: shift={shift_id}, caregiver={caregiver_id}")
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.put(
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts/{shift_id}/assign",
+                json={
+                    "caregiver_id": caregiver_id,
+                    "notify_caregiver": True
+                },
+                timeout=15.0
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"Caregiver {caregiver_id} assigned to shift {shift_id}")
+                return ShiftActionResult(
+                    success=True,
+                    message="Shift assigned successfully.",
+                    shift_id=shift_id
+                )
+            else:
+                logger.warning(f"Failed to assign shift: {response.status_code}")
+                return ShiftActionResult(
+                    success=False,
+                    message="Could not assign the shift.",
+                    shift_id=shift_id
+                )
+    except Exception as e:
+        logger.error(f"Error assigning shift: {e}")
+        return ShiftActionResult(success=False, message=str(e))
+
+
+# =============================================================================
 # Retell Webhook Endpoints
 # =============================================================================
 
@@ -2073,6 +2361,46 @@ async def retell_function_call(function_name: str, request: Request):
             result = await get_shift_filling_status(**args)
             return JSONResponse(result)
 
+        # NEW PRODUCTION READINESS FUNCTIONS
+        elif function_name == "get_client_schedule":
+            result = await get_client_schedule(**args)
+            return JSONResponse({
+                "success": result.success,
+                "shifts": result.shifts,
+                "message": result.message
+            })
+
+        elif function_name == "report_late":
+            result = await report_late(**args)
+            return JSONResponse({
+                "success": result.success,
+                "message": result.message,
+                "shift_id": result.shift_id
+            })
+
+        elif function_name == "cancel_client_visit":
+            result = await cancel_client_visit(**args)
+            return JSONResponse({
+                "success": result.success,
+                "message": result.message,
+                "shift_id": result.shift_id
+            })
+
+        elif function_name == "add_note_to_wellsky":
+            result = await add_note_to_wellsky(**args)
+            return JSONResponse({
+                "success": result.success,
+                "message": result.message
+            })
+
+        elif function_name == "assign_shift_to_caregiver":
+            result = await assign_shift_to_caregiver(**args)
+            return JSONResponse({
+                "success": result.success,
+                "message": result.message,
+                "shift_id": result.shift_id
+            })
+
         else:
             raise HTTPException(status_code=404, detail=f"Unknown function: {function_name}")
 
@@ -2293,9 +2621,30 @@ def detect_sms_intent(message: str) -> str:
     """
     Detect the intent of an SMS message from a caregiver.
 
-    Returns one of: clock_out, clock_in, callout, schedule, payroll, general
+    Returns one of: shift_accept, shift_decline, clock_out, clock_in, callout, schedule, payroll, general
     """
-    msg_lower = message.lower()
+    msg_lower = message.lower().strip()
+
+    # Shift acceptance - short affirmative responses to shift offers
+    # Check this FIRST since YES responses should take priority
+    if msg_lower in ["yes", "yes!", "yep", "yeah", "yea", "y", "sure", "ok", "okay"]:
+        return "shift_accept"
+    if any(phrase in msg_lower for phrase in [
+        "yes i can", "yes, i can", "i can take it", "i'll take it",
+        "i will take it", "count me in", "i'm available", "im available",
+        "i can do it", "i'll do it", "i will do it", "sign me up"
+    ]):
+        return "shift_accept"
+
+    # Shift decline - short negative responses to shift offers
+    if msg_lower in ["no", "no!", "nope", "n", "can't", "cant", "pass"]:
+        return "shift_decline"
+    if any(phrase in msg_lower for phrase in [
+        "no i can't", "no, i can't", "i can't take it", "i cannot",
+        "not available", "i'm not available", "im not available",
+        "i can't do it", "count me out", "sorry no", "sorry, no"
+    ]):
+        return "shift_decline"
 
     # Clock out issues
     if any(phrase in msg_lower for phrase in [
@@ -2406,6 +2755,52 @@ async def handle_inbound_sms(sms: InboundSMS):
         # Detect intent from message
         intent = detect_sms_intent(sms.message)
         logger.info(f"Detected intent: {intent} for {sms.from_number}")
+
+        # Handle shift offer responses FIRST (before other processing)
+        # These are responses to "Reply YES to accept" shift offers
+        if intent in ("shift_accept", "shift_decline"):
+            try:
+                logger.info(f"Processing shift response from {sms.from_number}: {intent}")
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        f"{PORTAL_BASE_URL}/api/internal/shift-filling/sms-response",
+                        json={
+                            "phone_number": sms.from_number,
+                            "message_text": sms.message
+                        },
+                        timeout=15.0
+                    )
+                    if response.status_code == 200:
+                        result = response.json()
+                        if result.get("found_campaign"):
+                            # This was a response to a shift offer
+                            action = result.get("action")
+                            if action == "assigned":
+                                reply_text = (
+                                    f"You're confirmed for the shift with {result.get('client_name', 'your client')} "
+                                    f"on {result.get('shift_date', '')} at {result.get('shift_time', '')}. "
+                                    f"Thank you for stepping up!"
+                                )
+                            elif action == "declined":
+                                reply_text = "Got it, no problem. Thank you for letting us know!"
+                            elif action == "already_filled":
+                                reply_text = "Thanks for responding! This shift was already filled by another caregiver."
+                            else:
+                                reply_text = "Thanks for your response. We'll be in touch if needed."
+
+                            # Send the reply
+                            sms_sent = await _send_sms_ringcentral(sms.from_number, reply_text)
+                            return SMSResponse(
+                                success=True,
+                                reply_sent=sms_sent,
+                                reply_text=reply_text
+                            )
+                        else:
+                            # No pending shift offer - fall through to normal processing
+                            logger.info(f"No pending shift offer for {sms.from_number}, continuing normal flow")
+            except Exception as shift_err:
+                logger.warning(f"Error checking shift response: {shift_err}")
+                # Fall through to normal processing
 
         # Look up shift data from WellSky
         shift_context = None

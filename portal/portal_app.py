@@ -4722,6 +4722,391 @@ async def internal_send_shift_offer(request: Request):
         })
 
 
+@app.post("/api/internal/shift-filling/sms-response")
+async def internal_process_sms_response(request: Request):
+    """
+    Process an incoming SMS response to a shift offer.
+    Called by Gigi when a caregiver texts YES/NO in response to a shift offer.
+
+    This endpoint:
+    1. Finds any active campaign where this phone was contacted
+    2. Processes the response (YES = assign shift, NO = record decline)
+    3. Returns the result to Gigi for confirmation
+    """
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse({
+            "success": False,
+            "found_campaign": False,
+            "message": "Shift filling service not available"
+        })
+
+    try:
+        data = await request.json()
+        phone_number = data.get("phone_number")
+        message_text = data.get("message_text", "").strip()
+
+        if not phone_number:
+            return JSONResponse({
+                "success": False,
+                "error": "phone_number is required"
+            }, status_code=400)
+
+        logger.info(f"[GIGI] Processing SMS response from {phone_number}: {message_text[:50]}")
+
+        # Clean phone number for matching
+        import re
+        clean_phone = re.sub(r'[^\d]', '', phone_number)[-10:]
+
+        # Find the campaign this phone belongs to
+        found_campaign = None
+        found_outreach = None
+
+        for campaign_id, campaign in shift_filling_engine.active_campaigns.items():
+            # Check if campaign is still active
+            if campaign.status.value not in ["in_progress", "pending"]:
+                continue
+
+            # Check each caregiver contacted
+            for outreach in campaign.caregivers_contacted:
+                outreach_phone = re.sub(r'[^\d]', '', outreach.phone)[-10:]
+                if outreach_phone == clean_phone:
+                    found_campaign = campaign
+                    found_outreach = outreach
+                    break
+
+            if found_campaign:
+                break
+
+        if not found_campaign:
+            logger.info(f"No active shift offer found for {phone_number}")
+            return JSONResponse({
+                "success": True,
+                "found_campaign": False,
+                "message": "No pending shift offer found for this phone number"
+            })
+
+        # Process the response through the engine
+        result = shift_filling_engine.process_response(
+            campaign_id=found_campaign.id,
+            phone=phone_number,
+            message_text=message_text
+        )
+
+        # Build response for Gigi
+        action = result.get("action", "unknown")
+
+        if action == "shift_filled":
+            return JSONResponse({
+                "success": True,
+                "found_campaign": True,
+                "action": "assigned",
+                "shift_assigned": True,
+                "shift_id": found_campaign.shift_id,
+                "caregiver_name": result.get("assigned_caregiver"),
+                "client_name": found_campaign.shift.client.full_name if found_campaign.shift and found_campaign.shift.client else "Unknown",
+                "shift_date": found_campaign.shift.date.strftime("%B %d") if found_campaign.shift and found_campaign.shift.date else "",
+                "shift_time": found_campaign.shift.to_display_time() if hasattr(found_campaign.shift, 'to_display_time') else "",
+                "message": f"Shift assigned to {result.get('assigned_caregiver')}"
+            })
+
+        elif action == "decline_recorded":
+            return JSONResponse({
+                "success": True,
+                "found_campaign": True,
+                "action": "declined",
+                "shift_assigned": False,
+                "message": "Decline recorded. We'll continue looking for coverage."
+            })
+
+        elif action == "already_filled":
+            return JSONResponse({
+                "success": True,
+                "found_campaign": True,
+                "action": "already_filled",
+                "shift_assigned": False,
+                "message": "This shift has already been filled by another caregiver."
+            })
+
+        elif action == "clarification_sent":
+            return JSONResponse({
+                "success": True,
+                "found_campaign": True,
+                "action": "clarification",
+                "shift_assigned": False,
+                "message": "We sent a clarification request to the caregiver."
+            })
+
+        else:
+            return JSONResponse({
+                "success": True,
+                "found_campaign": True,
+                "action": action,
+                "shift_assigned": False,
+                "message": "Response recorded"
+            })
+
+    except Exception as e:
+        logger.error(f"Error processing SMS response: {e}")
+        return JSONResponse({
+            "success": False,
+            "found_campaign": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+#
+# GIGI AI Agent - New Endpoints for Production Readiness
+#
+
+@app.post("/api/internal/wellsky/notes/client/{client_id}")
+async def internal_add_client_note(client_id: str, request: Request):
+    """
+    Add a note to a client's profile in WellSky.
+    Called by Gigi AI agent after conversations to document interactions.
+    """
+    if wellsky_service is None:
+        return JSONResponse({
+            "success": False,
+            "error": "WellSky service not available"
+        }, status_code=503)
+
+    try:
+        data = await request.json()
+        note = data.get("note", "")
+        note_type = data.get("note_type", "general")
+        source = data.get("source", "gigi_ai")
+
+        if not note:
+            return JSONResponse({
+                "success": False,
+                "error": "Note content is required"
+            }, status_code=400)
+
+        success, message = wellsky_service.add_note_to_client(
+            client_id=client_id,
+            note=note,
+            note_type=note_type,
+            source=source
+        )
+
+        return JSONResponse({
+            "success": success,
+            "message": message,
+            "client_id": client_id
+        }, status_code=200 if success else 400)
+
+    except Exception as e:
+        logger.error(f"Error adding note to client {client_id}: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.post("/api/internal/wellsky/notes/caregiver/{caregiver_id}")
+async def internal_add_caregiver_note(caregiver_id: str, request: Request):
+    """
+    Add a note to a caregiver's profile in WellSky.
+    Called by Gigi AI agent to document call-outs, late arrivals, etc.
+    """
+    if wellsky_service is None:
+        return JSONResponse({
+            "success": False,
+            "error": "WellSky service not available"
+        }, status_code=503)
+
+    try:
+        data = await request.json()
+        note = data.get("note", "")
+        note_type = data.get("note_type", "general")
+        source = data.get("source", "gigi_ai")
+
+        if not note:
+            return JSONResponse({
+                "success": False,
+                "error": "Note content is required"
+            }, status_code=400)
+
+        success, message = wellsky_service.add_note_to_caregiver(
+            caregiver_id=caregiver_id,
+            note=note,
+            note_type=note_type,
+            source=source
+        )
+
+        return JSONResponse({
+            "success": success,
+            "message": message,
+            "caregiver_id": caregiver_id
+        }, status_code=200 if success else 400)
+
+    except Exception as e:
+        logger.error(f"Error adding note to caregiver {caregiver_id}: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.get("/api/internal/wellsky/clients/{client_id}/shifts")
+async def internal_get_client_shifts(client_id: str, days: int = 7):
+    """
+    Get upcoming shifts for a client.
+    Called by Gigi when a client asks about their schedule.
+    """
+    if wellsky_service is None:
+        return JSONResponse({
+            "success": False,
+            "shifts": [],
+            "error": "WellSky service not available"
+        }, status_code=503)
+
+    try:
+        shifts = wellsky_service.get_client_upcoming_shifts(client_id, days_ahead=days)
+
+        return JSONResponse({
+            "success": True,
+            "client_id": client_id,
+            "shifts": [{
+                "shift_id": s.id,
+                "date": s.date.isoformat() if s.date else None,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+                "caregiver_name": s.caregiver_first_name + " " + s.caregiver_last_name if s.caregiver_first_name else "TBD",
+                "status": s.status.value if hasattr(s.status, 'value') else str(s.status)
+            } for s in shifts],
+            "count": len(shifts)
+        })
+
+    except Exception as e:
+        logger.error(f"Error getting client shifts: {e}")
+        return JSONResponse({
+            "success": False,
+            "shifts": [],
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.put("/api/internal/wellsky/shifts/{shift_id}/assign")
+async def internal_assign_shift(shift_id: str, request: Request):
+    """
+    Assign a caregiver to a shift.
+    Called by Gigi when a caregiver accepts a shift offer.
+    """
+    if wellsky_service is None:
+        return JSONResponse({
+            "success": False,
+            "error": "WellSky service not available"
+        }, status_code=503)
+
+    try:
+        data = await request.json()
+        caregiver_id = data.get("caregiver_id")
+        notify_caregiver = data.get("notify_caregiver", True)
+
+        if not caregiver_id:
+            return JSONResponse({
+                "success": False,
+                "error": "caregiver_id is required"
+            }, status_code=400)
+
+        success, message = wellsky_service.assign_caregiver_to_shift(
+            shift_id=shift_id,
+            caregiver_id=caregiver_id,
+            notify_caregiver=notify_caregiver
+        )
+
+        return JSONResponse({
+            "success": success,
+            "message": message,
+            "shift_id": shift_id,
+            "caregiver_id": caregiver_id
+        }, status_code=200 if success else 400)
+
+    except Exception as e:
+        logger.error(f"Error assigning shift: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.put("/api/internal/wellsky/shifts/{shift_id}/cancel")
+async def internal_cancel_shift(shift_id: str, request: Request):
+    """
+    Cancel a shift.
+    Called by Gigi when a client requests to cancel a visit.
+    """
+    if wellsky_service is None:
+        return JSONResponse({
+            "success": False,
+            "error": "WellSky service not available"
+        }, status_code=503)
+
+    try:
+        data = await request.json()
+        reason = data.get("reason", "Client requested cancellation")
+        cancelled_by = data.get("cancelled_by", "client")
+
+        success, message = wellsky_service.cancel_shift(
+            shift_id=shift_id,
+            reason=reason,
+            cancelled_by=cancelled_by
+        )
+
+        return JSONResponse({
+            "success": success,
+            "message": message,
+            "shift_id": shift_id
+        }, status_code=200 if success else 400)
+
+    except Exception as e:
+        logger.error(f"Error cancelling shift: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
+@app.post("/api/internal/wellsky/shifts/{shift_id}/late-notification")
+async def internal_late_notification(shift_id: str, request: Request):
+    """
+    Notify client that caregiver is running late.
+    Called by Gigi when a caregiver reports they're running late.
+    """
+    if wellsky_service is None:
+        return JSONResponse({
+            "success": False,
+            "error": "WellSky service not available"
+        }, status_code=503)
+
+    try:
+        data = await request.json()
+        delay_minutes = data.get("delay_minutes", 15)
+        reason = data.get("reason", "")
+
+        success, message, client_phone = wellsky_service.notify_client_caregiver_late(
+            shift_id=shift_id,
+            delay_minutes=delay_minutes,
+            reason=reason
+        )
+
+        return JSONResponse({
+            "success": success,
+            "message": message,
+            "shift_id": shift_id,
+            "client_phone": client_phone,
+            "delay_minutes": delay_minutes
+        }, status_code=200 if success else 400)
+
+    except Exception as e:
+        logger.error(f"Error sending late notification: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e)
+        }, status_code=500)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

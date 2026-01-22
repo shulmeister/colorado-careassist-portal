@@ -2498,6 +2498,328 @@ class WellSkyService:
                    f"{len(self._mock_caregivers)} caregivers, {len(self._mock_shifts)} shifts, "
                    f"{len(self._mock_prospects)} prospects, {len(self._mock_applicants)} applicants")
 
+    # =========================================================================
+    # GIGI AI AGENT METHODS - New features for production readiness
+    # =========================================================================
+
+    def add_note_to_client(
+        self,
+        client_id: str,
+        note: str,
+        note_type: str = "general",
+        source: str = "gigi_ai"
+    ) -> Tuple[bool, str]:
+        """
+        Add a note to a client's profile in WellSky.
+
+        Args:
+            client_id: The client's WellSky ID
+            note: The note content
+            note_type: Type of note (general, call, complaint, schedule, care_plan)
+            source: Source of the note (gigi_ai, portal, phone)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        formatted_note = f"[{timestamp}] [{source.upper()}] [{note_type}] {note}"
+
+        if self.is_mock_mode:
+            client = self._mock_clients.get(client_id)
+            if client:
+                client.notes = f"{client.notes}\n{formatted_note}" if client.notes else formatted_note
+                logger.info(f"Mock: Added note to client {client_id}")
+                return True, f"Note added to client {client_id}"
+            return False, f"Client {client_id} not found"
+
+        # Real API call
+        try:
+            response = requests.post(
+                f"{self.api_base_url}/clients/{client_id}/notes",
+                headers=self._get_headers(),
+                json={
+                    "note": formatted_note,
+                    "note_type": note_type,
+                    "source": source,
+                    "created_at": datetime.utcnow().isoformat()
+                },
+                timeout=15
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"Added note to client {client_id}")
+                return True, f"Note added to client {client_id}"
+            else:
+                logger.warning(f"Failed to add note to client {client_id}: {response.text}")
+                return False, f"Failed to add note: {response.status_code}"
+        except Exception as e:
+            logger.error(f"Error adding note to client {client_id}: {e}")
+            return False, str(e)
+
+    def add_note_to_caregiver(
+        self,
+        caregiver_id: str,
+        note: str,
+        note_type: str = "general",
+        source: str = "gigi_ai"
+    ) -> Tuple[bool, str]:
+        """
+        Add a note to a caregiver's profile in WellSky.
+
+        Args:
+            caregiver_id: The caregiver's WellSky ID
+            note: The note content
+            note_type: Type of note (general, call, callout, late, performance)
+            source: Source of the note (gigi_ai, portal, phone)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        formatted_note = f"[{timestamp}] [{source.upper()}] [{note_type}] {note}"
+
+        if self.is_mock_mode:
+            caregiver = self._mock_caregivers.get(caregiver_id)
+            if caregiver:
+                caregiver.notes = f"{caregiver.notes}\n{formatted_note}" if caregiver.notes else formatted_note
+                logger.info(f"Mock: Added note to caregiver {caregiver_id}")
+                return True, f"Note added to caregiver {caregiver_id}"
+            return False, f"Caregiver {caregiver_id} not found"
+
+        # Real API call
+        try:
+            response = requests.post(
+                f"{self.api_base_url}/caregivers/{caregiver_id}/notes",
+                headers=self._get_headers(),
+                json={
+                    "note": formatted_note,
+                    "note_type": note_type,
+                    "source": source,
+                    "created_at": datetime.utcnow().isoformat()
+                },
+                timeout=15
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"Added note to caregiver {caregiver_id}")
+                return True, f"Note added to caregiver {caregiver_id}"
+            else:
+                logger.warning(f"Failed to add note to caregiver {caregiver_id}: {response.text}")
+                return False, f"Failed to add note: {response.status_code}"
+        except Exception as e:
+            logger.error(f"Error adding note to caregiver {caregiver_id}: {e}")
+            return False, str(e)
+
+    def assign_caregiver_to_shift(
+        self,
+        shift_id: str,
+        caregiver_id: str,
+        notify_caregiver: bool = True
+    ) -> Tuple[bool, str]:
+        """
+        Assign a caregiver to an open shift in WellSky.
+
+        Args:
+            shift_id: The shift ID
+            caregiver_id: The caregiver's WellSky ID
+            notify_caregiver: Whether to notify the caregiver
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if self.is_mock_mode:
+            shift = self._mock_shifts.get(shift_id)
+            caregiver = self._mock_caregivers.get(caregiver_id)
+
+            if not shift:
+                return False, f"Shift {shift_id} not found"
+            if not caregiver:
+                return False, f"Caregiver {caregiver_id} not found"
+
+            shift.caregiver_id = caregiver_id
+            shift.caregiver_first_name = caregiver.first_name
+            shift.caregiver_last_name = caregiver.last_name
+            shift.status = ShiftStatus.SCHEDULED
+            logger.info(f"Mock: Assigned caregiver {caregiver_id} to shift {shift_id}")
+            return True, f"Assigned {caregiver.full_name} to shift"
+
+        # Real API call
+        try:
+            response = requests.put(
+                f"{self.api_base_url}/shifts/{shift_id}/assign",
+                headers=self._get_headers(),
+                json={
+                    "caregiver_id": caregiver_id,
+                    "notify_caregiver": notify_caregiver,
+                    "assigned_by": "gigi_ai",
+                    "assigned_at": datetime.utcnow().isoformat()
+                },
+                timeout=15
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"Assigned caregiver {caregiver_id} to shift {shift_id}")
+                return True, "Caregiver assigned to shift"
+            else:
+                logger.warning(f"Failed to assign caregiver to shift: {response.text}")
+                return False, f"Failed to assign: {response.status_code}"
+        except Exception as e:
+            logger.error(f"Error assigning caregiver to shift: {e}")
+            return False, str(e)
+
+    def get_client_upcoming_shifts(
+        self,
+        client_id: str,
+        days_ahead: int = 7
+    ) -> List[WellSkyShift]:
+        """
+        Get upcoming shifts for a client.
+
+        Args:
+            client_id: The client's WellSky ID
+            days_ahead: Number of days to look ahead
+
+        Returns:
+            List of upcoming shifts
+        """
+        today = date.today()
+        end_date = today + timedelta(days=days_ahead)
+
+        if self.is_mock_mode:
+            shifts = []
+            for shift in self._mock_shifts.values():
+                if shift.client_id == client_id and shift.date:
+                    if today <= shift.date <= end_date:
+                        shifts.append(shift)
+            shifts.sort(key=lambda s: (s.date, s.start_time or ""))
+            return shifts
+
+        # Real API call
+        try:
+            response = requests.get(
+                f"{self.api_base_url}/clients/{client_id}/shifts",
+                headers=self._get_headers(),
+                params={
+                    "start_date": today.isoformat(),
+                    "end_date": end_date.isoformat()
+                },
+                timeout=15
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return [self._parse_shift(s) for s in data.get("shifts", [])]
+            else:
+                logger.warning(f"Failed to get client shifts: {response.text}")
+                return []
+        except Exception as e:
+            logger.error(f"Error getting client shifts: {e}")
+            return []
+
+    def cancel_shift(
+        self,
+        shift_id: str,
+        reason: str,
+        cancelled_by: str = "client"
+    ) -> Tuple[bool, str]:
+        """
+        Cancel a shift in WellSky.
+
+        Args:
+            shift_id: The shift ID
+            reason: Reason for cancellation
+            cancelled_by: Who cancelled (client, caregiver, agency)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if self.is_mock_mode:
+            shift = self._mock_shifts.get(shift_id)
+            if not shift:
+                return False, f"Shift {shift_id} not found"
+
+            shift.status = ShiftStatus.CANCELLED
+            shift.notes = f"{shift.notes}\n[CANCELLED by {cancelled_by}] {reason}" if shift.notes else f"[CANCELLED by {cancelled_by}] {reason}"
+            logger.info(f"Mock: Cancelled shift {shift_id}")
+            return True, f"Shift cancelled"
+
+        # Real API call
+        try:
+            response = requests.put(
+                f"{self.api_base_url}/shifts/{shift_id}",
+                headers=self._get_headers(),
+                json={
+                    "status": "cancelled",
+                    "cancellation_reason": reason,
+                    "cancelled_by": cancelled_by,
+                    "cancelled_at": datetime.utcnow().isoformat()
+                },
+                timeout=15
+            )
+            if response.status_code in (200, 201, 204):
+                logger.info(f"Cancelled shift {shift_id}")
+                return True, "Shift cancelled"
+            else:
+                logger.warning(f"Failed to cancel shift: {response.text}")
+                return False, f"Failed to cancel: {response.status_code}"
+        except Exception as e:
+            logger.error(f"Error cancelling shift: {e}")
+            return False, str(e)
+
+    def notify_client_caregiver_late(
+        self,
+        shift_id: str,
+        delay_minutes: int,
+        reason: str = ""
+    ) -> Tuple[bool, str, Optional[str]]:
+        """
+        Notify client that caregiver will be late.
+
+        Args:
+            shift_id: The shift ID
+            delay_minutes: Expected delay in minutes
+            reason: Reason for being late
+
+        Returns:
+            Tuple of (success, message, client_phone)
+        """
+        if self.is_mock_mode:
+            shift = self._mock_shifts.get(shift_id)
+            if not shift:
+                return False, f"Shift {shift_id} not found", None
+
+            client = self._mock_clients.get(shift.client_id)
+            client_phone = client.phone if client else None
+
+            # Log the late notification
+            note = f"[LATE NOTIFICATION] Caregiver running ~{delay_minutes} min late"
+            if reason:
+                note += f" - {reason}"
+            shift.notes = f"{shift.notes}\n{note}" if shift.notes else note
+
+            logger.info(f"Mock: Late notification for shift {shift_id}, client phone: {client_phone}")
+            return True, f"Client notified of {delay_minutes} minute delay", client_phone
+
+        # Real API call
+        try:
+            response = requests.post(
+                f"{self.api_base_url}/shifts/{shift_id}/late-notification",
+                headers=self._get_headers(),
+                json={
+                    "delay_minutes": delay_minutes,
+                    "reason": reason,
+                    "notified_at": datetime.utcnow().isoformat()
+                },
+                timeout=15
+            )
+            if response.status_code in (200, 201):
+                data = response.json()
+                client_phone = data.get("client_phone")
+                logger.info(f"Late notification sent for shift {shift_id}")
+                return True, "Client notified", client_phone
+            else:
+                logger.warning(f"Failed to send late notification: {response.text}")
+                return False, f"Failed to notify: {response.status_code}", None
+        except Exception as e:
+            logger.error(f"Error sending late notification: {e}")
+            return False, str(e), None
+
 
 # =============================================================================
 # Singleton Instance
