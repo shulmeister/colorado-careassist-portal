@@ -167,6 +167,41 @@ def get_duplicate_response(tool_name: str) -> Dict[str, Any]:
         "next_step": "STOP calling tools. Confirm with the caller and close the conversation."
     }
 
+
+# =============================================================================
+# CALL CONTEXT: Store caller info for the duration of a call
+# =============================================================================
+# When a call starts, we look up the caller and store their info.
+# This allows the conversation to personalize without re-looking up.
+
+_call_context_cache: Dict[str, Dict[str, Any]] = {}
+
+def _store_call_context(call_id: str, caller_info: Dict[str, Any]):
+    """Store caller context for this call."""
+    if call_id:
+        _call_context_cache[call_id] = {
+            "caller_info": caller_info,
+            "timestamp": time.time()
+        }
+        logger.info(f"Stored call context for {call_id}: {caller_info}")
+
+def _get_call_context(call_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve caller context for this call."""
+    if call_id and call_id in _call_context_cache:
+        return _call_context_cache[call_id].get("caller_info")
+    return None
+
+def _cleanup_call_context():
+    """Remove call context older than 30 minutes."""
+    cutoff = time.time() - 1800  # 30 minutes
+    expired = [
+        call_id for call_id, data in _call_context_cache.items()
+        if data.get("timestamp", 0) < cutoff
+    ]
+    for call_id in expired:
+        del _call_context_cache[call_id]
+
+
 # =============================================================================
 # FastAPI App
 # =============================================================================
@@ -2348,7 +2383,31 @@ async def retell_webhook(request: Request):
     if event == "call_started":
         from_number = body.get("from_number", "")
         logger.info(f"Call started from {from_number}")
-        return JSONResponse({"status": "ok"})
+
+        # AUTO-LOOKUP: Identify caller from database before conversation starts
+        caller_info = None
+        if from_number:
+            clean_phone = ''.join(filter(str.isdigit, from_number))[-10:]
+            cached = _lookup_in_cache(clean_phone)
+            if cached:
+                caller_info = {
+                    "caller_type": cached.get("type"),
+                    "caller_name": cached.get("name"),
+                    "is_known": True
+                }
+                logger.info(f"AUTO-LOOKUP: Identified {cached.get('type')} {cached.get('name')}")
+            else:
+                caller_info = {"caller_type": "unknown", "caller_name": None, "is_known": False}
+                logger.info(f"AUTO-LOOKUP: Unknown caller from {clean_phone}")
+
+            # Store in call-level cache for later reference
+            _store_call_context(call_id, caller_info)
+
+        # Return caller info to Retell (can be used as dynamic variables)
+        return JSONResponse({
+            "status": "ok",
+            "caller_info": caller_info
+        })
 
     elif event == "call_ended":
         transcript = body.get("transcript", "")
@@ -2540,6 +2599,38 @@ async def retell_function_call(function_name: str, request: Request):
         if function_name == "verify_caller":
             result = await verify_caller(**args)
             return JSONResponse(result.model_dump())
+
+        elif function_name == "lookup_caller":
+            # Simple database lookup - returns caller type and name
+            phone = args.get("phone_number", args.get("from_number", ""))
+            clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+
+            # Check call context first (set at call_started)
+            caller_info = _get_call_context(call_id)
+            if caller_info:
+                return JSONResponse({
+                    "found": caller_info.get("is_known", False),
+                    "caller_type": caller_info.get("caller_type", "unknown"),
+                    "name": caller_info.get("caller_name"),
+                    "greeting": f"Hi {caller_info.get('caller_name', 'there')}" if caller_info.get("caller_name") else "Hi there"
+                })
+
+            # Fall back to database lookup
+            cached = _lookup_in_cache(clean_phone)
+            if cached:
+                return JSONResponse({
+                    "found": True,
+                    "caller_type": cached.get("type"),
+                    "name": cached.get("name"),
+                    "greeting": f"Hi {cached.get('name')}"
+                })
+
+            return JSONResponse({
+                "found": False,
+                "caller_type": "unknown",
+                "name": None,
+                "greeting": "Hi there"
+            })
 
         elif function_name == "get_shift_details":
             result = await get_shift_details(**args)
