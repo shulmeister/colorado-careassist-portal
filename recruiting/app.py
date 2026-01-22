@@ -1362,8 +1362,23 @@ def index():
             
             function updateCostPerMetrics(statsData) {
                 // Get all-time spend from Facebook campaigns
+                // First, auto-sync campaigns if none exist
                 fetch('/recruiting/api/facebook/campaigns', { credentials: 'include' })
                     .then(response => response.json())
+                    .then(campaigns => {
+                        if (campaigns.length === 0) {
+                            console.log('No campaigns found, auto-syncing from Facebook...');
+                            return fetch('/recruiting/api/facebook/sync-campaigns', { credentials: 'include' })
+                                .then(response => response.json())
+                                .then(syncData => {
+                                    console.log('Auto-sync result:', syncData);
+                                    // Re-fetch campaigns after sync
+                                    return fetch('/recruiting/api/facebook/campaigns', { credentials: 'include' })
+                                        .then(response => response.json());
+                                });
+                        }
+                        return campaigns;
+                    })
                     .then(campaigns => {
                         let totalSpend = 0;
                         const promises = campaigns.map(campaign => {
