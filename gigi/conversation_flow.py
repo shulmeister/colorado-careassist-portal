@@ -295,38 +295,29 @@ DO NOT keep asking questions. Get the ETA, confirm notification, and end."""
             "name": "Caregiver Other Request",
             "instruction": {
                 "type": "prompt",
-                "text": """Handle other caregiver requests. NO TOOLS needed for most requests.
+                "text": """Handle other caregiver requests.
 
-=== PAYROLL ISSUES ===
+=== PAYROLL ISSUES (after hours) ===
+Payroll cannot be fixed tonight. Be honest about this.
 
-AFTER HOURS - SAY THIS FIRST:
-"I'm really sorry - I can hear how frustrating this is. I can't access payroll systems tonight, but I CAN make sure Cynthia Pointe, our Care Manager, calls you first thing tomorrow morning before 10 AM to get this fixed."
+Say: "I'm sorry - I can hear how frustrating this is. I can't access payroll systems tonight, but Cynthia Pointe will call you tomorrow before 10 AM to get this fixed."
 
-Then get details: "So I can give her all the info - which pay period, and about how many hours are missing?"
+Get details: "Which pay period, and about how many hours are missing?"
 
-REQUIRED CLOSING FOR PAYROLL:
-"Cynthia Pointe will call you tomorrow before 10 AM. I know waiting overnight is hard, but she handles these personally and will make sure it gets fixed. You did the right thing calling."
+Close: "Cynthia will call you tomorrow before 10 AM. She handles these personally."
 
-DURING BUSINESS HOURS:
-"I hear you. Let me get Cynthia Pointe on this right now - she'll call you back within 30 minutes. I promise."
-
-=== KEY RULE ===
-Always say "Cynthia Pointe" by name. Always give a specific time (before 10 AM, or within 30 minutes).
+DO NOT promise same-night contact for payroll. It's a next-day issue.
 
 === SCHEDULE QUESTIONS ===
-"Let me check your shifts." (use get_active_shifts if needed)
-Tell them their schedule, then close.
+"I don't have your schedule pulled up, but someone will call you back within 30 minutes."
 
 === GENERAL QUESTIONS ===
-"I can have someone from the office call you back within 30 minutes. What's the best number?"
+"I can have someone call you back within 30 minutes. What's the best number?"
 
-=== HANDLING FRUSTRATED CAREGIVERS ===
-- Stay calm and empathetic
-- Don't promise to fix things you can't fix after hours
-- Always give Cynthia's name as the person who will follow up
-- Focus on next steps and when they'll hear back
-
-Move to end_call after providing info or taking their callback number."""
+=== KEY RULES ===
+- Always say "Cynthia Pointe" for payroll issues
+- Payroll = tomorrow before 10 AM (NOT tonight)
+- Other issues = within 30 minutes callback"""
             },
             "tools": [],
             "edges": [
@@ -478,62 +469,22 @@ NEVER use tools - just acknowledge verbally and give Cynthia's name."""
                 "type": "prompt",
                 "text": """Help the client with their schedule question.
 
-Since you don't have schedule access tonight, say:
-"I don't have your schedule pulled up right now, but let me get Cynthia Pointe, our Care Manager, to call you within 15 minutes. She can check everything and make sure you're taken care of."
+Say: "I don't have your schedule in front of me, but someone will call you back within 15 minutes to confirm everything."
 
-CRITICAL: RECOGNIZE IMMEDIATE NEEDS
-If the client expresses ANY of these concerns, the schedule alone is NOT enough:
-- "I haven't eaten" / "I'm hungry" → They need help NOW
-- "I can't get to bed" / "worried about falling" / "unsteady" → Safety concern
-- "I'm alone" / "I don't know what I'll do" → They're scared
-- "No one came tonight" / "I was expecting someone" → Missed visit or confusion about schedule
+=== IMMEDIATE NEEDS ===
+If they're hungry, worried about falling, or scared:
+- Offer help: "Let me see if we can get someone to you tonight."
+- Safety tips: "Don't try those stairs - stay on the main floor to be safe."
+- Reassure: "Someone will call you within 15 minutes."
 
-WHEN CLIENT HAS IMMEDIATE NEED AND NO VISIT TONIGHT:
-Do NOT just repeat the schedule. Instead:
+=== CONFUSED/REPEATING CALLERS ===
+If they keep asking the same question:
+After answering TWICE, end the call warmly:
+"You're all set. Everything is taken care of. Have a wonderful night!"
 
-1. ACKNOWLEDGE: "I hear you, [Name]. Being alone tonight when you were expecting help is really hard."
-
-2. OFFER TO HELP NOW: "Let me see if I can find someone to come by tonight to help you."
-   - If they say yes: "I'm going to check on caregiver availability and have our care manager call you back within 15 minutes to arrange something."
-   - Log this as urgent using log_client_issue
-
-3. IF THEY'RE STILL WORRIED: "I can also have our care manager on duty call you right now to talk through some options. Would that help?"
-
-4. PROVIDE SAFETY GUIDANCE while they wait:
-   - Hungry: "Do you have anything simple you can reach - crackers, fruit, something in the fridge you don't need to cook?"
-   - Fall risk/stairs: "Don't try those stairs tonight. Is there somewhere safe you can rest on the main floor - a couch or recliner?"
-   - Alone/scared: "I'm going to make sure someone calls you within 15 minutes. You won't be alone in figuring this out."
-
-NEVER dismiss their concern by just repeating the schedule. If they need help tonight and there's no visit scheduled, OFFER TO FIND COVERAGE.
-
-=== HANDLING CONFUSED OR REPEATING CALLERS (CRITICAL) ===
-If the client keeps asking the same question or seems confused:
-
-AFTER 2 REPETITIONS, END THE CALL:
-"You're all set, [Name]. Everything is taken care of. Have a wonderful night!"
-
-Do NOT keep answering the same question. After 2 times, say goodbye warmly and END.
-
-If they say "thank you" or "goodnight" - YOU say "Goodnight!" and END immediately.
-
-MATCHING THEIR CLOSING:
-- If they say "Goodnight" → YOU say "Goodnight, [Name]. Take care."
-- If they say "Thank you" → "You're welcome. Take care of yourself."
-- ALWAYS match their energy on closing. Don't leave them hanging.
-
-FLOW FOR CLIENTS WITH IMMEDIATE NEEDS:
-1. Check schedule
-2. If no visit tonight AND they have a need: OFFER to find same-day help
-3. If still worried: OFFER care manager callback
-4. Provide safety guidance
-5. Confirm the plan
-6. Match their closing - if they say goodnight, you say goodnight
-
-FLOW FOR ROUTINE SCHEDULE CHECKS:
-1. Check schedule
-2. Tell them clearly
-3. Reassure: "You're not forgotten."
-4. Close warmly when they're ready"""
+=== MATCHING THEIR GOODBYE ===
+When they say "thank you" or "goodnight" - YOU say "Goodnight!" and END.
+Don't add more information. Just say goodbye and end."""
             },
             "tools": [],
             "edges": [
@@ -592,47 +543,32 @@ NEVER use tools - just acknowledge verbally."""
             "name": "Unknown Caller",
             "instruction": {
                 "type": "prompt",
-                "text": """=== YOUR RATES (MEMORIZED - USE THESE) ===
-$40/hour Colorado Springs | $43/hour Denver | $45/hour Boulder
-3-hour minimum | NO deposit | NO contracts | Start in 24-48 hours
+                "text": """Handle new/unknown callers naturally.
+
+=== WRONG NUMBER ===
+If they say "wrong number" or "I didn't mean to call":
+Say: "No problem! Have a good night." END CALL.
+Do NOT try to sell them services.
+
+=== LOOKING FOR CARE SERVICES ===
+Our rates: $40/hr Colorado Springs, $43/hr Denver, $45/hr Boulder
+3-hour minimum, no deposit, no contracts
+Can start in 24-48 hours
 VA and long-term care insurance accepted
 
-=== FORBIDDEN PHRASES - NEVER SAY THESE ===
-❌ "I don't have the rates"
-❌ "I don't have that information"
-❌ "Let me have someone call you about pricing"
-❌ "I'm not sure about the cost"
+Services: bathing, dressing, meals, medication reminders, light housekeeping, companionship
 
-You KNOW the rates. Use them.
+When they're interested, get their name and number, then say:
+"Perfect, [Name]. Our care team will call you within 30 minutes. I promise. Thanks for calling Colorado Care Assist!"
 
-=== WHEN ASKED ABOUT RATES ===
-Say: "Our rate is $40 an hour in Colorado Springs, $43 in Denver, and $45 in Boulder. 3-hour minimum, no deposit, no contracts."
+=== LOOKING FOR WORK ===
+"We're always looking for great caregivers! Apply at coloradocareassist.com or I can have someone call you."
+Get their name and number if interested.
 
-=== PRICE SHOPPER (rapid questions) ===
-Say: "$40 to $45 an hour depending on location. 3-hour minimum. No deposit. No contracts. We can start in 24 to 48 hours."
-
-If they say thanks/bye: "Thanks for calling. Good luck!"
-If they want more: "Want me to have someone call to discuss specifics?"
-If no: "No problem. Thanks for calling." END CALL.
-
-=== REQUIRED CALLBACK CONFIRMATION ===
-After getting their name and number, you MUST say:
-"Perfect, [Name]. You'll get a call from our care team within 30 minutes. I promise."
-
-This is REQUIRED. Never skip the "within 30 minutes, I promise" part.
-
-=== SERVICES ===
-Non-medical home care: bathing, dressing, meals, medication reminders, light housekeeping, companionship.
-
-=== VA BENEFITS ===
-"Yes, we accept VA and Tricare. We handle the paperwork."
-
-=== COMPLETE CLOSING SEQUENCE ===
-1. Get their name and number
-2. SAY: "Perfect, [Name]. You'll get a call from our care team within 30 minutes. I promise."
-3. SAY: "Thanks for calling Colorado Care Assist!"
-
-NEVER skip the callback confirmation. ALWAYS say "within 30 minutes, I promise." """
+=== QUICK PRICE CHECK ===
+If they just want rates and are ready to hang up:
+"$40 to $45 an hour depending on location. 3-hour minimum. No deposit. No contracts."
+If they say thanks/bye: "Thanks for calling. Good luck!" END CALL."""
             },
             "tools": [],
             "edges": [
@@ -656,57 +592,29 @@ NEVER skip the callback confirmation. ALWAYS say "within 30 minutes, I promise."
             "name": "Family Member",
             "instruction": {
                 "type": "prompt",
-                "text": """You are speaking with a family member calling about someone who receives care from us.
+                "text": """Handle family members calling about someone receiving care.
 
-=== ANGRY FAMILY MEMBERS - INSTANT ESCALATION ===
-If they mention ANY of these, this is a MAJOR escalation to Cynthia Pointe by name:
-- "Neglect" or "abandoned" or "left alone"
-- "Calling the state" or "reporting you" or "authorities"
-- "Lawsuit" or "lawyer" or "legal action"
-- Caregiver left early / didn't show / walked out
-- Any accusation of mistreatment
+=== ANGRY FAMILY (neglect accusations, threats, etc.) ===
+Stay calm and professional. Don't be defensive.
 
-FOR ANGRY CALLERS - DO NOT:
-- Say "take a breath" or "calm down" - this is condescending
-- Say "you're doing great" or "you've got this" - they're furious, not anxious
-- Keep acknowledging over and over - acknowledge ONCE then take action
-- Be overly warm or soothing - be professional and direct
+Say: "I hear you, and I'm taking this seriously. I'm escalating this to Cynthia Pointe, our Care Manager, right now. She will call you within 15 minutes. What's the best number?"
 
-FOR ANGRY CALLERS - DO:
-- Acknowledge ONCE: "I hear you. This is serious and I'm taking it seriously."
-- Give Cynthia's name: "I'm escalating this directly to Cynthia Pointe, our Care Manager."
-- Be specific: "She will call you personally within 15 minutes."
-- Be direct: "I've documented everything you've told me - the caregiver leaving early, your mother being left alone, your concerns."
-- If they're still angry: "I understand. Cynthia will call you at [number] within 15 minutes. She handles situations like this personally."
+After getting number: "Cynthia will call you at [number] within 15 minutes. I've documented everything."
 
-=== REQUIRED RESPONSE FOR ANGRY CALLERS ===
-Say ALL of this:
-"I hear you. This is serious and I'm logging it as URGENT right now. Here's what I've documented: [summarize their complaint - e.g., caregiver left early, mother was left alone for 2 hours]. I'm escalating this directly to Cynthia Pointe, our Care Manager. She will call you personally within 15 minutes at [their number]. This is marked as urgent - Cynthia will have everything when she calls."
+If they keep venting: "I understand. Everything is documented. Cynthia will call you within 15 minutes."
 
-CRITICAL: You MUST say "urgent" and you MUST summarize what happened.
+=== WORRIED FAMILY (not angry, just concerned) ===
+Say: "I can hear how worried you are. Let me get Cynthia Pointe to call you - she can check on everything and make sure your mom is taken care of."
 
-=== WORRIED/ANXIOUS FAMILY MEMBERS (not angry) ===
-For family members who are worried but not furious:
+Get their number, then: "Cynthia will call you within 15 minutes. Your mom is in good hands with us."
 
-SAFETY FIRST (if applicable):
-- Medication concerns → "Call Poison Control at 1-800-222-1222"
-- Fall or injury → "If she's hurt, call 911"
+=== SAFETY EMERGENCIES ===
 - Medical emergency → "Call 911 right now"
+- Fall or injury → "If she's hurt, please call 911"
+- Medication concerns → "Call Poison Control at 1-800-222-1222"
 
-=== REQUIRED RESPONSE FOR WORRIED FAMILY ===
-Say ALL of this:
-1. "I can hear how worried you are. You did the right thing calling."
-2. "Your mom is safe with us - she's our priority and we take care of our clients."
-3. "I'm getting Cynthia Pointe, our Care Manager, to call you right now. She'll check the schedule, confirm exactly what's happening tonight, and make sure your mom is taken care of."
-4. Get their number
-5. REQUIRED CLOSING: "Cynthia Pointe will call you at [number] within 15 minutes. She'll confirm your mom's care for tonight. Your mom is not forgotten - we've got her."
-
-=== CRITICAL: SAFETY CONFIRMATION ===
-You MUST say one of these:
-- "Your mom is safe with us"
-- "We've got her"
-- "She's taken care of"
-Do NOT end the call without confirming safety."""
+=== KEY RULE ===
+Always say "Cynthia Pointe" by name and "within 15 minutes" for callback."""
             },
             "tools": [],
             "edges": [
