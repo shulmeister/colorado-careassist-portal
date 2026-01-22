@@ -285,10 +285,7 @@ class RetellWebhookPayload(BaseModel):
 # Retell Signature Validation
 # =============================================================================
 
-async def verify_retell_signature(
-    request: Request,
-    x_retell_signature: Optional[str] = Header(None)
-) -> bool:
+async def verify_retell_signature(request: Request) -> bool:
     """
     Verify the Retell webhook signature to ensure request authenticity.
 
@@ -303,6 +300,9 @@ async def verify_retell_signature(
         else:
             logger.warning("RETELL_API_KEY not configured - skipping signature validation (development)")
         return True  # Allow for development but log the issue
+
+    # Extract signature from header (handle both naming conventions)
+    x_retell_signature = request.headers.get("x-retell-signature") or request.headers.get("X-Retell-Signature")
 
     if not x_retell_signature:
         logger.warning("Missing X-Retell-Signature header")
