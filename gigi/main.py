@@ -66,6 +66,10 @@ BEETEXTING_API_KEY = os.getenv("BEETEXTING_API_KEY")
 BEETEXTING_FROM_NUMBER = os.getenv("BEETEXTING_FROM_NUMBER", "+17194283999")  # 719-428-3999
 ON_CALL_MANAGER_PHONE = os.getenv("ON_CALL_MANAGER_PHONE", "+13037571777")    # 303-757-1777
 
+# Escalation contacts (RingCentral extensions for urgent client issues)
+ESCALATION_CYNTHIA_EXT = os.getenv("ESCALATION_CYNTHIA_EXT", "105")  # Cynthia Pointe - Care Manager
+ESCALATION_JASON_EXT = os.getenv("ESCALATION_JASON_EXT", "101")      # Jason Shulman - Owner
+
 # SMS Auto-Reply Toggle (default OFF for safety)
 SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "false").lower() == "true"
 
@@ -916,6 +920,91 @@ async def _send_sms_ringcentral(to_phone: str, message: str) -> bool:
     except Exception as e:
         logger.error(f"Error sending RingCentral SMS: {e}")
         return False
+
+
+async def _send_ringcentral_pager(extension_ids: list, message: str) -> bool:
+    """
+    Send a company pager message to RingCentral extensions.
+    This is the internal messaging system that goes directly to extensions.
+
+    Args:
+        extension_ids: List of extension IDs (e.g., ["105", "101"])
+        message: The message to send
+
+    Returns:
+        True if sent successfully
+    """
+    token = await _get_ringcentral_token()
+
+    if not token:
+        logger.warning("RingCentral not available - pager not sent")
+        logger.info(f"[MOCK PAGER] To extensions: {extension_ids}, Message: {message}")
+        return False
+
+    # Build recipient list
+    recipients = [{"extensionNumber": ext} for ext in extension_ids]
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/company-pager",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "to": recipients,
+                    "text": message
+                },
+                timeout=10.0
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"Pager sent successfully to extensions: {extension_ids}")
+                return True
+            else:
+                logger.error(f"RingCentral pager error: {response.status_code} - {response.text}")
+                return False
+    except Exception as e:
+        logger.error(f"Error sending RingCentral pager: {e}")
+        return False
+
+
+async def notify_escalation_contacts(issue_type: str, client_name: str, summary: str, priority: str = "urgent") -> bool:
+    """
+    Notify Cynthia and Jason about urgent client escalations.
+
+    Args:
+        issue_type: Type of issue (cancel_threat, complaint, safety, etc.)
+        client_name: Name of the client
+        summary: Brief summary of the issue
+        priority: Priority level
+
+    Returns:
+        True if at least one notification was sent
+    """
+    if not OPERATIONS_SMS_ENABLED:
+        logger.info(f"[DISABLED] Would notify escalation contacts about: {issue_type} - {client_name}")
+        return False
+
+    # Format the message
+    if issue_type == "cancel_threat":
+        message = f"🚨 CLIENT CANCEL THREAT: {client_name}\n{summary}\nGigi promised Cynthia will call before 9 AM."
+    else:
+        message = f"⚠️ URGENT CLIENT ISSUE: {client_name}\n{summary}\nPriority: {priority}"
+
+    # Send to both Cynthia (105) and Jason (101)
+    extensions = [ESCALATION_CYNTHIA_EXT, ESCALATION_JASON_EXT]
+
+    success = await _send_ringcentral_pager(extensions, message)
+
+    if success:
+        logger.info(f"Escalation notification sent to Cynthia ({ESCALATION_CYNTHIA_EXT}) and Jason ({ESCALATION_JASON_EXT})")
+    else:
+        # Fallback: try SMS to on-call manager
+        logger.warning("Pager failed - trying SMS to on-call manager")
+        success = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, message)
+
+    return success
 
 
 # =============================================================================
@@ -1843,6 +1932,7 @@ async def log_client_issue(
 ) -> ClientIssueReport:
     """
     Logs a client service issue or satisfaction concern to the Portal.
+    ALSO notifies Cynthia and Jason via RingCentral for urgent issues.
 
     Use this for any client concerns, requests, or feedback including:
     - Service complaints
@@ -1861,7 +1951,16 @@ async def log_client_issue(
     """
     # Handle None or missing client_id
     effective_client_id = client_id if client_id else "UNKNOWN"
-    logger.info(f"log_client_issue called: client={effective_client_id}, type={issue_type}")
+    logger.info(f"log_client_issue called: client={effective_client_id}, type={issue_type}, priority={priority}")
+
+    # Detect cancel threats in the note
+    cancel_keywords = ["cancel", "we're done", "find another agency", "leaving", "switching", "done with you"]
+    is_cancel_threat = any(keyword in note.lower() for keyword in cancel_keywords)
+
+    # Auto-escalate cancel threats to urgent
+    if is_cancel_threat and priority != "urgent":
+        logger.info(f"Auto-escalating to urgent priority due to cancel threat language")
+        priority = "urgent"
 
     issue_data = {
         "client_id": effective_client_id,
@@ -1870,7 +1969,8 @@ async def log_client_issue(
         "priority": priority,
         "source": "gigi_ai_agent",
         "reported_at": datetime.now().isoformat(),
-        "status": "new"
+        "status": "new",
+        "is_cancel_threat": is_cancel_threat
     }
 
     issue_id = None
@@ -1889,6 +1989,26 @@ async def log_client_issue(
                 logger.warning(f"Portal returned {response.status_code}: {response.text}")
     except Exception as e:
         logger.error(f"Error logging client issue: {e}")
+
+    # ==========================================================================
+    # ESCALATION: Notify Cynthia and Jason for urgent issues / cancel threats
+    # ==========================================================================
+    escalation_sent = False
+    if priority == "urgent" or is_cancel_threat:
+        # Extract client name from note if possible (simple extraction)
+        client_name = effective_client_id if effective_client_id != "UNKNOWN" else "Unknown Client"
+
+        issue_category = "cancel_threat" if is_cancel_threat else "urgent"
+        escalation_sent = await notify_escalation_contacts(
+            issue_type=issue_category,
+            client_name=client_name,
+            summary=note[:200],  # First 200 chars
+            priority=priority
+        )
+        if escalation_sent:
+            logger.info(f"Escalation notification sent to Cynthia and Jason")
+        else:
+            logger.warning(f"Escalation notification failed or disabled")
 
     if issue_id:
         return ClientIssueReport(
