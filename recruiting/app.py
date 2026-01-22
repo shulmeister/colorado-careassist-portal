@@ -260,10 +260,15 @@ def create_tables():
 # Routes
 @app.route('/')
 def index():
-    # No authentication required - portal handles auth
-    # Just render the dashboard directly
+    # Validate portal token and set up session for API calls
+    # This must happen before rendering so AJAX calls can use the session
+    if not check_portal_auth():
+        # If accessed directly without portal token, redirect to portal
+        portal_url = os.getenv("PORTAL_URL", "https://portal.coloradocareassist.com")
+        return redirect(f"{portal_url}/auth/login?next=/recruiting")
+
     try:
-        print("Rendering Recruiter Dashboard (no auth required)")
+        print(f"Rendering Recruiter Dashboard (authenticated via portal: {session.get('portal_user', {}).get('email')})")
         
         # Show main dashboard
         return '''
@@ -1227,7 +1232,7 @@ def index():
                             
                             // Refresh metrics with new time period immediately
                             console.log('Refreshing metrics with selectedTimePeriod:', selectedTimePeriod);
-                            fetch('/api/facebook/campaigns')
+                            fetch('/recruiting/api/facebook/campaigns', { credentials: 'include' })
                                 .then(response => response.json())
                                 .then(campaigns => {
                                     console.log('Loading metrics with time period:', selectedTimePeriod);
@@ -1293,6 +1298,7 @@ def index():
                 
                 fetch('/recruiting/api/leads/upload', {
                     method: 'POST',
+                    credentials: 'include',
                     body: formData
                 })
                 .then(response => response.json())
@@ -1336,7 +1342,7 @@ def index():
             }
 
             function loadStats() {
-                fetch('/recruiting/api/stats')
+                fetch('/recruiting/api/stats', { credentials: 'include' })
                     .then(response => response.json())
                     .then(data => {
                         document.getElementById('totalLeads').textContent = data.total_leads;
@@ -1353,12 +1359,12 @@ def index():
             
             function updateCostPerMetrics(statsData) {
                 // Get all-time spend from Facebook campaigns
-                fetch('/recruiting/api/facebook/campaigns')
+                fetch('/recruiting/api/facebook/campaigns', { credentials: 'include' })
                     .then(response => response.json())
                     .then(campaigns => {
                         let totalSpend = 0;
                         const promises = campaigns.map(campaign => {
-                            return fetch('/recruiting/api/facebook/campaigns/' + campaign.campaign_id + '/metrics')
+                            return fetch('/recruiting/api/facebook/campaigns/' + campaign.campaign_id + '/metrics', { credentials: 'include' })
                                 .then(response => response.json())
                                 .then(metrics => {
                                     if (metrics && metrics.spend !== undefined) {
@@ -1871,6 +1877,7 @@ def index():
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: 'include',
                     body: JSON.stringify({ notes: notes })
                 })
                 .then(response => response.json())
@@ -2019,6 +2026,7 @@ def index():
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: 'include',
                     body: JSON.stringify({ status: status })
                 })
                 .then(response => response.json())
@@ -2038,7 +2046,7 @@ def index():
             // Facebook Campaign Functions
             function loadFacebookCampaigns() {
                 console.log('loadFacebookCampaigns called');
-                fetch('/recruiting/api/facebook/campaigns')
+                fetch('/recruiting/api/facebook/campaigns', { credentials: 'include' })
                     .then(response => response.json())
                     .then(campaigns => {
                         displayCampaigns(campaigns);
@@ -2182,7 +2190,7 @@ def index():
                         '/recruiting/api/facebook/campaigns/' + campaign.campaign_id + '/metrics' : 
                         '/recruiting/api/facebook/campaigns/' + campaign.campaign_id + '/metrics?days=' + timePeriod;
                     console.log('Making API call to:', url);
-                    return fetch(url)
+                    return fetch(url, { credentials: 'include' })
                         .then(response => {
                             console.log('Response for campaign', campaign.campaign_id, ':', response.status);
                             return response.json();
@@ -2229,7 +2237,7 @@ def index():
                 button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
                 button.disabled = true;
                 
-                fetch('/recruiting/api/facebook/sync-campaigns')
+                fetch('/recruiting/api/facebook/sync-campaigns', { credentials: 'include' })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
@@ -2259,7 +2267,7 @@ def index():
                 const selectedPeriod = document.querySelector('input[name="timePeriod"]:checked').value;
                 const timePeriod = selectedPeriod === 'all' ? 365 : parseInt(selectedPeriod);
                 
-                fetch('/recruiting/api/facebook/campaigns')
+                fetch('/recruiting/api/facebook/campaigns', { credentials: 'include' })
                     .then(response => response.json())
                     .then(campaigns => {
                         loadCampaignMetrics(campaigns, timePeriod);
@@ -2278,6 +2286,7 @@ def index():
                     headers: {
                         'Content-Type': 'application/json',
                     },
+                    credentials: 'include',
                     body: JSON.stringify({ status: newStatus })
                 })
                 .then(response => response.json())

@@ -1364,13 +1364,22 @@
                 const linkHref = isOperationsDashboard ? "/operations" : tool.url;
                 const isLargeLogo = ['RingCentral', 'QuickBooks', 'Google Ads', 'Adams Keegan Efficenter'].includes(tool.name);
                 const logoClass = isLargeLogo ? 'large-logo' : '';
-                
-                const iconHtml = tool.icon && tool.icon.startsWith('http') 
-                    ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" class="${logoClass}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
-                    : tool.icon && tool.icon.startsWith('/static/')
+
+                // Helper function to detect if icon is an image URL
+                const isImageUrl = (icon) => {
+                    if (!icon) return false;
+                    // Check for common URL patterns
+                    if (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('//') || icon.startsWith('/static/') || icon.startsWith('data:image/')) return true;
+                    // Check for image file extensions
+                    const lowerIcon = icon.toLowerCase();
+                    if (lowerIcon.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)(\?|$)/)) return true;
+                    return false;
+                };
+
+                const iconHtml = isImageUrl(tool.icon)
                     ? `<div class="tool-icon"><img src="${tool.icon}" alt="${tool.name}" class="${logoClass}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><span style="display:none;">🔗</span></div>`
                     : `<div class="tool-icon"><span>${tool.icon || '🔗'}</span></div>`;
-                
+
                 // Internal routes (start with /) should open in same window, external URLs in new tab
                 const isInternalRoute = linkHref.startsWith('/');
                 const targetAttr = isInternalRoute ? '' : 'target="_blank"';
@@ -1403,8 +1412,15 @@
 
             list.innerHTML = currentTools.map((tool, index) => {
                 // Handle icon display - show image if URL, otherwise show emoji/text
+                const isImageUrl = (icon) => {
+                    if (!icon) return false;
+                    if (icon.startsWith('http://') || icon.startsWith('https://') || icon.startsWith('//') || icon.startsWith('/static/') || icon.startsWith('data:image/')) return true;
+                    const lowerIcon = icon.toLowerCase();
+                    if (lowerIcon.match(/\.(png|jpg|jpeg|gif|svg|ico|webp)(\?|$)/)) return true;
+                    return false;
+                };
                 let iconHtml = '';
-                if (tool.icon && (tool.icon.startsWith('http') || tool.icon.startsWith('/static/'))) {
+                if (isImageUrl(tool.icon)) {
                     iconHtml = `<img src="${tool.icon}" alt="${tool.name}" onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';"><span style="display:none;">🔗</span>`;
                 } else {
                     iconHtml = tool.icon || '🔗';
