@@ -154,7 +154,45 @@ RINGCENTRAL_JWT_TOKEN=eyJxxxxx
 WELLSKY_API_KEY=xxxxx
 WELLSKY_API_SECRET=xxxxx
 WELLSKY_AGENCY_ID=xxxxx
+
+# Operations Toggles (IMPORTANT - see Go-Live Checklist below)
+GIGI_OPERATIONS_SMS_ENABLED=false           # Set to "true" to enable SMS/notifications
+GIGI_ENABLE_TEST_ENDPOINTS=false            # Set to "true" only for debugging
+
+# Escalation Contacts (RingCentral extensions)
+ESCALATION_CYNTHIA_EXT=105                  # Cynthia Pointe - Care Manager
+ESCALATION_JASON_EXT=101                    # Jason Shulman - Owner
 ```
+
+## GO-LIVE CHECKLIST (WellSky API Key)
+
+**CRITICAL**: When you add the WellSky API key, you MUST also enable these settings:
+
+```bash
+# Run these commands on Heroku when going live:
+heroku config:set WELLSKY_API_KEY=your_api_key
+heroku config:set WELLSKY_API_SECRET=your_api_secret
+heroku config:set WELLSKY_AGENCY_ID=your_agency_id
+
+# ENABLE OPERATIONS (without this, notifications don't send!)
+heroku config:set GIGI_OPERATIONS_SMS_ENABLED=true
+```
+
+### What `GIGI_OPERATIONS_SMS_ENABLED=true` enables:
+- SMS notifications to on-call manager for caregiver call-outs
+- RingCentral internal messages to Cynthia (ext 105) and Jason (ext 101) for:
+  - Client cancel threats
+  - Urgent client complaints
+  - Safety escalations
+- Caregiver replacement blast SMS campaigns
+
+### Pre-Go-Live Verification:
+1. [ ] WellSky API credentials set
+2. [ ] `GIGI_OPERATIONS_SMS_ENABLED=true` set
+3. [ ] Test a caregiver call-out in Retell simulation
+4. [ ] Verify Cynthia and Jason receive RingCentral message
+5. [ ] Test a client cancel threat scenario
+6. [ ] Verify escalation notification received
 
 ## Files
 
