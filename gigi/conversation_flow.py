@@ -119,7 +119,7 @@ Route based on caller type."""
                     "destination_node_id": "caregiver_router",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Caller is a caregiver"
+                        "prompt": "The caller is identified as a caregiver OR says they are a caregiver"
                     }
                 },
                 {
@@ -127,7 +127,7 @@ Route based on caller type."""
                     "destination_node_id": "client_router",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Caller is a client receiving care"
+                        "prompt": "The caller is identified as a client (the person receiving care)"
                     }
                 },
                 {
@@ -135,7 +135,7 @@ Route based on caller type."""
                     "destination_node_id": "family_handler",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Caller is calling about a family member who receives care (son, daughter, spouse calling about parent, etc.)"
+                        "prompt": "The caller says they are a family member calling about someone who receives care"
                     }
                 },
                 {
@@ -143,7 +143,7 @@ Route based on caller type."""
                     "destination_node_id": "unknown_handler",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Caller is new, unknown, or looking for services"
+                        "prompt": "The caller is looking for care services OR looking for work OR is unknown"
                     }
                 }
             ]
@@ -158,12 +158,22 @@ Route based on caller type."""
             "name": "Caregiver Router",
             "instruction": {
                 "type": "prompt",
-                "text": """Caregiver is calling. Ask: "How can I help you?"
+                "text": """You're speaking with a caregiver. Listen to understand what they need:
 
-Route based on response:
-- Calling out / sick → callout
-- Running late → late
-- Anything else → other"""
+=== RECOGNIZE THESE IMMEDIATELY ===
+- Calling out / sick / emergency / car trouble / can't make it → CALL-OUT
+- Running late / stuck in traffic / will be late → LATE
+- Schedule / shifts / when do I work → SCHEDULE
+- Paycheck / pay stub / check is wrong / hours missing / pay issue → PAYROLL (route to caregiver_other)
+
+=== CRITICAL: LISTEN TO WHAT THEY ALREADY SAID ===
+If they've ALREADY told you their issue, do NOT ask them to repeat it.
+- If they said "my check is short" → They told you it's payroll. Route immediately.
+- If they said "I'm sick" → They told you it's a callout. Route immediately.
+
+Only ask a clarifying question if you genuinely don't know what they need.
+
+NEVER ask "are you calling to report a call-out..." if they've already told you their issue."""
             },
             "edges": [
                 {
@@ -171,7 +181,7 @@ Route based on response:
                     "destination_node_id": "caregiver_callout",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Caregiver calling out or sick"
+                        "prompt": "Caregiver needs to call out or cancel their shift"
                     }
                 },
                 {
@@ -179,7 +189,15 @@ Route based on response:
                     "destination_node_id": "caregiver_late",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Caregiver running late"
+                        "prompt": "Caregiver is running late to their shift"
+                    }
+                },
+                {
+                    "id": "to_payroll",
+                    "destination_node_id": "caregiver_other",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Caregiver has a payroll issue, missing hours, or paycheck problem"
                     }
                 },
                 {
@@ -187,14 +205,14 @@ Route based on response:
                     "destination_node_id": "caregiver_other",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Caregiver said anything"
+                        "prompt": "Caregiver has a different question or request"
                     }
                 }
             ]
         },
 
         # =====================================================================
-        # CAREGIVER CALL-OUT - Handle call-outs
+        # CAREGIVER CALL-OUT - Handle call-outs (ONE tool call)
         # =====================================================================
         {
             "id": "caregiver_callout",
@@ -202,11 +220,21 @@ Route based on response:
             "name": "Caregiver Call-Out",
             "instruction": {
                 "type": "prompt",
-                "text": """Handle caregiver call-out.
+                "text": """Handle the caregiver's call-out request.
 
-SAY: "Got it. I've logged your call-out and we're finding coverage. Feel better!"
-Then: "Anything else?"
-If no: "Take care!" """
+=== CRITICAL: USE INFO ALREADY GIVEN ===
+If the caregiver already said their shift time or reason, DO NOT ask again.
+- "I'm sick and can't make my 9am shift" → You have BOTH. Don't ask again.
+- "I can't make it tomorrow" → You know they're calling out. Just ask which shift if unclear.
+
+=== REQUIRED RESPONSE ===
+Once you understand which shift, say ALL of this:
+"Got it. I've logged your call-out and we're already reaching out to find coverage. You don't need to do anything else - we've got it handled. Feel better!"
+
+Then: "Is there anything else?"
+If no: "Take care of yourself!"
+
+CRITICAL: Always say "You don't need to do anything else" - this is required."""
             },
             "tools": [],
             "edges": [
@@ -215,14 +243,14 @@ If no: "Take care!" """
                     "destination_node_id": "closing",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has confirmed the call-out"
+                        "prompt": "Gigi has confirmed the call-out is logged and caller said bye or has no other needs"
                     }
                 }
             ]
         },
 
         # =====================================================================
-        # CAREGIVER LATE - Handle running late
+        # CAREGIVER LATE - Handle running late (ONE tool call)
         # =====================================================================
         {
             "id": "caregiver_late",
@@ -230,12 +258,20 @@ If no: "Take care!" """
             "name": "Caregiver Running Late",
             "instruction": {
                 "type": "prompt",
-                "text": """Handle caregiver running late.
+                "text": """Handle the caregiver's late notification.
 
-If ETA unclear: "About how many minutes?"
-Once you know: "Got it. I've notified the client. Drive safe!"
-Then: "Anything else?"
-If no: "Bye!" """
+=== CRITICAL: USE INFO ALREADY GIVEN ===
+If they already said how late they'll be, DO NOT ask again.
+- "I'm running 15 minutes late" → You have the ETA. Don't ask "how many minutes?"
+- "Stuck in traffic, be there in 20" → You have 20 minutes. Don't re-ask.
+
+=== SIMPLE FLOW ===
+1. If ETA unclear: "About how many minutes do you think?"
+2. Once you have the ETA, say: "Got it. I've notified the client you're running about [X] minutes late. Drive safe!"
+3. Ask: "Anything else?"
+4. If no: "Drive safe. Bye!"
+
+DO NOT keep asking questions. Get the ETA, confirm notification, and end."""
             },
             "tools": [],
             "edges": [
@@ -244,7 +280,7 @@ If no: "Bye!" """
                     "destination_node_id": "closing",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has confirmed the late notification"
+                        "prompt": "Gigi has confirmed the client was notified and caller said bye or has no other needs"
                     }
                 }
             ]
@@ -259,14 +295,28 @@ If no: "Bye!" """
             "name": "Caregiver Other Request",
             "instruction": {
                 "type": "prompt",
-                "text": """PAYROLL: "I'm sorry, I can't fix payroll tonight. Cynthia Pointe will call you TOMORROW before 10 AM. What pay period and how many hours are missing?"
-After details: "Got it. Cynthia will call tomorrow before 10 AM. Take care!"
+                "text": """Handle other caregiver requests.
 
-SCHEDULE: "Someone will call you within 30 minutes. Take care!"
+=== PAYROLL ISSUES (after hours) ===
+Payroll cannot be fixed tonight. Be honest about this.
 
-OTHER: "Someone will call you within 30 minutes. Take care!"
+1. Acknowledge: "I'm sorry - I can hear how frustrating this is. I can't access payroll systems tonight."
+2. Get details IMMEDIATELY - ask all at once:
+   "So I can give Cynthia all the info - which pay period, how many hours are missing, and which shifts?"
+3. After getting details: "Got it. Cynthia Pointe will call you tomorrow before 10 AM to get this fixed. She handles these personally."
 
-FORBIDDEN: Never say "2 hours" or "tonight" for payroll callbacks. ONLY "tomorrow before 10 AM"."""
+DO NOT promise same-night contact for payroll. It's a next-day issue.
+
+=== SCHEDULE QUESTIONS ===
+"I don't have your schedule pulled up, but someone will call you back within 30 minutes."
+
+=== GENERAL QUESTIONS ===
+"I can have someone call you back within 30 minutes. What's the best number?"
+
+=== KEY RULES ===
+- Payroll = Cynthia Pointe, tomorrow before 10 AM
+- Other issues = callback within 30 minutes
+- Get payroll details upfront (pay period, hours missing, which shifts)"""
             },
             "tools": [],
             "edges": [
@@ -275,14 +325,14 @@ FORBIDDEN: Never say "2 hours" or "tonight" for payroll callbacks. ONLY "tomorro
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has spoken to the caregiver"
+                        "prompt": "Request handled or callback promised - move to end call"
                     }
                 }
             ]
         },
 
         # =====================================================================
-        # CLIENT ROUTER - Route client requests
+        # CLIENT ROUTER - Route client requests (includes medical advice boundary)
         # =====================================================================
         {
             "id": "client_router",
@@ -290,20 +340,38 @@ FORBIDDEN: Never say "2 hours" or "tonight" for payroll callbacks. ONLY "tomorro
             "name": "Client Router",
             "instruction": {
                 "type": "prompt",
-                "text": """Client is calling. Ask: "How can I help you?"
+                "text": """You're speaking with a client. Listen to what they need and route appropriately.
 
-- Complaint/concern → complaint
-- Schedule question → schedule
-- Cancel → cancel
-- Medical advice → "Please call 911 or your doctor." → end"""
+MEDICAL ADVICE BOUNDARY (CRITICAL):
+If client asks for medical advice (should I take a pill, am I having a heart attack, should I go to ER):
+- Say: "I'm not able to give medical advice, but I want to make sure you're safe."
+- If they mention dizziness, chest pain, trouble breathing, or falling: "That sounds like something a doctor or nurse should help with. If you're feeling unsafe right now, please call 911. Otherwise, I'd recommend calling your doctor's office or a nurse line."
+- Do NOT try to diagnose or advise on medications
+- Stay calm and supportive, not preachy
+- After directing them, ask: "Is there anything else I can help with tonight?"
+- Move to end_call
+
+ROUTING:
+- Complaint, concern, or problem → client_complaint
+- Schedule question ("when is my caregiver coming") → client_schedule
+- Cancel a visit → client_cancel
+- Medical advice request → Handle here (don't route), then end_call"""
             },
             "edges": [
+                {
+                    "id": "to_complaint",
+                    "destination_node_id": "client_complaint",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Client has a complaint, concern, or problem (not medical advice)"
+                    }
+                },
                 {
                     "id": "to_schedule",
                     "destination_node_id": "client_schedule",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Client asking about schedule or caregiver"
+                        "prompt": "Client asking about their schedule or when caregiver is coming"
                     }
                 },
                 {
@@ -311,7 +379,7 @@ FORBIDDEN: Never say "2 hours" or "tonight" for payroll callbacks. ONLY "tomorro
                     "destination_node_id": "client_cancel",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Client wants to cancel"
+                        "prompt": "Client wants to cancel a visit"
                     }
                 },
                 {
@@ -319,15 +387,7 @@ FORBIDDEN: Never say "2 hours" or "tonight" for payroll callbacks. ONLY "tomorro
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Client mentioned medical symptoms"
-                    }
-                },
-                {
-                    "id": "to_complaint",
-                    "destination_node_id": "client_complaint",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Client said anything"
+                        "prompt": "Client asked for medical advice and has been directed to call 911 or their doctor"
                     }
                 }
             ]
@@ -342,13 +402,23 @@ FORBIDDEN: Never say "2 hours" or "tonight" for payroll callbacks. ONLY "tomorro
             "name": "Client Complaint",
             "instruction": {
                 "type": "prompt",
-                "text": """Handle client complaints.
+                "text": """Handle the client's complaint or concern.
 
-SAY EXACTLY: "I hear you and I'm documenting everything. Cynthia Pointe, our Care Manager, will call you tomorrow before 9 AM. Anything else?"
+=== STANDARD FLOW ===
+1. Acknowledge ONCE: "I hear you, and I understand this is frustrating."
+2. Say: "I'm documenting this right now. Cynthia Pointe will call you tomorrow before 9 AM."
+3. Ask: "Is there anything else tonight?"
+4. If no: "Cynthia will take care of this. Have a good night."
 
-If no: "Cynthia Pointe will take care of this. Goodnight!"
+=== CANCEL THREATS ===
+If they threaten to cancel or leave:
+Say: "I hear you, and I'm taking this seriously. I'm escalating this to Cynthia Pointe right now. She will call you tomorrow before 9 AM. Everything is documented."
 
-MUST say "Cynthia Pointe" at least once."""
+=== KEY RULES ===
+- Acknowledge ONCE, then move to action
+- Always say "Cynthia Pointe" by name
+- Always say "tomorrow before 9 AM"
+- Don't keep apologizing - just document and escalate"""
             },
             "tools": [],
             "edges": [
@@ -357,7 +427,7 @@ MUST say "Cynthia Pointe" at least once."""
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has addressed the complaint"
+                        "prompt": "Issue has been logged and caller has been told a supervisor will call - move to end call"
                     }
                 }
             ]
@@ -372,9 +442,24 @@ MUST say "Cynthia Pointe" at least once."""
             "name": "Client Schedule",
             "instruction": {
                 "type": "prompt",
-                "text": """SAY: "Someone will call you within 15 minutes with your schedule. Goodnight!"
+                "text": """Help the client with their schedule question.
 
-If they keep asking: "You're all set. Goodnight!" Then STOP."""
+Say: "I don't have your schedule in front of me, but someone will call you back within 15 minutes to confirm everything."
+
+=== IMMEDIATE NEEDS ===
+If they're hungry, worried about falling, or scared:
+- Offer help: "Let me see if we can get someone to you tonight."
+- Reassure: "Someone will call you within 15 minutes."
+
+=== CRITICAL: PREVENT LOOPS ===
+If the client asks the same question twice OR seems confused:
+DO NOT answer a third time. Instead say:
+"You're all set, [Name]. Someone will call you in 15 minutes. Goodnight!"
+Then STOP TALKING. Do not respond to further questions.
+
+=== ENDING THE CALL ===
+When they say "thank you" or "goodnight":
+Say "Goodnight!" and STOP. Do not say anything else."""
             },
             "tools": [],
             "edges": [
@@ -383,14 +468,14 @@ If they keep asking: "You're all set. Goodnight!" Then STOP."""
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has spoken"
+                        "prompt": "Gigi has said goodbye OR answered the same question twice OR caller said goodnight/thank you"
                     }
                 }
             ]
         },
 
         # =====================================================================
-        # CLIENT CANCEL - Cancel visit
+        # CLIENT CANCEL - Cancel visit (ONE tool call)
         # =====================================================================
         {
             "id": "client_cancel",
@@ -398,10 +483,18 @@ If they keep asking: "You're all set. Goodnight!" Then STOP."""
             "name": "Client Cancellation",
             "instruction": {
                 "type": "prompt",
-                "text": """Handle cancellation.
+                "text": """Handle the client's cancellation request.
 
-SAY: "I've noted your cancellation. The caregiver will be notified. Anything else?"
-If no: "Goodnight!" """
+1. Confirm which visit: "Which visit would you like to cancel?"
+2. Ask the reason: "May I ask the reason?"
+3. Call cancel_client_visit ONCE.
+4. After success: "I've cancelled that visit. The caregiver will be notified."
+5. Ask: "Is there anything else?"
+
+Say: "I've noted your cancellation request. The caregiver will be notified and someone will confirm with you tomorrow."
+Ask: "Is there anything else?"
+
+NEVER use tools - just acknowledge verbally."""
             },
             "tools": [],
             "edges": [
@@ -410,7 +503,7 @@ If no: "Goodnight!" """
                     "destination_node_id": "closing",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has acknowledged the cancellation"
+                        "prompt": "Cancellation complete and caller has no other requests"
                     }
                 }
             ]
@@ -425,17 +518,41 @@ If no: "Goodnight!" """
             "name": "Unknown Caller",
             "instruction": {
                 "type": "prompt",
-                "text": """PRICE QUESTION: "$40/hr Colorado Springs, $43 Denver, $45 Boulder. 3-hour minimum, no deposit. Want a callback?"
-- If yes: Get name/number. "Someone calls in 30 min. Thanks!"
-- If no: "Good luck!"
+                "text": """Handle new/unknown callers.
 
-CARE SERVICES: Give rates, get name/number. "Someone calls in 30 min."
+=== FIRST: ACKNOWLEDGE THEY'RE NOT IN SYSTEM ===
+Say: "I don't see you in our system, but I'm happy to help. Are you looking for care services?"
 
-WORK: "Apply at coloradocareassist.com. Goodbye!"
+=== WRONG NUMBER ===
+If they say "wrong number" or "I didn't mean to call":
+Say: "No problem! Have a good night."
+Do NOT try to sell them services. Just end the call.
 
-WRONG NUMBER: "No problem! Goodbye!"
+=== LOOKING FOR CARE SERVICES ===
+Our rates: $40/hr Colorado Springs, $43/hr Denver, $45/hr Boulder
+3-hour minimum, no deposit, no contracts
+Can start in 24-48 hours
+VA and long-term care insurance accepted
 
-After ANY response: Say goodbye and END."""
+Services: bathing, dressing, meals, medication reminders, light housekeeping, companionship
+
+When interested, get name and number, then:
+"Perfect, [Name]. Our care team will call you within 30 minutes. I promise. Thanks for calling!"
+
+=== PRICE SHOPPER (just wants rates, no callback) ===
+Give rates: "$40 to $45 an hour depending on location. 3-hour minimum. No deposit."
+If they decline callback or say thanks/bye:
+Say: "No problem. Thanks for calling Colorado Care Assist. Good luck!"
+Then END THE CALL. Do not keep talking.
+
+=== LOOKING FOR WORK ===
+"We're always looking for great caregivers! Apply at coloradocareassist.com or I can have someone call you."
+
+=== FLUSTERED/OVERWHELMED CALLER ===
+If they seem stressed or overwhelmed:
+- Slow down, speak calmly
+- Say: "I know this is a lot. Let me just get your name and number, and Cynthia Pointe will call you within 30 minutes to walk you through everything."
+- Keep it simple - just get name and number, confirm callback"""
             },
             "tools": [],
             "edges": [
@@ -444,7 +561,7 @@ After ANY response: Say goodbye and END."""
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has spoken"
+                        "prompt": "Caller's questions answered AND (callback confirmed OR caller declined and said goodbye)"
                     }
                 }
             ]
@@ -459,13 +576,36 @@ After ANY response: Say goodbye and END."""
             "name": "Family Member",
             "instruction": {
                 "type": "prompt",
-                "text": """SAY FIRST: "Your loved one is safe with us. Cynthia Pointe will call you within 15 minutes. What's your callback number?"
+                "text": """Handle family members calling about someone receiving care.
 
-After number: "Cynthia will call within 15 minutes. Goodbye!"
+=== ANGRY FAMILY (neglect accusations, threats, etc.) ===
+Stay calm and professional. Don't be defensive.
 
-If angry: Stay calm. "I hear you. Cynthia Pointe will call within 15 minutes."
+Say: "I hear you, and I'm taking this seriously. I'm logging this as URGENT and creating an incident report right now. Cynthia Pointe, our Care Manager, will call you within 15 minutes. What's the best number?"
 
-If rambling after callback confirmed: "I have everything. Cynthia will call. Goodbye!" Then STOP."""
+After getting number: "This is marked urgent. Cynthia will call you at [number] within 15 minutes with a full update."
+
+MUST SAY: "urgent" and "incident report" for angry/neglect calls.
+
+=== WORRIED FAMILY (not angry, just concerned) ===
+IMMEDIATELY reassure them about safety:
+"First - your mom is safe with us. We take care of our clients."
+
+Then: "I can hear how worried you are. Let me get Cynthia Pointe to call you - she'll check on everything and confirm your mom's care tonight."
+
+Get their number, then: "Cynthia will call you within 15 minutes. Your mom is safe and taken care of."
+
+MUST SAY: "your mom is safe" for worried family calls.
+
+=== SAFETY EMERGENCIES ===
+- Medical emergency → "Call 911 right now"
+- Fall or injury → "If she's hurt, please call 911"
+- Medication concerns → "Call Poison Control at 1-800-222-1222"
+
+=== RAMBLING/REPEATING CALLERS ===
+If they keep repeating concerns after you've confirmed the callback:
+Say: "I have everything documented. Cynthia will call you within 15 minutes. You're all set."
+Then END THE CALL. Don't let them keep going."""
             },
             "tools": [],
             "edges": [
@@ -474,14 +614,14 @@ If rambling after callback confirmed: "I have everything. Cynthia will call. Goo
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has spoken to the family member"
+                        "prompt": "Family member has been told Cynthia Pointe will call within 15 minutes AND callback number confirmed"
                     }
                 }
             ]
         },
 
         # =====================================================================
-        # CLOSING - End the conversation
+        # CLOSING - End the conversation (STAY HERE - don't loop back)
         # =====================================================================
         {
             "id": "closing",
@@ -489,7 +629,23 @@ If rambling after callback confirmed: "I have everything. Cynthia will call. Goo
             "name": "Closing",
             "instruction": {
                 "type": "prompt",
-                "text": """Say: "You're all set. Take care!" and END."""
+                "text": """Close the conversation warmly and STAY in this node.
+
+IMPORTANT: The caller's issue has already been handled. Do NOT go back to previous nodes.
+
+If the caller asks anxious follow-up questions like:
+- "Are you sure it's handled?" → "Yes, you're all set. We've got it covered."
+- "Do I need to do anything else?" → "Nope, you're good. We'll take care of everything."
+- "Can you confirm the time again?" → Give a brief answer and reassure them.
+
+These are NOT new requests - they are seeking reassurance. Stay calm and reassuring.
+
+For caregivers: "Take care of yourself. We'll handle it from here. Thank you for calling Colorado Care Assist."
+For clients: "Someone from our team will call you back within 30 minutes. Thank you for calling Colorado Care Assist."
+
+After reassuring them, say: "You're all set. Have a good night!" and end the call.
+
+NEVER go back to caregiver_callout, caregiver_late, or client_complaint nodes. The action is DONE."""
             },
             "edges": [
                 {
@@ -497,39 +653,7 @@ If rambling after callback confirmed: "I have everything. Cynthia will call. Goo
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Gigi has said goodbye"
-                    }
-                }
-            ]
-        },
-
-        # =====================================================================
-        # GLOBAL FALLBACK - Catches any unhandled situation
-        # =====================================================================
-        {
-            "id": "global_fallback",
-            "type": "conversation",
-            "name": "Global Fallback",
-            "global": True,
-            "instruction": {
-                "type": "prompt",
-                "text": """Handle any situation not covered by other nodes.
-
-Say: "I want to make sure you get the right help. Let me have someone call you back within 30 minutes. What's the best number?"
-
-After getting number: "Got it. Someone will call you within 30 minutes. Have a good night!"
-
-If they don't want a callback: "No problem. Thanks for calling Colorado Care Assist!"
-
-Then END the call."""
-            },
-            "edges": [
-                {
-                    "id": "fallback_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Gigi has responded to the caller"
+                        "prompt": "Caller says goodbye, thanks you, or confirms they have no other needs"
                     }
                 }
             ]
