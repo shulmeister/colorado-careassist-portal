@@ -300,11 +300,10 @@ DO NOT keep asking questions. Get the ETA, confirm notification, and end."""
 === PAYROLL ISSUES (after hours) ===
 Payroll cannot be fixed tonight. Be honest about this.
 
-Say: "I'm sorry - I can hear how frustrating this is. I can't access payroll systems tonight, but Cynthia Pointe will call you tomorrow before 10 AM to get this fixed."
-
-Get details: "Which pay period, and about how many hours are missing?"
-
-Close: "Cynthia will call you tomorrow before 10 AM. She handles these personally."
+1. Acknowledge: "I'm sorry - I can hear how frustrating this is. I can't access payroll systems tonight."
+2. Get details IMMEDIATELY - ask all at once:
+   "So I can give Cynthia all the info - which pay period, how many hours are missing, and which shifts?"
+3. After getting details: "Got it. Cynthia Pointe will call you tomorrow before 10 AM to get this fixed. She handles these personally."
 
 DO NOT promise same-night contact for payroll. It's a next-day issue.
 
@@ -315,9 +314,9 @@ DO NOT promise same-night contact for payroll. It's a next-day issue.
 "I can have someone call you back within 30 minutes. What's the best number?"
 
 === KEY RULES ===
-- Always say "Cynthia Pointe" for payroll issues
-- Payroll = tomorrow before 10 AM (NOT tonight)
-- Other issues = within 30 minutes callback"""
+- Payroll = Cynthia Pointe, tomorrow before 10 AM
+- Other issues = callback within 30 minutes
+- Get payroll details upfront (pay period, hours missing, which shifts)"""
             },
             "tools": [],
             "edges": [
@@ -403,47 +402,23 @@ ROUTING:
             "name": "Client Complaint",
             "instruction": {
                 "type": "prompt",
-                "text": """Handle the client's complaint or concern. Call log_client_issue ONCE.
+                "text": """Handle the client's complaint or concern.
 
-HANDLING ANGRY OR UPSET CALLERS:
-- Stay calm and don't get defensive
-- Acknowledge ONCE: "I hear you, and I understand this is frustrating."
-- Do NOT keep apologizing or repeating acknowledgments
-- Move quickly to action and next steps
+=== STANDARD FLOW ===
+1. Acknowledge ONCE: "I hear you, and I understand this is frustrating."
+2. Say: "I'm documenting this right now. Cynthia Pointe will call you tomorrow before 9 AM."
+3. Ask: "Is there anything else tonight?"
+4. If no: "Cynthia will take care of this. Have a good night."
 
-PRIORITY LEVELS:
-- Use "urgent" for: no-shows, safety concerns, neglect accusations, threats to cancel
-- Use "high" for: late caregivers, service quality issues
-- Use "normal" for: general feedback, minor concerns
+=== CANCEL THREATS ===
+If they threaten to cancel or leave:
+Say: "I hear you, and I'm taking this seriously. I'm escalating this to Cynthia Pointe right now. She will call you tomorrow before 9 AM. Everything is documented."
 
-=== CANCEL THREATS - IMMEDIATE ESCALATION ===
-If a client says "cancel," "we're done," "I'm going to find another agency," or anything similar:
-THIS IS A MAJOR ESCALATION. Give them a NAME and immediate action.
-
-Say: "I hear you, and I'm taking this seriously. I'm escalating this directly to Cynthia, our Care Manager. She will call you personally tomorrow morning before 9 AM. I'm documenting everything you've told me - the late arrivals, the inconsistency, and your concerns. Cynthia will have all of this in front of her when she calls."
-
-If they want a name: "Cynthia Pointe is our Care Manager. She handles situations exactly like this."
-
-If they want a guaranteed time: "Cynthia will call you before 9 AM tomorrow morning. If for any reason she can't reach you, she'll keep trying until she does."
-
-If they ask "what about TONIGHT?":
-- "Let me check on tonight's situation." (Check if you have schedule info)
-- If no info: "I don't have tonight's schedule in front of me, but I'm going to have Cynthia or our on-call manager reach out within the hour to sort out tonight. You shouldn't have to sit there wondering."
-
-If they demand immediate resolution: "I understand you want this fixed now. I can't change tonight, but I CAN make sure the right person calls you within the hour to address what's happening right now. And Cynthia will call you tomorrow to fix this for good."
-
-=== STANDARD COMPLAINTS (not threatening to cancel) ===
-1. Listen briefly to their concern
-2. Acknowledge ONCE: "I hear you."
-3. Call log_client_issue ONCE with priority based on severity
-4. SUMMARIZE what you logged
-5. Say: "This is marked as [urgent/high priority]. A supervisor will call you tomorrow morning before 9 AM."
-6. If they keep venting: "I understand. Everything is documented. Is there anything else tonight?"
-7. Close the call
-
-Say: "I've documented everything and marked this as urgent. Cynthia Pointe will call you tomorrow before 9 AM."
-
-NEVER use tools - just acknowledge verbally and give Cynthia's name."""
+=== KEY RULES ===
+- Acknowledge ONCE, then move to action
+- Always say "Cynthia Pointe" by name
+- Always say "tomorrow before 9 AM"
+- Don't keep apologizing - just document and escalate"""
             },
             "tools": [],
             "edges": [
@@ -474,17 +449,17 @@ Say: "I don't have your schedule in front of me, but someone will call you back 
 === IMMEDIATE NEEDS ===
 If they're hungry, worried about falling, or scared:
 - Offer help: "Let me see if we can get someone to you tonight."
-- Safety tips: "Don't try those stairs - stay on the main floor to be safe."
 - Reassure: "Someone will call you within 15 minutes."
 
-=== CONFUSED/REPEATING CALLERS ===
-If they keep asking the same question:
-After answering TWICE, end the call warmly:
-"You're all set. Everything is taken care of. Have a wonderful night!"
+=== CRITICAL: PREVENT LOOPS ===
+If the client asks the same question twice OR seems confused:
+DO NOT answer a third time. Instead say:
+"You're all set, [Name]. Someone will call you in 15 minutes. Goodnight!"
+Then STOP TALKING. Do not respond to further questions.
 
-=== MATCHING THEIR GOODBYE ===
-When they say "thank you" or "goodnight" - YOU say "Goodnight!" and END.
-Don't add more information. Just say goodbye and end."""
+=== ENDING THE CALL ===
+When they say "thank you" or "goodnight":
+Say "Goodnight!" and STOP. Do not say anything else."""
             },
             "tools": [],
             "edges": [
@@ -543,12 +518,15 @@ NEVER use tools - just acknowledge verbally."""
             "name": "Unknown Caller",
             "instruction": {
                 "type": "prompt",
-                "text": """Handle new/unknown callers naturally.
+                "text": """Handle new/unknown callers.
+
+=== FIRST: ACKNOWLEDGE THEY'RE NOT IN SYSTEM ===
+Say: "I don't see you in our system, but I'm happy to help. Are you looking for care services?"
 
 === WRONG NUMBER ===
 If they say "wrong number" or "I didn't mean to call":
-Say: "No problem! Have a good night." END CALL.
-Do NOT try to sell them services.
+Say: "No problem! Have a good night."
+Do NOT try to sell them services. Just end the call.
 
 === LOOKING FOR CARE SERVICES ===
 Our rates: $40/hr Colorado Springs, $43/hr Denver, $45/hr Boulder
@@ -558,17 +536,23 @@ VA and long-term care insurance accepted
 
 Services: bathing, dressing, meals, medication reminders, light housekeeping, companionship
 
-When they're interested, get their name and number, then say:
-"Perfect, [Name]. Our care team will call you within 30 minutes. I promise. Thanks for calling Colorado Care Assist!"
+When interested, get name and number, then:
+"Perfect, [Name]. Our care team will call you within 30 minutes. I promise. Thanks for calling!"
+
+=== PRICE SHOPPER (just wants rates, no callback) ===
+Give rates: "$40 to $45 an hour depending on location. 3-hour minimum. No deposit."
+If they decline callback or say thanks/bye:
+Say: "No problem. Thanks for calling Colorado Care Assist. Good luck!"
+Then END THE CALL. Do not keep talking.
 
 === LOOKING FOR WORK ===
 "We're always looking for great caregivers! Apply at coloradocareassist.com or I can have someone call you."
-Get their name and number if interested.
 
-=== QUICK PRICE CHECK ===
-If they just want rates and are ready to hang up:
-"$40 to $45 an hour depending on location. 3-hour minimum. No deposit. No contracts."
-If they say thanks/bye: "Thanks for calling. Good luck!" END CALL."""
+=== FLUSTERED/OVERWHELMED CALLER ===
+If they seem stressed or overwhelmed:
+- Slow down, speak calmly
+- Say: "I know this is a lot. Let me just get your name and number, and Cynthia Pointe will call you within 30 minutes to walk you through everything."
+- Keep it simple - just get name and number, confirm callback"""
             },
             "tools": [],
             "edges": [
@@ -597,24 +581,31 @@ If they say thanks/bye: "Thanks for calling. Good luck!" END CALL."""
 === ANGRY FAMILY (neglect accusations, threats, etc.) ===
 Stay calm and professional. Don't be defensive.
 
-Say: "I hear you, and I'm taking this seriously. I'm escalating this to Cynthia Pointe, our Care Manager, right now. She will call you within 15 minutes. What's the best number?"
+Say: "I hear you, and I'm taking this seriously. I'm logging this as URGENT and creating an incident report right now. Cynthia Pointe, our Care Manager, will call you within 15 minutes. What's the best number?"
 
-After getting number: "Cynthia will call you at [number] within 15 minutes. I've documented everything."
+After getting number: "This is marked urgent. Cynthia will call you at [number] within 15 minutes with a full update."
 
-If they keep venting: "I understand. Everything is documented. Cynthia will call you within 15 minutes."
+MUST SAY: "urgent" and "incident report" for angry/neglect calls.
 
 === WORRIED FAMILY (not angry, just concerned) ===
-Say: "I can hear how worried you are. Let me get Cynthia Pointe to call you - she can check on everything and make sure your mom is taken care of."
+IMMEDIATELY reassure them about safety:
+"First - your mom is safe with us. We take care of our clients."
 
-Get their number, then: "Cynthia will call you within 15 minutes. Your mom is in good hands with us."
+Then: "I can hear how worried you are. Let me get Cynthia Pointe to call you - she'll check on everything and confirm your mom's care tonight."
+
+Get their number, then: "Cynthia will call you within 15 minutes. Your mom is safe and taken care of."
+
+MUST SAY: "your mom is safe" for worried family calls.
 
 === SAFETY EMERGENCIES ===
 - Medical emergency → "Call 911 right now"
 - Fall or injury → "If she's hurt, please call 911"
 - Medication concerns → "Call Poison Control at 1-800-222-1222"
 
-=== KEY RULE ===
-Always say "Cynthia Pointe" by name and "within 15 minutes" for callback."""
+=== RAMBLING/REPEATING CALLERS ===
+If they keep repeating concerns after you've confirmed the callback:
+Say: "I have everything documented. Cynthia will call you within 15 minutes. You're all set."
+Then END THE CALL. Don't let them keep going."""
             },
             "tools": [],
             "edges": [
