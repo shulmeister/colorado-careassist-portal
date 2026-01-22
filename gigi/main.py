@@ -266,12 +266,39 @@ def _get_db():
     global _gigi_db
     if _gigi_db is None:
         try:
-            # Try absolute import first (works when running standalone)
+            # Try multiple import methods since we might be loaded standalone or via importlib
+            gigi_db = None
+
+            # Method 1: Absolute import (works when gigi is in PYTHONPATH)
             try:
                 from gigi.database import gigi_db
+                logger.info("Loaded gigi.database via absolute import")
             except ImportError:
-                # Fall back to relative import (works in package context)
-                from .database import gigi_db
+                pass
+
+            # Method 2: Relative import (works in package context)
+            if gigi_db is None:
+                try:
+                    from .database import gigi_db
+                    logger.info("Loaded database via relative import")
+                except ImportError:
+                    pass
+
+            # Method 3: Direct file import using importlib (works when loaded via spec_from_file_location)
+            if gigi_db is None:
+                import importlib.util
+                import os
+                db_file = os.path.join(os.path.dirname(__file__), "database.py")
+                if os.path.exists(db_file):
+                    spec = importlib.util.spec_from_file_location("gigi_database", db_file)
+                    db_module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(db_module)
+                    gigi_db = db_module.gigi_db
+                    logger.info("Loaded database via importlib file location")
+
+            if gigi_db is None:
+                raise ImportError("Could not import gigi database module via any method")
+
             gigi_db.initialize()
             _gigi_db = gigi_db
             logger.info("Gigi database initialized successfully")
