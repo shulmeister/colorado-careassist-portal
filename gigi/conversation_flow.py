@@ -39,7 +39,7 @@ RETELL_API_BASE = "https://api.retellai.com"
 WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function"
 
 # Current agent ID (we'll update to conversation flow)
-CURRENT_AGENT_ID = "agent_363f3725498b851037ea84bda5"
+CURRENT_AGENT_ID = "agent_d5c3f32bdf48fa4f7f24af7d36"  # Gigi v2 - Conversation Flow
 
 
 def get_conversation_flow_config():

@@ -16,7 +16,7 @@ if not RETELL_API_KEY:
     sys.exit(1)
 RETELL_API_BASE = "https://api.retellai.com"
 WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function"
-CURRENT_AGENT_ID = "agent_363f3725498b851037ea84bda5"
+CURRENT_AGENT_ID = "agent_d5c3f32bdf48fa4f7f24af7d36"  # Gigi v2 - Conversation Flow
 
 # Import the config
 sys.path.insert(0, os.path.dirname(__file__))
