@@ -58,13 +58,14 @@ try:
 
     sales_path = os.path.join(os.path.dirname(__file__), "sales")
     if os.path.exists(sales_path):
-        # Save root-level services modules (especially marketing) before sales modifies sys.path
-        # Sales has its own services/ but not services/marketing, so we preserve those
+        # Save AND REMOVE root-level services modules before loading sales
+        # Sales has its own services/ directory, so we need to clear the cache
+        # to let sales import its own services modules, then restore root's after
         saved_services_modules = {}
         for mod_name in list(sys.modules.keys()):
             if mod_name == 'services' or mod_name.startswith('services.'):
-                saved_services_modules[mod_name] = sys.modules[mod_name]
-        logger.info(f"✅ Saved {len(saved_services_modules)} services modules")
+                saved_services_modules[mod_name] = sys.modules.pop(mod_name)  # pop removes from cache
+        logger.info(f"✅ Saved and cleared {len(saved_services_modules)} services modules from cache")
 
         # Add sales path to front of sys.path for the services imports
         if sales_path in sys.path:
@@ -96,9 +97,10 @@ try:
             sys.path.remove(root_path)
         sys.path.insert(0, root_path)
 
-        # Restore saved services modules (especially services.marketing.*)
+        # Restore root services modules (especially services.marketing.*) for portal's use
+        # This overwrites sales' services in sys.modules, but sales already has references to its modules
         sys.modules.update(saved_services_modules)
-        logger.info(f"✅ Restored {len(saved_services_modules)} services modules")
+        logger.info(f"✅ Restored {len(saved_services_modules)} root services modules to cache")
     else:
         logger.warning("⚠️  Sales dashboard not found")
 except Exception as e:
