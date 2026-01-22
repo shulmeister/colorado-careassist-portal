@@ -96,6 +96,73 @@ def _log_config_status():
 _log_config_status()
 
 # =============================================================================
+# ANTI-LOOP: Tool Call Deduplication
+# =============================================================================
+# The LLM sometimes calls the same tool multiple times despite instructions not to.
+# This server-side cache prevents duplicate tool calls within the same conversation.
+
+from collections import defaultdict
+import time
+
+# Tools that should only be called ONCE per conversation
+ONCE_PER_CALL_TOOLS = {
+    "log_client_issue",
+    "report_call_out",
+    "execute_caregiver_call_out",
+    "report_late",
+    "cancel_client_visit",
+    "add_note_to_wellsky",
+    "start_shift_filling_campaign",
+}
+
+# Cache of tool calls: {call_id: {tool_name: timestamp}}
+# Entries expire after 10 minutes to prevent memory leaks
+_tool_call_cache: Dict[str, Dict[str, float]] = defaultdict(dict)
+_cache_lock = None  # Will use threading lock if needed
+
+def _cleanup_old_cache_entries():
+    """Remove cache entries older than 10 minutes."""
+    cutoff = time.time() - 600  # 10 minutes
+    expired_calls = [
+        call_id for call_id, tools in _tool_call_cache.items()
+        if all(ts < cutoff for ts in tools.values())
+    ]
+    for call_id in expired_calls:
+        del _tool_call_cache[call_id]
+
+def check_tool_already_called(call_id: str, tool_name: str) -> bool:
+    """
+    Check if a once-per-call tool has already been called in this conversation.
+    Returns True if already called (should block), False if OK to proceed.
+    """
+    if not call_id or tool_name not in ONCE_PER_CALL_TOOLS:
+        return False
+
+    _cleanup_old_cache_entries()
+
+    if tool_name in _tool_call_cache.get(call_id, {}):
+        logger.warning(f"BLOCKED DUPLICATE: {tool_name} already called for call {call_id}")
+        return True
+
+    return False
+
+def record_tool_call(call_id: str, tool_name: str):
+    """Record that a tool was called for this conversation."""
+    if call_id and tool_name in ONCE_PER_CALL_TOOLS:
+        _tool_call_cache[call_id][tool_name] = time.time()
+        logger.info(f"Recorded tool call: {tool_name} for call {call_id}")
+
+def get_duplicate_response(tool_name: str) -> Dict[str, Any]:
+    """Return a response telling the LLM the action was already completed."""
+    return {
+        "success": True,
+        "already_completed": True,
+        "action_completed": True,
+        "message": f"This action was already completed earlier in this conversation. Do NOT call {tool_name} again. Please confirm with the caller that their request has been handled and ask if there is anything else.",
+        "next_step": "STOP calling tools. Confirm with the caller and close the conversation."
+    }
+
+# =============================================================================
 # FastAPI App
 # =============================================================================
 
@@ -2323,7 +2390,25 @@ async def retell_function_call(function_name: str, request: Request):
     body = await request.json()
     args = body.get("args", body.get("arguments", {}))
 
-    logger.info(f"Direct function call: {function_name} with args: {args}")
+    # Extract call_id for deduplication (Retell sends this in the body or we use a fallback)
+    call_id = body.get("call_id") or body.get("call", {}).get("call_id") or args.get("call_id", "")
+
+    # If no call_id, try to use the from_number as a pseudo-call-id
+    if not call_id:
+        phone = args.get("phone_number", args.get("from_number", ""))
+        if phone:
+            # Use phone + current 5-minute window as pseudo call_id
+            window = int(time.time() / 300)  # 5-minute windows
+            call_id = f"phone_{phone}_{window}"
+
+    logger.info(f"Direct function call: {function_name} with args: {args} (call_id: {call_id})")
+
+    # =========================================================================
+    # ANTI-LOOP: Check if this tool was already called in this conversation
+    # =========================================================================
+    if check_tool_already_called(call_id, function_name):
+        logger.warning(f"BLOCKED: {function_name} already called in call {call_id}")
+        return JSONResponse(get_duplicate_response(function_name))
 
     try:
         if function_name == "verify_caller":
@@ -2340,14 +2425,17 @@ async def retell_function_call(function_name: str, request: Request):
 
         elif function_name == "execute_caregiver_call_out":
             result = await execute_caregiver_call_out(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse(result)
 
         elif function_name == "report_call_out":
             result = await report_call_out(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse(result.model_dump())
 
         elif function_name == "log_client_issue":
             result = await log_client_issue(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse(result.model_dump())
 
         # SHIFT FILLING FUNCTIONS - Gigi actively fills shifts!
@@ -2370,6 +2458,7 @@ async def retell_function_call(function_name: str, request: Request):
 
         elif function_name == "start_shift_filling_campaign":
             result = await start_shift_filling_campaign(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse({
                 "success": result.success,
                 "message": result.message,
@@ -2405,6 +2494,7 @@ async def retell_function_call(function_name: str, request: Request):
 
         elif function_name == "report_late":
             result = await report_late(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse({
                 "success": result.success,
                 "message": result.message,
@@ -2413,6 +2503,7 @@ async def retell_function_call(function_name: str, request: Request):
 
         elif function_name == "cancel_client_visit":
             result = await cancel_client_visit(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse({
                 "success": result.success,
                 "message": result.message,
@@ -2421,6 +2512,7 @@ async def retell_function_call(function_name: str, request: Request):
 
         elif function_name == "add_note_to_wellsky":
             result = await add_note_to_wellsky(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse({
                 "success": result.success,
                 "message": result.message
