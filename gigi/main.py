@@ -262,10 +262,15 @@ def _get_db():
     global _gigi_db
     if _gigi_db is None:
         try:
-            from .database import gigi_db
+            # Try absolute import first (works when running standalone)
+            try:
+                from gigi.database import gigi_db
+            except ImportError:
+                # Fall back to relative import (works in package context)
+                from .database import gigi_db
             gigi_db.initialize()
             _gigi_db = gigi_db
-            logger.info("Gigi database initialized")
+            logger.info("Gigi database initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Gigi database: {e}")
             _gigi_db = None

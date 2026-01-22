@@ -55,7 +55,7 @@
       "type": "function",
       "function": {
         "name": "execute_caregiver_call_out",
-        "description": "AUTONOMOUS CALL-OUT HANDLER - Use when a caregiver calls out sick. SAFETY RULES: (1) Only works for shifts starting within 24 hours. (2) If shift starts in less than 2 hours, returns requires_manual_handoff=true - you must tell them: 'Since this shift starts very soon, I'm going to connect you directly to our on-call manager to ensure we can get coverage immediately.' For valid call-outs, performs THREE actions: (A) Updates WellSky to 'Open', (B) Logs to Portal, (C) Triggers Replacement Blast. On success, say: 'I've updated the system and we are already looking for a replacement. Feel better.'",
+        "description": "CALL ONCE for caregiver call-outs. After success, confirm with caller and STOP - do NOT call again. This tool updates WellSky, logs the call-out, and triggers replacement SMS all in one call. If shift is less than 2 hours away, requires_manual_handoff=true means transfer to manager.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -81,7 +81,7 @@
       "type": "function",
       "function": {
         "name": "report_call_out",
-        "description": "ACTIVE SHIFT FILLING - Use when a caregiver calls out. This function doesn't just log - it ACTIVELY finds coverage by: (1) Recording the call-out, (2) Finding qualified replacement caregivers, (3) Starting SMS outreach to available caregivers, (4) Notifying the on-call manager as backup. The response tells you how many caregivers are being contacted. Tell the caller: 'I'm already reaching out to [X] available caregivers to find coverage for your shift.'",
+        "description": "CALL ONCE to report a caregiver call-out. After success, say 'Got it, we're finding coverage' and STOP. Do NOT call this tool again - one call handles everything. The system automatically finds replacements and sends SMS blasts.",
         "parameters": {
           "type": "object",
           "properties": {
@@ -169,7 +169,7 @@
       "type": "function",
       "function": {
         "name": "log_client_issue",
-        "description": "Logs a client service issue, complaint, or feedback to the portal. Use for any client concern that needs follow-up.",
+        "description": "Logs a client service issue to the portal. CALL THIS ONLY ONCE PER ISSUE - the system captures everything from one call. After it returns success, say 'I've logged this' and move to closing. Do NOT call this tool again to add more details.",
         "parameters": {
           "type": "object",
           "properties": {
