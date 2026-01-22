@@ -160,18 +160,20 @@ Route based on caller type."""
                 "type": "prompt",
                 "text": """You're speaking with a caregiver. Listen to understand what they need:
 
-- If they mention: calling out, sick, emergency, car trouble, can't make it, canceling
-  → They need to report a CALL-OUT
+=== RECOGNIZE THESE IMMEDIATELY ===
+- Calling out / sick / emergency / car trouble / can't make it → CALL-OUT
+- Running late / stuck in traffic / will be late → LATE
+- Schedule / shifts / when do I work → SCHEDULE
+- Paycheck / pay stub / check is wrong / hours missing / pay issue → PAYROLL (route to caregiver_other)
 
-- If they mention: running late, stuck in traffic, will be late, behind schedule
-  → They need to report being LATE
+=== CRITICAL: LISTEN TO WHAT THEY ALREADY SAID ===
+If they've ALREADY told you their issue, do NOT ask them to repeat it.
+- If they said "my check is short" → They told you it's payroll. Route immediately.
+- If they said "I'm sick" → They told you it's a callout. Route immediately.
 
-- If they ask about: schedule, shifts, when do I work
-  → They want SCHEDULE information
+Only ask a clarifying question if you genuinely don't know what they need.
 
-Listen and route appropriately. If unclear, ask ONE question:
-"Are you calling to report a call-out, let us know you're running late, or something else?"
-"""
+NEVER ask "are you calling to report a call-out..." if they've already told you their issue."""
             },
             "edges": [
                 {
@@ -188,6 +190,14 @@ Listen and route appropriately. If unclear, ask ONE question:
                     "transition_condition": {
                         "type": "prompt",
                         "prompt": "Caregiver is running late to their shift"
+                    }
+                },
+                {
+                    "id": "to_payroll",
+                    "destination_node_id": "caregiver_other",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Caregiver has a payroll issue, missing hours, or paycheck problem"
                     }
                 },
                 {
@@ -341,30 +351,40 @@ IMPORTANT: Call report_late exactly ONCE. After it succeeds, do NOT call it agai
                 "type": "prompt",
                 "text": """Handle other caregiver requests. NO TOOLS needed for most requests.
 
-PAYROLL ISSUES:
-If caregiver says their paycheck is wrong/short:
-1. IMMEDIATELY set expectations: "I'm sorry you're dealing with that. It's after hours right now, so I can't access payroll systems tonight - but I can make sure this gets to the right person first thing tomorrow morning."
-2. Get specific details:
-   - "Which pay period is this for - the most recent check?"
-   - "About how many hours do you think are missing?"
-   - "Do you know the dates you worked that aren't showing up?"
-3. Summarize: "Okay, so your [date] paycheck is short by about [X] hours. I'm noting that down."
-4. Say: "Someone from payroll will call you tomorrow morning before 10 AM to sort this out. What's the best number to reach you?"
-5. Reassure: "I know it's frustrating to wait overnight, but this will get handled tomorrow. You're doing the right thing by letting us know."
-6. Move to end_call
+=== PAYROLL ISSUES ===
 
-IMPORTANT: Do NOT promise to fix it tonight or call back tonight. Payroll cannot be accessed after hours.
+DURING BUSINESS HOURS (8 AM - 5 PM Monday-Friday):
+"I hear you, and I'm going to have Cynthia call you back ASAP. I'm texting her right now."
+Get their number, confirm, and close.
 
-SCHEDULE QUESTIONS:
+AFTER HOURS (evenings, nights, weekends):
+1. Acknowledge with empathy: "I'm sorry you're dealing with that. I know this is really stressful, especially with rent due."
+2. Get the details:
+   - "Which pay period - the most recent check?"
+   - "About how many hours are missing?"
+   - "Which client's shifts?"
+3. Summarize: "Got it - your check is short about [X] hours from [client]."
+4. Give Cynthia's name: "Cynthia Pointe will call you tomorrow morning before 10 AM. She handles payroll issues personally."
+5. If they ask "who is calling me?": "Cynthia Pointe - she's our Care Manager and she'll make sure this gets fixed."
+6. Close: "I know it's hard to wait overnight, but Cynthia will sort this out first thing. You did the right thing calling."
+
+=== KEY DIFFERENCE ===
+- Business hours → "I'm texting Cynthia now. She'll call you ASAP."
+- After hours → "Cynthia Pointe will call you tomorrow before 10 AM."
+
+Always give Cynthia's name. Never say "someone from payroll" - say "Cynthia Pointe."
+
+=== SCHEDULE QUESTIONS ===
 "Let me check your shifts." (use get_active_shifts if needed)
 Tell them their schedule, then close.
 
-GENERAL QUESTIONS:
+=== GENERAL QUESTIONS ===
 "I can have someone from the office call you back within 30 minutes. What's the best number?"
 
-HANDLING FRUSTRATED CAREGIVERS:
+=== HANDLING FRUSTRATED CAREGIVERS ===
 - Stay calm and empathetic
 - Don't promise to fix things you can't fix after hours
+- Always give Cynthia's name as the person who will follow up
 - Focus on next steps and when they'll hear back
 
 Move to end_call after providing info or taking their callback number."""
