@@ -690,6 +690,1021 @@
       "location": "Boulder"
     }
   },
-  "last_sync": "2026-01-21T21:27:51.762314",
-  "notes": "Caregivers with location data for shift filling. Clients from WellSky export."
+  "last_sync": "2026-01-21T21:36:16.437799",
+  "notes": "Caregivers with location data for shift filling. Clients from WellSky export.",
+  "shifts": [
+    {
+      "caregiver_name": "Angela Atteberry",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-21T07:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Halie Gutierrez",
+      "client_name": "Robert Brown",
+      "start_time": "2026-01-21T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Serenity Dorrance",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-21T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Ladonna Damron",
+      "client_name": "Marthe Schwartz",
+      "start_time": "2026-01-21T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Jennifer Jeffers",
+      "client_name": "Richard Northrop",
+      "start_time": "2026-01-21T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": null,
+      "pay_method": "Not Payable"
+    },
+    {
+      "caregiver_name": "Brandy Edwards",
+      "client_name": "Richard Thompkins",
+      "start_time": "2026-01-21T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Sarah Trujillo",
+      "client_name": "Mark Diamond",
+      "start_time": "2026-01-21T08:30:00",
+      "status": "Scheduled",
+      "pay_amount": 21.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jennifer Jeffers",
+      "client_name": "Fred DeHerrera",
+      "start_time": "2026-01-21T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": null,
+      "pay_method": "Not Payable"
+    },
+    {
+      "caregiver_name": "Lisa Keezer",
+      "client_name": "Janna Segal",
+      "start_time": "2026-01-21T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Chenelle Sandoval",
+      "client_name": "Nasim Vaghoo",
+      "start_time": "2026-01-21T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Liza Martinez",
+      "client_name": "Gerald Hostetler",
+      "start_time": "2026-01-21T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 22.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Karen Lieljuris",
+      "client_name": "Tim and Barbara Spencer",
+      "start_time": "2026-01-21T11:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Kristin Sinatra",
+      "client_name": "Jadwiga \"Geeg\" Kepa",
+      "start_time": "2026-01-21T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Sheila Sandoval",
+      "client_name": "Nancy Jo Boggs",
+      "start_time": "2026-01-21T12:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "Ralph Schoenbauer",
+      "start_time": "2026-01-21T15:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Addison Hairfield",
+      "client_name": "Gerald Hostetler",
+      "start_time": "2026-01-21T17:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Karen Lieljuris",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-21T19:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-22T07:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-22T07:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Diana Aldan-Muna",
+      "client_name": "Barb Wolff",
+      "start_time": "2026-01-22T07:30:00",
+      "status": "Cancelled by Client",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Kristin Sinatra",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-22T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Liza Martinez",
+      "client_name": "Gerald Hostetler",
+      "start_time": "2026-01-22T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 22.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Tamara Ritchie",
+      "client_name": "Grant Allred",
+      "start_time": "2026-01-22T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Destine Wood",
+      "client_name": "Therese Schreiner",
+      "start_time": "2026-01-22T09:00:00",
+      "status": "Cancelled by Client",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jean Knoefler",
+      "client_name": "Shirley Rosell - AAA",
+      "start_time": "2026-01-22T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Beth Gourley",
+      "client_name": "Ronald Duncan",
+      "start_time": "2026-01-22T10:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Beth Gourley",
+      "client_name": "Ronald Duncan",
+      "start_time": "2026-01-22T11:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jennifer Jeffers",
+      "client_name": "William Crowley",
+      "start_time": "2026-01-22T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": null,
+      "pay_method": "Not Payable"
+    },
+    {
+      "caregiver_name": "Zipporah \"Lisa\" Wambugu",
+      "client_name": "Wayne Gill",
+      "start_time": "2026-01-22T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Michelle Kearney",
+      "client_name": "Leslie Capell",
+      "start_time": "2026-01-22T13:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Heather Paillette",
+      "client_name": "Gerald Hostetler",
+      "start_time": "2026-01-22T17:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Angela Atteberry",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-22T19:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Andrea Boone",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-23T07:00:00",
+      "status": "Scheduled",
+      "pay_amount": 22.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Mary Mosha",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-23T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Chenelle Sandoval",
+      "client_name": "Marthe Schwartz",
+      "start_time": "2026-01-23T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Destine Wood",
+      "client_name": "Steve Kohli",
+      "start_time": "2026-01-23T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Karen Lieljuris",
+      "client_name": "Herbert Burley AAA",
+      "start_time": "2026-01-23T11:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Michelle Kearney",
+      "client_name": "Charles Besch - AAA",
+      "start_time": "2026-01-23T11:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Halie Gutierrez",
+      "client_name": "Christine Brock - AAA",
+      "start_time": "2026-01-23T13:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Karen Lieljuris",
+      "client_name": "Ianina Rybitska - AAA",
+      "start_time": "2026-01-23T13:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Dennis Muna",
+      "client_name": "James Bolt",
+      "start_time": "2026-01-23T13:00:00",
+      "status": "Scheduled",
+      "pay_amount": 24.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Sarah Trujillo",
+      "client_name": "Mark Diamond",
+      "start_time": "2026-01-23T13:30:00",
+      "status": "Scheduled",
+      "pay_amount": 21.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "Ralph Schoenbauer",
+      "start_time": "2026-01-23T15:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Destine Wood",
+      "client_name": "Richard Northrop",
+      "start_time": "2026-01-23T16:30:00",
+      "status": "Scheduled",
+      "pay_amount": 24.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Gloria Kvapil",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-23T19:00:00",
+      "status": "Scheduled",
+      "pay_amount": 22.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Gloria Kvapil",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-24T07:00:00",
+      "status": "Scheduled",
+      "pay_amount": 22.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Ann Marie Grant-Rose",
+      "client_name": "Marthe Schwartz",
+      "start_time": "2026-01-24T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 354.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Kristin Sinatra",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-24T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": null,
+      "pay_method": "Not Payable"
+    },
+    {
+      "caregiver_name": "Angela Atteberry",
+      "client_name": "Richard Thompkins",
+      "start_time": "2026-01-24T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Sarah Trujillo",
+      "client_name": "Mark Diamond",
+      "start_time": "2026-01-24T08:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Lisa Keezer",
+      "client_name": "Janna Segal",
+      "start_time": "2026-01-24T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Tamara Ritchie",
+      "client_name": "Grant Allred",
+      "start_time": "2026-01-24T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "JaNay Crawford",
+      "client_name": "Grant Allred",
+      "start_time": "2026-01-24T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Courtney Truesdell",
+      "client_name": "Judy Tuetken AAA",
+      "start_time": "2026-01-24T11:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Christina Garcia",
+      "client_name": "Ruth Ratynski",
+      "start_time": "2026-01-24T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 22.63,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Zipporah \"Lisa\" Wambugu",
+      "client_name": "Wayne Gill",
+      "start_time": "2026-01-24T14:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Racheal Wambui",
+      "client_name": "Ralph Schoenbauer",
+      "start_time": "2026-01-24T16:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Courtney Truesdell",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-25T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Angela Oborne",
+      "client_name": "Richard Thompkins",
+      "start_time": "2026-01-25T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Karen Lieljuris",
+      "client_name": "Tim and Barbara Spencer",
+      "start_time": "2026-01-25T11:30:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Gloria Kvapil",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-26T07:00:00",
+      "status": "Pending Confirmation",
+      "pay_amount": 22.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jennifer Clinkscales",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-26T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Chenelle Sandoval",
+      "client_name": "Marthe Schwartz",
+      "start_time": "2026-01-26T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Sarah Trujillo",
+      "client_name": "Mark Diamond",
+      "start_time": "2026-01-26T08:30:00",
+      "status": "Scheduled",
+      "pay_amount": 21.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Diana Aldan-Muna",
+      "client_name": "Barb Wolff",
+      "start_time": "2026-01-26T08:30:00",
+      "status": "Cancelled by Client",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Michelle Kearney",
+      "client_name": "Leslie Capell",
+      "start_time": "2026-01-26T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "Fred DeHerrera",
+      "start_time": "2026-01-26T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Addison Hairfield",
+      "client_name": "Betty Jean Lipsey AAA",
+      "start_time": "2026-01-26T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Addison Hairfield",
+      "client_name": "Betty Jean Lipsey AAA",
+      "start_time": "2026-01-26T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Destine Wood",
+      "client_name": "Richard Northrop",
+      "start_time": "2026-01-26T13:30:00",
+      "status": "Scheduled",
+      "pay_amount": 24.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "Ralph Schoenbauer",
+      "start_time": "2026-01-26T15:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Anissa Loran",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-26T19:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Nicole Yonkers",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-27T07:30:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Beth Martin",
+      "client_name": "Richard Thompkins",
+      "start_time": "2026-01-27T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "John Hartling",
+      "start_time": "2026-01-27T08:00:00",
+      "status": "Pending Confirmation",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "John Hartling",
+      "start_time": "2026-01-27T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 22.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "SIRIPRAPA PRATOOMCHAI",
+      "client_name": "Virginia Johnson",
+      "start_time": "2026-01-27T08:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Destine Wood",
+      "client_name": "Therese Schreiner",
+      "start_time": "2026-01-27T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "JaNay Crawford",
+      "client_name": "Grant Allred",
+      "start_time": "2026-01-27T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jean Knoefler",
+      "client_name": "Rodney Albertson",
+      "start_time": "2026-01-27T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Kristin Sinatra",
+      "client_name": "Wayne Gill",
+      "start_time": "2026-01-27T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Brandy Edwards",
+      "client_name": "Gary Jackson",
+      "start_time": "2026-01-27T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Beth Gourley",
+      "client_name": "Ronald Duncan",
+      "start_time": "2026-01-27T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Addison Hairfield",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-27T19:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Nicole Yonkers",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-28T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "SIRIPRAPA PRATOOMCHAI",
+      "client_name": "Virginia Johnson",
+      "start_time": "2026-01-28T08:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Destine Wood",
+      "client_name": "Therese Schreiner",
+      "start_time": "2026-01-28T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Anissa Loran",
+      "client_name": "Janna Segal",
+      "start_time": "2026-01-28T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jean Knoefler",
+      "client_name": "JoAnne Jones - AAA",
+      "start_time": "2026-01-28T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jean Knoefler",
+      "client_name": "JoAnne Jones - AAA",
+      "start_time": "2026-01-28T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Ianina Rybitska - AAA",
+      "start_time": "2026-01-28T13:00:00",
+      "status": "Open Shift",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Karen Lieljuris",
+      "client_name": "Susan Duchin",
+      "start_time": "2026-01-28T19:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Diana Aldan-Muna",
+      "client_name": "Barb Wolff",
+      "start_time": "2026-01-29T07:30:00",
+      "status": "Cancelled by Client",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Destine Wood",
+      "client_name": "Therese Schreiner",
+      "start_time": "2026-01-29T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Zipporah \"Lisa\" Wambugu",
+      "client_name": "Wayne Gill",
+      "start_time": "2026-01-29T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Beth Gourley",
+      "client_name": "Ronald Duncan",
+      "start_time": "2026-01-29T10:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jean Knoefler",
+      "client_name": "Margot Brown - AAA",
+      "start_time": "2026-01-29T11:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Michelle Kearney",
+      "client_name": "Leslie Capell",
+      "start_time": "2026-01-29T12:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Chenelle Sandoval",
+      "client_name": "Marthe Schwartz",
+      "start_time": "2026-01-30T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "SIRIPRAPA PRATOOMCHAI",
+      "client_name": "Virginia Johnson",
+      "start_time": "2026-01-30T08:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Charles Besch - AAA",
+      "start_time": "2026-01-30T10:30:00",
+      "status": "Open Shift",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Michelle Kearney",
+      "client_name": "Charles Besch - AAA",
+      "start_time": "2026-01-30T10:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Halie Gutierrez",
+      "client_name": "Christine Brock - AAA",
+      "start_time": "2026-01-30T13:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Destine Wood",
+      "client_name": "Richard Northrop",
+      "start_time": "2026-01-30T13:30:00",
+      "status": "Scheduled",
+      "pay_amount": 24.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Danielle Garcia",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-31T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Mary Mosha",
+      "client_name": "Preston Hill",
+      "start_time": "2026-01-31T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "SIRIPRAPA PRATOOMCHAI",
+      "client_name": "Virginia Johnson",
+      "start_time": "2026-01-31T08:30:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Ladonna Damron",
+      "client_name": "Janna Segal",
+      "start_time": "2026-01-31T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Wayne Gill",
+      "start_time": "2026-01-31T10:00:00",
+      "status": "Open Shift",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Jean Knoefler",
+      "client_name": "JoAnne Jones - AAA",
+      "start_time": "2026-01-31T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Karen Lieljuris",
+      "client_name": "Ianina Rybitska - AAA",
+      "start_time": "2026-01-31T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 19.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Diana Aldan-Muna",
+      "client_name": "Barb Wolff",
+      "start_time": "2026-02-02T08:30:00",
+      "status": "Pending Confirmation",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Michelle Kearney",
+      "client_name": "Leslie Capell",
+      "start_time": "2026-02-02T09:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Melissa Romero",
+      "client_name": "Don and Jane Martin",
+      "start_time": "2026-02-02T10:15:00",
+      "status": "Scheduled",
+      "pay_amount": 22.5,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Serenity Dorrance",
+      "client_name": "Preston Hill",
+      "start_time": "2026-02-03T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": "Dina Castaneda Ortega",
+      "client_name": "John Hartling",
+      "start_time": "2026-02-03T08:00:00",
+      "status": "Scheduled",
+      "pay_amount": 22.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Wayne Gill",
+      "start_time": "2026-02-03T10:00:00",
+      "status": "Open Shift",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Melissa Romero",
+      "client_name": "Jadwiga \"Geeg\" Kepa",
+      "start_time": "2026-02-04T12:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Diana Aldan-Muna",
+      "client_name": "Barb Wolff",
+      "start_time": "2026-02-05T07:30:00",
+      "status": "Pending Confirmation",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Preston Hill",
+      "start_time": "2026-02-05T08:00:00",
+      "status": "Open Shift",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Preston Hill",
+      "start_time": "2026-02-07T08:00:00",
+      "status": "Open Shift",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Grant Allred",
+      "start_time": "2026-02-07T09:00:00",
+      "status": "Open Shift",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": "Danielle Garcia",
+      "client_name": "Wayne Gill",
+      "start_time": "2026-02-07T10:00:00",
+      "status": "Scheduled",
+      "pay_amount": 20.0,
+      "pay_method": "Hourly"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Preston Hill",
+      "start_time": "2026-02-10T08:00:00",
+      "status": "Open Shift",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Preston Hill",
+      "start_time": "2026-02-11T08:00:00",
+      "status": "Open Shift",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    },
+    {
+      "caregiver_name": NaN,
+      "client_name": "Preston Hill",
+      "start_time": "2026-02-14T08:00:00",
+      "status": "Open Shift",
+      "pay_amount": 330.0,
+      "pay_method": "Live In"
+    }
+  ],
+  "sync_stats": {
+    "caregivers_count": 54,
+    "clients_count": 51,
+    "shifts_count": 126
+  }
 }
