@@ -251,56 +251,86 @@ async def verify_retell_signature(
 
 
 # =============================================================================
-# Contacts Cache - Check this FIRST before hitting WellSky API
+# Database Connection - Enterprise-grade data storage
+# =============================================================================
+
+# Import database module (lazy initialization)
+_gigi_db = None
+
+def _get_db():
+    """Get the Gigi database instance (lazy initialization)."""
+    global _gigi_db
+    if _gigi_db is None:
+        try:
+            from .database import gigi_db
+            gigi_db.initialize()
+            _gigi_db = gigi_db
+            logger.info("Gigi database initialized")
+        except Exception as e:
+            logger.error(f"Failed to initialize Gigi database: {e}")
+            _gigi_db = None
+    return _gigi_db
+
+
+# =============================================================================
+# Contacts Cache - Fallback to JSON file if database unavailable
 # =============================================================================
 
 CONTACTS_CACHE_FILE = os.path.join(os.path.dirname(__file__), "contacts_cache.json")
 _contacts_cache = None
 _cache_load_time = None
-CACHE_REFRESH_HOURS = 24  # Reload cache from file every 24 hours
+CACHE_REFRESH_HOURS = 24
 
 def _load_contacts_cache() -> Dict[str, Any]:
-    """Load contacts cache from file. Cache is refreshed from file every 24 hours."""
+    """Load contacts cache from JSON file (fallback if database unavailable)."""
     global _contacts_cache, _cache_load_time
 
     now = datetime.now()
 
-    # Return cached data if still fresh
     if _contacts_cache and _cache_load_time:
         hours_since_load = (now - _cache_load_time).total_seconds() / 3600
         if hours_since_load < CACHE_REFRESH_HOURS:
             return _contacts_cache
 
-    # Load from file
     try:
         if os.path.exists(CONTACTS_CACHE_FILE):
             with open(CONTACTS_CACHE_FILE, 'r') as f:
                 _contacts_cache = json.load(f)
                 _cache_load_time = now
-                logger.info(f"Loaded contacts cache: {len(_contacts_cache.get('caregivers', {}))} caregivers, {len(_contacts_cache.get('clients', {}))} clients")
+                logger.info(f"Loaded JSON cache fallback: {len(_contacts_cache.get('caregivers', {}))} caregivers")
                 return _contacts_cache
     except Exception as e:
-        logger.error(f"Error loading contacts cache: {e}")
+        logger.error(f"Error loading JSON cache: {e}")
 
     return {"caregivers": {}, "clients": {}}
 
 
 def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
     """
-    Look up a phone number in the local cache.
+    Look up a phone number - checks DATABASE first, falls back to JSON cache.
     Returns dict with 'type' (caregiver/client), 'name', 'status' if found.
-    Returns None if not in cache.
+    Returns None if not found.
     """
-    cache = _load_contacts_cache()
-
-    # Normalize phone to 10 digits
     clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
 
-    # Check caregivers first (more common callers)
+    # Try database first (enterprise solution)
+    db = _get_db()
+    if db:
+        try:
+            result = db.lookup_caller(clean_phone)
+            if result:
+                logger.info(f"DB HIT: Found {result.get('type')} {result.get('name')} for {clean_phone}")
+                return result
+        except Exception as e:
+            logger.warning(f"Database lookup failed, falling back to cache: {e}")
+
+    # Fallback to JSON cache
+    cache = _load_contacts_cache()
+
     caregivers = cache.get("caregivers", {})
     if clean_phone in caregivers:
         cg = caregivers[clean_phone]
-        logger.info(f"Cache HIT: Found caregiver {cg.get('name')} for phone {clean_phone}")
+        logger.info(f"JSON Cache HIT: Found caregiver {cg.get('name')} for {clean_phone}")
         return {
             "type": "caregiver",
             "name": cg.get("name"),
@@ -308,11 +338,10 @@ def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
             "phone": clean_phone
         }
 
-    # Check clients
     clients = cache.get("clients", {})
     if clean_phone in clients:
         cl = clients[clean_phone]
-        logger.info(f"Cache HIT: Found client {cl.get('name')} for phone {clean_phone}")
+        logger.info(f"JSON Cache HIT: Found client {cl.get('name')} for {clean_phone}")
         return {
             "type": "client",
             "name": cl.get("name"),
@@ -321,7 +350,7 @@ def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
             "location": cl.get("location")
         }
 
-    logger.info(f"Cache MISS: Phone {clean_phone} not in cache")
+    logger.info(f"MISS: Phone {clean_phone} not found in database or cache")
     return None
 
 
@@ -417,6 +446,7 @@ def _get_client_location(client_name: str) -> Optional[str]:
 def _is_caregiver_available(caregiver_name: str, shift_date: datetime = None) -> bool:
     """
     Check if a caregiver is available (not blocked by unavailability).
+    Uses DATABASE first, falls back to JSON cache.
 
     Args:
         caregiver_name: The caregiver's name
@@ -425,28 +455,34 @@ def _is_caregiver_available(caregiver_name: str, shift_date: datetime = None) ->
     Returns:
         True if available, False if blocked by unavailability
     """
+    shift_date = shift_date or datetime.now()
+
+    # Try database first
+    db = _get_db()
+    if db:
+        try:
+            return db.is_caregiver_available(caregiver_name, shift_date)
+        except Exception as e:
+            logger.warning(f"DB availability check failed: {e}")
+
+    # Fallback to JSON cache
     cache = _load_contacts_cache()
     unavailability = cache.get("unavailability", [])
 
     if not unavailability:
-        return True  # No blocks = available
+        return True
 
     name_lower = caregiver_name.lower().strip()
-    shift_date = shift_date or datetime.now()
 
     for block in unavailability:
         block_name = block.get("caregiver_name", "").lower()
         if name_lower not in block_name and block_name not in name_lower:
             continue
 
-        # Found a block for this caregiver - check if it applies
         desc = block.get("description", "").lower()
 
-        # Check for "all day" blocks on specific dates
         if "occurs once all day on" in desc:
             try:
-                # Extract date like "01/22/2026"
-                import re
                 date_match = re.search(r'(\d{2}/\d{2}/\d{4})', desc)
                 if date_match:
                     block_date = datetime.strptime(date_match.group(1), "%m/%d/%Y")
@@ -456,7 +492,6 @@ def _is_caregiver_available(caregiver_name: str, shift_date: datetime = None) ->
             except Exception:
                 pass
 
-        # Check for recurring weekly blocks
         if "repeats weekly" in desc:
             days_in_desc = []
             for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
@@ -474,6 +509,7 @@ def _is_caregiver_available(caregiver_name: str, shift_date: datetime = None) ->
 def _get_available_caregivers_for_shift(location: str, shift_time: datetime = None) -> List[Dict[str, Any]]:
     """
     Get caregivers who are available for a shift at a specific location/time.
+    Uses DATABASE first for enterprise-grade reliability.
 
     Filters out:
     - Caregivers in different locations
@@ -489,18 +525,29 @@ def _get_available_caregivers_for_shift(location: str, shift_time: datetime = No
     Returns:
         List of available caregivers sorted by outreach priority
     """
+    shift_time = shift_time or datetime.now()
+
+    # Try database first
+    db = _get_db()
+    if db:
+        try:
+            available = db.get_available_caregivers(location, shift_time)
+            logger.info(f"DB: Found {len(available)} available caregivers in {location}")
+            return available
+        except Exception as e:
+            logger.warning(f"DB get_available_caregivers failed: {e}")
+
+    # Fallback to JSON cache
     all_caregivers = _get_caregivers_by_location(location)
     available = []
 
     for cg in all_caregivers:
         name = cg.get("name", "")
 
-        # Check availability
         if not _is_caregiver_available(name, shift_time):
             logger.info(f"Skipping {name} - has unavailability block")
             continue
 
-        # Check status
         if cg.get("status", "active") != "active":
             logger.info(f"Skipping {name} - not active")
             continue
