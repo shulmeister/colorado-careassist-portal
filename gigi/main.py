@@ -1,8 +1,8 @@
 """
-Gigi - Colorado CareAssist After-Hours AI Agent
+Gigi - Colorado CareAssist AI Voice Assistant
 Powered by Retell AI
 
-Gigi handles after-hours calls from both Caregivers and Clients:
+Gigi is a real team member who answers calls when the office is closed or when staff cannot answer:
 - Caregivers: Call-outs, schedule questions, shift confirmations
 - Clients: Service requests, satisfaction issues, scheduling
 
@@ -1792,7 +1792,7 @@ if not GEMINI_API_KEY:
     logger.warning("GEMINI_API_KEY not found in environment. AI features will be disabled.")
 
 # SMS Response prompt for Gigi
-SMS_SYSTEM_PROMPT = """You are Gigi, the after-hours AI assistant for Colorado Care Assist, a non-medical home care agency.
+SMS_SYSTEM_PROMPT = """You are Gigi, a real team member at Colorado Care Assist, a non-medical home care agency.
 
 You are responding to TEXT MESSAGES from caregivers. Keep responses:
 - BRIEF (2-3 sentences max) - this is SMS

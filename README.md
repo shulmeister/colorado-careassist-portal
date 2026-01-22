@@ -27,9 +27,9 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 - **Tech**: FastAPI, Jinja2, PostgreSQL
 - **Purpose**: Central launchpad with tiles that link to other apps
 
-### GIGI - After-Hours AI Agent
+### GIGI - AI Voice Assistant
 
-Gigi is the AI-powered after-hours assistant that handles caregiver and client communications when the office is closed.
+Gigi is a real team member at Colorado Care Assist - an AI-powered voice assistant who answers calls when the office is closed or when staff cannot answer. She handles caregiver and client communications with calm, capable professionalism.
 
 - **Location**: `gigi/` folder within portal repo
 - **Live URL**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/
@@ -154,7 +154,7 @@ git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
 ```
 colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 ├── .git/                            # Portal's git repo
-├── gigi/                            # GIGI AI AGENT (after-hours assistant)
+├── gigi/                            # GIGI AI AGENT (full-time voice assistant)
 │   ├── main.py                      # FastAPI app (voice + SMS)
 │   ├── knowledge_base.md            # Voice agent knowledge base
 │   └── system_prompt.txt            # Voice agent personality

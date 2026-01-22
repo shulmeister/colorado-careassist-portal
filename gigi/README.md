@@ -1,6 +1,6 @@
-# Gigi - After-Hours AI Agent
+# Gigi - AI Voice Assistant
 
-Gigi is the AI-powered after-hours assistant for Colorado Care Assist. She handles caregiver and client communications when the office is closed (evenings, weekends, holidays).
+Gigi is a real team member at Colorado Care Assist - an AI-powered voice assistant who answers calls when the office is closed or when staff cannot answer. She handles caregiver and client communications with calm, capable professionalism.
 
 ## Capabilities
 

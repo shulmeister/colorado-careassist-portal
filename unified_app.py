@@ -7,7 +7,7 @@ Architecture:
 - /sales/*             → Sales CRM (FastAPI) - mounted inside portal
 - /recruiting/*        → Recruiter dashboard (Flask) - mounted inside portal
 - /payroll             → Payroll converter
-- /gigi/*              → Gigi AI Agent (Retell) - after-hours assistant
+- /gigi/*              → Gigi AI Agent (Retell) - voice assistant
 - /powderpulse/*       → PowderPulse ski weather app
 """
 import os
@@ -201,7 +201,7 @@ except Exception as e:
     logger.error(f"❌ Failed to set up Liftie proxy: {e}")
 
 # ==================== MOUNT GIGI AI AGENT ====================
-# Gigi is the after-hours AI assistant powered by Retell AI
+# Gigi is the AI voice assistant powered by Retell AI
 try:
     gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
     if os.path.exists(gigi_path):

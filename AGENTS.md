@@ -13,7 +13,7 @@
 ```
 colorado-careassist-portal/          ← THE HUB (this repo)
 ├── portal_app.py                    ← Main FastAPI application
-├── gigi/                            ← GIGI AI AGENT (after-hours assistant)
+├── gigi/                            ← GIGI AI AGENT (full-time voice assistant)
 │   ├── main.py                      ← Gigi FastAPI app (voice + SMS)
 │   ├── knowledge_base.md            ← Gigi's knowledge base
 │   └── system_prompt.txt            ← Voice agent system prompt
@@ -33,11 +33,11 @@ colorado-careassist-portal/          ← THE HUB (this repo)
 
 ---
 
-## 2. GIGI - After-Hours AI Agent
+## 2. GIGI - AI Voice Assistant
 
 ### What is Gigi?
 
-Gigi is an AI-powered after-hours assistant that handles:
+Gigi is a real team member at Colorado Care Assist - an AI-powered voice assistant who answers calls when the office is closed or when staff cannot answer. She handles:
 - **Phone calls** via Retell AI voice agent
 - **SMS/Text messages** via RingCentral webhook integration
 - **Automated actions** via WellSky scheduling system
@@ -291,7 +291,7 @@ git add -A && git commit -m "Description" && git push origin main && git push he
 - Marketing API endpoints (`/api/marketing/*`)
 
 ### Gigi (`gigi/main.py`)
-- After-hours AI agent (~1400+ lines)
+- AI voice assistant (~1400+ lines)
 - Retell AI voice tool functions
 - SMS webhook handlers (RingCentral, Beetexting)
 - WellSky-aware intent detection and action
