@@ -91,6 +91,12 @@ try:
         app.mount("/sales", sales_app)
 
         logger.info("✅ Mounted Sales Dashboard at /sales")
+
+        # Restore root path to front of sys.path so portal's services.marketing imports work
+        if root_path in sys.path:
+            sys.path.remove(root_path)
+        sys.path.insert(0, root_path)
+        logger.info("✅ Restored root path for services imports")
     else:
         logger.warning("⚠️  Sales dashboard not found")
 except Exception as e:

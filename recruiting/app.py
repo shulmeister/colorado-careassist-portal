@@ -859,6 +859,9 @@ def index():
                     <p>Manage your lead pipeline and track recruitment success</p>
                 </div>
                 <div class="d-flex gap-2">
+                    <a href="/" class="btn" style="background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.35); color: #dbeafe;">
+                        <i class="fas fa-arrow-left"></i> Back to Portal
+                    </a>
                     <button class="btn upload-btn" id="addLeadBtn">
                         <i class="fas fa-plus"></i> Add Lead
                     </button>
