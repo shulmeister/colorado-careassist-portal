@@ -843,17 +843,18 @@ SAFETY FIRST:
 - Medical emergency → "Call 911 right now"
 
 THEN:
-1. Acknowledge ONCE: "I can hear how worried you are."
-2. Summarize: "So your mom is [confused/alone] and you want to make sure she's okay."
-3. Escalate: "I'm going to have our care team call you within 15 minutes."
+1. Acknowledge ONCE: "I can hear how worried you are, and you're doing the right thing calling."
+2. Give Cynthia's name: "Let me get Cynthia Pointe, our Care Manager, to call you right away."
+3. Explain what Cynthia will do: "She can look at the schedule and make sure your mom is taken care of."
 4. Get their number
-5. Close: "You did the right thing by calling. Someone will call you within 15 minutes."
+5. Close: "You did the right thing calling. Cynthia Pointe will call you at [number] within 15 minutes."
 
-=== KEY DIFFERENCE ===
-- WORRIED caller → "Our care team will call you within 15 minutes"
-- ANGRY caller → "Cynthia Pointe, our Care Manager, will call you personally within 15 minutes"
+=== CRITICAL RULE ===
+ALL family calls get Cynthia's name - worried OR angry.
+NEVER say "on-call manager" or "someone" or "care team."
+ALWAYS say "Cynthia Pointe, our Care Manager."
 
-Angry callers get Cynthia's name. Always."""
+Family members need to hear a real person's name. Always give Cynthia's name."""
             },
             "tools": [],
             "edges": [
@@ -862,7 +863,7 @@ Angry callers get Cynthia's name. Always."""
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Family member has been told Cynthia Pointe (or care team) will call within 15 minutes AND callback number confirmed"
+                        "prompt": "Family member has been told Cynthia Pointe will call within 15 minutes AND callback number confirmed"
                     }
                 }
             ]
