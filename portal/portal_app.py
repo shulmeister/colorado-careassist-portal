@@ -167,9 +167,11 @@ limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# Mount static files and templates
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static files and templates - use absolute paths
+_portal_dir = os.path.dirname(os.path.abspath(__file__))
+_root_dir = os.path.dirname(_portal_dir)
+templates = Jinja2Templates(directory=os.path.join(_portal_dir, "templates"))
+app.mount("/static", StaticFiles(directory=os.path.join(_root_dir, "static")), name="static")
 
 # 
 

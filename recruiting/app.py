@@ -2413,11 +2413,11 @@ def get_campaign_metrics(campaign_id, days=7):
         campaign = Campaign(campaign_id)
         
         # Get insights for the specified time period
-        if days >= 365:  # All time
-            # For all time, use a very wide date range (from campaign start to now)
-            print(f"Campaign {campaign_id} - Fetching ALL TIME metrics (wide date range)")
+        if days >= 365:  # All time (or 12 months)
+            # For all time, go back 13 months to ensure we capture full 12 months
             end_time = datetime.now()
-            start_time = datetime(2025, 1, 1)  # Start from beginning of 2025
+            start_time = end_time - timedelta(days=400)  # ~13 months back
+            print(f"Campaign {campaign_id} - Fetching ALL TIME metrics from {start_time.strftime('%Y-%m-%d')} to {end_time.strftime('%Y-%m-%d')}")
             
             try:
                 insights = campaign.get_insights(
