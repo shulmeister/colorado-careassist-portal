@@ -77,7 +77,7 @@ STYLE:
                 "text": """Greet the caller warmly with:
 "Hi, this is Gigi with Colorado Care Assist. How can I help you tonight?"
 
-IMMEDIATELY call verify_caller with phone number {{user_number}} to identify them.
+IMMEDIATELY call verify_caller with phone number {{from_number}} to identify them.
 
 AFTER VERIFY_CALLER RETURNS:
 - If caller is a known caregiver: "Thanks [Name], I see you in our system. What can I help you with?"
