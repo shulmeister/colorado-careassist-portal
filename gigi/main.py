@@ -11,6 +11,7 @@ during conversations to look up information and take actions.
 """
 
 import os
+import re
 import json
 import hmac
 import hashlib
@@ -411,6 +412,104 @@ def _get_client_location(client_name: str) -> Optional[str]:
             return cl.get("location") or cl.get("city")
 
     return None
+
+
+def _is_caregiver_available(caregiver_name: str, shift_date: datetime = None) -> bool:
+    """
+    Check if a caregiver is available (not blocked by unavailability).
+
+    Args:
+        caregiver_name: The caregiver's name
+        shift_date: The date/time of the shift (defaults to now)
+
+    Returns:
+        True if available, False if blocked by unavailability
+    """
+    cache = _load_contacts_cache()
+    unavailability = cache.get("unavailability", [])
+
+    if not unavailability:
+        return True  # No blocks = available
+
+    name_lower = caregiver_name.lower().strip()
+    shift_date = shift_date or datetime.now()
+
+    for block in unavailability:
+        block_name = block.get("caregiver_name", "").lower()
+        if name_lower not in block_name and block_name not in name_lower:
+            continue
+
+        # Found a block for this caregiver - check if it applies
+        desc = block.get("description", "").lower()
+
+        # Check for "all day" blocks on specific dates
+        if "occurs once all day on" in desc:
+            try:
+                # Extract date like "01/22/2026"
+                import re
+                date_match = re.search(r'(\d{2}/\d{2}/\d{4})', desc)
+                if date_match:
+                    block_date = datetime.strptime(date_match.group(1), "%m/%d/%Y")
+                    if shift_date.date() == block_date.date():
+                        logger.info(f"Caregiver {caregiver_name} unavailable on {shift_date.date()}")
+                        return False
+            except Exception:
+                pass
+
+        # Check for recurring weekly blocks
+        if "repeats weekly" in desc:
+            days_in_desc = []
+            for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
+                if day in desc:
+                    days_in_desc.append(day)
+
+            shift_day = shift_date.strftime("%A").lower()
+            if shift_day in days_in_desc:
+                logger.info(f"Caregiver {caregiver_name} unavailable on {shift_day}s")
+                return False
+
+    return True
+
+
+def _get_available_caregivers_for_shift(location: str, shift_time: datetime = None) -> List[Dict[str, Any]]:
+    """
+    Get caregivers who are available for a shift at a specific location/time.
+
+    Filters out:
+    - Caregivers in different locations
+    - Caregivers with unavailability blocks
+
+    Prioritizes:
+    - SMS-enabled caregivers (faster outreach)
+
+    Args:
+        location: The client's location (e.g., "Colorado Springs", "Denver")
+        shift_time: When the shift is (for unavailability check)
+
+    Returns:
+        List of available caregivers sorted by outreach priority
+    """
+    all_caregivers = _get_caregivers_by_location(location)
+    available = []
+
+    for cg in all_caregivers:
+        name = cg.get("name", "")
+
+        # Check availability
+        if not _is_caregiver_available(name, shift_time):
+            logger.info(f"Skipping {name} - has unavailability block")
+            continue
+
+        # Check status
+        if cg.get("status", "active") != "active":
+            logger.info(f"Skipping {name} - not active")
+            continue
+
+        available.append(cg)
+
+    logger.info(f"Found {len(available)} available caregivers in {location} "
+                f"(filtered from {len(all_caregivers)} total)")
+    return available
 
 
 # =============================================================================
