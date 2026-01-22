@@ -250,7 +250,82 @@ async def verify_retell_signature(
 
 
 # =============================================================================
-# WellSky Integration Helpers
+# Contacts Cache - Check this FIRST before hitting WellSky API
+# =============================================================================
+
+CONTACTS_CACHE_FILE = os.path.join(os.path.dirname(__file__), "contacts_cache.json")
+_contacts_cache = None
+_cache_load_time = None
+CACHE_REFRESH_HOURS = 24  # Reload cache from file every 24 hours
+
+def _load_contacts_cache() -> Dict[str, Any]:
+    """Load contacts cache from file. Cache is refreshed from file every 24 hours."""
+    global _contacts_cache, _cache_load_time
+
+    now = datetime.now()
+
+    # Return cached data if still fresh
+    if _contacts_cache and _cache_load_time:
+        hours_since_load = (now - _cache_load_time).total_seconds() / 3600
+        if hours_since_load < CACHE_REFRESH_HOURS:
+            return _contacts_cache
+
+    # Load from file
+    try:
+        if os.path.exists(CONTACTS_CACHE_FILE):
+            with open(CONTACTS_CACHE_FILE, 'r') as f:
+                _contacts_cache = json.load(f)
+                _cache_load_time = now
+                logger.info(f"Loaded contacts cache: {len(_contacts_cache.get('caregivers', {}))} caregivers, {len(_contacts_cache.get('clients', {}))} clients")
+                return _contacts_cache
+    except Exception as e:
+        logger.error(f"Error loading contacts cache: {e}")
+
+    return {"caregivers": {}, "clients": {}}
+
+
+def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
+    """
+    Look up a phone number in the local cache.
+    Returns dict with 'type' (caregiver/client), 'name', 'status' if found.
+    Returns None if not in cache.
+    """
+    cache = _load_contacts_cache()
+
+    # Normalize phone to 10 digits
+    clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+
+    # Check caregivers first (more common callers)
+    caregivers = cache.get("caregivers", {})
+    if clean_phone in caregivers:
+        cg = caregivers[clean_phone]
+        logger.info(f"Cache HIT: Found caregiver {cg.get('name')} for phone {clean_phone}")
+        return {
+            "type": "caregiver",
+            "name": cg.get("name"),
+            "status": cg.get("status", "active"),
+            "phone": clean_phone
+        }
+
+    # Check clients
+    clients = cache.get("clients", {})
+    if clean_phone in clients:
+        cl = clients[clean_phone]
+        logger.info(f"Cache HIT: Found client {cl.get('name')} for phone {clean_phone}")
+        return {
+            "type": "client",
+            "name": cl.get("name"),
+            "status": cl.get("status", "active"),
+            "phone": clean_phone,
+            "location": cl.get("location")
+        }
+
+    logger.info(f"Cache MISS: Phone {clean_phone} not in cache")
+    return None
+
+
+# =============================================================================
+# WellSky Integration Helpers (used as FALLBACK when not in cache)
 # =============================================================================
 
 async def _query_wellsky_caregiver(phone: str) -> Optional[Dict[str, Any]]:
@@ -510,10 +585,10 @@ async def _send_sms_ringcentral(to_phone: str, message: str) -> bool:
 
 async def verify_caller(phone_number: str) -> CallerInfo:
     """
-    Queries WellSky/Portal to identify if the caller is a Caregiver or Client.
+    Identifies if the caller is a Caregiver or Client.
 
-    This is the FIRST tool Gigi should call to understand who she's talking to.
-    The result determines which conversation path to follow.
+    PERFORMANCE: Checks local cache FIRST (instant), only falls back to
+    WellSky API if not found in cache. This saves API calls and is much faster.
 
     Args:
         phone_number: The caller's phone number (any format)
@@ -527,6 +602,32 @@ async def verify_caller(phone_number: str) -> CallerInfo:
     clean_phone = ''.join(filter(str.isdigit, phone_number))
     if len(clean_phone) == 11 and clean_phone.startswith('1'):
         clean_phone = clean_phone[1:]
+
+    # =========================================================================
+    # STEP 1: Check local cache FIRST (instant, no API call)
+    # =========================================================================
+    cached = _lookup_in_cache(clean_phone)
+    if cached:
+        if cached["type"] == "caregiver":
+            return CallerInfo(
+                caller_type=CallerType.CAREGIVER,
+                name=cached.get("name"),
+                phone=phone_number,
+                is_active=cached.get("status") == "active"
+            )
+        elif cached["type"] == "client":
+            return CallerInfo(
+                caller_type=CallerType.CLIENT,
+                name=cached.get("name"),
+                phone=phone_number,
+                is_active=cached.get("status") == "active",
+                additional_info={"location": cached.get("location")}
+            )
+
+    # =========================================================================
+    # STEP 2: Not in cache - fall back to WellSky API (slower)
+    # =========================================================================
+    logger.info(f"Phone {clean_phone} not in cache, checking WellSky...")
 
     # Check if caller is a caregiver
     caregiver = await _query_wellsky_caregiver(clean_phone)
