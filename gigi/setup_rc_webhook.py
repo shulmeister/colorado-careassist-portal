@@ -8,7 +8,7 @@ when someone sends her a direct message (like "gigi stop" or "gigi go").
 
 import os
 import json
-from ringcentral import SDK
+import requests
 
 # Configuration
 CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID")
@@ -30,28 +30,51 @@ print("=" * 60)
 print("SETTING UP RINGCENTRAL WEBHOOK FOR GIGI")
 print("=" * 60)
 
-# Initialize SDK
-sdk = SDK(CLIENT_ID, CLIENT_SECRET, SERVER_URL)
-platform = sdk.platform()
+# Get access token via JWT
+print("\nAuthenticating...")
+auth_response = requests.post(
+    f"{SERVER_URL}/restapi/oauth/token",
+    data={
+        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        "assertion": JWT_TOKEN,
+    },
+    auth=(CLIENT_ID, CLIENT_SECRET),
+    timeout=30
+)
 
-try:
-    platform.login(jwt=JWT_TOKEN)
-    print("Authenticated successfully")
-except Exception as e:
-    print(f"ERROR: Failed to authenticate: {e}")
+if auth_response.status_code != 200:
+    print(f"ERROR: Failed to authenticate: {auth_response.text}")
     exit(1)
 
+token_data = auth_response.json()
+access_token = token_data.get("access_token")
+print("Authenticated successfully")
+
+headers = {
+    "Authorization": f"Bearer {access_token}",
+    "Content-Type": "application/json"
+}
+
 # Get current user info
-try:
-    user_info = platform.get("/restapi/v1.0/account/~/extension/~").json()
+user_response = requests.get(
+    f"{SERVER_URL}/restapi/v1.0/account/~/extension/~",
+    headers=headers,
+    timeout=30
+)
+if user_response.status_code == 200:
+    user_info = user_response.json()
     print(f"Logged in as: {user_info.get('name')} (ext {user_info.get('extensionNumber')})")
-except Exception as e:
-    print(f"WARNING: Could not get user info: {e}")
 
 # List existing subscriptions
 print("\nExisting subscriptions:")
-try:
-    subs = platform.get("/restapi/v1.0/subscription").json()
+subs_response = requests.get(
+    f"{SERVER_URL}/restapi/v1.0/subscription",
+    headers=headers,
+    timeout=30
+)
+
+if subs_response.status_code == 200:
+    subs = subs_response.json()
     existing_subs = subs.get("records", [])
     for sub in existing_subs:
         print(f"  - {sub.get('id')}: {sub.get('status')} - {sub.get('deliveryMode', {}).get('address', 'N/A')}")
@@ -60,33 +83,38 @@ try:
     for sub in existing_subs:
         if sub.get("deliveryMode", {}).get("address") == WEBHOOK_URL:
             print(f"  Deleting old subscription {sub.get('id')}...")
-            platform.delete(f"/restapi/v1.0/subscription/{sub.get('id')}")
-except Exception as e:
-    print(f"  Could not list subscriptions: {e}")
+            requests.delete(
+                f"{SERVER_URL}/restapi/v1.0/subscription/{sub.get('id')}",
+                headers=headers,
+                timeout=30
+            )
+else:
+    print(f"  Could not list subscriptions: {subs_response.status_code}")
 
 # Create new webhook subscription for team messaging
 print("\nCreating new webhook subscription...")
 
 # Subscribe to team messaging events
-# /restapi/v1.0/glip/posts - all posts in chats user is member of
-# /restapi/v1.0/account/~/extension/~/message-store/instant - instant messages
-
 event_filters = [
     "/restapi/v1.0/glip/posts",  # Team messaging posts
-    "/restapi/v1.0/account/~/extension/~/message-store/instant",  # Direct messages
 ]
 
-try:
-    response = platform.post("/restapi/v1.0/subscription", {
+sub_response = requests.post(
+    f"{SERVER_URL}/restapi/v1.0/subscription",
+    headers=headers,
+    json={
         "eventFilters": event_filters,
         "deliveryMode": {
             "transportType": "WebHook",
             "address": WEBHOOK_URL,
         },
         "expiresIn": 604800,  # 7 days (max)
-    })
+    },
+    timeout=30
+)
 
-    result = response.json()
+if sub_response.status_code in (200, 201):
+    result = sub_response.json()
     print(f"\nSubscription created!")
     print(f"  ID: {result.get('id')}")
     print(f"  Status: {result.get('status')}")
@@ -95,25 +123,9 @@ try:
     print(f"\nEvent filters:")
     for ef in result.get("eventFilters", []):
         print(f"    - {ef}")
-
-except Exception as e:
-    print(f"ERROR: Failed to create subscription: {e}")
-
-    # Try with just one event filter
-    print("\nTrying with simpler event filter...")
-    try:
-        response = platform.post("/restapi/v1.0/subscription", {
-            "eventFilters": ["/restapi/v1.0/glip/posts"],
-            "deliveryMode": {
-                "transportType": "WebHook",
-                "address": WEBHOOK_URL,
-            },
-            "expiresIn": 604800,
-        })
-        result = response.json()
-        print(f"Subscription created with ID: {result.get('id')}")
-    except Exception as e2:
-        print(f"ERROR: Still failed: {e2}")
+else:
+    print(f"ERROR: Failed to create subscription: {sub_response.status_code}")
+    print(sub_response.text[:500])
 
 print("\n" + "=" * 60)
 print("WEBHOOK SETUP COMPLETE")
