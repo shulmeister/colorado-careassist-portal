@@ -105,11 +105,19 @@ Then LISTEN to understand what they need and route accordingly."""
                     }
                 },
                 {
-                    "id": "to_unknown",
-                    "destination_node_id": "unknown_handler",
+                    "id": "to_prospective_client",
+                    "destination_node_id": "prospective_client_handler",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "The caller wants to START care services OR is looking for work OR is a new inquiry"
+                        "prompt": "The caller wants to START care services for themselves or a family member - they are a PROSPECTIVE CLIENT (not already receiving care)"
+                    }
+                },
+                {
+                    "id": "to_prospective_caregiver",
+                    "destination_node_id": "prospective_caregiver_handler",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "The caller is looking for work, wants a job, asking about employment, or applying to be a caregiver - they are a PROSPECTIVE CAREGIVER"
                     }
                 }
             ]
@@ -183,13 +191,51 @@ Do NOT repeat their issue back. Just route."""
                 "type": "prompt",
                 "text": """Handle the caregiver's call-out.
 
-SAY: "Got it. I've logged your call-out and we're reaching out for coverage. Feel better! Anything else?"
+1. First, call report_call_out to log the call-out
+2. Then call start_shift_filling_campaign to find coverage
+3. SAY: "Got it. I've logged your call-out and we're reaching out for coverage. Feel better! Anything else?"
 
 If they say no or bye: "Take care. Bye!"
 
 Keep it short. Do NOT keep asking questions."""
             },
-            "tools": [],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "report_call_out",
+                        "description": "Log a caregiver call-out and notify the team",
+                        "url": f"{WEBHOOK_BASE}/report_call_out",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "caregiver_name": {"type": "string", "description": "Name of the caregiver calling out"},
+                                "reason": {"type": "string", "description": "Reason for calling out (sick, emergency, etc)"},
+                                "shift_date": {"type": "string", "description": "Date of the shift (today, tomorrow, or specific date)"}
+                            },
+                            "required": ["caregiver_name", "reason"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "start_shift_filling_campaign",
+                        "description": "Start texting available caregivers to fill the open shift",
+                        "url": f"{WEBHOOK_BASE}/start_shift_filling_campaign",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "client_name": {"type": "string", "description": "Name of the client who needs coverage"},
+                                "shift_date": {"type": "string", "description": "Date of the shift"},
+                                "shift_time": {"type": "string", "description": "Time of the shift"},
+                                "urgency": {"type": "string", "enum": ["urgent", "normal"], "description": "How urgent is coverage needed"}
+                            },
+                            "required": ["client_name"]
+                        }
+                    }
+                }
+            ],
             "edges": [
                 {
                     "id": "callout_to_closing",
@@ -213,13 +259,33 @@ Keep it short. Do NOT keep asking questions."""
                 "type": "prompt",
                 "text": """Handle late notification.
 
-SAY: "Got it. I've notified the client. Drive safe! Anything else?"
+1. Ask how late they will be: "About how many minutes?"
+2. Call report_late to notify the client
+3. SAY: "Got it. I've notified the client. Drive safe! Anything else?"
 
 If they say no or bye: "Drive safe. Bye!"
 
 Keep it short."""
             },
-            "tools": [],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "report_late",
+                        "description": "Report that a caregiver will be late and notify the client",
+                        "url": f"{WEBHOOK_BASE}/report_late",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "caregiver_name": {"type": "string", "description": "Name of the caregiver who is late"},
+                                "delay_minutes": {"type": "integer", "description": "Estimated delay in minutes"},
+                                "reason": {"type": "string", "description": "Reason for being late (traffic, etc)"}
+                            },
+                            "required": ["caregiver_name", "delay_minutes"]
+                        }
+                    }
+                }
+            ],
             "edges": [
                 {
                     "id": "late_to_closing",
@@ -370,34 +436,37 @@ PRIORITY LEVELS:
 
 === CANCEL THREATS - IMMEDIATE ESCALATION ===
 If a client says "cancel," "we're done," "I'm going to find another agency," or anything similar:
-THIS IS A MAJOR ESCALATION. Give them a NAME and immediate action.
+1. Call log_client_issue with priority "urgent" and issue_type "complaint"
+2. Say: "I hear you, and I'm taking this seriously. I'm escalating this directly to Cynthia Pointe, our Care Manager. She will call you personally tomorrow morning before 9 AM."
 
-Say: "I hear you, and I'm taking this seriously. I'm escalating this directly to Cynthia, our Care Manager. She will call you personally tomorrow morning before 9 AM. I'm documenting everything you've told me - the late arrivals, the inconsistency, and your concerns. Cynthia will have all of this in front of her when she calls."
-
-If they want a name: "Cynthia Pointe is our Care Manager. She handles situations exactly like this."
-
-If they want a guaranteed time: "Cynthia will call you before 9 AM tomorrow morning. If for any reason she can't reach you, she'll keep trying until she does."
-
-If they ask "what about TONIGHT?":
-- "Let me check on tonight's situation." (Check if you have schedule info)
-- If no info: "I don't have tonight's schedule in front of me, but I'm going to have Cynthia or our on-call manager reach out within the hour to sort out tonight. You shouldn't have to sit there wondering."
-
-If they demand immediate resolution: "I understand you want this fixed now. I can't change tonight, but I CAN make sure the right person calls you within the hour to address what's happening right now. And Cynthia will call you tomorrow to fix this for good."
-
-=== STANDARD COMPLAINTS (not threatening to cancel) ===
+=== STANDARD COMPLAINTS ===
 1. Listen briefly to their concern
 2. Acknowledge ONCE: "I hear you."
 3. Call log_client_issue ONCE with priority based on severity
-4. SUMMARIZE what you logged
-5. Say: "This is marked as [urgent/high priority]. A supervisor will call you tomorrow morning before 9 AM."
-6. If they keep venting: "I understand. Everything is documented. Is there anything else tonight?"
-7. Close the call
-
-Say: "I've documented everything and marked this as urgent. Cynthia Pointe will call you tomorrow before 9 AM."
-
-NEVER use tools - just acknowledge verbally and give Cynthia's name."""
+4. Say: "I've documented everything and marked this as [urgent/high priority]. Cynthia Pointe will call you tomorrow before 9 AM."
+5. If they keep venting: "I understand. Everything is documented. Is there anything else tonight?"
+6. Close the call"""
             },
-            "tools": [],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "log_client_issue",
+                        "description": "Log a client complaint or concern for follow-up",
+                        "url": f"{WEBHOOK_BASE}/log_client_issue",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "client_name": {"type": "string", "description": "Name of the client"},
+                                "note": {"type": "string", "description": "Description of the issue or complaint"},
+                                "issue_type": {"type": "string", "enum": ["complaint", "schedule", "feedback", "general"], "description": "Type of issue"},
+                                "priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"], "description": "Priority level"}
+                            },
+                            "required": ["client_name", "note", "priority"]
+                        }
+                    }
+                }
+            ],
             "edges": [
                 {
                     "id": "complaint_to_end",
@@ -423,22 +492,56 @@ NEVER use tools - just acknowledge verbally and give Cynthia's name."""
 
 === MISSED VISIT / NO-SHOW (PRIORITY #1) ===
 If they say caregiver didn't show, no one came, or they're waiting alone:
-
-SAY IMMEDIATELY: "I'm so sorry no one came, [Name]. Let me work on getting someone to you tonight. Cynthia Pointe, our Care Manager, will call you within 15 minutes to arrange coverage. What's the best number to reach you?"
-
-Do NOT just promise a callback. LEAD with "getting someone to you tonight."
+1. Call get_client_schedule to check their schedule
+2. Call log_client_issue with priority "urgent"
+3. SAY: "I'm so sorry no one came. I'm messaging our scheduler right now and Cynthia Pointe will call you within 15 minutes to arrange coverage."
 
 === ROUTINE SCHEDULE QUESTION ===
-If they just want to know when their caregiver is coming (not a no-show):
-
-SAY: "Let me have Cynthia Pointe call you within 15 minutes to confirm your schedule. You're not forgotten."
+If they just want to know when their caregiver is coming:
+1. Call get_client_schedule to look up their shifts
+2. Tell them: "Your next visit is [date] at [time] with [caregiver name]."
+3. Ask: "Is there anything else?"
 
 === CLOSING ===
-After confirming callback:
-- "Cynthia will call you at [number] within 15 minutes. Hang tight."
-- Match their closing - if they say goodnight, you say goodnight."""
+After providing info: "Anything else I can help with?"
+Match their closing - if they say goodnight, you say goodnight."""
             },
-            "tools": [],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_client_schedule",
+                        "description": "Look up a client's upcoming visits and schedule",
+                        "url": f"{WEBHOOK_BASE}/get_client_schedule",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "client_name": {"type": "string", "description": "Name of the client"},
+                                "days_ahead": {"type": "integer", "description": "Number of days to look ahead (default 7)"}
+                            },
+                            "required": ["client_name"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "log_client_issue",
+                        "description": "Log a no-show or schedule issue for urgent follow-up",
+                        "url": f"{WEBHOOK_BASE}/log_client_issue",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "client_name": {"type": "string", "description": "Name of the client"},
+                                "note": {"type": "string", "description": "Description of the issue"},
+                                "issue_type": {"type": "string", "enum": ["complaint", "schedule", "feedback", "general"], "description": "Type of issue"},
+                                "priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"], "description": "Priority level"}
+                            },
+                            "required": ["client_name", "note", "priority"]
+                        }
+                    }
+                }
+            ],
             "edges": [
                 {
                     "id": "schedule_to_end",
@@ -462,18 +565,33 @@ After confirming callback:
                 "type": "prompt",
                 "text": """Handle the client's cancellation request.
 
-1. Confirm which visit: "Which visit would you like to cancel?"
-2. Ask the reason: "May I ask the reason?"
-3. Call cancel_client_visit ONCE.
-4. After success: "I've cancelled that visit. The caregiver will be notified."
-5. Ask: "Is there anything else?"
+1. Confirm which visit: "Which visit would you like to cancel - today's, tomorrow's?"
+2. Ask the reason briefly: "May I ask the reason?"
+3. Call cancel_client_visit ONCE with the details
+4. After success: "I've cancelled that visit. The caregiver has been notified."
+5. Ask: "Is there anything else I can help with?"
 
-Say: "I've noted your cancellation request. The caregiver will be notified and someone will confirm with you tomorrow."
-Ask: "Is there anything else?"
-
-NEVER use tools - just acknowledge verbally."""
+Keep it simple and efficient."""
             },
-            "tools": [],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "cancel_client_visit",
+                        "description": "Cancel a client's scheduled visit and notify the caregiver",
+                        "url": f"{WEBHOOK_BASE}/cancel_client_visit",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "client_name": {"type": "string", "description": "Name of the client"},
+                                "visit_date": {"type": "string", "description": "Date of the visit to cancel (today, tomorrow, or specific date)"},
+                                "reason": {"type": "string", "description": "Reason for cancellation"}
+                            },
+                            "required": ["client_name", "visit_date", "reason"]
+                        }
+                    }
+                }
+            ],
             "edges": [
                 {
                     "id": "cancel_to_closing",
@@ -487,27 +605,21 @@ NEVER use tools - just acknowledge verbally."""
         },
 
         # =====================================================================
-        # UNKNOWN HANDLER - Prospective clients/caregivers
+        # PROSPECTIVE CLIENT HANDLER - People looking for care services
         # =====================================================================
         {
-            "id": "unknown_handler",
+            "id": "prospective_client_handler",
             "type": "conversation",
-            "name": "Unknown Caller",
+            "name": "Prospective Client",
             "instruction": {
                 "type": "prompt",
-                "text": """You are helping a NEW caller interested in home care services.
-
-=== CRITICAL: NEVER REPEAT QUESTIONS ===
-If you already know they want NEW services, do NOT ask again. Move forward.
+                "text": """You are helping someone who is interested in HOME CARE SERVICES for themselves or a family member.
+They are NOT an existing client - they are looking to START services.
 
 === SIMPLE FLOW ===
 1. Get their NAME and CALLBACK NUMBER
 2. Confirm: "Perfect, [Name]. Our new client team will call you at [number] within 30 minutes to discuss care options."
 3. End warmly: "Thanks for calling Colorado Care Assist. Take care!"
-
-=== IF THEY SAY "SURE" OR "YES" OR "OK" ===
-This means they AGREE. Immediately confirm and close:
-"Perfect! Someone from our new client team will call you within 30 minutes. Thanks for calling Colorado Care Assist!"
 
 === RATES (if asked) ===
 $40/hour Colorado Springs | $43/hour Denver | $45/hour Boulder
@@ -520,16 +632,58 @@ Non-medical home care: bathing, dressing, meals, medication reminders, light hou
 "Yes, we accept VA and Tricare. We handle the paperwork."
 
 === CLOSING ===
-After confirming the callback, ALWAYS end with: "Thanks for calling Colorado Care Assist!" """
+After confirming the callback: "Thanks for calling Colorado Care Assist!" """
             },
             "tools": [],
             "edges": [
                 {
-                    "id": "unknown_to_end",
+                    "id": "prospective_client_to_end",
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "Caller's questions answered AND (callback confirmed OR caller declined and said goodbye)"
+                        "prompt": "Callback confirmed OR caller declined"
+                    }
+                }
+            ]
+        },
+
+        # =====================================================================
+        # PROSPECTIVE CAREGIVER HANDLER - People looking for jobs
+        # =====================================================================
+        {
+            "id": "prospective_caregiver_handler",
+            "type": "conversation",
+            "name": "Prospective Caregiver",
+            "instruction": {
+                "type": "prompt",
+                "text": """You are helping someone who is looking for EMPLOYMENT as a caregiver.
+They are NOT an existing employee - they want to APPLY for a job.
+
+=== SIMPLE FLOW ===
+1. Get their NAME and CALLBACK NUMBER
+2. Confirm: "Perfect, [Name]. Our recruiting team will call you at [number] within 30 minutes to discuss opportunities."
+3. End warmly: "Thanks for your interest in Colorado Care Assist!"
+
+=== REQUIREMENTS (if asked) ===
+- Valid driver's license and reliable transportation
+- Must pass background check
+- CNAs and experience preferred but not required - we provide training
+- Part-time and full-time positions available
+
+=== PAY (if asked) ===
+$18-22/hour depending on experience and certifications. Mileage reimbursement included.
+
+=== CLOSING ===
+After confirming the callback: "Thanks for your interest in Colorado Care Assist!" """
+            },
+            "tools": [],
+            "edges": [
+                {
+                    "id": "prospective_caregiver_to_end",
+                    "destination_node_id": "end_call",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Callback confirmed OR caller declined"
                     }
                 }
             ]

@@ -55,10 +55,17 @@ def main():
     if response.status_code == 200:
         print("SUCCESS! Conversation flow updated.")
         print("\nChanges made:")
-        print("  - unknown_handler: Removed tools (no more looping)")
-        print("  - family_handler: New node for family members")
-        print("  - Clearer routing from start_greeting")
-        print("\nRe-run your simulation tests in the Retell dashboard.")
+        print("  ROUTING:")
+        print("  - Split unknown_handler into prospective_client_handler and prospective_caregiver_handler")
+        print("  - Each caller type now has dedicated route: caregiver, client, family, prospective_client, prospective_caregiver")
+        print("")
+        print("  TOOLS:")
+        print("  - caregiver_callout: report_call_out, start_shift_filling_campaign")
+        print("  - caregiver_late: report_late")
+        print("  - client_complaint: log_client_issue")
+        print("  - client_schedule: get_client_schedule, log_client_issue")
+        print("  - client_cancel: cancel_client_visit")
+        print("\nIMPORTANT: Click 'Publish' in the Retell dashboard to activate changes!")
     else:
         print(f"ERROR: {response.text[:1000]}")
         return False

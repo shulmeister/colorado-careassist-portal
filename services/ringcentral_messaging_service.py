@@ -866,5 +866,159 @@ class RingCentralMessagingService:
         return status
 
 
+    # =========================================================================
+    # SENDING Messages to Team Chats (for Gigi notifications)
+    # =========================================================================
+
+    def send_message_to_chat(
+        self,
+        chat_name: str,
+        message: str,
+        attachments: List[Dict] = None
+    ) -> Dict[str, Any]:
+        """
+        Send a message to a team chat.
+
+        This is used by Gigi to notify the team about:
+        - Caregiver call-outs (to New Scheduler chat)
+        - Client complaints (direct to Cynthia)
+        - Urgent issues (to Jason)
+
+        Args:
+            chat_name: Name of the chat to send to (e.g., "New Scheduler", "Cynthia Pointe")
+            message: The message text to send
+            attachments: Optional list of attachment dicts
+
+        Returns:
+            Result dict with success status
+        """
+        # Find the target chat
+        chat = self.find_chat_by_name(chat_name)
+        if not chat:
+            logger.error(f"Cannot send message - chat '{chat_name}' not found")
+            return {
+                "success": False,
+                "error": f"Chat '{chat_name}' not found"
+            }
+
+        chat_id = chat.get("id")
+
+        try:
+            data = {"text": message}
+            if attachments:
+                data["attachments"] = attachments
+
+            result = self._api_request(f"/glip/chats/{chat_id}/posts", method="POST", params=data)
+
+            if result:
+                logger.info(f"Message sent to chat '{chat_name}': {message[:50]}...")
+                return {
+                    "success": True,
+                    "chat_name": chat_name,
+                    "message_id": result.get("id")
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "API request failed"
+                }
+
+        except Exception as e:
+            logger.error(f"Error sending message to chat '{chat_name}': {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    def send_direct_message(
+        self,
+        person_email: str,
+        message: str
+    ) -> Dict[str, Any]:
+        """
+        Send a direct message to a specific person by email.
+
+        Args:
+            person_email: Email address of the recipient
+            message: The message text
+
+        Returns:
+            Result dict with success status
+        """
+        try:
+            # First, find or create a 1:1 chat with this person
+            # RingCentral uses "conversations" for 1:1 chats
+            create_result = self._api_request(
+                "/glip/conversations",
+                method="POST",
+                params={"members": [{"email": person_email}]}
+            )
+
+            if not create_result:
+                return {
+                    "success": False,
+                    "error": f"Could not create conversation with {person_email}"
+                }
+
+            chat_id = create_result.get("id")
+
+            # Now send the message
+            data = {"text": message}
+            result = self._api_request(f"/glip/chats/{chat_id}/posts", method="POST", params=data)
+
+            if result:
+                logger.info(f"Direct message sent to {person_email}: {message[:50]}...")
+                return {
+                    "success": True,
+                    "recipient": person_email,
+                    "message_id": result.get("id")
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Failed to send message"
+                }
+
+        except Exception as e:
+            logger.error(f"Error sending direct message to {person_email}: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    def notify_scheduler_chat(self, message: str) -> Dict[str, Any]:
+        """
+        Send a notification to the New Scheduler chat.
+        Used by Gigi for shift-related notifications.
+        """
+        return self.send_message_to_chat("New Scheduler", message)
+
+    def notify_cynthia(self, message: str) -> Dict[str, Any]:
+        """
+        Send a notification directly to Cynthia Pointe.
+        Used by Gigi for client escalations and urgent issues.
+        """
+        # Try direct message first, fall back to chat
+        result = self.send_direct_message("cynthia@coloradocareassist.com", message)
+        if not result.get("success"):
+            # Fall back to finding her in a chat
+            return self.send_message_to_chat("Cynthia", message)
+        return result
+
+    def notify_jason(self, message: str) -> Dict[str, Any]:
+        """
+        Send a notification directly to Jason.
+        Used by Gigi for critical issues.
+        """
+        return self.send_direct_message("jason@coloradocareassist.com", message)
+
+    def notify_israt(self, message: str) -> Dict[str, Any]:
+        """
+        Send a notification directly to Israt (scheduler).
+        Used by Gigi for scheduling issues.
+        """
+        return self.send_direct_message("israt@coloradocareassist.com", message)
+
+
 # Singleton instance
 ringcentral_messaging_service = RingCentralMessagingService()

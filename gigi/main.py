@@ -37,6 +37,14 @@ except ImportError:
     wellsky = None
     WELLSKY_AVAILABLE = False
 
+# Import RingCentral messaging service for team notifications
+try:
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+    RC_MESSAGING_AVAILABLE = True
+except ImportError:
+    ringcentral_messaging_service = None
+    RC_MESSAGING_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -1013,6 +1021,9 @@ async def notify_escalation_contacts(issue_type: str, client_name: str, summary:
     """
     Notify Cynthia and Jason about urgent client escalations.
 
+    PRIMARY: RingCentral team messaging (like Slack - always checked)
+    BACKUP: RingCentral pager and SMS
+
     Args:
         issue_type: Type of issue (cancel_threat, complaint, safety, etc.)
         client_name: Name of the client
@@ -1022,27 +1033,52 @@ async def notify_escalation_contacts(issue_type: str, client_name: str, summary:
     Returns:
         True if at least one notification was sent
     """
-    if not OPERATIONS_SMS_ENABLED:
-        logger.info(f"[DISABLED] Would notify escalation contacts about: {issue_type} - {client_name}")
-        return False
-
     # Format the message
     if issue_type == "cancel_threat":
         message = f"🚨 CLIENT CANCEL THREAT: {client_name}\n{summary}\nGigi promised Cynthia will call before 9 AM."
     else:
         message = f"⚠️ URGENT CLIENT ISSUE: {client_name}\n{summary}\nPriority: {priority}"
 
-    # Send to both Cynthia (105) and Jason (101)
-    extensions = [ESCALATION_CYNTHIA_EXT, ESCALATION_JASON_EXT]
+    success = False
 
-    success = await _send_ringcentral_pager(extensions, message)
+    # =========================================================================
+    # PRIMARY: RingCentral Team Messaging (always checked, like Slack)
+    # =========================================================================
+    if RC_MESSAGING_AVAILABLE and ringcentral_messaging_service:
+        try:
+            # Send to Cynthia directly
+            cynthia_result = ringcentral_messaging_service.notify_cynthia(message)
+            if cynthia_result.get("success"):
+                logger.info(f"RingCentral message sent to Cynthia")
+                success = True
 
-    if success:
-        logger.info(f"Escalation notification sent to Cynthia ({ESCALATION_CYNTHIA_EXT}) and Jason ({ESCALATION_JASON_EXT})")
-    else:
-        # Fallback: try SMS to on-call manager
-        logger.warning("Pager failed - trying SMS to on-call manager")
-        success = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, message)
+            # Also notify Jason for urgent issues
+            if priority == "urgent" or issue_type == "cancel_threat":
+                jason_result = ringcentral_messaging_service.notify_jason(message)
+                if jason_result.get("success"):
+                    logger.info(f"RingCentral message sent to Jason")
+                    success = True
+        except Exception as e:
+            logger.error(f"RingCentral messaging failed: {e}")
+
+    # =========================================================================
+    # BACKUP: RingCentral Pager and SMS (if messaging fails or is disabled)
+    # =========================================================================
+    if not success and OPERATIONS_SMS_ENABLED:
+        # Try RingCentral pager
+        extensions = [ESCALATION_CYNTHIA_EXT, ESCALATION_JASON_EXT]
+        pager_success = await _send_ringcentral_pager(extensions, message)
+
+        if pager_success:
+            logger.info(f"Escalation pager sent to Cynthia ({ESCALATION_CYNTHIA_EXT}) and Jason ({ESCALATION_JASON_EXT})")
+            success = True
+        else:
+            # Final fallback: SMS to on-call manager
+            logger.warning("Pager failed - trying SMS to on-call manager")
+            success = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, message)
+
+    if not success:
+        logger.warning(f"[ALL CHANNELS FAILED] Could not notify about: {issue_type} - {client_name}")
 
     return success
 
@@ -1624,7 +1660,33 @@ async def report_call_out(
         logger.error(f"Error posting call-out to portal: {e}")
 
     # =========================================================================
-    # STEP 3: Also notify On-Call Manager as backup (only if SMS enabled)
+    # STEP 3: Notify New Scheduler chat via RingCentral (PRIMARY)
+    # =========================================================================
+    rc_message = (
+        f"📞 CALL-OUT from Gigi:\n"
+        f"• Caregiver: {caregiver_name}\n"
+        f"• Client: {client_name}\n"
+        f"• Shift: {shift_time}\n"
+        f"• Reason: {reason}\n"
+        f"• Action: {'Shift filling campaign started' if filling_result.success else 'Manual follow-up needed'}"
+    )
+
+    scheduler_notified = False
+    if RC_MESSAGING_AVAILABLE and ringcentral_messaging_service:
+        try:
+            result = ringcentral_messaging_service.notify_scheduler_chat(rc_message)
+            scheduler_notified = result.get("success", False)
+            if scheduler_notified:
+                logger.info(f"RingCentral notification sent to New Scheduler chat")
+            else:
+                logger.warning(f"Failed to notify New Scheduler chat: {result.get('error')}")
+        except Exception as e:
+            logger.error(f"Error sending RingCentral notification: {e}")
+    else:
+        logger.info(f"[RC MESSAGING UNAVAILABLE] Would send to New Scheduler: {rc_message}")
+
+    # =========================================================================
+    # STEP 4: Also notify On-Call Manager via SMS as backup
     # =========================================================================
     sms_message = (
         f"CALL-OUT: {caregiver_name} called out for {client_name} "
@@ -1634,13 +1696,14 @@ async def report_call_out(
     )
 
     manager_notified = False
-    if OPERATIONS_SMS_ENABLED:
+    if OPERATIONS_SMS_ENABLED and not scheduler_notified:
+        # Only SMS if RingCentral messaging failed
         manager_notified = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
-    else:
+    elif not scheduler_notified:
         logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
 
     # =========================================================================
-    # STEP 4: Build confirmation message - Tell the caller what we're DOING
+    # STEP 5: Build confirmation message - Tell the caller what we're DOING
     # =========================================================================
     if filling_result.success and filling_result.candidates_contacted > 0:
         confirmation = (
