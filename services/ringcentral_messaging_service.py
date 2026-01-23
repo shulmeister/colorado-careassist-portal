@@ -112,7 +112,7 @@ class RingCentralMessagingService:
             else:
                 response = requests.post(url, headers=headers, json=params, timeout=30)
 
-            if response.status_code == 200:
+            if response.status_code in (200, 201):
                 return response.json()
             else:
                 logger.error(f"RingCentral API error: {response.status_code} - {response.text[:500]}")
