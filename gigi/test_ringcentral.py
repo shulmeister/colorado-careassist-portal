@@ -35,15 +35,13 @@ try:
         for q in status.get('call_queues', []):
             print(f"    - {q.get('name')} (ext {q.get('ext')})")
 
-    # Test sending a message to the scheduler chat
+    # Test sending a direct message to Jason
     print("\n" + "=" * 60)
-    print("TEST MESSAGE TO NEW SCHEDULER CHAT")
+    print("TEST DIRECT MESSAGE TO JASON")
     print("=" * 60)
 
-    # Use correct chat name: "New Scheduling"
-    result = ringcentral_messaging_service.send_message_to_chat(
-        "New Scheduling",
-        "🤖 TEST from Gigi AI (ext 111): This is a system test. Please ignore."
+    result = ringcentral_messaging_service.notify_jason(
+        "👋 Hi Jason! This is Gigi AI (ext 111). Just confirming my messaging is working. I'm ready to help with scheduling!"
     )
     print(f"Result: {json.dumps(result, indent=2)}")
 
