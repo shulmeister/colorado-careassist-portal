@@ -1019,6 +1019,46 @@ class RingCentralMessagingService:
         """
         return self.send_direct_message("israt@coloradocareassist.com", message)
 
+    def reply_to_sender(self, sender_info: Dict, message: str) -> Dict[str, Any]:
+        """
+        Reply to a message sender using whatever identifier is available.
+
+        Args:
+            sender_info: Dict with any of: email, extensionId, id, personId
+            message: The reply message
+
+        Returns:
+            Result dict with success status
+        """
+        try:
+            # Try email first (most reliable)
+            if sender_info.get("email"):
+                return self.send_direct_message(sender_info["email"], message)
+
+            # Try extension number to find email
+            extension_id = sender_info.get("extensionId") or sender_info.get("id")
+            if extension_id:
+                # Look up extension to get email
+                ext_info = self._api_request(f"/account/~/extension/{extension_id}")
+                if ext_info:
+                    email = ext_info.get("contact", {}).get("email")
+                    if email:
+                        return self.send_direct_message(email, message)
+                    # If no email, try the extension's name
+                    name = ext_info.get("name")
+                    logger.info(f"No email for extension {extension_id}, name: {name}")
+
+            # Fallback: post to New Scheduling with attribution
+            sender_name = sender_info.get("name", "Unknown")
+            return self.send_message_to_chat(
+                "New Scheduling",
+                f"[Reply to {sender_name}]: {message}"
+            )
+
+        except Exception as e:
+            logger.error(f"Error replying to sender: {e}")
+            return {"success": False, "error": str(e)}
+
 
 # Singleton instance
 ringcentral_messaging_service = RingCentralMessagingService()

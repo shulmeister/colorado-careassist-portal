@@ -1564,7 +1564,159 @@ def is_gigi_sms_autoreply_enabled():
     return _gigi_settings.get("sms_autoreply", False)
 
 
-# 
+# ============================================
+# GIGI RINGCENTRAL COMMAND HANDLER
+# ============================================
+# Allows controlling Gigi via direct messages:
+#   "gigi stop" - disables all Gigi features
+#   "gigi go" - enables all Gigi features
+#   "gigi status" - reports current status
+
+@app.post("/api/gigi/ringcentral/command")
+async def api_gigi_ringcentral_command(request: Request):
+    """
+    Webhook endpoint for RingCentral direct messages to Gigi.
+    Handles commands like 'gigi stop' and 'gigi go'.
+    """
+    global _gigi_settings
+
+    try:
+        body = await request.json()
+        logger.info(f"Gigi command webhook received: {body}")
+
+        # RingCentral webhook sends message in body
+        # Format varies - could be subscription notification or direct POST
+        message_text = ""
+        sender_id = None
+        sender_name = "Unknown"
+
+        # Try to extract message from various RingCentral webhook formats
+        if "body" in body:
+            # Direct webhook format
+            msg_body = body.get("body", {})
+            message_text = msg_body.get("text", "") or msg_body.get("subject", "")
+            sender_info = msg_body.get("from", {})
+            sender_id = sender_info.get("extensionId") or sender_info.get("id")
+            sender_name = sender_info.get("name", "Unknown")
+        elif "text" in body:
+            # Simple format
+            message_text = body.get("text", "")
+            sender_name = body.get("sender_name", "Unknown")
+            sender_id = body.get("sender_id")
+        elif "message" in body:
+            # Alternative format
+            message_text = body.get("message", "")
+            sender_name = body.get("from", "Unknown")
+
+        message_lower = message_text.lower().strip()
+        response_message = None
+
+        # Parse commands
+        if "gigi stop" in message_lower:
+            # Disable all Gigi features
+            _gigi_settings["sms_autoreply"] = False
+            _gigi_settings["operations_sms"] = False
+            log_gigi_activity(
+                "command",
+                f"{sender_name} sent 'gigi stop' - all features disabled",
+                "success"
+            )
+            response_message = "🛑 Gigi is now STOPPED. All automated features disabled. Send 'gigi go' to resume."
+            logger.info(f"Gigi STOPPED by {sender_name} via RingCentral DM")
+
+        elif "gigi go" in message_lower:
+            # Enable all Gigi features
+            _gigi_settings["sms_autoreply"] = True
+            _gigi_settings["operations_sms"] = True
+            log_gigi_activity(
+                "command",
+                f"{sender_name} sent 'gigi go' - all features enabled",
+                "success"
+            )
+            response_message = "✅ Gigi is now ACTIVE. SMS auto-reply and operations notifications enabled."
+            logger.info(f"Gigi STARTED by {sender_name} via RingCentral DM")
+
+        elif "gigi status" in message_lower:
+            # Report current status
+            sms_status = "ON" if _gigi_settings["sms_autoreply"] else "OFF"
+            ops_status = "ON" if _gigi_settings["operations_sms"] else "OFF"
+            response_message = f"📊 Gigi Status:\n• SMS Auto-Reply: {sms_status}\n• Operations SMS: {ops_status}"
+            log_gigi_activity(
+                "command",
+                f"{sender_name} requested status",
+                "success"
+            )
+
+        # Send reply if we have a response
+        if response_message:
+            try:
+                from services.ringcentral_messaging_service import ringcentral_messaging_service
+                # Build sender info for reply
+                sender_info = {
+                    "name": sender_name,
+                    "extensionId": sender_id,
+                    "email": body.get("body", {}).get("from", {}).get("email")
+                            or body.get("sender_email")
+                }
+                # Use the reply_to_sender method which handles fallbacks
+                ringcentral_messaging_service.reply_to_sender(sender_info, response_message)
+            except Exception as e:
+                logger.error(f"Failed to send Gigi command response: {e}")
+
+        return JSONResponse({
+            "success": True,
+            "command_recognized": response_message is not None,
+            "response": response_message,
+        })
+
+    except Exception as e:
+        logger.error(f"Error processing Gigi command: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+        }, status_code=500)
+
+
+@app.post("/api/gigi/command")
+async def api_gigi_command_simple(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Simple command endpoint for dashboard or API testing.
+    Accepts: {"command": "stop"} or {"command": "go"} or {"command": "status"}
+    """
+    global _gigi_settings
+
+    try:
+        body = await request.json()
+        command = body.get("command", "").lower().strip()
+        user_email = current_user.get("email", "API User")
+
+        if command == "stop":
+            _gigi_settings["sms_autoreply"] = False
+            _gigi_settings["operations_sms"] = False
+            log_gigi_activity("command", f"{user_email} stopped Gigi via API", "success")
+            return JSONResponse({"success": True, "message": "Gigi stopped", "settings": _gigi_settings})
+
+        elif command == "go":
+            _gigi_settings["sms_autoreply"] = True
+            _gigi_settings["operations_sms"] = True
+            log_gigi_activity("command", f"{user_email} started Gigi via API", "success")
+            return JSONResponse({"success": True, "message": "Gigi started", "settings": _gigi_settings})
+
+        elif command == "status":
+            return JSONResponse({"success": True, "settings": _gigi_settings})
+
+        else:
+            return JSONResponse({"success": False, "error": f"Unknown command: {command}"}, status_code=400)
+
+    except Exception as e:
+        logger.error(f"Error processing Gigi command: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+#
 # GoFormz → WellSky Webhook Endpoint
 # 
 
