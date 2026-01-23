@@ -33,6 +33,7 @@ response = requests.patch(
     json={
         "name": config["name"],
         "general_prompt": config["general_prompt"],
+        "tools": config.get("tools", []),
         "nodes": config["nodes"],
         "start_node_id": config["start_node_id"],
         "start_speaker": config["start_speaker"]

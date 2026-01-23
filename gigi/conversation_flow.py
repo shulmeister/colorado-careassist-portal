@@ -22,6 +22,127 @@ WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webho
 def get_conversation_flow_config():
     """Build the complete conversation flow with FUNCTION NODES."""
 
+    # Define tools at the FLOW level - referenced by tool_id in function nodes
+    tools = [
+        {
+            "type": "custom",
+            "tool_id": "tool_log_call_out",
+            "name": "log_call_out",
+            "description": "Log a caregiver call-out and notify the care team",
+            "url": f"{WEBHOOK_BASE}/log_call_out",
+            "method": "POST",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caregiver_name": {"type": "string", "description": "Name of the caregiver"},
+                    "reason": {"type": "string", "description": "Reason for calling out"},
+                    "client_name": {"type": "string", "description": "Client they were scheduled with"}
+                },
+                "required": ["caregiver_name", "reason"]
+            }
+        },
+        {
+            "type": "custom",
+            "tool_id": "tool_fill_shift",
+            "name": "start_shift_filling",
+            "description": "Text available caregivers to find coverage for an open shift",
+            "url": f"{WEBHOOK_BASE}/start_shift_filling",
+            "method": "POST",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "client_name": {"type": "string", "description": "Client who needs coverage"},
+                    "shift_date": {"type": "string", "description": "Date of the shift"},
+                    "urgency": {"type": "string", "description": "urgent or normal"}
+                },
+                "required": ["client_name"]
+            }
+        },
+        {
+            "type": "custom",
+            "tool_id": "tool_log_late",
+            "name": "log_late",
+            "description": "Log that a caregiver is running late and notify the client",
+            "url": f"{WEBHOOK_BASE}/log_late",
+            "method": "POST",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "caregiver_name": {"type": "string", "description": "Name of the caregiver"},
+                    "minutes_late": {"type": "string", "description": "How many minutes late"},
+                    "client_name": {"type": "string", "description": "Client they are going to"}
+                },
+                "required": ["caregiver_name", "minutes_late"]
+            }
+        },
+        {
+            "type": "custom",
+            "tool_id": "tool_send_team_message",
+            "name": "send_team_message",
+            "description": "Send a message to the care team on RingCentral",
+            "url": f"{WEBHOOK_BASE}/send_team_message",
+            "method": "POST",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "The message to send"},
+                    "caller_name": {"type": "string", "description": "Name of the caller"},
+                    "callback_number": {"type": "string", "description": "Callback phone number"},
+                    "recipient": {"type": "string", "description": "scheduler, cynthia, jason, or all"}
+                },
+                "required": ["message", "caller_name"]
+            }
+        },
+        {
+            "type": "custom",
+            "tool_id": "tool_log_issue",
+            "name": "log_issue",
+            "description": "Log a client complaint and escalate to Cynthia",
+            "url": f"{WEBHOOK_BASE}/log_issue",
+            "method": "POST",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "client_name": {"type": "string", "description": "Name of the client"},
+                    "issue": {"type": "string", "description": "Description of the issue"},
+                    "severity": {"type": "string", "description": "low, medium, high, urgent"}
+                },
+                "required": ["client_name", "issue"]
+            }
+        },
+        {
+            "type": "custom",
+            "tool_id": "tool_get_schedule",
+            "name": "get_schedule",
+            "description": "Look up a client's schedule from WellSky",
+            "url": f"{WEBHOOK_BASE}/get_schedule",
+            "method": "POST",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "client_name": {"type": "string", "description": "Name of the client"}
+                },
+                "required": ["client_name"]
+            }
+        },
+        {
+            "type": "custom",
+            "tool_id": "tool_cancel_visit",
+            "name": "cancel_visit",
+            "description": "Cancel a client visit and notify the caregiver",
+            "url": f"{WEBHOOK_BASE}/cancel_visit",
+            "method": "POST",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "client_name": {"type": "string", "description": "Name of the client"},
+                    "visit_date": {"type": "string", "description": "Date of the visit to cancel"}
+                },
+                "required": ["client_name"]
+            }
+        }
+    ]
+
     global_prompt = """## Identity
 You are Gigi, a real team member at Colorado Care Assist, a non-medical home care agency in Colorado.
 
@@ -117,23 +238,7 @@ Once you have all three, transition to log_call_out_function."""
             "id": "log_call_out_function",
             "type": "function",
             "name": "Log Call-Out",
-            "function": {
-                "type": "custom",
-                "name": "log_call_out",
-                "description": "Log the caregiver call-out and notify the care team",
-                "url": f"{WEBHOOK_BASE}/log_call_out",
-                "method": "POST",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "caregiver_name": {"type": "string", "description": "Name of the caregiver"},
-                        "reason": {"type": "string", "description": "Reason for calling out"},
-                        "client_name": {"type": "string", "description": "Client they were scheduled with"},
-                        "shift_date": {"type": "string", "description": "Date of the shift (today, tomorrow, or specific)"}
-                    },
-                    "required": ["caregiver_name", "reason"]
-                }
-            },
+            "tool_id": "tool_log_call_out",
             "speak_during_execution": {
                 "type": "static_text",
                 "text": "Let me log that for you."
@@ -152,22 +257,7 @@ Once you have all three, transition to log_call_out_function."""
             "id": "fill_shift_function",
             "type": "function",
             "name": "Fill Shift",
-            "function": {
-                "type": "custom",
-                "name": "start_shift_filling",
-                "description": "Text available caregivers to find coverage for the open shift",
-                "url": f"{WEBHOOK_BASE}/start_shift_filling",
-                "method": "POST",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "client_name": {"type": "string", "description": "Client who needs coverage"},
-                        "shift_date": {"type": "string", "description": "Date of the shift"},
-                        "urgency": {"type": "string", "description": "How urgent: urgent, normal"}
-                    },
-                    "required": ["client_name"]
-                }
-            },
+            "tool_id": "tool_fill_shift",
             "speak_during_execution": {
                 "type": "static_text",
                 "text": "I'm texting available caregivers now to find coverage."
@@ -219,22 +309,7 @@ Ask ONE question at a time. Once you have the info, transition to log_late_funct
             "id": "log_late_function",
             "type": "function",
             "name": "Log Late",
-            "function": {
-                "type": "custom",
-                "name": "log_late",
-                "description": "Log that a caregiver is running late and notify the client",
-                "url": f"{WEBHOOK_BASE}/log_late",
-                "method": "POST",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "caregiver_name": {"type": "string", "description": "Name of the caregiver"},
-                        "minutes_late": {"type": "string", "description": "How many minutes late"},
-                        "client_name": {"type": "string", "description": "Client they are going to"}
-                    },
-                    "required": ["caregiver_name", "minutes_late"]
-                }
-            },
+            "tool_id": "tool_log_late",
             "speak_during_execution": {
                 "type": "static_text",
                 "text": "Let me note that and notify the client."
@@ -285,23 +360,7 @@ Then transition to send_team_message_function."""
             "id": "send_team_message_function",
             "type": "function",
             "name": "Send Team Message",
-            "function": {
-                "type": "custom",
-                "name": "send_team_message",
-                "description": "Send a message to the care team on RingCentral",
-                "url": f"{WEBHOOK_BASE}/send_team_message",
-                "method": "POST",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "message": {"type": "string", "description": "The message to send"},
-                        "caller_name": {"type": "string", "description": "Name of the caller"},
-                        "callback_number": {"type": "string", "description": "Callback phone number"},
-                        "recipient": {"type": "string", "description": "Who to message: scheduler, cynthia, jason, or all"}
-                    },
-                    "required": ["message", "caller_name"]
-                }
-            },
+            "tool_id": "tool_send_team_message",
             "speak_during_execution": {
                 "type": "static_text",
                 "text": "I'm sending that message to the team now."
@@ -376,22 +435,7 @@ Once you understand the issue, transition to log_issue_function."""
             "id": "log_issue_function",
             "type": "function",
             "name": "Log Issue",
-            "function": {
-                "type": "custom",
-                "name": "log_issue",
-                "description": "Log a client complaint and escalate to Cynthia",
-                "url": f"{WEBHOOK_BASE}/log_issue",
-                "method": "POST",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "client_name": {"type": "string", "description": "Name of the client"},
-                        "issue": {"type": "string", "description": "Description of the issue"},
-                        "severity": {"type": "string", "description": "low, medium, high, urgent"}
-                    },
-                    "required": ["client_name", "issue"]
-                }
-            },
+            "tool_id": "tool_log_issue",
             "speak_during_execution": {
                 "type": "static_text",
                 "text": "I'm logging this and notifying our Care Manager Cynthia right now."
@@ -441,20 +485,7 @@ Then transition to get_schedule_function."""
             "id": "get_schedule_function",
             "type": "function",
             "name": "Get Schedule",
-            "function": {
-                "type": "custom",
-                "name": "get_schedule",
-                "description": "Look up a client's schedule from WellSky",
-                "url": f"{WEBHOOK_BASE}/get_schedule",
-                "method": "POST",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "client_name": {"type": "string", "description": "Name of the client"}
-                    },
-                    "required": ["client_name"]
-                }
-            },
+            "tool_id": "tool_get_schedule",
             "speak_during_execution": {
                 "type": "static_text",
                 "text": "Let me look that up for you."
@@ -505,21 +536,7 @@ Then transition to cancel_visit_function."""
             "id": "cancel_visit_function",
             "type": "function",
             "name": "Cancel Visit",
-            "function": {
-                "type": "custom",
-                "name": "cancel_visit",
-                "description": "Cancel a client visit and notify the caregiver",
-                "url": f"{WEBHOOK_BASE}/cancel_visit",
-                "method": "POST",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "client_name": {"type": "string", "description": "Name of the client"},
-                        "visit_date": {"type": "string", "description": "Date of the visit to cancel"}
-                    },
-                    "required": ["client_name"]
-                }
-            },
+            "tool_id": "tool_cancel_visit",
             "speak_during_execution": {
                 "type": "static_text",
                 "text": "Let me cancel that visit and notify your caregiver."
@@ -627,8 +644,8 @@ Collect name and phone, then transition to send_team_message_function."""
 
     return {
         "name": "Gigi v2 - With Function Nodes",
-        "model_choice": {"type": "gpt", "model": "gpt-4o-mini"},
         "general_prompt": global_prompt,
+        "tools": tools,
         "nodes": nodes,
         "start_node_id": "start_greeting",
         "start_speaker": "agent"
