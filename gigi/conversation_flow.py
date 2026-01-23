@@ -1,138 +1,72 @@
 #!/usr/bin/env python3
 """
-Gigi Conversation Flow Configuration
+Gigi Conversation Flow Configuration - WITH FUNCTION NODES
 
-This script creates/updates Gigi as a Conversation Flow agent in Retell AI.
-Conversation Flow provides deterministic control over the conversation,
-preventing the looping issues that occur with single-prompt agents.
+This creates a conversation flow with proper FUNCTION NODES that execute actions:
+- log_call_out_function: Logs caregiver call-outs
+- fill_shift_function: Texts caregivers to find coverage
+- send_team_message_function: Messages Cynthia/Jason/scheduler on RingCentral
+- log_issue_function: Logs client complaints
+- get_schedule_function: Looks up schedules
 
-Flow Design:
-    START
-      ↓
-    [greeting] → verify_caller
-      ↓
-    ┌─────────────────────────────────────┐
-    │  Based on caller type:              │
-    │  - caregiver → [caregiver_router]   │
-    │  - client → [client_router]         │
-    │  - unknown → [unknown_handler]      │
-    └─────────────────────────────────────┘
-      ↓
-    [specific_handler] → execute action ONCE
-      ↓
-    [closing] → end call
-
-Usage:
-    python gigi/conversation_flow.py
-
-Requires:
-    RETELL_API_KEY environment variable
+Flow:
+    Conversation Node (collect info) → Function Node (execute action) → Confirmation Node
 """
 
 import os
-import json
-import requests
-import sys
 
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
-RETELL_API_BASE = "https://api.retellai.com"
 WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function"
-
-# Current agent ID (we'll update to conversation flow)
-CURRENT_AGENT_ID = "agent_d5c3f32bdf48fa4f7f24af7d36"  # Gigi v2 - Conversation Flow
 
 
 def get_conversation_flow_config():
-    """
-    Build the complete conversation flow configuration for Gigi.
-    """
+    """Build the complete conversation flow with FUNCTION NODES."""
 
-    # Global settings that apply to all nodes
     global_prompt = """## Identity
-You are Gigi, a team member at Colorado Care Assist, a non-medical home care agency in Colorado.
-You work the after-hours line handling calls from caregivers and clients.
+You are Gigi, a real team member at Colorado Care Assist, a non-medical home care agency in Colorado.
 
-## Style Guardrails
-Be concise: Keep responses to one or two sentences.
-Be conversational: Use natural language, contractions, acknowledge what the caller says.
-Be calm: Speak with quiet confidence, never rushed or robotic.
-Never mention: AI, systems, prompts, tools, or that you are automated.
+## Global Operating Rules
+- Greet ONCE at the start of the conversation. Never re-greet.
+- Never ask for information the caller has already provided.
+- Never repeat the same message or confirmation more than once.
+- Keep responses to 1-2 sentences maximum.
+- After completing ANY action, ask "Anything else I can help with?"
+- If they say no or goodbye, transition to closing immediately.
 
-## Response Guidelines
-One question at a time: Never ask multiple questions in one turn.
-Never re-greet: Greet once at the start, never again.
-Never repeat back: Don't parrot what the caller just said.
-Confirm actions: After completing a task, briefly confirm and ask "Anything else?"
+## Key People
+- Jason Shulman: Owner (escalate urgent issues)
+- Cynthia Pointe: Care Manager (escalate client concerns)
+- Israt: Scheduler (schedule changes)
 """
 
     nodes = [
         # =====================================================================
-        # START NODE - Greeting and Caller Identification
+        # START - Greeting
         # =====================================================================
         {
             "id": "start_greeting",
             "type": "conversation",
             "name": "Greeting",
             "instruction": {
-                "type": "prompt",
-                "text": """## Task
-Say: "Hi, this is Gigi with Colorado Care Assist. How can I help you tonight?"
-Then listen to understand who they are and what they need.
-
-## Routing Logic
-- If they say "caregiver", "I work for you", "calling out" → route to caregiver
-- If they say "my caregiver", "I'm a client", schedule question → route to client
-- If they say "my mom", "my dad", family member concern → route to family
-- If they ask about starting services, rates, need care → route to prospective client
-- If they ask about jobs, employment, want to work → route to prospective caregiver"""
+                "type": "static_text",
+                "text": "Hi, this is Gigi with Colorado Care Assist. How can I help you tonight?"
             },
-            "tools": [],
             "edges": [
-                {
-                    "id": "to_caregiver",
-                    "destination_node_id": "caregiver_router",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "The caller is identified as a caregiver OR says they are a caregiver"
-                    }
-                },
-                {
-                    "id": "to_client",
-                    "destination_node_id": "client_router",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "The caller is identified as a client (the person receiving care)"
-                    }
-                },
-                {
-                    "id": "to_family",
-                    "destination_node_id": "family_handler",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "The caller says their family member ALREADY receives care from us and has a concern or question about their current care"
-                    }
-                },
-                {
-                    "id": "to_prospective_client",
-                    "destination_node_id": "prospective_client_handler",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "The caller wants to START care services for themselves or a family member - they are a PROSPECTIVE CLIENT (not already receiving care)"
-                    }
-                },
-                {
-                    "id": "to_prospective_caregiver",
-                    "destination_node_id": "prospective_caregiver_handler",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "The caller is looking for work, wants a job, asking about employment, or applying to be a caregiver - they are a PROSPECTIVE CAREGIVER"
-                    }
-                }
+                {"id": "to_caregiver", "destination_node_id": "caregiver_router",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller is a caregiver OR says calling out, running late, sick, can't make it"}},
+                {"id": "to_client", "destination_node_id": "client_router",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller is a client OR mentions their caregiver, their schedule, a complaint"}},
+                {"id": "to_family", "destination_node_id": "family_handler",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller mentions my mom, my dad, my parent, family member receiving care"}},
+                {"id": "to_prospect_client", "destination_node_id": "prospective_client_handler",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller asks about services, rates, starting care, needs help"}},
+                {"id": "to_prospect_cg", "destination_node_id": "prospective_caregiver_handler",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller asks about jobs, employment, hiring, wants to work for us"}}
             ]
         },
 
         # =====================================================================
-        # CAREGIVER ROUTER - Determine what the caregiver needs
+        # CAREGIVER FLOW
         # =====================================================================
         {
             "id": "caregiver_router",
@@ -140,230 +74,263 @@ Then listen to understand who they are and what they need.
             "name": "Caregiver Router",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Ask: "What can I help you with?"
-Listen and route based on their answer.
-
-## Routing Logic
-- "calling out", "can't make it", "sick", "cancel shift" → route to callout
-- "running late", "gonna be late", "stuck in traffic" → route to late
-- "paycheck", "payroll", "missing hours", "didn't get paid" → route to other
-- Anything else → route to other"""
+                "text": """Listen and route based on what the caregiver needs:
+- "calling out", "can't make it", "sick" → go to collect_callout_info
+- "running late", "stuck in traffic" → go to collect_late_info
+- anything else → go to caregiver_other"""
             },
             "edges": [
-                {
-                    "id": "to_callout",
-                    "destination_node_id": "caregiver_callout",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Caregiver needs to call out or cancel their shift"
-                    }
-                },
-                {
-                    "id": "to_late",
-                    "destination_node_id": "caregiver_late",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Caregiver is running late to their shift"
-                    }
-                },
-                {
-                    "id": "to_payroll",
-                    "destination_node_id": "caregiver_other",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Caregiver has a payroll issue, missing hours, or paycheck problem"
-                    }
-                },
-                {
-                    "id": "to_caregiver_other",
-                    "destination_node_id": "caregiver_other",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Caregiver has a different question or request"
-                    }
-                }
+                {"id": "to_callout", "destination_node_id": "collect_callout_info",
+                 "transition_condition": {"type": "prompt", "prompt": "Caregiver is calling out or can't make their shift"}},
+                {"id": "to_late", "destination_node_id": "collect_late_info",
+                 "transition_condition": {"type": "prompt", "prompt": "Caregiver is running late but still coming"}},
+                {"id": "to_other", "destination_node_id": "caregiver_other",
+                 "transition_condition": {"type": "prompt", "prompt": "Something else - payroll, schedule question, etc"}}
             ]
         },
 
-        # =====================================================================
-        # CAREGIVER CALL-OUT - Handle call-outs (ONE tool call)
-        # =====================================================================
+        # Collect call-out information (conversation node)
         {
-            "id": "caregiver_callout",
+            "id": "collect_callout_info",
             "type": "conversation",
-            "name": "Caregiver Call-Out",
+            "name": "Collect Call-Out Info",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Collect info, log the call-out, and START the shift-filling campaign.
+                "text": """Collect: name, reason, which client/shift.
+Ask ONE question at a time:
+1. "Can I get your name?" (if not known)
+2. "I'm sorry to hear that. What's going on?"
+3. "Which client were you scheduled with?"
 
-## Information to Gather
-1. Their name (if not known): "Can I get your name?"
-2. The reason: "I'm sorry to hear that. What's going on?"
-3. Which client/shift: "Which client were you scheduled with?"
-4. Shift time (if not mentioned): "What time was the shift?"
-
-## Tool Calling
-Once you have name + reason + client + time:
-→ FIRST: Call report_call_out with caregiver_name, reason, shift_date
-→ THEN: Call start_shift_filling_campaign with client_name, shift_date, shift_time, urgency="urgent"
-
-IMPORTANT: You MUST call BOTH tools. The second tool texts available caregivers to find coverage.
-
-## After Tool Calls
-Say: "Got it. I've logged your call-out and I'm texting available caregivers right now to find coverage. Feel better!"
-Then ask: "Anything else?"
-If no: "Take care. Bye!" → transition to closing"""
+Once you have all three, transition to log_call_out_function."""
             },
-            "tools": [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "report_call_out",
-                        "description": "Log a caregiver call-out and notify the team",
-                        "url": f"{WEBHOOK_BASE}/report_call_out",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "caregiver_name": {"type": "string", "description": "Name of the caregiver calling out"},
-                                "reason": {"type": "string", "description": "Reason for calling out (sick, emergency, etc)"},
-                                "shift_date": {"type": "string", "description": "Date of the shift (today, tomorrow, or specific date)"}
-                            },
-                            "required": ["caregiver_name", "reason"]
-                        }
-                    }
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "start_shift_filling_campaign",
-                        "description": "Start texting available caregivers to fill the open shift",
-                        "url": f"{WEBHOOK_BASE}/start_shift_filling_campaign",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "client_name": {"type": "string", "description": "Name of the client who needs coverage"},
-                                "shift_date": {"type": "string", "description": "Date of the shift"},
-                                "shift_time": {"type": "string", "description": "Time of the shift"},
-                                "urgency": {"type": "string", "enum": ["urgent", "normal"], "description": "How urgent is coverage needed"}
-                            },
-                            "required": ["client_name"]
-                        }
-                    }
-                }
-            ],
             "edges": [
-                {
-                    "id": "callout_to_closing",
-                    "destination_node_id": "closing",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Call-out confirmed or caregiver says bye"
-                    }
-                }
+                {"id": "to_log_callout", "destination_node_id": "log_call_out_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have caregiver name AND reason AND client name"}}
             ]
         },
 
         # =====================================================================
-        # CAREGIVER LATE - Handle running late (ONE tool call)
+        # FUNCTION NODE: Log Call-Out
         # =====================================================================
         {
-            "id": "caregiver_late",
-            "type": "conversation",
-            "name": "Caregiver Running Late",
-            "instruction": {
-                "type": "prompt",
-                "text": """## Task
-Log late notification and notify the client.
-
-## Information to Gather
-1. Their name (if not known): "Can I get your name?"
-2. How late: "About how many minutes?"
-
-## Tool Calling
-Once you have name + delay minutes:
-→ Call report_late with caregiver_name, delay_minutes
-
-## After Tool Call
-Say: "Got it. I've notified the client. Drive safe!"
-Then ask: "Anything else?"
-If no: "Drive safe. Bye!" → transition to closing"""
+            "id": "log_call_out_function",
+            "type": "function",
+            "name": "Log Call-Out",
+            "function": {
+                "type": "custom",
+                "name": "log_call_out",
+                "description": "Log the caregiver call-out and notify the care team",
+                "url": f"{WEBHOOK_BASE}/log_call_out",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "caregiver_name": {"type": "string", "description": "Name of the caregiver"},
+                        "reason": {"type": "string", "description": "Reason for calling out"},
+                        "client_name": {"type": "string", "description": "Client they were scheduled with"},
+                        "shift_date": {"type": "string", "description": "Date of the shift (today, tomorrow, or specific)"}
+                    },
+                    "required": ["caregiver_name", "reason"]
+                }
             },
-            "tools": [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "report_late",
-                        "description": "Report that a caregiver will be late and notify the client",
-                        "url": f"{WEBHOOK_BASE}/report_late",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "caregiver_name": {"type": "string", "description": "Name of the caregiver who is late"},
-                                "delay_minutes": {"type": "integer", "description": "Estimated delay in minutes"},
-                                "reason": {"type": "string", "description": "Reason for being late (traffic, etc)"}
-                            },
-                            "required": ["caregiver_name", "delay_minutes"]
-                        }
-                    }
-                }
-            ],
+            "speak_during_execution": {
+                "type": "static_text",
+                "text": "Let me log that for you."
+            },
+            "wait_for_result": True,
             "edges": [
-                {
-                    "id": "late_to_closing",
-                    "destination_node_id": "closing",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Late notification confirmed or caregiver says bye"
-                    }
-                }
+                {"id": "to_fill_shift", "destination_node_id": "fill_shift_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Call-out was logged successfully"}}
             ]
         },
 
         # =====================================================================
-        # CAREGIVER OTHER - Handle other requests (payroll, schedule, general)
+        # FUNCTION NODE: Fill Shift (text caregivers)
         # =====================================================================
+        {
+            "id": "fill_shift_function",
+            "type": "function",
+            "name": "Fill Shift",
+            "function": {
+                "type": "custom",
+                "name": "start_shift_filling",
+                "description": "Text available caregivers to find coverage for the open shift",
+                "url": f"{WEBHOOK_BASE}/start_shift_filling",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "client_name": {"type": "string", "description": "Client who needs coverage"},
+                        "shift_date": {"type": "string", "description": "Date of the shift"},
+                        "urgency": {"type": "string", "description": "How urgent: urgent, normal"}
+                    },
+                    "required": ["client_name"]
+                }
+            },
+            "speak_during_execution": {
+                "type": "static_text",
+                "text": "I'm texting available caregivers now to find coverage."
+            },
+            "wait_for_result": True,
+            "edges": [
+                {"id": "to_callout_confirm", "destination_node_id": "callout_confirmation",
+                 "transition_condition": {"type": "prompt", "prompt": "Shift filling campaign started"}}
+            ]
+        },
+
+        # Confirmation after call-out logged
+        {
+            "id": "callout_confirmation",
+            "type": "conversation",
+            "name": "Call-Out Confirmation",
+            "instruction": {
+                "type": "prompt",
+                "text": """Say: "Got it. I've logged your call-out and I'm reaching out to caregivers for coverage. Feel better!"
+Then ask: "Anything else I can help with?"
+If no → go to closing"""
+            },
+            "edges": [
+                {"id": "to_closing_from_callout", "destination_node_id": "closing",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller says no, nothing else, or goodbye"}}
+            ]
+        },
+
+        # Collect late info
+        {
+            "id": "collect_late_info",
+            "type": "conversation",
+            "name": "Collect Late Info",
+            "instruction": {
+                "type": "prompt",
+                "text": """Collect: name, how late, which client.
+Ask ONE question at a time. Once you have the info, transition to log_late_function."""
+            },
+            "edges": [
+                {"id": "to_log_late", "destination_node_id": "log_late_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have caregiver name AND estimated delay AND client"}}
+            ]
+        },
+
+        # =====================================================================
+        # FUNCTION NODE: Log Late
+        # =====================================================================
+        {
+            "id": "log_late_function",
+            "type": "function",
+            "name": "Log Late",
+            "function": {
+                "type": "custom",
+                "name": "log_late",
+                "description": "Log that a caregiver is running late and notify the client",
+                "url": f"{WEBHOOK_BASE}/log_late",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "caregiver_name": {"type": "string", "description": "Name of the caregiver"},
+                        "minutes_late": {"type": "string", "description": "How many minutes late"},
+                        "client_name": {"type": "string", "description": "Client they are going to"}
+                    },
+                    "required": ["caregiver_name", "minutes_late"]
+                }
+            },
+            "speak_during_execution": {
+                "type": "static_text",
+                "text": "Let me note that and notify the client."
+            },
+            "wait_for_result": True,
+            "edges": [
+                {"id": "to_late_confirm", "destination_node_id": "late_confirmation",
+                 "transition_condition": {"type": "prompt", "prompt": "Late notification logged"}}
+            ]
+        },
+
+        {
+            "id": "late_confirmation",
+            "type": "conversation",
+            "name": "Late Confirmation",
+            "instruction": {
+                "type": "prompt",
+                "text": """Say: "Got it. I've notified the client you're on your way. Drive safe!"
+Then ask: "Anything else?"
+If no → go to closing"""
+            },
+            "edges": [
+                {"id": "to_closing_from_late", "destination_node_id": "closing",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller says no or goodbye"}}
+            ]
+        },
+
         {
             "id": "caregiver_other",
             "type": "conversation",
-            "name": "Caregiver Other Request",
+            "name": "Caregiver Other",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Handle payroll or general caregiver requests. No tools needed.
-
-## If Payroll Issue
-Say: "I can't access payroll tonight, but Cynthia Pointe will call you tomorrow before ten AM. Which pay period and how many hours?"
-After they answer: "Got it. Cynthia Pointe will call you tomorrow before ten AM."
-→ Transition to end
-
-## If Schedule Question
-Say: "I can have someone call you back within thirty minutes to confirm your schedule. What's the best number?"
-→ Transition to end
-
-## If General Question
-Say: "I can have someone from the office call you back within thirty minutes. What's the best number?"
-→ Transition to end
-
-## Key Rule
-Always say "Cynthia Pointe" by name with a specific callback time."""
+                "text": """For payroll, schedule questions, or other issues:
+Say: "I'll make sure the right person gets your message. Can I get your name and a callback number?"
+Then transition to send_team_message_function."""
             },
-            "tools": [],
             "edges": [
-                {
-                    "id": "other_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Request handled or callback promised - move to end call"
-                    }
-                }
+                {"id": "to_team_msg", "destination_node_id": "send_team_message_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have name and callback number"}}
             ]
         },
 
         # =====================================================================
-        # CLIENT ROUTER - Route client requests (includes medical advice boundary)
+        # FUNCTION NODE: Send Team Message (RingCentral)
+        # =====================================================================
+        {
+            "id": "send_team_message_function",
+            "type": "function",
+            "name": "Send Team Message",
+            "function": {
+                "type": "custom",
+                "name": "send_team_message",
+                "description": "Send a message to the care team on RingCentral",
+                "url": f"{WEBHOOK_BASE}/send_team_message",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message": {"type": "string", "description": "The message to send"},
+                        "caller_name": {"type": "string", "description": "Name of the caller"},
+                        "callback_number": {"type": "string", "description": "Callback phone number"},
+                        "recipient": {"type": "string", "description": "Who to message: scheduler, cynthia, jason, or all"}
+                    },
+                    "required": ["message", "caller_name"]
+                }
+            },
+            "speak_during_execution": {
+                "type": "static_text",
+                "text": "I'm sending that message to the team now."
+            },
+            "wait_for_result": True,
+            "edges": [
+                {"id": "to_msg_confirm", "destination_node_id": "message_confirmation",
+                 "transition_condition": {"type": "prompt", "prompt": "Message sent successfully"}}
+            ]
+        },
+
+        {
+            "id": "message_confirmation",
+            "type": "conversation",
+            "name": "Message Confirmation",
+            "instruction": {
+                "type": "prompt",
+                "text": """Say: "I've sent your message. Someone will call you back within 15 minutes."
+Then ask: "Anything else I can help with?"
+If no → go to closing"""
+            },
+            "edges": [
+                {"id": "to_closing_from_msg", "destination_node_id": "closing",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller says no or goodbye"}}
+            ]
+        },
+
+        # =====================================================================
+        # CLIENT FLOW
         # =====================================================================
         {
             "id": "client_router",
@@ -371,250 +338,235 @@ Always say "Cynthia Pointe" by name with a specific callback time."""
             "name": "Client Router",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Listen to what the client needs and route appropriately.
-
-## Routing Logic
-- "complaint", "problem", "not happy", "caregiver was rude" → route to complaint
-- "schedule", "when is my caregiver", "no one came", "no show" → route to schedule
-- "cancel", "don't need the visit" → route to cancel
-- Medical question (pills, symptoms, should I go to ER) → handle here, then end
-
-## If Medical Question
-Say: "I can't give medical advice. If you're feeling unsafe, please call nine one one. Otherwise, I'd recommend calling your doctor."
-Then: "Is there anything else I can help with tonight?"
-→ Transition to end"""
+                "text": """Listen and route:
+- complaint, problem, issue → go to collect_complaint_info
+- schedule question → go to get_schedule_function
+- cancel, don't need care → go to collect_cancel_info"""
             },
             "edges": [
-                {
-                    "id": "to_complaint",
-                    "destination_node_id": "client_complaint",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Client has a complaint, concern, or problem (not medical advice)"
-                    }
-                },
-                {
-                    "id": "to_schedule",
-                    "destination_node_id": "client_schedule",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Client asking about their schedule or when caregiver is coming"
-                    }
-                },
-                {
-                    "id": "to_cancel",
-                    "destination_node_id": "client_cancel",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Client wants to cancel a visit"
-                    }
-                },
-                {
-                    "id": "medical_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Client asked for medical advice and has been directed to call 911 or their doctor"
-                    }
-                }
+                {"id": "to_complaint", "destination_node_id": "collect_complaint_info",
+                 "transition_condition": {"type": "prompt", "prompt": "Client has a complaint or problem"}},
+                {"id": "to_schedule", "destination_node_id": "collect_schedule_info",
+                 "transition_condition": {"type": "prompt", "prompt": "Client asking about their schedule"}},
+                {"id": "to_cancel", "destination_node_id": "collect_cancel_info",
+                 "transition_condition": {"type": "prompt", "prompt": "Client wants to cancel a visit"}}
             ]
         },
 
-        # =====================================================================
-        # CLIENT COMPLAINT - Log issues, ESCALATE cancel threats
-        # =====================================================================
         {
-            "id": "client_complaint",
+            "id": "collect_complaint_info",
             "type": "conversation",
-            "name": "Client Complaint",
+            "name": "Collect Complaint",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Log the complaint and escalate to Cynthia.
-
-## Information to Gather
-1. Their name (if not known): "Can I get your name?"
-2. The issue: Listen briefly, acknowledge once: "I hear you."
-
-## Tool Calling
-Once you understand the issue:
-→ Call log_client_issue with client_name, note (summary of issue), priority
-
-## Priority Logic
-- "cancel service", "find another agency", "we're done" → priority: "urgent"
-- "no show", "safety concern", "neglect" → priority: "urgent"
-- "late", "rude", "didn't do their job" → priority: "high"
-- General feedback → priority: "normal"
-
-## After Tool Call
-Say: "I've documented everything. Cynthia Pointe will call you tomorrow before nine AM."
-If they keep venting: "I understand. Everything is documented. Anything else tonight?"
-→ Transition to end"""
+                "text": """Collect: name, what happened.
+Say: "I'm sorry to hear that. Can you tell me what happened?"
+Once you understand the issue, transition to log_issue_function."""
             },
-            "tools": [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "log_client_issue",
-                        "description": "Log a client complaint or concern for follow-up",
-                        "url": f"{WEBHOOK_BASE}/log_client_issue",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "client_name": {"type": "string", "description": "Name of the client"},
-                                "note": {"type": "string", "description": "Description of the issue or complaint"},
-                                "issue_type": {"type": "string", "enum": ["complaint", "schedule", "feedback", "general"], "description": "Type of issue"},
-                                "priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"], "description": "Priority level"}
-                            },
-                            "required": ["client_name", "note", "priority"]
-                        }
-                    }
-                }
-            ],
             "edges": [
-                {
-                    "id": "complaint_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Issue has been logged and caller has been told a supervisor will call - move to end call"
-                    }
-                }
+                {"id": "to_log_issue", "destination_node_id": "log_issue_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have client name and understood the issue"}}
             ]
         },
 
         # =====================================================================
-        # CLIENT SCHEDULE - Check schedule AND address immediate needs
+        # FUNCTION NODE: Log Issue
         # =====================================================================
         {
-            "id": "client_schedule",
+            "id": "log_issue_function",
+            "type": "function",
+            "name": "Log Issue",
+            "function": {
+                "type": "custom",
+                "name": "log_issue",
+                "description": "Log a client complaint and escalate to Cynthia",
+                "url": f"{WEBHOOK_BASE}/log_issue",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "client_name": {"type": "string", "description": "Name of the client"},
+                        "issue": {"type": "string", "description": "Description of the issue"},
+                        "severity": {"type": "string", "description": "low, medium, high, urgent"}
+                    },
+                    "required": ["client_name", "issue"]
+                }
+            },
+            "speak_during_execution": {
+                "type": "static_text",
+                "text": "I'm logging this and notifying our Care Manager Cynthia right now."
+            },
+            "wait_for_result": True,
+            "edges": [
+                {"id": "to_issue_confirm", "destination_node_id": "issue_confirmation",
+                 "transition_condition": {"type": "prompt", "prompt": "Issue logged"}}
+            ]
+        },
+
+        {
+            "id": "issue_confirmation",
             "type": "conversation",
-            "name": "Client Schedule",
+            "name": "Issue Confirmation",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Help with schedule questions or handle no-shows.
-
-## If No-Show ("no one came", "caregiver didn't show", "waiting alone")
-→ Call log_client_issue with priority "urgent", issue_type "schedule"
-Say: "I'm so sorry no one came. I'm messaging our scheduler right now. Cynthia Pointe will call you within fifteen minutes to arrange coverage."
-→ Transition to end
-
-## If Schedule Question ("when is my caregiver coming")
-→ Call get_client_schedule with client_name
-Tell them the result, then ask: "Anything else?"
-→ Transition to end
-
-## Key Rule
-For no-shows, always promise Cynthia will call within fifteen minutes."""
+                "text": """Say: "I've logged your concern and Cynthia Pointe, our Care Manager, will call you back within 15 minutes."
+Then ask: "Is there anything else I can help with?"
+If no → go to closing"""
             },
-            "tools": [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "get_client_schedule",
-                        "description": "Look up a client's upcoming visits and schedule",
-                        "url": f"{WEBHOOK_BASE}/get_client_schedule",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "client_name": {"type": "string", "description": "Name of the client"},
-                                "days_ahead": {"type": "integer", "description": "Number of days to look ahead (default 7)"}
-                            },
-                            "required": ["client_name"]
-                        }
-                    }
-                },
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "log_client_issue",
-                        "description": "Log a no-show or schedule issue for urgent follow-up",
-                        "url": f"{WEBHOOK_BASE}/log_client_issue",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "client_name": {"type": "string", "description": "Name of the client"},
-                                "note": {"type": "string", "description": "Description of the issue"},
-                                "issue_type": {"type": "string", "enum": ["complaint", "schedule", "feedback", "general"], "description": "Type of issue"},
-                                "priority": {"type": "string", "enum": ["low", "normal", "high", "urgent"], "description": "Priority level"}
-                            },
-                            "required": ["client_name", "note", "priority"]
-                        }
-                    }
-                }
-            ],
             "edges": [
-                {
-                    "id": "schedule_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Gigi has told the client someone will call back OR Gigi has said goodnight OR Gigi has answered the question twice"
-                    }
-                }
+                {"id": "to_closing_from_issue", "destination_node_id": "closing",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller says no or goodbye"}}
+            ]
+        },
+
+        {
+            "id": "collect_schedule_info",
+            "type": "conversation",
+            "name": "Collect Schedule Info",
+            "instruction": {
+                "type": "prompt",
+                "text": """Ask: "Can I get your name so I can look up your schedule?"
+Then transition to get_schedule_function."""
+            },
+            "edges": [
+                {"id": "to_get_schedule", "destination_node_id": "get_schedule_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have client name"}}
             ]
         },
 
         # =====================================================================
-        # CLIENT CANCEL - Cancel visit (ONE tool call)
+        # FUNCTION NODE: Get Schedule
         # =====================================================================
         {
-            "id": "client_cancel",
+            "id": "get_schedule_function",
+            "type": "function",
+            "name": "Get Schedule",
+            "function": {
+                "type": "custom",
+                "name": "get_schedule",
+                "description": "Look up a client's schedule from WellSky",
+                "url": f"{WEBHOOK_BASE}/get_schedule",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "client_name": {"type": "string", "description": "Name of the client"}
+                    },
+                    "required": ["client_name"]
+                }
+            },
+            "speak_during_execution": {
+                "type": "static_text",
+                "text": "Let me look that up for you."
+            },
+            "wait_for_result": True,
+            "edges": [
+                {"id": "to_schedule_result", "destination_node_id": "schedule_result",
+                 "transition_condition": {"type": "prompt", "prompt": "Schedule retrieved"}}
+            ]
+        },
+
+        {
+            "id": "schedule_result",
             "type": "conversation",
-            "name": "Client Cancellation",
+            "name": "Schedule Result",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Cancel the client's visit.
-
-## Information to Gather
-1. Which visit: "Which visit - today's or tomorrow's?"
-2. The reason: "May I ask the reason?"
-
-## Tool Calling
-Once you have visit date + reason:
-→ Call cancel_client_visit with client_name, visit_date, reason
-
-## After Tool Call
-Say: "I've cancelled that visit. The caregiver has been notified."
-Then ask: "Anything else?"
-→ Transition to closing"""
+                "text": """Read the schedule info from the function result and tell the client.
+Then ask: "Is there anything else I can help with?"
+If no → go to closing"""
             },
-            "tools": [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "cancel_client_visit",
-                        "description": "Cancel a client's scheduled visit and notify the caregiver",
-                        "url": f"{WEBHOOK_BASE}/cancel_client_visit",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "client_name": {"type": "string", "description": "Name of the client"},
-                                "visit_date": {"type": "string", "description": "Date of the visit to cancel (today, tomorrow, or specific date)"},
-                                "reason": {"type": "string", "description": "Reason for cancellation"}
-                            },
-                            "required": ["client_name", "visit_date", "reason"]
-                        }
-                    }
-                }
-            ],
             "edges": [
-                {
-                    "id": "cancel_to_closing",
-                    "destination_node_id": "closing",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Cancellation complete and caller has no other requests"
-                    }
-                }
+                {"id": "to_closing_from_schedule", "destination_node_id": "closing",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller says no or goodbye"}}
+            ]
+        },
+
+        {
+            "id": "collect_cancel_info",
+            "type": "conversation",
+            "name": "Collect Cancel Info",
+            "instruction": {
+                "type": "prompt",
+                "text": """Collect: name, which visit to cancel.
+Ask: "Which visit would you like to cancel?"
+Then transition to cancel_visit_function."""
+            },
+            "edges": [
+                {"id": "to_cancel_visit", "destination_node_id": "cancel_visit_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have client name and visit to cancel"}}
             ]
         },
 
         # =====================================================================
-        # PROSPECTIVE CLIENT HANDLER - People looking for care services
+        # FUNCTION NODE: Cancel Visit
+        # =====================================================================
+        {
+            "id": "cancel_visit_function",
+            "type": "function",
+            "name": "Cancel Visit",
+            "function": {
+                "type": "custom",
+                "name": "cancel_visit",
+                "description": "Cancel a client visit and notify the caregiver",
+                "url": f"{WEBHOOK_BASE}/cancel_visit",
+                "method": "POST",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "client_name": {"type": "string", "description": "Name of the client"},
+                        "visit_date": {"type": "string", "description": "Date of the visit to cancel"}
+                    },
+                    "required": ["client_name"]
+                }
+            },
+            "speak_during_execution": {
+                "type": "static_text",
+                "text": "Let me cancel that visit and notify your caregiver."
+            },
+            "wait_for_result": True,
+            "edges": [
+                {"id": "to_cancel_confirm", "destination_node_id": "cancel_confirmation",
+                 "transition_condition": {"type": "prompt", "prompt": "Visit cancelled"}}
+            ]
+        },
+
+        {
+            "id": "cancel_confirmation",
+            "type": "conversation",
+            "name": "Cancel Confirmation",
+            "instruction": {
+                "type": "prompt",
+                "text": """Say: "Done. I've cancelled that visit and notified your caregiver."
+Then ask: "Is there anything else?"
+If no → go to closing"""
+            },
+            "edges": [
+                {"id": "to_closing_from_cancel", "destination_node_id": "closing",
+                 "transition_condition": {"type": "prompt", "prompt": "Caller says no or goodbye"}}
+            ]
+        },
+
+        # =====================================================================
+        # FAMILY MEMBER FLOW
+        # =====================================================================
+        {
+            "id": "family_handler",
+            "type": "conversation",
+            "name": "Family Handler",
+            "instruction": {
+                "type": "prompt",
+                "text": """Acknowledge their concern. Collect: their name, who they're calling about, what's the concern.
+Then transition to send_team_message_function to escalate to Cynthia."""
+            },
+            "edges": [
+                {"id": "to_escalate_family", "destination_node_id": "send_team_message_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have name and understood the concern"}}
+            ]
+        },
+
+        # =====================================================================
+        # PROSPECTIVE CLIENT
         # =====================================================================
         {
             "id": "prospective_client_handler",
@@ -622,42 +574,17 @@ Then ask: "Anything else?"
             "name": "Prospective Client",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Collect name and callback number, then confirm follow-up call.
-
-## Information to Gather
-1. Name: "Can I get your name?"
-2. Callback number: "And the best number to reach you?"
-
-## After Gathering Info
-Say: "Perfect, [Name]. Our new client team will call you at [number] within thirty minutes."
-Then: "Thanks for calling Colorado Care Assist!"
-→ Transition to end
-
-## If Asked About Rates
-"Forty dollars an hour in Colorado Springs, forty-three in Denver, forty-five in Boulder. Three hour minimum, no contracts."
-
-## If Asked About Services
-"Non-medical home care - bathing, dressing, meals, medication reminders, light housekeeping, companionship."
-
-## If Asked About VA Benefits
-"Yes, we accept VA and Tricare. We handle the paperwork." """
+                "text": """Say: "Thanks for calling! We'd love to help. Let me get your name and number so someone can call you back first thing in the morning to discuss your needs."
+Collect name and phone, then transition to send_team_message_function."""
             },
-            "tools": [],
             "edges": [
-                {
-                    "id": "prospective_client_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Callback confirmed OR caller declined"
-                    }
-                }
+                {"id": "to_log_prospect", "destination_node_id": "send_team_message_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have name and callback number"}}
             ]
         },
 
         # =====================================================================
-        # PROSPECTIVE CAREGIVER HANDLER - People looking for jobs
+        # PROSPECTIVE CAREGIVER
         # =====================================================================
         {
             "id": "prospective_caregiver_handler",
@@ -665,273 +592,50 @@ Then: "Thanks for calling Colorado Care Assist!"
             "name": "Prospective Caregiver",
             "instruction": {
                 "type": "prompt",
-                "text": """## Task
-Collect name and callback number, then confirm follow-up call.
-
-## Information to Gather
-1. Name: "Can I get your name?"
-2. Callback number: "And the best number to reach you?"
-
-## After Gathering Info
-Say: "Perfect, [Name]. Our recruiting team will call you at [number] within thirty minutes."
-Then: "Thanks for your interest in Colorado Care Assist!"
-→ Transition to end
-
-## If Asked About Requirements
-"Valid driver's license, reliable transportation, and you'll need to pass a background check. C N A's preferred but not required - we provide training."
-
-## If Asked About Pay
-"Eighteen to twenty-two dollars an hour depending on experience. Mileage reimbursement included." """
+                "text": """Say: "Great! We're always looking for caring people. Let me get your name and number so our recruiter can reach out."
+Collect name and phone, then transition to send_team_message_function."""
             },
-            "tools": [],
             "edges": [
-                {
-                    "id": "prospective_caregiver_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Callback confirmed OR caller declined"
-                    }
-                }
+                {"id": "to_log_applicant", "destination_node_id": "send_team_message_function",
+                 "transition_condition": {"type": "prompt", "prompt": "Have name and callback number"}}
             ]
         },
 
         # =====================================================================
-        # FAMILY MEMBER HANDLER - Handle worried AND angry family members
-        # =====================================================================
-        {
-            "id": "family_handler",
-            "type": "conversation",
-            "name": "Family Member",
-            "instruction": {
-                "type": "prompt",
-                "text": """## Task
-Escalate to Cynthia and get callback number.
-
-## If Angry (mentions neglect, lawsuit, authorities, caregiver left)
-Acknowledge once: "I hear you. This is serious and I'm taking it seriously."
-Say: "I'm escalating this directly to Cynthia Pointe, our Care Manager. She will call you personally within fifteen minutes."
-Get their number if needed.
-→ Transition to end
-
-## If Worried (not angry, just concerned)
-Say: "I can hear how worried you are. Cynthia Pointe will call you within fifteen minutes to check on your mom's care tonight."
-Get their number if needed.
-→ Transition to end
-
-## Key Rules
-- Always say "Cynthia Pointe" by name
-- Always say "within fifteen minutes"
-- Never say "calm down" or be condescending
-- Acknowledge once, then move to action"""
-            },
-            "tools": [],
-            "edges": [
-                {
-                    "id": "family_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Family member has been told Cynthia Pointe will call within 15 minutes AND callback number confirmed"
-                    }
-                }
-            ]
-        },
-
-        # =====================================================================
-        # CLOSING - End the conversation (STAY HERE - don't loop back)
+        # CLOSING
         # =====================================================================
         {
             "id": "closing",
             "type": "conversation",
             "name": "Closing",
             "instruction": {
-                "type": "prompt",
-                "text": """## Task
-Close the call warmly. Do not loop back to previous nodes.
-
-## What to Say
-Ask: "Anything else I can help with?"
-If yes: Listen and address briefly.
-If no: "Thank you for calling Colorado Care Assist. Have a good night!"
-→ Transition to end
-
-## If They Seek Reassurance
-- "Are you sure it's handled?" → "Yes, you're all set."
-- "Do I need to do anything?" → "Nope, we've got it covered."
-These are not new requests. Stay calm and confirm.
-
-## Key Rule
-Never go back to previous action nodes. The issue is handled."""
+                "type": "static_text",
+                "text": "Take care. Have a good night!"
             },
             "edges": [
-                {
-                    "id": "closing_to_end",
-                    "destination_node_id": "end_call",
-                    "transition_condition": {
-                        "type": "prompt",
-                        "prompt": "Caller says goodbye, thanks you, or confirms they have no other needs"
-                    }
-                }
+                {"id": "to_end", "destination_node_id": "end_call",
+                 "transition_condition": {"type": "prompt", "prompt": "After saying goodbye"}}
             ]
         },
 
-        # =====================================================================
-        # END CALL - Terminal node
-        # =====================================================================
         {
             "id": "end_call",
             "type": "end",
-            "name": "End Call",
-            "instruction": {
-                "type": "prompt",
-                "text": "End the call gracefully."
-            }
+            "name": "End Call"
         }
     ]
 
     return {
-        "name": "Gigi - Colorado Care Assist",
-        "model_choice": {
-            "type": "cascading",
-            "model": "gpt-5-mini"
-        },
+        "name": "Gigi v2 - With Function Nodes",
+        "model_choice": {"type": "gpt", "model": "gpt-4o-mini"},
         "general_prompt": global_prompt,
         "nodes": nodes,
         "start_node_id": "start_greeting",
-        "start_speaker": "agent",
-        "voice_id": "11labs-Myra",  # Keep existing voice
-        "language": "en-US",
-        "webhook_url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell",
-        "begin_message": "Hi, this is Gigi with Colorado Care Assist. How can I help you tonight?"
+        "start_speaker": "agent"
     }
 
 
-def create_conversation_flow():
-    """Create a new conversation flow agent."""
-    config = get_conversation_flow_config()
-
-    response = requests.post(
-        f"{RETELL_API_BASE}/create-agent",
-        headers={
-            "Authorization": f"Bearer {RETELL_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "agent_name": config["name"],
-            "voice_id": config.get("voice_id", "eleven_turbo_v2"),
-            "language": config.get("language", "en-US"),
-            "response_engine": {
-                "type": "retell-llm-conversation-flow",
-                "conversation_flow_id": None  # Will be created
-            }
-        }
-    )
-
-    print(f"Create agent response: {response.status_code}")
-    print(response.text)
-    return response.json() if response.status_code in (200, 201) else None
-
-
-def update_existing_agent():
-    """
-    Update the existing Gigi agent to use conversation flow.
-
-    Note: This may require creating a new conversation flow first,
-    then updating the agent to reference it.
-    """
-    config = get_conversation_flow_config()
-
-    # First, create the conversation flow
-    print("Creating conversation flow...")
-    flow_response = requests.post(
-        f"{RETELL_API_BASE}/create-conversation-flow",
-        headers={
-            "Authorization": f"Bearer {RETELL_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "name": config["name"],
-            "model_choice": config["model_choice"],
-            "general_prompt": config["general_prompt"],
-            "nodes": config["nodes"],
-            "start_node_id": config["start_node_id"],
-            "start_speaker": config["start_speaker"]
-        }
-    )
-
-    print(f"Conversation flow response: {flow_response.status_code}")
-
-    if flow_response.status_code not in (200, 201):
-        print(f"Error creating conversation flow: {flow_response.text}")
-        return None
-
-    flow_data = flow_response.json()
-    conversation_flow_id = flow_data.get("conversation_flow_id")
-    print(f"Created conversation flow: {conversation_flow_id}")
-
-    # Now update the agent to use this conversation flow
-    print(f"\nUpdating agent {CURRENT_AGENT_ID} to use conversation flow...")
-    agent_response = requests.patch(
-        f"{RETELL_API_BASE}/update-agent/{CURRENT_AGENT_ID}",
-        headers={
-            "Authorization": f"Bearer {RETELL_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "response_engine": {
-                "type": "retell-llm-conversation-flow",
-                "conversation_flow_id": conversation_flow_id
-            },
-            "webhook_url": config["webhook_url"],
-            "begin_message": config["begin_message"]
-        }
-    )
-
-    print(f"Agent update response: {agent_response.status_code}")
-    print(agent_response.text)
-
-    return agent_response.json() if agent_response.status_code == 200 else None
-
-
-def main():
-    if not RETELL_API_KEY:
-        print("ERROR: RETELL_API_KEY environment variable not set")
-        sys.exit(1)
-
-    print("=" * 60)
-    print("GIGI CONVERSATION FLOW SETUP")
-    print("=" * 60)
-
-    # Export config for review
-    config = get_conversation_flow_config()
-    config_file = os.path.join(os.path.dirname(__file__), "conversation_flow_config.json")
-    with open(config_file, "w") as f:
-        json.dump(config, f, indent=2)
-    print(f"\nConfiguration exported to: {config_file}")
-
-    print(f"\nNodes defined: {len(config['nodes'])}")
-    for node in config['nodes']:
-        tools = node.get('tools', [])
-        edges = node.get('edges', [])
-        print(f"  - {node['id']}: {node.get('name', '')} ({len(tools)} tools, {len(edges)} edges)")
-
-    # Ask for confirmation
-    print("\n" + "=" * 60)
-    response = input("Create conversation flow and update Gigi agent? (yes/no): ")
-
-    if response.lower() in ("yes", "y"):
-        result = update_existing_agent()
-        if result:
-            print("\n" + "=" * 60)
-            print("SUCCESS! Gigi is now a Conversation Flow agent.")
-            print("=" * 60)
-            print("\nTest by running simulations in the Retell dashboard.")
-        else:
-            print("\nFailed to update agent. Check the errors above.")
-    else:
-        print("\nAborted. Configuration file saved for review.")
-
-
 if __name__ == "__main__":
-    main()
+    import json
+    config = get_conversation_flow_config()
+    print(json.dumps(config, indent=2))
