@@ -41,7 +41,10 @@ def create_batch_test(test_definition_ids):
         headers=headers,
         json={
             'test_case_definition_ids': test_definition_ids,
-            'conversation_flow_id': CONVERSATION_FLOW_ID
+            'response_engine': {
+                'type': 'conversation-flow',
+                'conversation_flow_id': CONVERSATION_FLOW_ID
+            }
         },
         timeout=30
     )
