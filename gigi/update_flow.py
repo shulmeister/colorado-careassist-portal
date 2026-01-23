@@ -32,7 +32,6 @@ response = requests.patch(
     },
     json={
         "name": config["name"],
-        "model_choice": config["model_choice"],
         "general_prompt": config["general_prompt"],
         "nodes": config["nodes"],
         "start_node_id": config["start_node_id"],
