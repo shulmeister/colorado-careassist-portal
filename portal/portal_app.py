@@ -1580,6 +1580,16 @@ async def api_gigi_ringcentral_command(request: Request):
     """
     global _gigi_settings
 
+    # Handle RingCentral webhook validation request
+    validation_token = request.headers.get("Validation-Token")
+    if validation_token:
+        logger.info(f"RingCentral webhook validation request received")
+        return Response(
+            content="",
+            status_code=200,
+            headers={"Validation-Token": validation_token}
+        )
+
     try:
         body = await request.json()
         logger.info(f"Gigi command webhook received: {body}")
