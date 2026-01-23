@@ -196,19 +196,23 @@ Listen and route based on their answer.
             "instruction": {
                 "type": "prompt",
                 "text": """## Task
-Collect info and log the call-out.
+Collect info, log the call-out, and START the shift-filling campaign.
 
 ## Information to Gather
 1. Their name (if not known): "Can I get your name?"
 2. The reason: "I'm sorry to hear that. What's going on?"
-3. Which client/shift (if not mentioned): "Which client were you scheduled with?"
+3. Which client/shift: "Which client were you scheduled with?"
+4. Shift time (if not mentioned): "What time was the shift?"
 
 ## Tool Calling
-Once you have name + reason + client:
-→ Call report_call_out with caregiver_name, reason, client_name
+Once you have name + reason + client + time:
+→ FIRST: Call report_call_out with caregiver_name, reason, shift_date
+→ THEN: Call start_shift_filling_campaign with client_name, shift_date, shift_time, urgency="urgent"
 
-## After Tool Call
-Say: "Got it. I've logged your call-out and we're reaching out for coverage. Feel better!"
+IMPORTANT: You MUST call BOTH tools. The second tool texts available caregivers to find coverage.
+
+## After Tool Calls
+Say: "Got it. I've logged your call-out and I'm texting available caregivers right now to find coverage. Feel better!"
 Then ask: "Anything else?"
 If no: "Take care. Bye!" → transition to closing"""
             },
