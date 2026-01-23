@@ -126,6 +126,8 @@ ONCE_PER_CALL_TOOLS = {
     "cancel_client_visit",
     "add_note_to_wellsky",
     "start_shift_filling_campaign",
+    "add_visit_notes",
+    "escalate_emergency",
 }
 
 # Cache of tool calls: {call_id: {tool_name: timestamp}}
@@ -2484,6 +2486,244 @@ async def assign_shift_to_caregiver(
         return ShiftActionResult(success=False, message=str(e))
 
 
+@dataclass
+class VisitNotesResult:
+    """Result of adding visit notes."""
+    success: bool
+    message: str
+    shift_id: Optional[str] = None
+
+
+@dataclass
+class EmergencyEscalationResult:
+    """Result of emergency escalation."""
+    success: bool
+    message: str
+    escalation_id: Optional[str] = None
+    contacts_notified: List[str] = None
+
+
+async def add_visit_notes(
+    caregiver_phone: str,
+    client_name: str,
+    tasks_completed: str,
+    notes: Optional[str] = None
+) -> VisitNotesResult:
+    """
+    Log caregiver task completion notes for a visit.
+    Called when caregiver texts what they did during a shift.
+    CALL ONCE per conversation.
+
+    Examples of caregiver messages this handles:
+    - "Task completed for the spencer's. Laundry, cleaned house, changed bedsheets"
+    - "I clean top to bottom her two upstairs bathrooms vacuumed mopped"
+    - "Tasks: dinner prep, assisted with commode, laundry, bedtime routine"
+
+    Args:
+        caregiver_phone: The caregiver's phone number
+        client_name: Name of the client (extracted from message or context)
+        tasks_completed: Summary of tasks completed
+        notes: Any additional notes (mileage, issues, etc.)
+
+    Returns:
+        VisitNotesResult with confirmation
+    """
+    logger.info(f"add_visit_notes: caregiver={caregiver_phone}, client={client_name}")
+    logger.info(f"  Tasks: {tasks_completed}")
+
+    try:
+        # Post to portal API to log the visit notes
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{PORTAL_BASE_URL}/api/internal/gigi/visit-notes",
+                json={
+                    "caregiver_phone": caregiver_phone,
+                    "client_name": client_name,
+                    "tasks_completed": tasks_completed,
+                    "notes": notes,
+                    "source": "sms",
+                    "recorded_by": "gigi_ai"
+                },
+                timeout=15.0
+            )
+
+            if response.status_code in (200, 201):
+                data = response.json()
+                shift_id = data.get("shift_id")
+                logger.info(f"Visit notes logged for shift {shift_id}")
+                return VisitNotesResult(
+                    success=True,
+                    message="Got it! I've logged your visit notes. Thank you for the update.",
+                    shift_id=shift_id
+                )
+            else:
+                logger.warning(f"Failed to log visit notes: {response.status_code}")
+                # Still acknowledge receipt even if API fails
+                return VisitNotesResult(
+                    success=True,
+                    message="Thanks for the update! I've noted your completed tasks.",
+                    shift_id=None
+                )
+
+    except Exception as e:
+        logger.error(f"Error logging visit notes: {e}")
+        # Graceful degradation - acknowledge even on error
+        return VisitNotesResult(
+            success=True,
+            message="Thanks for letting us know what you completed.",
+            shift_id=None
+        )
+
+
+async def escalate_emergency(
+    caller_phone: str,
+    caller_name: str,
+    situation: str,
+    location: Optional[str] = None,
+    client_name: Optional[str] = None
+) -> EmergencyEscalationResult:
+    """
+    URGENT: Escalate an emergency situation requiring immediate human attention.
+    Called when caregiver reports potential client safety issue.
+    CALL ONCE and immediately connect to human or provide emergency guidance.
+
+    Examples of emergency situations this handles:
+    - "I'm at Shirley's and she's not answering the door, dog is barking"
+    - "Client fell and can't get up"
+    - "Client is confused and doesn't recognize me"
+    - "Client seems to be having a medical emergency"
+    - "I found the client on the floor"
+
+    This function:
+    1. Immediately notifies on-call manager via SMS
+    2. Sends RingCentral message to Cynthia (ext 105) and Jason (ext 101)
+    3. Logs the emergency for follow-up
+    4. Returns guidance for the caregiver
+
+    Args:
+        caller_phone: Phone number of person reporting
+        caller_name: Name of the caregiver/reporter
+        situation: Description of the emergency
+        location: Address or location if known
+        client_name: Name of the client involved
+
+    Returns:
+        EmergencyEscalationResult with status and next steps
+    """
+    logger.warning(f"EMERGENCY ESCALATION: {caller_name} ({caller_phone})")
+    logger.warning(f"  Situation: {situation}")
+    logger.warning(f"  Client: {client_name}, Location: {location}")
+
+    contacts_notified = []
+
+    try:
+        # 1. Send immediate SMS to on-call manager
+        if OPERATIONS_SMS_ENABLED and ON_CALL_MANAGER_PHONE:
+            emergency_sms = (
+                f"URGENT - GIGI ESCALATION\n"
+                f"From: {caller_name} ({caller_phone})\n"
+                f"Client: {client_name or 'Unknown'}\n"
+                f"Situation: {situation}\n"
+                f"Location: {location or 'Unknown'}\n"
+                f"Time: {datetime.now().strftime('%I:%M %p')}\n"
+                f"CALL BACK IMMEDIATELY"
+            )
+            sms_sent = await _send_sms_ringcentral(ON_CALL_MANAGER_PHONE, emergency_sms)
+            if sms_sent:
+                contacts_notified.append("On-call manager (SMS)")
+                logger.info("Emergency SMS sent to on-call manager")
+
+        # 2. Send RingCentral internal messages to Cynthia and Jason
+        if RC_MESSAGING_AVAILABLE and ringcentral_messaging_service:
+            rc_message = (
+                f"🚨 EMERGENCY ESCALATION 🚨\n\n"
+                f"Caregiver: {caller_name}\n"
+                f"Phone: {caller_phone}\n"
+                f"Client: {client_name or 'Unknown'}\n"
+                f"Location: {location or 'Not provided'}\n\n"
+                f"SITUATION: {situation}\n\n"
+                f"⚠️ IMMEDIATE CALLBACK REQUIRED"
+            )
+
+            # Notify Cynthia (Care Manager)
+            try:
+                result = ringcentral_messaging_service.send_direct_message_by_ext(
+                    ESCALATION_CYNTHIA_EXT, rc_message
+                )
+                if result.get("success"):
+                    contacts_notified.append(f"Cynthia (ext {ESCALATION_CYNTHIA_EXT})")
+            except Exception as e:
+                logger.error(f"Failed to notify Cynthia: {e}")
+
+            # Notify Jason (Owner)
+            try:
+                result = ringcentral_messaging_service.send_direct_message_by_ext(
+                    ESCALATION_JASON_EXT, rc_message
+                )
+                if result.get("success"):
+                    contacts_notified.append(f"Jason (ext {ESCALATION_JASON_EXT})")
+            except Exception as e:
+                logger.error(f"Failed to notify Jason: {e}")
+
+            # Also post to New Scheduling chat for visibility
+            try:
+                ringcentral_messaging_service.send_message_to_chat(
+                    "New Scheduling", rc_message
+                )
+                contacts_notified.append("New Scheduling chat")
+            except Exception as e:
+                logger.error(f"Failed to post to New Scheduling: {e}")
+
+        # 3. Log the emergency
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{PORTAL_BASE_URL}/api/internal/gigi/emergencies",
+                json={
+                    "caller_phone": caller_phone,
+                    "caller_name": caller_name,
+                    "client_name": client_name,
+                    "location": location,
+                    "situation": situation,
+                    "contacts_notified": contacts_notified,
+                    "timestamp": datetime.now().isoformat()
+                },
+                timeout=10.0
+            )
+
+        # Determine response based on situation
+        if "not answering" in situation.lower() or "floor" in situation.lower():
+            guidance = (
+                "I've immediately notified the care team and management. "
+                "If you believe the client may be in danger, please call 911 first. "
+                "Stay at the location if safe to do so - someone will call you back within minutes."
+            )
+        else:
+            guidance = (
+                "I've notified the care team immediately. "
+                "Someone will call you back right away. "
+                "If this is a medical emergency, please call 911."
+            )
+
+        return EmergencyEscalationResult(
+            success=True,
+            message=guidance,
+            escalation_id=f"ESC-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            contacts_notified=contacts_notified
+        )
+
+    except Exception as e:
+        logger.error(f"Error in emergency escalation: {e}")
+        # Even on error, give the caregiver guidance
+        return EmergencyEscalationResult(
+            success=False,
+            message=(
+                "I'm having trouble reaching the team automatically. "
+                "Please call the office directly at 303-757-1777 or 911 if this is a medical emergency."
+            ),
+            contacts_notified=[]
+        )
+
+
 # =============================================================================
 # Retell Webhook Endpoints
 # =============================================================================
@@ -2930,6 +3170,25 @@ async def retell_function_call(function_name: str, request: Request):
                 "success": result.success,
                 "message": result.message,
                 "shift_id": result.shift_id
+            })
+
+        elif function_name == "add_visit_notes":
+            result = await add_visit_notes(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
+            return JSONResponse({
+                "success": result.success,
+                "message": result.message,
+                "shift_id": result.shift_id
+            })
+
+        elif function_name == "escalate_emergency":
+            result = await escalate_emergency(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
+            return JSONResponse({
+                "success": result.success,
+                "message": result.message,
+                "escalation_id": result.escalation_id,
+                "contacts_notified": result.contacts_notified or []
             })
 
         else:

@@ -170,11 +170,84 @@ Do NOT repeat their issue back. Just route."""
                     }
                 },
                 {
+                    "id": "to_emergency",
+                    "destination_node_id": "caregiver_emergency",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Caregiver reports an URGENT situation: client not answering door, client found on floor, client unresponsive, safety concern, or any potential emergency"
+                    }
+                },
+                {
                     "id": "to_caregiver_other",
                     "destination_node_id": "caregiver_other",
                     "transition_condition": {
                         "type": "prompt",
                         "prompt": "Caregiver has a different question or request"
+                    }
+                }
+            ]
+        },
+
+        # =====================================================================
+        # CAREGIVER EMERGENCY - Handle urgent client safety situations
+        # =====================================================================
+        {
+            "id": "caregiver_emergency",
+            "type": "conversation",
+            "name": "Caregiver Emergency",
+            "instruction": {
+                "type": "prompt",
+                "text": """URGENT: The caregiver is reporting a potential client safety issue.
+
+EXAMPLES:
+- "Client is not answering the door"
+- "I found the client on the floor"
+- "Client seems confused/disoriented"
+- "Client is unresponsive"
+- "Something is wrong, the dog is barking but no one answers"
+
+IMMEDIATE RESPONSE:
+1. Stay calm but act fast
+2. Call escalate_emergency ONCE with all details
+3. Give clear guidance:
+   - If potential medical emergency: "If you believe they need immediate medical help, call 911 first. Stay on scene if safe. I've alerted our care team - someone will call you back within 2 minutes."
+   - If client not answering: "Stay at the location if it's safe. I've notified management immediately. Try knocking again and checking windows. Someone will call you back right away."
+4. Reassure: "You did the right thing calling. Help is on the way."
+
+CRITICAL:
+- Do NOT minimize the situation
+- Do NOT tell them to just leave
+- Escalate IMMEDIATELY via the tool
+- Management gets notified via SMS and RingCentral instantly"""
+            },
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "escalate_emergency",
+                        "description": "URGENT: Escalate a potential client safety emergency - notifies management immediately via SMS and RingCentral",
+                        "url": f"{WEBHOOK_BASE}/escalate_emergency",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "caller_phone": {"type": "string", "description": "Phone number of the caregiver reporting"},
+                                "caller_name": {"type": "string", "description": "Name of the caregiver"},
+                                "situation": {"type": "string", "description": "Description of the emergency situation"},
+                                "client_name": {"type": "string", "description": "Name of the client involved"},
+                                "location": {"type": "string", "description": "Address or location if known"}
+                            },
+                            "required": ["caller_name", "situation"]
+                        }
+                    }
+                }
+            ],
+            "edges": [
+                {
+                    "id": "emergency_to_end",
+                    "destination_node_id": "end_call",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Emergency has been escalated and caregiver has been given guidance"
                     }
                 }
             ]
