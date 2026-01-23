@@ -40,8 +40,10 @@ try:
     print("TEST MESSAGE TO NEW SCHEDULER CHAT")
     print("=" * 60)
 
-    result = ringcentral_messaging_service.notify_scheduler_chat(
-        "🤖 TEST from Gigi: This is a system test. Please ignore."
+    # Use correct chat name: "New Scheduling"
+    result = ringcentral_messaging_service.send_message_to_chat(
+        "New Scheduling",
+        "🤖 TEST from Gigi AI (ext 111): This is a system test. Please ignore."
     )
     print(f"Result: {json.dumps(result, indent=2)}")
 

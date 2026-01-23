@@ -988,10 +988,10 @@ class RingCentralMessagingService:
 
     def notify_scheduler_chat(self, message: str) -> Dict[str, Any]:
         """
-        Send a notification to the New Scheduler chat.
+        Send a notification to the New Scheduling chat.
         Used by Gigi for shift-related notifications.
         """
-        return self.send_message_to_chat("New Scheduler", message)
+        return self.send_message_to_chat("New Scheduling", message)
 
     def notify_cynthia(self, message: str) -> Dict[str, Any]:
         """
