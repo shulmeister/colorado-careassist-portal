@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operations Dashboard - Colorado CareAssist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            line-height: 1.4;
+            overflow: hidden;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 20px 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-header {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 20px;
+        }
+
+        .sidebar-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 4px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .back-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            margin-top: 12px;
+            border-radius: 6px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.35);
+            color: #dbeafe;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .back-button:hover {
+            background: rgba(59, 130, 246, 0.25);
+            transform: translateX(-2px);
+        }
+
+        .sidebar-nav {
+            padding: 0 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #94a3b8;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+
+        .sidebar-link:hover {
+            background: rgba(148, 163, 184, 0.15);
+            color: #f8fafc;
+        }
+
+        .sidebar-link.active {
+            background: rgba(59, 130, 246, 0.18);
+            border: 1px solid rgba(59, 130, 246, 0.45);
+            color: #bfdbfe;
+        }
+
+        .sidebar-link .icon { font-size: 15px; }
+
+        /* Main Content */
+        .content {
+            background: #0f172a;
+            padding: 20px;
+            overflow-y: auto;
+            height: 100vh;
+        }
+
+        .content-header {
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .page-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f9fafb;
+        }
+
+        .page-subtitle {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-top: 2px;
+        }
+
+        .filters {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .btn {
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover { background: #2563eb; }
+
+        .btn-secondary {
+            background: #334155;
+            color: #e5e7eb;
+            border: 1px solid #475569;
+        }
+
+        .btn-secondary:hover { background: #475569; }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* KPI Cards */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 1400px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+
+        .kpi-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 14px;
+        }
+
+        .kpi-label {
+            font-size: 10px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 4px;
+        }
+
+        .kpi-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #f8fafc;
+        }
+
+        .kpi-value.positive { color: #22c55e; }
+        .kpi-value.warning { color: #f59e0b; }
+        .kpi-value.negative { color: #ef4444; }
+
+        .kpi-change {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+
+        /* Data Tables */
+        .data-section {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            margin-bottom: 16px;
+        }
+
+        .section-header {
+            padding: 14px 16px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f8fafc;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .data-table th {
+            text-align: left;
+            padding: 10px 16px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            font-size: 13px;
+            color: #e5e7eb;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        .data-table tr:hover td {
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+        .status-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+        .status-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .status-info { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+        .status-open { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+
+        /* Risk Score */
+        .risk-score {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .risk-bar {
+            width: 50px;
+            height: 6px;
+            background: #334155;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .risk-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s;
+        }
+
+        .risk-low .risk-fill { background: #22c55e; }
+        .risk-medium .risk-fill { background: #f59e0b; }
+        .risk-high .risk-fill { background: #ef4444; }
+
+        /* Charts */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 1000px) { .chart-grid { grid-template-columns: 1fr; } }
+
+        .chart-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 16px;
+        }
+
+        .chart-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: #f8fafc;
+            margin-bottom: 12px;
+        }
+
+        .chart-container {
+            height: 200px;
+            position: relative;
+        }
+
+        /* Loading State */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid #334155;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .empty-state .icon {
+            font-size: 40px;
+            margin-bottom: 12px;
+        }
+
+        /* WellSky Status Banner */
+        .wellsky-banner {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .wellsky-banner.connected {
+            background: rgba(34, 197, 94, 0.1);
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .wellsky-banner .icon { font-size: 18px; }
+        .wellsky-banner .text { font-size: 13px; color: #f59e0b; }
+        .wellsky-banner.connected .text { color: #22c55e; }
+
+        /* Sidebar Divider */
+        .sidebar-divider {
+            height: 1px;
+            background: #334155;
+            margin: 16px 12px;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 48px;
+            height: 26px;
+            flex-shrink: 0;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #475569;
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #22c55e;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        input:disabled + .toggle-slider {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 900px) { .control-panel { grid-template-columns: 1fr; } }
+
+        .control-card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 20px;
+        }
+
+        .control-card.highlight {
+            border-color: #3b82f6;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), transparent);
+        }
+
+        .control-card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+
+        .control-card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .control-card-title .icon {
+            font-size: 18px;
+        }
+
+        .control-card-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #334155;
+        }
+
+        .control-row:last-child {
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+
+        .control-label {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .control-label-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: #e5e7eb;
+        }
+
+        .control-label-desc {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        /* Status Indicator */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .status-indicator.online {
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+        }
+
+        .status-indicator.offline {
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+        }
+
+        .status-indicator.partial {
+            background: rgba(245, 158, 11, 0.15);
+            color: #f59e0b;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Activity Log */
+        .activity-log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            display: flex;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #1e293b;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.callout { background: rgba(239, 68, 68, 0.15); }
+        .activity-icon.sms { background: rgba(34, 197, 94, 0.15); }
+        .activity-icon.voice { background: rgba(168, 85, 247, 0.15); }
+
+        .activity-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .activity-title {
+            font-size: 13px;
+            color: #e5e7eb;
+            margin-bottom: 2px;
+        }
+
+        .activity-time {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        /* Gigi Status Banner */
+        .gigi-status-banner {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .gigi-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            flex-shrink: 0;
+        }
+
+        .gigi-info {
+            flex: 1;
+        }
+
+        .gigi-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #f8fafc;
+            margin-bottom: 4px;
+        }
+
+        .gigi-desc {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateX(100%);
+            transition: all 0.3s ease;
+            z-index: 10000;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .notification.show {
+            opacity: 1;
+            transform: translateX(0);
+        }
+
+        .notification-success {
+            background: linear-gradient(135deg, #166534, #15803d);
+            color: #dcfce7;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+        }
+
+        .notification-error {
+            background: linear-gradient(135deg, #991b1b, #b91c1c);
+            color: #fee2e2;
+            border: 1px solid rgba(248, 113, 113, 0.3);
+        }
+
+        .notification-info {
+            background: linear-gradient(135deg, #1e40af, #2563eb);
+            color: #dbeafe;
+            border: 1px solid rgba(96, 165, 250, 0.3);
+        }
+
+        .notification-icon {
+            font-size: 16px;
+            font-weight: 700;
+        }
+
+        /* Activity Log Items */
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #1e293b;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border: 1px solid #334155;
+        }
+
+        .activity-item:hover {
+            background: #293548;
+        }
+
+        .activity-item .activity-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .activity-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .activity-title {
+            font-weight: 600;
+            color: #f1f5f9;
+            font-size: 13px;
+            text-transform: capitalize;
+        }
+
+        .activity-desc {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        .activity-meta {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .activity-time {
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .status-success {
+            background: rgba(34, 197, 94, 0.15);
+            color: #4ade80;
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-title">Colorado CareAssist</div>
+                <div class="sidebar-subtitle">Operations Dashboard</div>
+                <a href="/" class="back-button">
+                    <span>&larr;</span> Back to Portal
+                </a>
+            </div>
+            <nav class="sidebar-nav">
+                <a class="sidebar-link active" data-tab="overview">
+                    <span class="icon">📊</span> Overview
+                </a>
+                <a class="sidebar-link" data-tab="clients">
+                    <span class="icon">👥</span> Clients
+                </a>
+                <a class="sidebar-link" data-tab="care-plans">
+                    <span class="icon">📋</span> Care Plans
+                </a>
+                <a class="sidebar-link" data-tab="shifts">
+                    <span class="icon">📅</span> Shifts & Coverage
+                </a>
+                <a class="sidebar-link" data-tab="at-risk">
+                    <span class="icon">⚠️</span> At-Risk Clients
+                </a>
+                <div class="sidebar-divider"></div>
+                <a class="sidebar-link" data-tab="gigi">
+                    <span class="icon">🤖</span> Gigi AI Agent
+                </a>
+                <a class="sidebar-link" data-tab="call-outs">
+                    <span class="icon">📞</span> Call-Out Log
+                </a>
+            </nav>
+        </aside>
+
+        <main class="content">
+            <div class="content-header">
+                <div>
+                    <h1 class="page-title">Operations Dashboard</h1>
+                    <p class="page-subtitle">Client satisfaction, care plans, and operational metrics</p>
+                </div>
+                <div class="filters">
+                    <button class="btn btn-secondary" onclick="refreshData()">
+                        ↻ Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- WellSky Status Banner -->
+            <div class="wellsky-banner" id="wellskyBanner">
+                <span class="icon">⏳</span>
+                <span class="text">Using mock data - WellSky API not connected</span>
+            </div>
+
+            <!-- Overview Tab -->
+            <div class="tab-content active" id="tab-overview">
+                <div class="kpi-grid">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Clients</div>
+                        <div class="kpi-value" id="kpi-active-clients">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active Caregivers</div>
+                        <div class="kpi-value" id="kpi-active-caregivers">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Open Shifts</div>
+                        <div class="kpi-value" id="kpi-open-shifts">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">EVV Compliance</div>
+                        <div class="kpi-value" id="kpi-evv-rate">--%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Plans Due Review</div>
+                        <div class="kpi-value" id="kpi-plans-due">--</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">At-Risk Clients</div>
+                        <div class="kpi-value" id="kpi-at-risk">--</div>
+                    </div>
+                </div>
+
+                <div class="chart-grid">
+                    <div class="chart-card">
+                        <div class="chart-title">Shifts This Week</div>
+                        <div class="chart-container">
+                            <canvas id="shiftsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-title">Client Status Distribution</div>
+                        <div class="chart-container">
+                            <canvas id="clientStatusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Clients Tab -->
+            <div class="tab-content" id="tab-clients">
+                <div class="data-section">
+                    <div class="section-header">
+                        <span class="section-title">Active Clients</span>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Client Name</th>
+                                <th>Status</th>
+                                <th>Hours/Week</th>
+                                <th>Payer</th>
+                                <th>Risk Score</th>
+                                <th>Last Visit</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clients-table-body">
+                            <tr><td colspan="6" class="loading"><div class="spinner"></div> Loading clients...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Care Plans Tab -->
+            <div class="tab-content" id="tab-care-plans">
+                <div class="data-section">
+                    <div class="section-header">
+                        <span class="section-title">Care Plans Due for Review</span>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Plan Status</th>
+                                <th>Review Date</th>
+                                <th>Days Until Review</th>
+                                <th>Authorized Hours</th>
+                            </tr>
+                        </thead>
+                        <tbody id="care-plans-table-body">
+                            <tr><td colspan="5" class="loading"><div class="spinner"></div> Loading care plans...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Shifts Tab -->
+            <div class="tab-content" id="tab-shifts">
+                <div class="data-section">
+                    <div class="section-header">
+                        <span class="section-title">Open Shifts (Need Coverage)</span>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Client</th>
+                                <th>Location</th>
+                                <th>Hours</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="shifts-table-body">
+                            <tr><td colspan="6" class="loading"><div class="spinner"></div> Loading shifts...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- At-Risk Tab -->
+            <div class="tab-content" id="tab-at-risk">
+                <div class="data-section">
+                    <div class="section-header">
+                        <span class="section-title">At-Risk Clients (Score > 40)</span>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Risk Score</th>
+                                <th>Primary Factors</th>
+                                <th>Recommendations</th>
+                            </tr>
+                        </thead>
+                        <tbody id="at-risk-table-body">
+                            <tr><td colspan="4" class="loading"><div class="spinner"></div> Loading at-risk clients...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Gigi AI Agent Tab -->
+            <div class="tab-content" id="tab-gigi">
+                <!-- Gigi Status Banner -->
+                <div class="gigi-status-banner">
+                    <div class="gigi-avatar">🤖</div>
+                    <div class="gigi-info">
+                        <div class="gigi-name">Gigi - After-Hours AI Agent</div>
+                        <div class="gigi-desc">Handles caregiver call-outs, client inquiries, and SMS automation</div>
+                    </div>
+                    <div class="status-indicator" id="gigi-status-indicator">
+                        <span class="status-dot"></span>
+                        <span id="gigi-status-text">Loading...</span>
+                    </div>
+                </div>
+
+                <!-- Control Panels -->
+                <div class="control-panel">
+                    <!-- SMS Auto-Reply Control -->
+                    <div class="control-card highlight">
+                        <div class="control-card-header">
+                            <div class="control-card-title">
+                                <span class="icon">💬</span> SMS Auto-Reply
+                            </div>
+                        </div>
+                        <div class="control-card-desc">
+                            When enabled, Gigi automatically replies to inbound SMS messages with AI-generated responses.
+                        </div>
+                        <div class="control-row">
+                            <div class="control-label">
+                                <span class="control-label-title">Enable Auto-Reply</span>
+                                <span class="control-label-desc">Responds to all inbound texts via RingCentral</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-sms-autoreply" onchange="toggleGigiSetting('sms_autoreply', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Operations SMS Control -->
+                    <div class="control-card highlight">
+                        <div class="control-card-header">
+                            <div class="control-card-title">
+                                <span class="icon">📢</span> Call-Out Notifications
+                            </div>
+                        </div>
+                        <div class="control-card-desc">
+                            When enabled, Gigi sends SMS notifications when processing caregiver call-outs (manager alerts, replacement blasts).
+                        </div>
+                        <div class="control-row">
+                            <div class="control-label">
+                                <span class="control-label-title">Enable Operations SMS</span>
+                                <span class="control-label-desc">Sends SMS for call-outs and coverage alerts</span>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="toggle-ops-sms" onchange="toggleGigiSetting('operations_sms', this.checked)">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Voice Agent Status -->
+                    <div class="control-card">
+                        <div class="control-card-header">
+                            <div class="control-card-title">
+                                <span class="icon">📞</span> Voice Agent (Retell AI)
+                            </div>
+                            <div class="status-indicator online" id="retell-status">
+                                <span class="status-dot"></span>
+                                <span>Active</span>
+                            </div>
+                        </div>
+                        <div class="control-card-desc">
+                            Handles inbound calls on 719-428-3999 and 303-757-1777. Identifies callers, processes call-outs, and logs client issues.
+                        </div>
+                        <div class="control-row">
+                            <div class="control-label">
+                                <span class="control-label-title">Primary Line</span>
+                                <span class="control-label-desc">719-428-3999</span>
+                            </div>
+                            <span class="status-badge status-active">Active</span>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-label">
+                                <span class="control-label-title">On-Call Manager Line</span>
+                                <span class="control-label-desc">303-757-1777</span>
+                            </div>
+                            <span class="status-badge status-active">Active</span>
+                        </div>
+                    </div>
+
+                    <!-- WellSky Integration -->
+                    <div class="control-card">
+                        <div class="control-card-header">
+                            <div class="control-card-title">
+                                <span class="icon">🔗</span> WellSky Integration
+                            </div>
+                            <div class="status-indicator partial" id="wellsky-status">
+                                <span class="status-dot"></span>
+                                <span>Mock Mode</span>
+                            </div>
+                        </div>
+                        <div class="control-card-desc">
+                            Enables Gigi to look up shifts, clock caregivers in/out, and process call-outs directly in the scheduling system.
+                        </div>
+                        <div class="control-row">
+                            <div class="control-label">
+                                <span class="control-label-title">API Status</span>
+                                <span class="control-label-desc" id="wellsky-api-status">Using mock data for testing</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="data-section">
+                    <div class="section-header">
+                        <span class="section-title">Recent Gigi Activity</span>
+                        <button class="btn btn-secondary" onclick="refreshGigiActivity()">↻ Refresh</button>
+                    </div>
+                    <div class="activity-log" id="gigi-activity-log">
+                        <div class="loading"><div class="spinner"></div> Loading activity...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Call-Out Log Tab -->
+            <div class="tab-content" id="tab-call-outs">
+                <div class="data-section">
+                    <div class="section-header">
+                        <span class="section-title">Recent Call-Outs</span>
+                        <button class="btn btn-secondary" onclick="refreshCallOuts()">↻ Refresh</button>
+                    </div>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Caregiver</th>
+                                <th>Client/Shift</th>
+                                <th>Reason</th>
+                                <th>Reported Via</th>
+                                <th>Time</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="call-outs-table-body">
+                            <tr><td colspan="7" class="loading"><div class="spinner"></div> Loading call-outs...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/js/operations-dashboard.js"></script>
+</body>
+</html>
