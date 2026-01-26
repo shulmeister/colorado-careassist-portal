@@ -68,7 +68,8 @@ class GoogleOAuthManager:
 
         authorization_url, state = flow.authorization_url(
             access_type='offline',
-            include_granted_scopes='false'
+            include_granted_scopes='false',
+            prompt='consent'
         )
 
         # SECURITY: Store state in session for CSRF validation
