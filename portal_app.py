@@ -2542,6 +2542,108 @@ async def gbp_status():
     return JSONResponse(status)
 
 
+# ============================================================================
+# QUICKBOOKS OAUTH CALLBACK
+# ============================================================================
+
+QB_CLIENT_ID = os.getenv("QB_CLIENT_ID")
+QB_CLIENT_SECRET = os.getenv("QB_CLIENT_SECRET")
+QB_REDIRECT_URI = os.getenv("QB_REDIRECT_URI", "https://careassist-unified-0a11ddb45ac0.herokuapp.com/qb/callback")
+
+@app.get("/qb/callback")
+async def quickbooks_callback(
+    code: str = Query(None),
+    realmId: str = Query(None),
+    state: str = Query(None),
+    error: str = Query(None)
+):
+    """
+    QuickBooks OAuth2 callback - exchanges code for tokens.
+    After authorizing, displays tokens for local CLI setup.
+    """
+    if error:
+        return HTMLResponse(f"""
+        <html><body style="font-family: sans-serif; padding: 40px;">
+        <h1>❌ QuickBooks Authorization Failed</h1>
+        <p>Error: {error}</p>
+        </body></html>
+        """)
+    
+    if not code or not realmId:
+        return HTMLResponse("""
+        <html><body style="font-family: sans-serif; padding: 40px;">
+        <h1>❌ Missing Parameters</h1>
+        <p>Authorization code or realm ID not provided.</p>
+        </body></html>
+        """)
+    
+    # Exchange code for tokens
+    import base64
+    
+    if not QB_CLIENT_ID or not QB_CLIENT_SECRET:
+        return HTMLResponse(f"""
+        <html><body style="font-family: sans-serif; padding: 40px;">
+        <h1>⚠️ QuickBooks Credentials Not Configured</h1>
+        <p>Set QB_CLIENT_ID and QB_CLIENT_SECRET in Heroku config.</p>
+        <h2>Manual Token Exchange</h2>
+        <p>Use these values in your local CLI:</p>
+        <pre style="background: #f0f0f0; padding: 20px; border-radius: 8px;">
+Code: {code}
+Realm ID: {realmId}
+        </pre>
+        </body></html>
+        """)
+    
+    auth_header = base64.b64encode(f"{QB_CLIENT_ID}:{QB_CLIENT_SECRET}".encode()).decode()
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
+            headers={
+                "Authorization": f"Basic {auth_header}",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": QB_REDIRECT_URI
+            }
+        )
+    
+    if resp.status_code != 200:
+        return HTMLResponse(f"""
+        <html><body style="font-family: sans-serif; padding: 40px;">
+        <h1>❌ Token Exchange Failed</h1>
+        <p>Status: {resp.status_code}</p>
+        <pre>{resp.text}</pre>
+        </body></html>
+        """)
+    
+    tokens = resp.json()
+    access_token = tokens.get("access_token", "")
+    refresh_token = tokens.get("refresh_token", "")
+    expires_in = tokens.get("expires_in", 3600)
+    
+    # Display tokens for manual copy to local CLI
+    return HTMLResponse(f"""
+    <html><body style="font-family: sans-serif; padding: 40px; max-width: 800px;">
+    <h1>✅ QuickBooks Connected!</h1>
+    <p>Copy these values to your local <code>~/clawd/credentials/quickbooks.json</code>:</p>
+    <pre style="background: #f0f0f0; padding: 20px; border-radius: 8px; overflow-x: auto;">
+{{
+  "realm_id": "{realmId}",
+  "access_token": "{access_token[:50]}...{access_token[-20:]}",
+  "refresh_token": "{refresh_token}",
+  "token_expires_in": {expires_in}
+}}
+    </pre>
+    <h3>Full Access Token (select all & copy):</h3>
+    <textarea style="width: 100%; height: 100px; font-family: monospace;" readonly>{access_token}</textarea>
+    <p style="margin-top: 20px; color: #666;">You can close this window.</p>
+    </body></html>
+    """)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
