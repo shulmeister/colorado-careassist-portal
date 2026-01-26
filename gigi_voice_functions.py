@@ -9,7 +9,7 @@ import subprocess
 import json
 from datetime import datetime, timedelta
 
-router = APIRouter(prefix="/gigi/voice", tags=["gigi-voice"])
+router = APIRouter(prefix="/api/gigi/voice", tags=["gigi-voice"])
 
 ACCOUNT = "jason@coloradocareassist.com"
 
