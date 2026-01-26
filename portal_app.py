@@ -64,8 +64,12 @@ PORTAL_SSO_TOKEN_TTL = int(os.getenv("PORTAL_SSO_TOKEN_TTL", "300"))
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
 
 # Include Gigi voice function router
-from gigi_voice_functions import router as gigi_voice_router
-app.include_router(gigi_voice_router)
+try:
+    from gigi_voice_functions import router as gigi_voice_router
+    app.include_router(gigi_voice_router)
+    logger.info("✅ Gigi voice functions loaded")
+except Exception as e:
+    logger.error(f"❌ Failed to load Gigi voice functions: {e}")
 
 # Add session middleware for OAuth state management
 from starlette.middleware.sessions import SessionMiddleware
