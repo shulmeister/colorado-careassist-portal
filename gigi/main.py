@@ -64,6 +64,9 @@ logger = logging.getLogger(__name__)
 # Configuration - SECURITY: No hardcoded credentials
 # =============================================================================
 
+# Alpha Vantage API for financial data (stocks, crypto)
+ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
+
 # Retell AI credentials (required for voice agent)
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
 # Note: Retell uses the API key itself for webhook signature verification (not a separate secret)
@@ -2515,6 +2518,30 @@ class EmergencyEscalationResult:
     contacts_notified: List[str] = None
 
 
+@dataclass
+class StockPriceResult:
+    """Result of stock price lookup."""
+    success: bool
+    symbol: Optional[str] = None
+    price: Optional[str] = None
+    change: Optional[str] = None
+    change_percent: Optional[str] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class CryptoPriceResult:
+    """Result of crypto price lookup."""
+    success: bool
+    symbol: Optional[str] = None
+    price: Optional[str] = None
+    market: Optional[str] = None
+    last_updated: Optional[str] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
 async def add_visit_notes(
     caregiver_phone: str,
     client_name: str,
@@ -2733,6 +2760,212 @@ async def escalate_emergency(
                 "Please call the office directly at 303-757-1777 or 911 if this is a medical emergency."
             ),
             contacts_notified=[]
+        )
+
+
+async def get_stock_price(symbol: str) -> StockPriceResult:
+    """
+    Get current stock price for a given ticker symbol.
+    Uses Alpha Vantage GLOBAL_QUOTE API.
+
+    Args:
+        symbol: Stock ticker symbol (e.g., "AAPL", "TSLA", "GOOG")
+
+    Returns:
+        StockPriceResult with current price and change information
+    """
+    if not ALPHA_VANTAGE_API_KEY:
+        logger.error("ALPHA_VANTAGE_API_KEY not configured")
+        return StockPriceResult(
+            success=False,
+            error="Stock price service not configured",
+            message="I'm unable to check stock prices right now. Please try again later."
+        )
+
+    try:
+        symbol = symbol.upper().strip()
+        logger.info(f"Looking up stock price for: {symbol}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://www.alphavantage.co/query",
+                params={
+                    "function": "GLOBAL_QUOTE",
+                    "symbol": symbol,
+                    "apikey": ALPHA_VANTAGE_API_KEY
+                },
+                timeout=10.0
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Alpha Vantage API error: {response.status_code}")
+                return StockPriceResult(
+                    success=False,
+                    error="API error",
+                    message="I'm having trouble getting stock data right now."
+                )
+
+            data = response.json()
+
+            # Check for API error messages
+            if "Error Message" in data:
+                logger.warning(f"Stock not found: {symbol}")
+                return StockPriceResult(
+                    success=False,
+                    error="Stock not found",
+                    message=f"I couldn't find a stock with the symbol {symbol}. Please check the ticker symbol and try again."
+                )
+
+            if "Note" in data or "Information" in data:
+                logger.warning("Alpha Vantage API rate limit hit")
+                return StockPriceResult(
+                    success=False,
+                    error="Rate limit",
+                    message="The stock price service is temporarily busy. Please try again in a moment."
+                )
+
+            # Parse the quote data
+            quote = data.get("Global Quote", {})
+            if not quote:
+                return StockPriceResult(
+                    success=False,
+                    error="No data returned",
+                    message=f"I couldn't find price data for {symbol}."
+                )
+
+            price = quote.get("05. price")
+            change = quote.get("09. change")
+            change_percent = quote.get("10. change percent", "").replace("%", "")
+
+            # Build friendly message
+            if change and change_percent:
+                change_float = float(change)
+                direction = "up" if change_float > 0 else "down"
+                message = f"{symbol} is currently trading at ${float(price):.2f}, {direction} ${abs(change_float):.2f} ({change_percent}%) today."
+            else:
+                message = f"{symbol} is currently trading at ${float(price):.2f}."
+
+            return StockPriceResult(
+                success=True,
+                symbol=symbol,
+                price=price,
+                change=change,
+                change_percent=change_percent,
+                message=message
+            )
+
+    except Exception as e:
+        logger.exception(f"Error fetching stock price for {symbol}: {e}")
+        return StockPriceResult(
+            success=False,
+            error=str(e),
+            message="I encountered an error looking up that stock price."
+        )
+
+
+async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResult:
+    """
+    Get current cryptocurrency price.
+    Uses Alpha Vantage CURRENCY_EXCHANGE_RATE API.
+
+    Args:
+        symbol: Crypto symbol (e.g., "BTC", "ETH", "DOGE")
+        market: Market currency to price against (default "USD")
+
+    Returns:
+        CryptoPriceResult with current price information
+    """
+    if not ALPHA_VANTAGE_API_KEY:
+        logger.error("ALPHA_VANTAGE_API_KEY not configured")
+        return CryptoPriceResult(
+            success=False,
+            error="Crypto price service not configured",
+            message="I'm unable to check crypto prices right now. Please try again later."
+        )
+
+    try:
+        symbol = symbol.upper().strip()
+        market = market.upper().strip()
+        logger.info(f"Looking up crypto price for: {symbol}/{market}")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                "https://www.alphavantage.co/query",
+                params={
+                    "function": "CURRENCY_EXCHANGE_RATE",
+                    "from_currency": symbol,
+                    "to_currency": market,
+                    "apikey": ALPHA_VANTAGE_API_KEY
+                },
+                timeout=10.0
+            )
+
+            if response.status_code != 200:
+                logger.error(f"Alpha Vantage API error: {response.status_code}")
+                return CryptoPriceResult(
+                    success=False,
+                    error="API error",
+                    message="I'm having trouble getting crypto data right now."
+                )
+
+            data = response.json()
+
+            # Check for API error messages
+            if "Error Message" in data:
+                logger.warning(f"Crypto not found: {symbol}")
+                return CryptoPriceResult(
+                    success=False,
+                    error="Crypto not found",
+                    message=f"I couldn't find cryptocurrency {symbol}. Please check the symbol and try again."
+                )
+
+            if "Note" in data or "Information" in data:
+                logger.warning("Alpha Vantage API rate limit hit")
+                return CryptoPriceResult(
+                    success=False,
+                    error="Rate limit",
+                    message="The crypto price service is temporarily busy. Please try again in a moment."
+                )
+
+            # Parse the exchange rate data
+            rate_data = data.get("Realtime Currency Exchange Rate", {})
+            if not rate_data:
+                return CryptoPriceResult(
+                    success=False,
+                    error="No data returned",
+                    message=f"I couldn't find price data for {symbol}."
+                )
+
+            from_symbol = rate_data.get("1. From_Currency Code")
+            from_name = rate_data.get("2. From_Currency Name", symbol)
+            to_symbol = rate_data.get("3. To_Currency Code")
+            exchange_rate = rate_data.get("5. Exchange Rate")
+            last_updated = rate_data.get("6. Last Refreshed")
+
+            # Build friendly message
+            price_float = float(exchange_rate)
+            if price_float >= 1:
+                formatted_price = f"${price_float:,.2f}"
+            else:
+                formatted_price = f"${price_float:.6f}".rstrip('0').rstrip('.')
+
+            message = f"{from_name} ({from_symbol}) is currently trading at {formatted_price} {to_symbol}."
+
+            return CryptoPriceResult(
+                success=True,
+                symbol=from_symbol,
+                price=exchange_rate,
+                market=to_symbol,
+                last_updated=last_updated,
+                message=message
+            )
+
+    except Exception as e:
+        logger.exception(f"Error fetching crypto price for {symbol}: {e}")
+        return CryptoPriceResult(
+            success=False,
+            error=str(e),
+            message="I encountered an error looking up that crypto price."
         )
 
 
@@ -3338,7 +3571,6 @@ async def retell_function_call(function_name: str, request: Request):
                 "message": f"I'm transferring your call now. Please hold."
             })
 
-
         elif function_name == "get_weather":
             location = args.get("location", "Boulder")
             logger.info(f"Getting weather for: {location}")
@@ -3353,18 +3585,57 @@ async def retell_function_call(function_name: str, request: Request):
             caller_name = args.get("caller_name", "Unknown caller")
             caller_phone = args.get("caller_phone", "")
             message = args.get("message", "")
-            
+
             logger.info(f"Taking message from {caller_name} ({caller_phone}): {message}")
-            
+
             # Send to Telegram
             telegram_text = f"📞 NEW MESSAGE\n\nFrom: {caller_name}\nPhone: {caller_phone}\nMessage: {message}"
             send_telegram_message(telegram_text)
-            
+
             record_tool_call(call_id, function_name)
             return JSONResponse({
                 "response_type": "response",
                 "response": f"Got it. I'll make sure Jason gets your message.",
                 "content": "Message recorded and sent to Jason"
+            })
+
+        elif function_name == "get_stock_price":
+            symbol = args.get("symbol")
+            if not symbol:
+                return JSONResponse({
+                    "success": False,
+                    "error": "Symbol required",
+                    "message": "I need a stock ticker symbol to look up. What stock are you interested in?"
+                })
+            result = await get_stock_price(symbol)
+            return JSONResponse({
+                "success": result.success,
+                "symbol": result.symbol,
+                "price": result.price,
+                "change": result.change,
+                "change_percent": result.change_percent,
+                "message": result.message,
+                "error": result.error
+            })
+
+        elif function_name == "get_crypto_price":
+            symbol = args.get("symbol")
+            market = args.get("market", "USD")
+            if not symbol:
+                return JSONResponse({
+                    "success": False,
+                    "error": "Symbol required",
+                    "message": "I need a cryptocurrency symbol to look up. What crypto are you interested in?"
+                })
+            result = await get_crypto_price(symbol, market)
+            return JSONResponse({
+                "success": result.success,
+                "symbol": result.symbol,
+                "price": result.price,
+                "market": result.market,
+                "last_updated": result.last_updated,
+                "message": result.message,
+                "error": result.error
             })
 
         else:
