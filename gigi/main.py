@@ -3191,6 +3191,48 @@ async def retell_function_call(function_name: str, request: Request):
                 "contacts_notified": result.contacts_notified or []
             })
 
+        elif function_name == "transfer_to_jason":
+            # Transfer call to Jason's cell phone
+            logger.info("Transferring call to Jason at 603-997-1495")
+            record_tool_call(call_id, function_name)
+            return JSONResponse({
+                "response_type": "transfer_call",
+                "transfer_to": "+16039971495",
+                "message": "I'm transferring you to Jason now. Please hold."
+            })
+
+        elif function_name == "transfer_to_oncall":
+            # Transfer call to on-call manager line
+            logger.info("Transferring call to on-call line at 303-757-1777")
+            record_tool_call(call_id, function_name)
+            return JSONResponse({
+                "response_type": "transfer_call",
+                "transfer_to": "+13037571777",
+                "message": "I'm transferring you to our on-call manager now. Please hold."
+            })
+
+        elif function_name == "transfer_call":
+            # Generic transfer to specified number
+            transfer_to = args.get("phone_number", args.get("transfer_to", ""))
+            if not transfer_to:
+                return JSONResponse({
+                    "success": False,
+                    "message": "No phone number provided for transfer"
+                })
+            # Normalize phone number
+            clean_number = ''.join(filter(str.isdigit, transfer_to))
+            if len(clean_number) == 10:
+                clean_number = "+1" + clean_number
+            elif len(clean_number) == 11 and clean_number.startswith("1"):
+                clean_number = "+" + clean_number
+            logger.info(f"Transferring call to {clean_number}")
+            record_tool_call(call_id, function_name)
+            return JSONResponse({
+                "response_type": "transfer_call",
+                "transfer_to": clean_number,
+                "message": f"I'm transferring your call now. Please hold."
+            })
+
         else:
             raise HTTPException(status_code=404, detail=f"Unknown function: {function_name}")
 

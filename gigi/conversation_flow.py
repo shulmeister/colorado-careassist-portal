@@ -137,6 +137,14 @@ If they say "wrong number", "I'm not a client", "I'm not in your system", or sim
                         "type": "prompt",
                         "prompt": "The caller is looking for work, wants a job, asking about employment, or applying to be a caregiver - they are a PROSPECTIVE CAREGIVER"
                     }
+                },
+                {
+                    "id": "to_transfer_jason_from_start",
+                    "destination_node_id": "transfer_to_jason",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "The caller asks to speak to Jason, the owner, a human, a real person, a manager, or asks to be transferred"
+                    }
                 }
             ]
         },
@@ -201,6 +209,14 @@ Do NOT repeat their issue back. Just route."""
                     "transition_condition": {
                         "type": "prompt",
                         "prompt": "Caregiver has a different question or request"
+                    }
+                },
+                {
+                    "id": "to_transfer_jason_from_caregiver",
+                    "destination_node_id": "transfer_to_jason",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Caregiver asks to speak to Jason, the owner, a human, a real person, or asks to be transferred to a manager"
                     }
                 }
             ]
@@ -499,6 +515,14 @@ ROUTING:
                         "type": "prompt",
                         "prompt": "Client asked for medical advice and has been directed to call 911 or their doctor"
                     }
+                },
+                {
+                    "id": "to_transfer_jason_from_client",
+                    "destination_node_id": "transfer_to_jason",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Client asks to speak to Jason, the owner, a human, a real person, or asks to be transferred to a manager"
+                    }
                 }
             ]
         },
@@ -570,6 +594,14 @@ After you've acknowledged and logged the issue, END the conversation. Do not kee
                     "transition_condition": {
                         "type": "prompt",
                         "prompt": "Issue has been logged and caller has been told a supervisor will call - move to end call"
+                    }
+                },
+                {
+                    "id": "to_transfer_jason_from_complaint",
+                    "destination_node_id": "transfer_to_jason",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Client insists on speaking to Jason NOW, demands to be transferred immediately, or refuses to wait for a callback"
                     }
                 }
             ]
@@ -870,6 +902,14 @@ REQUIRED RESPONSE FOR WORRIED FAMILY:
                         "type": "prompt",
                         "prompt": "Family member has been told Cynthia Pointe will call within 15 minutes AND callback number confirmed"
                     }
+                },
+                {
+                    "id": "to_transfer_jason_from_family",
+                    "destination_node_id": "transfer_to_jason",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Family member insists on speaking to Jason NOW, demands to be transferred immediately, or refuses to wait for a callback"
+                    }
                 }
             ]
         },
@@ -911,6 +951,34 @@ NEVER go back to caregiver_callout, caregiver_late, or client_complaint nodes. T
                     }
                 }
             ]
+        },
+
+        # =====================================================================
+        # TRANSFER TO JASON - Transfer call to Jason's cell
+        # =====================================================================
+        {
+            "id": "transfer_to_jason",
+            "type": "transfer_call",
+            "name": "Transfer to Jason",
+            "transfer_to": "+16039971495",
+            "instruction": {
+                "type": "prompt",
+                "text": "Say: 'I'm transferring you to Jason now. One moment please.' Then transfer the call."
+            }
+        },
+
+        # =====================================================================
+        # TRANSFER TO ON-CALL - Transfer call to on-call manager
+        # =====================================================================
+        {
+            "id": "transfer_to_oncall",
+            "type": "transfer_call",
+            "name": "Transfer to On-Call Manager",
+            "transfer_to": "+13037571777",
+            "instruction": {
+                "type": "prompt",
+                "text": "Say: 'I'm connecting you with our on-call manager now. Please hold.' Then transfer the call."
+            }
         },
 
         # =====================================================================
