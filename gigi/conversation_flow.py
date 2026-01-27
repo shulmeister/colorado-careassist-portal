@@ -958,13 +958,39 @@ NEVER go back to caregiver_callout, caregiver_late, or client_complaint nodes. T
         # =====================================================================
         {
             "id": "transfer_to_jason",
-            "type": "transfer_call",
+            "type": "conversation",
             "name": "Transfer to Jason",
-            "transfer_to": "+16039971495",
             "instruction": {
                 "type": "prompt",
-                "text": "Say: 'I'm transferring you to Jason now. One moment please.' Then transfer the call."
-            }
+                "text": """Say: "I'm transferring you to Jason now. One moment please."
+
+Then call the transfer_to_jason function to transfer the call."""
+            },
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "transfer_to_jason",
+                        "description": "Transfer the call to Jason's cell phone at 603-997-1495",
+                        "url": f"{WEBHOOK_BASE}/transfer_to_jason",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {},
+                            "required": []
+                        }
+                    }
+                }
+            ],
+            "edges": [
+                {
+                    "id": "jason_transfer_to_end",
+                    "destination_node_id": "end_call",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Transfer has been initiated"
+                    }
+                }
+            ]
         },
 
         # =====================================================================
@@ -972,13 +998,39 @@ NEVER go back to caregiver_callout, caregiver_late, or client_complaint nodes. T
         # =====================================================================
         {
             "id": "transfer_to_oncall",
-            "type": "transfer_call",
+            "type": "conversation",
             "name": "Transfer to On-Call Manager",
-            "transfer_to": "+13037571777",
             "instruction": {
                 "type": "prompt",
-                "text": "Say: 'I'm connecting you with our on-call manager now. Please hold.' Then transfer the call."
-            }
+                "text": """Say: "I'm connecting you with our on-call manager now. Please hold."
+
+Then call the transfer_to_oncall function to transfer the call."""
+            },
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "transfer_to_oncall",
+                        "description": "Transfer the call to the on-call manager line at 303-757-1777",
+                        "url": f"{WEBHOOK_BASE}/transfer_to_oncall",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {},
+                            "required": []
+                        }
+                    }
+                }
+            ],
+            "edges": [
+                {
+                    "id": "oncall_transfer_to_end",
+                    "destination_node_id": "end_call",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Transfer has been initiated"
+                    }
+                }
+            ]
         },
 
         # =====================================================================
