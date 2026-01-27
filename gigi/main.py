@@ -3338,6 +3338,35 @@ async def retell_function_call(function_name: str, request: Request):
                 "message": f"I'm transferring your call now. Please hold."
             })
 
+
+        elif function_name == "get_weather":
+            location = args.get("location", "Boulder")
+            logger.info(f"Getting weather for: {location}")
+            weather_result = get_weather(location)
+            return JSONResponse({
+                "response_type": "response",
+                "response": weather_result,
+                "content": weather_result
+            })
+
+        elif function_name == "take_message":
+            caller_name = args.get("caller_name", "Unknown caller")
+            caller_phone = args.get("caller_phone", "")
+            message = args.get("message", "")
+            
+            logger.info(f"Taking message from {caller_name} ({caller_phone}): {message}")
+            
+            # Send to Telegram
+            telegram_text = f"📞 NEW MESSAGE\n\nFrom: {caller_name}\nPhone: {caller_phone}\nMessage: {message}"
+            send_telegram_message(telegram_text)
+            
+            record_tool_call(call_id, function_name)
+            return JSONResponse({
+                "response_type": "response",
+                "response": f"Got it. I'll make sure Jason gets your message.",
+                "content": "Message recorded and sent to Jason"
+            })
+
         else:
             raise HTTPException(status_code=404, detail=f"Unknown function: {function_name}")
 
