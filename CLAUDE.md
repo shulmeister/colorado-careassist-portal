@@ -37,3 +37,26 @@ npm run lint     # Linter
 /public       # Static assets
 /.claude      # AI agent configurations
 ```
+
+---
+
+## CRITICAL INFRASTRUCTURE - DO NOT ASK FOR THIS INFO
+
+### Core 4 Apps (MUST NEVER GO DOWN)
+
+| App | Platform | URL | Notes |
+|-----|----------|-----|-------|
+| careassist-unified | Heroku (Basic) | portal.coloradocareassist.com | Main portal |
+| coloradocareassist | Heroku (Basic) | coloradocareassist.com | Main website |
+| hesedhomecare | Heroku (Basic) | hesedhomecare.org | Hesed Home Care |
+| clawd | DigitalOcean Droplet | clawd.coloradocareassist.com | AI assistant |
+
+### Clawd Droplet Details
+- **IP:** 69.55.59.212
+- **Access:** Cloudflare tunnel (not direct port access)
+- **Service:** Runs on HOST (not Docker) on port 8080
+- **If Docker container conflicts:** `docker stop clawdbot`
+- **Check status:** `lsof -i :8080`
+
+### SSH to Clawd
+The droplet requires SSH key to be added via DigitalOcean Console.
