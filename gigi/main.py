@@ -45,6 +45,17 @@ except ImportError:
     ringcentral_messaging_service = None
     RC_MESSAGING_AVAILABLE = False
 
+# Import enhanced webhook functionality for caller ID, transfer, and message taking
+try:
+    from enhanced_webhook import (
+        CallerLookupService, generate_greeting, transfer_call,
+        send_telegram_message, handle_message_received, get_weather
+    )
+    ENHANCED_WEBHOOK_AVAILABLE = True
+except ImportError:
+    logger.warning("Enhanced webhook not available - caller ID and transfer features disabled")
+    ENHANCED_WEBHOOK_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -73,6 +84,7 @@ BEETEXTING_API_KEY = os.getenv("BEETEXTING_API_KEY")
 # Phone numbers (safe defaults - these are public business numbers)
 BEETEXTING_FROM_NUMBER = os.getenv("BEETEXTING_FROM_NUMBER", "+17194283999")  # 719-428-3999
 ON_CALL_MANAGER_PHONE = os.getenv("ON_CALL_MANAGER_PHONE", "+13037571777")    # 303-757-1777
+JASON_PHONE = "+16039971495"  # Jason Shulman - for call transfers
 
 # Escalation contacts (RingCentral extensions for urgent client issues)
 ESCALATION_CYNTHIA_EXT = os.getenv("ESCALATION_CYNTHIA_EXT", "105")  # Cynthia Pointe - Care Manager
@@ -2751,32 +2763,79 @@ async def retell_webhook(request: Request):
 
     if event == "call_started":
         from_number = body.get("from_number", "")
-        logger.info(f"Call started from {from_number}")
+        to_number = body.get("to_number", "")
+        logger.info(f"Call started from {from_number} to {to_number}")
 
-        # AUTO-LOOKUP: Identify caller from database before conversation starts
-        caller_info = None
-        if from_number:
-            clean_phone = ''.join(filter(str.isdigit, from_number))[-10:]
-            cached = _lookup_in_cache(clean_phone)
-            if cached:
-                caller_info = {
-                    "caller_type": cached.get("type"),
-                    "caller_name": cached.get("name"),
-                    "is_known": True
-                }
-                logger.info(f"AUTO-LOOKUP: Identified {cached.get('type')} {cached.get('name')}")
-            else:
-                caller_info = {"caller_type": "unknown", "caller_name": None, "is_known": False}
-                logger.info(f"AUTO-LOOKUP: Unknown caller from {clean_phone}")
-
-            # Store in call-level cache for later reference
+        # Enhanced caller lookup with fallback to Apple Contacts
+        if ENHANCED_WEBHOOK_AVAILABLE:
+            # Use enhanced lookup service with multiple sources
+            def db_lookup(phone):
+                db = _get_db()
+                if db:
+                    try:
+                        return db.lookup_caller(phone)
+                    except Exception as e:
+                        logger.warning(f"Database lookup failed: {e}")
+                return None
+            
+            lookup_service = CallerLookupService(
+                db_lookup_fn=db_lookup,
+                cache_lookup_fn=lambda phone: _lookup_in_cache(phone)
+            )
+            
+            caller_info = lookup_service.lookup(from_number)
+            greeting = generate_greeting(caller_info)
+            
+            # Store enhanced info in call context
             _store_call_context(call_id, caller_info)
+            
+            # Log the lookup result
+            if caller_info.get("found"):
+                name = caller_info.get("name", "Unknown")
+                source = caller_info.get("source", "unknown")
+                logger.info(f"AUTO-LOOKUP: Found {name} via {source}")
+            else:
+                logger.info(f"AUTO-LOOKUP: Unknown caller {from_number}")
+            
+            # Prepare response with greeting and action instructions
+            response_data = {
+                "status": "ok",
+                "caller_info": caller_info,
+                "initial_greeting": greeting
+            }
+            
+            # Set action based on caller type
+            if caller_info.get("should_transfer"):
+                response_data["action"] = "greet_and_transfer"
+                logger.info("Will transfer call to Jason after greeting")
+            elif caller_info.get("take_message"):
+                response_data["action"] = "take_message"
+                logger.info("Unknown caller - will take message")
+            
+            return JSONResponse(response_data)
+        else:
+            # Fallback to original logic if enhanced webhook not available
+            caller_info = None
+            if from_number:
+                clean_phone = ''.join(filter(str.isdigit, from_number))[-10:]
+                cached = _lookup_in_cache(clean_phone)
+                if cached:
+                    caller_info = {
+                        "caller_type": cached.get("type"),
+                        "caller_name": cached.get("name"),
+                        "is_known": True
+                    }
+                    logger.info(f"AUTO-LOOKUP: Identified {cached.get('type')} {cached.get('name')}")
+                else:
+                    caller_info = {"caller_type": "unknown", "caller_name": None, "is_known": False}
+                    logger.info(f"AUTO-LOOKUP: Unknown caller from {clean_phone}")
 
-        # Return caller info to Retell (can be used as dynamic variables)
-        return JSONResponse({
-            "status": "ok",
-            "caller_info": caller_info
-        })
+                _store_call_context(call_id, caller_info)
+
+            return JSONResponse({
+                "status": "ok",
+                "caller_info": caller_info
+            })
 
     elif event == "call_ended":
         transcript = body.get("transcript", "")
@@ -2816,6 +2875,52 @@ async def retell_webhook(request: Request):
                         "tool_call_id": tool_call_id,
                         "result": result.model_dump()
                     })
+
+                # NEW: Enhanced webhook tools for caller ID, weather, transfer, and messages
+                elif tool_name == "get_weather" and ENHANCED_WEBHOOK_AVAILABLE:
+                    location = tool_args.get("location", "Boulder CO")
+                    weather_result = get_weather(location)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": weather_result
+                    })
+                    logger.info(f"Weather requested for {location}: {weather_result}")
+
+                elif tool_name == "transfer_to_jason" and ENHANCED_WEBHOOK_AVAILABLE:
+                    reason = tool_args.get("reason", "Personal call")
+                    success = transfer_call(call_id, JASON_PHONE)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": {
+                            "success": success,
+                            "message": "Transferring you to Jason now" if success else "I'm having trouble transferring right now. Let me take a message instead."
+                        }
+                    })
+                    logger.info(f"Transfer to Jason initiated (reason: {reason}): {'success' if success else 'failed'}")
+
+                elif tool_name == "take_message" and ENHANCED_WEBHOOK_AVAILABLE:
+                    caller_phone = tool_args.get("caller_phone", "Unknown")
+                    caller_name = tool_args.get("caller_name", "")
+                    message_text = tool_args.get("message", "")
+                    
+                    # Format caller info for message handler
+                    caller_info = {
+                        "phone": caller_phone,
+                        "name": caller_name if caller_name else None,
+                        "type": "unknown"
+                    }
+                    
+                    # Send to Telegram
+                    handle_message_received(caller_info, message_text, call_id)
+                    
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": {
+                            "success": True,
+                            "message": "I've sent your message to Jason. He'll get back to you as soon as possible. Have a great day!"
+                        }
+                    })
+                    logger.info(f"Message taken from {caller_phone} ({caller_name or 'anonymous'})")
 
                 elif tool_name == "get_shift_details":
                     result = await get_shift_details(**tool_args)
