@@ -108,27 +108,41 @@ class GoogleOAuthManager:
             else:
                 logger.warning("No stored OAuth state found - CSRF validation skipped")
 
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [self.redirect_uri]
-                }
-            },
-            scopes=self.scopes
-        )
-        flow.redirect_uri = self.redirect_uri
-        
         try:
-            # Exchange code for token
-            flow.fetch_token(code=code)
-            credentials = flow.credentials
-            
+            # Exchange code for token manually (bypasses strict scope validation)
+            # This is needed because Google returns ALL scopes the user has granted
+            # to any app, causing scope mismatch errors with Flow.fetch_token()
+            async with httpx.AsyncClient() as client:
+                token_response = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "client_id": self.client_id,
+                        "client_secret": self.client_secret,
+                        "code": code,
+                        "grant_type": "authorization_code",
+                        "redirect_uri": self.redirect_uri
+                    }
+                )
+
+                if token_response.status_code != 200:
+                    error_detail = token_response.text
+                    logger.error(f"Token exchange failed: {error_detail}")
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Token exchange failed: {error_detail}"
+                    )
+
+                token_data = token_response.json()
+                access_token = token_data.get("access_token")
+
+                if not access_token:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="No access token received from Google"
+                    )
+
             # Get user info
-            user_info = await self._get_user_info(credentials.token)
+            user_info = await self._get_user_info(access_token)
             
             # Validate domain
             email = user_info.get("email", "")
