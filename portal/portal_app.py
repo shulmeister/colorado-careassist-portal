@@ -5274,110 +5274,126 @@ async def parse_va_form(
     file: UploadFile = File(...),
     current_user: Dict[str, Any] = Depends(get_current_user_optional)
 ):
-    """Parse VA Form 10-7080 PDF and extract data"""
-    import pdfplumber
-    import re
-    import io
+    """Parse VA Form 10-7080 PDF using Gemini AI vision"""
+    import base64
+    import json
+
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+    if not GEMINI_API_KEY:
+        return JSONResponse({
+            "success": False,
+            "error": "GEMINI_API_KEY not configured",
+            "message": "AI extraction unavailable"
+        }, status_code=500)
 
     try:
-        # Read PDF content
+        # Read PDF and convert to base64
         pdf_content = await file.read()
-        pdf_file = io.BytesIO(pdf_content)
+        pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
 
-        extracted_data = {}
+        # Gemini extraction prompt
+        extraction_prompt = """Extract ALL data from this VA Form 10-7080 (Approved Referral for Medical Care).
 
-        with pdfplumber.open(pdf_file) as pdf:
-            # Extract text from all pages
-            full_text = ""
-            for page in pdf.pages:
-                full_text += page.extract_text() + "\n"
+Return a JSON object with these EXACT keys (use empty string "" if field not found):
 
-            # Parse specific fields using regex patterns
-            # Veteran Name (usually in format: Last, First Middle)
-            name_match = re.search(r'Veteran[\'"]?s?\s+Name[:\s]*([A-Z]+),\s*([A-Z]+)\s*([A-Z]*)', full_text, re.IGNORECASE)
-            if name_match:
-                extracted_data['veteran_last_name'] = name_match.group(1).title()
-                extracted_data['veteran_first_name'] = name_match.group(2).title()
-                extracted_data['veteran_middle_name'] = name_match.group(3).title() if name_match.group(3) else ''
+{
+  "veteran_last_name": "",
+  "veteran_first_name": "",
+  "veteran_middle_name": "",
+  "date_of_birth": "",
+  "last_4_ssn": "",
+  "phone": "",
+  "address": "",
+  "va_consult_number": "",
+  "referral_issue_date": "",
+  "first_appointment_date": "",
+  "expiration_date": "",
+  "pcp_last_name": "",
+  "pcp_first_name": "",
+  "pcp_npi": "",
+  "facility_name": "",
+  "facility_phone": "",
+  "facility_fax": "",
+  "diagnosis": "",
+  "reason_for_request": "",
+  "hours_per_week": "",
+  "authorization_duration": "",
+  "adl_dependencies": []
+}
 
-            # Date of Birth
-            dob_match = re.search(r'(?:Date of Birth|DOB)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', full_text, re.IGNORECASE)
-            if dob_match:
-                extracted_data['date_of_birth'] = dob_match.group(1)
+CRITICAL INSTRUCTIONS:
+1. Extract ALL dates in MM/DD/YYYY format (e.g., 02/04/2026)
+2. For veteran name, split into last_name, first_name, middle_name
+3. For PCP/provider name, split into pcp_last_name, pcp_first_name
+4. last_4_ssn should be only the last 4 digits
+5. va_consult_number is the referral number (format: VA followed by digits)
+6. referral_issue_date is when the VA issued this referral
+7. first_appointment_date is when services will start
+8. hours_per_week is the authorized hours (may be a range like "7 to 11")
+9. authorization_duration is how long the authorization lasts (e.g., "180 Days")
+10. adl_dependencies is an array of ADL needs (e.g., ["Bathing", "Dressing", "Ambulating"])
+11. Return ONLY valid JSON, no markdown, no explanation
 
-            # Last 4 SSN
-            ssn_match = re.search(r'(?:SSN|Social Security)[:\s]*\**(\d{4})', full_text, re.IGNORECASE)
-            if ssn_match:
-                extracted_data['last_4_ssn'] = ssn_match.group(1)
+Extract every field you can find. Be thorough."""
 
-            # Phone Number
-            phone_match = re.search(r'(?:Phone|Telephone)[:\s]*\(?(\d{3})\)?[\s.-]*(\d{3})[\s.-]*(\d{4})', full_text, re.IGNORECASE)
-            if phone_match:
-                extracted_data['phone'] = f"({phone_match.group(1)}) {phone_match.group(2)}-{phone_match.group(3)}"
+        # Call Gemini API
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            gemini_response = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_API_KEY}",
+                json={
+                    "contents": [{
+                        "parts": [
+                            {"text": extraction_prompt},
+                            {
+                                "inline_data": {
+                                    "mime_type": "application/pdf",
+                                    "data": pdf_base64
+                                }
+                            }
+                        ]
+                    }],
+                    "generationConfig": {
+                        "temperature": 0.1,
+                        "responseMimeType": "application/json"
+                    }
+                }
+            )
 
-            # Address
-            address_match = re.search(r'(?:Address|Street)[:\s]*([^\n]+)', full_text, re.IGNORECASE)
-            if address_match:
-                extracted_data['address'] = address_match.group(1).strip()
+        if gemini_response.status_code != 200:
+            raise Exception(f"Gemini API error: {gemini_response.text}")
 
-            # VA Consult Number / Referral Number
-            consult_match = re.search(r'(?:Consult|Referral)\s*(?:Number|#)[:\s]*(VA\d+)', full_text, re.IGNORECASE)
-            if consult_match:
-                extracted_data['va_consult_number'] = consult_match.group(1)
+        result = gemini_response.json()
 
-            # Referral Issue Date
-            issue_date_match = re.search(r'(?:Issue Date|Issued)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', full_text, re.IGNORECASE)
-            if issue_date_match:
-                extracted_data['referral_issue_date'] = issue_date_match.group(1)
+        # Extract the JSON from Gemini response
+        if "candidates" in result and len(result["candidates"]) > 0:
+            content_text = result["candidates"][0]["content"]["parts"][0]["text"]
 
-            # First Appointment Date
-            appt_match = re.search(r'(?:First Appointment|Appointment Date)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', full_text, re.IGNORECASE)
-            if appt_match:
-                extracted_data['first_appointment_date'] = appt_match.group(1)
+            # Parse the JSON response
+            extracted_data = json.loads(content_text)
 
-            # Expiration Date
-            exp_match = re.search(r'(?:Expiration Date|Expires)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', full_text, re.IGNORECASE)
-            if exp_match:
-                extracted_data['expiration_date'] = exp_match.group(1)
+            return JSONResponse({
+                "success": True,
+                "data": extracted_data,
+                "message": f"PDF parsed successfully using Gemini AI"
+            })
+        else:
+            raise Exception("No response from Gemini")
 
-            # PCP/Provider Name
-            provider_match = re.search(r'(?:Provider|Physician)[:\s]*([A-Z]+),\s*([A-Z]+)', full_text, re.IGNORECASE)
-            if provider_match:
-                extracted_data['pcp_last_name'] = provider_match.group(1).title()
-                extracted_data['pcp_first_name'] = provider_match.group(2).title()
-
-            # PCP NPI
-            npi_match = re.search(r'NPI[:\s]*(\d+)', full_text, re.IGNORECASE)
-            if npi_match:
-                extracted_data['pcp_npi'] = npi_match.group(1)
-
-            # VA Facility
-            facility_match = re.search(r'(?:VA Facility|Facility Name)[:\s]*([^\n]+)', full_text, re.IGNORECASE)
-            if facility_match:
-                extracted_data['facility_name'] = facility_match.group(1).strip()
-
-            # Diagnosis
-            diagnosis_match = re.search(r'(?:Diagnosis|Provisional Diagnosis)[:\s]*([^\n]+)', full_text, re.IGNORECASE)
-            if diagnosis_match:
-                extracted_data['diagnosis'] = diagnosis_match.group(1).strip()
-
-            # Hours per week
-            hours_match = re.search(r'(\d+)\s*(?:hours?|hrs?)(?:\s*per week)?', full_text, re.IGNORECASE)
-            if hours_match:
-                extracted_data['hours_per_week'] = hours_match.group(1)
-
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON parse error: {e}")
         return JSONResponse({
-            "success": True,
-            "data": extracted_data,
-            "message": "PDF parsed successfully"
-        })
-
+            "success": False,
+            "error": f"Failed to parse Gemini response: {str(e)}",
+            "message": "AI extraction failed"
+        }, status_code=500)
     except Exception as e:
+        logger.error(f"VA form parsing error: {e}")
         return JSONResponse({
             "success": False,
             "error": str(e),
             "message": "Failed to parse PDF"
-        }, status_code=400)
+        }, status_code=500)
 
 
 @app.get("/va-plan-of-care", response_class=HTMLResponse)
@@ -5645,12 +5661,29 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
 
                     // Populate VA facility
                     if (data.facility_name) document.getElementById('va-facility').value = data.facility_name;
+                    if (data.facility_phone) document.getElementById('va-phone').value = data.facility_phone;
+                    if (data.facility_fax) document.getElementById('va-fax').value = data.facility_fax;
 
                     // Populate clinical information
                     if (data.diagnosis) document.getElementById('diagnosis').value = data.diagnosis;
+                    if (data.reason_for_request) document.getElementById('reason').value = data.reason_for_request;
                     if (data.hours_per_week) document.getElementById('hours-week').value = data.hours_per_week;
+                    if (data.authorization_duration) document.getElementById('auth-duration').value = data.authorization_duration;
 
-                    uploadStatus.innerHTML = `<div class="upload-status success">✓ PDF parsed successfully! ${Object.keys(data).length} fields extracted. Review and edit below.</div>`;
+                    // Populate ADL dependencies
+                    if (data.adl_dependencies && Array.isArray(data.adl_dependencies)) {
+                        // First uncheck all
+                        document.querySelectorAll('input[name="adl"]').forEach(cb => cb.checked = false);
+                        // Then check the ones from the PDF
+                        data.adl_dependencies.forEach(adl => {
+                            const checkbox = Array.from(document.querySelectorAll('input[name="adl"]'))
+                                .find(cb => cb.value.toLowerCase() === adl.toLowerCase());
+                            if (checkbox) checkbox.checked = true;
+                        });
+                    }
+
+                    const fieldCount = Object.values(data).filter(v => v && v !== '').length;
+                    uploadStatus.innerHTML = `<div class="upload-status success">✓ PDF parsed successfully! ${fieldCount} fields extracted. Review and edit below.</div>`;
                 } else {
                     uploadStatus.innerHTML = `<div class="upload-status error">⚠ ${result.message || 'Failed to parse PDF'}. Please fill form manually.</div>`;
                 }
@@ -5660,7 +5693,32 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
             }
         }
 
-        function generateFileName(){const t=document.getElementById("vet-lastname").value,e=document.getElementById("vet-firstname").value.charAt(0).toUpperCase(),n=document.getElementById("vet-ssn").value,a=document.getElementById("ref-number").value,l=document.getElementById("pcp-lastname").value,i=document.getElementById("pcp-firstname").value.charAt(0).toUpperCase(),s=document.getElementById("agency-code").value,d=t=>{if(!t)return"00.00.0000";const e=new Date(t),n=String(e.getMonth()+1).padStart(2,"0"),a=String(e.getDate()).padStart(2,"0");return`${n}.${a}.${e.getFullYear()}`},o=d(document.getElementById("ref-issue").value),c=d(document.getElementById("ref-start").value),r=document.getElementById("agency-docnum").value;return`${t}.${e}.${n}_${a}.${l}.${i}.${s}.${o}.${c}.${r}`}function getADLs(){return Array.from(document.querySelectorAll('input[name="adl"]:checked')).map(t=>t.value)}function generatePreview(){const t=generateFileName();document.getElementById("filename-display").textContent=t+".pdf";const e=getADLs(),n=e.length>0?"<ul>"+e.map(t=>`<li>${t}</li>`).join("")+"</ul>":"<p>No ADL dependencies specified</p>",a=`
+        function generateFileName() {
+            const vetLastName = document.getElementById("vet-lastname").value || 'LASTNAME';
+            const vetFirstInitial = (document.getElementById("vet-firstname").value || 'F').charAt(0).toUpperCase();
+            const last4SSN = document.getElementById("vet-ssn").value || '0000';
+            const vaConsultNum = document.getElementById("ref-number").value || 'VA000000';
+            const pcpLastName = document.getElementById("pcp-lastname").value || 'PCPLAST';
+            const pcpFirstInitial = (document.getElementById("pcp-firstname").value || 'P').charAt(0).toUpperCase();
+            const agencyCode = document.getElementById("agency-code").value || 'CC.D';
+            const agencyDocNum = document.getElementById("agency-docnum").value || '001';
+
+            // Format date from YYYY-MM-DD input to MM.DD.YYYY
+            function formatDate(dateInput) {
+                if (!dateInput) return '00.00.0000';
+                const date = new Date(dateInput + 'T00:00:00'); // Force local timezone
+                if (isNaN(date.getTime())) return '00.00.0000';
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                const year = date.getFullYear();
+                return `${month}.${day}.${year}`;
+            }
+
+            const certDate = formatDate(document.getElementById("ref-issue").value);
+            const startDate = formatDate(document.getElementById("ref-start").value);
+
+            return `${vetLastName}.${vetFirstInitial}.${last4SSN}_${vaConsultNum}.${pcpLastName}.${pcpFirstInitial}.${agencyCode}.${certDate}.${startDate}.${agencyDocNum}`;
+        }function getADLs(){return Array.from(document.querySelectorAll('input[name="adl"]:checked')).map(t=>t.value)}function generatePreview(){const t=generateFileName();document.getElementById("filename-display").textContent=t+".pdf";const e=getADLs(),n=e.length>0?"<ul>"+e.map(t=>`<li>${t}</li>`).join("")+"</ul>":"<p>No ADL dependencies specified</p>",a=`
                 <div class="poc-header">
                     <h1>HOME HEALTH CERTIFICATION AND PLAN OF CARE</h1>
                     <p>Department of Veterans Affairs</p>
