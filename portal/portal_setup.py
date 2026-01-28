@@ -258,7 +258,7 @@ def setup_default_tools():
             {
                 "name": "EbizCharge",
                 "url": "https://qboapp1.ebizcharge.net/",
-                "icon": "https://www.cenpos.com/wp-content/uploads/2019/05/EBizCharge-for-QuickBooks-Logo.png",
+                "icon": "https://www.ebizcharge.com/wp-content/uploads/2023/02/ebizcharge-logo.svg",
                 "description": "QuickBooks payment processing",
                 "category": "Finance",
                 "display_order": 30
@@ -266,7 +266,7 @@ def setup_default_tools():
             {
                 "name": "Fax.Plus",
                 "url": "https://app.fax.plus/faxes/inbox",
-                "icon": "https://app.fax.plus/favicon.ico",
+                "icon": "https://assets-global.website-files.com/5e1c4fb9dd524e37c7025f88/5e1c4fb9dd524e0a66026015_fax-plus-logo.svg",
                 "description": "Online fax service",
                 "category": "Communication",
                 "display_order": 31
@@ -282,7 +282,7 @@ def setup_default_tools():
             {
                 "name": "CBI InstaCheck",
                 "url": "https://www.cbirecordscolorado.com/",
-                "icon": "https://www.cbirecordscolorado.com/images/CBI_LOGO.png",
+                "icon": "https://coloradoabi.com/wp-content/uploads/2020/08/CBI-Logo.png",
                 "description": "Colorado Bureau of Investigation background checks",
                 "category": "HR",
                 "display_order": 33
@@ -290,7 +290,7 @@ def setup_default_tools():
             {
                 "name": "CAPS",
                 "url": "https://www.colorado.gov/pacific/cdhs/adult-protective-services",
-                "icon": "https://www.colorado.gov/favicon.ico",
+                "icon": "https://www.colorado.gov/pacific/sites/default/files/Colorado_logo.png",
                 "description": "Colorado Adult Protective Services reporting",
                 "category": "Operations",
                 "display_order": 34
@@ -298,7 +298,7 @@ def setup_default_tools():
             {
                 "name": "Google Admin",
                 "url": "https://admin.google.com",
-                "icon": "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/logo_admin_2x.png",
+                "icon": "https://www.gstatic.com/images/branding/product/2x/admin_2020q4_48dp.png",
                 "description": "Google Workspace administration",
                 "category": "Productivity",
                 "display_order": 35
@@ -306,7 +306,7 @@ def setup_default_tools():
             {
                 "name": "AI Tools",
                 "url": "#ai-tools-dropdown",
-                "icon": "https://cdn-icons-png.flaticon.com/512/8637/8637099.png",
+                "icon": "https://cdn-icons-png.flaticon.com/512/4712/4712027.png",
                 "description": "ChatGPT, Gemini, Claude, and Grok",
                 "category": "Productivity",
                 "display_order": 36
