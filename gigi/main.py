@@ -56,6 +56,17 @@ except Exception as e:
     MEMORY_SYSTEM_AVAILABLE = False
     logger.warning(f"Memory System not available: {e}")
 
+# Import Gigi Mode Detection System
+try:
+    from gigi.mode_detector import ModeDetector, OperatingMode, ModeSource, parse_mode_command
+    mode_detector = ModeDetector()
+    MODE_DETECTOR_AVAILABLE = True
+    logger.info("✓ Gigi Mode Detector initialized")
+except Exception as e:
+    mode_detector = None
+    MODE_DETECTOR_AVAILABLE = False
+    logger.warning(f"Mode Detector not available: {e}")
+
 # Import enhanced webhook functionality for caller ID, transfer, and message taking
 try:
     from enhanced_webhook import (
@@ -304,6 +315,58 @@ def capture_memory(
 
     except Exception as e:
         logger.error(f"Failed to capture memory: {e}")
+        return None
+
+
+def detect_and_update_mode(text: str) -> Optional[str]:
+    """
+    Detect and update mode from conversation context.
+
+    Checks for:
+    1. Explicit mode commands ("Set mode to focus")
+    2. Context-based mode detection (crisis keywords, travel indicators, etc.)
+
+    Args:
+        text: User message text
+
+    Returns:
+        Mode value if detected and updated, None otherwise
+    """
+    if not MODE_DETECTOR_AVAILABLE:
+        return None
+
+    try:
+        # First check for explicit mode command
+        mode_command = parse_mode_command(text)
+        if mode_command:
+            mode, expires_at = mode_command
+            mode_detector.set_mode(
+                mode=mode,
+                source=ModeSource.EXPLICIT,
+                confidence=1.0,
+                expires_at=expires_at,
+                context={"trigger": "user_command", "text": text[:100]}
+            )
+            logger.info(f"✓ Mode set to {mode.value} via explicit command")
+            return mode.value
+
+        # Check for context-based mode detection
+        detected_mode, confidence = mode_detector.detect_mode_from_context(text)
+        if detected_mode and confidence >= 0.7:
+            # High confidence context detection - update mode
+            mode_detector.set_mode(
+                mode=detected_mode,
+                source=ModeSource.CONTEXT,
+                confidence=confidence,
+                context={"trigger": "context_detection", "text": text[:100]}
+            )
+            logger.info(f"✓ Mode detected from context: {detected_mode.value} (confidence: {confidence:.2f})")
+            return detected_mode.value
+
+        return None
+
+    except Exception as e:
+        logger.error(f"Failed to detect/update mode: {e}")
         return None
 
 
@@ -3736,8 +3799,9 @@ async def health_check():
     health = {
         "status": "healthy",
         "agent": "gigi",
-        "version": "2.0.0",  # Version 2.0: Memory system + behavioral OS
-        "memory_system": MEMORY_SYSTEM_AVAILABLE
+        "version": "2.1.0",  # Version 2.1: Memory + Mode Detection
+        "memory_system": MEMORY_SYSTEM_AVAILABLE,
+        "mode_detector": MODE_DETECTOR_AVAILABLE
     }
 
     # Add memory stats if available
@@ -3751,6 +3815,23 @@ async def health_check():
             }
         except Exception as e:
             health["memory_stats"] = {
+                "error": str(e),
+                "system_ready": False
+            }
+
+    # Add mode detector info if available
+    if MODE_DETECTOR_AVAILABLE:
+        try:
+            current_mode = mode_detector.get_current_mode()
+            health["current_mode"] = {
+                "mode": current_mode.mode.value,
+                "source": current_mode.source.value,
+                "confidence": float(current_mode.confidence),
+                "set_at": current_mode.set_at.isoformat() if current_mode.set_at else None,
+                "system_ready": True
+            }
+        except Exception as e:
+            health["current_mode"] = {
                 "error": str(e),
                 "system_ready": False
             }
