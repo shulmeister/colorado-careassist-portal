@@ -5270,7 +5270,7 @@ async def internal_late_notification(shift_id: str, request: Request):
 
 
 @app.get("/va-plan-of-care", response_class=HTMLResponse)
-async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_user)):
+async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_user_optional)):
     """VA Plan of Care Generator - Convert VA Form 10-7080 to Plan of Care (485)"""
     va_html_content = """<!DOCTYPE html>
 <html lang="en">
