@@ -5338,15 +5338,25 @@ CRITICAL INSTRUCTIONS:
 Extract every field you can find. Be thorough."""
 
         # Call Gemini API - try multiple models
-        models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro"]
+        # Use v1 API endpoint and correct model identifiers
+        models_to_try = [
+            ("v1beta", "gemini-2.0-flash-exp"),
+            ("v1", "gemini-1.5-flash-latest"),
+            ("v1", "gemini-1.5-pro-latest"),
+            ("v1beta", "gemini-1.5-flash-002"),
+            ("v1beta", "gemini-1.5-pro-002")
+        ]
         gemini_response = None
         last_error = None
 
         async with httpx.AsyncClient(timeout=60.0) as client:
-            for model in models_to_try:
+            for api_version, model in models_to_try:
                 try:
+                    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent"
+                    logger.info(f"Trying {model} on {api_version}...")
+
                     gemini_response = await client.post(
-                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                        url,
                         headers={
                             "x-goog-api-key": GEMINI_API_KEY,
                             "Content-Type": "application/json"
