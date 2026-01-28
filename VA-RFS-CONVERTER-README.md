@@ -10,9 +10,27 @@
 
 ## 🎯 What It Does
 
-Converts referral face sheets (from nursing homes, hospitals, ALFs, rehabilitation centers) into **VA Form 10-10172 RFS (Request for Service)** with automatic AI data extraction.
+Converts multiple document types into **VA Form 10-10172 RFS (Request for Service)** with automatic AI data extraction:
+
+1. **VA Form 10-7080** (Approved Referral for Medical Care) → RFS for **CONTINUING CARE** (re-authorizations every 6 months)
+2. **Referral face sheets** (nursing homes, hospitals, ALFs, rehab centers) → RFS for **NEW SERVICES**
+3. **Contact sheets** and other medical referrals → RFS for **NEW SERVICES**
 
 **Live URL:** https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-rfs-converter
+
+---
+
+## 📋 Two Types of RFS Requests
+
+### 1. Continuing Care (Re-authorizations)
+**Source Document:** VA Form 10-7080
+**Use Case:** Existing clients need re-authorization every 6 months
+**Example:** Veteran has been receiving 7-11 hours/week HHA services. Authorization expires in 30 days. Submit RFS with new VA Form 10-7080 to continue services.
+
+### 2. New Services (Initial Referrals)
+**Source Documents:** Referral face sheets, contact sheets, medical referrals
+**Use Case:** New referrals from nursing homes, hospitals, ALFs, rehab facilities
+**Example:** Hospital discharges veteran and refers to home health. Submit RFS with hospital referral order to initiate services.
 
 ---
 
@@ -21,12 +39,13 @@ Converts referral face sheets (from nursing homes, hospitals, ALFs, rehabilitati
 ### 1. AI-Powered Data Extraction
 - ✅ Gemini 2.0 Flash AI reads referral PDFs visually
 - ✅ Extracts 30+ fields automatically
-- ✅ Supports multiple referral formats:
-  - Nursing home face sheets
-  - Hospital referral orders
-  - Assisted living facility referrals
-  - Rehabilitation center referrals
-  - Other medical facility referrals
+- ✅ Supports multiple document types:
+  - **VA Form 10-7080** (Approved Referral for Medical Care) - for re-authorizations
+  - **Nursing home face sheets** - for new service referrals
+  - **Hospital referral orders** - for new service referrals
+  - **Assisted living facility referrals** - for new service referrals
+  - **Rehabilitation center referrals** - for new service referrals
+  - **Contact sheets and other medical referrals** - for new service referrals
 - ✅ 95%+ accuracy on clear scans
 - ✅ 2-5 second extraction time
 
@@ -84,11 +103,31 @@ The AI will automatically populate:
 
 ---
 
-## 📋 Supported Referral Sources
+## 📋 Supported Document Types
 
 The VA RFS Converter can extract data from:
 
-### Nursing Home Face Sheets
+### 1. VA Form 10-7080 (Approved Referral for Medical Care)
+**Purpose:** Re-authorizations for continuing care (every 6 months)
+**Example fields extracted:**
+- Veteran Name → Veteran Information (Last, First, Middle)
+- Veteran ICN, EDIPI, SSN → Identifiers (extract last 4 SSN)
+- Veteran DOB, Address, City, State, ZIP, Phone → Demographics
+- Referring Provider, NPI → Ordering Provider Information
+- VA Facility Name, Phone, Fax → Provider Contact
+- Provisional Diagnosis (e.g., "R54 Age-related physical debility") → Diagnosis Primary
+- ICD-10 Codes (e.g., R54) → ICD-10 Codes field
+- Service Requested (e.g., "HHHA 7 to 11 hrs Per Week") → Service Requested
+- Category of Care (e.g., "HOMEMAKER/HOME HEALTH AIDE") → Care Type
+- Active Outpatient Medications → Medications
+- Referral Issue Date → Referral Date
+- First Appointment Date → Admission Date
+- Expiration Date → Discharge Date
+
+**Common use case:** Existing client William Crowley receives 7-11 hrs/week HHA services. Authorization expires 08/02/2026. Submit RFS with new VA Form 10-7080 to continue services for another 6 months.
+
+### 2. Nursing Home Face Sheets
+**Purpose:** New service referrals
 **Example fields extracted:**
 - Patient/Resident Name → Veteran Name
 - DOB, SSN → Veteran Information
@@ -98,7 +137,8 @@ The VA RFS Converter can extract data from:
 - Primary Diagnosis → Diagnosis
 - Care Level (SNF, AL) → Service Type
 
-### Hospital Referral Orders
+### 3. Hospital Referral Orders
+**Purpose:** New service referrals
 **Example fields extracted:**
 - Patient Name → Veteran Name
 - MRN, DOB, SSN → Identifiers
@@ -107,7 +147,8 @@ The VA RFS Converter can extract data from:
 - Service Requested → Service Type
 - Discharge Planning → Orders
 
-### Assisted Living Facility Referrals
+### 4. Assisted Living Facility Referrals
+**Purpose:** New service referrals
 **Example fields extracted:**
 - Resident Name → Veteran Name
 - Demographics → Veteran Information

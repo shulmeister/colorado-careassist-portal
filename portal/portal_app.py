@@ -5877,7 +5877,10 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
 
 
 # ============================================================================
-# VA RFS CONVERTER - Convert Referral Face Sheets to VA Form 10-10172 RFS
+# VA RFS CONVERTER - Convert VA 10-7080, Referral Face Sheets & Contact Sheets to VA Form 10-10172 RFS
+# Handles: 1) VA Form 10-7080 (re-authorizations every 6 months)
+#          2) Referral face sheets (nursing home, hospital, ALF, rehab)
+#          3) Contact sheets and other medical referrals
 # ============================================================================
 
 @app.post("/api/parse-va-rfs-referral")
@@ -5904,7 +5907,10 @@ async def parse_va_rfs_referral(
         pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
 
         # Gemini extraction prompt for VA RFS
-        extraction_prompt = """Extract ALL data from this referral face sheet (nursing home, hospital, ALF, or other medical facility referral).
+        extraction_prompt = """Extract ALL data from this document. This can be one of three types:
+1. VA Form 10-7080 (Approved Referral for Medical Care) - for re-authorizations
+2. Referral face sheet from nursing home, hospital, ALF, or rehabilitation facility
+3. Contact sheet or other medical referral document
 
 This will be used to populate VA Form 10-10172 RFS (Request for Service).
 
@@ -5945,18 +5951,70 @@ Return a JSON object with these EXACT keys (use empty string "" if field not fou
 }
 
 IMPORTANT INSTRUCTIONS:
-1. Extract patient/veteran information (name, DOB, SSN, phone, address)
-2. Look for primary physician or ordering provider (name, NPI, phone, fax, office address)
-3. Extract all diagnosis information and ICD-10 codes
-4. Look for care type (Skilled Nursing, Assisted Living, Home Health, etc.)
-5. Find facility name and type (SNF, ALF, Hospital, etc.)
-6. Extract service requested or orders
-7. Look for medications, allergies, emergency contacts
-8. Find any dates: referral date, admission date, discharge date
+
+FOR VA FORM 10-7080:
+- Veteran Name → veteran_last_name, veteran_first_name, veteran_middle_name
+- Veteran Date of Birth → date_of_birth
+- Veteran SSN (full or last 4) → last_4_ssn (extract just last 4 digits)
+- Veteran Address, City, State, ZIP → separate into address, city, state, zip fields
+- Veteran Phone Number → phone
+- Referring Provider → ordering_provider_name
+- Referring Provider NPI → ordering_provider_npi
+- VA Telephone Number → ordering_provider_phone
+- VA Fax Number → ordering_provider_fax
+- Referring VA Facility → ordering_provider_address (include full facility name and address)
+- Provisional Diagnosis OR Root cause/diagnoses → diagnosis_primary
+- ICD-10 codes (like R54) → icd10_codes
+- Service Requested (like "HHHA 7 to 11 hrs Per Week") → service_requested
+- Category of Care → care_type
+- Active Outpatient Medications → medications
+- Referral Issue Date → referral_date
+- First Appointment Date → admission_date
+- Expiration Date → discharge_date
+
+FOR REFERRAL FACE SHEETS (Nursing Home, Hospital, ALF):
+- Patient/Resident Name → veteran_last_name, veteran_first_name, veteran_middle_name
+- DOB → date_of_birth
+- SSN → last_4_ssn (extract just last 4 digits)
+- Address fields → address, city, state, zip
+- Phone → phone
+- Primary Physician OR Ordering Provider → ordering_provider_name
+- Physician NPI → ordering_provider_npi
+- Provider Phone → ordering_provider_phone
+- Provider Fax → ordering_provider_fax
+- Provider Office/Facility Address → ordering_provider_address
+- Facility Name (SNF, ALF, Hospital, etc.) → facility_name
+- Facility Type → facility_type
+- Primary Diagnosis → diagnosis_primary
+- Secondary Diagnosis → diagnosis_secondary
+- ICD-10 Codes → icd10_codes
+- Care Level or Service Type → care_type
+- Orders or Services Requested → orders
+- Medications → medications
+- Allergies → allergies
+- Emergency Contact → emergency_contact_name, emergency_contact_phone
+- Referral Date → referral_date
+- Admission Date → admission_date
+- Discharge Date → discharge_date
+
+GENERAL INSTRUCTIONS:
+1. Search the ENTIRE document for all fields (multi-page documents)
+2. Extract patient/veteran information (name, DOB, SSN, phone, address)
+3. Look for primary physician, referring provider, or ordering provider (name, NPI, contact info)
+4. Extract ALL diagnosis information and ICD-10 codes (like R54, I50.9, Z99.11, etc.)
+5. Look for care type (HHHA, Home Health, Skilled Nursing, Assisted Living, etc.)
+6. Find facility name and type if applicable (SNF, ALF, Hospital, Rehab, VA Facility)
+7. Extract service requested or orders (hours per week, type of care)
+8. Look for medications, allergies, emergency contacts
+9. Find key dates: referral issue date, admission date, start of care, discharge/expiration date
 
 DATE FORMATS: Convert all dates to MM/DD/YYYY format.
 
-DIAGNOSIS: Extract both text descriptions AND ICD-10 codes if available.
+SSN: If you find full SSN like "155-26-3414", extract only last 4 digits: "3414"
+
+DIAGNOSIS: Extract both text descriptions (like "Age-related physical debility") AND ICD-10 codes (like "R54")
+
+PROVIDER: For VA Form 10-7080, the "Referring Provider" is the ordering provider for the RFS.
 
 Return ONLY the JSON object, no other text."""
 
@@ -6339,14 +6397,21 @@ async def va_rfs_converter(
     <div class="container">
         <div class="header">
             <h1>🏥 VA RFS Converter</h1>
-            <p>Convert Referral Face Sheets to VA Form 10-10172 RFS (Request for Service)</p>
+            <p>Convert VA Form 10-7080, Referral Face Sheets & Contact Sheets to VA Form 10-10172 RFS</p>
+            <p style="font-size: 12px; margin-top: 5px; opacity: 0.85;">Request for Service • Re-authorizations • New Referrals</p>
         </div>
 
         <div class="upload-section">
             <div class="upload-box" id="uploadBox">
                 <div class="upload-icon">📄</div>
-                <h3>Upload Referral Face Sheet</h3>
-                <p style="margin: 10px 0; color: #666;">Drag and drop your PDF here or click to browse</p>
+                <h3>Upload Referral Document</h3>
+                <p style="margin: 10px 0; color: #666; font-weight: 600;">Accepts:</p>
+                <p style="margin: 5px 0; color: #666; font-size: 14px;">
+                    ✓ VA Form 10-7080 (re-authorizations)<br>
+                    ✓ Referral face sheets (nursing home, hospital, ALF)<br>
+                    ✓ Contact sheets & medical referrals
+                </p>
+                <p style="margin: 15px 0 10px 0; color: #888; font-size: 13px;">Drag and drop your PDF here or click to browse</p>
                 <input type="file" id="pdfFile" accept=".pdf" />
                 <button class="btn btn-primary" onclick="document.getElementById('pdfFile').click()">
                     Select PDF
