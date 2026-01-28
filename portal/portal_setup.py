@@ -258,7 +258,7 @@ def setup_default_tools():
             {
                 "name": "EbizCharge",
                 "url": "https://qboapp1.ebizcharge.net/",
-                "icon": "https://www.ebizcharge.com/wp-content/uploads/2023/02/ebizcharge-logo.svg",
+                "icon": "https://www.ebizcharge.com/wp-content/themes/cenpos-child/images/logo.png",
                 "description": "QuickBooks payment processing",
                 "category": "Finance",
                 "display_order": 30
@@ -266,7 +266,7 @@ def setup_default_tools():
             {
                 "name": "Fax.Plus",
                 "url": "https://app.fax.plus/faxes/inbox",
-                "icon": "https://assets-global.website-files.com/5e1c4fb9dd524e37c7025f88/5e1c4fb9dd524e0a66026015_fax-plus-logo.svg",
+                "icon": "https://cdn.prod.website-files.com/5e1c4fb9dd524e37c7025f88/5e1c4fb9dd524e0a66026015_fax-plus-logo.svg",
                 "description": "Online fax service",
                 "category": "Communication",
                 "display_order": 31
@@ -282,7 +282,7 @@ def setup_default_tools():
             {
                 "name": "CBI InstaCheck",
                 "url": "https://www.cbirecordscolorado.com/",
-                "icon": "https://coloradoabi.com/wp-content/uploads/2020/08/CBI-Logo.png",
+                "icon": "https://ucdenver.edu/sites/g/files/lkoglw1426/files/styles/small/public/2023-04/cbi_colorado-department-of-public-safety_logo.png",
                 "description": "Colorado Bureau of Investigation background checks",
                 "category": "HR",
                 "display_order": 33
@@ -290,7 +290,7 @@ def setup_default_tools():
             {
                 "name": "CAPS",
                 "url": "https://www.colorado.gov/pacific/cdhs/adult-protective-services",
-                "icon": "https://www.colorado.gov/pacific/sites/default/files/Colorado_logo.png",
+                "icon": "https://cdpsdocs.state.co.us/img/cocoportal-logo.png",
                 "description": "Colorado Adult Protective Services reporting",
                 "category": "Operations",
                 "display_order": 34
