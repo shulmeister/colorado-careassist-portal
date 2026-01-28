@@ -169,6 +169,14 @@ CRITICAL: You MUST say "you're not in our system" within your first response to 
                         "type": "prompt",
                         "prompt": "The caller asks about stock prices, crypto prices, cryptocurrency, Bitcoin, Ethereum, investment advice, market data, or any financial market question"
                     }
+                },
+                {
+                    "id": "to_events_query",
+                    "destination_node_id": "events_query_handler",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "The caller asks about concerts, events, shows, sports, theater, comedy shows, things to do, what's happening this weekend, or any entertainment events"
+                    }
                 }
             ]
         },
@@ -1018,6 +1026,83 @@ If they keep asking: "I've given you the latest price. Take care!" → GO TO end
                     "transition_condition": {
                         "type": "prompt",
                         "prompt": "Price provided and caller satisfied OR caller asks nothing else"
+                    }
+                }
+            ]
+        },
+
+        # =====================================================================
+        # EVENTS QUERY HANDLER - Concerts, sports, theater lookups
+        # =====================================================================
+        {
+            "id": "events_query_handler",
+            "type": "conversation",
+            "name": "Events Query",
+            "instruction": {
+                "type": "prompt",
+                "text": """## TASK: Help find local events, concerts, shows
+
+## DETECT WHAT THEY WANT
+Listen for:
+- Concert requests: "concerts this weekend", "who's playing", "live music"
+- Sports: "Broncos game", "Nuggets", "Avalanche", "sports events"
+- Theater: "shows", "plays", "comedy shows"
+- General: "things to do", "what's happening", "events"
+
+## EVENT LOOKUP
+If they ask about events:
+1. Extract what they're looking for (concerts, sports, theater, etc.)
+2. Extract when (this weekend, tonight, next week, or leave blank for upcoming)
+3. Call get_events with the query type
+4. Share the results clearly: "Here's what I found: [event name] at [venue] on [date]."
+5. If multiple events: "There are [count] events. The top ones are: [list up to 3]."
+6. Ask: "Want me to tell you about any specific one?"
+7. If no → "Anything else?"
+8. If no again → GO TO end_call
+
+## IF NO EVENTS FOUND
+"I'm not seeing any [type] events in the next few days. Try checking Ticketmaster or the venue websites directly."
+Ask: "Anything else?"
+If no → GO TO end_call
+
+## KEEP IT SHORT
+- One lookup, share results, ask if they need more info
+- Do NOT give full details unless they ask
+- Just provide event name, venue, and date
+
+## ANTI-LOOP
+After answering ONCE, if they ask again: "Like I said, [quick summary]. Anything else?"
+If they keep asking: "I've given you what I found. Check Ticketmaster for more. Take care!" → GO TO end_call"""
+            },
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_events",
+                        "description": "Get upcoming events, concerts, sports, theater in Denver/Colorado area",
+                        "url": f"{WEBHOOK_BASE}/get_events",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string", "description": "Type of event: concerts, sports, theater, comedy, or general search term"},
+                                "city": {"type": "string", "description": "City name (default Denver)"},
+                                "state": {"type": "string", "description": "State code (default CO)"},
+                                "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (optional)"},
+                                "end_date": {"type": "string", "description": "End date YYYY-MM-DD (optional)"},
+                                "limit": {"type": "integer", "description": "Max events to return (default 5)"}
+                            },
+                            "required": []
+                        }
+                    }
+                }
+            ],
+            "edges": [
+                {
+                    "id": "events_to_end",
+                    "destination_node_id": "end_call",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Events provided and caller satisfied OR caller asks nothing else"
                     }
                 }
             ]

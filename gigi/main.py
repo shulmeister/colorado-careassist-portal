@@ -100,6 +100,9 @@ logger = logging.getLogger(__name__)
 # Alpha Vantage API for financial data (stocks, crypto)
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
+# Ticketmaster API for events (concerts, sports, theater)
+TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY", "Sczxp0S6KI0GLLj1CZtYlHm57Za8Byi9")
+
 # Retell AI credentials (required for voice agent)
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
 # Note: Retell uses the API key itself for webhook signature verification (not a separate secret)
@@ -2788,6 +2791,16 @@ class CryptoPriceResult:
     error: Optional[str] = None
 
 
+@dataclass
+class EventsResult:
+    """Result of events/concerts lookup."""
+    success: bool
+    events: Optional[List[Dict[str, str]]] = None
+    count: int = 0
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
 async def add_visit_notes(
     caregiver_phone: str,
     client_name: str,
@@ -3212,6 +3225,159 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
             success=False,
             error=str(e),
             message="I encountered an error looking up that crypto price."
+        )
+
+
+async def get_events(
+    query: str = "concerts",
+    city: str = "Denver",
+    state: str = "CO",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    limit: int = 5
+) -> EventsResult:
+    """
+    Get upcoming events (concerts, sports, theater) in a specific area.
+    Uses Ticketmaster Discovery API.
+
+    Args:
+        query: Type of event (e.g., "concerts", "sports", "theater", "comedy")
+        city: City name (default "Denver")
+        state: State code (default "CO")
+        start_date: Start date in YYYY-MM-DD format (default: today)
+        end_date: End date in YYYY-MM-DD format (default: 7 days from start)
+        limit: Maximum number of events to return (default 5)
+
+    Returns:
+        EventsResult with list of upcoming events
+    """
+    if not TICKETMASTER_API_KEY:
+        logger.error("TICKETMASTER_API_KEY not configured")
+        return EventsResult(
+            success=False,
+            error="Events service not configured",
+            message="I'm unable to check events right now. Please try again later."
+        )
+
+    try:
+        # Default date range: today through next week
+        if not start_date:
+            start_date = datetime.now().strftime("%Y-%m-%dT00:00:00Z")
+        else:
+            start_date = f"{start_date}T00:00:00Z"
+
+        if not end_date:
+            end_dt = datetime.now() + timedelta(days=7)
+            end_date = end_dt.strftime("%Y-%m-%dT23:59:59Z")
+        else:
+            end_date = f"{end_date}T23:59:59Z"
+
+        # Build API request
+        url = "https://app.ticketmaster.com/discovery/v2/events.json"
+        params = {
+            "apikey": TICKETMASTER_API_KEY,
+            "city": city,
+            "stateCode": state,
+            "startDateTime": start_date,
+            "endDateTime": end_date,
+            "size": limit,
+            "sort": "date,asc"
+        }
+
+        # Add keyword filter if specific query provided
+        if query.lower() not in ["all", "events", "anything"]:
+            params["keyword"] = query
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url, params=params)
+
+            if response.status_code != 200:
+                logger.error(f"Ticketmaster API error: {response.status_code}")
+                return EventsResult(
+                    success=False,
+                    error="API error",
+                    message="I'm having trouble getting events right now."
+                )
+
+            data = response.json()
+
+            # Check if events found
+            embedded = data.get("_embedded")
+            if not embedded or "events" not in embedded:
+                return EventsResult(
+                    success=False,
+                    count=0,
+                    message=f"I couldn't find any {query} in {city} this week. Try a different search or check back later."
+                )
+
+            events_data = embedded["events"]
+            events_list = []
+
+            for event in events_data[:limit]:
+                name = event.get("name", "Unknown Event")
+                event_date = event.get("dates", {}).get("start", {}).get("localDate", "TBA")
+                event_time = event.get("dates", {}).get("start", {}).get("localTime", "")
+
+                # Format date nicely
+                try:
+                    dt = datetime.strptime(event_date, "%Y-%m-%d")
+                    formatted_date = dt.strftime("%A, %B %d")
+                except:
+                    formatted_date = event_date
+
+                # Get venue
+                venues = event.get("_embedded", {}).get("venues", [])
+                venue_name = venues[0].get("name", "Venue TBA") if venues else "Venue TBA"
+
+                # Get price range if available
+                price_ranges = event.get("priceRanges", [])
+                price_info = ""
+                if price_ranges:
+                    min_price = price_ranges[0].get("min", 0)
+                    max_price = price_ranges[0].get("max", 0)
+                    if min_price and max_price:
+                        price_info = f" (${min_price:.0f}-${max_price:.0f})"
+
+                # Build event description
+                event_desc = f"{name} - {formatted_date}"
+                if event_time:
+                    event_desc += f" at {event_time}"
+                event_desc += f" at {venue_name}{price_info}"
+
+                events_list.append({
+                    "name": name,
+                    "date": formatted_date,
+                    "time": event_time,
+                    "venue": venue_name,
+                    "description": event_desc
+                })
+
+            if not events_list:
+                return EventsResult(
+                    success=False,
+                    count=0,
+                    message=f"I couldn't find any {query} in {city} this week."
+                )
+
+            # Build friendly message
+            event_type = query if query.lower() not in ["all", "events", "anything"] else "events"
+            message = f"I found {len(events_list)} {event_type} in {city} this week:\n\n"
+            for i, evt in enumerate(events_list, 1):
+                message += f"{i}. {evt['description']}\n"
+
+            return EventsResult(
+                success=True,
+                events=events_list,
+                count=len(events_list),
+                message=message
+            )
+
+    except Exception as e:
+        logger.exception(f"Error fetching events: {e}")
+        return EventsResult(
+            success=False,
+            error=str(e),
+            message="I encountered an error looking up events."
         )
 
 
@@ -3880,6 +4046,23 @@ async def retell_function_call(function_name: str, request: Request):
                 "price": result.price,
                 "market": result.market,
                 "last_updated": result.last_updated,
+                "message": result.message,
+                "error": result.error
+            })
+
+        elif function_name == "get_events":
+            query = args.get("query", "concerts")
+            city = args.get("city", "Denver")
+            state = args.get("state", "CO")
+            start_date = args.get("start_date")
+            end_date = args.get("end_date")
+            limit = args.get("limit", 5)
+
+            result = await get_events(query, city, state, start_date, end_date, limit)
+            return JSONResponse({
+                "success": result.success,
+                "events": result.events,
+                "count": result.count,
                 "message": result.message,
                 "error": result.error
             })
