@@ -6105,6 +6105,193 @@ Return ONLY the JSON object, no other text."""
         }, status_code=200)
 
 
+@app.post("/api/fill-va-rfs-form")
+async def fill_va_rfs_form(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Fill official VA Form 10-10172 RFS PDF with extracted data"""
+    from PyPDFForm import PdfWrapper
+    from datetime import datetime
+    import io
+
+    try:
+        # Get form data from request
+        data = await request.json()
+
+        # Load the blank VA Form 10-10172 PDF
+        pdf_path = os.path.join(os.path.dirname(__file__), '..', 'va_form_10_10172_blank.pdf')
+        pdf = PdfWrapper(pdf_path)
+
+        # Map extracted data to PDF form fields
+        # Note: Field names may need adjustment after testing with actual PDF
+        form_data = {}
+
+        # Section I: Veteran & Ordering Provider Information
+        # Field 1: Veteran's Legal Full Name (First, MI, Last)
+        vet_name_parts = []
+        if data.get('veteran_first_name'):
+            vet_name_parts.append(data['veteran_first_name'])
+        if data.get('veteran_middle_name'):
+            vet_name_parts.append(data['veteran_middle_name'][:1])  # Middle initial
+        if data.get('veteran_last_name'):
+            vet_name_parts.append(data['veteran_last_name'])
+        if vet_name_parts:
+            form_data['1 VETERANS LEGAL FULL NAME First MI Last'] = ', '.join(vet_name_parts)
+
+        # Field 2: Date of Birth
+        if data.get('date_of_birth'):
+            form_data['2 DATE OF BIRTH MMDDYYYY'] = data['date_of_birth']
+
+        # Field 3: VA Facility & Address
+        if data.get('ordering_provider_address'):
+            form_data['3 VA FACILITY  ADDRESS'] = data['ordering_provider_address']
+
+        # Field 4: VA Authorization Number
+        if data.get('va_authorization_number'):
+            form_data['4 VA AUTHORIZATION NUMBER'] = data['va_authorization_number']
+
+        # Field 5: Ordering Provider Office Name & Address
+        if data.get('ordering_provider_name') or data.get('ordering_provider_address'):
+            provider_info = []
+            if data.get('ordering_provider_name'):
+                provider_info.append(data['ordering_provider_name'])
+            if data.get('ordering_provider_address'):
+                provider_info.append(data['ordering_provider_address'])
+            form_data['5 ORDERING PROVIDER OFFICE NAME  ADDRESS'] = '\n'.join(provider_info)
+
+        # Field 6: IHS Provider - default to NO
+        form_data['6 INDIAN HEALTH SERVICES IHS PROVIDERTRIBAL HEALTH PROGRAM THP_NO'] = True
+
+        # Field 7: Ordering Provider Phone
+        if data.get('ordering_provider_phone'):
+            form_data['7 ORDERING PROVIDER PHONE NUMBER 999 9999999'] = data['ordering_provider_phone']
+
+        # Field 8: Ordering Provider Fax
+        if data.get('ordering_provider_fax'):
+            form_data['8 ORDERING PROVIDER FAX NUMBER 999 9999999'] = data['ordering_provider_fax']
+
+        # Field 9: Ordering Provider Secure Email
+        if data.get('ordering_provider_email'):
+            form_data['9 ORDERING PROVIDER SECURE EMAIL ADDRESS'] = data['ordering_provider_email']
+
+        # Section II: Type of Care Request
+        # Field 10: Is care needed within 48 hours - default to NO
+        form_data['10 IS CARE NEEDED WITHIN 48 HOURS Based on the clinical need of the patient_NO'] = True
+
+        # Field 11: Is this a continuation of care
+        # YES if VA 10-7080, NO if referral sheet
+        is_continuation = data.get('is_continuation_of_care', False)
+        if is_continuation:
+            form_data['11 IS THIS A CONTINUATION OF CARE_YES'] = True
+        else:
+            form_data['11 IS THIS A CONTINUATION OF CARE_NO'] = True
+
+        # Field 12: Is this a referral to another specialty - default to NO
+        form_data['12 IS THIS A REFERRAL TO ANOTHER SPECIALTY_NO'] = True
+
+        # Field 13: Diagnosis Codes (ICD-10)
+        if data.get('icd10_codes'):
+            form_data['13 DIAGNOSIS CODES ICD10'] = data['icd10_codes']
+
+        # Field 14: Diagnosis Description
+        if data.get('diagnosis_primary'):
+            form_data['14 DIAGNOSIS DESCRIPTION'] = data['diagnosis_primary']
+
+        # Field 15-16: CPT/HCPCS Codes (if available)
+        if data.get('cpt_codes'):
+            form_data['15 REQUESTED CPTHCPCS CODE'] = data['cpt_codes']
+        if data.get('cpt_description'):
+            form_data['16 DESCRIPTION CPTHCPCS CODE'] = data['cpt_description']
+
+        # Field 17: Geriatric and Extended Care checkboxes
+        care_type_lower = (data.get('care_type') or '').lower()
+        service_requested_lower = (data.get('service_requested') or '').lower()
+
+        # Check for different service types
+        if 'nursing home' in care_type_lower or 'snf' in care_type_lower:
+            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_COMMUNITY NURSING HOME'] = True
+
+        if 'hospice' in care_type_lower or 'palliative' in care_type_lower:
+            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_HOSPICEPALLIATIVE CARE'] = True
+
+        if 'home health' in care_type_lower or 'skilled' in service_requested_lower or 'home health' in service_requested_lower:
+            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_SKILLED HOME HEALTH CARE'] = True
+
+        if 'homemaker' in service_requested_lower or 'hha' in service_requested_lower or 'home health aide' in service_requested_lower:
+            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_HOMEMAKERHOME HEALTH AIDE'] = True
+
+        if 'respite' in care_type_lower:
+            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_RESPITE'] = True
+
+        if 'adult day' in care_type_lower:
+            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_COMMUNITY ADULT DAY HEALTH CARE'] = True
+
+        # Field 18: Reason for Request (combine multiple fields)
+        reason_parts = []
+        if data.get('diagnosis_primary'):
+            reason_parts.append(f"Diagnosis: {data['diagnosis_primary']}")
+        if data.get('diagnosis_secondary'):
+            reason_parts.append(f"Secondary Diagnosis: {data['diagnosis_secondary']}")
+        if data.get('service_requested'):
+            reason_parts.append(f"Service Requested: {data['service_requested']}")
+        if data.get('orders'):
+            reason_parts.append(f"Orders: {data['orders']}")
+        if data.get('medications'):
+            reason_parts.append(f"Medications: {data['medications']}")
+        if data.get('allergies'):
+            reason_parts.append(f"Allergies: {data['allergies']}")
+
+        if reason_parts:
+            form_data['18 REASON FOR REQUEST To avoid delays in care include appropriate documentation such as office notes current treatment plans clinical history laboratory results radiology results or medications to support the medical necessity of services requested'] = '\n\n'.join(reason_parts)
+
+        # Field 19: Ordering Provider Name (Printed)
+        if data.get('ordering_provider_name'):
+            form_data['19 ORDERING PROVIDER NAME PRINTED'] = data['ordering_provider_name']
+
+        # Field 20: Ordering Provider NPI
+        if data.get('ordering_provider_npi'):
+            form_data['20 ORDERING PROVIDER NPI'] = data['ordering_provider_npi']
+
+        # Field 21: Signature - leave blank for manual signature
+
+        # Field 22: Today's Date
+        today = datetime.now().strftime('%m/%d/%Y')
+        form_data['22 TODAYS DATE MMDDYYYY'] = today
+
+        # Fill the PDF form
+        filled_pdf = pdf.fill(form_data)
+
+        # Generate filename
+        vet_last = data.get('veteran_last_name', 'Veteran')
+        vet_first_initial = (data.get('veteran_first_name') or 'V')[0].upper()
+        last_4_ssn = data.get('last_4_ssn', '0000')
+        date_str = datetime.now().strftime('%m.%d.%Y')
+
+        filename = f"{vet_last}.{vet_first_initial}.{last_4_ssn}_VA-RFS-10-10172.{date_str}.pdf"
+
+        # Return filled PDF
+        pdf_bytes = filled_pdf.read()
+
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+
+    except Exception as e:
+        print(f"Error filling VA RFS form: {e}")
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to fill VA RFS form"
+        }, status_code=500)
+
+
 @app.get("/va-rfs-converter")
 async def va_rfs_converter(
     current_user: Dict[str, Any] = Depends(get_current_user_optional)
@@ -7003,31 +7190,95 @@ async def va_rfs_converter(
             document.getElementById('va-rfs-form').scrollIntoView({ behavior: 'smooth' });
         }
 
-        function downloadRFSPDF() {
-            previewRFS();
-
-            const filename = generateRFSFilename();
-            const element = document.getElementById('va-rfs-form');
-
-            const opt = {
-                margin: [0.5, 0.5, 0.5, 0.5],
-                filename: filename + '.pdf',
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: {
-                    scale: 1.5,
-                    scrollY: 0,
-                    scrollX: 0,
-                    useCORS: true
-                },
-                jsPDF: {
-                    unit: 'in',
-                    format: 'letter',
-                    orientation: 'portrait'
-                },
-                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+        async function downloadRFSPDF() {
+            // Collect all form data
+            const formData = {
+                veteran_last_name: document.getElementById('vet-last-name').value,
+                veteran_first_name: document.getElementById('vet-first-name').value,
+                veteran_middle_name: document.getElementById('vet-middle-name').value,
+                date_of_birth: formatDateForDisplay(document.getElementById('vet-dob').value),
+                last_4_ssn: document.getElementById('vet-ssn-last4').value,
+                phone: document.getElementById('vet-phone').value,
+                address: document.getElementById('vet-address').value,
+                city: document.getElementById('vet-city').value,
+                state: document.getElementById('vet-state').value,
+                zip: document.getElementById('vet-zip').value,
+                ordering_provider_name: document.getElementById('provider-name').value,
+                ordering_provider_npi: document.getElementById('provider-npi').value,
+                ordering_provider_phone: document.getElementById('provider-phone').value,
+                ordering_provider_fax: document.getElementById('provider-fax').value,
+                ordering_provider_address: document.getElementById('provider-address').value,
+                facility_name: document.getElementById('facility-name').value,
+                facility_type: document.getElementById('facility-type').value,
+                diagnosis_primary: document.getElementById('diagnosis-primary').value,
+                diagnosis_secondary: document.getElementById('diagnosis-secondary').value,
+                icd10_codes: document.getElementById('icd10-codes').value,
+                care_type: getCareType(),
+                service_requested: document.getElementById('service-orders').value,
+                orders: document.getElementById('service-orders').value,
+                medications: document.getElementById('medications').value,
+                allergies: document.getElementById('allergies').value,
+                emergency_contact_name: document.getElementById('emergency-name').value,
+                emergency_contact_phone: document.getElementById('emergency-phone').value,
+                referral_date: formatDateForDisplay(document.getElementById('referral-date').value),
+                admission_date: formatDateForDisplay(document.getElementById('admission-date').value),
+                discharge_date: formatDateForDisplay(document.getElementById('discharge-date').value),
+                is_continuation_of_care: document.getElementById('service-homehealth').checked || false
             };
 
-            html2pdf().set(opt).from(element).save();
+            try {
+                // Show loading indicator
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Generating PDF...';
+                btn.disabled = true;
+
+                // Call API to fill official VA Form 10-10172 PDF
+                const response = await fetch('/api/fill-va-rfs-form', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to generate PDF');
+                }
+
+                // Download the filled PDF
+                const blob = await response.blob();
+                const filename = generateRFSFilename();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename + '.pdf';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                btn.textContent = originalText;
+                btn.disabled = false;
+
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                showAlert('Failed to generate PDF. Please try again.', 'error');
+                if (event.target) {
+                    event.target.textContent = '⬇️ Download PDF';
+                    event.target.disabled = false;
+                }
+            }
+        }
+
+        function getCareType() {
+            const types = [];
+            if (document.getElementById('service-homehealth').checked) types.push('Home Health');
+            if (document.getElementById('service-geriatric').checked) types.push('Geriatric Care');
+            if (document.getElementById('service-respite').checked) types.push('Respite Care');
+            if (document.getElementById('service-hospice').checked) types.push('Hospice');
+            if (document.getElementById('service-dme').checked) types.push('DME/Prosthetics');
+            return types.join(', ');
         }
 
         function downloadRFSHTML() {
