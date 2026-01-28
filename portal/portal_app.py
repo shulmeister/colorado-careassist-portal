@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, status, Query
+from fastapi import FastAPI, HTTPException, Request, Depends, status, Query, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -5269,6 +5269,117 @@ async def internal_late_notification(shift_id: str, request: Request):
         }, status_code=500)
 
 
+@app.post("/api/parse-va-form-10-7080")
+async def parse_va_form(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Parse VA Form 10-7080 PDF and extract data"""
+    import pdfplumber
+    import re
+    import io
+
+    try:
+        # Read PDF content
+        pdf_content = await file.read()
+        pdf_file = io.BytesIO(pdf_content)
+
+        extracted_data = {}
+
+        with pdfplumber.open(pdf_file) as pdf:
+            # Extract text from all pages
+            full_text = ""
+            for page in pdf.pages:
+                full_text += page.extract_text() + "\n"
+
+            # Parse specific fields using regex patterns
+            # Veteran Name (usually in format: Last, First Middle)
+            name_match = re.search(r'Veteran[\'"]?s?\s+Name[:\s]*([A-Z]+),\s*([A-Z]+)\s*([A-Z]*)', full_text, re.IGNORECASE)
+            if name_match:
+                extracted_data['veteran_last_name'] = name_match.group(1).title()
+                extracted_data['veteran_first_name'] = name_match.group(2).title()
+                extracted_data['veteran_middle_name'] = name_match.group(3).title() if name_match.group(3) else ''
+
+            # Date of Birth
+            dob_match = re.search(r'(?:Date of Birth|DOB)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', full_text, re.IGNORECASE)
+            if dob_match:
+                extracted_data['date_of_birth'] = dob_match.group(1)
+
+            # Last 4 SSN
+            ssn_match = re.search(r'(?:SSN|Social Security)[:\s]*\**(\d{4})', full_text, re.IGNORECASE)
+            if ssn_match:
+                extracted_data['last_4_ssn'] = ssn_match.group(1)
+
+            # Phone Number
+            phone_match = re.search(r'(?:Phone|Telephone)[:\s]*\(?(\d{3})\)?[\s.-]*(\d{3})[\s.-]*(\d{4})', full_text, re.IGNORECASE)
+            if phone_match:
+                extracted_data['phone'] = f"({phone_match.group(1)}) {phone_match.group(2)}-{phone_match.group(3)}"
+
+            # Address
+            address_match = re.search(r'(?:Address|Street)[:\s]*([^\n]+)', full_text, re.IGNORECASE)
+            if address_match:
+                extracted_data['address'] = address_match.group(1).strip()
+
+            # VA Consult Number / Referral Number
+            consult_match = re.search(r'(?:Consult|Referral)\s*(?:Number|#)[:\s]*(VA\d+)', full_text, re.IGNORECASE)
+            if consult_match:
+                extracted_data['va_consult_number'] = consult_match.group(1)
+
+            # Referral Issue Date
+            issue_date_match = re.search(r'(?:Issue Date|Issued)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', full_text, re.IGNORECASE)
+            if issue_date_match:
+                extracted_data['referral_issue_date'] = issue_date_match.group(1)
+
+            # First Appointment Date
+            appt_match = re.search(r'(?:First Appointment|Appointment Date)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', full_text, re.IGNORECASE)
+            if appt_match:
+                extracted_data['first_appointment_date'] = appt_match.group(1)
+
+            # Expiration Date
+            exp_match = re.search(r'(?:Expiration Date|Expires)[:\s]*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', full_text, re.IGNORECASE)
+            if exp_match:
+                extracted_data['expiration_date'] = exp_match.group(1)
+
+            # PCP/Provider Name
+            provider_match = re.search(r'(?:Provider|Physician)[:\s]*([A-Z]+),\s*([A-Z]+)', full_text, re.IGNORECASE)
+            if provider_match:
+                extracted_data['pcp_last_name'] = provider_match.group(1).title()
+                extracted_data['pcp_first_name'] = provider_match.group(2).title()
+
+            # PCP NPI
+            npi_match = re.search(r'NPI[:\s]*(\d+)', full_text, re.IGNORECASE)
+            if npi_match:
+                extracted_data['pcp_npi'] = npi_match.group(1)
+
+            # VA Facility
+            facility_match = re.search(r'(?:VA Facility|Facility Name)[:\s]*([^\n]+)', full_text, re.IGNORECASE)
+            if facility_match:
+                extracted_data['facility_name'] = facility_match.group(1).strip()
+
+            # Diagnosis
+            diagnosis_match = re.search(r'(?:Diagnosis|Provisional Diagnosis)[:\s]*([^\n]+)', full_text, re.IGNORECASE)
+            if diagnosis_match:
+                extracted_data['diagnosis'] = diagnosis_match.group(1).strip()
+
+            # Hours per week
+            hours_match = re.search(r'(\d+)\s*(?:hours?|hrs?)(?:\s*per week)?', full_text, re.IGNORECASE)
+            if hours_match:
+                extracted_data['hours_per_week'] = hours_match.group(1)
+
+        return JSONResponse({
+            "success": True,
+            "data": extracted_data,
+            "message": "PDF parsed successfully"
+        })
+
+    except Exception as e:
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to parse PDF"
+        }, status_code=400)
+
+
 @app.get("/va-plan-of-care", response_class=HTMLResponse)
 async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_user_optional)):
     """VA Plan of Care Generator - Convert VA Form 10-7080 to Plan of Care (485)"""
@@ -5320,6 +5431,18 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
         .preview-actions { display: flex; gap: 10px; }
         .filename-preview { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; font-family: 'Courier New', monospace; font-size: 14px; border-left: 5px solid #003f87; word-break: break-all; color: #333; }
         .filename-preview strong { color: #003f87; display: block; margin-bottom: 8px; font-size: 15px; }
+        .upload-section { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); margin-bottom: 20px; text-align: center; }
+        .upload-section h2 { color: #003f87; font-size: 20px; margin-bottom: 15px; font-weight: 600; }
+        .upload-section p { color: #666; margin-bottom: 20px; font-size: 14px; }
+        .file-input-wrapper { position: relative; display: inline-block; cursor: pointer; }
+        .file-input-wrapper input[type="file"] { position: absolute; left: -9999px; }
+        .file-input-label { display: inline-block; padding: 14px 32px; background: #003f87; color: white; border-radius: 8px; cursor: pointer; transition: all 0.3s; font-weight: 600; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+        .file-input-label:hover { background: #002b5c; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2); }
+        .file-name-display { margin-top: 15px; color: #28a745; font-weight: 600; min-height: 20px; }
+        .upload-status { margin-top: 10px; padding: 12px; border-radius: 6px; font-size: 14px; font-weight: 500; }
+        .upload-status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .upload-status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .upload-status.loading { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
         #plan-of-care { border: 3px solid #003f87; padding: 40px; background: white; font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #000; }
         #plan-of-care .poc-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #003f87; padding-bottom: 15px; }
         #plan-of-care .poc-header h1 { font-size: 24px; margin-bottom: 8px; color: #003f87; font-weight: bold; }
@@ -5358,24 +5481,34 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
             <p>Convert VA Form 10-7080 to Home Health Certification and Plan of Care (485)</p>
             <p style="font-size: 13px; margin-top: 10px;">Must submit within 5 days | Contact: Tamatha.Anding@va.gov (naming)</p>
         </div>
+        <div class="upload-section">
+            <h2>📄 Step 1: Upload VA Form 10-7080</h2>
+            <p>Upload your VA Form 10-7080 PDF to automatically extract veteran and referral information</p>
+            <div class="file-input-wrapper">
+                <input type="file" id="pdf-upload" accept=".pdf" onchange="handlePDFUpload(event)">
+                <label for="pdf-upload" class="file-input-label">Choose PDF File</label>
+            </div>
+            <div id="file-name-display" class="file-name-display"></div>
+            <div id="upload-status"></div>
+        </div>
         <div class="form-container">
             <form id="va-form" onsubmit="event.preventDefault();">
                 <div class="section">
                     <h2>Veteran Information</h2>
                     <div class="form-grid">
-                        <div class="form-group"><label>Last Name<span class="required">*</span></label><input type="text" id="vet-lastname" required placeholder="Crowley"></div>
-                        <div class="form-group"><label>First Name<span class="required">*</span></label><input type="text" id="vet-firstname" required placeholder="William"></div>
-                        <div class="form-group"><label>Middle Name</label><input type="text" id="vet-middlename" placeholder="Anthony"></div>
+                        <div class="form-group"><label>Last Name<span class="required">*</span></label><input type="text" id="vet-lastname" required></div>
+                        <div class="form-group"><label>First Name<span class="required">*</span></label><input type="text" id="vet-firstname" required></div>
+                        <div class="form-group"><label>Middle Name</label><input type="text" id="vet-middlename"></div>
                         <div class="form-group"><label>Date of Birth<span class="required">*</span></label><input type="date" id="vet-dob" required></div>
-                        <div class="form-group"><label>Last 4 SSN<span class="required">*</span></label><input type="text" id="vet-ssn" maxlength="4" required placeholder="3414"></div>
-                        <div class="form-group"><label>Phone</label><input type="tel" id="vet-phone" placeholder="(719) 331-6192"></div>
-                        <div class="form-group" style="grid-column: 1 / -1"><label>Address</label><input type="text" id="vet-address" placeholder="2710 W KIOWA ST, COLO SPGS, CO 80904"></div>
+                        <div class="form-group"><label>Last 4 SSN<span class="required">*</span></label><input type="text" id="vet-ssn" maxlength="4" required></div>
+                        <div class="form-group"><label>Phone</label><input type="tel" id="vet-phone"></div>
+                        <div class="form-group" style="grid-column: 1 / -1"><label>Address</label><input type="text" id="vet-address"></div>
                     </div>
                 </div>
                 <div class="section">
                     <h2>Referral Information</h2>
                     <div class="form-grid">
-                        <div class="form-group"><label>VA Consult Number<span class="required">*</span></label><input type="text" id="ref-number" required placeholder="VA0055325584"></div>
+                        <div class="form-group"><label>VA Consult Number<span class="required">*</span></label><input type="text" id="ref-number" required></div>
                         <div class="form-group"><label>Referral Issue Date (Cert Date)<span class="required">*</span></label><input type="date" id="ref-issue" required></div>
                         <div class="form-group"><label>First Appointment/Start Date<span class="required">*</span></label><input type="date" id="ref-start" required></div>
                         <div class="form-group"><label>Expiration Date</label><input type="date" id="ref-expiration"></div>
@@ -5384,31 +5517,31 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
                 <div class="section">
                     <h2>Primary Care Provider (PCP)</h2>
                     <div class="form-grid">
-                        <div class="form-group"><label>PCP Last Name<span class="required">*</span></label><input type="text" id="pcp-lastname" required placeholder="Reeder"></div>
-                        <div class="form-group"><label>PCP First Name<span class="required">*</span></label><input type="text" id="pcp-firstname" required placeholder="Carol"></div>
-                        <div class="form-group"><label>PCP NPI</label><input type="text" id="pcp-npi" placeholder="1265757181"></div>
+                        <div class="form-group"><label>PCP Last Name<span class="required">*</span></label><input type="text" id="pcp-lastname" required></div>
+                        <div class="form-group"><label>PCP First Name<span class="required">*</span></label><input type="text" id="pcp-firstname" required></div>
+                        <div class="form-group"><label>PCP NPI</label><input type="text" id="pcp-npi"></div>
                     </div>
                 </div>
                 <div class="section">
                     <h2>VA Facility</h2>
                     <div class="form-grid">
-                        <div class="form-group" style="grid-column: 1 / -1"><label>Facility Name</label><input type="text" id="va-facility" placeholder="Eastern Colorado Health Care System"></div>
-                        <div class="form-group"><label>VA Phone</label><input type="tel" id="va-phone" placeholder="720-857-5988"></div>
-                        <div class="form-group"><label>VA Fax</label><input type="tel" id="va-fax" placeholder="720-723-6016"></div>
+                        <div class="form-group" style="grid-column: 1 / -1"><label>Facility Name</label><input type="text" id="va-facility"></div>
+                        <div class="form-group"><label>VA Phone</label><input type="tel" id="va-phone"></div>
+                        <div class="form-group"><label>VA Fax</label><input type="tel" id="va-fax"></div>
                     </div>
                 </div>
                 <div class="section">
                     <h2>Clinical Information</h2>
                     <div class="form-grid">
-                        <div class="form-group" style="grid-column: 1 / -1"><label>Provisional Diagnosis</label><textarea id="diagnosis" placeholder="R54 Age-related physical debility" rows="2"></textarea></div>
-                        <div class="form-group" style="grid-column: 1 / -1"><label>Reason for Request</label><textarea id="reason" placeholder="Age-related physical debility, significant declination in functionality" rows="3"></textarea></div>
+                        <div class="form-group" style="grid-column: 1 / -1"><label>Provisional Diagnosis</label><textarea id="diagnosis" rows="2"></textarea></div>
+                        <div class="form-group" style="grid-column: 1 / -1"><label>Reason for Request</label><textarea id="reason" rows="3"></textarea></div>
                     </div>
                 </div>
                 <div class="section">
                     <h2>Services Authorized</h2>
                     <div class="form-grid">
-                        <div class="form-group"><label>Hours Per Week</label><input type="text" id="hours-week" placeholder="7 to 11"></div>
-                        <div class="form-group"><label>Authorization Duration</label><input type="text" id="auth-duration" placeholder="180 Days"></div>
+                        <div class="form-group"><label>Hours Per Week</label><input type="text" id="hours-week"></div>
+                        <div class="form-group"><label>Authorization Duration</label><input type="text" id="auth-duration"></div>
                     </div>
                 </div>
                 <div class="section">
@@ -5451,6 +5584,82 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
         </div>
     </div>
     <script>
+        async function handlePDFUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const fileNameDisplay = document.getElementById('file-name-display');
+            const uploadStatus = document.getElementById('upload-status');
+
+            fileNameDisplay.textContent = `Selected: ${file.name}`;
+            uploadStatus.innerHTML = '<div class="upload-status loading">Parsing PDF... Please wait.</div>';
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/parse-va-form-10-7080', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    // Populate form fields with extracted data
+                    const data = result.data;
+
+                    // Helper function to convert date formats
+                    function formatDateForInput(dateStr) {
+                        if (!dateStr) return '';
+                        // Convert MM/DD/YYYY or MM-DD-YYYY to YYYY-MM-DD
+                        const parts = dateStr.split(/[/-]/);
+                        if (parts.length === 3) {
+                            const month = parts[0].padStart(2, '0');
+                            const day = parts[1].padStart(2, '0');
+                            const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+                            return `${year}-${month}-${day}`;
+                        }
+                        return dateStr;
+                    }
+
+                    // Populate veteran information
+                    if (data.veteran_last_name) document.getElementById('vet-lastname').value = data.veteran_last_name;
+                    if (data.veteran_first_name) document.getElementById('vet-firstname').value = data.veteran_first_name;
+                    if (data.veteran_middle_name) document.getElementById('vet-middlename').value = data.veteran_middle_name;
+                    if (data.date_of_birth) document.getElementById('vet-dob').value = formatDateForInput(data.date_of_birth);
+                    if (data.last_4_ssn) document.getElementById('vet-ssn').value = data.last_4_ssn;
+                    if (data.phone) document.getElementById('vet-phone').value = data.phone;
+                    if (data.address) document.getElementById('vet-address').value = data.address;
+
+                    // Populate referral information
+                    if (data.va_consult_number) document.getElementById('ref-number').value = data.va_consult_number;
+                    if (data.referral_issue_date) document.getElementById('ref-issue').value = formatDateForInput(data.referral_issue_date);
+                    if (data.first_appointment_date) document.getElementById('ref-start').value = formatDateForInput(data.first_appointment_date);
+                    if (data.expiration_date) document.getElementById('ref-expiration').value = formatDateForInput(data.expiration_date);
+
+                    // Populate PCP information
+                    if (data.pcp_last_name) document.getElementById('pcp-lastname').value = data.pcp_last_name;
+                    if (data.pcp_first_name) document.getElementById('pcp-firstname').value = data.pcp_first_name;
+                    if (data.pcp_npi) document.getElementById('pcp-npi').value = data.pcp_npi;
+
+                    // Populate VA facility
+                    if (data.facility_name) document.getElementById('va-facility').value = data.facility_name;
+
+                    // Populate clinical information
+                    if (data.diagnosis) document.getElementById('diagnosis').value = data.diagnosis;
+                    if (data.hours_per_week) document.getElementById('hours-week').value = data.hours_per_week;
+
+                    uploadStatus.innerHTML = `<div class="upload-status success">✓ PDF parsed successfully! ${Object.keys(data).length} fields extracted. Review and edit below.</div>`;
+                } else {
+                    uploadStatus.innerHTML = `<div class="upload-status error">⚠ ${result.message || 'Failed to parse PDF'}. Please fill form manually.</div>`;
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                uploadStatus.innerHTML = '<div class="upload-status error">⚠ Error uploading PDF. Please fill form manually.</div>';
+            }
+        }
+
         function generateFileName(){const t=document.getElementById("vet-lastname").value,e=document.getElementById("vet-firstname").value.charAt(0).toUpperCase(),n=document.getElementById("vet-ssn").value,a=document.getElementById("ref-number").value,l=document.getElementById("pcp-lastname").value,i=document.getElementById("pcp-firstname").value.charAt(0).toUpperCase(),s=document.getElementById("agency-code").value,d=t=>{if(!t)return"00.00.0000";const e=new Date(t),n=String(e.getMonth()+1).padStart(2,"0"),a=String(e.getDate()).padStart(2,"0");return`${n}.${a}.${e.getFullYear()}`},o=d(document.getElementById("ref-issue").value),c=d(document.getElementById("ref-start").value),r=document.getElementById("agency-docnum").value;return`${t}.${e}.${n}_${a}.${l}.${i}.${s}.${o}.${c}.${r}`}function getADLs(){return Array.from(document.querySelectorAll('input[name="adl"]:checked')).map(t=>t.value)}function generatePreview(){const t=generateFileName();document.getElementById("filename-display").textContent=t+".pdf";const e=getADLs(),n=e.length>0?"<ul>"+e.map(t=>`<li>${t}</li>`).join("")+"</ul>":"<p>No ADL dependencies specified</p>",a=`
                 <div class="poc-header">
                     <h1>HOME HEALTH CERTIFICATION AND PLAN OF CARE</h1>
