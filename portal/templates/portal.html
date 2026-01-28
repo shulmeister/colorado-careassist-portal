@@ -280,15 +280,29 @@
             color: #64748b;
         }
 
+        .weather-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+        }
+
         .weather-icon {
             font-size: 20px;
-            flex-shrink: 0;
             width: 24px;
             height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
             opacity: 0.8;
+        }
+
+        .weather-temp {
+            font-size: 9px;
+            color: #94a3b8;
+            font-weight: 600;
+            white-space: nowrap;
         }
 
         .user-section {
@@ -968,7 +982,10 @@
                                 <div class="clock-center"></div>
                             </div>
                         </div>
-                        <div class="weather-icon" id="weather-icon-london">🌤️</div>
+                        <div class="weather-container">
+                            <div class="weather-icon" id="weather-icon-london">🌤️</div>
+                            <div class="weather-temp" id="weather-temp-london">--°</div>
+                        </div>
                         <div class="clock-info">
                             <div class="clock-city">London</div>
                             <div class="clock-time" id="clock-london">--:--</div>
@@ -983,7 +1000,10 @@
                                 <div class="clock-center"></div>
                             </div>
                         </div>
-                        <div class="weather-icon" id="weather-icon-denver">🌤️</div>
+                        <div class="weather-container">
+                            <div class="weather-icon" id="weather-icon-denver">🌤️</div>
+                            <div class="weather-temp" id="weather-temp-denver">--°</div>
+                        </div>
                         <div class="clock-info">
                             <div class="clock-city">Denver</div>
                             <div class="clock-time" id="clock-denver">--:--</div>
@@ -992,17 +1012,20 @@
                     </div>
                     <div class="clock-item">
                         <div class="clock-face-container">
-                            <div class="clock-face" id="clock-face-manila">
-                                <div class="clock-hand clock-hand-hour" id="hour-hand-manila"></div>
-                                <div class="clock-hand clock-hand-minute" id="minute-hand-manila"></div>
+                            <div class="clock-face" id="clock-face-newyork">
+                                <div class="clock-hand clock-hand-hour" id="hour-hand-newyork"></div>
+                                <div class="clock-hand clock-hand-minute" id="minute-hand-newyork"></div>
                                 <div class="clock-center"></div>
                             </div>
                         </div>
-                        <div class="weather-icon" id="weather-icon-manila">🌤️</div>
+                        <div class="weather-container">
+                            <div class="weather-icon" id="weather-icon-newyork">🌤️</div>
+                            <div class="weather-temp" id="weather-temp-newyork">--°</div>
+                        </div>
                         <div class="clock-info">
-                            <div class="clock-city">Manila</div>
-                            <div class="clock-time" id="clock-manila">--:--</div>
-                            <div class="clock-date" id="date-manila">--</div>
+                            <div class="clock-city">New York</div>
+                            <div class="clock-time" id="clock-newyork">--:--</div>
+                            <div class="clock-date" id="date-newyork">--</div>
                         </div>
                     </div>
                     <div class="clock-item">
@@ -1013,7 +1036,10 @@
                                 <div class="clock-center"></div>
                             </div>
                         </div>
-                        <div class="weather-icon" id="weather-icon-dhaka">🌤️</div>
+                        <div class="weather-container">
+                            <div class="weather-icon" id="weather-icon-dhaka">🌤️</div>
+                            <div class="weather-temp" id="weather-temp-dhaka">--°</div>
+                        </div>
                         <div class="clock-info">
                             <div class="clock-city">Dhaka</div>
                             <div class="clock-time" id="clock-dhaka">--:--</div>
@@ -2016,7 +2042,7 @@
             const timezones = [
                 { id: 'london', tz: 'Europe/London', city: 'London', weatherCity: 'London,GB' },
                 { id: 'denver', tz: 'America/Denver', city: 'Denver', weatherCity: 'Denver,US' },
-                { id: 'manila', tz: 'Asia/Manila', city: 'Manila', weatherCity: 'Manila,PH' },
+                { id: 'newyork', tz: 'America/New_York', city: 'New York', weatherCity: 'New York,US' },
                 { id: 'dhaka', tz: 'Asia/Dhaka', city: 'Dhaka', weatherCity: 'Dhaka,BD' }
             ];
 
@@ -2075,12 +2101,12 @@
             });
         }
 
-        // Update weather icons for clock cities
+        // Update weather icons and temperature for clock cities
         async function updateClockWeather() {
             const cities = [
                 { id: 'london', query: 'London,GB' },
                 { id: 'denver', query: 'Denver,US' },
-                { id: 'manila', query: 'Manila,PH' },
+                { id: 'newyork', query: 'New York,US' },
                 { id: 'dhaka', query: 'Dhaka,BD' }
             ];
 
@@ -2163,11 +2189,22 @@
                         if (weatherIconEl) {
                             weatherIconEl.textContent = icon;
                         }
+
+                        // Update temperature in Fahrenheit
+                        const tempF = Math.round((data.weather.main.temp - 273.15) * 9/5 + 32);
+                        const tempEl = document.getElementById(`weather-temp-${id}`);
+                        if (tempEl) {
+                            tempEl.textContent = `${tempF}°F`;
+                        }
                     } else {
                         // If API key not configured or error, show default icon
                         const weatherIconEl = document.getElementById(`weather-icon-${id}`);
                         if (weatherIconEl) {
                             weatherIconEl.textContent = '🌤️';
+                        }
+                        const tempEl = document.getElementById(`weather-temp-${id}`);
+                        if (tempEl) {
+                            tempEl.textContent = '--°';
                         }
                     }
                 } catch (error) {
@@ -2176,6 +2213,10 @@
                     const weatherIconEl = document.getElementById(`weather-icon-${id}`);
                     if (weatherIconEl) {
                         weatherIconEl.textContent = '🌤️';
+                    }
+                    const tempEl = document.getElementById(`weather-temp-${id}`);
+                    if (tempEl) {
+                        tempEl.textContent = '--°';
                     }
                 }
             }

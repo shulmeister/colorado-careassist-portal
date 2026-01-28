@@ -302,6 +302,14 @@ def setup_default_tools():
                 "description": "Google Workspace administration",
                 "category": "Productivity",
                 "display_order": 35
+            },
+            {
+                "name": "AI Tools",
+                "url": "#ai-tools-dropdown",
+                "icon": "https://cdn-icons-png.flaticon.com/512/8637/8637099.png",
+                "description": "ChatGPT, Gemini, Claude, and Grok",
+                "category": "Productivity",
+                "display_order": 36
             }
         ]
         

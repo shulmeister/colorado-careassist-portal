@@ -32,7 +32,7 @@ response = requests.patch(
     },
     json={
         "name": config["name"],
-        "general_prompt": config["general_prompt"],
+        "global_prompt": config["general_prompt"],  # API uses global_prompt
         "tools": config.get("tools", []),
         "nodes": config["nodes"],
         "start_node_id": config["start_node_id"],

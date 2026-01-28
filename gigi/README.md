@@ -281,6 +281,137 @@ curl -X POST "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook
   }'
 ```
 
+## Core Intelligence Systems (v2.2.0)
+
+### Memory System
+Gigi has a PostgreSQL-backed memory system that learns from conversations and retains important information.
+
+**Features:**
+- **Explicit Instructions**: User-defined rules ("Never book United Airlines")
+- **Observed Patterns**: Learned preferences from conversations
+- **Conflict Detection**: Automatically detects when memories contradict
+- **Confidence Decay**: Old/unused memories fade over time
+- **Daily Decay**: Scheduled job runs at 3:00 AM UTC to update confidence scores
+
+**Management:**
+```bash
+# Create a memory
+heroku run "python gigi/memory_cli.py create 'Avoid scheduling on Sundays' --type explicit --category scheduling --impact high"
+
+# List memories
+heroku run "python gigi/memory_cli.py list --category scheduling"
+
+# Reinforce a memory
+heroku run "python gigi/memory_cli.py reinforce <memory_id>"
+
+# Audit for conflicts
+heroku run "python gigi/memory_cli.py conflicts"
+```
+
+**Files:**
+- `gigi/memory_system.py` - Core memory system
+- `gigi/memory_cli.py` - CLI management tool
+- `gigi/run_decay.py` - Daily decay script (Heroku Scheduler)
+- `gigi/migrate_memory.py` - Database migration
+
+### Mode Detection System
+Gigi automatically detects Jason's current operating mode and adjusts behavior accordingly.
+
+**8 Operating Modes:**
+| Mode | When | Gigi's Behavior |
+|------|------|-----------------|
+| `FOCUS` | Deep work, do not disturb | Crisis-only interrupts |
+| `EXECUTION` | Task completion mode | Urgent-only interrupts |
+| `DECISION` | Evaluation mode | Present options, no auto-action |
+| `TRAVEL` | In transit | Location-aware assistance |
+| `OFF_GRID` | After hours, weekends | Auto-responder mode |
+| `CRISIS` | Emergency situations | Immediate action, all hands |
+| `THINKING` | Strategic planning | Suppress non-critical |
+| `REVIEW` | Evaluation mode | Present summaries |
+
+**Detection Sources:**
+- Calendar events (title patterns, keywords)
+- Time-based inference (after hours → OFF_GRID)
+- Manual override via CLI
+- Context clues from conversation
+
+**Management:**
+```bash
+# Check current mode
+heroku run "python gigi/mode_cli.py current"
+
+# Set mode manually
+heroku run "python gigi/mode_cli.py set focus --reason 'Important client call'"
+
+# View mode history
+heroku run "python gigi/mode_cli.py history --hours 24"
+
+# Get mode statistics
+heroku run "python gigi/mode_cli.py stats --days 7"
+```
+
+**Files:**
+- `gigi/mode_detector.py` - Mode detection engine
+- `gigi/mode_cli.py` - CLI management tool
+- `gigi/migrate_mode.py` - Database migration
+
+### Failure Protocol System
+Gigi logs failures, detects meltdowns, and prevents cascading errors.
+
+**Failure Types:**
+- Tool failures (API errors, timeouts)
+- Low confidence decisions (<0.5)
+- Conflicting instructions
+- Missing required context
+
+**Meltdown Prevention:**
+- Threshold: 3 failures in 5 minutes
+- Action: Stops autonomous operations, notifies human
+- Prevents cascade failures from compounding
+
+**Management:**
+```bash
+# View recent failures
+heroku run "python gigi/failure_cli.py recent --hours 24"
+
+# Filter by severity
+heroku run "python gigi/failure_cli.py recent --severity critical"
+
+# Get failure statistics
+heroku run "python gigi/failure_cli.py stats --days 7"
+
+# Resolve a failure
+heroku run "python gigi/failure_cli.py resolve <failure_id> 'Fixed by updating API key'"
+
+# Check meltdown state
+heroku run "python gigi/failure_cli.py meltdown"
+
+# Test the system
+heroku run "python gigi/failure_cli.py test"
+```
+
+**Files:**
+- `gigi/failure_handler.py` - Failure detection and logging
+- `gigi/failure_cli.py` - CLI management tool
+- `gigi/migrate_failure.py` - Database migration
+
+### Heroku Scheduler Jobs
+
+| Job | Frequency | Command | Purpose |
+|-----|-----------|---------|---------|
+| Memory Decay | Daily 3:00 AM UTC | `python gigi/run_decay.py` | Reduces confidence scores on old memories |
+| Google Drive Sync | Daily 10:00 PM UTC | `python gigi/daily_sync.py` | Syncs caregiver applications from Drive |
+| Auto-scan Drive | Daily 12:00 PM UTC | `python sales/scripts/auto_scan_drive.py` | Scans for new prospect leads |
+
 ---
 
-*Last Updated: January 21, 2026*
+## Version History
+
+- **v2.2.0** (Jan 2026): Memory System + Mode Detection + Failure Protocols
+- **v2.1.0** (Jan 2026): WellSky integration, autonomous call-out handling
+- **v2.0.0** (Jan 2026): SMS auto-reply with intent detection
+- **v1.0.0** (Dec 2025): Initial Retell AI voice agent
+
+---
+
+*Last Updated: January 27, 2026*

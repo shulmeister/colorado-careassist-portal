@@ -121,7 +121,7 @@ def main():
 
     # Step 3: Poll for completion
     print("Waiting for results", end="", flush=True)
-    max_wait = 120  # 2 minutes max
+    max_wait = 300  # 5 minutes max
     waited = 0
     
     while waited < max_wait:
