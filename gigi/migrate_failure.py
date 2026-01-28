@@ -17,7 +17,7 @@ def run_migration():
     print(f"\nInitializing failure handler...")
 
     try:
-        from gigi.failure_handler import FailureHandler
+        from gigi.failure_handler import FailureHandler, FailureType, FailureSeverity, FailureAction
 
         handler = FailureHandler()
         print("✓ Failure tables created successfully!")
@@ -25,10 +25,10 @@ def run_migration():
         # Run a test
         print("\nRunning test failure...")
         test_id = handler.log_failure(
-            failure_type=handler.FailureType.TOOL_FAILURE,
+            failure_type=FailureType.TOOL_FAILURE,
             message="Migration test - database connection successful",
-            severity=handler.FailureSeverity.INFO,
-            action=handler.FailureAction.CONTINUE,
+            severity=FailureSeverity.INFO,
+            action=FailureAction.CONTINUE,
             context={"test": True, "migration": "v1"}
         )
 
