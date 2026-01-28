@@ -67,6 +67,17 @@ except Exception as e:
     MODE_DETECTOR_AVAILABLE = False
     logger.warning(f"Mode Detector not available: {e}")
 
+# Import Gigi Failure Protocol System
+try:
+    from gigi.failure_handler import FailureHandler, FailureType, FailureSeverity, FailureAction, safe_tool_call
+    failure_handler = FailureHandler()
+    FAILURE_HANDLER_AVAILABLE = True
+    logger.info("✓ Gigi Failure Handler initialized")
+except Exception as e:
+    failure_handler = None
+    FAILURE_HANDLER_AVAILABLE = False
+    logger.warning(f"Failure Handler not available: {e}")
+
 # Import enhanced webhook functionality for caller ID, transfer, and message taking
 try:
     from enhanced_webhook import (
@@ -368,6 +379,98 @@ def detect_and_update_mode(text: str) -> Optional[str]:
     except Exception as e:
         logger.error(f"Failed to detect/update mode: {e}")
         return None
+
+
+def handle_tool_error(
+    tool_name: str,
+    error: Exception,
+    context: Dict[str, Any] = None
+) -> Dict[str, Any]:
+    """
+    Handle a tool failure with failure protocol.
+
+    Args:
+        tool_name: Name of the tool that failed
+        error: The exception that occurred
+        context: Additional context
+
+    Returns:
+        Dict with error response for user
+    """
+    if not FAILURE_HANDLER_AVAILABLE:
+        logger.error(f"Tool {tool_name} failed: {error}")
+        return {
+            "success": False,
+            "error": f"{tool_name} is not available right now",
+            "message": "I'm having trouble with that feature. Please try again later."
+        }
+
+    # Log the failure with protocol system
+    action, message = failure_handler.handle_tool_failure(
+        tool_name=tool_name,
+        error=error,
+        context=context
+    )
+
+    # Return appropriate response based on action
+    if action == FailureAction.ESCALATE:
+        return {
+            "success": False,
+            "error": str(error),
+            "message": message,
+            "severity": "critical"
+        }
+    elif action == FailureAction.ABORT:
+        return {
+            "success": False,
+            "error": "Operation aborted",
+            "message": message,
+            "severity": "error"
+        }
+    else:
+        return {
+            "success": False,
+            "error": str(error),
+            "message": message,
+            "severity": "warning"
+        }
+
+
+def check_confidence(
+    action: str,
+    confidence: float,
+    context: Dict[str, Any] = None
+) -> Tuple[bool, Optional[str]]:
+    """
+    Check if confidence is sufficient to proceed with an action.
+
+    Args:
+        action: The action being considered
+        confidence: Confidence level (0.0 to 1.0)
+        context: Additional context
+
+    Returns:
+        (should_proceed, message_to_user)
+    """
+    if not FAILURE_HANDLER_AVAILABLE:
+        # Without failure handler, use simple threshold
+        if confidence < 0.5:
+            return (False, f"I'm not confident enough to {action}. Can you provide more details?")
+        return (True, None)
+
+    # Use failure handler protocol
+    action_taken, message = failure_handler.handle_low_confidence(
+        action=action,
+        confidence=confidence,
+        context=context
+    )
+
+    if action_taken == FailureAction.ABORT:
+        return (False, message)
+    elif action_taken == FailureAction.ASK_USER:
+        return (False, message)
+    else:
+        return (True, message if confidence < 0.7 else None)
 
 
 # =============================================================================
@@ -3799,9 +3902,10 @@ async def health_check():
     health = {
         "status": "healthy",
         "agent": "gigi",
-        "version": "2.1.0",  # Version 2.1: Memory + Mode Detection
+        "version": "2.2.0",  # Version 2.2: Memory + Mode Detection + Failure Protocols
         "memory_system": MEMORY_SYSTEM_AVAILABLE,
-        "mode_detector": MODE_DETECTOR_AVAILABLE
+        "mode_detector": MODE_DETECTOR_AVAILABLE,
+        "failure_handler": FAILURE_HANDLER_AVAILABLE
     }
 
     # Add memory stats if available
@@ -3832,6 +3936,25 @@ async def health_check():
             }
         except Exception as e:
             health["current_mode"] = {
+                "error": str(e),
+                "system_ready": False
+            }
+
+    # Add failure handler stats if available
+    if FAILURE_HANDLER_AVAILABLE:
+        try:
+            stats = failure_handler.get_failure_stats(days=1)
+            recent_critical = failure_handler.get_recent_failures(hours=1, severity=FailureSeverity.CRITICAL)
+            is_meltdown = failure_handler.detect_meltdown()
+
+            health["failure_stats"] = {
+                "failures_24h": stats['total_failures'],
+                "critical_1h": len(recent_critical),
+                "meltdown_detected": is_meltdown,
+                "system_ready": True
+            }
+        except Exception as e:
+            health["failure_stats"] = {
                 "error": str(e),
                 "system_ready": False
             }
