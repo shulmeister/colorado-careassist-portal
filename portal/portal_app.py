@@ -5337,23 +5337,16 @@ CRITICAL INSTRUCTIONS:
 
 Extract every field you can find. Be thorough."""
 
-        # Call Gemini API - try multiple models
-        # Use v1 API endpoint and correct model identifiers
-        models_to_try = [
-            ("v1beta", "gemini-2.0-flash-exp"),
-            ("v1", "gemini-1.5-flash-latest"),
-            ("v1", "gemini-1.5-pro-latest"),
-            ("v1beta", "gemini-1.5-flash-002"),
-            ("v1beta", "gemini-1.5-pro-002")
-        ]
+        # Call Gemini API - try multiple models (same as ai_document_parser.py)
+        models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
         gemini_response = None
         last_error = None
 
         async with httpx.AsyncClient(timeout=60.0) as client:
-            for api_version, model in models_to_try:
+            for model in models_to_try:
                 try:
-                    url = f"https://generativelanguage.googleapis.com/{api_version}/models/{model}:generateContent"
-                    logger.info(f"Trying {model} on {api_version}...")
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+                    logger.info(f"Trying Gemini model: {model}")
 
                     gemini_response = await client.post(
                         url,
@@ -5379,12 +5372,18 @@ Extract every field you can find. Be thorough."""
                         }
                     )
 
+                    if gemini_response.status_code == 404:
+                        logger.info(f"Gemini model {model} not found (404), trying next...")
+                        last_error = f"{model}: Model not found (404)"
+                        continue
+
                     if gemini_response.status_code == 200:
-                        logger.info(f"Successfully used Gemini model: {model}")
+                        logger.info(f"✓ Successfully used Gemini model: {model}")
                         break
                     else:
-                        last_error = f"{model}: {gemini_response.text}"
-                        logger.warning(f"Model {model} failed: {gemini_response.text}")
+                        last_error = f"{model}: HTTP {gemini_response.status_code} - {gemini_response.text[:200]}"
+                        logger.warning(f"Model {model} failed with status {gemini_response.status_code}")
+                        continue
                 except Exception as e:
                     last_error = f"{model}: {str(e)}"
                     logger.warning(f"Model {model} exception: {e}")
