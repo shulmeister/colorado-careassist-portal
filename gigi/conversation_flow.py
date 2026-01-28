@@ -1410,7 +1410,7 @@ def update_existing_agent():
         },
         json={
             "response_engine": {
-                "type": "retell-llm-conversation-flow",
+                "type": "conversation-flow",
                 "conversation_flow_id": conversation_flow_id
             },
             "webhook_url": config["webhook_url"],
