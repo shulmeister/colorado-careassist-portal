@@ -270,6 +270,38 @@ def setup_default_tools():
                 "description": "Online fax service",
                 "category": "Communication",
                 "display_order": 31
+            },
+            {
+                "name": "RingCentral",
+                "url": "https://app.ringcentral.com",
+                "icon": "https://app.ringcentral.com/favicon.ico",
+                "description": "Business phone and communications",
+                "category": "Communication",
+                "display_order": 32
+            },
+            {
+                "name": "CBI InstaCheck",
+                "url": "https://www.cbirecordscolorado.com/",
+                "icon": "https://www.cbirecordscolorado.com/images/CBI_LOGO.png",
+                "description": "Colorado Bureau of Investigation background checks",
+                "category": "HR",
+                "display_order": 33
+            },
+            {
+                "name": "CAPS",
+                "url": "https://www.colorado.gov/pacific/cdhs/adult-protective-services",
+                "icon": "https://www.colorado.gov/favicon.ico",
+                "description": "Colorado Adult Protective Services reporting",
+                "category": "Operations",
+                "display_order": 34
+            },
+            {
+                "name": "Google Admin",
+                "url": "https://admin.google.com",
+                "icon": "https://ssl.gstatic.com/ui/v1/icons/mail/rfr/logo_admin_2x.png",
+                "description": "Google Workspace administration",
+                "category": "Productivity",
+                "display_order": 35
             }
         ]
         
