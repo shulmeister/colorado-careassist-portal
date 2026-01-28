@@ -45,6 +45,17 @@ except ImportError:
     ringcentral_messaging_service = None
     RC_MESSAGING_AVAILABLE = False
 
+# Import Gigi Memory System
+try:
+    from gigi.memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel, MemoryStatus
+    memory_system = MemorySystem()
+    MEMORY_SYSTEM_AVAILABLE = True
+    logger.info("✓ Gigi Memory System initialized")
+except Exception as e:
+    memory_system = None
+    MEMORY_SYSTEM_AVAILABLE = False
+    logger.warning(f"Memory System not available: {e}")
+
 # Import enhanced webhook functionality for caller ID, transfer, and message taking
 try:
     from enhanced_webhook import (
@@ -225,6 +236,75 @@ def _cleanup_call_context():
     ]
     for call_id in expired:
         del _call_context_cache[call_id]
+
+
+# =============================================================================
+# MEMORY SYSTEM: Capture preferences and patterns
+# =============================================================================
+
+def capture_memory(
+    content: str,
+    memory_type: str = "single_inference",
+    category: str = "general",
+    impact: str = "low",
+    metadata: Dict[str, Any] = None
+):
+    """
+    Capture a memory to Gigi's memory system.
+
+    Args:
+        content: The preference, pattern, or instruction
+        memory_type: explicit, correction, confirmed, inferred, single, temporary
+        category: communication, scheduling, money, relationships, preferences, etc.
+        impact: high, medium, low
+        metadata: Additional context
+    """
+    if not MEMORY_SYSTEM_AVAILABLE:
+        return
+
+    try:
+        type_map = {
+            "explicit": MemoryType.EXPLICIT_INSTRUCTION,
+            "correction": MemoryType.CORRECTION,
+            "confirmed": MemoryType.CONFIRMED_PATTERN,
+            "inferred": MemoryType.INFERRED_PATTERN,
+            "single": MemoryType.SINGLE_INFERENCE,
+            "temporary": MemoryType.TEMPORARY
+        }
+
+        impact_map = {
+            "high": ImpactLevel.HIGH,
+            "medium": ImpactLevel.MEDIUM,
+            "low": ImpactLevel.LOW
+        }
+
+        source = MemorySource.EXPLICIT if memory_type == "explicit" else MemorySource.INFERENCE
+
+        confidence = {
+            "explicit": 1.0,
+            "correction": 0.9,
+            "confirmed": 0.8,
+            "inferred": 0.6,
+            "single": 0.4,
+            "temporary": 0.5
+        }.get(memory_type, 0.5)
+
+        memory_id = memory_system.create_memory(
+            content=content,
+            memory_type=type_map.get(memory_type, MemoryType.SINGLE_INFERENCE),
+            source=source,
+            confidence=confidence,
+            category=category,
+            impact_level=impact_map.get(impact, ImpactLevel.LOW),
+            metadata=metadata or {}
+        )
+
+        logger.info(f"✓ Memory captured: {content[:50]}... (ID: {memory_id})")
+        return memory_id
+
+    except Exception as e:
+        logger.error(f"Failed to capture memory: {e}")
+        return None
 
 
 # =============================================================================
@@ -3653,7 +3733,29 @@ async def retell_function_call(function_name: str, request: Request):
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "healthy", "agent": "gigi", "version": "1.0.0"}
+    health = {
+        "status": "healthy",
+        "agent": "gigi",
+        "version": "2.0.0",  # Version 2.0: Memory system + behavioral OS
+        "memory_system": MEMORY_SYSTEM_AVAILABLE
+    }
+
+    # Add memory stats if available
+    if MEMORY_SYSTEM_AVAILABLE:
+        try:
+            active_memories = memory_system.query_memories(status=MemoryStatus.ACTIVE, limit=1000)
+            health["memory_stats"] = {
+                "active_memories": len(active_memories),
+                "high_confidence": len([m for m in active_memories if m.confidence >= 0.7]),
+                "system_ready": True
+            }
+        except Exception as e:
+            health["memory_stats"] = {
+                "error": str(e),
+                "system_ready": False
+            }
+
+    return health
 
 
 @app.get("/")

@@ -80,6 +80,10 @@ class MemorySystem:
         if not self.database_url:
             raise ValueError("DATABASE_URL not set")
 
+        # Fix for Heroku PostgreSQL URLs (postgres:// -> postgresql://)
+        if self.database_url.startswith("postgres://"):
+            self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
+
         self._init_schema()
 
     def _get_connection(self):
