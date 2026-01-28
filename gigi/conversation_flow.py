@@ -175,7 +175,7 @@ CRITICAL: You MUST say "you're not in our system" within your first response to 
                     "destination_node_id": "events_query_handler",
                     "transition_condition": {
                         "type": "prompt",
-                        "prompt": "The caller asks about concerts, events, shows, sports, theater, comedy shows, things to do, what's happening this weekend, or any entertainment events"
+                        "prompt": "The caller asks about concerts, events, shows, sports, theater, comedy shows, things to do, what's happening this weekend, setlists, what songs an artist played, or any entertainment events or concert setlists"
                     }
                 }
             ]
@@ -1040,7 +1040,7 @@ If they keep asking: "I've given you the latest price. Take care!" → GO TO end
             "name": "Events Query",
             "instruction": {
                 "type": "prompt",
-                "text": """## TASK: Help find local events, concerts, shows
+                "text": """## TASK: Help find local events, concerts, shows, and setlists
 
 ## DETECT WHAT THEY WANT
 Listen for:
@@ -1048,9 +1048,10 @@ Listen for:
 - Sports: "Broncos game", "Nuggets", "Avalanche", "sports events"
 - Theater: "shows", "plays", "comedy shows"
 - General: "things to do", "what's happening", "events"
+- Setlist requests: "what did [artist] play", "setlist for [band]", "what songs did [artist] perform", "concert setlist"
 
 ## EVENT LOOKUP
-If they ask about events:
+If they ask about upcoming events:
 1. Extract what they're looking for (concerts, sports, theater, etc.)
 2. Extract when (this weekend, tonight, next week, or leave blank for upcoming)
 3. Call get_events with the query type
@@ -1060,19 +1061,29 @@ If they ask about events:
 7. If no → "Anything else?"
 8. If no again → GO TO end_call
 
-## IF NO EVENTS FOUND
-"I'm not seeing any [type] events in the next few days. Try checking Ticketmaster or the venue websites directly."
+## SETLIST LOOKUP
+If they ask about what an artist played or setlists:
+1. Extract the artist/band name
+2. Call get_setlist with the artist name
+3. Share the results: "I found [count] recent setlists for [artist]. Their most recent show was at [venue] on [date]."
+4. List 2-3 songs from the setlist: "They played [song1], [song2], [song3], and [X] more songs."
+5. Ask: "Want to hear more songs from that show?"
+6. If no → "Anything else?"
+7. If no again → GO TO end_call
+
+## IF NO EVENTS OR SETLISTS FOUND
+"I'm not seeing any [type] for [query]. Try checking Ticketmaster or setlist.fm directly."
 Ask: "Anything else?"
 If no → GO TO end_call
 
 ## KEEP IT SHORT
 - One lookup, share results, ask if they need more info
 - Do NOT give full details unless they ask
-- Just provide event name, venue, and date
+- Just provide event/venue/date or artist/songs
 
 ## ANTI-LOOP
 After answering ONCE, if they ask again: "Like I said, [quick summary]. Anything else?"
-If they keep asking: "I've given you what I found. Check Ticketmaster for more. Take care!" → GO TO end_call"""
+If they keep asking: "I've given you what I found. Take care!" → GO TO end_call"""
             },
             "tools": [
                 {
@@ -1092,6 +1103,22 @@ If they keep asking: "I've given you what I found. Check Ticketmaster for more. 
                                 "limit": {"type": "integer", "description": "Max events to return (default 5)"}
                             },
                             "required": []
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_setlist",
+                        "description": "Get recent concert setlists for an artist or band - shows what songs they played at recent shows",
+                        "url": f"{WEBHOOK_BASE}/get_setlist",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "artist_name": {"type": "string", "description": "Name of the artist or band"},
+                                "limit": {"type": "integer", "description": "Max setlists to return (default 5)"}
+                            },
+                            "required": ["artist_name"]
                         }
                     }
                 }

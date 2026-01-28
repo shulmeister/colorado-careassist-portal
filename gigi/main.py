@@ -103,6 +103,9 @@ ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 # Ticketmaster API for events (concerts, sports, theater)
 TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY", "Sczxp0S6KI0GLLj1CZtYlHm57Za8Byi9")
 
+# Setlist.fm API for concert setlists and song history
+SETLIST_FM_API_KEY = os.getenv("SETLIST_FM_API_KEY", "E79vhiUAC8vhcI7NZTGci17xgXwtpqaYo4xp")
+
 # Retell AI credentials (required for voice agent)
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
 # Note: Retell uses the API key itself for webhook signature verification (not a separate secret)
@@ -2801,6 +2804,168 @@ class EventsResult:
     error: Optional[str] = None
 
 
+@dataclass
+class SetlistResult:
+    """Result of setlist lookup."""
+    success: bool
+    setlists: Optional[List[Dict[str, Any]]] = None
+    count: int = 0
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+async def get_setlist(
+    artist_name: str,
+    limit: int = 5
+) -> SetlistResult:
+    """
+    Get recent setlists for an artist using setlist.fm API.
+
+    Args:
+        artist_name: Name of the artist/band
+        limit: Maximum number of setlists to return (default 5, max 20)
+
+    Returns:
+        SetlistResult with setlist data
+    """
+    if not SETLIST_FM_API_KEY:
+        return SetlistResult(
+            success=False,
+            error="Setlist.fm API key not configured",
+            message="I don't have access to setlist information right now."
+        )
+
+    try:
+        # Setlist.fm API endpoint
+        base_url = "https://api.setlist.fm/rest/1.0/search/setlists"
+
+        # Limit results (API max is 20 per page)
+        limit = min(limit, 20)
+
+        # Build request params
+        params = {
+            "artistName": artist_name,
+            "p": 1,  # page number
+        }
+
+        # Headers required by setlist.fm
+        headers = {
+            "x-api-key": SETLIST_FM_API_KEY,
+            "Accept": "application/json",
+            "User-Agent": "ColoradoCareAssist/1.0 (shulmeister@gmail.com)"
+        }
+
+        logger.info(f"Searching setlists for artist: {artist_name}")
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(base_url, params=params, headers=headers)
+
+            if response.status_code == 404:
+                return SetlistResult(
+                    success=False,
+                    count=0,
+                    message=f"I couldn't find any setlists for {artist_name}. They might not have recent concert data available."
+                )
+
+            if response.status_code != 200:
+                logger.error(f"Setlist.fm API error: {response.status_code} - {response.text}")
+                return SetlistResult(
+                    success=False,
+                    error=f"API returned status {response.status_code}",
+                    message="I'm having trouble accessing setlist information right now."
+                )
+
+            data = response.json()
+
+            # Parse setlists from response
+            setlists_raw = data.get("setlist", [])
+
+            if not setlists_raw:
+                return SetlistResult(
+                    success=False,
+                    count=0,
+                    message=f"I couldn't find any setlists for {artist_name}. They might not have recent concert data available."
+                )
+
+            # Format setlists for response (limit to requested number)
+            setlists_list = []
+            for setlist in setlists_raw[:limit]:
+                # Parse venue info
+                venue = setlist.get("venue", {})
+                venue_name = venue.get("name", "Unknown Venue")
+                city = venue.get("city", {}).get("name", "")
+                state = venue.get("city", {}).get("state", "")
+                country = venue.get("city", {}).get("country", {}).get("name", "")
+
+                # Build location string
+                location_parts = [p for p in [city, state, country] if p]
+                location = ", ".join(location_parts) if location_parts else "Unknown Location"
+
+                # Parse date
+                event_date = setlist.get("eventDate", "Unknown Date")
+
+                # Parse songs from sets
+                songs = []
+                sets_data = setlist.get("sets", {}).get("set", [])
+                for set_data in sets_data:
+                    if isinstance(set_data, dict):
+                        song_list = set_data.get("song", [])
+                        for song in song_list:
+                            if isinstance(song, dict):
+                                song_name = song.get("name")
+                                if song_name:
+                                    songs.append(song_name)
+
+                # Format setlist description
+                setlist_desc = f"{artist_name} at {venue_name}, {location} on {event_date}"
+                if songs:
+                    setlist_desc += f" - {len(songs)} songs"
+
+                setlists_list.append({
+                    "artist": setlist.get("artist", {}).get("name", artist_name),
+                    "venue": venue_name,
+                    "location": location,
+                    "date": event_date,
+                    "songs": songs[:10],  # Limit to first 10 songs for brevity
+                    "total_songs": len(songs),
+                    "description": setlist_desc,
+                    "url": setlist.get("url", "")
+                })
+
+            if not setlists_list:
+                return SetlistResult(
+                    success=False,
+                    count=0,
+                    message=f"I found some setlists for {artist_name} but couldn't parse them properly."
+                )
+
+            # Build friendly message
+            message = f"I found {len(setlists_list)} recent setlists for {artist_name}:\n\n"
+            for i, setlist in enumerate(setlists_list, 1):
+                message += f"{i}. {setlist['venue']}, {setlist['location']} - {setlist['date']}\n"
+                if setlist['songs']:
+                    song_sample = ", ".join(setlist['songs'][:3])
+                    if setlist['total_songs'] > 3:
+                        message += f"   Songs include: {song_sample}, and {setlist['total_songs'] - 3} more\n"
+                    else:
+                        message += f"   Songs: {song_sample}\n"
+
+            return SetlistResult(
+                success=True,
+                setlists=setlists_list,
+                count=len(setlists_list),
+                message=message
+            )
+
+    except Exception as e:
+        logger.exception(f"Error fetching setlists: {e}")
+        return SetlistResult(
+            success=False,
+            error=str(e),
+            message="I encountered an error looking up setlists."
+        )
+
+
 async def add_visit_notes(
     caregiver_phone: str,
     client_name: str,
@@ -4062,6 +4227,26 @@ async def retell_function_call(function_name: str, request: Request):
             return JSONResponse({
                 "success": result.success,
                 "events": result.events,
+                "count": result.count,
+                "message": result.message,
+                "error": result.error
+            })
+
+        elif function_name == "get_setlist":
+            artist_name = args.get("artist_name", "")
+            limit = args.get("limit", 5)
+
+            if not artist_name:
+                return JSONResponse({
+                    "success": False,
+                    "error": "Artist name is required",
+                    "message": "I need an artist or band name to look up setlists."
+                })
+
+            result = await get_setlist(artist_name, limit)
+            return JSONResponse({
+                "success": result.success,
+                "setlists": result.setlists,
                 "count": result.count,
                 "message": result.message,
                 "error": result.error
