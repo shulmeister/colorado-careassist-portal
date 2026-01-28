@@ -230,6 +230,46 @@ def setup_default_tools():
                 "description": "Convert referral face sheets to VA Form 10-10172 RFS",
                 "category": "Operations",
                 "display_order": 26
+            },
+            {
+                "name": "Retell AI",
+                "url": "https://dashboard.retellai.com/agents",
+                "icon": "https://assets-global.website-files.com/6597424b923cc19ee2895fd8/65990a15e28e4e522c858e39_favicon.png",
+                "description": "AI voice agents and phone automation",
+                "category": "Development",
+                "display_order": 27
+            },
+            {
+                "name": "DigitalOcean",
+                "url": "https://cloud.digitalocean.com/login",
+                "icon": "https://www.digitalocean.com/_next/static/media/favicon.594d6067.ico",
+                "description": "Cloud infrastructure and hosting",
+                "category": "Development",
+                "display_order": 28
+            },
+            {
+                "name": "Cloudflare",
+                "url": "https://dash.cloudflare.com/64fdb3764a8fc8ffae0860415a00c1d6/home/domains",
+                "icon": "https://dash.cloudflare.com/favicon.ico",
+                "description": "DNS, CDN, and security management",
+                "category": "Development",
+                "display_order": 29
+            },
+            {
+                "name": "EbizCharge",
+                "url": "https://qboapp1.ebizcharge.net/",
+                "icon": "https://www.cenpos.com/wp-content/uploads/2019/05/EBizCharge-for-QuickBooks-Logo.png",
+                "description": "QuickBooks payment processing",
+                "category": "Finance",
+                "display_order": 30
+            },
+            {
+                "name": "Fax.Plus",
+                "url": "https://app.fax.plus/faxes/inbox",
+                "icon": "https://app.fax.plus/favicon.ico",
+                "description": "Online fax service",
+                "category": "Communication",
+                "display_order": 31
             }
         ]
         
