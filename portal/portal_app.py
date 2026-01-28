@@ -5269,6 +5269,273 @@ async def internal_late_notification(shift_id: str, request: Request):
         }, status_code=500)
 
 
+@app.get("/va-plan-of-care", response_class=HTMLResponse)
+async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """VA Plan of Care Generator - Convert VA Form 10-7080 to Plan of Care (485)"""
+    va_html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VA Plan of Care Generator | Colorado Care Assist</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%); padding: 20px; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { text-align: center; padding: 30px; background: linear-gradient(135deg, #003f87 0%, #0066cc 100%); color: white; border-radius: 12px; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 63, 135, 0.3); }
+        .header h1 { font-size: 32px; margin-bottom: 10px; font-weight: 700; }
+        .header p { font-size: 16px; opacity: 0.95; }
+        .form-container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); margin-bottom: 30px; }
+        .section { margin-bottom: 35px; padding-bottom: 25px; border-bottom: 2px solid #e0e0e0; }
+        .section:last-child { border-bottom: none; }
+        .section h2 { color: #003f87; font-size: 22px; margin-bottom: 20px; font-weight: 600; display: flex; align-items: center; }
+        .section h2::before { content: ''; display: inline-block; width: 4px; height: 24px; background: #003f87; margin-right: 12px; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-weight: 600; margin-bottom: 8px; color: #333; font-size: 14px; }
+        .form-group label .required { color: #dc3545; margin-left: 3px; }
+        .form-group input, .form-group textarea { padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; font-family: inherit; transition: all 0.3s; }
+        .form-group input:focus, .form-group textarea:focus { outline: none; border-color: #003f87; box-shadow: 0 0 0 3px rgba(0, 63, 135, 0.1); }
+        .form-group textarea { resize: vertical; min-height: 80px; }
+        .adl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 10px; }
+        .checkbox-label { display: flex; align-items: center; gap: 10px; cursor: pointer; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; transition: all 0.3s; background: white; }
+        .checkbox-label:hover { background-color: #f8f9fa; border-color: #003f87; }
+        .checkbox-label input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+        .checkbox-label input[type="checkbox"]:checked + span { color: #003f87; font-weight: 600; }
+        .actions { display: flex; justify-content: center; gap: 15px; margin-top: 40px; padding-top: 30px; border-top: 2px solid #e0e0e0; }
+        .btn { padding: 14px 32px; font-size: 16px; font-weight: 600; border: none; border-radius: 8px; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); text-transform: uppercase; letter-spacing: 0.5px; }
+        .btn-primary { background: #003f87; color: white; }
+        .btn-primary:hover { background: #002b5c; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2); }
+        .btn-success { background: #28a745; color: white; }
+        .btn-success:hover { background: #218838; transform: translateY(-2px); }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-secondary:hover { background: #5a6268; transform: translateY(-2px); }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-danger:hover { background: #c82333; transform: translateY(-2px); }
+        .preview-container { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); margin-top: 30px; display: none; }
+        .preview-container.active { display: block; }
+        .preview-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; padding-bottom: 20px; border-bottom: 3px solid #003f87; }
+        .preview-header h2 { color: #003f87; margin: 0; }
+        .preview-actions { display: flex; gap: 10px; }
+        .filename-preview { background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 25px; font-family: 'Courier New', monospace; font-size: 14px; border-left: 5px solid #003f87; word-break: break-all; color: #333; }
+        .filename-preview strong { color: #003f87; display: block; margin-bottom: 8px; font-size: 15px; }
+        #plan-of-care { border: 3px solid #003f87; padding: 40px; background: white; font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #000; }
+        #plan-of-care .poc-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #003f87; padding-bottom: 15px; }
+        #plan-of-care .poc-header h1 { font-size: 24px; margin-bottom: 8px; color: #003f87; font-weight: bold; }
+        #plan-of-care .poc-header p { margin: 5px 0; font-size: 14px; }
+        #plan-of-care .poc-section { margin-bottom: 20px; page-break-inside: avoid; }
+        #plan-of-care .poc-section-title { font-weight: bold; color: #003f87; margin-bottom: 10px; font-size: 16px; border-bottom: 2px solid #ccc; padding-bottom: 5px; }
+        #plan-of-care .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        #plan-of-care .info-item { padding: 5px 0; font-size: 13px; }
+        #plan-of-care .info-label { font-weight: bold; margin-right: 5px; }
+        #plan-of-care table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        #plan-of-care th, #plan-of-care td { border: 1px solid #333; padding: 10px; text-align: left; font-size: 13px; }
+        #plan-of-care th { background-color: #f0f0f0; font-weight: bold; }
+        #plan-of-care ul { margin: 10px 0; padding-left: 25px; }
+        #plan-of-care li { margin: 5px 0; font-size: 13px; }
+        #plan-of-care p { margin: 8px 0; font-size: 13px; }
+        @media (max-width: 768px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .header h1 { font-size: 24px; }
+            .form-container, .preview-container { padding: 20px; }
+            .preview-header { flex-direction: column; gap: 15px; align-items: flex-start; }
+            .preview-actions, .actions { width: 100%; flex-direction: column; }
+            .btn { width: 100%; }
+        }
+        @media print {
+            body { background: white; }
+            .form-container, .preview-header, .filename-preview { display: none; }
+            .preview-container { box-shadow: none; padding: 0; }
+            #plan-of-care { border: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>VA Plan of Care Generator</h1>
+            <p>Convert VA Form 10-7080 to Home Health Certification and Plan of Care (485)</p>
+            <p style="font-size: 13px; margin-top: 10px;">Must submit within 5 days | Contact: Tamatha.Anding@va.gov (naming)</p>
+        </div>
+        <div class="form-container">
+            <form id="va-form" onsubmit="event.preventDefault();">
+                <div class="section">
+                    <h2>Veteran Information</h2>
+                    <div class="form-grid">
+                        <div class="form-group"><label>Last Name<span class="required">*</span></label><input type="text" id="vet-lastname" required placeholder="Crowley"></div>
+                        <div class="form-group"><label>First Name<span class="required">*</span></label><input type="text" id="vet-firstname" required placeholder="William"></div>
+                        <div class="form-group"><label>Middle Name</label><input type="text" id="vet-middlename" placeholder="Anthony"></div>
+                        <div class="form-group"><label>Date of Birth<span class="required">*</span></label><input type="date" id="vet-dob" required></div>
+                        <div class="form-group"><label>Last 4 SSN<span class="required">*</span></label><input type="text" id="vet-ssn" maxlength="4" required placeholder="3414"></div>
+                        <div class="form-group"><label>Phone</label><input type="tel" id="vet-phone" placeholder="(719) 331-6192"></div>
+                        <div class="form-group" style="grid-column: 1 / -1"><label>Address</label><input type="text" id="vet-address" placeholder="2710 W KIOWA ST, COLO SPGS, CO 80904"></div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Referral Information</h2>
+                    <div class="form-grid">
+                        <div class="form-group"><label>VA Consult Number<span class="required">*</span></label><input type="text" id="ref-number" required placeholder="VA0055325584"></div>
+                        <div class="form-group"><label>Referral Issue Date (Cert Date)<span class="required">*</span></label><input type="date" id="ref-issue" required></div>
+                        <div class="form-group"><label>First Appointment/Start Date<span class="required">*</span></label><input type="date" id="ref-start" required></div>
+                        <div class="form-group"><label>Expiration Date</label><input type="date" id="ref-expiration"></div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Primary Care Provider (PCP)</h2>
+                    <div class="form-grid">
+                        <div class="form-group"><label>PCP Last Name<span class="required">*</span></label><input type="text" id="pcp-lastname" required placeholder="Reeder"></div>
+                        <div class="form-group"><label>PCP First Name<span class="required">*</span></label><input type="text" id="pcp-firstname" required placeholder="Carol"></div>
+                        <div class="form-group"><label>PCP NPI</label><input type="text" id="pcp-npi" placeholder="1265757181"></div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>VA Facility</h2>
+                    <div class="form-grid">
+                        <div class="form-group" style="grid-column: 1 / -1"><label>Facility Name</label><input type="text" id="va-facility" placeholder="Eastern Colorado Health Care System"></div>
+                        <div class="form-group"><label>VA Phone</label><input type="tel" id="va-phone" placeholder="720-857-5988"></div>
+                        <div class="form-group"><label>VA Fax</label><input type="tel" id="va-fax" placeholder="720-723-6016"></div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Clinical Information</h2>
+                    <div class="form-grid">
+                        <div class="form-group" style="grid-column: 1 / -1"><label>Provisional Diagnosis</label><textarea id="diagnosis" placeholder="R54 Age-related physical debility" rows="2"></textarea></div>
+                        <div class="form-group" style="grid-column: 1 / -1"><label>Reason for Request</label><textarea id="reason" placeholder="Age-related physical debility, significant declination in functionality" rows="3"></textarea></div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Services Authorized</h2>
+                    <div class="form-grid">
+                        <div class="form-group"><label>Hours Per Week</label><input type="text" id="hours-week" placeholder="7 to 11"></div>
+                        <div class="form-group"><label>Authorization Duration</label><input type="text" id="auth-duration" placeholder="180 Days"></div>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Activities of Daily Living (ADL) Dependencies</h2>
+                    <p style="margin-bottom: 15px; color: #666;">Select all activities requiring hands-on assistance:</p>
+                    <div class="adl-grid">
+                        <label class="checkbox-label"><input type="checkbox" name="adl" value="Bathing"><span>Bathing</span></label>
+                        <label class="checkbox-label"><input type="checkbox" name="adl" value="Dressing"><span>Dressing</span></label>
+                        <label class="checkbox-label"><input type="checkbox" name="adl" value="Grooming"><span>Grooming</span></label>
+                        <label class="checkbox-label"><input type="checkbox" name="adl" value="Ambulating"><span>Ambulating</span></label>
+                        <label class="checkbox-label"><input type="checkbox" name="adl" value="Toileting"><span>Toileting</span></label>
+                        <label class="checkbox-label"><input type="checkbox" name="adl" value="Mobility"><span>Mobility</span></label>
+                        <label class="checkbox-label"><input type="checkbox" name="adl" value="Eating"><span>Eating</span></label>
+                        <label class="checkbox-label"><input type="checkbox" name="adl" value="Transferring"><span>Transferring</span></label>
+                    </div>
+                </div>
+                <div class="section">
+                    <h2>Agency Information</h2>
+                    <div class="form-grid">
+                        <div class="form-group"><label>Agency Code<span class="required">*</span></label><input type="text" id="agency-code" value="CC.D" required></div>
+                        <div class="form-group"><label>Agency Document Number<span class="required">*</span></label><input type="text" id="agency-docnum" value="001" required></div>
+                    </div>
+                </div>
+                <div class="actions">
+                    <button type="button" class="btn btn-primary" onclick="generatePreview()">Preview Plan of Care</button>
+                </div>
+            </form>
+        </div>
+        <div class="preview-container" id="preview-container">
+            <div class="preview-header">
+                <h2>Plan of Care Preview</h2>
+                <div class="preview-actions">
+                    <button type="button" class="btn btn-success" onclick="downloadPDF()">Download PDF</button>
+                    <button type="button" class="btn btn-secondary" onclick="downloadHTML()">Download HTML</button>
+                    <button type="button" class="btn btn-danger" onclick="closePreview()">Close</button>
+                </div>
+            </div>
+            <div class="filename-preview"><strong>Filename:</strong><span id="filename-display"></span></div>
+            <div id="plan-of-care"></div>
+        </div>
+    </div>
+    <script>
+        function generateFileName(){const t=document.getElementById("vet-lastname").value,e=document.getElementById("vet-firstname").value.charAt(0).toUpperCase(),n=document.getElementById("vet-ssn").value,a=document.getElementById("ref-number").value,l=document.getElementById("pcp-lastname").value,i=document.getElementById("pcp-firstname").value.charAt(0).toUpperCase(),s=document.getElementById("agency-code").value,d=t=>{if(!t)return"00.00.0000";const e=new Date(t),n=String(e.getMonth()+1).padStart(2,"0"),a=String(e.getDate()).padStart(2,"0");return`${n}.${a}.${e.getFullYear()}`},o=d(document.getElementById("ref-issue").value),c=d(document.getElementById("ref-start").value),r=document.getElementById("agency-docnum").value;return`${t}.${e}.${n}_${a}.${l}.${i}.${s}.${o}.${c}.${r}`}function getADLs(){return Array.from(document.querySelectorAll('input[name="adl"]:checked')).map(t=>t.value)}function generatePreview(){const t=generateFileName();document.getElementById("filename-display").textContent=t+".pdf";const e=getADLs(),n=e.length>0?"<ul>"+e.map(t=>`<li>${t}</li>`).join("")+"</ul>":"<p>No ADL dependencies specified</p>",a=`
+                <div class="poc-header">
+                    <h1>HOME HEALTH CERTIFICATION AND PLAN OF CARE</h1>
+                    <p>Department of Veterans Affairs</p>
+                    <p><strong>VA Consult Number:</strong> ${document.getElementById("ref-number").value}</p>
+                </div>
+                <div class="poc-section">
+                    <div class="poc-section-title">1. Patient Information</div>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="info-label">Name:</span> ${document.getElementById("vet-lastname").value}, ${document.getElementById("vet-firstname").value} ${document.getElementById("vet-middlename").value}</div>
+                        <div class="info-item"><span class="info-label">Date of Birth:</span> ${document.getElementById("vet-dob").value}</div>
+                        <div class="info-item"><span class="info-label">Last 4 SSN:</span> ${document.getElementById("vet-ssn").value}</div>
+                        <div class="info-item"><span class="info-label">Phone:</span> ${document.getElementById("vet-phone").value}</div>
+                        <div class="info-item" style="grid-column: 1 / -1"><span class="info-label">Address:</span> ${document.getElementById("vet-address").value}</div>
+                    </div>
+                </div>
+                <div class="poc-section">
+                    <div class="poc-section-title">2. Referral Information</div>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="info-label">Referral Number:</span> ${document.getElementById("ref-number").value}</div>
+                        <div class="info-item"><span class="info-label">Issue Date:</span> ${document.getElementById("ref-issue").value}</div>
+                        <div class="info-item"><span class="info-label">Start Date:</span> ${document.getElementById("ref-start").value}</div>
+                        <div class="info-item"><span class="info-label">Expiration Date:</span> ${document.getElementById("ref-expiration").value}</div>
+                    </div>
+                </div>
+                <div class="poc-section">
+                    <div class="poc-section-title">3. Primary Care Provider</div>
+                    <div class="info-grid">
+                        <div class="info-item"><span class="info-label">Physician:</span> Dr. ${document.getElementById("pcp-firstname").value} ${document.getElementById("pcp-lastname").value}</div>
+                        <div class="info-item"><span class="info-label">NPI:</span> ${document.getElementById("pcp-npi").value}</div>
+                        <div class="info-item" style="grid-column: 1 / -1"><span class="info-label">Facility:</span> ${document.getElementById("va-facility").value}</div>
+                        <div class="info-item"><span class="info-label">Phone:</span> ${document.getElementById("va-phone").value}</div>
+                        <div class="info-item"><span class="info-label">Fax:</span> ${document.getElementById("va-fax").value}</div>
+                    </div>
+                </div>
+                <div class="poc-section"><div class="poc-section-title">4. Diagnosis</div><p>${document.getElementById("diagnosis").value}</p></div>
+                <div class="poc-section"><div class="poc-section-title">5. Clinical Information</div><p><strong>Reason for Home Health Services:</strong></p><p>${document.getElementById("reason").value}</p></div>
+                <div class="poc-section">
+                    <div class="poc-section-title">6. Services Authorized</div>
+                    <table>
+                        <thead><tr><th>Service Type</th><th>Frequency</th><th>Duration</th></tr></thead>
+                        <tbody>
+                            <tr><td>Home Health Aide</td><td>${document.getElementById("hours-week").value} hours per week</td><td>${document.getElementById("auth-duration").value}</td></tr>
+                            <tr><td>Supervisory RN Visits</td><td>Per state regulation (up to 48 units per 180 days)</td><td>${document.getElementById("auth-duration").value}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="poc-section"><div class="poc-section-title">7. Activities of Daily Living (ADL) Dependencies</div><p>Veteran requires hands-on assistance with the following:</p>${n}</div>
+                <div class="poc-section"><div class="poc-section-title">8. Goals</div><ul><li>Maintain current level of functioning and prevent further decline</li><li>Ensure safety and independence in the home environment</li><li>Provide assistance with ADLs to promote dignity and quality of life</li><li>Monitor and report any changes in condition to VA provider</li></ul></div>
+                <div class="poc-section"><div class="poc-section-title">9. Orders for Discipline and Treatments</div><p><strong>Home Health Aide Services:</strong></p><ul><li>Assist with bathing, dressing, grooming as needed</li><li>Assist with mobility and transfers</li><li>Provide light housekeeping in areas used by the Veteran</li><li>Assist with meal preparation as needed</li><li>Report any changes in condition to supervisory RN</li></ul><p><strong>RN Supervisory Visits:</strong></p><ul><li>Supervise home health aide as required by state regulation</li><li>Assess Veteran's condition and safety in home</li><li>Coordinate with VA provider regarding any concerns</li><li>Document and report per VA requirements</li></ul></div>
+                <div class="poc-section"><div class="poc-section-title">10. Medications</div><p>Refer to VA pharmacy for current medication list. All prescriptions to be filled through VA.</p></div>
+                <div class="poc-section"><div class="poc-section-title">11. Activities Permitted</div><p>Activity and weight bearing as tolerated. Regular diet.</p></div>
+                <div class="poc-section"><div class="poc-section-title">12. Safety Measures</div><ul><li>Fall precautions - assist with ambulation and transfers</li><li>Ensure safe home environment</li><li>Report any safety concerns to RN supervisor</li></ul></div>
+                <div class="poc-section" style="margin-top: 40px; padding-top: 20px; border-top: 3px solid #000;"><p><strong>Certification:</strong></p><p>I certify that this Veteran is under my care and that the above home health services are medically necessary.</p><br><p>___________________________________ Date: _______________</p><p>Physician Signature</p><br><p>Dr. ${document.getElementById("pcp-firstname").value} ${document.getElementById("pcp-lastname").value}, NPI: ${document.getElementById("pcp-npi").value}</p></div>
+                <div class="poc-section" style="font-size: 12px; color: #666; margin-top: 30px;"><p><strong>Important:</strong> Any claims related to this episode of care MUST include the VA Consult Number ${document.getElementById("ref-number").value} as the Prior Authorization number.</p><p>Submit claims to TriWest (Payer ID: TWVACCN)</p></div>
+            `;document.getElementById("plan-of-care").innerHTML=a,document.getElementById("preview-container").classList.add("active"),document.getElementById("preview-container").scrollIntoView({behavior:"smooth"})}function closePreview(){document.getElementById("preview-container").classList.remove("active"),window.scrollTo({top:0,behavior:"smooth"})}function downloadPDF(){const t=document.getElementById("plan-of-care"),e=generateFileName(),n={margin:.75,filename:e+".pdf",image:{type:"jpeg",quality:.98},html2canvas:{scale:2,letterRendering:!0},jsPDF:{unit:"in",format:"letter",orientation:"portrait"}};html2pdf().set(n).from(t).save()}function downloadHTML(){const t=generateFileName(),e=document.getElementById("plan-of-care").innerHTML,n=`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>VA Plan of Care - ${t}</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; }
+        .poc-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #003f87; padding-bottom: 15px; }
+        .poc-section { margin-bottom: 20px; }
+        .poc-section-title { font-weight: bold; color: #003f87; margin-bottom: 10px; border-bottom: 2px solid #ccc; }
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .info-item { padding: 5px 0; }
+        .info-label { font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #333; padding: 10px; text-align: left; }
+        th { background-color: #f0f0f0; }
+    </style>
+</head>
+<body>
+    ${e}
+</body>
+</html>
+            `,a=new Blob([n],{type:"text/html"}),l=window.URL.createObjectURL(a),i=document.createElement("a");i.href=l,i.download=t+".html",document.body.appendChild(i),i.click(),window.URL.revokeObjectURL(l),document.body.removeChild(i)}
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(content=va_html_content)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

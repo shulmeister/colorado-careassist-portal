@@ -214,6 +214,14 @@ def setup_default_tools():
                 "description": "Manage Google Business listings",
                 "category": "Marketing",
                 "display_order": 24
+            },
+            {
+                "name": "VA Plan of Care Generator",
+                "url": "/va-plan-of-care",
+                "icon": "https://cdn-icons-png.flaticon.com/512/2910/2910791.png",
+                "description": "Convert VA Form 10-7080 to Plan of Care with automatic PDF naming",
+                "category": "Operations",
+                "display_order": 25
             }
         ]
         
