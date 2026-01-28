@@ -5508,11 +5508,11 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
         .upload-status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .upload-status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .upload-status.loading { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-        #plan-of-care { border: 3px solid #003f87; padding: 40px; background: white; font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #000; }
-        #plan-of-care .poc-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #003f87; padding-bottom: 15px; }
+        #plan-of-care { border: 3px solid #003f87; padding: 40px; background: white; font-family: Arial, Helvetica, sans-serif; line-height: 1.6; color: #000; max-width: 8.5in; }
+        #plan-of-care .poc-header { text-align: center; margin-bottom: 30px; border-bottom: 3px solid #003f87; padding-bottom: 15px; page-break-after: avoid; }
         #plan-of-care .poc-header h1 { font-size: 24px; margin-bottom: 8px; color: #003f87; font-weight: bold; }
         #plan-of-care .poc-header p { margin: 5px 0; font-size: 14px; }
-        #plan-of-care .poc-section { margin-bottom: 20px; page-break-inside: avoid; }
+        #plan-of-care .poc-section { margin-bottom: 20px; page-break-inside: avoid; orphans: 3; widows: 3; }
         #plan-of-care .poc-section-title { font-weight: bold; color: #003f87; margin-bottom: 10px; font-size: 16px; border-bottom: 2px solid #ccc; padding-bottom: 5px; }
         #plan-of-care .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         #plan-of-care .info-item { padding: 5px 0; font-size: 13px; }
@@ -5787,10 +5787,10 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
                 return `${month}.${day}.${year}`;
             }
 
-            const certDate = formatDate(document.getElementById("ref-issue").value);
+            // Use start date for filename (one date only)
             const startDate = formatDate(document.getElementById("ref-start").value);
 
-            return `${vetLastName}.${vetFirstInitial}.${last4SSN}_${vaConsultNum}.${pcpLastName}.${pcpFirstInitial}.${agencyCode}.${certDate}.${startDate}.${agencyDocNum}`;
+            return `${vetLastName}.${vetFirstInitial}.${last4SSN}_${vaConsultNum}.${pcpLastName}.${pcpFirstInitial}.${agencyCode}.${startDate}.${agencyDocNum}`;
         }function getADLs(){return Array.from(document.querySelectorAll('input[name="adl"]:checked')).map(t=>t.value)}function generatePreview(){const t=generateFileName();document.getElementById("filename-display").textContent=t+".pdf";const e=getADLs(),n=e.length>0?"<ul>"+e.map(t=>`<li>${t}</li>`).join("")+"</ul>":"<p>No ADL dependencies specified</p>",a=`
                 <div class="poc-header">
                     <h1>HOME HEALTH CERTIFICATION AND PLAN OF CARE</h1>
@@ -5846,7 +5846,7 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
                 <div class="poc-section"><div class="poc-section-title">12. Safety Measures</div><ul><li>Fall precautions - assist with ambulation and transfers</li><li>Ensure safe home environment</li><li>Report any safety concerns to RN supervisor</li></ul></div>
                 <div class="poc-section" style="margin-top: 40px; padding-top: 20px; border-top: 3px solid #000;"><p><strong>Certification:</strong></p><p>I certify that this Veteran is under my care and that the above home health services are medically necessary.</p><br><p>___________________________________ Date: _______________</p><p>Physician Signature</p><br><p>Dr. ${document.getElementById("pcp-firstname").value} ${document.getElementById("pcp-lastname").value}, NPI: ${document.getElementById("pcp-npi").value}</p></div>
                 <div class="poc-section" style="font-size: 12px; color: #666; margin-top: 30px;"><p><strong>Important:</strong> Any claims related to this episode of care MUST include the VA Consult Number ${document.getElementById("ref-number").value} as the Prior Authorization number.</p><p>Submit claims to TriWest (Payer ID: TWVACCN)</p></div>
-            `;document.getElementById("plan-of-care").innerHTML=a,document.getElementById("preview-container").classList.add("active"),document.getElementById("preview-container").scrollIntoView({behavior:"smooth"})}function closePreview(){document.getElementById("preview-container").classList.remove("active"),window.scrollTo({top:0,behavior:"smooth"})}function downloadPDF(){const t=document.getElementById("plan-of-care"),e=generateFileName(),n={margin:.75,filename:e+".pdf",image:{type:"jpeg",quality:.98},html2canvas:{scale:2,letterRendering:!0},jsPDF:{unit:"in",format:"letter",orientation:"portrait"}};html2pdf().set(n).from(t).save()}function downloadHTML(){const t=generateFileName(),e=document.getElementById("plan-of-care").innerHTML,n=`
+            `;document.getElementById("plan-of-care").innerHTML=a,document.getElementById("preview-container").classList.add("active"),document.getElementById("preview-container").scrollIntoView({behavior:"smooth"})}function closePreview(){document.getElementById("preview-container").classList.remove("active"),window.scrollTo({top:0,behavior:"smooth"})}function downloadPDF(){const element=document.getElementById("plan-of-care");const filename=generateFileName();const opt={margin:[0.5,0.5,0.5,0.5],filename:filename+".pdf",image:{type:"jpeg",quality:0.98},html2canvas:{scale:1.5,useCORS:true,letterRendering:true,scrollY:0,scrollX:0},jsPDF:{unit:"in",format:"letter",orientation:"portrait"},pagebreak:{mode:["avoid-all","css","legacy"]}};html2pdf().set(opt).from(element).save()}function downloadHTML(){const t=generateFileName(),e=document.getElementById("plan-of-care").innerHTML,n=`
 <!DOCTYPE html>
 <html>
 <head>
