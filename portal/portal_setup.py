@@ -222,6 +222,14 @@ def setup_default_tools():
                 "description": "Convert VA Form 10-7080 to Plan of Care with automatic PDF naming",
                 "category": "Operations",
                 "display_order": 25
+            },
+            {
+                "name": "VA RFS Converter",
+                "url": "/va-rfs-converter",
+                "icon": "https://cdn-icons-png.flaticon.com/512/3004/3004458.png",
+                "description": "Convert referral face sheets to VA Form 10-10172 RFS",
+                "category": "Operations",
+                "display_order": 26
             }
         ]
         

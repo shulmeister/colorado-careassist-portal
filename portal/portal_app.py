@@ -5876,6 +5876,1152 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
     return HTMLResponse(content=va_html_content)
 
 
+# ============================================================================
+# VA RFS CONVERTER - Convert Referral Face Sheets to VA Form 10-10172 RFS
+# ============================================================================
+
+@app.post("/api/parse-va-rfs-referral")
+async def parse_va_rfs_referral(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """Parse referral face sheet PDF using Gemini AI vision for VA Form 10-10172 RFS"""
+    import base64
+    import json
+
+    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+    if not GEMINI_API_KEY:
+        return JSONResponse({
+            "success": False,
+            "error": "GEMINI_API_KEY not configured",
+            "message": "AI extraction unavailable"
+        }, status_code=200)
+
+    try:
+        # Read PDF and convert to base64
+        pdf_content = await file.read()
+        pdf_base64 = base64.b64encode(pdf_content).decode('utf-8')
+
+        # Gemini extraction prompt for VA RFS
+        extraction_prompt = """Extract ALL data from this referral face sheet (nursing home, hospital, ALF, or other medical facility referral).
+
+This will be used to populate VA Form 10-10172 RFS (Request for Service).
+
+Return a JSON object with these EXACT keys (use empty string "" if field not found):
+
+{
+  "veteran_last_name": "",
+  "veteran_first_name": "",
+  "veteran_middle_name": "",
+  "date_of_birth": "",
+  "last_4_ssn": "",
+  "full_ssn": "",
+  "phone": "",
+  "address": "",
+  "city": "",
+  "state": "",
+  "zip": "",
+  "ordering_provider_name": "",
+  "ordering_provider_npi": "",
+  "ordering_provider_phone": "",
+  "ordering_provider_fax": "",
+  "ordering_provider_address": "",
+  "facility_name": "",
+  "facility_type": "",
+  "diagnosis_primary": "",
+  "diagnosis_secondary": "",
+  "icd10_codes": "",
+  "care_type": "",
+  "service_requested": "",
+  "orders": "",
+  "medications": "",
+  "allergies": "",
+  "emergency_contact_name": "",
+  "emergency_contact_phone": "",
+  "referral_date": "",
+  "admission_date": "",
+  "discharge_date": ""
+}
+
+IMPORTANT INSTRUCTIONS:
+1. Extract patient/veteran information (name, DOB, SSN, phone, address)
+2. Look for primary physician or ordering provider (name, NPI, phone, fax, office address)
+3. Extract all diagnosis information and ICD-10 codes
+4. Look for care type (Skilled Nursing, Assisted Living, Home Health, etc.)
+5. Find facility name and type (SNF, ALF, Hospital, etc.)
+6. Extract service requested or orders
+7. Look for medications, allergies, emergency contacts
+8. Find any dates: referral date, admission date, discharge date
+
+DATE FORMATS: Convert all dates to MM/DD/YYYY format.
+
+DIAGNOSIS: Extract both text descriptions AND ICD-10 codes if available.
+
+Return ONLY the JSON object, no other text."""
+
+        # Try multiple Gemini models
+        models_to_try = [
+            "gemini-2.0-flash",
+            "gemini-1.5-flash",
+            "gemini-1.5-pro"
+        ]
+
+        last_error = None
+        for model in models_to_try:
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    gemini_response = await client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                        headers={
+                            "x-goog-api-key": GEMINI_API_KEY,
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "contents": [{
+                                "parts": [
+                                    {"text": extraction_prompt},
+                                    {
+                                        "inline_data": {
+                                            "mime_type": "application/pdf",
+                                            "data": pdf_base64
+                                        }
+                                    }
+                                ]
+                            }],
+                            "generationConfig": {
+                                "temperature": 0.1
+                            }
+                        }
+                    )
+
+                    if gemini_response.status_code == 200:
+                        result = gemini_response.json()
+
+                        # Extract text from Gemini response
+                        if "candidates" in result and len(result["candidates"]) > 0:
+                            candidate = result["candidates"][0]
+                            if "content" in candidate and "parts" in candidate["content"]:
+                                extracted_text = candidate["content"]["parts"][0]["text"]
+
+                                # Parse JSON from response
+                                json_start = extracted_text.find("{")
+                                json_end = extracted_text.rfind("}") + 1
+                                if json_start >= 0 and json_end > json_start:
+                                    json_str = extracted_text[json_start:json_end]
+                                    extracted_data = json.loads(json_str)
+
+                                    print(f"✓ Successfully used Gemini model: {model}")
+
+                                    return JSONResponse({
+                                        "success": True,
+                                        "data": extracted_data,
+                                        "message": f"PDF parsed successfully using Gemini AI ({model})",
+                                        "fields_extracted": len([v for v in extracted_data.values() if v])
+                                    }, status_code=200)
+
+                        last_error = f"Unexpected response structure from {model}"
+                    else:
+                        last_error = f"Gemini model {model} returned status {gemini_response.status_code}"
+                        print(f"Gemini model {model} failed ({gemini_response.status_code}), trying next...")
+                        continue
+
+            except Exception as e:
+                last_error = str(e)
+                print(f"Error with Gemini model {model}: {e}, trying next...")
+                continue
+
+        # If all models failed
+        return JSONResponse({
+            "success": False,
+            "error": f"All Gemini models failed. Last error: {last_error}",
+            "message": "Could not extract data from PDF"
+        }, status_code=200)
+
+    except Exception as e:
+        print(f"Error parsing VA RFS referral: {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "message": "Failed to parse PDF"
+        }, status_code=200)
+
+
+@app.get("/va-rfs-converter")
+async def va_rfs_converter(
+    current_user: Dict[str, Any] = Depends(get_current_user_optional)
+):
+    """VA RFS Converter - Convert referral face sheets to VA Form 10-10172 RFS"""
+
+    va_rfs_html_content = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VA RFS Converter - Colorado Care Assist</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.2/html2pdf.bundle.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .upload-section {
+            padding: 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .upload-box {
+            border: 3px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            background: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .upload-box:hover {
+            background: #f8f9ff;
+            border-color: #764ba2;
+        }
+        .upload-box.dragover {
+            background: #e8ebff;
+            border-color: #764ba2;
+        }
+        .upload-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(56, 239, 125, 0.4);
+        }
+        .form-section {
+            padding: 30px;
+            display: none;
+        }
+        .form-section.active {
+            display: block;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .form-group.full-width {
+            grid-column: 1 / -1;
+        }
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #2d3748;
+            font-size: 14px;
+        }
+        input, select, textarea {
+            padding: 10px;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1e3c72;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        .alert {
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .loading.active {
+            display: block;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Print styles for VA Form 10-10172 */
+        #va-rfs-form {
+            display: none;
+        }
+        #va-rfs-form.active {
+            display: block;
+            background: white;
+            padding: 40px;
+            max-width: 8.5in;
+            margin: 0 auto;
+        }
+        .rfs-header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #000;
+            padding-bottom: 10px;
+        }
+        .rfs-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .rfs-subtitle {
+            font-size: 12px;
+        }
+        .rfs-field {
+            margin-bottom: 15px;
+            page-break-inside: avoid;
+        }
+        .rfs-label {
+            font-weight: bold;
+            font-size: 11px;
+            display: block;
+            margin-bottom: 3px;
+        }
+        .rfs-value {
+            border-bottom: 1px solid #333;
+            min-height: 20px;
+            padding: 2px 5px;
+            font-size: 12px;
+        }
+        .rfs-checkbox {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border: 1px solid #000;
+            margin-right: 5px;
+            vertical-align: middle;
+        }
+        .rfs-checkbox.checked::after {
+            content: "✓";
+            display: block;
+            text-align: center;
+            font-weight: bold;
+        }
+        .rfs-section {
+            margin-top: 25px;
+            page-break-inside: avoid;
+        }
+        .rfs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        @media print {
+            body { background: white; padding: 0; }
+            .container { box-shadow: none; border-radius: 0; }
+            .header, .upload-section, .form-section, .action-buttons { display: none; }
+            #va-rfs-form { display: block !important; }
+        }
+
+        @media (max-width: 768px) {
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            .action-buttons {
+                flex-direction: column;
+            }
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 VA RFS Converter</h1>
+            <p>Convert Referral Face Sheets to VA Form 10-10172 RFS (Request for Service)</p>
+        </div>
+
+        <div class="upload-section">
+            <div class="upload-box" id="uploadBox">
+                <div class="upload-icon">📄</div>
+                <h3>Upload Referral Face Sheet</h3>
+                <p style="margin: 10px 0; color: #666;">Drag and drop your PDF here or click to browse</p>
+                <input type="file" id="pdfFile" accept=".pdf" />
+                <button class="btn btn-primary" onclick="document.getElementById('pdfFile').click()">
+                    Select PDF
+                </button>
+            </div>
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p style="margin-top: 15px;">Extracting data with AI...</p>
+            </div>
+        </div>
+
+        <div class="form-section" id="formSection">
+            <div id="alertContainer"></div>
+
+            <div class="section-title">📋 Veteran Information</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Last Name *</label>
+                    <input type="text" id="vet-last-name" required>
+                </div>
+                <div class="form-group">
+                    <label>First Name *</label>
+                    <input type="text" id="vet-first-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Middle Name</label>
+                    <input type="text" id="vet-middle-name">
+                </div>
+                <div class="form-group">
+                    <label>Date of Birth (MM/DD/YYYY) *</label>
+                    <input type="date" id="vet-dob" required>
+                </div>
+                <div class="form-group">
+                    <label>Last 4 SSN *</label>
+                    <input type="text" id="vet-ssn-last4" maxlength="4" pattern="[0-9]{4}">
+                </div>
+                <div class="form-group">
+                    <label>Phone</label>
+                    <input type="tel" id="vet-phone">
+                </div>
+                <div class="form-group full-width">
+                    <label>Address</label>
+                    <input type="text" id="vet-address">
+                </div>
+                <div class="form-group">
+                    <label>City</label>
+                    <input type="text" id="vet-city">
+                </div>
+                <div class="form-group">
+                    <label>State</label>
+                    <input type="text" id="vet-state" maxlength="2">
+                </div>
+                <div class="form-group">
+                    <label>ZIP</label>
+                    <input type="text" id="vet-zip" maxlength="10">
+                </div>
+            </div>
+
+            <div class="section-title">👨‍⚕️ Ordering Provider Information</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Provider Name *</label>
+                    <input type="text" id="provider-name" required>
+                </div>
+                <div class="form-group">
+                    <label>Provider NPI *</label>
+                    <input type="text" id="provider-npi" required>
+                </div>
+                <div class="form-group">
+                    <label>Provider Phone</label>
+                    <input type="tel" id="provider-phone">
+                </div>
+                <div class="form-group">
+                    <label>Provider Fax</label>
+                    <input type="tel" id="provider-fax">
+                </div>
+                <div class="form-group full-width">
+                    <label>Provider Office Address</label>
+                    <input type="text" id="provider-address">
+                </div>
+            </div>
+
+            <div class="section-title">🏥 Facility Information</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Facility Name</label>
+                    <input type="text" id="facility-name">
+                </div>
+                <div class="form-group">
+                    <label>Facility Type</label>
+                    <select id="facility-type">
+                        <option value="">Select...</option>
+                        <option value="SNF">Skilled Nursing Facility (SNF)</option>
+                        <option value="ALF">Assisted Living Facility (ALF)</option>
+                        <option value="Hospital">Hospital</option>
+                        <option value="Rehab">Rehabilitation Center</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="section-title">🩺 Medical Information</div>
+            <div class="form-grid">
+                <div class="form-group full-width">
+                    <label>Primary Diagnosis *</label>
+                    <textarea id="diagnosis-primary" required></textarea>
+                </div>
+                <div class="form-group full-width">
+                    <label>Secondary Diagnosis</label>
+                    <textarea id="diagnosis-secondary"></textarea>
+                </div>
+                <div class="form-group full-width">
+                    <label>ICD-10 Codes</label>
+                    <input type="text" id="icd10-codes" placeholder="e.g., Z99.11, I50.9">
+                </div>
+            </div>
+
+            <div class="section-title">🛏️ Service Type Requested</div>
+            <div class="checkbox-group">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="service-homehealth">
+                    <label for="service-homehealth">Home Health</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="service-geriatric">
+                    <label for="service-geriatric">Geriatric Care</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="service-respite">
+                    <label for="service-respite">Respite Care</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="service-hospice">
+                    <label for="service-hospice">Hospice</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="service-dme">
+                    <label for="service-dme">DME/Prosthetics</label>
+                </div>
+            </div>
+
+            <div class="section-title">📝 Additional Information</div>
+            <div class="form-grid">
+                <div class="form-group full-width">
+                    <label>Service Orders</label>
+                    <textarea id="service-orders"></textarea>
+                </div>
+                <div class="form-group full-width">
+                    <label>Medications</label>
+                    <textarea id="medications"></textarea>
+                </div>
+                <div class="form-group full-width">
+                    <label>Allergies</label>
+                    <textarea id="allergies"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Emergency Contact Name</label>
+                    <input type="text" id="emergency-name">
+                </div>
+                <div class="form-group">
+                    <label>Emergency Contact Phone</label>
+                    <input type="tel" id="emergency-phone">
+                </div>
+            </div>
+
+            <div class="section-title">📅 Dates</div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Referral Date</label>
+                    <input type="date" id="referral-date">
+                </div>
+                <div class="form-group">
+                    <label>Admission Date</label>
+                    <input type="date" id="admission-date">
+                </div>
+                <div class="form-group">
+                    <label>Discharge Date</label>
+                    <input type="date" id="discharge-date">
+                </div>
+            </div>
+
+            <div class="action-buttons">
+                <button class="btn btn-success" onclick="previewRFS()">
+                    📄 Preview VA Form 10-10172
+                </button>
+                <button class="btn btn-primary" onclick="downloadRFSPDF()">
+                    ⬇️ Download PDF
+                </button>
+                <button class="btn btn-primary" onclick="downloadRFSHTML()">
+                    💾 Download HTML
+                </button>
+            </div>
+        </div>
+
+        <!-- VA Form 10-10172 Preview (hidden until preview) -->
+        <div id="va-rfs-form">
+            <div class="rfs-header">
+                <div class="rfs-title">REQUEST FOR SERVICES (RFS)</div>
+                <div class="rfs-subtitle">VA FORM 10-10172 | Department of Veterans Affairs</div>
+                <div class="rfs-subtitle">Medical Equipment and Prosthetics Services</div>
+            </div>
+
+            <div class="rfs-section">
+                <h3 style="font-size: 14px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 5px;">SECTION I - VETERAN INFORMATION</h3>
+
+                <div class="rfs-grid">
+                    <div class="rfs-field">
+                        <span class="rfs-label">1. VETERAN'S LAST NAME</span>
+                        <div class="rfs-value" id="rfs-vet-last"></div>
+                    </div>
+                    <div class="rfs-field">
+                        <span class="rfs-label">2. FIRST NAME</span>
+                        <div class="rfs-value" id="rfs-vet-first"></div>
+                    </div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">3. MIDDLE NAME</span>
+                    <div class="rfs-value" id="rfs-vet-middle"></div>
+                </div>
+
+                <div class="rfs-grid">
+                    <div class="rfs-field">
+                        <span class="rfs-label">4. DATE OF BIRTH</span>
+                        <div class="rfs-value" id="rfs-vet-dob"></div>
+                    </div>
+                    <div class="rfs-field">
+                        <span class="rfs-label">5. LAST 4 SSN</span>
+                        <div class="rfs-value" id="rfs-vet-ssn"></div>
+                    </div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">6. ADDRESS</span>
+                    <div class="rfs-value" id="rfs-vet-address-full"></div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">7. PHONE</span>
+                    <div class="rfs-value" id="rfs-vet-phone"></div>
+                </div>
+            </div>
+
+            <div class="rfs-section">
+                <h3 style="font-size: 14px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 5px;">SECTION II - ORDERING PROVIDER INFORMATION</h3>
+
+                <div class="rfs-grid">
+                    <div class="rfs-field">
+                        <span class="rfs-label">8. ORDERING PROVIDER NAME</span>
+                        <div class="rfs-value" id="rfs-provider-name"></div>
+                    </div>
+                    <div class="rfs-field">
+                        <span class="rfs-label">9. PROVIDER NPI</span>
+                        <div class="rfs-value" id="rfs-provider-npi"></div>
+                    </div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">10. PROVIDER OFFICE ADDRESS</span>
+                    <div class="rfs-value" id="rfs-provider-address"></div>
+                </div>
+
+                <div class="rfs-grid">
+                    <div class="rfs-field">
+                        <span class="rfs-label">11. PHONE</span>
+                        <div class="rfs-value" id="rfs-provider-phone"></div>
+                    </div>
+                    <div class="rfs-field">
+                        <span class="rfs-label">12. FAX</span>
+                        <div class="rfs-value" id="rfs-provider-fax"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rfs-section">
+                <h3 style="font-size: 14px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 5px;">SECTION III - DIAGNOSIS AND SERVICES</h3>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">13. PRIMARY DIAGNOSIS</span>
+                    <div class="rfs-value" id="rfs-diagnosis-primary" style="min-height: 40px;"></div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">14. SECONDARY DIAGNOSIS</span>
+                    <div class="rfs-value" id="rfs-diagnosis-secondary" style="min-height: 40px;"></div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">15. ICD-10 CODES</span>
+                    <div class="rfs-value" id="rfs-icd10"></div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">16. SERVICE TYPE REQUESTED (Check all that apply)</span>
+                    <div style="margin-top: 8px;">
+                        <div><span class="rfs-checkbox" id="rfs-check-homehealth"></span> Home Health Care</div>
+                        <div><span class="rfs-checkbox" id="rfs-check-geriatric"></span> Geriatric Care</div>
+                        <div><span class="rfs-checkbox" id="rfs-check-respite"></span> Respite Care</div>
+                        <div><span class="rfs-checkbox" id="rfs-check-hospice"></span> Hospice Care</div>
+                        <div><span class="rfs-checkbox" id="rfs-check-dme"></span> Durable Medical Equipment/Prosthetics</div>
+                    </div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">17. SERVICE ORDERS / SPECIFIC REQUESTS</span>
+                    <div class="rfs-value" id="rfs-orders" style="min-height: 60px;"></div>
+                </div>
+            </div>
+
+            <div class="rfs-section">
+                <h3 style="font-size: 14px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 5px;">SECTION IV - ADDITIONAL INFORMATION</h3>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">18. CURRENT MEDICATIONS</span>
+                    <div class="rfs-value" id="rfs-medications" style="min-height: 40px;"></div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">19. ALLERGIES</span>
+                    <div class="rfs-value" id="rfs-allergies"></div>
+                </div>
+
+                <div class="rfs-grid">
+                    <div class="rfs-field">
+                        <span class="rfs-label">20. FACILITY NAME (if applicable)</span>
+                        <div class="rfs-value" id="rfs-facility-name"></div>
+                    </div>
+                    <div class="rfs-field">
+                        <span class="rfs-label">21. FACILITY TYPE</span>
+                        <div class="rfs-value" id="rfs-facility-type"></div>
+                    </div>
+                </div>
+
+                <div class="rfs-grid">
+                    <div class="rfs-field">
+                        <span class="rfs-label">22. EMERGENCY CONTACT</span>
+                        <div class="rfs-value" id="rfs-emergency-contact"></div>
+                    </div>
+                    <div class="rfs-field">
+                        <span class="rfs-label">23. EMERGENCY PHONE</span>
+                        <div class="rfs-value" id="rfs-emergency-phone"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rfs-section">
+                <h3 style="font-size: 14px; margin-bottom: 10px; border-bottom: 1px solid #000; padding-bottom: 5px;">SECTION V - DATES</h3>
+
+                <div class="rfs-grid">
+                    <div class="rfs-field">
+                        <span class="rfs-label">24. REFERRAL DATE</span>
+                        <div class="rfs-value" id="rfs-referral-date"></div>
+                    </div>
+                    <div class="rfs-field">
+                        <span class="rfs-label">25. ADMISSION DATE</span>
+                        <div class="rfs-value" id="rfs-admission-date"></div>
+                    </div>
+                </div>
+
+                <div class="rfs-field">
+                    <span class="rfs-label">26. DISCHARGE DATE (if applicable)</span>
+                    <div class="rfs-value" id="rfs-discharge-date"></div>
+                </div>
+            </div>
+
+            <div class="rfs-section" style="margin-top: 40px; border-top: 2px solid #000; padding-top: 20px;">
+                <p style="font-size: 10px; font-style: italic;">
+                    This form is to be completed by the ordering provider or authorized VA staff for requesting
+                    medical equipment, prosthetics, home health services, or other veteran care services.
+                </p>
+                <div style="margin-top: 30px;">
+                    <div style="display: inline-block; width: 45%;">
+                        <div style="border-bottom: 1px solid #000; margin-bottom: 5px; height: 40px;"></div>
+                        <span class="rfs-label">PROVIDER SIGNATURE</span>
+                    </div>
+                    <div style="display: inline-block; width: 45%; margin-left: 8%;">
+                        <div style="border-bottom: 1px solid #000; margin-bottom: 5px; height: 40px;"></div>
+                        <span class="rfs-label">DATE</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 30px; padding: 15px; background: #f0f0f0; border: 1px solid #ccc; font-size: 10px;">
+                <strong>FOR COLORADO CARE ASSIST USE:</strong><br>
+                Generated by: Colorado Care Assist VA RFS Converter<br>
+                Processing Agency: Colorado Care Assist (CC.D)<br>
+                Document prepared: <span id="rfs-generated-date"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // File upload handling
+        const uploadBox = document.getElementById('uploadBox');
+        const pdfFile = document.getElementById('pdfFile');
+        const loading = document.getElementById('loading');
+        const formSection = document.getElementById('formSection');
+        const alertContainer = document.getElementById('alertContainer');
+
+        // Drag and drop
+        uploadBox.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadBox.classList.add('dragover');
+        });
+
+        uploadBox.addEventListener('dragleave', () => {
+            uploadBox.classList.remove('dragover');
+        });
+
+        uploadBox.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadBox.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                pdfFile.files = files;
+                handleFileUpload();
+            }
+        });
+
+        pdfFile.addEventListener('change', handleFileUpload);
+
+        async function handleFileUpload() {
+            const file = pdfFile.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                showAlert('Please upload a PDF file', 'error');
+                return;
+            }
+
+            loading.classList.add('active');
+            formSection.classList.remove('active');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/parse-va-rfs-referral', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    populateFormFields(result.data);
+                    formSection.classList.add('active');
+                    showAlert(`✓ Success! Extracted ${result.fields_extracted} fields. Please review and edit as needed.`, 'success');
+                    console.log('Extracted data from Gemini:', result.data);
+                } else {
+                    showAlert(`Failed to extract data: ${result.error}. Please fill in the form manually.`, 'error');
+                    formSection.classList.add('active');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showAlert('Error uploading file. Please try again or fill in manually.', 'error');
+                formSection.classList.add('active');
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+
+        function populateFormFields(data) {
+            // Veteran info
+            document.getElementById('vet-last-name').value = data.veteran_last_name || '';
+            document.getElementById('vet-first-name').value = data.veteran_first_name || '';
+            document.getElementById('vet-middle-name').value = data.veteran_middle_name || '';
+            document.getElementById('vet-dob').value = convertDate(data.date_of_birth) || '';
+            document.getElementById('vet-ssn-last4').value = data.last_4_ssn || '';
+            document.getElementById('vet-phone').value = data.phone || '';
+            document.getElementById('vet-address').value = data.address || '';
+            document.getElementById('vet-city').value = data.city || '';
+            document.getElementById('vet-state').value = data.state || '';
+            document.getElementById('vet-zip').value = data.zip || '';
+
+            // Provider info
+            document.getElementById('provider-name').value = data.ordering_provider_name || '';
+            document.getElementById('provider-npi').value = data.ordering_provider_npi || '';
+            document.getElementById('provider-phone').value = data.ordering_provider_phone || '';
+            document.getElementById('provider-fax').value = data.ordering_provider_fax || '';
+            document.getElementById('provider-address').value = data.ordering_provider_address || '';
+
+            // Facility info
+            document.getElementById('facility-name').value = data.facility_name || '';
+            if (data.facility_type) {
+                document.getElementById('facility-type').value = data.facility_type;
+            }
+
+            // Medical info
+            document.getElementById('diagnosis-primary').value = data.diagnosis_primary || '';
+            document.getElementById('diagnosis-secondary').value = data.diagnosis_secondary || '';
+            document.getElementById('icd10-codes').value = data.icd10_codes || '';
+
+            // Additional info
+            document.getElementById('service-orders').value = data.orders || data.service_requested || '';
+            document.getElementById('medications').value = data.medications || '';
+            document.getElementById('allergies').value = data.allergies || '';
+            document.getElementById('emergency-name').value = data.emergency_contact_name || '';
+            document.getElementById('emergency-phone').value = data.emergency_contact_phone || '';
+
+            // Dates
+            document.getElementById('referral-date').value = convertDate(data.referral_date) || '';
+            document.getElementById('admission-date').value = convertDate(data.admission_date) || '';
+            document.getElementById('discharge-date').value = convertDate(data.discharge_date) || '';
+
+            // Auto-check service types based on care type
+            const careType = (data.care_type || '').toLowerCase();
+            if (careType.includes('home health') || careType.includes('hh')) {
+                document.getElementById('service-homehealth').checked = true;
+            }
+            if (careType.includes('geriatric') || careType.includes('snf') || careType.includes('alf')) {
+                document.getElementById('service-geriatric').checked = true;
+            }
+        }
+
+        function convertDate(dateStr) {
+            if (!dateStr) return '';
+            // Handle MM/DD/YYYY format
+            const match = dateStr.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+            if (match) {
+                const [, month, day, year] = match;
+                return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            }
+            return '';
+        }
+
+        function formatDateForDisplay(dateInput) {
+            if (!dateInput) return '';
+            const date = new Date(dateInput);
+            if (isNaN(date)) return dateInput;
+            return (date.getMonth() + 1).toString().padStart(2, '0') + '/' +
+                   date.getDate().toString().padStart(2, '0') + '/' +
+                   date.getFullYear();
+        }
+
+        function previewRFS() {
+            // Populate preview form
+            document.getElementById('rfs-vet-last').textContent = document.getElementById('vet-last-name').value;
+            document.getElementById('rfs-vet-first').textContent = document.getElementById('vet-first-name').value;
+            document.getElementById('rfs-vet-middle').textContent = document.getElementById('vet-middle-name').value;
+            document.getElementById('rfs-vet-dob').textContent = formatDateForDisplay(document.getElementById('vet-dob').value);
+            document.getElementById('rfs-vet-ssn').textContent = document.getElementById('vet-ssn-last4').value;
+
+            const fullAddress = [
+                document.getElementById('vet-address').value,
+                document.getElementById('vet-city').value,
+                document.getElementById('vet-state').value,
+                document.getElementById('vet-zip').value
+            ].filter(x => x).join(', ');
+            document.getElementById('rfs-vet-address-full').textContent = fullAddress;
+            document.getElementById('rfs-vet-phone').textContent = document.getElementById('vet-phone').value;
+
+            document.getElementById('rfs-provider-name').textContent = document.getElementById('provider-name').value;
+            document.getElementById('rfs-provider-npi').textContent = document.getElementById('provider-npi').value;
+            document.getElementById('rfs-provider-address').textContent = document.getElementById('provider-address').value;
+            document.getElementById('rfs-provider-phone').textContent = document.getElementById('provider-phone').value;
+            document.getElementById('rfs-provider-fax').textContent = document.getElementById('provider-fax').value;
+
+            document.getElementById('rfs-diagnosis-primary').textContent = document.getElementById('diagnosis-primary').value;
+            document.getElementById('rfs-diagnosis-secondary').textContent = document.getElementById('diagnosis-secondary').value;
+            document.getElementById('rfs-icd10').textContent = document.getElementById('icd10-codes').value;
+
+            // Checkboxes
+            document.getElementById('rfs-check-homehealth').className = document.getElementById('service-homehealth').checked ? 'rfs-checkbox checked' : 'rfs-checkbox';
+            document.getElementById('rfs-check-geriatric').className = document.getElementById('service-geriatric').checked ? 'rfs-checkbox checked' : 'rfs-checkbox';
+            document.getElementById('rfs-check-respite').className = document.getElementById('service-respite').checked ? 'rfs-checkbox checked' : 'rfs-checkbox';
+            document.getElementById('rfs-check-hospice').className = document.getElementById('service-hospice').checked ? 'rfs-checkbox checked' : 'rfs-checkbox';
+            document.getElementById('rfs-check-dme').className = document.getElementById('service-dme').checked ? 'rfs-checkbox checked' : 'rfs-checkbox';
+
+            document.getElementById('rfs-orders').textContent = document.getElementById('service-orders').value;
+            document.getElementById('rfs-medications').textContent = document.getElementById('medications').value;
+            document.getElementById('rfs-allergies').textContent = document.getElementById('allergies').value;
+
+            document.getElementById('rfs-facility-name').textContent = document.getElementById('facility-name').value;
+            document.getElementById('rfs-facility-type').textContent = document.getElementById('facility-type').value;
+
+            const emergencyContact = document.getElementById('emergency-name').value;
+            document.getElementById('rfs-emergency-contact').textContent = emergencyContact;
+            document.getElementById('rfs-emergency-phone').textContent = document.getElementById('emergency-phone').value;
+
+            document.getElementById('rfs-referral-date').textContent = formatDateForDisplay(document.getElementById('referral-date').value);
+            document.getElementById('rfs-admission-date').textContent = formatDateForDisplay(document.getElementById('admission-date').value);
+            document.getElementById('rfs-discharge-date').textContent = formatDateForDisplay(document.getElementById('discharge-date').value);
+
+            document.getElementById('rfs-generated-date').textContent = new Date().toLocaleDateString('en-US');
+
+            // Show preview
+            document.getElementById('va-rfs-form').classList.add('active');
+            document.getElementById('va-rfs-form').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function downloadRFSPDF() {
+            previewRFS();
+
+            const filename = generateRFSFilename();
+            const element = document.getElementById('va-rfs-form');
+
+            const opt = {
+                margin: [0.5, 0.5, 0.5, 0.5],
+                filename: filename + '.pdf',
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                    scale: 1.5,
+                    scrollY: 0,
+                    scrollX: 0,
+                    useCORS: true
+                },
+                jsPDF: {
+                    unit: 'in',
+                    format: 'letter',
+                    orientation: 'portrait'
+                },
+                pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+            };
+
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function downloadRFSHTML() {
+            previewRFS();
+
+            const filename = generateRFSFilename();
+            const htmlContent = document.getElementById('va-rfs-form').outerHTML;
+            const fullHTML = `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>VA Form 10-10172 RFS</title>
+    <style>
+        ${document.querySelector('style').textContent}
+    </style>
+</head>
+<body>
+    ${htmlContent}
+</body>
+</html>`;
+
+            const blob = new Blob([fullHTML], { type: 'text/html' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename + '.html';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function generateRFSFilename() {
+            const vetLast = document.getElementById('vet-last-name').value || 'Veteran';
+            const vetFirst = document.getElementById('vet-first-name').value || 'V';
+            const vetFirstInitial = vetFirst.charAt(0).toUpperCase();
+            const last4 = document.getElementById('vet-ssn-last4').value || '0000';
+
+            const today = new Date();
+            const month = (today.getMonth() + 1).toString().padStart(2, '0');
+            const day = today.getDate().toString().padStart(2, '0');
+            const year = today.getFullYear();
+
+            return `${vetLast}.${vetFirstInitial}.${last4}_VA-RFS-10-10172.${month}.${day}.${year}`;
+        }
+
+        function showAlert(message, type) {
+            const alertClass = type === 'success' ? 'alert-success' : 'alert-error';
+            alertContainer.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 8000);
+        }
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(content=va_rfs_html_content)
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
