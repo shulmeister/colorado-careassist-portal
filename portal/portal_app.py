@@ -5338,9 +5338,13 @@ CRITICAL INSTRUCTIONS:
 Extract every field you can find. Be thorough."""
 
         # Call Gemini API
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=60.0) as client:
             gemini_response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key={GEMINI_API_KEY}",
+                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent",
+                headers={
+                    "x-goog-api-key": GEMINI_API_KEY,
+                    "Content-Type": "application/json"
+                },
                 json={
                     "contents": [{
                         "parts": [
