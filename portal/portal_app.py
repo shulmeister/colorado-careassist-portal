@@ -6123,111 +6123,96 @@ async def fill_va_rfs_form(
         pdf_path = os.path.join(os.path.dirname(__file__), '..', 'va_form_10_10172_blank.pdf')
         pdf = PdfWrapper(pdf_path)
 
-        # Map extracted data to PDF form fields
-        # Note: Field names may need adjustment after testing with actual PDF
+        # Map extracted data to PDF form fields using actual field names from PDF
         form_data = {}
 
-        # Section I: Veteran & Ordering Provider Information
-        # Field 1: Veteran's Legal Full Name (First, MI, Last)
+        # VETERANSNAME[0] - Veteran's Full Name (Last, First MI)
         vet_name_parts = []
+        if data.get('veteran_last_name'):
+            vet_name_parts.append(data['veteran_last_name'])
         if data.get('veteran_first_name'):
             vet_name_parts.append(data['veteran_first_name'])
         if data.get('veteran_middle_name'):
             vet_name_parts.append(data['veteran_middle_name'][:1])  # Middle initial
-        if data.get('veteran_last_name'):
-            vet_name_parts.append(data['veteran_last_name'])
         if vet_name_parts:
-            form_data['1 VETERANS LEGAL FULL NAME First MI Last'] = ', '.join(vet_name_parts)
+            form_data['VETERANSNAME[0]'] = ', '.join(vet_name_parts)
 
-        # Field 2: Date of Birth
+        # DOB[0] - Date of Birth
         if data.get('date_of_birth'):
-            form_data['2 DATE OF BIRTH MMDDYYYY'] = data['date_of_birth']
+            form_data['DOB[0]'] = data['date_of_birth']
 
-        # Field 3: VA Facility & Address
-        if data.get('ordering_provider_address'):
-            form_data['3 VA FACILITY  ADDRESS'] = data['ordering_provider_address']
+        # VAFACILITYADDRESS[0] - VA Facility & Address
+        if data.get('facility_name'):
+            form_data['VAFACILITYADDRESS[0]'] = data['facility_name']
 
-        # Field 4: VA Authorization Number
+        # VAAUTHORIZATIONNUMBER[0] - VA Authorization Number
         if data.get('va_authorization_number'):
-            form_data['4 VA AUTHORIZATION NUMBER'] = data['va_authorization_number']
+            form_data['VAAUTHORIZATIONNUMBER[0]'] = data['va_authorization_number']
 
-        # Field 5: Ordering Provider Office Name & Address
+        # ORDERINGPROVIDEROFFICENAMEADDRESS[0] - Ordering Provider Office Name & Address
         if data.get('ordering_provider_name') or data.get('ordering_provider_address'):
             provider_info = []
             if data.get('ordering_provider_name'):
                 provider_info.append(data['ordering_provider_name'])
             if data.get('ordering_provider_address'):
                 provider_info.append(data['ordering_provider_address'])
-            form_data['5 ORDERING PROVIDER OFFICE NAME  ADDRESS'] = '\n'.join(provider_info)
+            form_data['ORDERINGPROVIDEROFFICENAMEADDRESS[0]'] = '\n'.join(provider_info)
 
-        # Field 6: IHS Provider - default to NO
-        form_data['6 INDIAN HEALTH SERVICES IHS PROVIDERTRIBAL HEALTH PROGRAM THP_NO'] = True
+        # HISTHP[0] - IHS/THP Provider checkbox (0=NO, 1=YES) - default to NO
+        form_data['HISTHP[0]'] = 0
 
-        # Field 7: Ordering Provider Phone
+        # ORDERINGPROVIDERPHONENUMBER[0] - Provider Phone
         if data.get('ordering_provider_phone'):
-            form_data['7 ORDERING PROVIDER PHONE NUMBER 999 9999999'] = data['ordering_provider_phone']
+            form_data['ORDERINGPROVIDERPHONENUMBER[0]'] = data['ordering_provider_phone']
 
-        # Field 8: Ordering Provider Fax
+        # ORDERINGPROVIDERFAXNUMBER[0] - Provider Fax
         if data.get('ordering_provider_fax'):
-            form_data['8 ORDERING PROVIDER FAX NUMBER 999 9999999'] = data['ordering_provider_fax']
+            form_data['ORDERINGPROVIDERFAXNUMBER[0]'] = data['ordering_provider_fax']
 
-        # Field 9: Ordering Provider Secure Email
+        # ORDERINGPROVIDERSECUREEMAILADDRESS[0] - Provider Email
         if data.get('ordering_provider_email'):
-            form_data['9 ORDERING PROVIDER SECURE EMAIL ADDRESS'] = data['ordering_provider_email']
+            form_data['ORDERINGPROVIDERSECUREEMAILADDRESS[0]'] = data['ordering_provider_email']
 
-        # Section II: Type of Care Request
-        # Field 10: Is care needed within 48 hours - default to NO
-        form_data['10 IS CARE NEEDED WITHIN 48 HOURS Based on the clinical need of the patient_NO'] = True
+        # RadioButtonList[0] - Is care needed within 48 hours? (0=NO)
+        form_data['RadioButtonList[0]'] = 0  # NO by default
 
-        # Field 11: Is this a continuation of care
-        # YES if VA 10-7080, NO if referral sheet
+        # RadioButtonList[1] - Is this a continuation of care?
+        # 0=NO (new services), 1=YES (re-authorization from VA 10-7080)
         is_continuation = data.get('is_continuation_of_care', False)
-        if is_continuation:
-            form_data['11 IS THIS A CONTINUATION OF CARE_YES'] = True
-        else:
-            form_data['11 IS THIS A CONTINUATION OF CARE_NO'] = True
+        form_data['RadioButtonList[1]'] = 1 if is_continuation else 0
 
-        # Field 12: Is this a referral to another specialty - default to NO
-        form_data['12 IS THIS A REFERRAL TO ANOTHER SPECIALTY_NO'] = True
+        # RadioButtonList[2] - Is this a referral to another specialty? (0=NO)
+        form_data['RadioButtonList[2]'] = 0  # NO by default
 
-        # Field 13: Diagnosis Codes (ICD-10)
+        # SPECIALTY[0] - Medical Specialty
+        if data.get('specialty'):
+            form_data['SPECIALTY[0]'] = data['specialty']
+
+        # DIAGNOSISCODES[0] - Diagnosis Codes (ICD-10)
         if data.get('icd10_codes'):
-            form_data['13 DIAGNOSIS CODES ICD10'] = data['icd10_codes']
+            form_data['DIAGNOSISCODES[0]'] = data['icd10_codes']
 
-        # Field 14: Diagnosis Description
+        # DIAGNOSISDESCRIPTION[0] - Diagnosis Description
         if data.get('diagnosis_primary'):
-            form_data['14 DIAGNOSIS DESCRIPTION'] = data['diagnosis_primary']
+            form_data['DIAGNOSISDESCRIPTION[0]'] = data['diagnosis_primary']
 
-        # Field 15-16: CPT/HCPCS Codes (if available)
+        # PROVISIONALDIAGNOSIS[0] - Provisional Diagnosis (alternative field)
+        if data.get('diagnosis_primary') and not data.get('diagnosisdescription'):
+            form_data['PROVISIONALDIAGNOSIS[0]'] = data['diagnosis_primary']
+
+        # REQUESTEDCPTHCPCSCODE[0] - CPT/HCPCS Codes
         if data.get('cpt_codes'):
-            form_data['15 REQUESTED CPTHCPCS CODE'] = data['cpt_codes']
+            form_data['REQUESTEDCPTHCPCSCODE[0]'] = data['cpt_codes']
+
+        # DESCRIPTIONCPTHCPCSCODE[0] - Description of CPT/HCPCS
         if data.get('cpt_description'):
-            form_data['16 DESCRIPTION CPTHCPCS CODE'] = data['cpt_description']
+            form_data['DESCRIPTIONCPTHCPCSCODE[0]'] = data['cpt_description']
 
-        # Field 17: Geriatric and Extended Care checkboxes
-        care_type_lower = (data.get('care_type') or '').lower()
-        service_requested_lower = (data.get('service_requested') or '').lower()
+        # RadioButtonList[3] - Geriatric and Extended Care service type
+        # This is a multi-select radio button group (0-6 options)
+        # For now, we'll use TextField1[0] for service details
 
-        # Check for different service types
-        if 'nursing home' in care_type_lower or 'snf' in care_type_lower:
-            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_COMMUNITY NURSING HOME'] = True
-
-        if 'hospice' in care_type_lower or 'palliative' in care_type_lower:
-            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_HOSPICEPALLIATIVE CARE'] = True
-
-        if 'home health' in care_type_lower or 'skilled' in service_requested_lower or 'home health' in service_requested_lower:
-            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_SKILLED HOME HEALTH CARE'] = True
-
-        if 'homemaker' in service_requested_lower or 'hha' in service_requested_lower or 'home health aide' in service_requested_lower:
-            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_HOMEMAKERHOME HEALTH AIDE'] = True
-
-        if 'respite' in care_type_lower:
-            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_RESPITE'] = True
-
-        if 'adult day' in care_type_lower:
-            form_data['17 GERIATRIC AND EXTENDED CARE Note Add needed details to the justification section_COMMUNITY ADULT DAY HEALTH CARE'] = True
-
-        # Field 18: Reason for Request (combine multiple fields)
+        # TextField1[0] - Reason for Request / Justification
         reason_parts = []
         if data.get('diagnosis_primary'):
             reason_parts.append(f"Diagnosis: {data['diagnosis_primary']}")
@@ -6241,23 +6226,30 @@ async def fill_va_rfs_form(
             reason_parts.append(f"Medications: {data['medications']}")
         if data.get('allergies'):
             reason_parts.append(f"Allergies: {data['allergies']}")
+        if data.get('emergency_contact_name') or data.get('emergency_contact_phone'):
+            contact_info = []
+            if data.get('emergency_contact_name'):
+                contact_info.append(data['emergency_contact_name'])
+            if data.get('emergency_contact_phone'):
+                contact_info.append(data['emergency_contact_phone'])
+            reason_parts.append(f"Emergency Contact: {' - '.join(contact_info)}")
 
         if reason_parts:
-            form_data['18 REASON FOR REQUEST To avoid delays in care include appropriate documentation such as office notes current treatment plans clinical history laboratory results radiology results or medications to support the medical necessity of services requested'] = '\n\n'.join(reason_parts)
+            form_data['TextField1[0]'] = '\n\n'.join(reason_parts)
 
-        # Field 19: Ordering Provider Name (Printed)
+        # ORDERINGPROVIDERSNAMEPRINTED[0] - Provider Name (Printed)
         if data.get('ordering_provider_name'):
-            form_data['19 ORDERING PROVIDER NAME PRINTED'] = data['ordering_provider_name']
+            form_data['ORDERINGPROVIDERSNAMEPRINTED[0]'] = data['ordering_provider_name']
 
-        # Field 20: Ordering Provider NPI
+        # ORDERINGPROVIDERSNPI[0] - Provider NPI
         if data.get('ordering_provider_npi'):
-            form_data['20 ORDERING PROVIDER NPI'] = data['ordering_provider_npi']
+            form_data['ORDERINGPROVIDERSNPI[0]'] = data['ordering_provider_npi']
 
-        # Field 21: Signature - leave blank for manual signature
+        # SignatureField11[0] - Signature field - leave blank for manual signature
 
-        # Field 22: Today's Date
+        # Date[0] - Today's Date
         today = datetime.now().strftime('%m/%d/%Y')
-        form_data['22 TODAYS DATE MMDDYYYY'] = today
+        form_data['Date[0]'] = today
 
         # Fill the PDF form
         filled_pdf = pdf.fill(form_data)
