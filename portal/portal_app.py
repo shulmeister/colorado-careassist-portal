@@ -5917,6 +5917,7 @@ This will be used to populate VA Form 10-10172 RFS (Request for Service).
 Return a JSON object with these EXACT keys (use empty string "" if field not found):
 
 {
+  "document_type": "",
   "veteran_last_name": "",
   "veteran_first_name": "",
   "veteran_middle_name": "",
@@ -5949,6 +5950,10 @@ Return a JSON object with these EXACT keys (use empty string "" if field not fou
   "admission_date": "",
   "discharge_date": ""
 }
+
+CRITICAL - Set document_type field:
+- If this is VA Form 10-7080 (has "VA FORM 10-7080" header) → document_type: "VA_10_7080"
+- If this is a referral face sheet, contact sheet, or hospital referral → document_type: "REFERRAL_FACE_SHEET"
 
 IMPORTANT INSTRUCTIONS:
 
@@ -6208,9 +6213,19 @@ async def fill_va_rfs_form(
         if data.get('cpt_description'):
             form_data['DESCRIPTIONCPTHCPCSCODE[0]'] = data['cpt_description']
 
-        # RadioButtonList[3] - Geriatric and Extended Care service type
-        # This is a multi-select radio button group (0-6 options)
-        # For now, we'll use TextField1[0] for service details
+        # RadioButtonList[3] - Geriatric and Extended Care service type (single-select)
+        # Values: 0=None, 1=Nursing Home, 2=Home Infusion, 3=Hospice, 4=Skilled Home Health,
+        #         5=Homemaker/Home Health Aide, 6=Respite, 7=Adult Day Care
+        # Per user: ONLY use 5 (HHA) or 6 (Respite), never anything else
+        service_text = (data.get('service_requested') or '').lower()
+        orders_text = (data.get('orders') or '').lower()
+        combined_service = service_text + ' ' + orders_text
+
+        if 'respite' in combined_service:
+            form_data['RadioButtonList[3]'] = 6  # Respite
+        elif any(keyword in combined_service for keyword in ['hha', 'homemaker', 'home health aide']):
+            form_data['RadioButtonList[3]'] = 5  # Homemaker/Home Health Aide
+        # If neither detected, don't set the field (leave blank for manual selection)
 
         # TextField1[0] - Reason for Request / Justification
         reason_parts = []
@@ -6983,6 +6998,9 @@ async def va_rfs_converter(
     </div>
 
     <script>
+        // Initialize document type (default to face sheet, updated from AI extraction)
+        window.rfsDocumentType = 'REFERRAL_FACE_SHEET';
+
         // File upload handling
         const uploadBox = document.getElementById('uploadBox');
         const pdfFile = document.getElementById('pdfFile');
@@ -7054,6 +7072,10 @@ async def va_rfs_converter(
         }
 
         function populateFormFields(data) {
+            // Store document type for determining continuation of care
+            window.rfsDocumentType = data.document_type || 'REFERRAL_FACE_SHEET';
+            console.log('Document type detected:', window.rfsDocumentType);
+
             // Veteran info
             document.getElementById('vet-last-name').value = data.veteran_last_name || '';
             document.getElementById('vet-first-name').value = data.veteran_first_name || '';
@@ -7215,7 +7237,7 @@ async def va_rfs_converter(
                 referral_date: formatDateForDisplay(document.getElementById('referral-date').value),
                 admission_date: formatDateForDisplay(document.getElementById('admission-date').value),
                 discharge_date: formatDateForDisplay(document.getElementById('discharge-date').value),
-                is_continuation_of_care: document.getElementById('service-homehealth').checked || false
+                is_continuation_of_care: (window.rfsDocumentType === 'VA_10_7080')  // YES for VA 10-7080, NO for face sheets
             };
 
             try {
