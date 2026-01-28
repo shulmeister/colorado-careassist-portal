@@ -5337,41 +5337,67 @@ CRITICAL INSTRUCTIONS:
 
 Extract every field you can find. Be thorough."""
 
-        # Call Gemini API
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            gemini_response = await client.post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent",
-                headers={
-                    "x-goog-api-key": GEMINI_API_KEY,
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "contents": [{
-                        "parts": [
-                            {"text": extraction_prompt},
-                            {
-                                "inline_data": {
-                                    "mime_type": "application/pdf",
-                                    "data": pdf_base64
-                                }
-                            }
-                        ]
-                    }],
-                    "generationConfig": {
-                        "temperature": 0.1,
-                        "responseMimeType": "application/json"
-                    }
-                }
-            )
+        # Call Gemini API - try multiple models
+        models_to_try = ["gemini-1.5-flash", "gemini-1.5-pro"]
+        gemini_response = None
+        last_error = None
 
-        if gemini_response.status_code != 200:
-            raise Exception(f"Gemini API error: {gemini_response.text}")
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            for model in models_to_try:
+                try:
+                    gemini_response = await client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                        headers={
+                            "x-goog-api-key": GEMINI_API_KEY,
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "contents": [{
+                                "parts": [
+                                    {"text": extraction_prompt},
+                                    {
+                                        "inline_data": {
+                                            "mime_type": "application/pdf",
+                                            "data": pdf_base64
+                                        }
+                                    }
+                                ]
+                            }],
+                            "generationConfig": {
+                                "temperature": 0.1
+                            }
+                        }
+                    )
+
+                    if gemini_response.status_code == 200:
+                        logger.info(f"Successfully used Gemini model: {model}")
+                        break
+                    else:
+                        last_error = f"{model}: {gemini_response.text}"
+                        logger.warning(f"Model {model} failed: {gemini_response.text}")
+                except Exception as e:
+                    last_error = f"{model}: {str(e)}"
+                    logger.warning(f"Model {model} exception: {e}")
+                    continue
+
+        if not gemini_response or gemini_response.status_code != 200:
+            raise Exception(f"All Gemini models failed. Last error: {last_error}")
 
         result = gemini_response.json()
 
         # Extract the JSON from Gemini response
         if "candidates" in result and len(result["candidates"]) > 0:
             content_text = result["candidates"][0]["content"]["parts"][0]["text"]
+
+            # Clean up the response - sometimes Gemini wraps JSON in markdown
+            content_text = content_text.strip()
+            if content_text.startswith("```json"):
+                content_text = content_text[7:]
+            if content_text.startswith("```"):
+                content_text = content_text[3:]
+            if content_text.endswith("```"):
+                content_text = content_text[:-3]
+            content_text = content_text.strip()
 
             # Parse the JSON response
             extracted_data = json.loads(content_text)
@@ -5382,22 +5408,26 @@ Extract every field you can find. Be thorough."""
                 "message": f"PDF parsed successfully using Gemini AI"
             })
         else:
-            raise Exception("No response from Gemini")
+            raise Exception(f"No candidates in Gemini response: {json.dumps(result)}")
 
     except json.JSONDecodeError as e:
-        logger.error(f"JSON parse error: {e}")
+        error_msg = f"JSON parse error: {str(e)}"
+        logger.error(error_msg)
         return JSONResponse({
             "success": False,
-            "error": f"Failed to parse Gemini response: {str(e)}",
-            "message": "AI extraction failed"
-        }, status_code=500)
+            "error": error_msg,
+            "message": f"AI extraction failed: {error_msg}"
+        }, status_code=200)  # Return 200 so frontend can show error
     except Exception as e:
-        logger.error(f"VA form parsing error: {e}")
+        error_msg = f"VA form parsing error: {str(e)}"
+        logger.error(error_msg)
+        import traceback
+        traceback.print_exc()
         return JSONResponse({
             "success": False,
-            "error": str(e),
-            "message": "Failed to parse PDF"
-        }, status_code=500)
+            "error": error_msg,
+            "message": f"Failed to parse PDF: {error_msg}"
+        }, status_code=200)  # Return 200 so frontend can show error
 
 
 @app.get("/va-plan-of-care", response_class=HTMLResponse)
