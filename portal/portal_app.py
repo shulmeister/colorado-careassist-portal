@@ -5322,20 +5322,26 @@ Return a JSON object with these EXACT keys (use empty string "" if field not fou
   "adl_dependencies": []
 }
 
-CRITICAL INSTRUCTIONS:
-1. Extract ALL dates in MM/DD/YYYY format (e.g., 02/04/2026)
-2. For veteran name, split into last_name, first_name, middle_name
-3. For PCP/provider name, split into pcp_last_name, pcp_first_name
-4. last_4_ssn should be only the last 4 digits
-5. va_consult_number is the referral number (format: VA followed by digits)
-6. referral_issue_date is when the VA issued this referral
-7. first_appointment_date is when services will start
-8. hours_per_week is the authorized hours (may be a range like "7 to 11")
-9. authorization_duration is how long the authorization lasts (e.g., "180 Days")
-10. adl_dependencies is an array of ADL needs (e.g., ["Bathing", "Dressing", "Ambulating"])
-11. Return ONLY valid JSON, no markdown, no explanation
+CRITICAL INSTRUCTIONS FOR DATES:
+1. ALL dates must be in MM/DD/YYYY format (e.g., 02/04/2026)
+2. "referral_issue_date" - Look for "Date Referral Issued" or "Issue Date" or "Referral Date" - this is CRITICAL for the filename
+3. "first_appointment_date" - Look for "First Appt Date" or "Start Date" or "First Appointment" - this is CRITICAL for the filename
+4. "expiration_date" - Look for "Expiration Date" or "Valid Through" or "Authorization Expires"
+5. "date_of_birth" - Veteran's date of birth
+6. If you see a date on the form but aren't sure which field it belongs to, look at the context/label near it
+7. Search the ENTIRE document for these dates - they may be on different pages
 
-Extract every field you can find. Be thorough."""
+OTHER CRITICAL FIELDS:
+- veteran name: Split "LAST, FIRST MIDDLE" into separate fields
+- va_consult_number: The referral/consult number starting with "VA" (e.g., VA0055325584)
+- pcp name: Provider/physician name - split into last and first
+- pcp_npi: Provider NPI number
+- last_4_ssn: Only the last 4 digits of SSN
+- hours_per_week: Authorized hours (may be range like "7 to 11")
+- authorization_duration: How long authorized (e.g., "180 Days")
+- adl_dependencies: Array of ADL needs ["Bathing", "Dressing", "Ambulating", etc.]
+
+Return ONLY valid JSON, no markdown code fences, no explanation. Extract EVERY field you can find."""
 
         # Call Gemini API - try multiple models (same as ai_document_parser.py)
         models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
@@ -5668,18 +5674,42 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
                     // Populate form fields with extracted data
                     const data = result.data;
 
+                    // Debug: Log extracted data to console
+                    console.log('Extracted data from Gemini:', data);
+                    console.log('Date fields:', {
+                        referral_issue_date: data.referral_issue_date,
+                        first_appointment_date: data.first_appointment_date,
+                        expiration_date: data.expiration_date
+                    });
+
                     // Helper function to convert date formats
                     function formatDateForInput(dateStr) {
-                        if (!dateStr) return '';
-                        // Convert MM/DD/YYYY or MM-DD-YYYY to YYYY-MM-DD
-                        const parts = dateStr.split(/[/-]/);
+                        if (!dateStr || dateStr === '') {
+                            console.warn('Empty date received:', dateStr);
+                            return '';
+                        }
+
+                        // Already in YYYY-MM-DD format
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+                            return dateStr;
+                        }
+
+                        // Convert MM/DD/YYYY or MM-DD-YYYY or M/D/YYYY to YYYY-MM-DD
+                        const parts = dateStr.trim().split(/[/-]/);
                         if (parts.length === 3) {
                             const month = parts[0].padStart(2, '0');
                             const day = parts[1].padStart(2, '0');
-                            const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
-                            return `${year}-${month}-${day}`;
+                            let year = parts[2];
+                            if (year.length === 2) {
+                                year = '20' + year;
+                            }
+                            const formatted = `${year}-${month}-${day}`;
+                            console.log(`Converted date: ${dateStr} -> ${formatted}`);
+                            return formatted;
                         }
-                        return dateStr;
+
+                        console.warn('Could not parse date:', dateStr);
+                        return '';
                     }
 
                     // Populate veteran information
