@@ -20,9 +20,17 @@
 - Retell AI voice agent (deployed on Heroku)
 - 18-node conversation flow
 - Financial data tools (stocks, crypto via Alpha Vantage)
-- WellSky integration (caregiver call-outs, scheduling)
-- RingCentral messaging (escalations, transfers)
-- PostgreSQL database
+- **WellSky integration** (FULLY OPERATIONAL):
+  - Shift updates (mark open, assign, cancel)
+  - Care Alerts (add notes to client/caregiver)
+  - **Admin Tasks** (create coverage/issue tasks) ← NEW!
+  - Caregiver/client lookups
+  - Schedule queries
+- **RingCentral integration**:
+  - SMS webhooks (all company numbers)
+  - Team Messaging (Schedulers, Biz Dev chats)
+  - Direct messages (Jason ext 101, Cynthia ext 105)
+- PostgreSQL database (Memory, Modes, Failures)
 
 ### ✅ Phase 1 Complete: Memory System (Deployed v504)
 
@@ -239,6 +247,23 @@ python memory_cli.py audit <memory_id>
 - **Team Messaging webhook** - Auto-renewal script created (`gigi/renew_team_webhook.py`)
   - RingCentral limits Team Messaging webhooks to 7 days max
   - Add to Heroku Scheduler: Daily 3am run `python gigi/renew_team_webhook.py`
+
+### WellSky Task Integration ✅ (NEW - Autonomous Mode)
+- **Call-out workflow** now creates WellSky admin task for finding replacement
+  - Task priority: URGENT
+  - Assigned to scheduler (if WELLSKY_SCHEDULER_USER_ID configured)
+  - Linked to client record
+  - Includes shift details, caregiver name, reason
+- **Client issue workflow** now creates WellSky admin task
+  - Task priority based on issue severity (urgent/high/normal)
+  - Assigned to care manager (if WELLSKY_CARE_MANAGER_USER_ID configured)
+  - Requires follow-up call within 30 minutes
+- **WellSky API verified working**
+  - Fixed WELLSKY_API_URL (was wrong, now `https://connect.clearcareonline.com/v1`)
+  - Authentication: ✅ Working
+  - Practitioners endpoint: ✅ Working
+  - Patients endpoint: ✅ Working
+  - Appointments endpoint: ✅ Working (requires caregiverId/clientId param)
 
 ### Manual Step Required:
 - **BeeTexting webhook** needs dashboard config (API doesn't support programmatic setup)
