@@ -229,6 +229,14 @@ except Exception as e:
     import traceback
     logger.error(traceback.format_exc())
 
+# ==================== CONVENIENCE REDIRECTS ====================
+from fastapi.responses import RedirectResponse
+
+@app.get("/shadow")
+async def redirect_shadow():
+    """Redirect /shadow to /gigi/shadow"""
+    return RedirectResponse(url="/gigi/shadow")
+
 # Debug: Log all routes
 logger.info("=== Registered Routes ===")
 for route in app.routes:
