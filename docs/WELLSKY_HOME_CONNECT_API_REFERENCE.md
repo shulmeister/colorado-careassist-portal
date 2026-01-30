@@ -65,35 +65,24 @@ WellSky Personal Care Home Connect API is an enterprise-class API system that en
 
 **Endpoint:** `POST /oauth/accesstoken`
 
-**Request:**
-```json
-{
-  "client_id": "your_client_id",
-  "client_secret": "your_client_secret",
-  "grant_type": "client_credentials"
-}
-```
-
-**Response:**
-```json
-{
-  "status": "success",
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "expires_in": "3600",
-  "token_type": "Bearer",
-  "issued_at": "1706554800000"
-}
-```
-
 **Usage:**
 ```http
 Authorization: Bearer {access_token}
 ```
+*(Note: Do not use `BearerToken` - use standard `Bearer`)*
 
-**Important:** The response includes three tokens:
-- `access_token` (auth_token) - Use this for Connect API calls
-- `graphql_token` - For GraphQL API
-- `drf_token` - For Django REST Framework endpoints
+---
+
+## Endpoint Standards
+
+1.  **Plurality:**
+    *   `v1/practitioners/` (Plural)
+    *   `v1/patients/` (Plural)
+    *   `v1/appointment/` (**Singular**)
+
+2.  **Trailing Slashes:**
+    *   REQUIRED for lists: `v1/patients/`
+    *   REQUIRED for details: `v1/patients/123/`
 
 ---
 

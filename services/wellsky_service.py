@@ -599,7 +599,7 @@ class WellSkyService:
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         headers = {
-            "Authorization": f"BearerToken {token}",  # WellSky uses "BearerToken" not "Bearer"
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         }
 
@@ -665,17 +665,15 @@ class WellSkyService:
                 clients = [c for c in clients if c.status == status]
             return clients[offset:offset + limit]
 
-        params = {"limit": limit, "offset": offset}
-        if status:
-            params["status"] = status.value
-        if modified_since:
-            params["modified_since"] = modified_since.isoformat()
-
-        success, data = self._make_request("GET", "/clients", params=params)
-
-        if success and "clients" in data:
-            return [self._parse_client(c) for c in data["clients"]]
-        return []
+        # Real API Implementation (FHIR)
+        active = None
+        if status == ClientStatus.ACTIVE:
+            active = True
+        elif status == ClientStatus.DISCHARGED:
+            active = False
+            
+        page = offset // limit if limit > 0 else 0
+        return self.search_patients(active=active, limit=limit, page=page)
 
     def get_client(self, client_id: str) -> Optional[WellSkyClient]:
         """Get a single client by ID"""
@@ -810,7 +808,7 @@ class WellSkyService:
 
         success, data = self._make_request(
             "POST",
-            "/v1/patients/_search/",
+            "patients/_search/",
             params=params,
             data=search_payload
         )
@@ -848,7 +846,7 @@ class WellSkyService:
         if self.is_mock_mode:
             return self._mock_clients.get(patient_id)
 
-        success, data = self._make_request("GET", f"/v1/patients/{patient_id}/")
+        success, data = self._make_request("GET", f"patients/{patient_id}/")
 
         if not success:
             logger.error(f"Get patient {patient_id} failed: {data}")
@@ -972,7 +970,7 @@ class WellSkyService:
                 "display": referral_source
             })
 
-        success, data = self._make_request("POST", "/v1/patients/", data=fhir_patient)
+        success, data = self._make_request("POST", "patients/", data=fhir_patient)
 
         if not success:
             logger.error(f"Create patient failed: {data}")
@@ -993,23 +991,12 @@ class WellSkyService:
     def _parse_fhir_patient(self, fhir_data: Dict) -> WellSkyClient:
         """
         Parse FHIR Patient resource into WellSkyClient object.
-
-        FHIR structure:
-        {
-            "resourceType": "Patient",
-            "id": "2870130",
-            "active": true,
-            "name": [{"family": "Johnson", "given": ["Margaret"]}],
-            "telecom": [{"system": "phone", "value": "3035551234"}],
-            "address": [{"city": "Denver", "state": "CO"}],
-            "meta": {
-                "tag": [
-                    {"code": "isClient", "display": "true"},
-                    {"code": "status", "display": "80"}
-                ]
-            }
-        }
+        Handles both direct resource and Bundle entry wrapper.
         """
+        # If this is a Bundle entry, extract the actual resource
+        if "resource" in fhir_data:
+            fhir_data = fhir_data["resource"]
+
         # Extract ID
         client_id = str(fhir_data.get("id", ""))
 
@@ -1139,17 +1126,16 @@ class WellSkyService:
                 caregivers = [c for c in caregivers if day_name in c.available_days]
             return caregivers[offset:offset + limit]
 
-        params = {"limit": limit, "offset": offset}
-        if status:
-            params["status"] = status.value
-        if available_on:
-            params["available_on"] = available_on.isoformat()
-
-        success, data = self._make_request("GET", "/caregivers", params=params)
-
-        if success and "caregivers" in data:
-            return [self._parse_caregiver(c) for c in data["caregivers"]]
-        return []
+        # Real API Implementation (FHIR)
+        active = None
+        if status == CaregiverStatus.ACTIVE:
+            active = True
+        elif status in (CaregiverStatus.INACTIVE, CaregiverStatus.TERMINATED):
+            active = False
+            
+        page = offset // limit if limit > 0 else 0
+        # search_practitioners defaults to is_hired=True, which is correct for caregivers
+        return self.search_practitioners(active=active, limit=limit, page=page)
 
     def get_caregiver(self, caregiver_id: str) -> Optional[WellSkyCaregiver]:
         """Get a single caregiver by ID"""
@@ -1287,7 +1273,7 @@ class WellSkyService:
 
         success, data = self._make_request(
             "POST",
-            "/v1/practitioners/_search/",
+            "practitioners/_search/",
             params=params,
             data=search_payload
         )
@@ -1325,7 +1311,7 @@ class WellSkyService:
         if self.is_mock_mode:
             return self._mock_caregivers.get(practitioner_id)
 
-        success, data = self._make_request("GET", f"/v1/practitioners/{practitioner_id}/")
+        success, data = self._make_request("GET", f"practitioners/{practitioner_id}/")
 
         if not success:
             logger.error(f"Get practitioner {practitioner_id} failed: {data}")
@@ -1340,23 +1326,12 @@ class WellSkyService:
     def _parse_fhir_practitioner(self, fhir_data: Dict) -> WellSkyCaregiver:
         """
         Parse FHIR Practitioner resource into WellSkyCaregiver object.
-
-        FHIR structure:
-        {
-            "resourceType": "Practitioner",
-            "id": "123",
-            "active": true,
-            "name": [{"family": "Lopez", "given": ["Maria"]}],
-            "telecom": [{"system": "phone", "value": "3035551234"}],
-            "address": [{"city": "Denver", "state": "CO"}],
-            "meta": {
-                "tag": [
-                    {"code": "isHired", "display": "true"},
-                    {"code": "profileTags", "display": "45,67"}
-                ]
-            }
-        }
+        Handles both direct resource and Bundle entry wrapper.
         """
+        # If this is a Bundle entry, extract the actual resource
+        if "resource" in fhir_data:
+            fhir_data = fhir_data["resource"]
+
         # Extract ID
         caregiver_id = str(fhir_data.get("id", ""))
 
@@ -1498,23 +1473,44 @@ class WellSkyService:
                 shifts = [s for s in shifts if s.status == status]
             return shifts[:limit]
 
-        params = {"limit": limit}
-        if date_from:
-            params["date_from"] = date_from.isoformat()
+        # Real API Implementation
+        start_date = date_from or date.today()
+        # Handle date range logic for additional_days
+        days = 0
         if date_to:
-            params["date_to"] = date_to.isoformat()
-        if client_id:
-            params["client_id"] = client_id
-        if caregiver_id:
-            params["caregiver_id"] = caregiver_id
+            delta = (date_to - start_date).days
+            days = max(0, min(delta, 6))  # Max 6 additional days per API limitation
+
+        all_shifts = []
+
+        if client_id or caregiver_id:
+            # Direct search
+            shifts = self.search_appointments(
+                caregiver_id=caregiver_id,
+                client_id=client_id,
+                start_date=start_date,
+                additional_days=days,
+                limit=limit
+            )
+            all_shifts.extend(shifts)
+        else:
+            # Iterate through active clients if no IDs provided
+            # This is heavy but necessary due to API limitations
+            active_clients = self.get_clients(status=ClientStatus.ACTIVE, limit=1000)
+            for client in active_clients:
+                shifts = self.search_appointments(
+                    client_id=client.id,
+                    start_date=start_date,
+                    additional_days=days,
+                    limit=limit
+                )
+                all_shifts.extend(shifts)
+
+        # Filter by status if needed (API doesn't support status filter in search)
         if status:
-            params["status"] = status.value
+            all_shifts = [s for s in all_shifts if s.status == status]
 
-        success, data = self._make_request("GET", "/shifts", params=params)
-
-        if success and "shifts" in data:
-            return [self._parse_shift(s) for s in data["shifts"]]
-        return []
+        return all_shifts[:limit]
 
     def get_open_shifts(self, date_from: date = None, date_to: date = None) -> List[WellSkyShift]:
         """Get open (unfilled) shifts"""
@@ -1635,7 +1631,7 @@ class WellSkyService:
 
             success, data = self._make_request(
                 "POST",
-                "/v1/appointment/_search/",
+                "appointment/_search/",
                 params=params,
                 data=search_payload
             )
@@ -1661,7 +1657,7 @@ class WellSkyService:
 
             success, data = self._make_request(
                 "GET",
-                "/v1/appointment/",
+                "appointment/",
                 params=params
             )
 
@@ -1698,7 +1694,7 @@ class WellSkyService:
         if self.is_mock_mode:
             return self._mock_shifts.get(appointment_id)
 
-        success, data = self._make_request("GET", f"/v1/appointment/{appointment_id}/")
+        success, data = self._make_request("GET", f"appointment/{appointment_id}/")
 
         if not success:
             logger.error(f"Get appointment {appointment_id} failed: {data}")
@@ -1713,20 +1709,12 @@ class WellSkyService:
     def _parse_fhir_appointment(self, fhir_data: Dict) -> WellSkyShift:
         """
         Parse FHIR Appointment resource into WellSkyShift object.
-
-        FHIR structure:
-        {
-            "resourceType": "Appointment",
-            "id": "109131818",
-            "status": "SCHEDULED",
-            "start": "2026-01-29T14:00:00+00:00",
-            "end": "2026-01-29T18:00:00+00:00",
-            "caregiver": {"id": "3306118"},
-            "client": {"id": "2870130"},
-            "position": {"latitude": 39.7392, "longitude": -104.9903},
-            "tasks": [{"id": "123", "description": "Meal prep", "status": "NOT_COMPLETE"}]
-        }
+        Handles both direct resource and Bundle entry wrapper.
         """
+        # If this is a Bundle entry, extract the actual resource
+        if "resource" in fhir_data:
+            fhir_data = fhir_data["resource"]
+
         from datetime import datetime as dt
 
         # Extract IDs

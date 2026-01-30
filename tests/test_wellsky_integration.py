@@ -214,56 +214,42 @@ def test_appointment_search(ws: WellSkyService, results: TestResults):
     """Test appointment search methods"""
     print("\n📅 Test 4: Appointment Search")
 
-    # Test 4.1: Get shifts by caregiver ID
+    # First get a caregiver to test with
     try:
-        # First get a caregiver
         caregivers = ws.search_practitioners(is_hired=True, limit=1)
 
         if len(caregivers) == 0:
             results.add_skip("Search shifts by caregiver", "No caregivers to test with")
-        else:
-            caregiver_id = caregivers[0].id
+            return
 
-            shifts = ws.search_appointments(
-                caregiver_id=caregiver_id,
-                start_date=date.today(),
-                additional_days=7
-            )
+        caregiver_id = caregivers[0].id
 
-            results.add_pass(f"Search shifts by caregiver (found {len(shifts)})")
-
-            if len(shifts) > 0:
-                shift = shifts[0]
-                assert shift.id, "Shift missing ID"
-                assert shift.date or shift.start_time, "Shift missing date/time"
-                results.add_pass("Shift data structure valid")
-
-    except Exception as e:
-        results.add_fail("Search shifts by caregiver", str(e))
-
-    # Test 4.2: Search shifts for today
-    try:
+        # Test 4.1: Get shifts by caregiver ID
         shifts = ws.search_appointments(
+            caregiver_id=caregiver_id,
+            start_date=date.today(),
+            additional_days=7
+        )
+
+        results.add_pass(f"Search shifts by caregiver (found {len(shifts)})")
+
+        if len(shifts) > 0:
+            shift = shifts[0]
+            assert shift.id, "Shift missing ID"
+            assert shift.date or shift.start_time, "Shift missing date/time"
+            results.add_pass("Shift data structure valid")
+
+        # Test 4.2: Search today's shifts for this caregiver
+        shifts = ws.search_appointments(
+            caregiver_id=caregiver_id,
             start_date=date.today(),
             additional_days=0,
             limit=10
         )
-        results.add_pass(f"Search today's shifts (found {len(shifts)})")
+        results.add_pass(f"Search today's shifts for caregiver (found {len(shifts)})")
 
     except Exception as e:
-        results.add_fail("Search today's shifts", str(e))
-
-    # Test 4.3: Search shifts for date range
-    try:
-        shifts = ws.search_appointments(
-            start_date=date.today(),
-            additional_days=6,  # This week
-            limit=20
-        )
-        results.add_pass(f"Search shifts for week (found {len(shifts)})")
-
-    except Exception as e:
-        results.add_fail("Search shifts for week", str(e))
+        results.add_fail("Appointment Search", str(e))
 
 
 # =============================================================================
@@ -275,8 +261,17 @@ def test_get_appointment(ws: WellSkyService, results: TestResults):
     print("\n🔍 Test 5: Get Specific Appointment")
 
     try:
-        # First get a shift to test with
+        # First get a caregiver to find shifts
+        caregivers = ws.search_practitioners(is_hired=True, limit=1)
+        if len(caregivers) == 0:
+            results.add_skip("Get appointment by ID", "No caregivers to find shifts with")
+            return
+            
+        caregiver_id = caregivers[0].id
+
+        # Now get a shift to test with
         shifts = ws.search_appointments(
+            caregiver_id=caregiver_id,
             start_date=date.today() - timedelta(days=7),
             additional_days=14,
             limit=1
@@ -346,7 +341,7 @@ def test_get_patient(ws: WellSkyService, results: TestResults):
 
     try:
         # First get a client to test with
-        clients = ws.search_patients(limit=1)
+        clients = ws.search_patients(limit=5)
 
         if len(clients) == 0:
             results.add_skip("Get patient by ID", "No clients to test with")

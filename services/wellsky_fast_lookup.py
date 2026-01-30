@@ -54,19 +54,21 @@ class WellSkyFastLookup:
             phone_number: Any format ("+1-719-555-1234", "7195551234", etc.)
 
         Returns:
-            {
-                'type': 'practitioner' or 'patient',
-                'id': WellSky ID,
-                'name': Full name,
-                'first_name': First name,
-                'last_name': Last name,
-                'status': Status string,
-                'city': City,
-                'phone': Cleaned phone,
-                'email': Email
-            }
-            or None if not found
+            Dict or None
         """
+        # Hardcoded Admin/Manager Check
+        clean_phone = phone_number.replace("+", "").replace("-", "").replace(" ", "")[-10:]
+        if clean_phone == "6039971495":
+            return {
+                'type': 'admin',
+                'id': 'admin_jason',
+                'name': 'Jason',
+                'first_name': 'Jason',
+                'last_name': 'Shulman',
+                'role': 'Owner',
+                'source': 'Hardcoded'
+            }
+
         try:
             conn = self._get_db_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -171,12 +173,12 @@ class WellSkyFastLookup:
                     'city': p.city,
                     'state': p.state,
                     'status': p.status.value if hasattr(p.status, 'value') else str(p.status),
-                    'is_hired': p.is_hired,
+                    'is_hired': True,  # search_practitioners defaults to is_hired=True
                     'is_active': p.is_active
                 }
 
-            # Try patients
-            patients = self.wellsky.search_patients(phone=phone_number, limit=1)
+            # Try patients (search all, including inactive)
+            patients = self.wellsky.search_patients(phone=phone_number, active=None, limit=1)
             if patients:
                 pt = patients[0]
                 return {

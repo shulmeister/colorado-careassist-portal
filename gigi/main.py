@@ -18,7 +18,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List, Literal
+from typing import Optional, Dict, Any, List, Literal, Tuple
 from enum import Enum
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Header
@@ -27,6 +27,10 @@ from pydantic import BaseModel, Field
 import httpx
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import WellSky service for shift management
 try:
@@ -165,6 +169,28 @@ RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID")
 RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET")
 RINGCENTRAL_SERVER = os.getenv("RINGCENTRAL_SERVER", "https://platform.ringcentral.com")
 RINGCENTRAL_JWT = os.getenv("RINGCENTRAL_JWT_TOKEN") or os.getenv("RINGCENTRAL_JWT")
+
+# =============================================================================
+# SHADOW MODE - "Gigi Brain" Visualization
+# =============================================================================
+# Allows seeing what Gigi WOULD do without actually changing data or sending texts.
+# Set GIGI_MODE=shadow in environment variables.
+
+GIGI_MODE = os.getenv("GIGI_MODE", "live").lower()
+SHADOW_LOGS = []
+
+def log_shadow_action(action: str, details: Dict[str, Any]):
+    """Log an action taken in shadow mode."""
+    entry = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "action": action,
+        "details": details
+    }
+    SHADOW_LOGS.append(entry)
+    # Keep last 100 logs
+    if len(SHADOW_LOGS) > 100:
+        SHADOW_LOGS.pop(0)
+    logger.info(f"[SHADOW MODE] {action}: {details}")
 
 # Log configuration status (not the values!)
 def _log_config_status():
@@ -510,6 +536,58 @@ app = FastAPI(
     description="After-hours AI assistant for caregivers and clients",
     version="1.0.0"
 )
+
+from fastapi.responses import HTMLResponse
+
+@app.get("/shadow", response_class=HTMLResponse)
+async def get_shadow_dashboard():
+    """Simple dashboard to view Gigi's shadow mode actions."""
+    status_color = "orange" if GIGI_MODE == "shadow" else "green"
+    html = f"""
+    <html>
+    <head>
+        <title>Gigi Brain 🧠</title>
+        <style>
+            body {{ font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }}
+            .status {{ padding: 10px; background: #f0f0f0; border-radius: 5px; border-left: 5px solid {status_color}; }}
+            .log-entry {{ border-bottom: 1px solid #eee; padding: 10px 0; }}
+            .timestamp {{ color: #666; font-size: 0.9em; }}
+            .action {{ font-weight: bold; color: #2c3e50; }}
+            pre {{ background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }}
+        </style>
+    </head>
+    <body>
+        <h1>Gigi Brain 🧠</h1>
+        <div class="status">
+            <strong>Current Mode:</strong> {GIGI_MODE.upper()}<br>
+            <small>If SHADOW, actions are logged but not executed.</small>
+        </div>
+        
+        <h2>Decision Log</h2>
+        {'<p>No actions recorded yet.</p>' if not SHADOW_LOGS else ''}
+        
+        <div id="logs">
+    """
+    
+    for log in reversed(SHADOW_LOGS):
+        html += f"""
+        <div class="log-entry">
+            <div class="timestamp">{log['timestamp']}</div>
+            <div class="action">{log['action']}</div>
+            <pre>{json.dumps(log['details'], indent=2)}</pre>
+        </div>
+        """
+        
+    html += """
+        </div>
+        <script>
+            // Auto-refresh every 5 seconds
+            setTimeout(() => window.location.reload(), 5000);
+        </script>
+    </body>
+    </html>
+    """
+    return html
 
 async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None):
     """Log event to the central portal activity stream"""
@@ -1706,6 +1784,16 @@ async def execute_caregiver_call_out(
     # =========================================================================
     # If offshore scheduler or human coordinator is already processing this
     # shift, we get a lock conflict and tell the caregiver to wait.
+
+    # SHADOW MODE: Skip lock acquisition (since we aren't really processing)
+    if GIGI_MODE == "shadow":
+        logger.info(f"SHADOW MODE: Skipping shift lock for {shift_id}")
+        return await _execute_caregiver_call_out_locked(
+            caregiver_id=caregiver_id,
+            shift_id=shift_id,
+            reason=reason
+        )
+
     if SHIFT_LOCK_AVAILABLE and shift_lock_manager:
         try:
             with shift_lock_manager.acquire_shift_lock(
@@ -1834,6 +1922,51 @@ async def _execute_caregiver_call_out_locked(
     client_name = shift.client_name if shift else "Unknown Client"
     client_id = shift.client_id if shift else None
     shift_time = shift.start_time.strftime("%B %d at %I:%M %p") if shift else "Unknown Time"
+
+    # =========================================================================
+    # SHADOW MODE INTERCEPTION
+    # =========================================================================
+    if GIGI_MODE == "shadow":
+        logger.info(f"SHADOW MODE: Intercepting call-out for {shift_id}")
+
+        # Log Step A
+        log_shadow_action("UPDATE_WELLSKY_SHIFT", {
+            "shift_id": shift_id,
+            "status": "open",
+            "reason": reason,
+            "caregiver": caregiver_name,
+            "client": client_name
+        })
+
+        # Log Step B (simulated data)
+        log_shadow_action("LOG_PORTAL_EVENT", {
+            "caregiver": caregiver_name,
+            "client": client_name,
+            "reason": reason,
+            "status": "pending_coverage"
+        })
+
+        # Log Step C (simulated)
+        log_shadow_action("TRIGGER_REPLACEMENT_BLAST", {
+            "client": client_name,
+            "shift_time": shift_time,
+            "urgency": "high"
+        })
+
+        return {
+            "success": True,
+            "step_a_wellsky_updated": True,
+            "step_b_portal_logged": True,
+            "step_c_replacement_blast_sent": True,
+            "call_out_id": "SHADOW_MODE_ID",
+            "caregivers_notified": 5,
+            "message": (
+                f"[SHADOW MODE] I would have updated the system and notified caregivers. "
+                f"The shift with {client_name} would be marked as open. "
+                f"(No actual changes made)"
+            ),
+            "errors": []
+        }
 
     # =========================================================================
     # STEP A: Update WellSky shift status to 'Open' (Unassigned)
