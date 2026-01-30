@@ -2074,6 +2074,19 @@ async def _execute_caregiver_call_out_locked(
                         note=f"🚨 CARE ALERT: Caregiver {caregiver_name} called out for shift on {shift_time}. Reason: {reason}",
                         note_type="callout"
                     )
+
+                    # 5. Create WellSky Task for coverage
+                    task_created = wellsky.create_admin_task(
+                        title=f"URGENT: Find replacement for {client_name}",
+                        description=f"Caregiver {caregiver_name} called out for shift on {shift_time}.\nReason: {reason}\nShift ID: {shift_id}\nClient: {client_name}",
+                        priority="urgent",
+                        related_client_id=client_id,
+                        assigned_to=os.getenv("WELLSKY_SCHEDULER_USER_ID")  # Assign to scheduler if configured
+                    )
+                    if task_created:
+                        logger.info(f"✅ WellSky Task created for shift {shift_id} coverage")
+                    else:
+                        logger.warning(f"⚠️ Failed to create WellSky Task for shift {shift_id}")
                 else:
                     wellsky_update_failed = True
                     wellsky_failure_reason = str(update_response)
@@ -3109,7 +3122,22 @@ async def log_client_issue(
             "message": f"Client Issue: {note}"
         })
     else:
-        # 1. Notify Team
+        # 1. Create WellSky Task for client issue
+        if WELLSKY_AVAILABLE and wellsky and effective_client_id != "UNKNOWN":
+            task_priority = "urgent" if priority == "urgent" else "high" if priority == "high" else "normal"
+            task_created = wellsky.create_admin_task(
+                title=f"Client Issue: {issue_type}",
+                description=f"{note}\n\nPriority: {priority}\nLogged by: Gigi AI\nRequires follow-up call within 30 minutes",
+                priority=task_priority,
+                related_client_id=effective_client_id,
+                assigned_to=os.getenv("WELLSKY_CARE_MANAGER_USER_ID")  # Assign to care manager if configured
+            )
+            if task_created:
+                logger.info(f"✅ WellSky Task created for client issue: {issue_type}")
+            else:
+                logger.warning(f"⚠️ Failed to create WellSky Task for client issue")
+
+        # 2. Notify Team
         schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
         if schedulers_chat_id:
             team_msg = f"📢 CLIENT ISSUE ({priority}): {effective_client_id}\n📝 {note}"
