@@ -203,6 +203,7 @@ def process_business_card(db, content: bytes, filename: str, file_id: str, user_
             existing_contact.address = address
         existing_contact.updated_at = datetime.utcnow()
         existing_contact.last_seen = datetime.utcnow()
+        existing_contact.last_activity = datetime.utcnow()  # SET THIS for dashboard filters
         existing_contact.account_manager = user_email
         contact_id = existing_contact.id
         contact_updated = True
@@ -226,6 +227,7 @@ def process_business_card(db, content: bytes, filename: str, file_id: str, user_
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             last_seen=datetime.utcnow(),
+            last_activity=datetime.utcnow(),  # SET THIS for dashboard filters
         )
         db.add(new_contact)
         db.flush()
