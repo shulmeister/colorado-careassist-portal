@@ -9047,6 +9047,7 @@ async def get_activity_logs(
             log_dict = {
                 "id": log.id,
                 "activity_type": log.activity_type,
+                "type": log.activity_type,  # Frontend looks for 'type' field
                 "title": log.title or log.description,
                 "description": log.description,
                 "contact_id": log.contact_id,
@@ -9057,7 +9058,7 @@ async def get_activity_logs(
                 "modified_time": (log.modified_time or log.created_at).isoformat() if (log.modified_time or log.created_at) else None,
                 # Include Drive fields if present (for backward compatibility)
                 "file_id": log.file_id,
-                "name": log.name,
+                "name": log.name or log.title or log.description,  # Frontend looks for 'name' field
                 "url": log.external_url or log.url,
                 "preview_url": log.preview_url,
                 "edit_url": log.edit_url,
