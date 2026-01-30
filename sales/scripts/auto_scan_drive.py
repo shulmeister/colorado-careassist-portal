@@ -518,7 +518,7 @@ def scan_folder(db, drive_service, folder_id: str, folder_type: str) -> Dict[str
             drive_url = f"https://drive.google.com/file/d/{file_id}/view"
 
             # Determine user email for this folder
-            folder_user = FOLDER_USERS.get(folder_type, user_email)
+            folder_user = FOLDER_USERS.get(folder_type, DEFAULT_USER)
 
             # Process based on folder type
             if folder_type.startswith('business_cards'):
