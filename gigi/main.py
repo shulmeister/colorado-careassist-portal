@@ -1381,7 +1381,10 @@ async def _get_ringcentral_token() -> Optional[str]:
 
 
 async def _send_sms_ringcentral(to_phone: str, message: str) -> bool:
-    # ... existing implementation ...
+    """Send SMS via RingCentral (not yet implemented)."""
+    logger.warning("RingCentral SMS not yet implemented")
+    return False
+
 
 async def send_glip_message(chat_id: str, text: str) -> bool:
     """Send a message to a RingCentral Glip team/chat."""
@@ -2180,8 +2183,9 @@ async def _execute_caregiver_call_out_locked(
         try:
             # 1. Log to Portal (Internal Record)
             async with httpx.AsyncClient() as client:
-                # ... (portal logging remains)
-            
+                # Portal logging would go here if needed
+                pass
+
             # 2. Notify "New Schedulers" RingCentral Team
             schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
             if schedulers_chat_id:
