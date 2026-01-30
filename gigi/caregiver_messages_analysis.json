@@ -1,0 +1,151 @@
+{
+  "total_messages": 68,
+  "autonomous_score": 2.941176470588235,
+  "breakdown": {
+    "\u2705 FULLY_HANDLED": 0,
+    "\u26a0\ufe0f MOSTLY_HANDLED": 0,
+    "\u274c NEEDS_FIX": 1,
+    "\ud83d\udd36 PARTIAL": 4,
+    "\u2753 OTHER": 63
+  },
+  "intent_counts": {
+    "clock_issue": 4,
+    "other": 63,
+    "running_late": 1
+  },
+  "sample_messages": {
+    "\u2705 FULLY_HANDLED": [],
+    "\u26a0\ufe0f MOSTLY_HANDLED": [],
+    "\u274c NEEDS_FIX": [
+      {
+        "text": "Janay is running late. It'll take her 7 minutes to get there. I already informed Cathy regarding this. ",
+        "intent": "running_late",
+        "timestamp": "2026-01-29T16:14:09.421Z"
+      }
+    ],
+    "\ud83d\udd36 PARTIAL": [
+      {
+        "text": "I am clocking out for today. Thank you!:pray:",
+        "intent": "clock_issue",
+        "timestamp": "2026-01-30T00:02:52.916Z"
+      },
+      {
+        "text": "I am clocking out for today. Thank you! :heart_hands:",
+        "intent": "clock_issue",
+        "timestamp": "2026-01-29T00:02:07.546Z"
+      },
+      {
+        "text": "Received an inbound call from CG. Dennis he informed Mr. Bolt experienced a fall and was transported to Littleton Advent Hospital for monitoring. Dennis tried to notify Mr. Bolt\u2019s family, including his sons and wife, to inform them of the situation. Dennis reported that Mr. Bolt was feeling weak but stable, and that his heart was being monitored at the hospital.\nWhen Dennis arrived at Mr. Bolt\u2019s residence, he learned from the residents that Mr. Bolt had already been taken to the hospital. Dennis then went to the hospital and is currently with Mr. Bolt. He stated that he would call back to clock out, as he was not at the residence. Dennis also said that he would give us updates regarding Mr. Bolt\u2019s condition and discharge status.",
+        "intent": "clock_issue",
+        "timestamp": "2026-01-28T20:59:50.721Z"
+      },
+      {
+        "text": "I am clocking out for today. Thank you!:heart_hands:",
+        "intent": "clock_issue",
+        "timestamp": "2026-01-28T00:05:38.092Z"
+      }
+    ],
+    "\u2753 OTHER": [
+      {
+        "text": "Brandy requested off on Mon 02/02. Waiting to hear back from Both Angela's to see if one of them will cover.",
+        "intent": "other",
+        "timestamp": "2026-01-29T23:39:24.119Z"
+      },
+      {
+        "text": "Beth informed that she left.. Also, she told Mr. Duncan that if they need assistance on the weekend, to let us know.",
+        "intent": "other",
+        "timestamp": "2026-01-29T23:14:36.443Z"
+      },
+      {
+        "text": "pay her $24/hr for this shift only under aotho",
+        "intent": "other",
+        "timestamp": "2026-01-29T22:45:22.205Z"
+      },
+      {
+        "text": "if mr duncan has some hours left she gets paid",
+        "intent": "other",
+        "timestamp": "2026-01-29T22:42:37.558Z"
+      },
+      {
+        "text": "Beth: Good afternoon. Can you clock me out for Mr Duncan, please? We are at the VA due to Ron experiencing some cognitive and physical issues.\nI'd like to stay but I know I won't get paid... ",
+        "intent": "other",
+        "timestamp": "2026-01-29T22:41:54.676Z"
+      },
+      {
+        "text": "love that",
+        "intent": "other",
+        "timestamp": "2026-01-29T22:41:20.369Z"
+      },
+      {
+        "text": "Nicole said her shift went really well with Leslie and said Leslie loves her and wants her to come back. She jokingly said you can come back tomorrow if you want. I will follow up with Megan tomorrow.",
+        "intent": "other",
+        "timestamp": "2026-01-29T22:31:07.452Z"
+      },
+      {
+        "text": "Called Yulia to inform her that Karen is only available on Saturdays for Ianina and cannot assist twice weekly. If she's okay we can schedule another caregiver for other days. Call went to voicemail; no response yet.",
+        "intent": "other",
+        "timestamp": "2026-01-29T19:43:29.886Z"
+      },
+      {
+        "text": "The Beetexting is working.",
+        "intent": "other",
+        "timestamp": "2026-01-29T19:31:37.106Z"
+      },
+      {
+        "text": "I will call Sam back. In meantime when that happens to me with Beetexting I shut down RingCentral desktop app and restart it.",
+        "intent": "other",
+        "timestamp": "2026-01-29T19:29:55.148Z"
+      },
+      {
+        "text": "Danny with the environment control called twice she's looking for ![:Person](63409495008), I advised her for email. ",
+        "intent": "other",
+        "timestamp": "2026-01-29T18:56:08.095Z"
+      },
+      {
+        "text": "Got it. The Surname was different.",
+        "intent": "other",
+        "timestamp": "2026-01-29T18:38:28.660Z"
+      },
+      {
+        "text": "Monique\u00a0is calling regarding employee verification, Roxana Thompson. ![:Person](63409495008) However, as far as I can see, there is no caregiver named Roxana listed. Monique\u2019s callback number is (470) 570-5958.",
+        "intent": "other",
+        "timestamp": "2026-01-29T18:33:51.159Z"
+      },
+      {
+        "text": "I asked Shirley's POA if she had contacted the voucher office regarding the February voucher, and Cynthia said no. She mentioned that Shirley will be returning in March and asked me to inform Jean about it. I also advised her that if Shirley returns home earlier, she should inform the voucher office and let us know.... I also informed Jean about it..",
+        "intent": "other",
+        "timestamp": "2026-01-29T18:07:12.797Z"
+      },
+      {
+        "text": "Cg. Jean informed me that she gonna do Margot's shift 10 AM - 1 PM instead of 11 AM - 2 PM. Updated in WS....... Also, Cynthia Bell the POA of Shirley Rosell informed that Shirley might be back from Rehab in March. ",
+        "intent": "other",
+        "timestamp": "2026-01-29T17:57:22.905Z"
+      },
+      {
+        "text": "Janay may need ot be removed from Tues and Thursdays due to an issue with her babysitter. She is actively looking for a new one. She will keep us posted.",
+        "intent": "other",
+        "timestamp": "2026-01-29T17:41:10.084Z"
+      },
+      {
+        "text": "Super annoying",
+        "intent": "other",
+        "timestamp": "2026-01-29T17:25:04.591Z"
+      },
+      {
+        "text": "I was able to reply to Jean\u2019s text, but Beetexting is loading again. I hope it will be fixed soon.",
+        "intent": "other",
+        "timestamp": "2026-01-29T17:22:30.422Z"
+      },
+      {
+        "text": "Sam\u2019s callback number is (848) 219-5285. She requested a return call whenever you\u2019re available. ![:Person](262740009) ",
+        "intent": "other",
+        "timestamp": "2026-01-29T17:16:15.064Z"
+      },
+      {
+        "text": "Mine is frozen\n",
+        "intent": "other",
+        "timestamp": "2026-01-29T16:45:23.058Z"
+      }
+    ]
+  }
+}

@@ -1351,7 +1351,7 @@ Then call the transfer_to_oncall function to transfer the call."""
         "name": "Gigi - Colorado Care Assist",
         "model_choice": {
             "type": "cascading",
-            "model": "gpt-5-mini"
+            "model": "claude-4.5-haiku"  # Switched from gpt-5-mini - 90% of routine tasks on cheap Haiku
         },
         "general_prompt": global_prompt,
         "nodes": nodes,

@@ -78,6 +78,27 @@ except Exception as e:
     FAILURE_HANDLER_AVAILABLE = False
     logger.warning(f"Failure Handler not available: {e}")
 
+# Import Gigi Shift Lock System for coordinator coordination
+try:
+    from gigi.shift_lock import get_shift_lock_manager, ShiftLockConflictError as CoordinatorLockError
+    shift_lock_manager = get_shift_lock_manager()
+    SHIFT_LOCK_AVAILABLE = True
+    logger.info("✓ Gigi Shift Lock Manager initialized")
+except Exception as e:
+    shift_lock_manager = None
+    SHIFT_LOCK_AVAILABLE = False
+    logger.warning(f"Shift Lock Manager not available: {e}")
+
+# Import Partial Availability Parser for nuanced call-out handling
+try:
+    from gigi.partial_availability_parser import detect_partial_availability
+    PARTIAL_AVAILABILITY_PARSER_AVAILABLE = True
+    logger.info("✓ Partial Availability Parser loaded")
+except Exception as e:
+    detect_partial_availability = None
+    PARTIAL_AVAILABILITY_PARSER_AVAILABLE = False
+    logger.warning(f"Partial Availability Parser not available: {e}")
+
 # Import enhanced webhook functionality for caller ID, transfer, and message taking
 try:
     from enhanced_webhook import (
@@ -176,6 +197,7 @@ ONCE_PER_CALL_TOOLS = {
     "log_client_issue",
     "report_call_out",
     "execute_caregiver_call_out",
+    "cancel_shift_acceptance",
     "report_late",
     "cancel_client_visit",
     "add_note_to_wellsky",
@@ -604,11 +626,6 @@ async def verify_retell_signature(request: Request) -> bool:
     Retell uses your API key for webhook signature verification.
     See: https://docs.retellai.com/features/secure-webhook
     """
-    # TEMPORARY: Disable signature verification to debug call issues
-    # TODO: Re-enable once calls are working
-    logger.info("Signature verification temporarily disabled for debugging")
-    return True
-
     if not RETELL_API_KEY:
         # SECURITY: API key required for signature validation
         is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
@@ -1684,6 +1701,64 @@ async def execute_caregiver_call_out(
     """
     logger.info(f"execute_caregiver_call_out: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
 
+    # =========================================================================
+    # COORDINATOR COORDINATION: Acquire shift lock to prevent collisions
+    # =========================================================================
+    # If offshore scheduler or human coordinator is already processing this
+    # shift, we get a lock conflict and tell the caregiver to wait.
+    if SHIFT_LOCK_AVAILABLE and shift_lock_manager:
+        try:
+            with shift_lock_manager.acquire_shift_lock(
+                shift_id=shift_id,
+                locked_by="gigi_ai",
+                reason="processing_callout",
+                timeout_minutes=10
+            ) as lock_info:
+                logger.info(f"Shift lock acquired: {shift_id} by gigi_ai")
+                # Proceed with call-out processing inside the lock
+                return await _execute_caregiver_call_out_locked(
+                    caregiver_id=caregiver_id,
+                    shift_id=shift_id,
+                    reason=reason
+                )
+        except CoordinatorLockError as e:
+            # Someone else (human coordinator or another Gigi instance) is processing this shift
+            logger.warning(f"Shift lock conflict for {shift_id}: {e}")
+            lock_status = shift_lock_manager.get_lock_status(shift_id)
+            locked_by = lock_status.locked_by if lock_status else "someone"
+
+            return {
+                "success": False,
+                "shift_locked": True,
+                "locked_by": locked_by,
+                "message": (
+                    f"I see this shift is currently being processed by our team. "
+                    f"Please hold on for just a moment while they handle it, or "
+                    f"try calling back in a few minutes if you need immediate assistance."
+                ),
+                "errors": [f"Shift locked by {locked_by}"],
+                "action_completed": True,
+                "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
+            }
+    else:
+        # Shift lock not available - proceed without lock (development mode)
+        logger.warning(f"Shift lock manager not available - proceeding without lock for shift {shift_id}")
+        return await _execute_caregiver_call_out_locked(
+            caregiver_id=caregiver_id,
+            shift_id=shift_id,
+            reason=reason
+        )
+
+
+async def _execute_caregiver_call_out_locked(
+    caregiver_id: str,
+    shift_id: str,
+    reason: str = "sick"
+) -> Dict[str, Any]:
+    """
+    Internal implementation of execute_caregiver_call_out.
+    This runs inside the shift lock context.
+    """
     # Get shift details first to validate time window
     shift = await get_shift_details(caregiver_id)
 
@@ -1763,6 +1838,12 @@ async def execute_caregiver_call_out(
     # =========================================================================
     # STEP A: Update WellSky shift status to 'Open' (Unassigned)
     # =========================================================================
+    # CRITICAL: This step MUST succeed. If WellSky update fails, we STOP
+    # and escalate to human. Do NOT proceed with Steps B & C.
+    # =========================================================================
+    wellsky_update_failed = False
+    wellsky_failure_reason = None
+
     try:
         async with httpx.AsyncClient() as client:
             # PUT to WellSky shift update endpoint
@@ -1782,13 +1863,58 @@ async def execute_caregiver_call_out(
                 result["step_a_wellsky_updated"] = True
                 logger.info(f"STEP A SUCCESS: WellSky shift {shift_id} updated to Open")
             else:
-                error_msg = f"WellSky returned {wellsky_response.status_code}: {wellsky_response.text}"
+                wellsky_update_failed = True
+                wellsky_failure_reason = f"HTTP {wellsky_response.status_code}: {wellsky_response.text}"
+                error_msg = f"CRITICAL: WellSky update failed - {wellsky_failure_reason}"
                 result["errors"].append(f"Step A: {error_msg}")
-                logger.warning(error_msg)
+                logger.error(error_msg)
     except Exception as e:
-        error_msg = f"WellSky update failed: {str(e)}"
+        wellsky_update_failed = True
+        wellsky_failure_reason = str(e)
+        error_msg = f"CRITICAL: WellSky update failed - {wellsky_failure_reason}"
         result["errors"].append(f"Step A: {error_msg}")
         logger.error(error_msg)
+
+    # =========================================================================
+    # CRITICAL CHECK: If WellSky update failed, STOP and escalate to human
+    # =========================================================================
+    if wellsky_update_failed:
+        logger.error(f"⚠️ ABORTING call-out process - WellSky update failed for shift {shift_id}")
+
+        # Escalate to Jason immediately
+        escalation_message = (
+            f"🚨 CRITICAL GIGI FAILURE: Call-out for {client_name} ({shift_time}) "
+            f"could not be processed. WellSky API error: {wellsky_failure_reason}. "
+            f"Caregiver: {caregiver_name} (Reason: {reason}). "
+            f"ACTION REQUIRED: Manually update WellSky shift {shift_id} and find replacement."
+        )
+
+        if OPERATIONS_SMS_ENABLED:
+            # Send to Jason Shulman (ext 101)
+            jason_phone = "+17205550101"  # TODO: Update with actual Jason's number
+            await _send_sms_beetexting(jason_phone, escalation_message)
+            logger.critical(f"ESCALATED to Jason ({jason_phone}): {escalation_message}")
+
+            # Also alert on-call manager
+            await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_message)
+            logger.critical(f"ESCALATED to on-call manager ({ON_CALL_MANAGER_PHONE})")
+        else:
+            logger.critical(f"[SMS DISABLED] Would escalate to Jason: {escalation_message}")
+
+        result["success"] = False
+        result["human_escalation_required"] = True
+        result["escalated_to"] = "Jason Shulman + On-Call Manager"
+        result["message"] = (
+            f"I've logged your call-out for {client_name}, but I'm having trouble "
+            f"connecting to the scheduling system right now. I've immediately notified "
+            f"the manager on duty who will handle this manually. They should contact you soon "
+            f"to confirm. Feel better!"
+        )
+        result["action_completed"] = True
+        result["next_step"] = "Tell caregiver manager was notified. Ask 'Is there anything else?'"
+
+        logger.info(f"execute_caregiver_call_out ABORTED - human escalation sent")
+        return result  # ⛔ STOP HERE - do NOT proceed with Steps B & C
 
     # =========================================================================
     # STEP B: Log call-out event to Client Ops Portal
@@ -1870,28 +1996,61 @@ async def execute_caregiver_call_out(
         result["errors"].append(f"Step C: {error_msg}")
         logger.error(error_msg)
 
+    # =========================================================================
+    # CRITICAL CHECK: If BOTH B and C failed, escalate immediately
+    # =========================================================================
+    # Scenario: WellSky updated (shift is open) but NO ONE was notified
+    # Result: Zero coverage attempt, but shift shows as "open" in system
+    if not result["step_b_portal_logged"] and not result["step_c_replacement_blast_sent"]:
+        logger.error(f"⚠️ CRITICAL: Steps B & C both failed for shift {shift_id} - shift is open but no notifications sent!")
+
+        escalation_message = (
+            f"🚨 GIGI NOTIFICATION FAILURE: {caregiver_name} called out for {client_name} "
+            f"({shift_time}). Shift is marked OPEN in WellSky but automated notifications FAILED. "
+            f"NO caregivers were notified. ACTION REQUIRED: Manually send replacement blast for shift {shift_id}."
+        )
+
+        if OPERATIONS_SMS_ENABLED:
+            jason_phone = "+17205550101"  # TODO: Update with actual Jason's number
+            await _send_sms_beetexting(jason_phone, escalation_message)
+            await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_message)
+            logger.critical(f"ESCALATED notification failure to Jason + on-call manager")
+        else:
+            logger.critical(f"[SMS DISABLED] Would escalate: {escalation_message}")
+
+        result["human_escalation_required"] = True
+        result["escalation_reason"] = "Notification systems failed - manual intervention needed"
+
     # Also send direct notification to On-Call Manager (only if operations SMS is enabled)
-    sms_message = (
-        f"CALL-OUT: {caregiver_name} called out for {client_name} "
-        f"({shift_time}). Reason: {reason}. "
-        f"Replacement blast sent. Logged by Gigi at {datetime.now().strftime('%I:%M %p')}."
-    )
-    if OPERATIONS_SMS_ENABLED:
-        await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
-        logger.info(f"SMS notification sent to on-call manager")
-    else:
-        logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
+    elif result["step_c_replacement_blast_sent"]:
+        # Normal case: replacement blast succeeded
+        sms_message = (
+            f"CALL-OUT: {caregiver_name} called out for {client_name} "
+            f"({shift_time}). Reason: {reason}. "
+            f"Replacement blast sent to {result.get('caregivers_notified', 0)} caregivers. "
+            f"Logged by Gigi at {datetime.now().strftime('%I:%M %p')}."
+        )
+        if OPERATIONS_SMS_ENABLED:
+            await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
+            logger.info(f"SMS notification sent to on-call manager")
+        else:
+            logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
 
     # =========================================================================
     # Build final result and message for Gigi to speak
     # =========================================================================
+    # NOTE: If we reach here, Step A (WellSky) succeeded (otherwise we would have
+    # returned early with escalation). So we only check Steps B & C.
     steps_completed = sum([
         result["step_a_wellsky_updated"],
         result["step_b_portal_logged"],
         result["step_c_replacement_blast_sent"]
     ])
 
-    result["success"] = steps_completed >= 2  # Success if at least 2 of 3 steps work
+    # Success requires:
+    # - Step A MUST succeed (critical - we aborted early if it failed)
+    # - At least one of B or C succeeds (logging or SMS blast)
+    result["success"] = result["step_a_wellsky_updated"] and steps_completed >= 2
 
     if result["success"]:
         result["message"] = (
@@ -1900,7 +2059,15 @@ async def execute_caregiver_call_out(
             f"available caregivers in the area. Feel better, and please keep us updated "
             f"if anything changes."
         )
+    elif result["step_a_wellsky_updated"] and steps_completed == 1:
+        # WellSky updated but only 1 of B/C succeeded
+        result["message"] = (
+            f"I've updated the scheduling system to mark your shift as open. "
+            f"I had some trouble with the automated notifications, so I've alerted "
+            f"the on-call manager who will follow up manually. Feel better!"
+        )
     else:
+        # This should never happen (we would have returned early), but just in case
         result["message"] = (
             f"I've logged your call-out, but I had some trouble updating all systems. "
             f"I've notified the on-call manager who will make sure coverage is handled. "
@@ -1912,6 +2079,258 @@ async def execute_caregiver_call_out(
     result["next_step"] = "DO NOT call this tool again. Tell the caregiver it's handled and ask 'Is there anything else?'"
 
     logger.info(f"execute_caregiver_call_out completed: success={result['success']}, steps={steps_completed}/3")
+    return result
+
+
+async def cancel_shift_acceptance(
+    caregiver_id: str,
+    shift_id: str,
+    reason: str = "Unable to work shift"
+) -> Dict[str, Any]:
+    """
+    Cancel a previously accepted shift assignment.
+
+    Handles scenario where caregiver accepts a shift via SMS/call, then
+    calls back to cancel: "Actually, I can't make it."
+
+    This function:
+    1. Unassigns the caregiver from the shift in WellSky
+    2. Marks the shift as open again
+    3. Restarts the replacement search
+    4. Notifies other caregivers that shift is available
+    5. Alerts on-call manager about the cancellation
+
+    Args:
+        caregiver_id: The caregiver's ID who is canceling
+        shift_id: The shift they're canceling
+        reason: Why they're canceling (e.g., "changed mind", "conflict", "emergency")
+
+    Returns:
+        Dict with cancellation status and next steps
+
+    Example conversation:
+        Caregiver: "Hi, I accepted the 2pm shift earlier but I can't make it anymore"
+        Gigi: *calls cancel_shift_acceptance*
+        Gigi: "I understand. I've cancelled your assignment and we're finding someone else..."
+    """
+    logger.info(f"cancel_shift_acceptance called: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
+
+    # =========================================================================
+    # COORDINATOR COORDINATION: Acquire shift lock to prevent collisions
+    # =========================================================================
+    if SHIFT_LOCK_AVAILABLE and shift_lock_manager:
+        try:
+            with shift_lock_manager.acquire_shift_lock(
+                shift_id=shift_id,
+                locked_by="gigi_ai",
+                reason="cancelling_acceptance",
+                timeout_minutes=10
+            ) as lock_info:
+                logger.info(f"Shift lock acquired for cancellation: {shift_id} by gigi_ai")
+                return await _cancel_shift_acceptance_locked(
+                    caregiver_id=caregiver_id,
+                    shift_id=shift_id,
+                    reason=reason
+                )
+        except CoordinatorLockError as e:
+            logger.warning(f"Shift lock conflict for cancellation {shift_id}: {e}")
+            lock_status = shift_lock_manager.get_lock_status(shift_id)
+            locked_by = lock_status.locked_by if lock_status else "someone"
+
+            return {
+                "success": False,
+                "shift_locked": True,
+                "locked_by": locked_by,
+                "message": (
+                    f"I see this shift is currently being processed. Please hold on for just "
+                    f"a moment while the team handles it, or try calling back in a few minutes."
+                ),
+                "errors": [f"Shift locked by {locked_by}"],
+                "action_completed": True,
+                "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
+            }
+    else:
+        logger.warning(f"Shift lock manager not available - proceeding without lock")
+        return await _cancel_shift_acceptance_locked(
+            caregiver_id=caregiver_id,
+            shift_id=shift_id,
+            reason=reason
+        )
+
+
+async def _cancel_shift_acceptance_locked(
+    caregiver_id: str,
+    shift_id: str,
+    reason: str = "Unable to work shift"
+) -> Dict[str, Any]:
+    """
+    Internal implementation of cancel_shift_acceptance.
+    This runs inside the shift lock context.
+    """
+    # Get shift and caregiver details
+    shift = await get_shift_details(caregiver_id)
+    if not shift:
+        logger.warning(f"Could not find shift details for caregiver {caregiver_id}")
+        return {
+            "success": False,
+            "error": "Could not find shift details",
+            "message": "I'm having trouble finding that shift in the system. Can you tell me which client it was for?"
+        }
+
+    caregiver_name = shift.caregiver_name or f"Caregiver {caregiver_id}"
+    client_name = shift.client_name or "Unknown Client"
+    shift_time = shift.start_time.strftime("%B %d at %I:%M %p") if shift.start_time else "Unknown Time"
+
+    result = {
+        "success": False,
+        "shift_id": shift_id,
+        "caregiver_id": caregiver_id,
+        "caregiver_name": caregiver_name,
+        "client_name": client_name,
+        "shift_time": shift_time,
+        "cancellation_reason": reason,
+        "errors": [],
+        "step_a_wellsky_unassigned": False,
+        "step_b_replacement_search_started": False,
+        "step_c_manager_notified": False
+    }
+
+    # =========================================================================
+    # STEP A: Unassign caregiver in WellSky (mark shift as open)
+    # =========================================================================
+    try:
+        async with httpx.AsyncClient() as client:
+            wellsky_response = await client.put(
+                f"{PORTAL_BASE_URL}/api/wellsky/shifts/{shift_id}",
+                json={
+                    "status": "open",
+                    "caregiver_id": None,  # Unassign
+                    "cancellation_reason": reason,
+                    "cancelled_by_caregiver_id": caregiver_id,
+                    "cancelled_at": datetime.now().isoformat(),
+                    "notes": f"Cancelled by {caregiver_name} via Gigi AI: {reason}"
+                },
+                timeout=15.0
+            )
+            if wellsky_response.status_code in (200, 201, 204):
+                result["step_a_wellsky_unassigned"] = True
+                logger.info(f"STEP A SUCCESS: Shift {shift_id} unassigned in WellSky")
+            else:
+                error_msg = f"WellSky returned {wellsky_response.status_code}"
+                result["errors"].append(f"Step A: {error_msg}")
+                logger.error(f"STEP A FAILED: {error_msg}")
+
+                # CRITICAL: If we can't unassign in WellSky, escalate to human
+                escalation_msg = (
+                    f"🚨 GIGI CANCELLATION FAILURE: {caregiver_name} wants to cancel shift with {client_name} "
+                    f"({shift_time}) but WellSky update failed. Reason: {reason}. "
+                    f"ACTION REQUIRED: Manually unassign shift {shift_id} and find replacement."
+                )
+                if OPERATIONS_SMS_ENABLED:
+                    await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_msg)
+                    logger.critical(f"ESCALATED cancellation failure to on-call manager")
+
+                result["message"] = (
+                    f"I understand you need to cancel, but I'm having trouble updating the system. "
+                    f"I've notified the manager on duty who will handle this manually. "
+                    f"They'll call you back shortly to confirm."
+                )
+                return result  # Stop here if WellSky fails
+
+    except Exception as e:
+        error_msg = f"WellSky unassignment failed: {str(e)}"
+        result["errors"].append(f"Step A: {error_msg}")
+        logger.error(error_msg)
+
+        # Escalate
+        if OPERATIONS_SMS_ENABLED:
+            escalation_msg = f"🚨 GIGI ERROR: Cannot cancel shift for {caregiver_name}/{client_name}. Error: {e}"
+            await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_msg)
+
+        result["message"] = "I'm having technical difficulties. A manager will call you back shortly."
+        return result
+
+    # =========================================================================
+    # STEP B: Restart replacement search
+    # =========================================================================
+    try:
+        async with httpx.AsyncClient() as client:
+            replacement_response = await client.post(
+                f"{PORTAL_BASE_URL}/api/operations/replacement-blast",
+                json={
+                    "shift_id": shift_id,
+                    "client_name": client_name,
+                    "shift_time": shift_time,
+                    "urgency": "high",
+                    "reason": f"Cancellation by {caregiver_name}: {reason}",
+                    "exclude_caregiver_ids": [caregiver_id],  # Don't offer to same caregiver
+                    "source": "gigi_cancellation"
+                },
+                timeout=30.0
+            )
+            if replacement_response.status_code in (200, 201):
+                replacement_result = replacement_response.json()
+                result["step_b_replacement_search_started"] = True
+                result["caregivers_notified"] = replacement_result.get("caregivers_notified", 0)
+                logger.info(f"STEP B SUCCESS: Replacement search started, {result['caregivers_notified']} caregivers notified")
+            else:
+                error_msg = f"Replacement blast returned {replacement_response.status_code}"
+                result["errors"].append(f"Step B: {error_msg}")
+                logger.warning(error_msg)
+
+    except Exception as e:
+        error_msg = f"Replacement search failed: {str(e)}"
+        result["errors"].append(f"Step B: {error_msg}")
+        logger.error(error_msg)
+
+    # =========================================================================
+    # STEP C: Notify on-call manager about cancellation
+    # =========================================================================
+    manager_message = (
+        f"SHIFT CANCELLATION: {caregiver_name} cancelled {client_name} shift ({shift_time}). "
+        f"Reason: {reason}. "
+    )
+
+    if result["step_b_replacement_search_started"]:
+        manager_message += f"Replacement search started - {result.get('caregivers_notified', 0)} caregivers notified."
+    else:
+        manager_message += "URGENT: Replacement search FAILED - manual intervention needed."
+
+    if OPERATIONS_SMS_ENABLED:
+        await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, manager_message)
+        result["step_c_manager_notified"] = True
+        logger.info(f"STEP C SUCCESS: Manager notified of cancellation")
+    else:
+        logger.info(f"[SMS DISABLED] Would notify manager: {manager_message}")
+
+    # =========================================================================
+    # Build result and response message
+    # =========================================================================
+    result["success"] = result["step_a_wellsky_unassigned"]
+
+    if result["success"]:
+        if result["step_b_replacement_search_started"]:
+            result["message"] = (
+                f"No problem, I understand things come up. I've cancelled your assignment "
+                f"for {client_name} on {shift_time} and I'm already reaching out to other "
+                f"caregivers to cover it. We've got this handled - don't worry about it. "
+                f"Is there anything else I can help you with?"
+            )
+        else:
+            result["message"] = (
+                f"I've cancelled your assignment for {client_name}. The manager has been "
+                f"notified and will find a replacement. Thanks for letting us know early!"
+            )
+    else:
+        result["message"] = (
+            f"I'm having trouble cancelling this in the system. I've alerted the manager "
+            f"who will handle it manually and call you back to confirm."
+        )
+
+    result["action_completed"] = True
+    result["next_step"] = "Cancellation handled. Ask caregiver if there's anything else."
+
+    logger.info(f"cancel_shift_acceptance completed: success={result['success']}")
     return result
 
 
@@ -3753,6 +4172,13 @@ async def retell_webhook(request: Request):
                         "result": result
                     })
 
+                elif tool_name == "cancel_shift_acceptance":
+                    result = await cancel_shift_acceptance(**tool_args)
+                    results.append({
+                        "tool_call_id": tool_call_id,
+                        "result": result
+                    })
+
                 elif tool_name == "report_call_out":
                     result = await report_call_out(**tool_args)
                     results.append({
@@ -3926,6 +4352,11 @@ async def retell_function_call(function_name: str, request: Request):
 
         elif function_name == "execute_caregiver_call_out":
             result = await execute_caregiver_call_out(**args)
+            record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
+            return JSONResponse(result)
+
+        elif function_name == "cancel_shift_acceptance":
+            result = await cancel_shift_acceptance(**args)
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse(result)
 
@@ -4711,6 +5142,58 @@ async def handle_inbound_sms(sms: InboundSMS):
                             logger.info(f"No pending shift offer for {sms.from_number}, continuing normal flow")
             except Exception as shift_err:
                 logger.warning(f"Error checking shift response: {shift_err}")
+                # Fall through to normal processing
+
+        # =====================================================================
+        # CHECK FOR PARTIAL AVAILABILITY (e.g., "I can't work but I could do 8:30-11:30")
+        # =====================================================================
+        # This must come BEFORE simple callout detection
+        if PARTIAL_AVAILABILITY_PARSER_AVAILABLE and detect_partial_availability:
+            try:
+                partial_avail = detect_partial_availability(sms.message)
+
+                if partial_avail.offers_alternative:
+                    # Caregiver is cancelling BUT offering an alternative time
+                    logger.info(f"Detected partial availability: {partial_avail.start_time}-{partial_avail.end_time}")
+
+                    # Build context message for coordinator
+                    coordinator_message = (
+                        f"📋 PARTIAL AVAILABILITY from {caller_info.name or sms.from_number}\n\n"
+                        f"Original message: \"{sms.message}\"\n\n"
+                        f"Parsed details:\n"
+                        f"  • Cancelling original shift: {partial_avail.is_cancelling}\n"
+                        f"  • Alternative time offered: {partial_avail.start_time} - {partial_avail.end_time}\n"
+                        f"  • Raw time text: \"{partial_avail.raw_time_text}\"\n\n"
+                        f"ACTION NEEDED: Contact caregiver to confirm if modified schedule works for client."
+                    )
+
+                    # Send to on-call manager
+                    if OPERATIONS_SMS_ENABLED:
+                        await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, coordinator_message)
+                        logger.info(f"Sent partial availability alert to coordinator")
+
+                    # Generate empathetic response to caregiver
+                    reply_text = (
+                        f"Thanks for letting us know! I've notified the coordinator about your "
+                        f"availability from {partial_avail.start_time} to {partial_avail.end_time}. "
+                        f"They'll reach out within the hour to see if we can adjust the shift. "
+                        f"I really appreciate you offering an alternative time!"
+                    )
+
+                    # Send reply
+                    sms_sent = await _send_sms_ringcentral(sms.from_number, reply_text)
+
+                    return SMSResponse(
+                        success=True,
+                        reply_sent=sms_sent,
+                        reply_text=reply_text,
+                        caller_type=caller_info.caller_type,
+                        caller_name=caller_info.name,
+                        original_message=sms.message
+                    )
+
+            except Exception as partial_err:
+                logger.warning(f"Error in partial availability detection: {partial_err}")
                 # Fall through to normal processing
 
         # Look up shift data from WellSky

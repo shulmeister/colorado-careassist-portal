@@ -139,6 +139,31 @@
     {
       "type": "function",
       "function": {
+        "name": "cancel_shift_acceptance",
+        "description": "Cancel a shift that caregiver previously accepted. Use when caregiver says 'I accepted earlier but can't make it' or 'I need to cancel the shift I took'. CALL ONCE - after success, confirm cancellation and STOP. This unassigns them, restarts replacement search, and notifies manager.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "caregiver_id": {
+              "type": "string",
+              "description": "The caregiver's ID from verify_caller"
+            },
+            "shift_id": {
+              "type": "string",
+              "description": "The shift ID they want to cancel"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why they're cancelling (e.g., 'changed mind', 'conflict', 'emergency', 'other plans'). Ask if not provided."
+            }
+          },
+          "required": ["caregiver_id", "shift_id"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
         "name": "report_call_out",
         "description": "CALL ONCE to report a caregiver call-out. After success, say 'Got it, we're finding coverage' and STOP. Do NOT call this tool again - one call handles everything. The system automatically finds replacements and sends SMS blasts.",
         "parameters": {

@@ -1580,7 +1580,7 @@ class WellSkyService:
                 results = [s for s in results if s.client_id == client_id]
             if start_date:
                 end_date = start_date + timedelta(days=additional_days)
-                results = [s for s in results if start_date <= s.shift_start.date() <= end_date]
+                results = [s for s in results if s.date and start_date <= s.date <= end_date]
             return results[:limit]
 
         # Validate required parameters
@@ -1767,23 +1767,24 @@ class WellSkyService:
                 "status": task_data.get("status", "NOT_COMPLETE")
             })
 
+        # Calculate duration
+        duration_hours = (shift_end - shift_start).total_seconds() / 3600.0
+
         return WellSkyShift(
             id=shift_id,
             client_id=client_id,
             caregiver_id=caregiver_id,
-            shift_start=shift_start,
-            shift_end=shift_end,
             status=status,
+            date=shift_start.date(),
+            start_time=shift_start.strftime("%H:%M"),
+            end_time=shift_end.strftime("%H:%M"),
+            duration_hours=duration_hours,
             client_first_name="",  # Not in FHIR appointment - need to fetch separately
             client_last_name="",
             caregiver_first_name="",  # Not in FHIR appointment - need to fetch separately
             caregiver_last_name="",
-            client_address="",
-            client_city="",
-            client_state="CO",
-            client_lat=client_lat,
-            client_lon=client_lon,
-            tasks=tasks
+            address="",
+            city=""
         )
 
     def update_shift_status(
