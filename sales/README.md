@@ -2,7 +2,23 @@
 
 A comprehensive full-stack sales CRM and activity tracking application for Colorado CareAssist. Built with React Admin frontend and FastAPI backend.
 
-**Live URL**: https://careassist-tracker-0fcf2cecdb22.herokuapp.com/
+**Live URLs**:
+- Portal: https://portal.coloradocareassist.com/sales/
+- Heroku: https://careassist-unified-0a11ddb45ac0.herokuapp.com/sales/
+
+**GitHub**: https://github.com/shulmeister/colorado-careassist-portal (sales dashboard is in `/sales` directory)
+
+## Architecture
+
+This sales dashboard is part of the **Colorado CareAssist Unified Portal**. The portal uses `unified_app.py` to mount multiple applications:
+
+- `/` → Portal hub (main landing page)
+- `/sales` → Sales Dashboard (this app)
+- `/gigi` → Gigi AI voice assistant
+- `/recruiting` → Recruiter dashboard
+- `/marketing` → Marketing dashboard
+
+Everything deploys together to the `careassist-unified` Heroku app.
 
 ## Features
 
@@ -11,6 +27,7 @@ A comprehensive full-stack sales CRM and activity tracking application for Color
 - **Pipeline View**: Visual deal pipeline with drag-and-drop stages
 - **Activity KPIs**: Real-time metrics for visits, contacts, companies, deals
 - **Forecasting**: Revenue projections based on deal stages and probability
+- **Latest Activity**: Real-time feed of all CRM activities including business card scans
 
 ### 👥 Contact Management
 - Full CRUD for contacts with first/last name, email, phone, company
@@ -42,25 +59,68 @@ A comprehensive full-stack sales CRM and activity tracking application for Color
 - **Smart Merge**: Merge contacts while preserving all relationships and activities
 - **Interaction Summary**: AI-generated summaries of relationship history with sentiment analysis
 
-### 📇 AI-Powered Document Scanning (Gemini)
+### 📇 AI-Powered Business Card Scanning (Gemini)
+
+**Auto-Scanner Workflow:**
+The system automatically monitors Google Drive folders and imports business cards in real-time:
+
+1. **Upload**: Drop business card photos (JPG, PNG, HEIC) into designated Google Drive folders:
+   - `Business Cards/Jen Jeffers/` → Cards assigned to jen@coloradocareassist.com
+   - `Business Cards/Jacob Stewart/` → Cards assigned to jacob@coloradocareassist.com
+   - `Business Cards/Colorado Springs/` → Cards assigned to cosprings@coloradocareassist.com
+
+2. **Auto-Processing**: Script runs every 5 minutes via cron job:
+   ```bash
+   */5 * * * * cd /path/to/sales && /path/to/venv/bin/python scripts/auto_scan_drive.py
+   ```
+
+3. **AI Extraction**: Gemini AI extracts:
+   - Name, company, title
+   - Email, phone
+   - Address
+   - LinkedIn profile
+
+4. **Duplicate Prevention**:
+   - Checks for existing contacts by email or phone
+   - Updates existing contacts instead of creating duplicates
+   - Logs all scans in activity timeline
+
+5. **Dashboard Updates**:
+   - New contacts appear immediately in dashboard
+   - Shows in "Latest Activity" widget with scan timestamp
+   - Contacts are filterable by account manager
+
+**Manual Upload Options:**
+- Upload from device camera/photos
+- Paste Google Drive links
+- Bulk import entire folders
+
+**Features:**
+- **No more OCR garbage** — Pure AI extraction via Gemini REST API
+- Automatic duplicate detection for contacts and companies
+- Activity logging for all scans (visible in Latest Activity feed)
+- Support for HEIC, JPG, PNG formats
+
+**Run Manual Scan:**
+```bash
+python scripts/auto_scan_drive.py
+```
+
+### 📄 AI Document Parsing (Gemini)
 - **MyWay PDFs**: AI extracts visits, addresses, cities, mileage, dates
 - **Receipts**: AI extracts vendor, amount, date, category, items
-- **Business Cards**: AI extracts contact info (name, company, email, phone)
-- Upload from device or paste Google Drive links
-- Bulk import folders from Google Drive
-- Automatic duplicate detection for contacts, companies, and visits
-- **No more OCR garbage** — Pure AI extraction via Gemini REST API
+- Automatic duplicate prevention for contacts, companies, and visits
 
 ### 📈 Activity Tracking
 - **Visits**: Log and track sales visits with MyWay PDF import (AI-parsed)
 - **Expense Tracking**: Mileage reimbursement and expense management (AI-parsed)
 - **Pay Period Navigator**: View expenses by payroll period
-- **Activity Logs**: Full audit trail of all CRM actions
+- **Activity Logs**: Full audit trail of all CRM actions including business card scans, calls, emails, visits
 - **Duplicate Prevention**: MyWay visits checked for duplicates before saving
 
 ### 🔗 Integrations
 - **Brevo** (formerly Sendinblue): Sync contacts for email marketing + webhook integration for automatic activity logging (delivered, opened, clicked events)
-- **Google Drive**: Import files and folders directly
+- **Google Drive**: Import files and folders directly + auto-monitoring of business card folders
 - **Gmail API**: Track emails sent (KPI)
 - **RingCentral**: Track phone calls (webhook integration for automatic call logging)
 
@@ -69,9 +129,9 @@ A comprehensive full-stack sales CRM and activity tracking application for Color
 ### Backend
 - **Python 3.11+** with FastAPI
 - **PostgreSQL** (SQLAlchemy ORM)
-- **AI Document Parsing**: Google Gemini 2.0 Flash via REST API (primary)
+- **AI Document Parsing**: Google Gemini 2.0 Flash via REST API
 - **Image Processing**: Pillow, pillow-heif (HEIC support)
-- **PDF/Receipt/Card Parsing**: Gemini AI (replaced OCR/Tesseract)
+- **PDF/Receipt/Card Parsing**: Gemini AI
 
 ### Frontend
 - **React 19** with TypeScript
@@ -80,53 +140,54 @@ A comprehensive full-stack sales CRM and activity tracking application for Color
 - **Vite** for building
 
 ### Infrastructure
-- **Heroku** for hosting
+- **Heroku** for hosting (unified portal app)
 - **PostgreSQL** on Heroku
 - **Google Cloud** for Drive/Gmail APIs
+- **Cron** for auto-scanning business card uploads
 
 ## API Endpoints
 
 ### Contacts
 ```
-GET    /admin/contacts              # List (with ?q=search&status=hot)
-GET    /admin/contacts/{id}         # Get one
-POST   /admin/contacts              # Create
-PUT    /admin/contacts/{id}         # Update
-DELETE /admin/contacts/{id}         # Delete (cascades tasks)
-POST   /api/contacts/merge          # Merge duplicates
+GET    /api/contacts              # List (with ?q=search&status=hot)
+GET    /api/contacts/{id}         # Get one
+POST   /api/contacts              # Create
+PUT    /api/contacts/{id}         # Update
+DELETE /api/contacts/{id}         # Delete (cascades tasks)
+POST   /api/contacts/merge        # Merge duplicates
 ```
 
 ### Contact Tasks
 ```
-GET    /admin/contact-tasks?contact_id=123  # List tasks for contact
-POST   /admin/contact-tasks                 # Create task
-PUT    /admin/contact-tasks/{id}            # Update task
-DELETE /admin/contact-tasks/{id}            # Delete task
+GET    /api/contact-tasks?contact_id=123  # List tasks for contact
+POST   /api/contact-tasks                 # Create task
+PUT    /api/contact-tasks/{id}            # Update task
+DELETE /api/contact-tasks/{id}            # Delete task
 ```
 
 ### Companies
 ```
-GET    /admin/companies             # List
-GET    /admin/companies/{id}        # Get one
-POST   /admin/companies             # Create
-PUT    /admin/companies/{id}        # Update
-DELETE /admin/companies/{id}        # Delete
+GET    /api/companies             # List
+GET    /api/companies/{id}        # Get one
+POST   /api/companies             # Create
+PUT    /api/companies/{id}        # Update
+DELETE /api/companies/{id}        # Delete
 ```
 
 ### Deals
 ```
-GET    /admin/deals                 # List
-GET    /admin/deals/{id}            # Get one
-POST   /admin/deals                 # Create
-PUT    /admin/deals/{id}            # Update
-DELETE /admin/deals/{id}            # Delete
+GET    /api/deals                 # List
+GET    /api/deals/{id}            # Get one
+POST   /api/deals                 # Create
+PUT    /api/deals/{id}            # Update
+DELETE /api/deals/{id}            # Delete
 ```
 
 ### Dashboard & Analytics
 ```
 GET    /api/dashboard/summary       # All KPIs
 GET    /api/visits                  # Visit list
-GET    /api/activity-logs           # Activity log
+GET    /api/activity-logs           # Activity log (includes business card scans, calls, emails, visits)
 GET    /api/deals/stale             # Deals stuck in stage >30 days
 GET    /api/analytics/stage-duration # Average time per stage
 ```
@@ -184,7 +245,7 @@ The Sales Dashboard automatically logs email activities from Brevo marketing cam
 
 **Setup:**
 1. In Brevo, go to **SMTP & API** → **Webhooks**
-2. Create a new webhook with URL: `https://careassist-tracker-0fcf2cecdb22.herokuapp.com/webhooks/brevo`
+2. Create a new webhook with URL: `https://careassist-unified-0a11ddb45ac0.herokuapp.com/sales/webhooks/brevo`
 3. Select events to track:
    - `delivered` - Email delivered (logged as activity)
    - `opened` - Email opened (logged as activity)
@@ -209,28 +270,38 @@ Automatically logs phone calls as activities. Configure in RingCentral dashboard
 - Node.js 18+
 - PostgreSQL
 - Heroku CLI (for deployment)
+- Google Cloud Project with Drive API enabled
 
-### 1. Clone and Install
+### 1. Clone Repository
 
 ```bash
-git clone https://github.com/shulmeister/sales-dashboard.git
-cd sales-dashboard
+git clone https://github.com/shulmeister/colorado-careassist-portal.git
+cd colorado-careassist-portal/sales
+```
 
-# Backend
+### 2. Backend Setup
+
+```bash
+# Create virtual environment
 python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Frontend
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Frontend Setup
+
+```bash
 cd frontend
 npm install
 npm run build
 cd ..
 ```
 
-### 2. Environment Variables
+### 4. Environment Variables
 
-Create `.env` file (see `.env.example`):
+Create `.env` file in the `sales/` directory:
 
 ```bash
 # Database
@@ -240,103 +311,131 @@ DATABASE_URL=postgresql://user:pass@host:5432/dbname
 APP_SECRET_KEY=your-random-secret-key
 
 # AI (for business card scanning)
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
+GEMINI_API_KEY=your-gemini-api-key
 
-# Google (for Drive import)
+# Google Drive (for business card auto-scanner)
 GOOGLE_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
+GOOGLE_DRIVE_BUSINESS_CARDS_FOLDER_ID=your-folder-id
 
 # Brevo (email marketing - free unlimited contacts!)
 BREVO_API_KEY=xkeysib-...
-
-# QuickBooks (customer sync to Brevo)
-QUICKBOOKS_CLIENT_ID=...
-QUICKBOOKS_CLIENT_SECRET=...
-QUICKBOOKS_REALM_ID=...
-QUICKBOOKS_ACCESS_TOKEN=...
-QUICKBOOKS_REFRESH_TOKEN=...
 
 # Optional integrations
 RINGCENTRAL_CLIENT_ID=...
 GMAIL_CREDENTIALS=...
 ```
 
-### 3. Run Locally
+### 5. Google Drive Setup for Business Card Auto-Scanner
+
+1. **Create Google Cloud Project**:
+   - Go to https://console.cloud.google.com
+   - Create new project
+   - Enable Google Drive API
+
+2. **Create Service Account**:
+   - IAM & Admin → Service Accounts → Create Service Account
+   - Download JSON key
+   - Copy JSON contents to `GOOGLE_SERVICE_ACCOUNT_KEY` env var
+
+3. **Share Drive Folder**:
+   - Create "Business Cards" folder in Google Drive
+   - Create subfolders: `Jen Jeffers`, `Jacob Stewart`, `Colorado Springs`
+   - Share folder with service account email (viewer access)
+   - Copy folder ID from URL to `GOOGLE_DRIVE_BUSINESS_CARDS_FOLDER_ID`
+
+4. **Set Up Cron Job** (for auto-scanning):
+   ```bash
+   # Edit crontab
+   crontab -e
+
+   # Add line to run every 5 minutes:
+   */5 * * * * cd /path/to/colorado-careassist-portal/sales && /path/to/venv/bin/python scripts/auto_scan_drive.py >> /tmp/business-card-scanner.log 2>&1
+   ```
+
+### 6. Run Locally
 
 ```bash
-# Start backend
+# From sales/ directory
 uvicorn app:app --reload --port 8000
 
-# In another terminal, start frontend dev server
+# In another terminal, start frontend dev server (optional)
 cd frontend
 npm run dev
 ```
 
-### 4. Deploy to Heroku
+Visit: http://localhost:8000
+
+### 7. Deploy to Heroku
+
+The sales dashboard is part of the unified portal and deploys together:
 
 ```bash
-# Login and create app
-heroku login
-heroku create your-app-name
+# From repository root (colorado-careassist-portal/)
+cd ..
 
-# Add buildpacks
-heroku buildpacks:add https://github.com/heroku/heroku-buildpack-apt
-heroku buildpacks:add heroku/python
-
-# Set config vars
-heroku config:set DATABASE_URL=...
-heroku config:set APP_SECRET_KEY=...
-heroku config:set OPENAI_API_KEY=...
-# etc.
-
-# Deploy
+# Deploy unified app (includes portal + sales + gigi)
 git push heroku main
 ```
+
+The sales dashboard will be available at:
+- https://careassist-unified-0a11ddb45ac0.herokuapp.com/sales/
+- https://portal.coloradocareassist.com/sales/ (if custom domain configured)
+
+**Important**: The Procfile at the repository root uses `unified_app.py` which mounts the sales app at `/sales`.
 
 ## Project Structure
 
 ```
-sales-dashboard/
-├── app.py                 # Main FastAPI application
-├── models.py              # SQLAlchemy models (with DealContact, DealStageHistory)
-├── analytics.py           # Dashboard KPI calculations
-├── ai_document_parser.py  # AI document parsing (Gemini)
-├── brevo_service.py       # Brevo email marketing integration
-├── google_drive_service.py # Google Drive integration
-├── business_card_scanner.py # Legacy OCR (deprecated)
-├── requirements.txt       # Python dependencies
-├── Procfile              # Heroku process file
-├── Aptfile               # System dependencies
-│
-├── services/             # Business logic services
-│   ├── activity_service.py    # Unified timeline & stage tracking
-│   ├── ai_enrichment_service.py # AI enrichment, deduplication, summaries
-│   └── auth_service.py        # Google OAuth authentication
-│
-├── scripts/              # Utility scripts
-│   └── migrate_attio_enhancements.py  # Database migration for new features
-│
-├── frontend/             # React Admin CRM
-│   ├── src/
-│   │   ├── components/
-│   │   │   └── atomic-crm/   # CRM components
-│   │   │       ├── contacts/
-│   │   │       ├── companies/
-│   │   │       ├── deals/
-│   │   │       └── activity/
-│   │   └── activity-tracker/ # Legacy activity pages
-│   ├── dist/             # Built frontend (served by FastAPI)
-│   └── package.json
-│
-└── README.md             # This file
+colorado-careassist-portal/
+├── unified_app.py         # Main entry point (mounts all apps)
+├── portal/                # Portal hub app
+├── gigi/                  # Gigi AI voice assistant
+└── sales/                 # Sales Dashboard (this directory)
+    ├── app.py             # FastAPI application
+    ├── models.py          # SQLAlchemy models
+    ├── analytics.py       # Dashboard KPI calculations
+    ├── ai_document_parser.py  # AI document parsing (Gemini)
+    ├── activity_logger.py     # Activity logging service
+    ├── brevo_service.py       # Brevo email marketing integration
+    ├── google_drive_service.py # Google Drive integration
+    ├── business_card_scanner.py # Business card AI parsing
+    ├── requirements.txt       # Python dependencies
+    ├── Procfile              # Heroku process file
+    ├── Aptfile               # System dependencies
+    │
+    ├── services/         # Business logic services
+    │   ├── activity_service.py    # Unified timeline & stage tracking
+    │   ├── ai_enrichment_service.py # AI enrichment, deduplication, summaries
+    │   └── auth_service.py        # Google OAuth authentication
+    │
+    ├── scripts/          # Utility scripts
+    │   ├── auto_scan_drive.py         # Auto-scan Google Drive for business cards (runs via cron)
+    │   └── fix_scanned_contacts.py    # Fix NULL last_activity for scanned contacts
+    │
+    ├── frontend/         # React Admin CRM
+    │   ├── src/
+    │   │   ├── components/
+    │   │   │   └── atomic-crm/   # CRM components
+    │   │   │       ├── contacts/
+    │   │   │       ├── companies/
+    │   │   │       ├── deals/
+    │   │   │       ├── activity/
+    │   │   │       └── dashboard/
+    │   │   │           └── DashboardActivityLog.tsx  # Latest Activity widget
+    │   │   └── activity-tracker/ # Legacy activity pages
+    │   ├── dist/         # Built frontend (served by FastAPI)
+    │   └── package.json
+    │
+    └── README.md         # This file
 ```
 
 ## Team Assignees
 
 Tasks and activities can be assigned to:
-- jacob@coloradocareassist.com
-- cynthia@coloradocareassist.com
-- jason@coloradocareassist.com
+- jacob@coloradocareassist.com (Jacob Stewart - Colorado Springs)
+- jen@coloradocareassist.com (Jen Jeffers - Denver)
+- jason@coloradocareassist.com (Jason Shulman - Owner)
+- cosprings@coloradocareassist.com (Colorado Springs Office)
 
 ## Current Stats (as of Jan 2026)
 
@@ -345,24 +444,57 @@ Tasks and activities can be assigned to:
 - **Active Deals** in pipeline
 - **744+ Total Visits** logged
 - **Brevo**: Unlimited contacts on free plan
+- **Business Card Scans**: Auto-processed from Google Drive every 5 minutes
 
-### New in Jan 2026 (Attio-Inspired Enhancements)
+### Recent Updates (Jan 2026)
+
+**Attio-Inspired Enhancements:**
 - Relationship Graph: Multi-contact deals with roles
 - Time-in-Stage Tracking: Stale deal detection
 - Unified Activity Timeline: All interactions in one view
 - AI Enrichment: Company data, deduplication, interaction summaries
 
-## Contributing
+**Business Card Auto-Scanner:**
+- Google Drive folder monitoring (Jen Jeffers, Jacob Stewart, Colorado Springs)
+- Automatic AI extraction via Gemini
+- Duplicate prevention by email/phone
+- Real-time dashboard updates
+- Activity logging for all scans (visible in Latest Activity widget)
 
-1. Create a feature branch: `git checkout -b feature/your-feature`
-2. Make changes and test locally
+**Latest Activity Widget Fix (v556):**
+- Fixed display of business card scans (was showing "Activity" placeholder)
+- Now shows proper descriptions: "Scanned business card for {name} from {filename}"
+- Queries activity_logs database table for all activity types
+
+## Development Workflow
+
+1. Make changes in `sales/` directory
+2. Test locally: `uvicorn app:app --reload`
 3. Build frontend: `cd frontend && npm run build`
-4. Commit: `git commit -am "Add your feature"`
-5. Push to all remotes:
-   ```bash
-   git push origin main
-   git push heroku main
-   ```
+4. Commit changes: `git commit -am "Your message"`
+5. Deploy unified app: `git push heroku main` (from repository root)
+
+## Troubleshooting
+
+### Business Card Scanner Not Running
+```bash
+# Check cron job is set up
+crontab -l | grep auto_scan_drive
+
+# Run manually to test
+cd /path/to/sales
+source venv/bin/activate
+python scripts/auto_scan_drive.py
+```
+
+### Latest Activity Widget Empty
+- Check `/api/activity-logs` endpoint returns data
+- Verify ActivityLog records exist in database
+- Check frontend is calling correct endpoint path
+
+### Contacts Not Appearing in Dashboard
+- Verify `last_activity` field is set (required for dashboard filters)
+- Run fix script: `python scripts/fix_scanned_contacts.py`
 
 ## License
 
