@@ -561,10 +561,55 @@ app = FastAPI(
 
 from fastapi.responses import HTMLResponse
 
+# =============================================================================
+# SIMULATION ENDPOINTS (For Testing Shadow Mode)
+# =============================================================================
+
+@app.post("/simulate/callout")
+async def simulate_callout():
+    """
+    Simulate a caregiver call-out event to test Shadow Mode logic.
+    Triggers execute_caregiver_call_out with mock data.
+    """
+    logger.info("Starting simulated call-out...")
+    
+    # Mock data
+    mock_caregiver_id = "TEST_CG_123"
+    mock_shift_id = "TEST_SHIFT_456"
+    mock_reason = "Simulation Test (Sick)"
+    
+    # Force log entry for the simulation start
+    if GIGI_MODE == "shadow":
+        log_shadow_action("SIMULATION_START", {
+            "type": "caregiver_call_out",
+            "caregiver_id": mock_caregiver_id,
+            "shift_id": mock_shift_id
+        })
+    
+    # Execute the tool (which handles Shadow Mode internally)
+    result = await execute_caregiver_call_out(
+        caregiver_id=mock_caregiver_id,
+        shift_id=mock_shift_id,
+        reason=mock_reason
+    )
+    
+    return {
+        "status": "simulation_complete",
+        "mode": GIGI_MODE,
+        "result": result
+    }
+
 @app.get("/shadow", response_class=HTMLResponse)
 async def get_shadow_dashboard():
     """Simple dashboard to view Gigi's shadow mode actions."""
     status_color = "orange" if GIGI_MODE == "shadow" else "green"
+    
+    # Calculate stats
+    total_logs = len(SHADOW_LOGS)
+    error_logs = sum(1 for log in SHADOW_LOGS if "error" in log['action'].lower() or "fail" in log['action'].lower())
+    success_count = total_logs - error_logs
+    success_rate = (success_count / total_logs * 100) if total_logs > 0 else 100
+    
     html = f"""
     <html>
     <head>
@@ -572,6 +617,9 @@ async def get_shadow_dashboard():
         <style>
             body {{ font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }}
             .status {{ padding: 10px; background: #f0f0f0; border-radius: 5px; border-left: 5px solid {status_color}; }}
+            .stats {{ display: flex; gap: 20px; margin: 20px 0; }}
+            .stat-box {{ background: #f8f9fa; padding: 15px; border-radius: 5px; flex: 1; text-align: center; }}
+            .stat-value {{ font-size: 24px; font-weight: bold; color: #2c3e50; }}
             .log-entry {{ border-bottom: 1px solid #eee; padding: 10px 0; }}
             .timestamp {{ color: #666; font-size: 0.9em; }}
             .action {{ font-weight: bold; color: #2c3e50; }}
@@ -583,6 +631,30 @@ async def get_shadow_dashboard():
         <div class="status">
             <strong>Current Mode:</strong> {GIGI_MODE.upper()}<br>
             <small>If SHADOW, actions are logged but not executed.</small>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value">{success_rate:.1f}%</div>
+                <div>Success Rate</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">{total_logs}</div>
+                <div>Decisions Logged</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value">{error_logs}</div>
+                <div>Errors</div>
+            </div>
+        </div>
+        
+        <div style="background: #e8f4fd; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #b6d4fe;">
+            <h3 style="margin-top: 0; color: #0d47a1;">🧪 Simulation Control Panel</h3>
+            <p>Trigger test events to verify Gigi's logic without waiting for real calls.</p>
+            <button onclick="runSimulation('callout')" style="background: #0d6efd; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                Simulate Call-Out
+            </button>
+            <div id="sim-result" style="margin-top: 10px; font-family: monospace; font-size: 0.9em; color: #333;"></div>
         </div>
         
         <h2>Decision Log</h2>
@@ -603,6 +675,19 @@ async def get_shadow_dashboard():
     html += """
         </div>
         <script>
+            async function runSimulation(type) {
+                const resultDiv = document.getElementById('sim-result');
+                resultDiv.innerHTML = 'Running simulation...';
+                try {
+                    const response = await fetch(`/simulate/${type}`, { method: 'POST' });
+                    const data = await response.json();
+                    resultDiv.innerHTML = '✅ Simulation Complete! Refreshing logs...';
+                    setTimeout(() => window.location.reload(), 1500);
+                } catch (e) {
+                    resultDiv.innerHTML = '❌ Error: ' + e.message;
+                }
+            }
+            
             // Auto-refresh every 5 seconds
             setTimeout(() => window.location.reload(), 5000);
         </script>
@@ -1786,44 +1871,52 @@ async def get_active_shifts(person_id: str) -> List[Dict[str, Any]]:
     Returns:
         List of shifts with shift_id, client_name, start_time
     """
-    logger.info(f"get_active_shifts called for person_id: {person_id}")
+    try:
+        logger.info(f"get_active_shifts called for person_id: {person_id}")
 
-    shifts = await _get_caregiver_shifts(person_id)
+        shifts = await _get_caregiver_shifts(person_id)
 
-    if not shifts:
+        if not shifts:
+            return []
+
+        # Filter to next 24 hours
+        now = datetime.now()
+        cutoff = now + timedelta(hours=24)
+        active_shifts = []
+
+        for shift in shifts:
+            try:
+                start_time_str = shift.get("start_time", "")
+                start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+
+                # Include shifts starting in next 24 hours
+                if now <= start_time <= cutoff:
+                    active_shifts.append({
+                        "shift_id": shift.get("id", ""),
+                        "client_name": shift.get("client_name", "Unknown Client"),
+                        "client_id": shift.get("client_id", ""),
+                        "start_time": start_time.strftime("%I:%M %p"),
+                        "start_time_iso": start_time_str,
+                        "end_time": shift.get("end_time", ""),
+                        "status": shift.get("status", "scheduled"),
+                        "client_address": shift.get("client_address", "")
+                    })
+            except (ValueError, TypeError) as e:
+                logger.warning(f"Error parsing shift date: {e}")
+                continue
+
+        # Sort by start time
+        active_shifts.sort(key=lambda x: x.get("start_time_iso", ""))
+
+        logger.info(f"Found {len(active_shifts)} active shifts in next 24 hours")
+        return active_shifts
+        
+    except Exception as e:
+        logger.error(f"Error in get_active_shifts: {e}")
+        # Return empty list on failure rather than crashing conversation
+        # This is a "Degrade" action
+        failure_handler.handle_tool_failure("get_active_shifts", e, {"person_id": person_id})
         return []
-
-    # Filter to next 24 hours
-    now = datetime.now()
-    cutoff = now + timedelta(hours=24)
-    active_shifts = []
-
-    for shift in shifts:
-        try:
-            start_time_str = shift.get("start_time", "")
-            start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
-
-            # Include shifts starting in next 24 hours
-            if now <= start_time <= cutoff:
-                active_shifts.append({
-                    "shift_id": shift.get("id", ""),
-                    "client_name": shift.get("client_name", "Unknown Client"),
-                    "client_id": shift.get("client_id", ""),
-                    "start_time": start_time.strftime("%I:%M %p"),
-                    "start_time_iso": start_time_str,
-                    "end_time": shift.get("end_time", ""),
-                    "status": shift.get("status", "scheduled"),
-                    "client_address": shift.get("client_address", "")
-                })
-        except (ValueError, TypeError) as e:
-            logger.warning(f"Error parsing shift date: {e}")
-            continue
-
-    # Sort by start time
-    active_shifts.sort(key=lambda x: x.get("start_time_iso", ""))
-
-    logger.info(f"Found {len(active_shifts)} active shifts in next 24 hours")
-    return active_shifts
 
 
 async def execute_caregiver_call_out(
@@ -1853,65 +1946,74 @@ async def execute_caregiver_call_out(
     Returns:
         Dict with success status, steps completed, and message for Gigi to read
     """
-    logger.info(f"execute_caregiver_call_out: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
+    try:
+        logger.info(f"execute_caregiver_call_out: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
 
-    # =========================================================================
-    # COORDINATOR COORDINATION: Acquire shift lock to prevent collisions
-    # =========================================================================
-    # If offshore scheduler or human coordinator is already processing this
-    # shift, we get a lock conflict and tell the caregiver to wait.
+        # =========================================================================
+        # COORDINATOR COORDINATION: Acquire shift lock to prevent collisions
+        # =========================================================================
+        # If offshore scheduler or human coordinator is already processing this
+        # shift, we get a lock conflict and tell the caregiver to wait.
 
-    # SHADOW MODE: Skip lock acquisition (since we aren't really processing)
-    if GIGI_MODE == "shadow":
-        logger.info(f"SHADOW MODE: Skipping shift lock for {shift_id}")
-        return await _execute_caregiver_call_out_locked(
-            caregiver_id=caregiver_id,
-            shift_id=shift_id,
-            reason=reason
-        )
-
-    if SHIFT_LOCK_AVAILABLE and shift_lock_manager:
-        try:
-            with shift_lock_manager.acquire_shift_lock(
+        # SHADOW MODE: Skip lock acquisition (since we aren't really processing)
+        if GIGI_MODE == "shadow":
+            logger.info(f"SHADOW MODE: Skipping shift lock for {shift_id}")
+            return await _execute_caregiver_call_out_locked(
+                caregiver_id=caregiver_id,
                 shift_id=shift_id,
-                locked_by="gigi_ai",
-                reason="processing_callout",
-                timeout_minutes=10
-            ) as lock_info:
-                logger.info(f"Shift lock acquired: {shift_id} by gigi_ai")
-                # Proceed with call-out processing inside the lock
-                return await _execute_caregiver_call_out_locked(
-                    caregiver_id=caregiver_id,
-                    shift_id=shift_id,
-                    reason=reason
-                )
-        except CoordinatorLockError as e:
-            # Someone else (human coordinator or another Gigi instance) is processing this shift
-            logger.warning(f"Shift lock conflict for {shift_id}: {e}")
-            lock_status = shift_lock_manager.get_lock_status(shift_id)
-            locked_by = lock_status.locked_by if lock_status else "someone"
+                reason=reason
+            )
 
-            return {
-                "success": False,
-                "shift_locked": True,
-                "locked_by": locked_by,
-                "message": (
-                    f"I see this shift is currently being processed by our team. "
-                    f"Please hold on for just a moment while they handle it, or "
-                    f"try calling back in a few minutes if you need immediate assistance."
-                ),
-                "errors": [f"Shift locked by {locked_by}"],
-                "action_completed": True,
-                "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
-            }
-    else:
-        # Shift lock not available - proceed without lock (development mode)
-        logger.warning(f"Shift lock manager not available - proceeding without lock for shift {shift_id}")
-        return await _execute_caregiver_call_out_locked(
-            caregiver_id=caregiver_id,
-            shift_id=shift_id,
-            reason=reason
-        )
+        if SHIFT_LOCK_AVAILABLE and shift_lock_manager:
+            try:
+                with shift_lock_manager.acquire_shift_lock(
+                    shift_id=shift_id,
+                    locked_by="gigi_ai",
+                    reason="processing_callout",
+                    timeout_minutes=10
+                ) as lock_info:
+                    logger.info(f"Shift lock acquired: {shift_id} by gigi_ai")
+                    # Proceed with call-out processing inside the lock
+                    return await _execute_caregiver_call_out_locked(
+                        caregiver_id=caregiver_id,
+                        shift_id=shift_id,
+                        reason=reason
+                    )
+            except CoordinatorLockError as e:
+                # Someone else (human coordinator or another Gigi instance) is processing this shift
+                logger.warning(f"Shift lock conflict for {shift_id}: {e}")
+                lock_status = shift_lock_manager.get_lock_status(shift_id)
+                locked_by = lock_status.locked_by if lock_status else "someone"
+
+                return {
+                    "success": False,
+                    "shift_locked": True,
+                    "locked_by": locked_by,
+                    "message": (
+                        f"I see this shift is currently being processed by our team. "
+                        f"Please hold on for just a moment while they handle it, or "
+                        f"try calling back in a few minutes if you need immediate assistance."
+                    ),
+                    "errors": [f"Shift locked by {locked_by}"],
+                    "action_completed": True,
+                    "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
+                }
+        else:
+            # Shift lock not available - proceed without lock (development mode)
+            logger.warning(f"Shift lock manager not available - proceeding without lock for shift {shift_id}")
+            return await _execute_caregiver_call_out_locked(
+                caregiver_id=caregiver_id,
+                shift_id=shift_id,
+                reason=reason
+            )
+            
+    except Exception as e:
+        # Phase 3 Failure Protocol: Handle tool failure gracefully
+        return handle_tool_error("execute_caregiver_call_out", e, {
+            "caregiver_id": caregiver_id,
+            "shift_id": shift_id,
+            "reason": reason
+        })
 
 
 async def _execute_caregiver_call_out_locked(
@@ -2374,49 +2476,58 @@ async def cancel_shift_acceptance(
         Gigi: *calls cancel_shift_acceptance*
         Gigi: "I understand. I've cancelled your assignment and we're finding someone else..."
     """
-    logger.info(f"cancel_shift_acceptance called: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
+    try:
+        logger.info(f"cancel_shift_acceptance called: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
 
-    # =========================================================================
-    # COORDINATOR COORDINATION: Acquire shift lock to prevent collisions
-    # =========================================================================
-    if SHIFT_LOCK_AVAILABLE and shift_lock_manager:
-        try:
-            with shift_lock_manager.acquire_shift_lock(
-                shift_id=shift_id,
-                locked_by="gigi_ai",
-                reason="cancelling_acceptance",
-                timeout_minutes=10
-            ) as lock_info:
-                logger.info(f"Shift lock acquired for cancellation: {shift_id} by gigi_ai")
-                return await _cancel_shift_acceptance_locked(
-                    caregiver_id=caregiver_id,
+        # =========================================================================
+        # COORDINATOR COORDINATION: Acquire shift lock to prevent collisions
+        # =========================================================================
+        if SHIFT_LOCK_AVAILABLE and shift_lock_manager:
+            try:
+                with shift_lock_manager.acquire_shift_lock(
                     shift_id=shift_id,
-                    reason=reason
-                )
-        except CoordinatorLockError as e:
-            logger.warning(f"Shift lock conflict for cancellation {shift_id}: {e}")
-            lock_status = shift_lock_manager.get_lock_status(shift_id)
-            locked_by = lock_status.locked_by if lock_status else "someone"
+                    locked_by="gigi_ai",
+                    reason="cancelling_acceptance",
+                    timeout_minutes=10
+                ) as lock_info:
+                    logger.info(f"Shift lock acquired for cancellation: {shift_id} by gigi_ai")
+                    return await _cancel_shift_acceptance_locked(
+                        caregiver_id=caregiver_id,
+                        shift_id=shift_id,
+                        reason=reason
+                    )
+            except CoordinatorLockError as e:
+                logger.warning(f"Shift lock conflict for cancellation {shift_id}: {e}")
+                lock_status = shift_lock_manager.get_lock_status(shift_id)
+                locked_by = lock_status.locked_by if lock_status else "someone"
 
-            return {
-                "success": False,
-                "shift_locked": True,
-                "locked_by": locked_by,
-                "message": (
-                    f"I see this shift is currently being processed. Please hold on for just "
-                    f"a moment while the team handles it, or try calling back in a few minutes."
-                ),
-                "errors": [f"Shift locked by {locked_by}"],
-                "action_completed": True,
-                "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
-            }
-    else:
-        logger.warning(f"Shift lock manager not available - proceeding without lock")
-        return await _cancel_shift_acceptance_locked(
-            caregiver_id=caregiver_id,
-            shift_id=shift_id,
-            reason=reason
-        )
+                return {
+                    "success": False,
+                    "shift_locked": True,
+                    "locked_by": locked_by,
+                    "message": (
+                        f"I see this shift is currently being processed. Please hold on for just "
+                        f"a moment while the team handles it, or try calling back in a few minutes."
+                    ),
+                    "errors": [f"Shift locked by {locked_by}"],
+                    "action_completed": True,
+                    "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
+                }
+        else:
+            logger.warning(f"Shift lock manager not available - proceeding without lock")
+            return await _cancel_shift_acceptance_locked(
+                caregiver_id=caregiver_id,
+                shift_id=shift_id,
+                reason=reason
+            )
+
+    except Exception as e:
+        # Phase 3 Failure Protocol: Handle tool failure gracefully
+        return handle_tool_error("cancel_shift_acceptance", e, {
+            "caregiver_id": caregiver_id,
+            "shift_id": shift_id,
+            "reason": reason
+        })
 
 
 async def _cancel_shift_acceptance_locked(
