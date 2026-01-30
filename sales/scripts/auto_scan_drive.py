@@ -44,6 +44,7 @@ logger = logging.getLogger(__name__)
 FOLDERS = {
     'business_cards_jacob': '1aGO6vxe50yA-1UcanPDEVlIFrXOMRYK4',
     'business_cards_jen': '1MItlSLjrtsq2X4hJmYECEb9wn9Aeql7B',
+    'business_cards_cosprings': '1m7T4QKiydcr2p55B5D0Mx0DIApK8lbak',
     'myway_routes': '1IHiYvGxOaA6nyjd1Ecvgt1FbB114P5mB',
     'expenses': '16OmBFwNzEKzVBBjmDtSTdM21pb3wGhSb'
 }
@@ -52,6 +53,7 @@ FOLDERS = {
 FOLDER_USERS = {
     'business_cards_jacob': 'jacob@coloradocareassist.com',
     'business_cards_jen': 'jen@coloradocareassist.com',
+    'business_cards_cosprings': 'cosprings@coloradocareassist.com',  # UPDATE WITH ACTUAL EMAIL
     'myway_routes': 'jacob@coloradocareassist.com',
     'expenses': 'jacob@coloradocareassist.com'
 }
