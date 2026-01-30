@@ -42,12 +42,21 @@ logger = logging.getLogger(__name__)
 
 # Folder IDs (extracted from URLs)
 FOLDERS = {
-    'business_cards': '1aGO6vxe50yA-1UcanPDEVlIFrXOMRYK4',
+    'business_cards_jacob': '1aGO6vxe50yA-1UcanPDEVlIFrXOMRYK4',
+    'business_cards_jen': '1MItlSLjrtsq2X4hJmYECEb9wn9Aeql7B',
     'myway_routes': '1IHiYvGxOaA6nyjd1Ecvgt1FbB114P5mB',
     'expenses': '16OmBFwNzEKzVBBjmDtSTdM21pb3wGhSb'
 }
 
-# Default user for all imports
+# Folder type to user mapping
+FOLDER_USERS = {
+    'business_cards_jacob': 'jacob@coloradocareassist.com',
+    'business_cards_jen': 'jen@coloradocareassist.com',
+    'myway_routes': 'jacob@coloradocareassist.com',
+    'expenses': 'jacob@coloradocareassist.com'
+}
+
+# Default user for all imports (fallback)
 DEFAULT_USER = 'jacob@coloradocareassist.com'
 
 # Mileage rate for expense calculation
@@ -113,8 +122,10 @@ def mark_file_processed(db, drive_file_id: str, filename: str, folder_type: str,
     db.commit()
 
 
-def process_business_card(db, content: bytes, filename: str, file_id: str) -> Dict[str, Any]:
+def process_business_card(db, content: bytes, filename: str, file_id: str, user_email: str = None) -> Dict[str, Any]:
     """Process a business card image and create Contact + Company + Activity log"""
+    if not user_email:
+        user_email = user_email
     from models import Contact, ReferralSource, ProcessedDriveFile
     from ai_document_parser import ai_parser
     from activity_logger import ActivityLogger
@@ -190,7 +201,7 @@ def process_business_card(db, content: bytes, filename: str, file_id: str) -> Di
             existing_contact.address = address
         existing_contact.updated_at = datetime.utcnow()
         existing_contact.last_seen = datetime.utcnow()
-        existing_contact.account_manager = DEFAULT_USER
+        existing_contact.account_manager = user_email
         contact_id = existing_contact.id
         contact_updated = True
     else:
@@ -207,7 +218,7 @@ def process_business_card(db, content: bytes, filename: str, file_id: str) -> Di
             website=website,
             notes=notes,
             status="cold",
-            account_manager=DEFAULT_USER,
+            account_manager=user_email,
             source="Auto-Scan Business Card",
             scanned_date=datetime.utcnow(),
             created_at=datetime.utcnow(),
@@ -225,7 +236,7 @@ def process_business_card(db, content: bytes, filename: str, file_id: str) -> Di
             ActivityLogger.log_business_card_scan(
                 db=db,
                 contact_id=contact_id,
-                user_email=DEFAULT_USER,
+                user_email=user_email,
                 contact_name=f"{first_name} {last_name}".strip(),
                 filename=filename,
                 commit=False  # We'll commit at the end
@@ -247,8 +258,10 @@ def process_business_card(db, content: bytes, filename: str, file_id: str) -> Di
     }
 
 
-def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[str, Any]:
+def process_myway_pdf(db, content: bytes, filename: str, file_id: str, user_email: str = None) -> Dict[str, Any]:
     """Process a MyWay route PDF and create Visits + Mileage entry + Activity logs"""
+    if not user_email:
+        user_email = DEFAULT_USER
     from models import Visit, FinancialEntry, ReferralSource, Contact
     from ai_document_parser import ai_parser
     from activity_logger import ActivityLogger
@@ -299,7 +312,7 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[s
             city=visit_data.get('city', ''),
             notes=visit_data.get('notes', ''),
             visit_date=visit_date,
-            user_email=DEFAULT_USER,
+            user_email=user_email,
             created_at=datetime.utcnow()
         )
         db.add(new_visit)
@@ -334,7 +347,7 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[s
                 db=db,
                 visit_id=new_visit.id,
                 business_name=business_name,
-                user_email=DEFAULT_USER,
+                user_email=user_email,
                 visit_date=visit_date if isinstance(visit_date, datetime) else datetime.combine(visit_date, datetime.min.time()),
                 contact_id=contact_id,
                 company_id=company_id,
@@ -356,7 +369,7 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[s
         existing_entry = db.query(FinancialEntry).filter(
             FinancialEntry.date >= datetime.combine(date_only, datetime.min.time()),
             FinancialEntry.date < datetime.combine(date_only, datetime.max.time()),
-            FinancialEntry.user_email == DEFAULT_USER
+            FinancialEntry.user_email == user_email
         ).first()
 
         if existing_entry:
@@ -379,7 +392,7 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[s
                 mileage_cost=mileage * MILEAGE_RATE,
                 materials_cost=0,
                 total_daily_cost=mileage * MILEAGE_RATE,
-                user_email=DEFAULT_USER,
+                user_email=user_email,
                 created_at=datetime.utcnow()
             )
             db.add(new_entry)
@@ -398,8 +411,10 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str) -> Dict[s
     }
 
 
-def process_expense_receipt(db, content: bytes, filename: str, file_id: str, drive_url: str) -> Dict[str, Any]:
+def process_expense_receipt(db, content: bytes, filename: str, file_id: str, drive_url: str, user_email: str = None) -> Dict[str, Any]:
     """Process an expense receipt and create Expense entry"""
+    if not user_email:
+        user_email = DEFAULT_USER
     from models import Expense
     from ai_document_parser import ai_parser
 
@@ -427,7 +442,7 @@ def process_expense_receipt(db, content: bytes, filename: str, file_id: str, dri
 
     # Create expense
     new_expense = Expense(
-        user_email=DEFAULT_USER,
+        user_email=user_email,
         amount=amount,
         description=f"{vendor}: {description}".strip(': '),
         category=category,
@@ -463,7 +478,7 @@ def scan_folder(db, drive_service, folder_id: str, folder_type: str) -> Dict[str
     folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
 
     # Determine if we need images only or all files
-    image_only = folder_type in ['business_cards', 'expenses']
+    image_only = folder_type.startswith('business_cards') or folder_type == 'expenses'
 
     files = drive_service.list_files_in_folder(folder_url, image_only=image_only, recursive=True)
     logger.info(f"Found {len(files)} files in folder")
@@ -500,19 +515,22 @@ def scan_folder(db, drive_service, folder_id: str, folder_type: str) -> Dict[str
             content, _, _ = download_result
             drive_url = f"https://drive.google.com/file/d/{file_id}/view"
 
+            # Determine user email for this folder
+            folder_user = FOLDER_USERS.get(folder_type, user_email)
+
             # Process based on folder type
-            if folder_type == 'business_cards':
-                process_result = process_business_card(db, content, filename, file_id)
+            if folder_type.startswith('business_cards'):
+                process_result = process_business_card(db, content, filename, file_id, user_email=folder_user)
                 result_type = 'contact' if process_result.get('success') else 'error'
                 result_id = process_result.get('contact_id')
 
             elif folder_type == 'myway_routes':
-                process_result = process_myway_pdf(db, content, filename, file_id)
+                process_result = process_myway_pdf(db, content, filename, file_id, user_email=folder_user)
                 result_type = 'visit' if process_result.get('success') else 'error'
                 result_id = None  # Multiple visits created
 
             elif folder_type == 'expenses':
-                process_result = process_expense_receipt(db, content, filename, file_id, drive_url)
+                process_result = process_expense_receipt(db, content, filename, file_id, drive_url, user_email=folder_user)
                 result_type = 'expense' if process_result.get('success') else 'error'
                 result_id = process_result.get('expense_id')
 
