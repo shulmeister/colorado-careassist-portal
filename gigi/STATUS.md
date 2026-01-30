@@ -232,6 +232,14 @@ python memory_cli.py audit <memory_id>
 - Mode: `shadow` (logs only, no execution - safe testing)
 - Operations SMS: ENABLED (notifications to on-call manager)
 
+### Webhook Fixes:
+- **SMS webhook** - Now listens to ALL extensions (ID: 89752bc2..., expires 2036)
+  - Was only listening to Gigi's ext 111 (307-459-8220)
+  - Now captures SMS to ALL company numbers: 719-428-3999, 303-757-1777, 307-459-8220
+- **Team Messaging webhook** - Auto-renewal script created (`gigi/renew_team_webhook.py`)
+  - RingCentral limits Team Messaging webhooks to 7 days max
+  - Add to Heroku Scheduler: Daily 3am run `python gigi/renew_team_webhook.py`
+
 ### Manual Step Required:
 - **BeeTexting webhook** needs dashboard config (API doesn't support programmatic setup)
   1. Login: https://app.beetexting.com
