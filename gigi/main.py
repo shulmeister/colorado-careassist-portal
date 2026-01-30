@@ -2042,59 +2042,43 @@ async def _execute_caregiver_call_out_locked(
         }
 
     # =========================================================================
-    # STEP A: Create WellSky Task & Notify Team (The "Safe" Workflow)
+    # STEP A: Un-assign Caregiver in WellSky (The "Correct" Workflow)
     # =========================================================================
-    wellsky_task_created = False
-    team_notified = False
-
-    if GIGI_MODE == "shadow":
-        log_shadow_action("CREATE_WELLSKY_TASK", {"title": f"Call-Out: {client_name}", "caregiver": caregiver_name})
-        log_shadow_action("NOTIFY_TEAM", {"team": "New Schedulers", "message": f"Call-Out from {caregiver_name}"})
-        wellsky_task_created = True
-        team_notified = True
-    elif WELLSKY_AVAILABLE and wellsky:
-        # 1. Create the Task for the human scheduler to act upon
-        task_title = f"ACTION: Process Call-Out for {client_name}"
-        task_desc = (
-            f"Caregiver {caregiver_name} reported a call-out for the shift on {shift_time}.\n"
-            f"Reason: {reason}\n\n"
-            f"ACTION REQUIRED: Please remove the caregiver from the shift in WellSky to mark it as OPEN, "
-            f"and confirm coverage."
-        )
-        wellsky_task_created = wellsky.create_admin_task(
-            title=task_title,
-            description=task_desc,
-            related_client_id=client_id,
-            related_caregiver_id=caregiver_id,
-            priority="high"
-        )
-        if wellsky_task_created:
-            result["step_a_wellsky_updated"] = True # Re-purpose this flag for our new Step A
-            logger.info(f"STEP A SUCCESS: WellSky Task created for shift {shift_id}")
-
-        # 2. Notify RingCentral Team
-        schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
-        if schedulers_chat_id:
-            team_msg = (
-                f"📢 GIGI CALL-OUT: {caregiver_name} for {client_name} ({shift_time}).\n"
-                f"Reason: {reason}.\n"
-                f"A task has been created in WellSky to un-assign and find coverage."
-            )
-            team_notified = await send_glip_message(schedulers_chat_id, team_msg)
-            if team_notified:
-                logger.info("STEP A SUCCESS: RingCentral team notified.")
-
-    # CRITICAL CHECK: If we couldn't log the task or notify the team, escalate
-    if not (wellsky_task_created and team_notified):
-        # ... (existing escalation logic for when WellSky fails) ...
-        # This part of the code correctly handles notifying the manager if the primary workflow fails.
-        # I will leave it as is.
-        pass
+    wellsky_update_failed = False
+    wellsky_failure_reason = ""
     
-    # Update the result flags
-    result["step_a_wellsky_updated"] = wellsky_task_created
-    # We can reuse step_b for team notification
-    result["step_b_portal_logged"] = team_notified
+    if GIGI_MODE == "shadow":
+        log_shadow_action("UNASSIGN_CAREIVER_FROM_SHIFT", {"shift_id": shift_id, "caregiver_id": caregiver_id})
+        result["step_a_wellsky_updated"] = True
+    elif WELLSKY_AVAILABLE and wellsky:
+        try:
+            # 1. Get the full appointment object
+            _, appointment_obj = wellsky.get_appointment(shift_id)
+            if appointment_obj:
+                # 2. Modify the object: un-assign the caregiver
+                appointment_obj["caregiver"] = None
+                
+                # 3. PUT the modified object back
+                update_success, update_response = wellsky.update_appointment(shift_id, appointment_obj)
+                
+                if update_success:
+                    result["step_a_wellsky_updated"] = True
+                    logger.info(f"STEP A SUCCESS: Caregiver {caregiver_id} un-assigned from shift {shift_id} in WellSky.")
+                else:
+                    wellsky_update_failed = True
+                    wellsky_failure_reason = str(update_response)
+            else:
+                wellsky_update_failed = True
+                wellsky_failure_reason = "Could not fetch original appointment to modify."
+        except Exception as e:
+            wellsky_update_failed = True
+            wellsky_failure_reason = str(e)
+    
+    # CRITICAL CHECK: If the update failed, STOP and escalate.
+    if wellsky_update_failed:
+        logger.error(f"⚠️ ABORTING call-out process - WellSky update failed for shift {shift_id}: {wellsky_failure_reason}")
+        # (The existing human escalation logic below will handle notifying managers)
+        pass # Fall through to the escalation block
 
     # =========================================================================
     # CRITICAL CHECK: If WellSky update failed, STOP and escalate to human
