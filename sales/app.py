@@ -9007,69 +9007,65 @@ async def get_financials(
 
 # Google Drive Activity Logs API Endpoints
 @app.get("/api/activity-logs")
-async def get_activity_logs(db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Get all activity logs from Google Drive and manually added logs"""
+async def get_activity_logs(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    company_id: Optional[int] = None,
+    contact_id: Optional[int] = None,
+    deal_id: Optional[int] = None,
+):
+    """Get all activity logs - includes business card scans, calls, emails, visits, and Google Drive docs"""
     try:
+        from sqlalchemy import desc
+
+        # Query activity_logs table for all activities
+        query = db.query(ActivityLog).order_by(desc(ActivityLog.created_at))
+
+        # Apply filters if provided
+        if company_id:
+            query = query.filter(ActivityLog.company_id == company_id)
+        if contact_id:
+            query = query.filter(ActivityLog.contact_id == contact_id)
+        if deal_id:
+            query = query.filter(ActivityLog.deal_id == deal_id)
+
+        # Get activity logs from database
+        activity_logs = query.limit(100).all()
+
+        # Get logs from Google Drive API (for backward compatibility with Drive documents)
         all_logs = []
-        
-        # Get logs from Google Drive API
         drive_service = GoogleDriveService()
-        if drive_service.enabled:
+        if drive_service.enabled and not (company_id or contact_id or deal_id):
             try:
                 drive_logs = drive_service.find_activity_logs(limit=100)
                 all_logs.extend(drive_logs)
             except Exception as e:
                 logger.warning(f"Error fetching logs from Drive API: {e}")
-        
-        # Get manually added logs from database
-        try:
-            manual_logs = db.query(ActivityLog).all()
-            
-            # Fix specific logs with correct dates
-            if pytz:
-                mountain_tz = pytz.timezone('America/Denver')
-                
-                # Fix Nov 4, 2025 log
-                nov_4_2025 = mountain_tz.localize(datetime(2025, 11, 4, 0, 0, 0))
-                nov_4_2025_utc = nov_4_2025.astimezone(timezone.utc)
-                
-                # Fix Nov 5, 2025 log (today's log)
-                nov_5_2025 = mountain_tz.localize(datetime(2025, 11, 5, 0, 0, 0))
-                nov_5_2025_utc = nov_5_2025.astimezone(timezone.utc)
-                
-                for log in manual_logs:
-                    # Fix the specific log from Nov 4
-                    if log.file_id.startswith("1oDF7jNf"):
-                        # Check if date is wrong (not Nov 4)
-                        log_date_mountain = log.modified_time.replace(tzinfo=timezone.utc).astimezone(mountain_tz) if log.modified_time else None
-                        if not log_date_mountain or log_date_mountain.date() != nov_4_2025.date():
-                            log.modified_time = nov_4_2025_utc
-                            log.created_time = nov_4_2025_utc
-                            db.commit()
-                            logger.info(f"Fixed date for log {log.file_id} to Nov 4, 2025")
-                    
-                    # Fix today's log (Nov 5) - check if it starts with "11-oZUpC"
-                    if log.file_id.startswith("11-oZUpC"):
-                        # Check if date is wrong (not Nov 5)
-                        log_date_mountain = log.modified_time.replace(tzinfo=timezone.utc).astimezone(mountain_tz) if log.modified_time else None
-                        if not log_date_mountain or log_date_mountain.date() != nov_5_2025.date():
-                            log.modified_time = nov_5_2025_utc
-                            log.created_time = nov_5_2025_utc
-                            db.commit()
-                            logger.info(f"Fixed date for log {log.file_id} to Nov 5, 2025")
-            
-            manual_logs_dict = {log.file_id: log.to_dict() for log in manual_logs}
-            
-            # Add manually added logs that aren't already in Drive results
-            drive_file_ids = {log.get('id') for log in all_logs}
-            for file_id, log_dict in manual_logs_dict.items():
-                if file_id not in drive_file_ids:
-                    all_logs.append(log_dict)
-        except Exception as e:
-            logger.warning(f"Error fetching manual logs from database: {e}")
-        
-        # Sort by modified_time (most recent first), with None values last
-        all_logs.sort(key=lambda x: (x.get('modified_time') or '0000-00-00'), reverse=True)
+
+        # Convert activity_logs to dict format
+        for log in activity_logs:
+            log_dict = {
+                "id": log.id,
+                "activity_type": log.activity_type,
+                "title": log.title or log.description,
+                "description": log.description,
+                "contact_id": log.contact_id,
+                "company_id": log.company_id,
+                "deal_id": log.deal_id,
+                "user_email": log.user_email,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "modified_time": (log.modified_time or log.created_at).isoformat() if (log.modified_time or log.created_at) else None,
+                # Include Drive fields if present (for backward compatibility)
+                "file_id": log.file_id,
+                "name": log.name,
+                "url": log.external_url or log.url,
+                "preview_url": log.preview_url,
+                "edit_url": log.edit_url,
+            }
+            all_logs.append(log_dict)
+
+        # Sort by modified_time/created_at (most recent first)
+        all_logs.sort(key=lambda x: (x.get('modified_time') or x.get('created_at') or '0000-00-00'), reverse=True)
         
         return JSONResponse({
             "success": True,
