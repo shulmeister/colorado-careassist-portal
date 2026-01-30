@@ -33,16 +33,20 @@ logger = logging.getLogger(__name__)
 # Configuration
 # =============================================================================
 
-WELLSKY_API_KEY = os.getenv("WELLSKY_API_KEY")
-WELLSKY_API_SECRET = os.getenv("WELLSKY_API_SECRET")
+# OAuth 2.0 Credentials (from WellSky Connect API)
+WELLSKY_CLIENT_ID = os.getenv("WELLSKY_CLIENT_ID") or os.getenv("WELLSKY_API_KEY")  # Backward compat
+WELLSKY_CLIENT_SECRET = os.getenv("WELLSKY_CLIENT_SECRET") or os.getenv("WELLSKY_API_SECRET")  # Backward compat
 WELLSKY_AGENCY_ID = os.getenv("WELLSKY_AGENCY_ID")
 WELLSKY_ENVIRONMENT = os.getenv("WELLSKY_ENVIRONMENT", "sandbox")  # sandbox or production
 
-# API Base URLs
+# API Base URLs (WellSky Home Connect API - https://connect.clearcareonline.com/fhir/)
 API_URLS = {
-    "sandbox": "https://api-sandbox.clearcareonline.com/v1",
-    "production": "https://api.clearcareonline.com/v1",
+    "sandbox": "https://connect-sandbox.clearcareonline.com/v1",  # Sandbox endpoint (if available)
+    "production": "https://connect.clearcareonline.com/v1",  # Production endpoint
 }
+
+# OAuth endpoint path
+OAUTH_TOKEN_PATH = "/oauth/accesstoken"  # Per WellSky Connect API docs
 
 
 # =============================================================================
@@ -486,11 +490,11 @@ class WellSkyService:
     """
 
     def __init__(self):
-        self.api_key = WELLSKY_API_KEY
-        self.api_secret = WELLSKY_API_SECRET
+        self.api_key = WELLSKY_CLIENT_ID  # OAuth client_id
+        self.api_secret = WELLSKY_CLIENT_SECRET  # OAuth client_secret
         self.agency_id = WELLSKY_AGENCY_ID
         self.environment = WELLSKY_ENVIRONMENT
-        self.base_url = API_URLS.get(self.environment, API_URLS["sandbox"])
+        self.base_url = API_URLS.get(self.environment, API_URLS["production"])  # Default to production
 
         self._access_token = None
         self._token_expires_at = None
@@ -535,17 +539,17 @@ class WellSkyService:
                 return self._access_token
 
         try:
-            # OAuth 2.0 client credentials flow
-            auth_url = f"{self.base_url}/oauth/token"
+            # OAuth 2.0 client credentials flow (WellSky Connect API)
+            auth_url = f"{self.base_url}{OAUTH_TOKEN_PATH}"
 
             response = requests.post(
                 auth_url,
-                data={
-                    "grant_type": "client_credentials",
+                json={
                     "client_id": self.api_key,
                     "client_secret": self.api_secret,
+                    "grant_type": "client_credentials",
                 },
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                headers={"Content-Type": "application/json"},
                 timeout=30
             )
 
