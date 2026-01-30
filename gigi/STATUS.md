@@ -1,6 +1,6 @@
 # Gigi Status Report
 
-**Last Updated:** 2026-01-27
+**Last Updated:** 2026-01-30
 
 ---
 
@@ -214,39 +214,45 @@ python memory_cli.py audit <memory_id>
 
 ---
 
-## What Changed Today (2026-01-27)
+## What Changed Today (2026-01-30)
 
-### Phases Completed:
+### Infrastructure Fixed:
 
-**Phase 1: Memory System** ✅
-- Deployed to production (v504)
-- Database tables created and migrated
-- 0 memories initially (fresh start)
-- Full confidence-based memory management
-- Automated decay mechanism
-- CLI tools for memory management
+**Gigi Webhooks & Integration** ✅
+- Fixed Python syntax errors preventing app mounting (v584)
+- Added BeeTexting API credentials to Heroku (v586)
+- Configured RingCentral SMS webhook (ID: 23dd2eb7..., expires 2036)
+- Configured RingCentral Team Messaging webhook (ID: 0f1536f6..., expires Feb 6)
+- Verified Gigi extension 111 and login as "Gigi AI"
 
-**Phase 2: Mode Detection** ✅
-- Deployed to production (v506)
-- Database tables created and migrated
-- 8 operating modes implemented
-- Time-based and context-based detection working
-- Mode detected: `off_grid` (after hours, auto-responder tone)
-- CLI tools for mode management
+### What's Working:
+- RingCentral SMS → Gigi (texts from 719-428-3999, 303-757-1777)
+- RingCentral Team Messaging → Gigi (Schedulers chat, DMs to Jason ext 101 / Cynthia ext 105)
+- All critical API credentials in Heroku (WellSky, RingCentral, BeeTexting, Retell, OpenAI)
+- Mode: `shadow` (logs only, no execution - safe testing)
+- Operations SMS: ENABLED (notifications to on-call manager)
 
-### Infrastructure Added:
-- `memory_system.py` - PostgreSQL-backed memory (500+ lines)
-- `memory_cli.py` - Memory management CLI (300+ lines)
-- `mode_detector.py` - Mode detection system (500+ lines)
-- `mode_cli.py` - Mode management CLI (300+ lines)
-- Migration scripts for both systems
-- Integration with main.py and health endpoint
+### Manual Step Required:
+- **BeeTexting webhook** needs dashboard config (API doesn't support programmatic setup)
+  1. Login: https://app.beetexting.com
+  2. Settings → Integrations → Webhooks
+  3. URL: `https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/beetexting`
+  4. Events: "Inbound SMS"
 
-### What's Live:
-- Memory capture function available in conversation
-- Mode detection running (currently: off_grid mode)
-- Behavior configuration per mode
-- Health endpoint shows both systems (v2.1.0)
+### Architecture Notes:
+- RingCentral resells BeeTexting (both systems synchronized)
+- BeeTexting = advanced SMS features (reply as queue, transfer ownership)
+- Team Messaging = internal Slack-like chats (Schedulers, Biz Dev)
+- Gigi posts to Schedulers chat for shift coverage when live
+- Gigi DMs Jason/Cynthia for escalations
+
+---
+
+## Previous Updates (2026-01-27)
+
+**Phase 1: Memory System** ✅ (v504)
+**Phase 2: Mode Detection** ✅ (v506)
+- See git history for details
 
 ---
 
