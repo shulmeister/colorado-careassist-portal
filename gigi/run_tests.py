@@ -57,23 +57,27 @@ def create_batch_test(test_definition_ids):
 
 def get_batch_test(batch_job_id):
     """Get batch test status."""
-    response = requests.get(
-        f'{BASE_URL}/get-batch-test/{batch_job_id}',
-        headers=headers,
-        timeout=30
-    )
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f'Error getting batch test: {response.status_code}')
-        return None
+    try:
+        response = requests.get(
+            f'{BASE_URL}/get-batch-test/{batch_job_id}',
+            headers=headers,
+            timeout=60
+        )
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f'Error getting batch test: {response.status_code}')
+            return None
+    except requests.exceptions.ReadTimeout:
+        print("Timeout checking status - will retry")
+        return {'status': 'in_progress'}
 
 def list_test_runs(batch_job_id):
     """List individual test runs from a batch."""
     response = requests.get(
         f'{BASE_URL}/list-test-runs/{batch_job_id}',
         headers=headers,
-        timeout=30
+        timeout=60
     )
     if response.status_code == 200:
         return response.json()
