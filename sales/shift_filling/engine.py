@@ -19,6 +19,7 @@ from .models import (
 )
 from .matcher import CaregiverMatcher, MatchResult
 from .sms_service import sms_service, SMSService
+from .db_lock import ShiftAssignmentLock, ShiftLockConflictError, ShiftLockDatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,14 @@ class ShiftFillingEngine:
         # Active outreach campaigns
         self.active_campaigns: Dict[str, ShiftOutreach] = {}
 
-        logger.info("ShiftFillingEngine initialized")
+        # Database lock for preventing race conditions
+        try:
+            self.shift_lock = ShiftAssignmentLock()
+            logger.info("ShiftFillingEngine initialized with database locking enabled")
+        except ValueError as e:
+            logger.warning(f"Database locking disabled: {e}")
+            self.shift_lock = None
+            logger.info("ShiftFillingEngine initialized WITHOUT database locking (race conditions possible)")
 
     def process_calloff(
         self,
@@ -223,12 +231,90 @@ class ShiftFillingEngine:
         campaign: ShiftOutreach,
         outreach: CaregiverOutreach
     ) -> Dict[str, Any]:
-        """Handle a caregiver accepting a shift."""
+        """
+        Handle a caregiver accepting a shift.
+
+        Uses database-level locking to prevent race condition where two caregivers
+        accept the same shift simultaneously.
+        """
+        shift = campaign.shift
+        caregiver = outreach.caregiver
+
+        # Acquire database lock for this specific shift
+        # This prevents race condition where two caregivers accept at the same time
+        if self.shift_lock:
+            try:
+                with self.shift_lock.acquire_shift_lock(shift.id):
+                    # Inside lock: only ONE process can execute this block at a time
+                    # for this specific shift
+
+                    # Double-check shift is still available (another process might have filled it)
+                    if campaign.status == OutreachStatus.FILLED:
+                        logger.info(f"Shift {shift.id} already filled (race condition avoided)")
+                        self.sms.send_shift_filled_notification(caregiver, shift)
+                        return {
+                            "success": True,
+                            "action": "already_filled",
+                            "message": "Shift was already filled by another caregiver"
+                        }
+
+                    # First acceptance wins!
+                    logger.info(f"Lock acquired for shift {shift.id}, assigning to {caregiver.full_name}")
+
+                    # 1. Mark winner in campaign
+                    campaign.mark_winner(caregiver.id)
+
+                    # 2. Assign in WellSky
+                    self.wellsky.assign_shift(shift.id, caregiver.id)
+
+                    # 3. Send confirmation to winner
+                    self.sms.send_confirmation(caregiver, shift)
+
+                    # 4. Notify others that shift is filled
+                    for other_outreach in campaign.caregivers_contacted:
+                        if other_outreach.caregiver_id != caregiver.id:
+                            if other_outreach.response_type == CaregiverResponseType.NO_RESPONSE:
+                                # Don't notify those who haven't responded yet
+                                pass
+                            else:
+                                self.sms.send_shift_filled_notification(other_outreach.caregiver, shift)
+
+                    # 5. Trigger callback
+                    if self.on_shift_filled:
+                        self.on_shift_filled(campaign, caregiver)
+
+                    logger.info(f"Shift {shift.id} successfully filled by {caregiver.full_name}")
+
+                    return {
+                        "success": True,
+                        "action": "shift_filled",
+                        "assigned_caregiver": caregiver.full_name,
+                        "caregiver_id": caregiver.id,
+                        "match_score": outreach.match_score
+                    }
+                # Lock automatically released here
+
+            except ShiftLockConflictError as e:
+                # Another process is currently assigning this shift
+                logger.warning(f"Lock conflict for shift {shift.id}: {e}")
+                return {
+                    "success": False,
+                    "action": "lock_conflict",
+                    "message": "Another caregiver is being assigned to this shift right now. Please try again in a moment."
+                }
+
+            except ShiftLockDatabaseError as e:
+                # Database connection failed - fall back to unlocked assignment
+                logger.error(f"Database locking failed for shift {shift.id}: {e}")
+                logger.warning("Proceeding with assignment WITHOUT lock (race condition possible)")
+                # Fall through to unlocked code below
+
+        # Fallback: No locking available (development mode or database error)
+        logger.warning(f"Processing shift {shift.id} acceptance WITHOUT database lock (race conditions possible)")
 
         # Check if shift is already filled
         if campaign.status == OutreachStatus.FILLED:
-            # Notify them it's taken
-            self.sms.send_shift_filled_notification(outreach.caregiver, campaign.shift)
+            self.sms.send_shift_filled_notification(caregiver, shift)
             return {
                 "success": True,
                 "action": "already_filled",
@@ -236,28 +322,16 @@ class ShiftFillingEngine:
             }
 
         # First acceptance wins!
-        caregiver = outreach.caregiver
-        shift = campaign.shift
-
-        # 1. Mark winner in campaign
         campaign.mark_winner(caregiver.id)
-
-        # 2. Assign in WellSky
         self.wellsky.assign_shift(shift.id, caregiver.id)
-
-        # 3. Send confirmation to winner
         self.sms.send_confirmation(caregiver, shift)
 
-        # 4. Notify others that shift is filled
+        # Notify others
         for other_outreach in campaign.caregivers_contacted:
             if other_outreach.caregiver_id != caregiver.id:
-                if other_outreach.response_type == CaregiverResponseType.NO_RESPONSE:
-                    # Don't notify those who haven't responded yet
-                    pass
-                else:
+                if other_outreach.response_type != CaregiverResponseType.NO_RESPONSE:
                     self.sms.send_shift_filled_notification(other_outreach.caregiver, shift)
 
-        # 5. Trigger callback
         if self.on_shift_filled:
             self.on_shift_filled(campaign, caregiver)
 
