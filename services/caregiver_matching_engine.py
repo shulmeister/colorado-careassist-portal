@@ -127,18 +127,55 @@ class CaregiverMatchingEngine:
         # --- STEP 3: HARD FILTERS (Non-negotiable) ---
         
         # 1. Blocked / Do Not Send
-        # Assuming client has 'do_not_send_caregivers' list of IDs
         if hasattr(client, 'do_not_send_caregivers') and caregiver.id in client.do_not_send_caregivers:
             return MatchScore(caregiver.id, caregiver.full_name, 0, {}, urgency, "C", True, "Blocked by client")
+
+        # 1b. Client Specific Preferences (The "Override" Layer)
+        # Example: client.preferences = {"no_male_caregivers": True, "familiarity_only": True}
+        if hasattr(client, 'preferences'):
+            prefs = client.preferences
             
-        # 2. Authorization / Skills (Simplistic check - expand if specific certs needed)
-        # For CRITICAL shifts, ensure at least some qualifications
-        if urgency == ShiftUrgency.CRITICAL and (not caregiver.certifications or len(caregiver.certifications) == 0):
-            # Penalize heavily but maybe not hard fail if data is sparse?
-            # User said "Exclude caregivers who fail... Not authorized".
-            # If we don't know authorized status, we might skip.
-            # For now, let's assume if they are 'active', they are authorized for basic care.
-            pass
+            # Gender Preference
+            if prefs.get('no_male_caregivers') and getattr(caregiver, 'gender', '').lower() == 'male':
+                return MatchScore(caregiver.id, caregiver.full_name, 0, {}, urgency, "C", True, "Client prefers female caregivers")
+                
+            if prefs.get('no_female_caregivers') and getattr(caregiver, 'gender', '').lower() == 'female':
+                return MatchScore(caregiver.id, caregiver.full_name, 0, {}, urgency, "C", True, "Client prefers male caregivers")
+
+            # Strict Familiarity Rule ("Never new caregiver")
+            if prefs.get('familiarity_only'):
+                has_worked = hasattr(caregiver, 'clients_worked_with') and client.id in caregiver.clients_worked_with
+                is_preferred = hasattr(client, 'preferred_caregivers') and caregiver.id in client.preferred_caregivers
+                if not (has_worked or is_preferred):
+                    return MatchScore(caregiver.id, caregiver.full_name, 0, {}, urgency, "C", True, "Client requires previous history")
+
+        # 2. Authorization / Skills (Strict Check for Critical Shifts)
+        # "Assign dementia or transfer care to an unproven caregiver" -> FORBIDDEN
+        if urgency == ShiftUrgency.CRITICAL:
+            required_skills = set()
+            # Determine needs from shift/client context (simplified)
+            # ideally passed in or derived from classify_urgency context
+            # For now, check if 'dementia' was a keyword in urgency classification
+            # This requires classify_urgency to return context or us to re-derive it.
+            # Let's assume we can check caregiver skills against the CRITICAL_KEYWORDS found in shift notes.
+            
+            # Re-scan keywords to find specific needs (Dementia, Transfer)
+            text_corpus = (getattr(shift, 'notes', '') or '') + " " + " ".join(getattr(shift, 'tasks_completed', []) or [])
+            text_corpus = text_corpus.lower()
+            
+            if "dementia" in text_corpus or "alzheimer" in text_corpus:
+                cg_skills = [s.lower() for s in (getattr(caregiver, 'skills', []) or [])]
+                cg_certs = [c.lower() for c in (getattr(caregiver, 'certifications', []) or [])]
+                all_qualifications = set(cg_skills + cg_certs)
+                
+                # Check for dementia qualification
+                if not any(q in all_qualifications for q in ["dementia", "alzheimer", "memory care"]):
+                    # If not explicitly qualified, check experience/history as proxy?
+                    # User rule: "Assign dementia... to unproven caregiver" -> FAIL.
+                    # If they have worked with client before, they are "proven".
+                    has_history = hasattr(caregiver, 'clients_worked_with') and client.id in caregiver.clients_worked_with
+                    if not has_history:
+                         return MatchScore(caregiver.id, caregiver.full_name, 0, {}, urgency, "C", True, "Unqualified for Dementia (New Caregiver)")
 
         # 3. Schedule Overlap (Hard Filter)
         if active_shifts:

@@ -3399,6 +3399,56 @@ class WellSkyService:
             logger.error(f"Error adding note to client {client_id}: {e}")
             return False, str(e)
 
+    def create_admin_task(
+        self,
+        title: str,
+        description: str,
+        due_date: Optional[date] = None,
+        assigned_to: Optional[str] = None,
+        related_client_id: Optional[str] = None,
+        related_caregiver_id: Optional[str] = None,
+        priority: str = "normal"
+    ) -> bool:
+        """
+        Create an administrative task in WellSky.
+        
+        Args:
+            title: Task title
+            description: Task details
+            due_date: When it's due
+            assigned_to: WellSky user ID to assign to
+            related_client_id: Client ID to link
+            related_caregiver_id: Caregiver ID to link
+            priority: normal, high, urgent
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Created AdminTask '{title}'")
+            return True
+
+        task_data = {
+            "title": title,
+            "description": description,
+            "status": "pending",
+            "priority": priority,
+            "due_date": due_date.isoformat() if due_date else date.today().isoformat()
+        }
+
+        if assigned_to:
+            task_data["assigned_to_id"] = assigned_to
+        if related_client_id:
+            task_data["client_id"] = related_client_id
+        if related_caregiver_id:
+            task_data["caregiver_id"] = related_caregiver_id
+
+        success, response = self._make_request("POST", "adminTasks/", data=task_data)
+
+        if success:
+            logger.info(f"Created AdminTask: {title}")
+            return True
+        else:
+            logger.error(f"Failed to create AdminTask: {response}")
+            return False
+
     def add_note_to_caregiver(
         self,
         caregiver_id: str,

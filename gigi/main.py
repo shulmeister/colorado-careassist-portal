@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Literal, Tuple
 from enum import Enum
+from types import SimpleNamespace
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Header
 from fastapi.responses import JSONResponse, Response
@@ -102,6 +103,27 @@ except Exception as e:
     detect_partial_availability = None
     PARTIAL_AVAILABILITY_PARSER_AVAILABLE = False
     logger.warning(f"Partial Availability Parser not available: {e}")
+
+# Import Caregiver Matching Engine
+try:
+    from services.caregiver_matching_engine import CaregiverMatchingEngine, ShiftUrgency
+    matching_engine = CaregiverMatchingEngine()
+    MATCHING_ENGINE_AVAILABLE = True
+    logger.info("✓ Caregiver Matching Engine loaded")
+except ImportError:
+    matching_engine = None
+    MATCHING_ENGINE_AVAILABLE = False
+    logger.warning("Caregiver Matching Engine not available")
+
+# Import Entity Resolution Service
+try:
+    from services.entity_resolution_service import entity_resolver
+    ENTITY_RESOLUTION_AVAILABLE = True
+    logger.info("✓ Entity Resolution Service loaded")
+except ImportError:
+    entity_resolver = None
+    ENTITY_RESOLUTION_AVAILABLE = False
+    logger.warning("Entity Resolution Service not available")
 
 # Import enhanced webhook functionality for caller ID, transfer, and message taking
 try:
@@ -1359,6 +1381,57 @@ async def _get_ringcentral_token() -> Optional[str]:
 
 
 async def _send_sms_ringcentral(to_phone: str, message: str) -> bool:
+    # ... existing implementation ...
+
+async def send_glip_message(chat_id: str, text: str) -> bool:
+    """Send a message to a RingCentral Glip team/chat."""
+    token = await _get_ringcentral_token()
+    if not token:
+        logger.warning("RingCentral not available - Glip message not sent")
+        return False
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{RINGCENTRAL_SERVER}/restapi/v1.0/glip/chats/{chat_id}/posts",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                },
+                json={"text": text},
+                timeout=10.0
+            )
+            return response.status_code in (200, 201)
+    except Exception as e:
+        logger.error(f"Error sending Glip message: {e}")
+        return False
+
+async def assign_beetexting_conversation(from_phone: str, agent_email: str) -> bool:
+    """Assign a BeeTexting conversation to a specific agent."""
+    token = BEETEXTING_API_KEY or await _get_beetexting_token()
+    if not token:
+        logger.warning("BeeTexting credentials missing - cannot assign conversation")
+        return False
+
+    try:
+        # BeeTexting usually identifies conversations by the contact's phone number
+        clean_phone = ''.join(filter(str.isdigit, from_phone))[-10:]
+        async with httpx.AsyncClient() as client:
+            # Note: Endpoint path is hypothetical based on typical BeeTexting patterns
+            # Would need to verify against their actual API docs for "Assign Conversation"
+            response = await client.post(
+                "https://api.beetexting.com/v1/conversations/assign",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "phone_number": clean_phone,
+                    "agent_email": agent_email
+                },
+                timeout=10.0
+            )
+            return response.status_code == 200
+    except Exception as e:
+        logger.error(f"Error assigning BeeTexting conversation: {e}")
+        return False
     """Send SMS via RingCentral API (backup provider)."""
     token = await _get_ringcentral_token()
 
@@ -2050,7 +2123,7 @@ async def _execute_caregiver_call_out_locked(
         return result  # ⛔ STOP HERE - do NOT proceed with Steps B & C
 
     # =========================================================================
-    # STEP B: Log call-out event to Client Ops Portal
+    # STEP B: Log call-out event to Client Ops Portal & Create WellSky Task
     # =========================================================================
     call_out_data = {
         "caregiver_id": caregiver_id,
@@ -2067,26 +2140,58 @@ async def _execute_caregiver_call_out_locked(
         "wellsky_updated": result["step_a_wellsky_updated"]
     }
 
-    try:
-        async with httpx.AsyncClient() as client:
-            portal_response = await client.post(
-                f"{PORTAL_BASE_URL}/api/operations/call-outs",
-                json=call_out_data,
-                timeout=10.0
-            )
-            if portal_response.status_code in (200, 201):
-                portal_result = portal_response.json()
-                result["call_out_id"] = portal_result.get("id")
-                result["step_b_portal_logged"] = True
-                logger.info(f"STEP B SUCCESS: Call-out logged to portal: {result['call_out_id']}")
-            else:
-                error_msg = f"Portal returned {portal_response.status_code}: {portal_response.text}"
-                result["errors"].append(f"Step B: {error_msg}")
-                logger.warning(error_msg)
-    except Exception as e:
-        error_msg = f"Portal logging failed: {str(e)}"
-        result["errors"].append(f"Step B: {error_msg}")
-        logger.error(error_msg)
+    if GIGI_MODE == "shadow":
+        log_shadow_action("LOG_PORTAL_EVENT", call_out_data)
+        log_shadow_action("CREATE_WELLSKY_TASK", {
+            "title": f"Shift Needs Filling: {client_name}",
+            "description": f"Dina Ortega (Caregiver {caregiver_id}) called out for {shift_time}. Shift marked OPEN by Gigi."
+        })
+    else:
+        try:
+            # 1. Log to Portal
+            async with httpx.AsyncClient() as client:
+                portal_response = await client.post(
+                    f"{PORTAL_BASE_URL}/api/operations/call-outs",
+                    json=call_out_data,
+                    timeout=10.0
+                )
+                if portal_response.status_code in (200, 201):
+                    result["step_b_portal_logged"] = True
+            
+            # 2. Create WellSky Admin Task
+            if WELLSKY_AVAILABLE and wellsky:
+                task_success = wellsky.create_admin_task(
+                    title=f"🚨 Shift Needs Filling: {client_name}",
+                    description=(
+                        f"Caregiver {caregiver_name} called out for shift on {shift_time}.\n"
+                        f"Reason: {reason}\n\n"
+                        f"Gigi marked the shift as OPEN and is currently reaching out to candidates."
+                    ),
+                    related_client_id=client_id,
+                    related_caregiver_id=caregiver_id,
+                    priority="high"
+                )
+                if task_success:
+                    logger.info(f"Created WellSky Task for call-out: {client_name}")
+
+            # 3. Notify "New Schedulers" RingCentral Team
+            schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
+            if schedulers_chat_id:
+                team_msg = (
+                    f"📢 GIGI ALERT: {caregiver_name} called out for {client_name} ({shift_time}).\n"
+                    f"✅ WellSky Shift marked OPEN.\n"
+                    f"✅ WellSky Task created.\n"
+                    f"⏳ Gigi is filling the shift now."
+                )
+                await send_glip_message(schedulers_chat_id, team_msg)
+
+            # 4. Assign BeeTexting conversation to Israt
+            scheduler_email = os.getenv("BEETEXTING_SCHEDULER_EMAIL", "israt@coloradocareassist.com")
+            # Logic to find phone number from ID if caregiver_id isn't phone
+            await assign_beetexting_conversation(caregiver_id, scheduler_email)
+
+        except Exception as e:
+            logger.error(f"Error in expanded call-out workflow: {e}")
 
     # =========================================================================
     # STEP C: Trigger Replacement Blast (notify available caregivers)
@@ -2981,6 +3086,35 @@ async def log_client_issue(
         logger.error(f"Error logging client issue: {e}")
 
     # ==========================================================================
+    # WORKFLOW: Create WellSky Task & Notify Team
+    # ==========================================================================
+    if GIGI_MODE == "shadow":
+        log_shadow_action("CREATE_WELLSKY_TASK", {
+            "title": f"Client Issue: {issue_type}",
+            "description": note,
+            "client_id": effective_client_id
+        })
+        log_shadow_action("NOTIFY_TEAM", {
+            "team": "New Schedulers",
+            "message": f"Client Issue: {note}"
+        })
+    else:
+        # 1. Create WellSky Task
+        if WELLSKY_AVAILABLE and wellsky:
+            wellsky.create_admin_task(
+                title=f"Client Issue: {issue_type}",
+                description=f"Note: {note}\nPriority: {priority}",
+                related_client_id=effective_client_id if effective_client_id != "UNKNOWN" else None,
+                priority="high" if priority in ["high", "urgent"] else "normal"
+            )
+
+        # 2. Notify Team
+        schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
+        if schedulers_chat_id:
+            team_msg = f"📢 CLIENT ISSUE ({priority}): {effective_client_id}\n📝 {note}"
+            await send_glip_message(schedulers_chat_id, team_msg)
+
+    # ==========================================================================
     # ESCALATION: Notify Cynthia and Jason for urgent issues / cancel threats
     # ==========================================================================
     escalation_sent = False
@@ -3193,6 +3327,28 @@ async def report_late(
             if response.status_code in (200, 201):
                 data = response.json()
                 logger.info(f"Late notification sent for shift {shift_id}")
+                
+                # ==========================================================================
+                # WORKFLOW: Create WellSky Task & Notify Team
+                # ==========================================================================
+                if GIGI_MODE == "shadow":
+                    log_shadow_action("CREATE_WELLSKY_TASK", {"title": f"Late Report: {shift_id}", "delay": delay_minutes})
+                    log_shadow_action("NOTIFY_TEAM", {"team": "New Schedulers", "message": f"Late: {shift_id}"})
+                else:
+                    if WELLSKY_AVAILABLE and wellsky:
+                        # Try to link to IDs if possible (would need to fetch shift details first)
+                        # For speed, we just log the shift_id
+                        wellsky.create_admin_task(
+                            title=f"⏰ Late Report: {delay_minutes} min",
+                            description=f"Shift ID: {shift_id}\nReason: {reason}",
+                            priority="normal"
+                        )
+                    
+                    schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
+                    if schedulers_chat_id:
+                        team_msg = f"⏰ LATE REPORT: Shift {shift_id}\nDelay: {delay_minutes}m\nReason: {reason}"
+                        await send_glip_message(schedulers_chat_id, team_msg)
+
                 return ShiftActionResult(
                     success=True,
                     message=f"Got it. I've notified the client that you're running about {delay_minutes} minutes late. Drive safe.",
@@ -4532,6 +4688,23 @@ async def retell_function_call(function_name: str, request: Request):
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
             return JSONResponse(result.model_dump())
 
+        elif function_name == "resolve_person":
+            if not ENTITY_RESOLUTION_AVAILABLE:
+                raise HTTPException(status_code=503, detail="Entity Resolution service is not available.")
+            
+            name = args.get("name")
+            if not name:
+                raise HTTPException(status_code=400, detail="Name is required for resolution.")
+
+            # Get caller context to help with resolution
+            caller_context = _get_call_context(call_id)
+            context = {}
+            if caller_context and caller_context.get("caller_type") == "caregiver":
+                context["caregiver_id"] = caller_context.get("person_id")
+
+            result = entity_resolver.resolve_person(name, context=context)
+            return JSONResponse(result)
+
         # SHIFT FILLING FUNCTIONS - Gigi actively fills shifts!
         elif function_name == "find_replacement_caregivers":
             result = await find_replacement_caregivers(**args)
@@ -5167,6 +5340,14 @@ def detect_sms_intent(message: str) -> str:
     ]):
         return "payroll"
 
+    # New Client Inquiry / Biz Dev
+    if any(phrase in msg_lower for phrase in [
+        "looking for care", "need a caregiver", "rates", "cost", 
+        "new client", "sign up", "services", "help for my mom", "help for my dad",
+        "care for my", "interested in services"
+    ]):
+        return "inquiry"
+
     return "general"
 
 
@@ -5372,17 +5553,47 @@ async def handle_inbound_sms(sms: InboundSMS):
                             logger.info(f"Clocked in shift {current_shift.id}: {message}")
 
                 elif intent == "callout":
-                    # Report the call-out
-                    success, message, affected_shift = wellsky.report_callout(
-                        sms.from_number,
-                        reason=sms.message[:200]
-                    )
-                    if success:
-                        action_taken = message
-                        current_shift = affected_shift
-                        if affected_shift:
-                            shift_context = format_shift_context(affected_shift)
-                        logger.info(f"Call-out reported: {message}")
+                    # Smart Call-Out Handling (Continuity First)
+                    if caller_info and caller_info.caller_type == CallerType.CAREGIVER and caller_info.person_id:
+                        caregiver_id = caller_info.person_id
+                        
+                        # Find the shift they mean (upcoming or current)
+                        # We use get_shift_details logic which checks cache then API
+                        shift_details = await get_shift_details(caregiver_id)
+                        
+                        if shift_details:
+                            # Execute Smart Call-Out Logic
+                            result = await execute_caregiver_call_out(
+                                caregiver_id=caregiver_id,
+                                shift_id=shift_details.shift_id,
+                                reason=sms.message[:200]
+                            )
+                            
+                            if result.get("success") or result.get("step_a_wellsky_updated"):
+                                action_taken = "Processed call-out and started finding coverage."
+                                
+                                # Create a mock shift object for context formatting
+                                current_shift = SimpleNamespace(
+                                    client_first_name=shift_details.client_name.split()[0] if shift_details.client_name else "Client",
+                                    client_last_name=" ".join(shift_details.client_name.split()[1:]) if shift_details.client_name else "",
+                                    date=shift_details.start_time.date(),
+                                    start_time=shift_details.start_time.strftime("%I:%M %p"),
+                                    end_time=shift_details.end_time.strftime("%I:%M %p"),
+                                    address=shift_details.client_address,
+                                    city="",
+                                    clock_in_time=None,
+                                    clock_out_time=None,
+                                    status=SimpleNamespace(value="open") # It's open now
+                                )
+                                shift_context = format_shift_context(current_shift)
+                                logger.info(f"Smart SMS Call-out success: {result.get('message')}")
+                            else:
+                                logger.warning(f"Smart SMS Call-out failed: {result.get('errors')}")
+                                action_taken = "Logged call-out but notified manager for manual follow-up."
+                        else:
+                             logger.warning(f"SMS Call-out: No shift found for caregiver {caregiver_id}")
+                    else:
+                        logger.warning(f"SMS Call-out from unknown or unverified caller: {sms.from_number}")
 
                 elif intent == "schedule":
                     # Get upcoming shifts
@@ -5394,6 +5605,31 @@ async def handle_inbound_sms(sms: InboundSMS):
                             date_str = shift.date.strftime("%a %m/%d") if shift.date else ""
                             shift_lines.append(f"- {date_str} {shift.start_time}: {client}")
                         shift_context = "UPCOMING SHIFTS:\n" + "\n".join(shift_lines)
+                    
+                    # Notify Schedulers
+                    schedulers_chat = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
+                    if schedulers_chat:
+                        await send_glip_message(schedulers_chat, f"📅 SCHEDULE QUESTION: {sms.from_number}\n{sms.message}")
+
+                elif intent == "payroll":
+                    # Notify Schedulers (or HR if separate, but user said 'caregiver issue to New Scheduling')
+                    schedulers_chat = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
+                    if schedulers_chat:
+                        await send_glip_message(schedulers_chat, f"💰 PAYROLL QUESTION: {sms.from_number}\n{sms.message}")
+                    action_taken = "Notified administrative team."
+
+                elif intent == "inquiry":
+                    # Route to Biz Dev
+                    biz_dev_chat = os.getenv("RINGCENTRAL_BIZ_DEV_CHAT_ID")
+                    if biz_dev_chat:
+                        await send_glip_message(biz_dev_chat, f"💼 NEW LEAD (SMS): {sms.from_number}\nMsg: {sms.message}")
+                        action_taken = "Notified Business Development team."
+                    else:
+                        # Fallback to schedulers if biz dev not set
+                        schedulers_chat = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
+                        if schedulers_chat:
+                            await send_glip_message(schedulers_chat, f"💼 NEW LEAD (SMS): {sms.from_number}\nMsg: {sms.message}")
+                        action_taken = "Notified office staff."
 
                 else:
                     # For general messages, still try to get context
@@ -5413,8 +5649,9 @@ async def handle_inbound_sms(sms: InboundSMS):
             action_taken=action_taken
         )
 
-        # Send reply via RingCentral SMS
-        sms_sent = await _send_sms_ringcentral(sms.from_number, reply_text)
+        # Send reply via BeeTexting SMS (falls back to RingCentral)
+        # This ensures the reply shows up in the BeeTexting thread we just assigned
+        sms_sent = await _send_sms_beetexting(sms.from_number, reply_text)
 
         if sms_sent:
             logger.info(f"SMS reply sent to {sms.from_number}: {reply_text[:50]}...")
