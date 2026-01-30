@@ -52,14 +52,21 @@ class GoogleDriveService:
                 return None
                 
             # Get file metadata
-            file_metadata = self.service.files().get(fileId=file_id, fields='name, mimeType, owners, createdTime').execute()
+            file_metadata = self.service.files().get(
+                fileId=file_id,
+                fields='name, mimeType, owners, createdTime',
+                supportsAllDrives=True
+            ).execute()
             filename = file_metadata.get('name', 'downloaded_file')
             mime_type = file_metadata.get('mimeType', '')
-            
+
             logger.info(f"Downloading file: {filename} (ID: {file_id}, Type: {mime_type})")
-            
+
             # Download file content
-            request = self.service.files().get_media(fileId=file_id)
+            request = self.service.files().get_media(
+                fileId=file_id,
+                supportsAllDrives=True
+            )
             file_io = io.BytesIO()
             downloader = MediaIoBaseDownload(file_io, request)
             
@@ -141,6 +148,9 @@ class GoogleDriveService:
                     fields='nextPageToken, files(id, name, mimeType, createdTime)',
                     pageToken=page_token,
                     pageSize=100,
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True,
+                    corpora='allDrives'
                 ).execute()
                 all_files.extend(response.get('files', []))
                 page_token = response.get('nextPageToken')
@@ -161,6 +171,9 @@ class GoogleDriveService:
                         fields='nextPageToken, files(id, name)',
                         pageToken=page_token,
                         pageSize=100,
+                        supportsAllDrives=True,
+                        includeItemsFromAllDrives=True,
+                        corpora='allDrives'
                     ).execute()
                     subfolders.extend(response.get('files', []))
                     page_token = response.get('nextPageToken')
@@ -185,11 +198,16 @@ class GoogleDriveService:
             return None
         try:
             file_metadata = self.service.files().get(
-                fileId=file_id, fields='name, mimeType, owners, createdTime'
+                fileId=file_id,
+                fields='name, mimeType, owners, createdTime',
+                supportsAllDrives=True
             ).execute()
             filename = file_metadata.get('name', 'downloaded_file')
 
-            request = self.service.files().get_media(fileId=file_id)
+            request = self.service.files().get_media(
+                fileId=file_id,
+                supportsAllDrives=True
+            )
             file_io = io.BytesIO()
             downloader = MediaIoBaseDownload(file_io, request)
             done = False
