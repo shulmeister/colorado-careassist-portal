@@ -730,6 +730,358 @@ class WellSkyService:
             return self._parse_client(data)
         return None
 
+    # =========================================================================
+    # FHIR-Compliant Patient API (WellSky Connect API)
+    # =========================================================================
+
+    def search_patients(
+        self,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        city: Optional[str] = None,
+        active: bool = True,
+        limit: int = 20,
+        page: int = 0
+    ) -> List[WellSkyClient]:
+        """
+        Search for patients (clients) using FHIR-compliant API.
+
+        Uses POST /v1/patients/_search/ endpoint.
+
+        Args:
+            first_name: Filter by first name
+            last_name: Filter by last name
+            phone: Filter by phone number (10 digits)
+            city: Filter by city
+            active: Filter by active status (default True)
+            limit: Results per page (1-100, default 20)
+            page: Page number (default 0)
+
+        Returns:
+            List of WellSkyClient objects
+        """
+        if self.is_mock_mode:
+            # Mock mode fallback
+            results = list(self._mock_clients.values())
+            if first_name:
+                results = [c for c in results if c.first_name.lower().startswith(first_name.lower())]
+            if last_name:
+                results = [c for c in results if c.last_name.lower().startswith(last_name.lower())]
+            if active:
+                results = [c for c in results if c.is_active]
+            return results[:limit]
+
+        # Build search payload
+        search_payload = {}
+
+        if first_name:
+            search_payload["first_name"] = first_name
+        if last_name:
+            search_payload["last_name"] = last_name
+        if phone:
+            # Clean phone to 10 digits
+            import re
+            clean_phone = re.sub(r'[^\d]', '', phone)[-10:]
+            search_payload["mobile_phone"] = clean_phone
+        if city:
+            search_payload["city"] = city
+        if active is not None:
+            search_payload["active"] = "true" if active else "false"
+
+        # Query parameters for pagination
+        params = {
+            "_count": min(limit, 100),
+            "_page": page
+        }
+
+        success, data = self._make_request(
+            "POST",
+            "/v1/patients/_search/",
+            params=params,
+            data=search_payload
+        )
+
+        if not success:
+            logger.error(f"Patient search failed: {data}")
+            return []
+
+        # Parse FHIR Bundle response
+        clients = []
+        if data.get("resourceType") == "Bundle" and data.get("entry"):
+            for entry in data["entry"]:
+                try:
+                    client = self._parse_fhir_patient(entry)
+                    clients.append(client)
+                except Exception as e:
+                    logger.error(f"Error parsing patient: {e}")
+                    continue
+
+        logger.info(f"Found {len(clients)} patients matching search criteria")
+        return clients
+
+    def get_patient(self, patient_id: str) -> Optional[WellSkyClient]:
+        """
+        Get a single patient by ID using FHIR-compliant API.
+
+        Uses GET /v1/patients/{id}/ endpoint.
+
+        Args:
+            patient_id: WellSky patient ID
+
+        Returns:
+            WellSkyClient object or None
+        """
+        if self.is_mock_mode:
+            return self._mock_clients.get(patient_id)
+
+        success, data = self._make_request("GET", f"/v1/patients/{patient_id}/")
+
+        if not success:
+            logger.error(f"Get patient {patient_id} failed: {data}")
+            return None
+
+        try:
+            return self._parse_fhir_patient(data)
+        except Exception as e:
+            logger.error(f"Error parsing patient {patient_id}: {e}")
+            return None
+
+    def create_patient(
+        self,
+        first_name: str,
+        last_name: str,
+        phone: Optional[str] = None,
+        email: Optional[str] = None,
+        address: Optional[str] = None,
+        city: Optional[str] = None,
+        state: str = "CO",
+        zip_code: Optional[str] = None,
+        is_client: bool = False,
+        status_id: int = 1,  # 1 = New Lead, 80 = Care Started
+        referral_source: Optional[str] = None
+    ) -> Optional[WellSkyClient]:
+        """
+        Create a new patient (client/prospect) using FHIR-compliant API.
+
+        Uses POST /v1/patients/ endpoint.
+
+        Args:
+            first_name: Patient first name (required)
+            last_name: Patient last name (required)
+            phone: Phone number (10 digits)
+            email: Email address
+            address: Street address
+            city: City
+            state: State (default "CO")
+            zip_code: ZIP code
+            is_client: True for client, False for prospect/lead
+            status_id: Patient status ID (1=New Lead, 80=Care Started)
+            referral_source: How they heard about us
+
+        Returns:
+            WellSkyClient object or None
+        """
+        if self.is_mock_mode:
+            client_id = f"P{len(self._mock_clients) + 1:03d}"
+            client = WellSkyClient(
+                id=client_id,
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone or "",
+                email=email or "",
+                address=address or "",
+                city=city or "",
+                state=state,
+                zip_code=zip_code or "",
+                status=ClientStatus.ACTIVE if is_client else ClientStatus.PROSPECT,
+                referral_source=referral_source or "",
+                created_at=datetime.utcnow()
+            )
+            self._mock_clients[client_id] = client
+            logger.info(f"Mock: Created patient {client_id}")
+            return client
+
+        # Build FHIR Patient resource
+        fhir_patient = {
+            "resourceType": "Patient",
+            "active": True,
+            "name": [
+                {
+                    "use": "official",
+                    "family": last_name,
+                    "given": [first_name]
+                }
+            ],
+            "telecom": [],
+            "address": [],
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": self.agency_id},
+                    {"code": "isClient", "display": "true" if is_client else "false"},
+                    {"code": "status", "display": str(status_id)}
+                ]
+            }
+        }
+
+        # Add phone
+        if phone:
+            import re
+            clean_phone = re.sub(r'[^\d]', '', phone)[-10:]
+            fhir_patient["telecom"].append({
+                "system": "phone",
+                "value": clean_phone,
+                "use": "mobile"
+            })
+
+        # Add email
+        if email:
+            fhir_patient["telecom"].append({
+                "system": "email",
+                "value": email
+            })
+
+        # Add address
+        if address or city or state or zip_code:
+            addr = {
+                "use": "home",
+                "line": [address] if address else [],
+                "city": city or "",
+                "state": state,
+                "postalCode": zip_code or ""
+            }
+            fhir_patient["address"].append(addr)
+
+        # Add referral source if provided
+        if referral_source:
+            fhir_patient["meta"]["tag"].append({
+                "code": "referralSource",
+                "display": referral_source
+            })
+
+        success, data = self._make_request("POST", "/v1/patients/", data=fhir_patient)
+
+        if not success:
+            logger.error(f"Create patient failed: {data}")
+            return None
+
+        # Parse response
+        try:
+            patient_id = data.get("id")
+            if patient_id:
+                logger.info(f"Created patient {patient_id}")
+                # Fetch the full patient record
+                return self.get_patient(str(patient_id))
+            return None
+        except Exception as e:
+            logger.error(f"Error parsing created patient: {e}")
+            return None
+
+    def _parse_fhir_patient(self, fhir_data: Dict) -> WellSkyClient:
+        """
+        Parse FHIR Patient resource into WellSkyClient object.
+
+        FHIR structure:
+        {
+            "resourceType": "Patient",
+            "id": "2870130",
+            "active": true,
+            "name": [{"family": "Johnson", "given": ["Margaret"]}],
+            "telecom": [{"system": "phone", "value": "3035551234"}],
+            "address": [{"city": "Denver", "state": "CO"}],
+            "meta": {
+                "tag": [
+                    {"code": "isClient", "display": "true"},
+                    {"code": "status", "display": "80"}
+                ]
+            }
+        }
+        """
+        # Extract ID
+        client_id = str(fhir_data.get("id", ""))
+
+        # Extract name
+        first_name = ""
+        last_name = ""
+        if fhir_data.get("name"):
+            name = fhir_data["name"][0]
+            last_name = name.get("family", "")
+            given = name.get("given", [])
+            first_name = given[0] if given else ""
+
+        # Extract phone and email
+        phone = ""
+        email = ""
+        for telecom in fhir_data.get("telecom", []):
+            system = telecom.get("system", "")
+            value = telecom.get("value", "")
+            if system == "phone":
+                phone = value
+            elif system == "email":
+                email = value
+
+        # Extract address
+        address_str = ""
+        city = ""
+        state = "CO"
+        zip_code = ""
+        if fhir_data.get("address"):
+            addr = fhir_data["address"][0]
+            address_str = ", ".join(addr.get("line", []))
+            city = addr.get("city", "")
+            state = addr.get("state", "CO")
+            zip_code = addr.get("postalCode", "")
+
+        # Extract status and metadata
+        active = fhir_data.get("active", True)
+        is_client = False
+        status_id = 1
+        referral_source = ""
+
+        for tag in fhir_data.get("meta", {}).get("tag", []):
+            code = tag.get("code", "")
+            display = tag.get("display", "")
+
+            if code == "isClient":
+                is_client = display.lower() == "true"
+            elif code == "status":
+                try:
+                    status_id = int(display)
+                except:
+                    status_id = 1
+            elif code == "referralSource":
+                referral_source = display
+
+        # Determine status
+        if is_client:
+            if status_id >= 80:
+                status = ClientStatus.ACTIVE
+            elif status_id >= 60:
+                status = ClientStatus.PENDING
+            else:
+                status = ClientStatus.PROSPECT
+        else:
+            status = ClientStatus.PROSPECT
+
+        if not active:
+            status = ClientStatus.DISCHARGED
+
+        return WellSkyClient(
+            id=client_id,
+            first_name=first_name,
+            last_name=last_name,
+            status=status,
+            address=address_str,
+            city=city,
+            state=state,
+            zip_code=zip_code,
+            phone=phone,
+            email=email,
+            referral_source=referral_source,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
     def _parse_client(self, data: Dict) -> WellSkyClient:
         """Parse API response into WellSkyClient object"""
         return WellSkyClient(
@@ -846,6 +1198,241 @@ class WellSkyService:
             return self._parse_caregiver(data)
         return None
 
+    # =========================================================================
+    # FHIR-Compliant Practitioner API (WellSky Connect API)
+    # =========================================================================
+
+    def search_practitioners(
+        self,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        city: Optional[str] = None,
+        active: bool = True,
+        is_hired: bool = True,
+        profile_tags: Optional[List[str]] = None,
+        limit: int = 20,
+        page: int = 0
+    ) -> List[WellSkyCaregiver]:
+        """
+        Search for practitioners (caregivers) using FHIR-compliant API.
+
+        Uses POST /v1/practitioners/_search/ endpoint.
+
+        Args:
+            first_name: Filter by first name
+            last_name: Filter by last name
+            phone: Filter by phone number (10 digits)
+            city: Filter by city
+            active: Filter by active status (default True)
+            is_hired: Filter by hired status (default True - only hired caregivers)
+            profile_tags: List of profile tag IDs (skills/certifications)
+            limit: Results per page (1-100, default 20)
+            page: Page number (default 0)
+
+        Returns:
+            List of WellSkyCaregiver objects
+        """
+        if self.is_mock_mode:
+            # Mock mode fallback
+            results = list(self._mock_caregivers.values())
+            if first_name:
+                results = [c for c in results if c.first_name.lower().startswith(first_name.lower())]
+            if last_name:
+                results = [c for c in results if c.last_name.lower().startswith(last_name.lower())]
+            if active:
+                results = [c for c in results if c.is_active]
+            return results[:limit]
+
+        # Build search payload
+        search_payload = {}
+
+        if first_name:
+            search_payload["first_name"] = first_name
+        if last_name:
+            search_payload["last_name"] = last_name
+        if phone:
+            # Clean phone to 10 digits
+            import re
+            clean_phone = re.sub(r'[^\d]', '', phone)[-10:]
+            search_payload["mobile_phone"] = clean_phone
+        if city:
+            search_payload["city"] = city
+        if active is not None:
+            search_payload["active"] = "true" if active else "false"
+        if is_hired is not None:
+            search_payload["is_hired"] = "true" if is_hired else "false"
+        if profile_tags:
+            # Tags are comma-separated in API
+            search_payload["tags"] = ",".join(str(t) for t in profile_tags)
+
+        # Query parameters for pagination
+        params = {
+            "_count": min(limit, 100),
+            "_page": page
+        }
+
+        success, data = self._make_request(
+            "POST",
+            "/v1/practitioners/_search/",
+            params=params,
+            data=search_payload
+        )
+
+        if not success:
+            logger.error(f"Practitioner search failed: {data}")
+            return []
+
+        # Parse FHIR Bundle response
+        caregivers = []
+        if data.get("resourceType") == "Bundle" and data.get("entry"):
+            for entry in data["entry"]:
+                try:
+                    caregiver = self._parse_fhir_practitioner(entry)
+                    caregivers.append(caregiver)
+                except Exception as e:
+                    logger.error(f"Error parsing practitioner: {e}")
+                    continue
+
+        logger.info(f"Found {len(caregivers)} practitioners matching search criteria")
+        return caregivers
+
+    def get_practitioner(self, practitioner_id: str) -> Optional[WellSkyCaregiver]:
+        """
+        Get a single practitioner by ID using FHIR-compliant API.
+
+        Uses GET /v1/practitioners/{id}/ endpoint.
+
+        Args:
+            practitioner_id: WellSky practitioner ID
+
+        Returns:
+            WellSkyCaregiver object or None
+        """
+        if self.is_mock_mode:
+            return self._mock_caregivers.get(practitioner_id)
+
+        success, data = self._make_request("GET", f"/v1/practitioners/{practitioner_id}/")
+
+        if not success:
+            logger.error(f"Get practitioner {practitioner_id} failed: {data}")
+            return None
+
+        try:
+            return self._parse_fhir_practitioner(data)
+        except Exception as e:
+            logger.error(f"Error parsing practitioner {practitioner_id}: {e}")
+            return None
+
+    def _parse_fhir_practitioner(self, fhir_data: Dict) -> WellSkyCaregiver:
+        """
+        Parse FHIR Practitioner resource into WellSkyCaregiver object.
+
+        FHIR structure:
+        {
+            "resourceType": "Practitioner",
+            "id": "123",
+            "active": true,
+            "name": [{"family": "Lopez", "given": ["Maria"]}],
+            "telecom": [{"system": "phone", "value": "3035551234"}],
+            "address": [{"city": "Denver", "state": "CO"}],
+            "meta": {
+                "tag": [
+                    {"code": "isHired", "display": "true"},
+                    {"code": "profileTags", "display": "45,67"}
+                ]
+            }
+        }
+        """
+        # Extract ID
+        caregiver_id = str(fhir_data.get("id", ""))
+
+        # Extract name
+        first_name = ""
+        last_name = ""
+        if fhir_data.get("name"):
+            name = fhir_data["name"][0]
+            last_name = name.get("family", "")
+            given = name.get("given", [])
+            first_name = given[0] if given else ""
+
+        # Extract phone and email
+        phone = ""
+        email = ""
+        for telecom in fhir_data.get("telecom", []):
+            system = telecom.get("system", "")
+            value = telecom.get("value", "")
+            if system == "phone" and telecom.get("use") in ["mobile", None]:
+                phone = value
+            elif system == "email":
+                email = value
+
+        # Extract address
+        address_str = ""
+        city = ""
+        state = "CO"
+        zip_code = ""
+        lat = 0.0
+        lon = 0.0
+        if fhir_data.get("address"):
+            addr = fhir_data["address"][0]
+            address_str = ", ".join(addr.get("line", []))
+            city = addr.get("city", "")
+            state = addr.get("state", "CO")
+            zip_code = addr.get("postalCode", "")
+
+        # Extract status and metadata
+        active = fhir_data.get("active", True)
+        status = CaregiverStatus.ACTIVE if active else CaregiverStatus.INACTIVE
+
+        is_hired = True
+        profile_tags = []
+        certifications = []
+
+        for tag in fhir_data.get("meta", {}).get("tag", []):
+            code = tag.get("code", "")
+            display = tag.get("display", "")
+
+            if code == "isHired":
+                is_hired = display.lower() == "true"
+            elif code == "profileTags" and display:
+                # Parse comma-separated tag IDs
+                profile_tags = [t.strip() for t in display.split(",") if t.strip()]
+
+        # Determine status based on isHired flag
+        if is_hired:
+            status = CaregiverStatus.ACTIVE if active else CaregiverStatus.INACTIVE
+        else:
+            status = CaregiverStatus.APPLICANT
+
+        # Extract languages
+        languages = ["English"]
+        for comm in fhir_data.get("communication", []):
+            for coding in comm.get("coding", []):
+                lang_code = coding.get("code", "")
+                lang_display = coding.get("display", "")
+                if lang_display and lang_display not in languages:
+                    languages.append(lang_display)
+
+        return WellSkyCaregiver(
+            id=caregiver_id,
+            first_name=first_name,
+            last_name=last_name,
+            status=status,
+            phone=phone,
+            email=email,
+            address=address_str,
+            city=city,
+            state=state,
+            zip_code=zip_code,
+            lat=lat,
+            lon=lon,
+            certifications=profile_tags,  # Use profile tags as certifications
+            languages=languages,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+
     def _parse_caregiver(self, data: Dict) -> WellSkyCaregiver:
         """Parse API response into WellSkyCaregiver object"""
         return WellSkyCaregiver(
@@ -947,6 +1534,257 @@ class WellSkyService:
             data={"caregiver_id": caregiver_id}
         )
         return success
+
+    # =========================================================================
+    # FHIR-Compliant Appointment API (WellSky Connect API)
+    # =========================================================================
+
+    def search_appointments(
+        self,
+        caregiver_id: Optional[str] = None,
+        client_id: Optional[str] = None,
+        start_date: Optional[date] = None,
+        additional_days: int = 0,
+        week_no: Optional[str] = None,
+        month_no: Optional[str] = None,
+        limit: int = 20,
+        page: int = 0
+    ) -> List[WellSkyShift]:
+        """
+        Search for appointments (shifts) using FHIR-compliant API.
+
+        Uses GET /v1/appointment/ or POST /v1/appointment/_search/ endpoint.
+
+        Args:
+            caregiver_id: Filter by caregiver/practitioner ID
+            client_id: Filter by client/patient ID
+            start_date: Start date for search (required if not using week_no/month_no)
+            additional_days: Number of days after start_date (0-6)
+            week_no: Week number in YYYYWW format (e.g., "202605")
+            month_no: Month number in YYYYMM format (e.g., "202601")
+            limit: Results per page (1-100, default 20)
+            page: Page number (default 0)
+
+        Returns:
+            List of WellSkyShift objects
+
+        Note: Either caregiver_id OR client_id is required.
+              Either start_date OR week_no OR month_no is required.
+        """
+        if self.is_mock_mode:
+            # Mock mode fallback
+            results = list(self._mock_shifts.values())
+            if caregiver_id:
+                results = [s for s in results if s.caregiver_id == caregiver_id]
+            if client_id:
+                results = [s for s in results if s.client_id == client_id]
+            if start_date:
+                end_date = start_date + timedelta(days=additional_days)
+                results = [s for s in results if start_date <= s.shift_start.date() <= end_date]
+            return results[:limit]
+
+        # Validate required parameters
+        if not caregiver_id and not client_id:
+            logger.error("Either caregiver_id or client_id is required for appointment search")
+            return []
+
+        if not start_date and not week_no and not month_no:
+            logger.error("Either start_date, week_no, or month_no is required for appointment search")
+            return []
+
+        # Use POST _search endpoint for more complex queries
+        use_post = True
+
+        if use_post:
+            # Build search payload
+            search_payload = {}
+
+            if caregiver_id:
+                search_payload["caregiverId"] = str(caregiver_id)
+            if client_id:
+                search_payload["clientId"] = str(client_id)
+
+            if start_date:
+                # Format: YYYYMMDD
+                search_payload["startDate"] = start_date.strftime("%Y%m%d")
+                if additional_days > 0:
+                    search_payload["additionalDays"] = str(min(additional_days, 6))
+            elif week_no:
+                search_payload["weekNo"] = week_no
+            elif month_no:
+                search_payload["monthNo"] = month_no
+
+            # Query parameters for pagination
+            params = {
+                "_count": min(limit, 100),
+                "_page": page
+            }
+
+            success, data = self._make_request(
+                "POST",
+                "/v1/appointment/_search/",
+                params=params,
+                data=search_payload
+            )
+        else:
+            # Use GET endpoint with query string
+            params = {
+                "_count": min(limit, 100),
+                "_page": page
+            }
+
+            if caregiver_id:
+                params["caregiverId"] = caregiver_id
+            if client_id:
+                params["clientId"] = client_id
+            if start_date:
+                params["startDate"] = start_date.strftime("%Y%m%d")
+                if additional_days > 0:
+                    params["additionalDays"] = str(min(additional_days, 6))
+            elif week_no:
+                params["weekNo"] = week_no
+            elif month_no:
+                params["monthNo"] = month_no
+
+            success, data = self._make_request(
+                "GET",
+                "/v1/appointment/",
+                params=params
+            )
+
+        if not success:
+            logger.error(f"Appointment search failed: {data}")
+            return []
+
+        # Parse FHIR Bundle response
+        shifts = []
+        if data.get("resourceType") == "Bundle" and data.get("entry"):
+            for entry in data["entry"]:
+                try:
+                    shift = self._parse_fhir_appointment(entry)
+                    shifts.append(shift)
+                except Exception as e:
+                    logger.error(f"Error parsing appointment: {e}")
+                    continue
+
+        logger.info(f"Found {len(shifts)} appointments matching search criteria")
+        return shifts
+
+    def get_appointment(self, appointment_id: str) -> Optional[WellSkyShift]:
+        """
+        Get a single appointment by ID using FHIR-compliant API.
+
+        Uses GET /v1/appointment/{id}/ endpoint.
+
+        Args:
+            appointment_id: WellSky appointment ID
+
+        Returns:
+            WellSkyShift object or None
+        """
+        if self.is_mock_mode:
+            return self._mock_shifts.get(appointment_id)
+
+        success, data = self._make_request("GET", f"/v1/appointment/{appointment_id}/")
+
+        if not success:
+            logger.error(f"Get appointment {appointment_id} failed: {data}")
+            return None
+
+        try:
+            return self._parse_fhir_appointment(data)
+        except Exception as e:
+            logger.error(f"Error parsing appointment {appointment_id}: {e}")
+            return None
+
+    def _parse_fhir_appointment(self, fhir_data: Dict) -> WellSkyShift:
+        """
+        Parse FHIR Appointment resource into WellSkyShift object.
+
+        FHIR structure:
+        {
+            "resourceType": "Appointment",
+            "id": "109131818",
+            "status": "SCHEDULED",
+            "start": "2026-01-29T14:00:00+00:00",
+            "end": "2026-01-29T18:00:00+00:00",
+            "caregiver": {"id": "3306118"},
+            "client": {"id": "2870130"},
+            "position": {"latitude": 39.7392, "longitude": -104.9903},
+            "tasks": [{"id": "123", "description": "Meal prep", "status": "NOT_COMPLETE"}]
+        }
+        """
+        from datetime import datetime as dt
+
+        # Extract IDs
+        shift_id = str(fhir_data.get("id", ""))
+
+        # Extract caregiver and client
+        caregiver_data = fhir_data.get("caregiver", {})
+        caregiver_id = caregiver_data.get("id", "")
+
+        client_data = fhir_data.get("client", {})
+        client_id = client_data.get("id", "")
+
+        # Extract dates/times (in UTC)
+        start_str = fhir_data.get("start", "")
+        end_str = fhir_data.get("end", "")
+
+        try:
+            shift_start = dt.fromisoformat(start_str.replace("Z", "+00:00"))
+        except:
+            shift_start = dt.utcnow()
+
+        try:
+            shift_end = dt.fromisoformat(end_str.replace("Z", "+00:00"))
+        except:
+            shift_end = shift_start + timedelta(hours=4)
+
+        # Extract status
+        status_str = fhir_data.get("status", "SCHEDULED").upper()
+        status_map = {
+            "SCHEDULED": ShiftStatus.SCHEDULED,
+            "CONFIRMED": ShiftStatus.CONFIRMED,
+            "IN_PROGRESS": ShiftStatus.IN_PROGRESS,
+            "COMPLETED": ShiftStatus.COMPLETED,
+            "MISSED": ShiftStatus.MISSED,
+            "CANCELLED": ShiftStatus.CANCELLED,
+            "OPEN": ShiftStatus.OPEN
+        }
+        status = status_map.get(status_str, ShiftStatus.SCHEDULED)
+
+        # Extract location
+        position = fhir_data.get("position", {})
+        client_lat = position.get("latitude", 0.0)
+        client_lon = position.get("longitude", 0.0)
+
+        # Extract tasks
+        tasks = []
+        for task_data in fhir_data.get("tasks", []):
+            tasks.append({
+                "id": task_data.get("id", ""),
+                "description": task_data.get("description", ""),
+                "status": task_data.get("status", "NOT_COMPLETE")
+            })
+
+        return WellSkyShift(
+            id=shift_id,
+            client_id=client_id,
+            caregiver_id=caregiver_id,
+            shift_start=shift_start,
+            shift_end=shift_end,
+            status=status,
+            client_first_name="",  # Not in FHIR appointment - need to fetch separately
+            client_last_name="",
+            caregiver_first_name="",  # Not in FHIR appointment - need to fetch separately
+            caregiver_last_name="",
+            client_address="",
+            client_city="",
+            client_state="CO",
+            client_lat=client_lat,
+            client_lon=client_lon,
+            tasks=tasks
+        )
 
     def update_shift_status(
         self,
