@@ -10,9 +10,11 @@ Strategy: Update old "business_cards" entries to "business_cards_jacob" since th
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-from db import get_db
+# Add parent directory to path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+
+from sales.db import get_db
 from sqlalchemy import text
 
 def main():
