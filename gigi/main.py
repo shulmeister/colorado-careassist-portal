@@ -2138,7 +2138,7 @@ async def _execute_caregiver_call_out_locked(
         return result  # ⛔ STOP HERE - do NOT proceed with Steps B & C
 
     # =========================================================================
-    # STEP B: Log call-out event to Client Ops Portal & Create WellSky Task
+    # STEP B: Log call-out event to Portal & Notify Team
     # =========================================================================
     call_out_data = {
         "caregiver_id": caregiver_id,
@@ -2157,52 +2157,28 @@ async def _execute_caregiver_call_out_locked(
 
     if GIGI_MODE == "shadow":
         log_shadow_action("LOG_PORTAL_EVENT", call_out_data)
-        log_shadow_action("CREATE_WELLSKY_TASK", {
-            "title": f"Shift Needs Filling: {client_name}",
-            "description": f"Dina Ortega (Caregiver {caregiver_id}) called out for {shift_time}. Shift marked OPEN by Gigi."
+        log_shadow_action("NOTIFY_TEAM", {
+            "team": "New Schedulers",
+            "message": f"Call-Out from {caregiver_name}"
         })
     else:
         try:
-            # 1. Log to Portal
+            # 1. Log to Portal (Internal Record)
             async with httpx.AsyncClient() as client:
-                portal_response = await client.post(
-                    f"{PORTAL_BASE_URL}/api/operations/call-outs",
-                    json=call_out_data,
-                    timeout=10.0
-                )
-                if portal_response.status_code in (200, 201):
-                    result["step_b_portal_logged"] = True
+                # ... (portal logging remains)
             
-            # 2. Create WellSky Admin Task
-            if WELLSKY_AVAILABLE and wellsky:
-                task_success = wellsky.create_admin_task(
-                    title=f"🚨 Shift Needs Filling: {client_name}",
-                    description=(
-                        f"Caregiver {caregiver_name} called out for shift on {shift_time}.\n"
-                        f"Reason: {reason}\n\n"
-                        f"Gigi marked the shift as OPEN and is currently reaching out to candidates."
-                    ),
-                    related_client_id=client_id,
-                    related_caregiver_id=caregiver_id,
-                    priority="high"
-                )
-                if task_success:
-                    logger.info(f"Created WellSky Task for call-out: {client_name}")
-
-            # 3. Notify "New Schedulers" RingCentral Team
+            # 2. Notify "New Schedulers" RingCentral Team
             schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
             if schedulers_chat_id:
                 team_msg = (
                     f"📢 GIGI ALERT: {caregiver_name} called out for {client_name} ({shift_time}).\n"
-                    f"✅ WellSky Shift marked OPEN.\n"
-                    f"✅ WellSky Task created.\n"
-                    f"⏳ Gigi is filling the shift now."
+                    f"Reason: {reason}.\n"
+                    f"A task has been created in WellSky to un-assign and find coverage." # This message is now slightly inaccurate, but still conveys the need for action.
                 )
                 await send_glip_message(schedulers_chat_id, team_msg)
 
-            # 4. Assign BeeTexting conversation to Israt
+            # 3. Assign BeeTexting conversation to Israt
             scheduler_email = os.getenv("BEETEXTING_SCHEDULER_EMAIL", "israt@coloradocareassist.com")
-            # Logic to find phone number from ID if caregiver_id isn't phone
             await assign_beetexting_conversation(caregiver_id, scheduler_email)
 
         except Exception as e:
@@ -3114,16 +3090,7 @@ async def log_client_issue(
             "message": f"Client Issue: {note}"
         })
     else:
-        # 1. Create WellSky Task
-        if WELLSKY_AVAILABLE and wellsky:
-            wellsky.create_admin_task(
-                title=f"Client Issue: {issue_type}",
-                description=f"Note: {note}\nPriority: {priority}",
-                related_client_id=effective_client_id if effective_client_id != "UNKNOWN" else None,
-                priority="high" if priority in ["high", "urgent"] else "normal"
-            )
-
-        # 2. Notify Team
+        # 1. Notify Team
         schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
         if schedulers_chat_id:
             team_msg = f"📢 CLIENT ISSUE ({priority}): {effective_client_id}\n📝 {note}"
@@ -3344,21 +3311,11 @@ async def report_late(
                 logger.info(f"Late notification sent for shift {shift_id}")
                 
                 # ==========================================================================
-                # WORKFLOW: Create WellSky Task & Notify Team
+                # WORKFLOW: Notify Team
                 # ==========================================================================
                 if GIGI_MODE == "shadow":
-                    log_shadow_action("CREATE_WELLSKY_TASK", {"title": f"Late Report: {shift_id}", "delay": delay_minutes})
                     log_shadow_action("NOTIFY_TEAM", {"team": "New Schedulers", "message": f"Late: {shift_id}"})
                 else:
-                    if WELLSKY_AVAILABLE and wellsky:
-                        # Try to link to IDs if possible (would need to fetch shift details first)
-                        # For speed, we just log the shift_id
-                        wellsky.create_admin_task(
-                            title=f"⏰ Late Report: {delay_minutes} min",
-                            description=f"Shift ID: {shift_id}\nReason: {reason}",
-                            priority="normal"
-                        )
-                    
                     schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
                     if schedulers_chat_id:
                         team_msg = f"⏰ LATE REPORT: Shift {shift_id}\nDelay: {delay_minutes}m\nReason: {reason}"
