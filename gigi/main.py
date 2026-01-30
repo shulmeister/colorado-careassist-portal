@@ -4030,17 +4030,24 @@ async def retell_webhook(request: Request):
             response_data = {
                 "status": "ok",
                 "caller_info": caller_info,
-                "initial_greeting": greeting
+                "initial_greeting": greeting,
+                # Override Retell agent config to use personalized greeting
+                "config_override": {
+                    "initial_greeting": greeting,
+                    "agent_name": "Gigi"
+                }
             }
-            
+
             # Set action based on caller type
             if caller_info.get("should_transfer"):
                 response_data["action"] = "greet_and_transfer"
-                logger.info("Will transfer call to Jason after greeting")
+                logger.info(f"Will transfer call to Jason after greeting: '{greeting}'")
             elif caller_info.get("take_message"):
                 response_data["action"] = "take_message"
-                logger.info("Unknown caller - will take message")
-            
+                logger.info(f"Unknown caller - will take message. Greeting: '{greeting}'")
+            else:
+                logger.info(f"Caller greeted with: '{greeting}'")
+
             return JSONResponse(response_data)
         else:
             # Fallback to original logic if enhanced webhook not available
