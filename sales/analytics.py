@@ -329,12 +329,34 @@ class AnalyticsEngine:
         """Get recent activity across all data types"""
         try:
             activities = []
-            
+
+            # Recent ActivityLogs (business card scans, calls, emails, etc.)
+            from models import ActivityLog
+            recent_activity_logs = self.db.query(ActivityLog).order_by(
+                desc(ActivityLog.created_at)
+            ).limit(limit * 2).all()  # Get more to ensure we have enough after filtering
+
+            for log in recent_activity_logs:
+                # Get user name from email if available
+                user_name = log.user_email.split('@')[0] if log.user_email else 'Unknown'
+
+                activities.append({
+                    "type": log.activity_type,
+                    "description": log.description or log.title or f"{log.activity_type} activity",
+                    "date": log.created_at.isoformat(),
+                    "details": {
+                        "user": user_name,
+                        "contact_id": log.contact_id,
+                        "company_id": log.company_id,
+                        "deal_id": log.deal_id
+                    }
+                })
+
             # Recent visits
             recent_visits = self.db.query(Visit).order_by(
                 desc(Visit.visit_date)
             ).limit(limit).all()
-            
+
             for visit in recent_visits:
                 activities.append({
                     "type": "visit",
@@ -346,12 +368,12 @@ class AnalyticsEngine:
                         "city": visit.city
                     }
                 })
-            
+
             # Recent time entries
             recent_time = self.db.query(TimeEntry).order_by(
                 desc(TimeEntry.created_at)
             ).limit(limit).all()
-            
+
             for entry in recent_time:
                 activities.append({
                     "type": "time_entry",
@@ -362,12 +384,12 @@ class AnalyticsEngine:
                         "hours": entry.hours_worked
                     }
                 })
-            
+
             # Recent contacts
             recent_contacts = self.db.query(Contact).order_by(
                 desc(Contact.created_at)
             ).limit(limit).all()
-            
+
             for contact in recent_contacts:
                 activities.append({
                     "type": "contact",
@@ -380,11 +402,11 @@ class AnalyticsEngine:
                         "email": contact.email
                     }
                 })
-            
+
             # Sort by date and return top N
             activities.sort(key=lambda x: x['date'], reverse=True)
             return activities[:limit]
-            
+
         except Exception as e:
             logger.error(f"Error getting recent activity: {str(e)}")
             return []
