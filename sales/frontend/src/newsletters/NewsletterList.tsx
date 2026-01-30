@@ -33,12 +33,12 @@ type NewsletterTemplate = {
 const templates: NewsletterTemplate[] = [
   {
     name: "Clients Newsletter",
-    file: "newsletter_january_2025_clients.html",
+    file: "newsletter_template_clients.html",
     audience: "clients",
   },
   {
     name: "Referral Sources Newsletter",
-    file: "newsletter_january_2025_referral_sources.html",
+    file: "newsletter_template_referral_sources.html",
     audience: "referral_sources",
   },
 ];
