@@ -45,7 +45,13 @@ API_URLS = {
     "production": "https://connect.clearcareonline.com/v1",  # Production endpoint
 }
 
-# OAuth endpoint path
+# API Host URLs (for OAuth - no /v1 prefix)
+API_HOSTS = {
+    "sandbox": "https://connect-sandbox.clearcareonline.com",
+    "production": "https://connect.clearcareonline.com",
+}
+
+# OAuth endpoint path (at ROOT level, not under /v1/)
 OAUTH_TOKEN_PATH = "/oauth/accesstoken"  # Per WellSky Connect API docs
 
 
@@ -494,7 +500,8 @@ class WellSkyService:
         self.api_secret = WELLSKY_CLIENT_SECRET  # OAuth client_secret
         self.agency_id = WELLSKY_AGENCY_ID
         self.environment = WELLSKY_ENVIRONMENT
-        self.base_url = API_URLS.get(self.environment, API_URLS["production"])  # Default to production
+        self.base_url = API_URLS.get(self.environment, API_URLS["production"])  # API base URL (with /v1)
+        self.host_url = API_HOSTS.get(self.environment, API_HOSTS["production"])  # Host URL (for OAuth - no /v1)
 
         self._access_token = None
         self._token_expires_at = None
@@ -540,7 +547,8 @@ class WellSkyService:
 
         try:
             # OAuth 2.0 client credentials flow (WellSky Connect API)
-            auth_url = f"{self.base_url}{OAUTH_TOKEN_PATH}"
+            # NOTE: OAuth endpoint is at ROOT level, not under /v1/
+            auth_url = f"{self.host_url}{OAUTH_TOKEN_PATH}"
 
             response = requests.post(
                 auth_url,
@@ -556,7 +564,7 @@ class WellSkyService:
             if response.status_code == 200:
                 data = response.json()
                 self._access_token = data.get("access_token")
-                expires_in = data.get("expires_in", 3600)
+                expires_in = int(data.get("expires_in", 3600))  # Convert to int (API returns string)
                 self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
                 logger.info("WellSky access token refreshed")
                 return self._access_token
@@ -591,20 +599,25 @@ class WellSkyService:
 
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
         headers = {
-            "Authorization": f"Bearer {token}",
+            "Authorization": f"BearerToken {token}",  # WellSky uses "BearerToken" not "Bearer"
             "Content-Type": "application/json",
-            "X-Agency-ID": self.agency_id,
         }
+
+        # Add agencyId to query params (required by WellSky API)
+        if params is None:
+            params = {}
+        if "agencyId" not in params and self.agency_id:
+            params["agencyId"] = self.agency_id
 
         try:
             if method.upper() == "GET":
                 response = requests.get(url, headers=headers, params=params, timeout=30)
             elif method.upper() == "POST":
-                response = requests.post(url, headers=headers, json=data, timeout=30)
+                response = requests.post(url, headers=headers, json=data, params=params, timeout=30)
             elif method.upper() == "PUT":
-                response = requests.put(url, headers=headers, json=data, timeout=30)
+                response = requests.put(url, headers=headers, json=data, params=params, timeout=30)
             elif method.upper() == "DELETE":
-                response = requests.delete(url, headers=headers, timeout=30)
+                response = requests.delete(url, headers=headers, params=params, timeout=30)
             else:
                 return False, {"error": f"Unsupported method: {method}"}
 
@@ -1266,7 +1279,7 @@ class WellSkyService:
             # Tags are comma-separated in API
             search_payload["tags"] = ",".join(str(t) for t in profile_tags)
 
-        # Query parameters for pagination
+        # Query parameters for pagination (agencyId added automatically by _make_request)
         params = {
             "_count": min(limit, 100),
             "_page": page
