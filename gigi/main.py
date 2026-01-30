@@ -2064,6 +2064,13 @@ async def _execute_caregiver_call_out_locked(
                 if update_success:
                     result["step_a_wellsky_updated"] = True
                     logger.info(f"STEP A SUCCESS: Caregiver {caregiver_id} un-assigned from shift {shift_id} in WellSky.")
+                    
+                    # 4. Add a Note to the Client (Care Alert)
+                    wellsky.add_note_to_client(
+                        client_id=client_id,
+                        note=f"🚨 CARE ALERT: Caregiver {caregiver_name} called out for shift on {shift_time}. Reason: {reason}",
+                        note_type="callout"
+                    )
                 else:
                     wellsky_update_failed = True
                     wellsky_failure_reason = str(update_response)
@@ -2077,8 +2084,32 @@ async def _execute_caregiver_call_out_locked(
     # CRITICAL CHECK: If the update failed, STOP and escalate.
     if wellsky_update_failed:
         logger.error(f"⚠️ ABORTING call-out process - WellSky update failed for shift {shift_id}: {wellsky_failure_reason}")
-        # (The existing human escalation logic below will handle notifying managers)
-        pass # Fall through to the escalation block
+        # (Escalation block follows)
+        pass 
+
+    # =========================================================================
+    # STEP B: Notify Team & Assign Thread
+    # =========================================================================
+    if not wellsky_update_failed:
+        try:
+            # 1. Notify "New Schedulers" RingCentral Team
+            schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
+            if schedulers_chat_id:
+                team_msg = (
+                    f"📢 GIGI ALERT: {caregiver_name} called out for {client_name} ({shift_time}).\n"
+                    f"✅ WellSky Shift marked OPEN.\n"
+                    f"✅ Care Alert added to client file.\n"
+                    f"⏳ Gigi is filling the shift now."
+                )
+                await send_glip_message(schedulers_chat_id, team_msg)
+
+            # 2. Assign BeeTexting conversation to Israt
+            scheduler_email = os.getenv("BEETEXTING_SCHEDULER_EMAIL", "israt@coloradocareassist.com")
+            await assign_beetexting_conversation(caregiver_id, scheduler_email)
+            result["step_b_portal_logged"] = True
+
+        except Exception as e:
+            logger.error(f"Error in team notification workflow: {e}")
 
     # =========================================================================
     # CRITICAL CHECK: If WellSky update failed, STOP and escalate to human
