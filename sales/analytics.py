@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, and_
-from models import Visit, TimeEntry, Contact, AnalyticsCache, FinancialEntry, SalesBonus, ReferralSource, Lead
+from models import Visit, TimeEntry, Contact, AnalyticsCache, FinancialEntry, SalesBonus, ReferralSource, Lead, ActivityLog
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 import logging
@@ -331,7 +331,6 @@ class AnalyticsEngine:
             activities = []
 
             # Recent ActivityLogs (business card scans, calls, emails, etc.)
-            from models import ActivityLog
             recent_activity_logs = self.db.query(ActivityLog).order_by(
                 desc(ActivityLog.created_at)
             ).limit(limit * 2).all()  # Get more to ensure we have enough after filtering
