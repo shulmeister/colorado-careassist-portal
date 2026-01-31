@@ -2483,35 +2483,54 @@ class WellSkyService:
     def get_caregiver_shifts_today(self, phone: str) -> List[WellSkyShift]:
         """
         Get all shifts for a caregiver today, looked up by phone number.
-        Used by Gigi to know what shifts a caregiver has when they text/call.
         """
         caregiver = self.get_caregiver_by_phone(phone)
-        if not caregiver:
-            logger.warning(f"No caregiver found for phone {phone}")
-            # Try direct lookup by phone in search if caregiver object didn't return
-            return []
-
         today = date.today()
-        # Direct fetch shifts for this specific ID
-        return self.get_shifts(
-            caregiver_id=str(caregiver.id),
-            date_from=today,
-            date_to=today
-        )
+        
+        if caregiver:
+            logger.info(f"Fetching shifts for caregiver ID: {caregiver.id}")
+            shifts = self.get_shifts(
+                caregiver_id=str(caregiver.id),
+                date_from=today,
+                date_to=today
+            )
+            if shifts:
+                return shifts
+
+        # AGGRESSIVE FALLBACK: Get ALL shifts for today and filter manually
+        # This handles cases where caregiver/shift link is weird in the API
+        logger.info(f"ID-based shift lookup failed for {phone}, scanning all agency shifts for today...")
+        all_shifts = self.get_shifts(date_from=today, date_to=today, limit=500)
+        import re
+        clean_phone = re.sub(r'[^\d]', '', phone)[-10:]
+        
+        matched_shifts = []
+        for s in all_shifts:
+            # Match by caregiver phone if available in shift object
+            if hasattr(s, 'caregiver_phone') and s.caregiver_phone:
+                if re.sub(r'[^\d]', '', s.caregiver_phone)[-10:] == clean_phone:
+                    matched_shifts.append(s)
+                    continue
+            
+            # Match by name if we found a caregiver record earlier
+            if caregiver and s.caregiver_id == caregiver.id:
+                matched_shifts.append(s)
+                
+        logger.info(f"Aggressive scan found {len(matched_shifts)} shifts for {phone}")
+        return matched_shifts
 
     def get_caregiver_current_shift(self, phone: str) -> Optional[WellSkyShift]:
         """
         Get the shift a caregiver is currently working or about to start.
-
-        Returns the shift that is:
-        1. In progress (clocked in but not out), OR
-        2. Scheduled/confirmed for today and starting within 2 hours
-
-        Used by Gigi when a caregiver says "I can't clock out" - she knows which shift.
         """
         shifts = self.get_caregiver_shifts_today(phone)
         if not shifts:
             return None
+
+        # If only one shift today, assume it is the target (high flexibility for SMS)
+        if len(shifts) == 1:
+            logger.info(f"Only one shift found for {phone} today, using it.")
+            return shifts[0]
 
         now = datetime.now()
 
@@ -2536,13 +2555,6 @@ class WellSkyService:
                             return shift
                     except (ValueError, TypeError):
                         pass
-
-        # FALLBACK: If there is exactly one shift today and it's scheduled, return it
-        # This handles cases like Karen's where the time might be slightly off or they are early
-        scheduled_today = [s for s in shifts if s.status in (ShiftStatus.SCHEDULED, ShiftStatus.CONFIRMED)]
-        if len(scheduled_today) == 1:
-            logger.info(f"Using only scheduled shift found today as 'current' for {phone}")
-            return scheduled_today[0]
 
         # Otherwise return the first shift of the day
         return shifts[0] if shifts else None
