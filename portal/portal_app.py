@@ -1308,21 +1308,52 @@ async def api_wellsky_clients(
 @app.get("/api/wellsky/shifts")
 async def api_wellsky_shifts(
     days: int = Query(30, ge=1, le=120),
-    limit: int = Query(500, ge=1, le=2000)
+    limit: int = Query(500, ge=1, le=2000),
+    caregiver_id: Optional[str] = None,
+    client_id: Optional[str] = None,
+    status: Optional[str] = None,
+    upcoming: Optional[bool] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ):
-    """Return upcoming shifts from WellSky (no auth; internal sync)."""
+    """Return shifts from WellSky (supports upcoming + caregiver/client filters)."""
     if wellsky_service is None:
         return JSONResponse({"success": False, "error": "WellSky service not available"}, status_code=503)
 
     try:
-        date_from = date.today()
-        date_to = date_from + timedelta(days=days)
-        shifts = wellsky_service.get_shifts(date_from=date_from, date_to=date_to, limit=limit)
+        status_enum = None
+        if status:
+            if ShiftStatus is None:
+                return JSONResponse({"success": False, "error": "ShiftStatus enum not available"}, status_code=503)
+            try:
+                status_enum = ShiftStatus(status.lower())
+            except Exception:
+                return JSONResponse({"success": False, "error": f"Invalid status: {status}"}, status_code=400)
+
+        df = None
+        dt = None
+        if date_from:
+            df = date.fromisoformat(date_from)
+        if date_to:
+            dt = date.fromisoformat(date_to)
+
+        if df is None and dt is None and (upcoming is True or upcoming is None):
+            df = date.today()
+            dt = df + timedelta(days=days)
+
+        shifts = wellsky_service.get_shifts(
+            date_from=df,
+            date_to=dt,
+            caregiver_id=caregiver_id,
+            client_id=client_id,
+            status=status_enum,
+            limit=limit,
+        )
         return JSONResponse({
             "shifts": [s.to_dict() for s in shifts],
             "count": len(shifts),
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
+            "date_from": df.isoformat() if df else None,
+            "date_to": dt.isoformat() if dt else None,
         })
     except Exception as e:
         logger.error(f"Error getting shifts: {e}")
