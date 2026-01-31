@@ -5491,16 +5491,32 @@ def _log_clock_issue_to_wellsky(
 
     client_id = getattr(shift, "client_id", None)
     caregiver_id = getattr(shift, "caregiver_id", None)
+    appointment_id = getattr(shift, "id", None)
 
-    # Add Note to Client (Visible in Care Alerts)
-    if client_id:
-        wellsky.add_note_to_client(
-            client_id=str(client_id),
-            note=f"GIGI ALERT: {caregiver_name} requested {action_label} via text. Message: {message}",
-            note_type="callout"
-        )
+    # SUCCESS PATH: If we have an appointment ID, use the TaskLog method
+    # This is how the morning clock-in note got created!
+    if appointment_id:
+        try:
+            # First, resolve the Carelog (Encounter) ID by 'starting' the clock-in process
+            # (If already clocked in, this returns the existing ID)
+            success, in_resp = wellsky.clock_in_shift(str(appointment_id))
+            if success:
+                import re
+                match = re.search(r"Carelog ID: (\d+)", in_resp)
+                if match:
+                    carelog_id = match.group(1)
+                    # Create the Shift Note (TaskLog)
+                    wellsky.create_task_log(
+                        encounter_id=carelog_id,
+                        title=f"Gigi AI - SMS {action_label.upper()}",
+                        description=f"Caregiver {caregiver_name} confirmed {action_label} via SMS. Gigi documented this request. Message: {message}",
+                        status="COMPLETE"
+                    )
+                    logger.info(f"Documented SMS {action_label} in WellSky TaskLog for shift {appointment_id}")
+        except Exception as e:
+            logger.error(f"Failed to document in TaskLog: {e}")
 
-    # Create Admin Task (Visible in Task List)
+    # Fallback to Admin Task (for office visibility)
     wellsky.create_admin_task(
         title=f"SMS {action_label.upper()} - {caregiver_name}",
         description=(
