@@ -1362,6 +1362,28 @@ async def api_operations_summary(
         # Add weekly shift data for chart
         summary["shifts_by_day"] = _get_weekly_shift_data()
         summary["wellsky_connected"] = not wellsky_service.is_mock_mode
+
+        # Flatten keys for frontend KPI expectations
+        clients_block = summary.get("clients", {}) if isinstance(summary, dict) else {}
+        caregivers_block = summary.get("caregivers", {}) if isinstance(summary, dict) else {}
+        shifts_block = summary.get("shifts", {}) if isinstance(summary, dict) else {}
+        compliance_block = summary.get("compliance", {}) if isinstance(summary, dict) else {}
+        care_plans_block = summary.get("care_plans", {}) if isinstance(summary, dict) else {}
+
+        summary["active_clients"] = clients_block.get("active", 0)
+        summary["active_caregivers"] = caregivers_block.get("active", 0)
+        summary["open_shifts"] = shifts_block.get("open", 0)
+        summary["evv_compliance"] = compliance_block.get("evv_rate", 0)
+        summary["plans_due_review"] = care_plans_block.get("due_for_review", 0)
+
+        # At-risk count for KPI (safe fallback)
+        try:
+            at_risk = wellsky_service.get_at_risk_clients(threshold=40)
+            summary["at_risk_clients"] = len(at_risk) if at_risk else 0
+        except Exception as e:
+            logger.warning(f"Error getting at-risk count: {e}")
+            summary["at_risk_clients"] = 0
+
         return JSONResponse(summary)
     except Exception as e:
         logger.error(f"Error getting operations summary: {e}")
@@ -1409,17 +1431,37 @@ async def api_operations_clients(
         raise HTTPException(status_code=503, detail="WellSky service not available")
 
     try:
-        clients = wellsky_service.get_clients(status="active")
+        status_enum = ClientStatus.ACTIVE if ClientStatus is not None else None
+        clients = wellsky_service.get_clients(status=status_enum)
         client_list = []
         for client in clients:
             # Get risk indicators for each client
-            indicators = wellsky_service.get_client_satisfaction_indicators(client.id)
+            try:
+                indicators = wellsky_service.get_client_satisfaction_indicators(client.id)
+            except Exception as e:
+                logger.warning(f"Error getting indicators for client {client.id}: {e}")
+                indicators = {}
+
+            name = getattr(client, "full_name", None)
+            if not name:
+                first = getattr(client, "first_name", "")
+                last = getattr(client, "last_name", "")
+                name = f"{first} {last}".strip() or "Unknown"
+
+            hours_per_week = getattr(client, "hours_per_week", None)
+            if hours_per_week is None:
+                hours_per_week = getattr(client, "authorized_hours_weekly", None)
+
+            payer = getattr(client, "payer_type", None)
+            if payer in (None, ""):
+                payer = getattr(client, "payer_source", None) or "N/A"
+
             client_list.append({
                 "id": client.id,
-                "name": client.name,
+                "name": name,
                 "status": client.status.value if hasattr(client.status, 'value') else str(client.status),
-                "hours_per_week": getattr(client, 'hours_per_week', None),
-                "payer": getattr(client, 'payer_type', 'N/A'),
+                "hours_per_week": hours_per_week,
+                "payer": payer,
                 "risk_score": indicators.get("risk_score", 0) if indicators else 0,
                 "last_visit": getattr(client, 'last_visit_date', None),
             })
