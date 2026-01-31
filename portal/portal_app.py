@@ -1471,44 +1471,6 @@ async def api_operations_clients(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/operations/clients/status-distribution")
-async def api_operations_client_status_distribution(
-    limit: int = Query(200, ge=1, le=1000),
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """Debug: return status distribution for all clients (active-only remains in dashboard)."""
-    if wellsky_service is None:
-        raise HTTPException(status_code=503, detail="WellSky service not available")
-
-    try:
-        from collections import Counter
-
-        offset = 0
-        all_clients = []
-        while True:
-            batch = wellsky_service.get_clients(status=None, limit=limit, offset=offset)
-            if not batch:
-                break
-            all_clients.extend(batch)
-            if len(batch) < limit:
-                break
-            offset += limit
-
-        statuses = []
-        for client in all_clients:
-            status_val = client.status.value if hasattr(client.status, "value") else str(client.status)
-            statuses.append((status_val or "").lower())
-
-        return JSONResponse({
-            "total_clients": len(all_clients),
-            "status_counts": dict(Counter(statuses)),
-            "sample_statuses": statuses[:10],
-        })
-    except Exception as e:
-        logger.error(f"Error getting client status distribution: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @app.get("/api/operations/care-plans")
 async def api_operations_care_plans(
     days: int = Query(30, ge=1, le=365),
