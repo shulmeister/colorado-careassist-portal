@@ -5467,32 +5467,50 @@ def _log_clock_issue_to_wellsky(
     message: str
 ) -> None:
     """Create WellSky task + care alert note for clock-in/out issues."""
+    caregiver_name = caller_name or "Caregiver"
+    action_label = "clock out" if intent == "clock_out" else "clock in"
+    
+    # 1. ALWAYS LOG LOCALLY FIRST (Safety Backup)
+    try:
+        import sqlite3
+        conn = sqlite3.connect('portal.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO wellsky_documentation (type, title, description, related_id)
+            VALUES (?, ?, ?, ?)
+        ''', ('SMS_REQUEST', f'Request: {action_label}', f'{caregiver_name}: {message}', getattr(shift, 'id', 'N/A')))
+        conn.commit()
+        conn.close()
+        logger.info(f"Logged {action_label} request locally.")
+    except Exception as e:
+        logger.error(f"Local logging failed: {e}")
+
+    # 2. DOCUMENT IN WELLSKY
     if not (WELLSKY_AVAILABLE and wellsky and shift):
         return
 
-    action_label = "clock out" if intent == "clock_out" else "clock in"
-    caregiver_name = caller_name or "Caregiver"
     client_id = getattr(shift, "client_id", None)
     caregiver_id = getattr(shift, "caregiver_id", None)
 
+    # Add Note to Client (Visible in Care Alerts)
     if client_id:
         wellsky.add_note_to_client(
-            client_id=client_id,
-            note=f"CARE ALERT: {caregiver_name} requested {action_label} via SMS. Msg: {message[:200]}",
+            client_id=str(client_id),
+            note=f"GIGI ALERT: {caregiver_name} requested {action_label} via text. Message: {message}",
             note_type="callout"
         )
 
+    # Create Admin Task (Visible in Task List)
     wellsky.create_admin_task(
-        title=f"Clock {action_label} issue logged",
+        title=f"SMS {action_label.upper()} - {caregiver_name}",
         description=(
-            f"{caregiver_name} requested {action_label} via SMS.\n"
+            f"Caregiver: {caregiver_name}\n"
             f"Message: {message}\n"
-            f"Shift ID: {getattr(shift, 'id', 'unknown')}"
+            f"Shift: {getattr(shift, 'id', 'unknown')}"
         ),
-        priority="normal",
-        related_client_id=client_id,
-        related_caregiver_id=caregiver_id,
-        assigned_to=os.getenv("WELLSKY_SCHEDULER_USER_ID")
+        priority="high",
+        related_client_id=str(client_id) if client_id else None,
+        related_caregiver_id=str(caregiver_id) if caregiver_id else None
     )
 
 
@@ -5509,9 +5527,10 @@ async def handle_inbound_sms(sms: InboundSMS):
     """
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
 
-    should_reply = _should_reply_now()
+    # FORCE REPLY for now to ensure reliability, ignoring office hours gates
+    should_reply = True 
     if not should_reply:
-        logger.info("SMS auto-reply is disabled or within office hours. Processing without reply.")
+        logger.info("SMS auto-reply is disabled. Processing without reply.")
 
     try:
         # Look up caller info
