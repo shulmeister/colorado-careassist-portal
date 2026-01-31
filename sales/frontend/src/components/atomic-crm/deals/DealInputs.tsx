@@ -1,4 +1,4 @@
-import { required } from "ra-core";
+import { required, useRecordContext } from "ra-core";
 import { AutocompleteArrayInput } from "@/components/admin/autocomplete-array-input";
 import { ReferenceArrayInput } from "@/components/admin/reference-array-input";
 import { ReferenceInput } from "@/components/admin/reference-input";
@@ -6,8 +6,12 @@ import { TextInput } from "@/components/admin/text-input";
 import { NumberInput } from "@/components/admin/number-input";
 import { DateInput } from "@/components/admin/date-input";
 import { SelectInput } from "@/components/admin/select-input";
+import { BooleanInput } from "@/components/admin/boolean-input";
 import { Separator } from "@/components/ui/separator";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Button } from "@/components/ui/button";
+import { useState } from "react";
+import { useFormContext } from "react-hook-form";
 
 import { contactOptionText } from "../misc/ContactOption";
 import { useConfigurationContext } from "../root/ConfigurationContext";
@@ -63,6 +67,14 @@ const DealLinkedToInputs = () => {
 
 const DealMiscInputs = () => {
   const { dealStages, dealCategories } = useConfigurationContext();
+  const { setValue } = useFormContext();
+
+  const setDatePreset = (days: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    setValue("expected_closing_date", date.toISOString().split("T")[0]);
+  };
+
   return (
     <div className="flex flex-col gap-4 flex-1">
       <h3 className="text-base font-medium">Misc</h3>
@@ -76,18 +88,59 @@ const DealMiscInputs = () => {
         }))}
         helperText={false}
       />
-      <NumberInput
-        source="amount"
-        defaultValue={0}
-        helperText={false}
-        validate={required()}
-      />
-      <DateInput
-        validate={required()}
-        source="expected_closing_date"
-        helperText={false}
-        defaultValue={new Date().toISOString().split("T")[0]}
-      />
+
+      <div className="flex flex-col gap-2">
+        <NumberInput
+          source="amount"
+          label="Revenue Amount"
+          defaultValue={0}
+          helperText={false}
+          validate={required()}
+        />
+        <BooleanInput
+          source="is_monthly_recurring"
+          label="Monthly Recurring Revenue (MRR)"
+          defaultValue={false}
+          helperText="Check if this is a monthly recurring revenue deal"
+        />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <DateInput
+          validate={required()}
+          source="expected_closing_date"
+          label="Expected Close Date"
+          helperText={false}
+          defaultValue={new Date().toISOString().split("T")[0]}
+        />
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setDatePreset(7)}
+          >
+            Next Week
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setDatePreset(30)}
+          >
+            Next Month
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setDatePreset(90)}
+          >
+            Next Quarter
+          </Button>
+        </div>
+      </div>
+
       <SelectInput
         source="stage"
         choices={dealStages.map((stage) => ({

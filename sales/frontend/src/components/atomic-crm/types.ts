@@ -143,6 +143,7 @@ export type Deal = {
   stage: string;
   description: string;
   amount: number;
+  is_monthly_recurring?: boolean;
   created_at: string;
   updated_at: string;
   archived_at?: string;

@@ -264,6 +264,7 @@ class Deal(Base):
     stage_entered_at = Column(DateTime, nullable=True)  # Phase 1: Time-in-stage tracking
     description = Column(Text, nullable=True)
     amount = Column(Float, nullable=True, default=0)
+    is_monthly_recurring = Column(Boolean, nullable=True, default=False)  # Track if revenue is MRR
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     archived_at = Column(DateTime, nullable=True)
@@ -327,6 +328,7 @@ class Deal(Base):
             "is_stale": self.is_stale,
             "description": self.description,
             "amount": self.amount,
+            "is_monthly_recurring": self.is_monthly_recurring,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
             "archived_at": self.archived_at.isoformat() if self.archived_at else None,
