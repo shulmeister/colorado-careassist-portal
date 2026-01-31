@@ -5765,25 +5765,16 @@ async def handle_inbound_sms(sms: InboundSMS):
                 action_taken=action_taken
             )
 
-        if not should_reply:
-            return SMSResponse(
-                success=True,
-                reply_sent=False,
-                reply_text=reply_text
-            )
-
-        # Send reply via BeeTexting SMS (falls back to RingCentral)
-        # This ensures the reply shows up in the BeeTexting thread we just assigned
-        sms_sent = await _send_sms_beetexting(sms.from_number, reply_text)
-
         # =====================================================================
         # DOCUMENTATION: Log the entire interaction to WellSky (24/7 compliance)
+        # This runs ALWAYS - even if Gigi doesn't reply (e.g., during office hours)
         # =====================================================================
         if WELLSKY_AVAILABLE and wellsky and caller_info and caller_info.person_id:
             try:
                 person_type = caller_info.caller_type.value # 'caregiver' or 'client'
-                log_note = f"SMS INTERACTION:\nCaregiver: {sms.message}\nGigi: {reply_text}"
-                
+                reply_status = "(Gigi replied)" if should_reply else "(Office hours - no auto-reply)"
+                log_note = f"SMS INTERACTION {reply_status}:\nCaregiver: {sms.message}\nGigi response: {reply_text}"
+
                 # Use the internal add_note_to_wellsky tool logic
                 await add_note_to_wellsky(
                     person_type=person_type,
@@ -5794,6 +5785,17 @@ async def handle_inbound_sms(sms: InboundSMS):
                 logger.info(f"Full conversation documented in WellSky for {caller_info.name}")
             except Exception as doc_err:
                 logger.warning(f"Failed to document full conversation: {doc_err}")
+
+        if not should_reply:
+            return SMSResponse(
+                success=True,
+                reply_sent=False,
+                reply_text=reply_text
+            )
+
+        # Send reply via BeeTexting SMS (falls back to RingCentral)
+        # This ensures the reply shows up in the BeeTexting thread we just assigned
+        sms_sent = await _send_sms_beetexting(sms.from_number, reply_text)
 
         if sms_sent:
             logger.info(f"SMS reply sent to {sms.from_number}: {reply_text[:50]}...")
