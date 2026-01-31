@@ -187,8 +187,8 @@ JASON_PHONE = "+16039971495"  # Jason Shulman - for call transfers
 ESCALATION_CYNTHIA_EXT = os.getenv("ESCALATION_CYNTHIA_EXT", "105")  # Cynthia Pointe - Care Manager
 ESCALATION_JASON_EXT = os.getenv("ESCALATION_JASON_EXT", "101")      # Jason Shulman - Owner
 
-# SMS Auto-Reply Toggle (default OFF for safety)
-SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "false").lower() == "true"
+# SMS Auto-Reply Toggle (default ON - Gigi replies outside office hours)
+SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true"
 
 # After-hours auto-reply (default ON; replies only outside office hours)
 SMS_AFTER_HOURS_ONLY = os.getenv("GIGI_SMS_AFTER_HOURS_ONLY", "true").lower() == "true"
@@ -5514,6 +5514,56 @@ def _log_clock_issue_to_wellsky(
     )
 
 
+def _log_unmatched_sms_to_wellsky(
+    caller_name: Optional[str],
+    intent: str,
+    message: str,
+    phone: str
+) -> None:
+    """Create WellSky task for caregiver SMS that couldn't be matched to a shift."""
+    caregiver_name = caller_name or "Unknown Caregiver"
+    action_label = "clock out" if intent == "clock_out" else "clock in"
+    
+    # ALWAYS LOG LOCALLY FIRST (Safety Backup)
+    try:
+        import sqlite3
+        conn = sqlite3.connect('portal.db')
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO wellsky_documentation (type, title, description, related_id)
+            VALUES (?, ?, ?, ?)
+        ''', ('UNMATCHED_SMS', f'Unmatched {action_label}', f'{caregiver_name} ({phone}): {message}', 'N/A'))
+        conn.commit()
+        conn.close()
+        logger.info(f"Logged unmatched {action_label} request locally.")
+    except Exception as e:
+        logger.error(f"Local logging failed: {e}")
+
+    if not (WELLSKY_AVAILABLE and wellsky):
+        return
+
+    # Try to find caregiver record by phone to link the task
+    caregiver_id = None
+    caregiver = wellsky.get_caregiver_by_phone(phone)
+    if caregiver:
+        caregiver_id = caregiver.id
+        caregiver_name = caregiver.full_name
+
+    # Create Admin Task (Visible in Task List)
+    wellsky.create_admin_task(
+        title=f"SMS {action_label.upper()} (NO SHIFT) - {caregiver_name}",
+        description=(
+            f"Caregiver: {caregiver_name}\n"
+            f"Phone: {phone}\n"
+            f"Intent: {action_label}\n"
+            f"Message: {message}\n"
+            f"Note: Gigi could not find a matching shift for this request."
+        ),
+        priority="high",
+        related_caregiver_id=str(caregiver_id) if caregiver_id else None
+    )
+
+
 @app.post("/webhook/inbound-sms", response_model=SMSResponse)
 async def handle_inbound_sms(sms: InboundSMS):
     """
@@ -5663,8 +5713,12 @@ async def handle_inbound_sms(sms: InboundSMS):
                             reply_text = f"Got it{f', {caller_info.name}' if caller_info.name else ''} — I’ve clocked you out."
                         else:
                             reply_text = "I’m having trouble clocking you out. I’ve logged this and the scheduler will follow up shortly."
+                            # STILL LOG TO WELLSKY even if clock out fails
+                            _log_clock_issue_to_wellsky(current_shift, caller_info.name, "clock_out", sms.message)
                     else:
                         reply_text = "I couldn’t find your current shift. I’ve logged this for the scheduler to follow up."
+                        # LOG GENERIC TASK if no shift found
+                        _log_unmatched_sms_to_wellsky(caller_info.name, "clock_out", sms.message, sms.from_number)
 
                 elif intent == "clock_in":
                     # Get their upcoming shift
@@ -5683,8 +5737,10 @@ async def handle_inbound_sms(sms: InboundSMS):
                             reply_text = f"Got it{f', {caller_info.name}' if caller_info.name else ''} — I’ve clocked you in."
                         else:
                             reply_text = "I’m having trouble clocking you in. I’ve logged this and the scheduler will follow up shortly."
+                            _log_clock_issue_to_wellsky(current_shift, caller_info.name, "clock_in", sms.message)
                     else:
                         reply_text = "I couldn’t find your current shift. I’ve logged this for the scheduler to follow up."
+                        _log_unmatched_sms_to_wellsky(caller_info.name, "clock_in", sms.message, sms.from_number)
 
                 elif intent == "callout":
                     # Smart Call-Out Handling (Continuity First)
@@ -5784,25 +5840,16 @@ async def handle_inbound_sms(sms: InboundSMS):
                 action_taken=action_taken
             )
 
-        if not should_reply:
-            return SMSResponse(
-                success=True,
-                reply_sent=False,
-                reply_text=reply_text
-            )
-
-        # Send reply via BeeTexting SMS (falls back to RingCentral)
-        # This ensures the reply shows up in the BeeTexting thread we just assigned
-        sms_sent = await _send_sms_beetexting(sms.from_number, reply_text)
-
         # =====================================================================
         # DOCUMENTATION: Log the entire interaction to WellSky (24/7 compliance)
+        # This runs ALWAYS - even if Gigi doesn't reply (e.g., during office hours)
         # =====================================================================
         if WELLSKY_AVAILABLE and wellsky and caller_info and caller_info.person_id:
             try:
                 person_type = caller_info.caller_type.value # 'caregiver' or 'client'
-                log_note = f"SMS INTERACTION:\nCaregiver: {sms.message}\nGigi: {reply_text}"
-                
+                reply_status = "(Gigi replied)" if should_reply else "(Office hours - no auto-reply)"
+                log_note = f"SMS INTERACTION {reply_status}:\nCaregiver: {sms.message}\nGigi response: {reply_text}"
+
                 # Use the internal add_note_to_wellsky tool logic
                 await add_note_to_wellsky(
                     person_type=person_type,
@@ -5813,6 +5860,17 @@ async def handle_inbound_sms(sms: InboundSMS):
                 logger.info(f"Full conversation documented in WellSky for {caller_info.name}")
             except Exception as doc_err:
                 logger.warning(f"Failed to document full conversation: {doc_err}")
+
+        if not should_reply:
+            return SMSResponse(
+                success=True,
+                reply_sent=False,
+                reply_text=reply_text
+            )
+
+        # Send reply via BeeTexting SMS (falls back to RingCentral)
+        # This ensures the reply shows up in the BeeTexting thread we just assigned
+        sms_sent = await _send_sms_beetexting(sms.from_number, reply_text)
 
         if sms_sent:
             logger.info(f"SMS reply sent to {sms.from_number}: {reply_text[:50]}...")

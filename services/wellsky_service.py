@@ -2205,6 +2205,11 @@ class WellSkyService:
         """
         Create a TaskLog object in WellSky for a specific encounter.
         POST /v1/encounter/{encounter_id}/tasklog/
+
+        THIS IS THE WORKING WAY TO DOCUMENT IN WELLSKY!
+        - Shows up as "Shift Notes" in mobile app and dashboard
+        - Requires encounter_id (NOT appointment_id)
+        - Get encounter_id from clock_in_shift() response
         """
         if self.is_mock_mode:
             logger.info(f"Mock: Created task log for encounter {encounter_id}")
@@ -2219,12 +2224,78 @@ class WellSkyService:
             "recorded": datetime.utcnow().isoformat() + "Z",
             "show_in_family_room": show_in_family_room
         }
-        
+
         success, response = self._make_request("POST", endpoint, data=data)
         if success:
             logger.info(f"Successfully created TaskLog for encounter {encounter_id}")
             return True, response
         return False, response
+
+    def document_shift_interaction(
+        self,
+        appointment_id: str,
+        title: str,
+        description: str,
+        clock_in_if_needed: bool = True,
+        lat: float = 39.7392,
+        lon: float = -104.9903
+    ) -> Tuple[bool, str]:
+        """
+        HIGH-LEVEL METHOD: Document an interaction on a shift in WellSky.
+
+        This is the CORRECT way to add documentation that shows in WellSky dashboard.
+        Uses the Encounter/TaskLog pattern:
+        1. Clock in to create encounter (if not already clocked in)
+        2. Add TaskLog to the encounter
+
+        Args:
+            appointment_id: The shift's appointment ID
+            title: Short title for the note (e.g., "Gigi AI - SMS Confirmation")
+            description: Full description of the interaction
+            clock_in_if_needed: If True, clock in to create encounter if needed
+            lat/lon: GPS coordinates for clock-in (defaults to Denver)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Documented shift {appointment_id}: {title}")
+            return True, "Shift documented (Mock)"
+
+        # Step 1: Try to clock in (idempotent - returns existing encounter if already clocked in)
+        if clock_in_if_needed:
+            success, result = self.clock_in_shift(appointment_id, lat, lon)
+            if not success:
+                logger.warning(f"Clock-in failed for {appointment_id}: {result}")
+                return False, f"Could not access shift: {result}"
+
+            # Extract encounter_id from result
+            import re
+            match = re.search(r"Carelog ID: (\d+)", result)
+            if match:
+                encounter_id = match.group(1)
+            else:
+                logger.error(f"Could not extract encounter_id from clock-in response: {result}")
+                return False, "Could not get encounter ID from clock-in"
+        else:
+            # Caller must provide encounter_id as appointment_id
+            encounter_id = appointment_id
+
+        # Step 2: Add TaskLog to the encounter
+        success, response = self.create_task_log(
+            encounter_id=encounter_id,
+            title=title,
+            description=description,
+            status="COMPLETE",
+            show_in_family_room=False
+        )
+
+        if success:
+            task_log_id = response.get("taskLogId", "unknown")
+            logger.info(f"Documented shift {appointment_id} → encounter {encounter_id} → tasklog {task_log_id}")
+            return True, f"Shift documented in WellSky (TaskLog ID: {task_log_id})"
+
+        return False, f"TaskLog creation failed: {response}"
 
     def add_note_to_client(
         self,
@@ -2235,26 +2306,78 @@ class WellSkyService:
     ) -> Tuple[bool, str]:
         """
         Add a note to a client's profile in WellSky.
+        ALWAYS logs to local database first for guaranteed documentation trail.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         formatted_note = f"[{timestamp}] [{source.upper()}] [{note_type}] {note}"
+
+        # =====================================================================
+        # ALWAYS log to local database FIRST (Documentation Trail - 24/7/365)
+        # This ensures documentation is preserved even if WellSky API fails
+        # =====================================================================
+        local_logged = False
+        try:
+            import sqlite3
+            conn = sqlite3.connect('portal.db')
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS gigi_documentation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    person_type TEXT NOT NULL,
+                    person_id TEXT NOT NULL,
+                    note TEXT NOT NULL,
+                    note_type TEXT,
+                    source TEXT,
+                    wellsky_synced INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            cursor.execute('''
+                INSERT INTO gigi_documentation_log (person_type, person_id, note, note_type, source, wellsky_synced)
+                VALUES (?, ?, ?, ?, ?, 0)
+            ''', ('client', client_id, formatted_note, note_type, source))
+            conn.commit()
+            conn.close()
+            local_logged = True
+            logger.info(f"Local: Documented client note for {client_id}")
+        except Exception as db_err:
+            logger.error(f"Local DB error (client note): {db_err}")
 
         if self.is_mock_mode:
             logger.info(f"Mock: Added note to client {client_id}")
             return True, "Note added (Mock)"
 
-        # Use documented note endpoint
+        # Try WellSky API (may fail due to write permission restrictions)
         endpoint = f"clients/{client_id}/notes/"
         data = {
             "note": formatted_note,
             "note_type": note_type,
             "source": source
         }
-        
+
         success, response = self._make_request("POST", endpoint, data=data)
         if success:
-            logger.info(f"Added note to client {client_id}")
+            # Update local record to mark as synced
+            try:
+                conn = sqlite3.connect('portal.db')
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE gigi_documentation_log
+                    SET wellsky_synced = 1
+                    WHERE person_type = 'client' AND person_id = ?
+                    ORDER BY created_at DESC LIMIT 1
+                ''', (client_id,))
+                conn.commit()
+                conn.close()
+            except:
+                pass
+            logger.info(f"Added note to client {client_id} in WellSky")
             return True, "Note added successfully"
+
+        # WellSky failed but local succeeded - still return success
+        if local_logged:
+            logger.warning(f"WellSky API failed for client {client_id}, but local record preserved")
+            return True, "Note documented locally (WellSky sync pending)"
         return False, str(response)
 
     def add_note_to_prospect(
@@ -2266,9 +2389,42 @@ class WellSkyService:
     ) -> Tuple[bool, str]:
         """
         Add a note to a prospect's profile in WellSky.
+        ALWAYS logs to local database first for guaranteed documentation trail.
         """
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         formatted_note = f"[{timestamp}] [{source.upper()}] [{note_type}] {note}"
+
+        # =====================================================================
+        # ALWAYS log to local database FIRST (Documentation Trail - 24/7/365)
+        # This ensures documentation is preserved even if WellSky API fails
+        # =====================================================================
+        local_logged = False
+        try:
+            import sqlite3
+            conn = sqlite3.connect('portal.db')
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS gigi_documentation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    person_type TEXT NOT NULL,
+                    person_id TEXT NOT NULL,
+                    note TEXT NOT NULL,
+                    note_type TEXT,
+                    source TEXT,
+                    wellsky_synced INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            cursor.execute('''
+                INSERT INTO gigi_documentation_log (person_type, person_id, note, note_type, source, wellsky_synced)
+                VALUES (?, ?, ?, ?, ?, 0)
+            ''', ('prospect', prospect_id, formatted_note, note_type, source))
+            conn.commit()
+            conn.close()
+            local_logged = True
+            logger.info(f"Local: Documented prospect note for {prospect_id}")
+        except Exception as db_err:
+            logger.error(f"Local DB error (prospect note): {db_err}")
 
         if self.is_mock_mode:
             logger.info(f"Mock: Added note to prospect {prospect_id}")
@@ -2282,11 +2438,31 @@ class WellSkyService:
             "note_type": note_type,
             "source": source
         }
-        
+
         success, response, status_code = self._make_legacy_request("POST", endpoint, data=data)
         if success:
+            # Update local record to mark as synced
+            try:
+                import sqlite3
+                conn = sqlite3.connect('portal.db')
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE gigi_documentation_log
+                    SET wellsky_synced = 1
+                    WHERE person_type = 'prospect' AND person_id = ?
+                    ORDER BY created_at DESC LIMIT 1
+                ''', (prospect_id,))
+                conn.commit()
+                conn.close()
+            except:
+                pass
             logger.info(f"Added note to prospect {prospect_id}")
             return True, "Note added successfully"
+
+        # WellSky failed but local succeeded - still return success
+        if local_logged:
+            logger.warning(f"WellSky API failed for prospect {prospect_id}, but local record preserved")
+            return True, "Note documented locally (WellSky sync pending)"
         return False, str(response)
 
     # =========================================================================
@@ -2333,7 +2509,7 @@ class WellSkyService:
             if shift.status == ShiftStatus.IN_PROGRESS:
                 return shift
 
-        # Next, look for shift starting soon (within 2 hours)
+        # Next, look for shift starting soon (within 4 hours for SMS flexibility)
         for shift in shifts:
             if shift.status in (ShiftStatus.SCHEDULED, ShiftStatus.CONFIRMED):
                 if shift.start_time and shift.date:
@@ -2342,10 +2518,18 @@ class WellSkyService:
                             shift.date,
                             datetime.strptime(shift.start_time, "%H:%M").time()
                         )
-                        if -30 <= (start_dt - now).total_seconds() / 60 <= 120:
+                        # Check if within 4 hours
+                        if -60 <= (start_dt - now).total_seconds() / 60 <= 240:
                             return shift
                     except (ValueError, TypeError):
                         pass
+
+        # FALLBACK: If there is exactly one shift today and it's scheduled, return it
+        # This handles cases like Karen's where the time might be slightly off or they are early
+        scheduled_today = [s for s in shifts if s.status in (ShiftStatus.SCHEDULED, ShiftStatus.CONFIRMED)]
+        if len(scheduled_today) == 1:
+            logger.info(f"Using only scheduled shift found today as 'current' for {phone}")
+            return scheduled_today[0]
 
         # Otherwise return the first shift of the day
         return shifts[0] if shifts else None
@@ -3915,6 +4099,7 @@ class WellSkyService:
     ) -> Tuple[bool, str]:
         """
         Add a note to a caregiver's profile in WellSky.
+        ALWAYS logs to local database first for guaranteed documentation trail.
 
         Args:
             caregiver_id: The caregiver's WellSky ID
@@ -3928,6 +4113,38 @@ class WellSkyService:
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         formatted_note = f"[{timestamp}] [{source.upper()}] [{note_type}] {note}"
 
+        # =====================================================================
+        # ALWAYS log to local database FIRST (Documentation Trail - 24/7/365)
+        # This ensures documentation is preserved even if WellSky API fails
+        # =====================================================================
+        local_logged = False
+        try:
+            import sqlite3
+            conn = sqlite3.connect('portal.db')
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS gigi_documentation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    person_type TEXT NOT NULL,
+                    person_id TEXT NOT NULL,
+                    note TEXT NOT NULL,
+                    note_type TEXT,
+                    source TEXT,
+                    wellsky_synced INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            cursor.execute('''
+                INSERT INTO gigi_documentation_log (person_type, person_id, note, note_type, source, wellsky_synced)
+                VALUES (?, ?, ?, ?, ?, 0)
+            ''', ('caregiver', caregiver_id, formatted_note, note_type, source))
+            conn.commit()
+            conn.close()
+            local_logged = True
+            logger.info(f"Local: Documented caregiver note for {caregiver_id}")
+        except Exception as db_err:
+            logger.error(f"Local DB error (caregiver note): {db_err}")
+
         if self.is_mock_mode:
             caregiver = self._mock_caregivers.get(caregiver_id)
             if caregiver:
@@ -3936,7 +4153,7 @@ class WellSkyService:
                 return True, f"Note added to caregiver {caregiver_id}"
             return False, f"Caregiver {caregiver_id} not found"
 
-        # Real API call
+        # Real API call (may fail due to write permission restrictions)
         try:
             response = requests.post(
                 f"{self.api_base_url}/caregivers/{caregiver_id}/notes",
@@ -3950,13 +4167,34 @@ class WellSkyService:
                 timeout=15
             )
             if response.status_code in (200, 201):
+                # Update local record to mark as synced
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect('portal.db')
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        UPDATE gigi_documentation_log
+                        SET wellsky_synced = 1
+                        WHERE person_type = 'caregiver' AND person_id = ?
+                        ORDER BY created_at DESC LIMIT 1
+                    ''', (caregiver_id,))
+                    conn.commit()
+                    conn.close()
+                except:
+                    pass
                 logger.info(f"Added note to caregiver {caregiver_id}")
                 return True, f"Note added to caregiver {caregiver_id}"
             else:
-                logger.warning(f"Failed to add note to caregiver {caregiver_id}: {response.text}")
+                logger.warning(f"WellSky API failed for caregiver {caregiver_id}: {response.status_code}")
+                # WellSky failed but local succeeded - still return success
+                if local_logged:
+                    return True, "Note documented locally (WellSky sync pending)"
                 return False, f"Failed to add note: {response.status_code}"
         except Exception as e:
             logger.error(f"Error adding note to caregiver {caregiver_id}: {e}")
+            # WellSky failed but local succeeded - still return success
+            if local_logged:
+                return True, "Note documented locally (WellSky sync pending)"
             return False, str(e)
 
     def assign_caregiver_to_shift(
