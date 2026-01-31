@@ -187,8 +187,8 @@ JASON_PHONE = "+16039971495"  # Jason Shulman - for call transfers
 ESCALATION_CYNTHIA_EXT = os.getenv("ESCALATION_CYNTHIA_EXT", "105")  # Cynthia Pointe - Care Manager
 ESCALATION_JASON_EXT = os.getenv("ESCALATION_JASON_EXT", "101")      # Jason Shulman - Owner
 
-# SMS Auto-Reply Toggle (default OFF for safety)
-SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "false").lower() == "true"
+# SMS Auto-Reply Toggle (default ON - Gigi replies outside office hours)
+SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true"
 
 # After-hours auto-reply (default ON; replies only outside office hours)
 SMS_AFTER_HOURS_ONLY = os.getenv("GIGI_SMS_AFTER_HOURS_ONLY", "true").lower() == "true"
