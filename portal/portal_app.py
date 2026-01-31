@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, status, Query, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, Depends, status, Query, UploadFile, File, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -7,6 +7,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from sqlalchemy.orm import Session
 import os
 import logging
+import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date as date_cls
 import httpx
@@ -132,6 +133,37 @@ def require_admin(user: Dict[str, Any]) -> None:
         )
 
 app = FastAPI(title="Colorado CareAssist Portal", version="1.0.0")
+
+# --- AUTONOMOUS DOCUMENTATION BACKGROUND LOOP ---
+async def autonomous_documentation_sync():
+    """Background loop to ensure 24/7 documentation of RC chats into WellSky"""
+    while True:
+        try:
+            logger.info("Starting autonomous RingCentral -> WellSky sync...")
+            # Use db_manager to get a fresh session outside of request context
+            with db_manager.get_session() as db:
+                from services.ringcentral_messaging_service import ringcentral_messaging_service
+                
+                channels = ["New Schedulers", "Biz Dev"]
+                for channel in channels:
+                    # Sync every 30 mins (checking last 1 hour for safety margin)
+                    ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=1)
+                    # Note: auto_create_complaints needs push_to_wellsky=True
+                    # We'll just trigger the main logic we added to the endpoint
+                    ringcentral_messaging_service.sync_tasks_to_wellsky(db, chat_name=channel, hours_back=1)
+                    
+            logger.info("Autonomous documentation sync completed.")
+        except Exception as e:
+            logger.error(f"Error in autonomous documentation loop: {e}")
+        
+        # Run every 30 minutes
+        await asyncio.sleep(1800)
+
+@app.on_event("startup")
+async def startup_event():
+    # Start the documentation loop
+    asyncio.create_task(autonomous_documentation_sync())
+    logger.info("Gigi Autonomous Documentation Engine started.")
 
 # Add session middleware for OAuth state management
 from starlette.middleware.sessions import SessionMiddleware
@@ -4578,6 +4610,41 @@ async def api_log_client_issue(request: Request):
             "success": False,
             "error": str(e)
         }, status_code=500)
+
+
+@app.post("/api/operations/sync-rc-to-wellsky")
+async def api_sync_rc_to_wellsky(
+    hours: int = Query(24, ge=1, le=168),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """
+    Trigger Gigi to scan RingCentral channels and sync documentation to WellSky.
+    """
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+    
+    results = {}
+    channels = ["New Schedulers", "Biz Dev"]
+    
+    for channel in channels:
+        # 1. Sync Complaints/Issues
+        scan_res = ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=hours)
+        complaint_res = ringcentral_messaging_service.auto_create_complaints(db, scan_res, auto_create=True, push_to_wellsky=True)
+        
+        # 2. Sync General Tasks
+        task_res = ringcentral_messaging_service.sync_tasks_to_wellsky(db, chat_name=channel, hours_back=hours)
+        
+        results[channel] = {
+            "complaints_detected": scan_res.get("potential_complaints", []),
+            "complaints_created": complaint_res.get("created_count", 0),
+            "tasks_synced": task_res.get("tasks_synced", 0)
+        }
+        
+    return JSONResponse({
+        "success": True,
+        "results": results,
+        "message": f"Sync completed for {len(channels)} channels over the last {hours} hours."
+    })
 
 
 @app.post("/api/operations/call-outs")

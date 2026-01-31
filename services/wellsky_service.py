@@ -52,11 +52,11 @@ API_HOSTS = {
 }
 
 # OAuth endpoint path (at ROOT level, not under /v1/)
-OAUTH_TOKEN_PATH = "/oauth/accesstoken"  # Per WellSky Connect API docs
+OAUTH_TOKEN_PATH = "/oauth/accesstoken"  # Working WellSky OAuth path
 
 # Legacy ClearCare API (kept for fallback until officially retired)
 LEGACY_API_HOST = "https://api.clearcareonline.com"
-LEGACY_TOKEN_PATH = "/connect/token"
+LEGACY_TOKEN_URL = "https://connect.clearcareonline.com/oauth/accesstoken"
 
 
 # =============================================================================
@@ -509,7 +509,7 @@ class WellSkyService:
         self.host_url = API_HOSTS.get(self.environment, API_HOSTS["production"])  # Host URL (for OAuth - no /v1)
         self.legacy_base_url = f"{LEGACY_API_HOST}/api/v1/agencies/{self.agency_id}" if self.agency_id else ""
         self.api_base_url = self.legacy_base_url if self.api_mode == "legacy" else self.base_url
-        self.legacy_token_url = f"{LEGACY_API_HOST}{LEGACY_TOKEN_PATH}"
+        self.legacy_token_url = LEGACY_TOKEN_URL
 
         self._access_token = None
         self._token_expires_at = None
@@ -569,7 +569,6 @@ class WellSkyService:
                 )
             else:
                 # OAuth 2.0 client credentials flow (WellSky Connect API)
-                # NOTE: OAuth endpoint is at ROOT level, not under /v1/
                 auth_url = f"{self.host_url}{OAUTH_TOKEN_PATH}"
 
                 response = requests.post(
@@ -586,7 +585,7 @@ class WellSkyService:
             if response.status_code == 200:
                 data = response.json()
                 self._access_token = data.get("access_token")
-                expires_in = int(data.get("expires_in", 3600))  # Convert to int (API returns string)
+                expires_in = int(data.get("expires_in", 3600))
                 self._token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
                 logger.info("WellSky access token refreshed")
                 return self._access_token
@@ -2258,6 +2257,38 @@ class WellSkyService:
             return True, "Note added successfully"
         return False, str(response)
 
+    def add_note_to_prospect(
+        self,
+        prospect_id: str,
+        note: str,
+        note_type: str = "general",
+        source: str = "gigi_ai"
+    ) -> Tuple[bool, str]:
+        """
+        Add a note to a prospect's profile in WellSky.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        formatted_note = f"[{timestamp}] [{source.upper()}] [{note_type}] {note}"
+
+        if self.is_mock_mode:
+            logger.info(f"Mock: Added note to prospect {prospect_id}")
+            return True, "Note added (Mock)"
+
+        # Use legacy endpoint which is known to support notes for prospects
+        # We use _make_legacy_request to bypass the Connect API prefix issues
+        endpoint = f"prospects/{prospect_id}/notes/"
+        data = {
+            "note": formatted_note,
+            "note_type": note_type,
+            "source": source
+        }
+        
+        success, response, status_code = self._make_legacy_request("POST", endpoint, data=data)
+        if success:
+            logger.info(f"Added note to prospect {prospect_id}")
+            return True, "Note added successfully"
+        return False, str(response)
+
     # =========================================================================
     # EVV / Clock In-Out Methods (Used by Gigi AI Agent)
     # =========================================================================
@@ -3762,58 +3793,51 @@ class WellSkyService:
     # GIGI AI AGENT METHODS - New features for production readiness
     # =========================================================================
 
-    def add_note_to_client(
+    def _make_legacy_request(
         self,
-        client_id: str,
-        note: str,
-        note_type: str = "general",
-        source: str = "gigi_ai"
-    ) -> Tuple[bool, str]:
+        method: str,
+        endpoint: str,
+        params: Dict = None,
+        data: Dict = None
+    ) -> Tuple[bool, Any, int]:
         """
-        Add a note to a client's profile in WellSky.
-
-        Args:
-            client_id: The client's WellSky ID
-            note: The note content
-            note_type: Type of note (general, call, complaint, schedule, care_plan)
-            source: Source of the note (gigi_ai, portal, phone)
-
-        Returns:
-            Tuple of (success, message)
+        Make authenticated API request to the legacy WellSky (ClearCare) API.
         """
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
-        formatted_note = f"[{timestamp}] [{source.upper()}] [{note_type}] {note}"
+        if not self.is_configured:
+            return False, {"error": "API not configured"}, 0
 
-        if self.is_mock_mode:
-            client = self._mock_clients.get(client_id)
-            if client:
-                client.notes = f"{client.notes}\n{formatted_note}" if client.notes else formatted_note
-                logger.info(f"Mock: Added note to client {client_id}")
-                return True, f"Note added to client {client_id}"
-            return False, f"Client {client_id} not found"
+        token = self._get_access_token()
+        if not token:
+            return False, {"error": "Authentication failed"}, 0
 
-        # Real API call
+        url = f"{LEGACY_API_HOST}/api/v1/agencies/{self.agency_id}/{endpoint.lstrip('/')}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+        }
+
         try:
-            response = requests.post(
-                f"{self.api_base_url}/clients/{client_id}/notes",
-                headers=self._get_headers(),
-                json={
-                    "note": formatted_note,
-                    "note_type": note_type,
-                    "source": source,
-                    "created_at": datetime.utcnow().isoformat()
-                },
-                timeout=15
-            )
-            if response.status_code in (200, 201):
-                logger.info(f"Added note to client {client_id}")
-                return True, f"Note added to client {client_id}"
+            if method.upper() == "GET":
+                response = requests.get(url, headers=headers, params=params, timeout=30)
+            elif method.upper() == "POST":
+                response = requests.post(url, headers=headers, json=data, params=params, timeout=30)
+            elif method.upper() == "PUT":
+                response = requests.put(url, headers=headers, json=data, params=params, timeout=30)
+            elif method.upper() == "DELETE":
+                response = requests.delete(url, headers=headers, params=params, timeout=30)
             else:
-                logger.warning(f"Failed to add note to client {client_id}: {response.text}")
-                return False, f"Failed to add note: {response.status_code}"
+                return False, {"error": f"Unsupported method: {method}"}, 0
+
+            if response.status_code in (200, 201):
+                return True, response.json(), response.status_code
+            elif response.status_code == 204:
+                return True, {}, response.status_code
+            else:
+                return False, response.text, response.status_code
+
         except Exception as e:
-            logger.error(f"Error adding note to client {client_id}: {e}")
-            return False, str(e)
+            logger.error(f"Legacy WellSky API error: {e}")
+            return False, str(e), 0
 
     def create_admin_task(
         self,
@@ -3826,43 +3850,60 @@ class WellSkyService:
         priority: str = "normal"
     ) -> bool:
         """
-        Create an administrative task in WellSky.
-        
-        Args:
-            title: Task title
-            description: Task details
-            due_date: When it's due
-            assigned_to: WellSky user ID to assign to
-            related_client_id: Client ID to link
-            related_caregiver_id: Caregiver ID to link
-            priority: normal, high, urgent
+        Create an administrative task. Falls back to local database if WellSky API fails.
         """
+        # Always log to local database first (Documentation Trail)
+        try:
+            import sqlite3
+            conn = sqlite3.connect('portal.db')
+            cursor = conn.cursor()
+            
+            # Ensure table exists
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS wellsky_documentation (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    type TEXT,
+                    title TEXT,
+                    description TEXT,
+                    related_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            related_id = related_client_id or related_caregiver_id or "N/A"
+            cursor.execute('''
+                INSERT INTO wellsky_documentation (type, title, description, related_id)
+                VALUES (?, ?, ?, ?)
+            ''', ('TASK', title, description, related_id))
+            
+            conn.commit()
+            conn.close()
+            logger.info(f"Logged task locally: {title}")
+        except Exception as e:
+            logger.error(f"Failed to log task locally: {e}")
+
         if self.is_mock_mode:
-            logger.info(f"Mock: Created AdminTask '{title}'")
             return True
 
+        # Attempt WellSky API call (even if we expect failure, we try)
         task_data = {
             "title": title,
             "description": description,
             "status": "pending",
             "priority": priority,
-            "due_date": due_date.isoformat() if due_date else date.today().isoformat()
+            "due_date": due_date.isoformat() if due_date else datetime.utcnow().date().isoformat(),
+            "theDate": datetime.utcnow().isoformat()
         }
 
-        if assigned_to:
-            task_data["assigned_to_id"] = assigned_to
-        if related_client_id:
-            task_data["client_id"] = related_client_id
-        if related_caregiver_id:
-            task_data["caregiver_id"] = related_caregiver_id
-
-        success, response = self._make_request("POST", "adminTasks/", data=task_data)
+        # Use legacy request for adminTasks
+        success, response, status_code = self._make_legacy_request("POST", "adminTasks/", data=task_data)
 
         if success:
-            logger.info(f"Created AdminTask: {title}")
+            logger.info(f"Created AdminTask in WellSky: {title}")
             return True
         else:
-            logger.error(f"Failed to create AdminTask: {response}")
+            # We already logged locally, so we consider this "handled" but return False to indicate API failure
+            logger.warning(f"WellSky API Task creation failed (as expected). Local record preserved. {status_code}")
             return False
 
     def add_note_to_caregiver(

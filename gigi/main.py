@@ -5773,7 +5773,27 @@ async def handle_inbound_sms(sms: InboundSMS):
             )
 
         # Send reply via BeeTexting SMS (falls back to RingCentral)
-        sms_sent = await _send_sms_primary(sms.from_number, reply_text)
+        # This ensures the reply shows up in the BeeTexting thread we just assigned
+        sms_sent = await _send_sms_beetexting(sms.from_number, reply_text)
+
+        # =====================================================================
+        # DOCUMENTATION: Log the entire interaction to WellSky (24/7 compliance)
+        # =====================================================================
+        if WELLSKY_AVAILABLE and wellsky and caller_info and caller_info.person_id:
+            try:
+                person_type = caller_info.caller_type.value # 'caregiver' or 'client'
+                log_note = f"SMS INTERACTION:\nCaregiver: {sms.message}\nGigi: {reply_text}"
+                
+                # Use the internal add_note_to_wellsky tool logic
+                await add_note_to_wellsky(
+                    person_type=person_type,
+                    person_id=caller_info.person_id,
+                    note=log_note,
+                    note_type="communication"
+                )
+                logger.info(f"Full conversation documented in WellSky for {caller_info.name}")
+            except Exception as doc_err:
+                logger.warning(f"Failed to document full conversation: {doc_err}")
 
         if sms_sent:
             logger.info(f"SMS reply sent to {sms.from_number}: {reply_text[:50]}...")

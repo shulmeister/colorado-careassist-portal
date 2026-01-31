@@ -197,25 +197,32 @@ class RingCentralMessagingService:
 
     def load_client_names(self, db_session) -> List[str]:
         """
-        Load client names from the database for matching.
-
-        Args:
-            db_session: SQLAlchemy session
-
-        Returns:
-            List of client names
+        Load client names from the database or WellSky for matching.
         """
-        from portal_models import CarePlanStatus
+        from services.wellsky_service import wellsky_service
+        
+        # 1. Try WellSky (Source of Truth)
+        if wellsky_service and wellsky_service.is_configured:
+            try:
+                clients = wellsky_service.get_clients(status="active", limit=500)
+                if clients:
+                    self._client_names_cache = [c.full_name for c in clients]
+                    logger.info(f"Loaded {len(self._client_names_cache)} client names from WellSky")
+                    return self._client_names_cache
+            except Exception as e:
+                logger.warning(f"Failed to load client names from WellSky: {e}")
 
+        # 2. Fallback to Portal DB
+        from portal.portal_models import CarePlanStatus
         try:
-            # Get unique client names from care plans
             clients = db_session.query(CarePlanStatus.client_name).distinct().all()
             self._client_names_cache = [c[0] for c in clients if c[0]]
-            logger.info(f"Loaded {len(self._client_names_cache)} client names for matching")
+            logger.info(f"Loaded {len(self._client_names_cache)} client names from database")
             return self._client_names_cache
         except Exception as e:
-            logger.error(f"Error loading client names: {e}")
-            return []
+            logger.error(f"Error loading client names from DB: {e}")
+            
+        return self._client_names_cache or []
 
     def find_client_mentions(
         self,
@@ -244,17 +251,26 @@ class RingCentralMessagingService:
 
             # Split name for partial matching
             name_parts = client_name.lower().split()
+            first_name = name_parts[0] if name_parts else None
 
-            # Check for full name match
+            # 1. Check for full name match (highest confidence)
             if client_name.lower() in text_lower:
                 pos = text_lower.find(client_name.lower())
                 mentions.append((client_name, pos))
                 continue
 
-            # Check for last name match (if 2+ parts)
+            # 2. Check for First Name match (common in chats)
+            if first_name and len(first_name) > 2:
+                # Use word boundary to avoid partial name matches (e.g. "Ma" in "Maryland")
+                pattern = rf'\b{re.escape(first_name)}\b'
+                match = re.search(pattern, text_lower)
+                if match:
+                    mentions.append((client_name, match.start()))
+                    continue
+
+            # 3. Check for last name match (if 2+ parts)
             if len(name_parts) >= 2:
                 last_name = name_parts[-1]
-                # Only match if it's a standalone word
                 pattern = rf'\b{re.escape(last_name)}\b'
                 match = re.search(pattern, text_lower)
                 if match:
@@ -373,20 +389,14 @@ class RingCentralMessagingService:
         self,
         db_session,
         scan_results: Dict[str, Any],
-        auto_create: bool = False
+        auto_create: bool = False,
+        push_to_wellsky: bool = True
     ) -> Dict[str, Any]:
         """
-        Automatically create complaint records from scan results.
-
-        Args:
-            db_session: SQLAlchemy session
-            scan_results: Results from scan_chat_for_client_issues
-            auto_create: If True, automatically create records (else just preview)
-
-        Returns:
-            Summary of created/skipped complaints
+        Automatically create complaint records and sync to WellSky.
         """
-        from portal_models import ClientComplaint
+        from portal.portal_models import ClientComplaint
+        from services.wellsky_service import wellsky_service
 
         if not scan_results.get("success"):
             return scan_results
@@ -418,7 +428,7 @@ class RingCentralMessagingService:
                     continue
 
             if auto_create:
-                # Create new complaint record
+                # 1. Create local Portal record
                 new_complaint = ClientComplaint(
                     client_name=complaint.get("client_name") or "Unknown Client",
                     complaint_date=datetime.utcnow().date(),
@@ -426,16 +436,47 @@ class RingCentralMessagingService:
                     severity=complaint.get("severity", "medium"),
                     description=f"Auto-detected from {complaint.get('chat_name')} chat",
                     details=complaint.get("message_text"),
-                    status="review",  # Requires manual review
+                    status="review",
                     reported_by="RingCentral Scanner",
                     notes=f"Keywords: {', '.join(complaint.get('matched_keywords', []))}\n"
                           f"ringcentral_msg:{message_id}"
                 )
                 db_session.add(new_complaint)
+                
+                # 2. PUSH TO WELLSKY (Direct Action)
+                wellsky_status = "skipped"
+                if push_to_wellsky and wellsky_service and wellsky_service.is_configured:
+                    try:
+                        # Find client in WellSky to get ID
+                        client_name = complaint.get("client_name")
+                        wellsky_client = None
+                        if client_name:
+                            search_res = wellsky_service.search_patients(last_name=client_name.split()[-1])
+                            if search_res:
+                                wellsky_client = search_res[0] # Take first match
+                        
+                        if wellsky_client:
+                            # Create an Admin Task in WellSky
+                            task_title = f"GIGI ALERT: {complaint.get('severity').upper()} Issue - {client_name}"
+                            task_desc = f"Message: {complaint.get('message_text')}\n\nDetected in RC Chat: {complaint.get('chat_name')}\nKeywords: {', '.join(complaint.get('matched_keywords', []))}"
+                            
+                            wellsky_service.create_admin_task(
+                                title=task_title,
+                                description=task_desc,
+                                priority="urgent" if complaint.get("severity") == "high" else "normal",
+                                related_client_id=wellsky_client.id
+                            )
+                            wellsky_status = "success"
+                            logger.info(f"Pushed RC complaint for {client_name} to WellSky Task")
+                    except Exception as e:
+                        wellsky_status = f"error: {str(e)}"
+                        logger.error(f"Failed to push RC complaint to WellSky: {e}")
+
                 created.append({
                     "client_name": new_complaint.client_name,
                     "keywords": complaint.get("matched_keywords"),
-                    "severity": new_complaint.severity
+                    "severity": new_complaint.severity,
+                    "wellsky_sync": wellsky_status
                 })
             else:
                 created.append({
@@ -1059,6 +1100,102 @@ class RingCentralMessagingService:
             logger.error(f"Error replying to sender: {e}")
             return {"success": False, "error": str(e)}
 
+
+    def sync_tasks_to_wellsky(
+        self,
+        db_session,
+        chat_name: str,
+        hours_back: int = 24
+    ) -> Dict[str, Any]:
+        """
+        Scan a team chat for task completions (Laundry, Cleaning, etc.) 
+        and log them as notes directly into the WellSky client file.
+        """
+        from services.wellsky_service import wellsky_service
+        
+        if not wellsky_service or not wellsky_service.is_configured:
+            return {"success": False, "error": "WellSky not configured"}
+
+        # Find the target chat
+        chat = self.find_chat_by_name(chat_name)
+        if not chat:
+            return {"success": False, "error": f"Chat '{chat_name}' not found"}
+
+        # Load client names for matching
+        client_names = self.load_client_names(db_session)
+        
+        # Get messages
+        since = datetime.utcnow() - timedelta(hours=hours_back)
+        messages = self.get_chat_messages(chat["id"], since=since)
+        
+        synced_count = 0
+        task_keywords = [
+            "laundry", "cleaned", "bath", "shower", "meal", "fed", "meds", "medication", 
+            "shopped", "errand", "cover", "cancel", "assessment", "clock", "visit", "appointment"
+        ]
+
+        for msg in messages:
+            text = msg.get("text", "")
+            if not text:
+                continue
+
+            # 1. Identify Client (Simple heuristic for common formats)
+            mentions = self.find_client_mentions(text, client_names)
+            
+            # 1b. Fallback: Check for common names manually if list is empty
+            if not mentions:
+                # Look for capitalized words that might be names near task keywords
+                name_match = re.search(r'for\s+([A-Z][a-z]+)', text)
+                if name_match:
+                    possible_name = name_match.group(1)
+                    # We'll try to resolve this via WellSky later
+                    client_name = possible_name
+                else:
+                    continue
+            else:
+                client_name = mentions[0][0]
+
+            # 2. Check for Task Keywords
+            if any(kw in text.lower() for kw in task_keywords):
+                try:
+                    # 3. Find WellSky ID
+                    # Use the last part of the name for broader search
+                    search_term = client_name.split()[-1]
+                    ws_clients = wellsky_service.search_patients(last_name=search_term)
+                    
+                    target_client = None
+                    if ws_clients:
+                        # Try to find exact or contains match
+                        for c in ws_clients:
+                            if client_name.lower() in c.full_name.lower() or c.full_name.lower() in client_name.lower():
+                                target_client = c
+                                break
+                        if not target_client:
+                            target_client = ws_clients[0] # Fallback to first search result
+                    
+                    if target_client:
+                        # 4. Log the Note in WellSky
+                        timestamp = msg.get("creationTime", "")
+                        note_text = f"RC DOCUMENTATION SYNC ({timestamp}): {text}"
+                        
+                        # Use add_note_to_client (the one on line 3765)
+                        wellsky_service.add_note_to_client(
+                            client_id=target_client.id,
+                            note=note_text,
+                            note_type="care_plan",
+                            source="gigi_ai"
+                        )
+                        synced_count += 1
+                        logger.info(f"Synced task for {target_client.full_name} from RC to WellSky")
+                except Exception as e:
+                    logger.error(f"Error syncing RC task to WellSky: {e}")
+
+        return {
+            "success": True,
+            "chat_name": chat_name,
+            "tasks_synced": synced_count,
+            "messages_scanned": len(messages)
+        }
 
 # Singleton instance
 ringcentral_messaging_service = RingCentralMessagingService()
