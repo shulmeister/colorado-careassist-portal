@@ -1297,7 +1297,18 @@ class WellSkyService:
             return None
 
         results = self.search_practitioners(phone=clean_phone, active=True, is_hired=True, limit=1)
-        return results[0] if results else None
+        if results:
+            return results[0]
+            
+        # FALLBACK: If mobile_phone search fails, get all active and filter manually
+        # (Connect API can be picky about which phone field it searches)
+        all_active = self.get_caregivers(status=CaregiverStatus.ACTIVE, limit=100)
+        for cg in all_active:
+            cg_clean = re.sub(r'[^\d]', '', cg.phone or '')[-10:]
+            if cg_clean == clean_phone:
+                return cg
+                
+        return None
 
     def get_active_caregiver_count(self) -> int:
         """Get count of active caregivers"""
@@ -2477,11 +2488,13 @@ class WellSkyService:
         caregiver = self.get_caregiver_by_phone(phone)
         if not caregiver:
             logger.warning(f"No caregiver found for phone {phone}")
+            # Try direct lookup by phone in search if caregiver object didn't return
             return []
 
         today = date.today()
+        # Direct fetch shifts for this specific ID
         return self.get_shifts(
-            caregiver_id=caregiver.id,
+            caregiver_id=str(caregiver.id),
             date_from=today,
             date_to=today
         )
