@@ -28,6 +28,7 @@ from fastapi.responses import JSONResponse, Response, HTMLResponse
 from pydantic import BaseModel, Field
 import httpx
 import sys
+import asyncio
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configure logging
@@ -36,6 +37,24 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app for Gigi routes
 app = FastAPI(title="Gigi AI Agent", version="1.0.0")
+
+@app.on_event("startup")
+async def startup_event():
+    """Start background services on app startup"""
+    # Start RC Bot if enabled (Zingage Backup)
+    if RC_BOT_AVAILABLE and rc_bot and os.getenv("GIGI_RC_BOT_ENABLED", "true").lower() == "true":
+        logger.info("🚀 Starting Gigi RingCentral Bot (Background Task)")
+        asyncio.create_task(rc_bot.initialize())
+        
+        async def run_bot_loop():
+            while True:
+                try:
+                    await rc_bot.check_and_act()
+                except Exception as e:
+                    logger.error(f"RC Bot Loop Error: {e}")
+                await asyncio.sleep(60) # Check every minute
+                
+        asyncio.create_task(run_bot_loop())
 
 # Import WellSky service for shift management
 try:
@@ -97,6 +116,17 @@ except Exception as e:
     shift_lock_manager = None
     SHIFT_LOCK_AVAILABLE = False
     logger.warning(f"Shift Lock Manager not available: {e}")
+
+# Import Gigi RingCentral Bot (Zingage Backup)
+try:
+    from gigi.ringcentral_bot import GigiRingCentralBot
+    rc_bot = GigiRingCentralBot()
+    RC_BOT_AVAILABLE = True
+    logger.info("✓ Gigi RingCentral Bot initialized")
+except ImportError as e:
+    rc_bot = None
+    RC_BOT_AVAILABLE = False
+    logger.warning(f"Gigi RingCentral Bot not available: {e}")
 
 # Import Partial Availability Parser for nuanced call-out handling
 try:
