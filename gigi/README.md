@@ -157,6 +157,8 @@ BEETEXTING_CLIENT_ID=xxxxx
 BEETEXTING_CLIENT_SECRET=xxxxx
 BEETEXTING_API_KEY=xxxxx
 BEETEXTING_FROM_NUMBER=+1719xxxxxxx
+BEETEXTING_API_URL=https://connect.beetexting.com/prod
+BEETEXTING_AUTH_URL=https://auth.beetexting.com/oauth2/token/
 
 # WellSky (when available)
 WELLSKY_CLIENT_ID=xxxxx

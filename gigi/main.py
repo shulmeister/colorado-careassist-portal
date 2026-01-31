@@ -173,6 +173,8 @@ def require_gigi_test_endpoints_enabled():
 BEETEXTING_CLIENT_ID = os.getenv("BEETEXTING_CLIENT_ID")
 BEETEXTING_CLIENT_SECRET = os.getenv("BEETEXTING_CLIENT_SECRET")
 BEETEXTING_API_KEY = os.getenv("BEETEXTING_API_KEY")
+BEETEXTING_AUTH_URL = os.getenv("BEETEXTING_AUTH_URL", "https://auth.beetexting.com/oauth2/token/")
+BEETEXTING_API_URL = os.getenv("BEETEXTING_API_URL", "https://connect.beetexting.com/prod")
 
 # Phone numbers (safe defaults - these are public business numbers)
 BEETEXTING_FROM_NUMBER = os.getenv("BEETEXTING_FROM_NUMBER", "+17194283999")  # 719-428-3999
@@ -1226,7 +1228,7 @@ async def _get_beetexting_token() -> Optional[str]:
         if datetime.now() < _beetexting_token_cache["expires_at"]:
             return _beetexting_token_cache["token"]
 
-    if not BEETEXTING_CLIENT_ID or not BEETEXTING_CLIENT_SECRET:
+    if not BEETEXTING_CLIENT_ID or not BEETEXTING_CLIENT_SECRET or not BEETEXTING_API_KEY:
         logger.warning("BeeTexting credentials not configured")
         return None
 
@@ -1234,11 +1236,16 @@ async def _get_beetexting_token() -> Optional[str]:
         async with httpx.AsyncClient() as client:
             # OAuth2 client credentials flow
             response = await client.post(
-                "https://api.beetexting.com/oauth2/token",
+                BEETEXTING_AUTH_URL,
                 data={
                     "grant_type": "client_credentials",
                     "client_id": BEETEXTING_CLIENT_ID,
                     "client_secret": BEETEXTING_CLIENT_SECRET
+                },
+                headers={
+                    "x-api-key": BEETEXTING_API_KEY,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Accept": "application/json"
                 },
                 timeout=10.0
             )
@@ -1263,22 +1270,21 @@ async def _get_beetexting_token() -> Optional[str]:
 
 async def _send_sms_beetexting(to_phone: str, message: str) -> bool:
     """Send SMS via BeeTexting API."""
-    # Try API key first, fall back to OAuth
-    token = BEETEXTING_API_KEY or await _get_beetexting_token()
+    token = await _get_beetexting_token()
 
-    if not token:
+    if not token or not BEETEXTING_API_KEY:
         logger.warning("BeeTexting not configured - trying RingCentral")
         return await _send_sms_ringcentral(to_phone, message)
 
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                "https://api.beetexting.com/v1/messages",
+                f"{BEETEXTING_API_URL}/message/sendsms",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
+                    "x-api-key": BEETEXTING_API_KEY
                 },
-                json={
+                params={
                     "from": BEETEXTING_FROM_NUMBER,
                     "to": to_phone,
                     "text": message
@@ -1377,7 +1383,7 @@ async def send_glip_message(chat_id: str, text: str) -> bool:
 
 async def assign_beetexting_conversation(from_phone: str, agent_email: str) -> bool:
     """Assign a BeeTexting conversation to a specific agent."""
-    token = BEETEXTING_API_KEY or await _get_beetexting_token()
+    token = await _get_beetexting_token()
     if not token:
         logger.warning("BeeTexting credentials missing - cannot assign conversation")
         return False
@@ -1389,9 +1395,12 @@ async def assign_beetexting_conversation(from_phone: str, agent_email: str) -> b
             # Note: Endpoint path is hypothetical based on typical BeeTexting patterns
             # Would need to verify against their actual API docs for "Assign Conversation"
             response = await client.post(
-                "https://api.beetexting.com/v1/conversations/assign",
-                headers={"Authorization": f"Bearer {token}"},
-                json={
+                f"{BEETEXTING_API_URL}/conversation/assign",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "x-api-key": BEETEXTING_API_KEY
+                },
+                params={
                     "phone_number": clean_phone,
                     "agent_email": agent_email
                 },
