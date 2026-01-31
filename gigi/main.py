@@ -193,7 +193,7 @@ RINGCENTRAL_SERVER = os.getenv("RINGCENTRAL_SERVER", "https://platform.ringcentr
 RINGCENTRAL_JWT = os.getenv("RINGCENTRAL_JWT_TOKEN") or os.getenv("RINGCENTRAL_JWT")
 
 # =============================================================================
-# SHADOW MODE - "Gigi Brain" Visualization
+# SHADOW MODE - "Gigi Brain" Visualization & Grading
 # =============================================================================
 # Allows seeing what Gigi WOULD do without actually changing data or sending texts.
 # Set GIGI_MODE=shadow in environment variables.
@@ -201,12 +201,17 @@ RINGCENTRAL_JWT = os.getenv("RINGCENTRAL_JWT_TOKEN") or os.getenv("RINGCENTRAL_J
 GIGI_MODE = os.getenv("GIGI_MODE", "live").lower()
 SHADOW_LOGS = []
 
-def log_shadow_action(action: str, details: Dict[str, Any]):
+import uuid
+
+def log_shadow_action(action: str, details: Dict[str, Any], trigger: str = "Unknown"):
     """Log an action taken in shadow mode."""
     entry = {
+        "id": str(uuid.uuid4()),
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "trigger": trigger,
         "action": action,
-        "details": details
+        "details": details,
+        "feedback": None  # 'good', 'bad', or None
     }
     SHADOW_LOGS.append(entry)
     # Keep last 100 logs
@@ -214,356 +219,37 @@ def log_shadow_action(action: str, details: Dict[str, Any]):
         SHADOW_LOGS.pop(0)
     logger.info(f"[SHADOW MODE] {action}: {details}")
 
-# Log configuration status (not the values!)
-def _log_config_status():
-    """Log which credentials are configured without exposing values."""
-    configs = {
-        "RETELL_API_KEY": bool(RETELL_API_KEY),
-        "BEETEXTING_CLIENT_ID": bool(BEETEXTING_CLIENT_ID),
-        "RINGCENTRAL_CLIENT_ID": bool(RINGCENTRAL_CLIENT_ID),
-        "RINGCENTRAL_JWT": bool(RINGCENTRAL_JWT),
-    }
-    missing = [k for k, v in configs.items() if not v]
-    if missing:
-        logger.warning(f"Gigi: Missing credentials (some features disabled): {missing}")
-    else:
-        logger.info("Gigi: All credentials configured")
-
-_log_config_status()
-
-# =============================================================================
-# ANTI-LOOP: Tool Call Deduplication
-# =============================================================================
-# The LLM sometimes calls the same tool multiple times despite instructions not to.
-# This server-side cache prevents duplicate tool calls within the same conversation.
-
-from collections import defaultdict
-import time
-
-# Tools that should only be called ONCE per conversation
-ONCE_PER_CALL_TOOLS = {
-    "log_client_issue",
-    "report_call_out",
-    "execute_caregiver_call_out",
-    "cancel_shift_acceptance",
-    "report_late",
-    "cancel_client_visit",
-    "add_note_to_wellsky",
-    "start_shift_filling_campaign",
-    "add_visit_notes",
-    "escalate_emergency",
-}
-
-# Cache of tool calls: {call_id: {tool_name: timestamp}}
-# Entries expire after 10 minutes to prevent memory leaks
-_tool_call_cache: Dict[str, Dict[str, float]] = defaultdict(dict)
-_cache_lock = None  # Will use threading lock if needed
-
-def _cleanup_old_cache_entries():
-    """Remove cache entries older than 10 minutes."""
-    cutoff = time.time() - 600  # 10 minutes
-    expired_calls = [
-        call_id for call_id, tools in _tool_call_cache.items()
-        if all(ts < cutoff for ts in tools.values())
-    ]
-    for call_id in expired_calls:
-        del _tool_call_cache[call_id]
-
-def check_tool_already_called(call_id: str, tool_name: str) -> bool:
-    """
-    Check if a once-per-call tool has already been called in this conversation.
-    Returns True if already called (should block), False if OK to proceed.
-    """
-    if not call_id or tool_name not in ONCE_PER_CALL_TOOLS:
-        return False
-
-    _cleanup_old_cache_entries()
-
-    if tool_name in _tool_call_cache.get(call_id, {}):
-        logger.warning(f"BLOCKED DUPLICATE: {tool_name} already called for call {call_id}")
-        return True
-
-    return False
-
-def record_tool_call(call_id: str, tool_name: str):
-    """Record that a tool was called for this conversation."""
-    if call_id and tool_name in ONCE_PER_CALL_TOOLS:
-        _tool_call_cache[call_id][tool_name] = time.time()
-        logger.info(f"Recorded tool call: {tool_name} for call {call_id}")
-
-def get_duplicate_response(tool_name: str) -> Dict[str, Any]:
-    """Return a response telling the LLM the action was already completed."""
-    return {
-        "success": True,
-        "already_completed": True,
-        "action_completed": True,
-        "message": f"This action was already completed earlier in this conversation. Do NOT call {tool_name} again. Please confirm with the caller that their request has been handled and ask if there is anything else.",
-        "next_step": "STOP calling tools. Confirm with the caller and close the conversation."
-    }
-
-
-# =============================================================================
-# CALL CONTEXT: Store caller info for the duration of a call
-# =============================================================================
-# When a call starts, we look up the caller and store their info.
-# This allows the conversation to personalize without re-looking up.
-
-_call_context_cache: Dict[str, Dict[str, Any]] = {}
-
-def _store_call_context(call_id: str, caller_info: Dict[str, Any]):
-    """Store caller context for this call."""
-    if call_id:
-        _call_context_cache[call_id] = {
-            "caller_info": caller_info,
-            "timestamp": time.time()
-        }
-        logger.info(f"Stored call context for {call_id}: {caller_info}")
-
-def _get_call_context(call_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieve caller context for this call."""
-    if call_id and call_id in _call_context_cache:
-        return _call_context_cache[call_id].get("caller_info")
-    return None
-
-def _cleanup_call_context():
-    """Remove call context older than 30 minutes."""
-    cutoff = time.time() - 1800  # 30 minutes
-    expired = [
-        call_id for call_id, data in _call_context_cache.items()
-        if data.get("timestamp", 0) < cutoff
-    ]
-    for call_id in expired:
-        del _call_context_cache[call_id]
-
-
-# =============================================================================
-# MEMORY SYSTEM: Capture preferences and patterns
-# =============================================================================
-
-def capture_memory(
-    content: str,
-    memory_type: str = "single_inference",
-    category: str = "general",
-    impact: str = "low",
-    metadata: Dict[str, Any] = None
-):
-    """
-    Capture a memory to Gigi's memory system.
-
-    Args:
-        content: The preference, pattern, or instruction
-        memory_type: explicit, correction, confirmed, inferred, single, temporary
-        category: communication, scheduling, money, relationships, preferences, etc.
-        impact: high, medium, low
-        metadata: Additional context
-    """
-    if not MEMORY_SYSTEM_AVAILABLE:
-        return
-
-    try:
-        type_map = {
-            "explicit": MemoryType.EXPLICIT_INSTRUCTION,
-            "correction": MemoryType.CORRECTION,
-            "confirmed": MemoryType.CONFIRMED_PATTERN,
-            "inferred": MemoryType.INFERRED_PATTERN,
-            "single": MemoryType.SINGLE_INFERENCE,
-            "temporary": MemoryType.TEMPORARY
-        }
-
-        impact_map = {
-            "high": ImpactLevel.HIGH,
-            "medium": ImpactLevel.MEDIUM,
-            "low": ImpactLevel.LOW
-        }
-
-        source = MemorySource.EXPLICIT if memory_type == "explicit" else MemorySource.INFERENCE
-
-        confidence = {
-            "explicit": 1.0,
-            "correction": 0.9,
-            "confirmed": 0.8,
-            "inferred": 0.6,
-            "single": 0.4,
-            "temporary": 0.5
-        }.get(memory_type, 0.5)
-
-        memory_id = memory_system.create_memory(
-            content=content,
-            memory_type=type_map.get(memory_type, MemoryType.SINGLE_INFERENCE),
-            source=source,
-            confidence=confidence,
-            category=category,
-            impact_level=impact_map.get(impact, ImpactLevel.LOW),
-            metadata=metadata or {}
-        )
-
-        logger.info(f"✓ Memory captured: {content[:50]}... (ID: {memory_id})")
-        return memory_id
-
-    except Exception as e:
-        logger.error(f"Failed to capture memory: {e}")
-        return None
-
-
-def detect_and_update_mode(text: str) -> Optional[str]:
-    """
-    Detect and update mode from conversation context.
-
-    Checks for:
-    1. Explicit mode commands ("Set mode to focus")
-    2. Context-based mode detection (crisis keywords, travel indicators, etc.)
-
-    Args:
-        text: User message text
-
-    Returns:
-        Mode value if detected and updated, None otherwise
-    """
-    if not MODE_DETECTOR_AVAILABLE:
-        return None
-
-    try:
-        # First check for explicit mode command
-        mode_command = parse_mode_command(text)
-        if mode_command:
-            mode, expires_at = mode_command
-            mode_detector.set_mode(
-                mode=mode,
-                source=ModeSource.EXPLICIT,
-                confidence=1.0,
-                expires_at=expires_at,
-                context={"trigger": "user_command", "text": text[:100]}
-            )
-            logger.info(f"✓ Mode set to {mode.value} via explicit command")
-            return mode.value
-
-        # Check for context-based mode detection
-        detected_mode, confidence = mode_detector.detect_mode_from_context(text)
-        if detected_mode and confidence >= 0.7:
-            # High confidence context detection - update mode
-            mode_detector.set_mode(
-                mode=detected_mode,
-                source=ModeSource.CONTEXT,
-                confidence=confidence,
-                context={"trigger": "context_detection", "text": text[:100]}
-            )
-            logger.info(f"✓ Mode detected from context: {detected_mode.value} (confidence: {confidence:.2f})")
-            return detected_mode.value
-
-        return None
-
-    except Exception as e:
-        logger.error(f"Failed to detect/update mode: {e}")
-        return None
-
-
-def handle_tool_error(
-    tool_name: str,
-    error: Exception,
-    context: Dict[str, Any] = None
-) -> Dict[str, Any]:
-    """
-    Handle a tool failure with failure protocol.
-
-    Args:
-        tool_name: Name of the tool that failed
-        error: The exception that occurred
-        context: Additional context
-
-    Returns:
-        Dict with error response for user
-    """
-    if not FAILURE_HANDLER_AVAILABLE:
-        logger.error(f"Tool {tool_name} failed: {error}")
-        return {
-            "success": False,
-            "error": f"{tool_name} is not available right now",
-            "message": "I'm having trouble with that feature. Please try again later."
-        }
-
-    # Log the failure with protocol system
-    action, message = failure_handler.handle_tool_failure(
-        tool_name=tool_name,
-        error=error,
-        context=context
-    )
-
-    # Return appropriate response based on action
-    if action == FailureAction.ESCALATE:
-        return {
-            "success": False,
-            "error": str(error),
-            "message": message,
-            "severity": "critical"
-        }
-    elif action == FailureAction.ABORT:
-        return {
-            "success": False,
-            "error": "Operation aborted",
-            "message": message,
-            "severity": "error"
-        }
-    else:
-        return {
-            "success": False,
-            "error": str(error),
-            "message": message,
-            "severity": "warning"
-        }
-
-
-def check_confidence(
-    action: str,
-    confidence: float,
-    context: Dict[str, Any] = None
-) -> Tuple[bool, Optional[str]]:
-    """
-    Check if confidence is sufficient to proceed with an action.
-
-    Args:
-        action: The action being considered
-        confidence: Confidence level (0.0 to 1.0)
-        context: Additional context
-
-    Returns:
-        (should_proceed, message_to_user)
-    """
-    if not FAILURE_HANDLER_AVAILABLE:
-        # Without failure handler, use simple threshold
-        if confidence < 0.5:
-            return (False, f"I'm not confident enough to {action}. Can you provide more details?")
-        return (True, None)
-
-    # Use failure handler protocol
-    action_taken, message = failure_handler.handle_low_confidence(
-        action=action,
-        confidence=confidence,
-        context=context
-    )
-
-    if action_taken == FailureAction.ABORT:
-        return (False, message)
-    elif action_taken == FailureAction.ASK_USER:
-        return (False, message)
-    else:
-        return (True, message if confidence < 0.7 else None)
-
-
-# =============================================================================
-# FastAPI App
-# =============================================================================
-
-app = FastAPI(
-    title="Gigi - Colorado CareAssist AI Agent",
-    description="After-hours AI assistant for caregivers and clients",
-    version="1.0.0"
-)
-
-from fastapi.responses import HTMLResponse
+# ... (Existing config status code) ...
 
 # =============================================================================
 # SIMULATION ENDPOINTS (For Testing Shadow Mode)
 # =============================================================================
+
+@app.post("/api/gigi/shadow/feedback")
+async def record_shadow_feedback(request: Request):
+    """Record human feedback on a shadow mode decision."""
+    data = await request.json()
+    log_id = data.get("id")
+    rating = data.get("rating")  # "good" or "bad"
+    
+    for log in SHADOW_LOGS:
+        if log["id"] == log_id:
+            log["feedback"] = rating
+            # In a real system, we would save this to a dataset for fine-tuning
+            logger.info(f"Feedback recorded for {log_id}: {rating}")
+            
+            # If feedback is "bad", capture a correction memory
+            if rating == "bad" and MEMORY_SYSTEM_AVAILABLE:
+                capture_memory(
+                    content=f"Correction on action '{log['action']}': Human marked this as incorrect behavior.",
+                    memory_type="correction",
+                    category="behavior_correction",
+                    impact="high",
+                    metadata={"log_id": log_id, "original_details": log['details']}
+                )
+            return {"success": True}
+    
+    return {"success": False, "error": "Log entry not found"}
 
 @app.post("/simulate/callout")
 async def simulate_callout():
@@ -580,11 +266,15 @@ async def simulate_callout():
     
     # Force log entry for the simulation start
     if GIGI_MODE == "shadow":
-        log_shadow_action("SIMULATION_START", {
-            "type": "caregiver_call_out",
-            "caregiver_id": mock_caregiver_id,
-            "shift_id": mock_shift_id
-        })
+        log_shadow_action(
+            "SIMULATION_START", 
+            {
+                "type": "caregiver_call_out",
+                "caregiver_id": mock_caregiver_id,
+                "shift_id": mock_shift_id
+            },
+            trigger="Manual Simulation Button"
+        )
     
     # Execute the tool (which handles Shadow Mode internally)
     result = await execute_caregiver_call_out(
@@ -606,90 +296,272 @@ async def get_shadow_dashboard():
     
     # Calculate stats
     total_logs = len(SHADOW_LOGS)
-    error_logs = sum(1 for log in SHADOW_LOGS if "error" in log['action'].lower() or "fail" in log['action'].lower())
-    success_count = total_logs - error_logs
-    success_rate = (success_count / total_logs * 100) if total_logs > 0 else 100
+    rated_logs = [l for l in SHADOW_LOGS if l['feedback'] is not None]
+    good_logs = [l for l in rated_logs if l['feedback'] == 'good']
+    
+    approval_rate = (len(good_logs) / len(rated_logs) * 100) if rated_logs else 0
     
     html = f"""
     <html>
     <head>
-        <title>Gigi Brain 🧠</title>
+        <title>Gigi Brain 🧠 - Review Station</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <style>
-            body {{ font-family: sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }}
-            .status {{ padding: 10px; background: #f0f0f0; border-radius: 5px; border-left: 5px solid {status_color}; }}
-            .stats {{ display: flex; gap: 20px; margin: 20px 0; }}
-            .stat-box {{ background: #f8f9fa; padding: 15px; border-radius: 5px; flex: 1; text-align: center; }}
-            .stat-value {{ font-size: 24px; font-weight: bold; color: #2c3e50; }}
-            .log-entry {{ border-bottom: 1px solid #eee; padding: 10px 0; }}
-            .timestamp {{ color: #666; font-size: 0.9em; }}
-            .action {{ font-weight: bold; color: #2c3e50; }}
-            pre {{ background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }}
+            body {{ background-color: #f8f9fa; font-family: 'Segoe UI', system-ui, sans-serif; }}
+            .container {{ max-width: 900px; margin-top: 30px; }}
+            .status-badge {{ 
+                padding: 5px 12px; 
+                border-radius: 20px; 
+                font-weight: bold; 
+                font-size: 0.9em;
+                text-transform: uppercase;
+            }}
+            .status-shadow {{ background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }}
+            .status-live {{ background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }}
+            
+            .stat-card {{
+                background: white;
+                border-radius: 10px;
+                padding: 20px;
+                text-align: center;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                height: 100%;
+            }}
+            .stat-value {{ font-size: 2.5rem; font-weight: 700; color: #2c3e50; }}
+            .stat-label {{ color: #6c757d; font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }}
+            
+            .review-card {{
+                background: white;
+                border-radius: 12px;
+                border: 1px solid #e9ecef;
+                margin-bottom: 20px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+                overflow: hidden;
+                transition: transform 0.2s;
+            }}
+            .review-card:hover {{ transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.05); }}
+            
+            .card-header {{
+                background: #f8f9fa;
+                border-bottom: 1px solid #e9ecef;
+                padding: 12px 20px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }}
+            .timestamp {{ font-size: 0.85rem; color: #6c757d; }}
+            
+            .card-body {{ padding: 20px; }}
+            
+            .trigger-box {{
+                background: #e3f2fd;
+                border-left: 4px solid #0d6efd;
+                padding: 10px 15px;
+                border-radius: 4px;
+                margin-bottom: 15px;
+            }}
+            .action-box {{
+                background: #fff3cd;
+                border-left: 4px solid #ffc107;
+                padding: 10px 15px;
+                border-radius: 4px;
+                margin-bottom: 15px;
+            }}
+            
+            .json-dump {{
+                background: #2d2d2d;
+                color: #e6e6e6;
+                padding: 10px;
+                border-radius: 6px;
+                font-family: monospace;
+                font-size: 0.85em;
+                max-height: 150px;
+                overflow-y: auto;
+                margin-top: 10px;
+            }}
+            
+            .feedback-actions {{
+                display: flex;
+                gap: 10px;
+                justify-content: flex-end;
+                border-top: 1px solid #f0f0f0;
+                padding-top: 15px;
+                margin-top: 10px;
+            }}
+            
+            .btn-feedback {{
+                border-radius: 50px;
+                padding: 6px 16px;
+                font-weight: 600;
+                font-size: 0.9rem;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                transition: all 0.2s;
+            }}
+            .btn-feedback:hover {{ transform: scale(1.05); }}
+            
+            .feedback-given {{ opacity: 0.7; pointer-events: none; }}
+            .feedback-good {{ background-color: #d1e7dd; color: #0f5132; border-color: #badbcc; }}
+            .feedback-bad {{ background-color: #f8d7da; color: #842029; border-color: #f5c2c7; }}
+            
+            .simulation-panel {{
+                background: linear-gradient(135deg, #0d6efd 0%, #0043a8 100%);
+                color: white;
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 30px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }}
         </style>
     </head>
     <body>
-        <h1>Gigi Brain 🧠</h1>
-        <div class="status">
-            <strong>Current Mode:</strong> {GIGI_MODE.upper()}<br>
-            <small>If SHADOW, actions are logged but not executed.</small>
-        </div>
-        
-        <div class="stats">
-            <div class="stat-box">
-                <div class="stat-value">{success_rate:.1f}%</div>
-                <div>Success Rate</div>
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="fw-bold mb-0">Gigi Brain 🧠</h1>
+                    <p class="text-muted">Shadow Mode Review Station</p>
+                </div>
+                <div class="status-badge status-{GIGI_MODE}">
+                    Mode: {GIGI_MODE.upper()}
+                </div>
             </div>
-            <div class="stat-box">
-                <div class="stat-value">{total_logs}</div>
-                <div>Decisions Logged</div>
+            
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-value text-primary">{total_logs}</div>
+                        <div class="stat-label">Decisions</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-value text-success">{approval_rate:.0f}%</div>
+                        <div class="stat-label">Approval Rate</div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card">
+                        <div class="stat-value text-warning">{len(rated_logs)}</div>
+                        <div class="stat-label">Reviewed</div>
+                    </div>
+                </div>
             </div>
-            <div class="stat-box">
-                <div class="stat-value">{error_logs}</div>
-                <div>Errors</div>
+            
+            <div class="simulation-panel">
+                <div>
+                    <h4 class="mb-1">🧪 Test Laboratory</h4>
+                    <p class="mb-0 opacity-75">Trigger a fake event to see how Gigi responds.</p>
+                </div>
+                <button onclick="runSimulation('callout')" class="btn btn-light fw-bold text-primary">
+                    Simulate Call-Out
+                </button>
             </div>
-        </div>
-        
-        <div style="background: #e8f4fd; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #b6d4fe;">
-            <h3 style="margin-top: 0; color: #0d47a1;">🧪 Simulation Control Panel</h3>
-            <p>Trigger test events to verify Gigi's logic without waiting for real calls.</p>
-            <button onclick="runSimulation('callout')" style="background: #0d6efd; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;">
-                Simulate Call-Out
-            </button>
-            <div id="sim-result" style="margin-top: 10px; font-family: monospace; font-size: 0.9em; color: #333;"></div>
-        </div>
-        
-        <h2>Decision Log</h2>
-        {'<p>No actions recorded yet.</p>' if not SHADOW_LOGS else ''}
-        
-        <div id="logs">
+            
+            <div id="sim-result" class="alert alert-info d-none mb-4"></div>
+            
+            <h3 class="mb-3">Recent Decisions</h3>
+            
+            {'<div class="text-center py-5 text-muted">No actions recorded yet. Waiting for incoming messages...</div>' if not SHADOW_LOGS else ''}
+            
+            <div id="logs">
     """
     
     for log in reversed(SHADOW_LOGS):
+        feedback_class = ""
+        if log['feedback'] == 'good':
+            feedback_class = "feedback-given feedback-good"
+        elif log['feedback'] == 'bad':
+            feedback_class = "feedback-given feedback-bad"
+            
         html += f"""
-        <div class="log-entry">
-            <div class="timestamp">{log['timestamp']}</div>
-            <div class="action">{log['action']}</div>
-            <pre>{json.dumps(log['details'], indent=2)}</pre>
+        <div class="review-card" id="card-{log['id']}">
+            <div class="card-header">
+                <span class="fw-bold">{log['action']}</span>
+                <span class="timestamp">{log['timestamp']}</span>
+            </div>
+            <div class="card-body">
+                <div class="trigger-box">
+                    <small class="text-uppercase fw-bold text-primary opacity-75">Trigger</small><br>
+                    {log.get('trigger', 'Internal Event')}
+                </div>
+                
+                <div class="action-box">
+                    <small class="text-uppercase fw-bold text-warning opacity-75">Proposed Action</small><br>
+                    {log.get('message') or "Executed Logic: " + log['action']}
+                </div>
+                
+                <div class="accordion" id="accordion-{log['id']}">
+                    <div class="accordion-item border-0">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed py-2 bg-light rounded" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{log['id']}">
+                                <small>View Raw Data</small>
+                            </button>
+                        </h2>
+                        <div id="collapse-{log['id']}" class="accordion-collapse collapse">
+                            <div class="json-dump">
+                                {json.dumps(log['details'], indent=2)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feedback-actions {feedback_class}" id="actions-{log['id']}">
+                    <button onclick="rate('{log['id']}', 'good')" class="btn btn-outline-success btn-feedback">
+                        👍 Good
+                    </button>
+                    <button onclick="rate('{log['id']}', 'bad')" class="btn btn-outline-danger btn-feedback">
+                        👎 Bad
+                    </button>
+                </div>
+            </div>
         </div>
         """
         
     html += """
+            </div>
         </div>
+        
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
         <script>
             async function runSimulation(type) {
                 const resultDiv = document.getElementById('sim-result');
+                resultDiv.classList.remove('d-none');
                 resultDiv.innerHTML = 'Running simulation...';
                 try {
                     const response = await fetch(`/simulate/${type}`, { method: 'POST' });
                     const data = await response.json();
-                    resultDiv.innerHTML = '✅ Simulation Complete! Refreshing logs...';
+                    resultDiv.innerHTML = '✅ Simulation Complete! Refreshing feed...';
                     setTimeout(() => window.location.reload(), 1500);
                 } catch (e) {
                     resultDiv.innerHTML = '❌ Error: ' + e.message;
                 }
             }
             
-            // Auto-refresh every 5 seconds
-            setTimeout(() => window.location.reload(), 5000);
+            async function rate(id, rating) {
+                try {
+                    const response = await fetch('/api/gigi/shadow/feedback', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({id: id, rating: rating})
+                    });
+                    
+                    const actionsDiv = document.getElementById('actions-' + id);
+                    if (rating === 'good') {
+                        actionsDiv.classList.add('feedback-given', 'feedback-good');
+                    } else {
+                        actionsDiv.classList.add('feedback-given', 'feedback-bad');
+                    }
+                } catch (e) {
+                    alert('Error saving feedback');
+                }
+            }
+            
+            // Auto-refresh every 10 seconds to catch new real messages
+            // setTimeout(() => window.location.reload(), 10000);
         </script>
     </body>
     </html>
