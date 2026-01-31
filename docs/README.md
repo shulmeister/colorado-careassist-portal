@@ -1,6 +1,7 @@
 # Documentation Index
 
-Start here: `docs/PROJECT_GUIDE.md`.
+Single entry point: `README.md` at the repo root.
+`docs/PROJECT_GUIDE.md` is the detailed, source-of-truth guide.
 
 ## Core
 - `docs/PROJECT_GUIDE.md` - Consolidated, source-of-truth guide.

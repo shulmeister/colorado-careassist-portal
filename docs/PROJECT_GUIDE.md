@@ -2,21 +2,21 @@
 
 This is the consolidated, source-of-truth guide for the portal and all spokes. It is written for agents and developers who need to understand the system quickly.
 
-## 1) Architecture (Hub-and-Spoke)
+## 1) Architecture (Unified App + Sub-Apps)
 
 ```
-colorado-careassist-portal/          # Hub repo
-├── portal_app.py                    # Main FastAPI app (Portal)
+colorado-careassist-portal/          # Unified repo (source of truth)
+├── unified_app.py                   # Main FastAPI app (mounts everything)
+├── portal/                          # Portal Hub (FastAPI)
 ├── gigi/                            # Gigi AI agent (FastAPI)
 ├── services/                        # WellSky + marketing services
 ├── templates/                       # Portal + Marketing dashboard templates
-└── dashboards/                      # Spokes (nested git repos)
-    ├── sales/                       # Sales Dashboard (FastAPI + React Admin)
-    ├── recruitment/                 # Recruiter Dashboard (Flask)
-    └── activity-tracker/            # Activity Tracker (FastAPI)
+├── sales/                           # Sales Dashboard (FastAPI + React Admin)
+├── recruiting/                      # Recruiter Dashboard (Flask)
+└── powderpulse/                     # Vue SPA
 ```
 
-Each folder in `dashboards/` is its own **independent git repo** (not submodules). Always confirm which repo you are in with `git remote -v`.
+Everything deploys together to a single Heroku app via `unified_app.py`.
 
 ## 2) Canonical Location
 
@@ -56,6 +56,7 @@ All work should happen from this canonical path:
 ## 4) Deployment Rule (Always)
 
 All deployments flow from GitHub `main` to Heroku. Do not push directly to Heroku.
+Planned hosting change: move off Heroku to a self-hosted Mac mini starting Monday, February 2, 2026.
 
 ```bash
 git add -A
@@ -106,9 +107,18 @@ GEMINI_API_KEY=...
 RINGCENTRAL_CLIENT_ID=...
 RINGCENTRAL_CLIENT_SECRET=...
 RINGCENTRAL_JWT_TOKEN=...
-WELLSKY_API_KEY=...
-WELLSKY_API_SECRET=...
+BEETEXTING_CLIENT_ID=...
+BEETEXTING_CLIENT_SECRET=...
+BEETEXTING_API_KEY=...
+BEETEXTING_FROM_NUMBER=...
+WELLSKY_CLIENT_ID=...
+WELLSKY_CLIENT_SECRET=...
 WELLSKY_AGENCY_ID=...
+WELLSKY_ENVIRONMENT=production
+GIGI_SMS_AUTOREPLY_ENABLED=true
+GIGI_SMS_AFTER_HOURS_ONLY=true
+GIGI_OFFICE_HOURS_START=08:00
+GIGI_OFFICE_HOURS_END=17:00
 ```
 
 ### 6.3) Marketing Environment Variables (Common)
@@ -136,9 +146,9 @@ Gigi-specific and marketing API details live in `gigi/README.md` and `services/m
 ## 7) Gigi Overview
 
 Gigi handles after-hours voice and SMS.
-- Voice: Retell AI webhook
-- SMS: RingCentral webhook
-- Optional WellSky actions when API keys are configured
+- Voice: Retell AI webhook (staged)
+- SMS: BeeTexting/RingCentral webhook (after-hours only)
+- WellSky actions: clock in/out, call-outs, task + care alert logging
 
 Details: `gigi/README.md`
 

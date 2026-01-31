@@ -3,7 +3,8 @@
 > **Complete unified business portal** with CRM, recruiting, marketing analytics, AI voice assistant, and operations dashboards - all in one deployable application.
 
 **Live URL**: https://portal.coloradocareassist.com (or https://careassist-unified-0a11ddb45ac0.herokuapp.com)
-**GitHub**: https://github.com/shulmeister/colorado-careassist-portal
+**GitHub (source of truth)**: https://github.com/shulmeister/colorado-careassist-portal
+**Deploys**: GitHub `main` → Heroku `careassist-unified` (planned self-hosting starting Monday, February 2, 2026)
 
 ---
 
@@ -86,7 +87,9 @@ colorado-careassist-portal/
 
 ## 🤖 Gigi - AI Voice Assistant
 
-**Gigi** is Colorado Care Assist's AI-powered voice assistant who answers calls when the office is closed or when staff cannot answer. She handles caregiver call-outs, client complaints, and prospect inquiries with calm, capable professionalism.
+**Gigi** is Colorado Care Assist's AI-powered assistant who handles after-hours caregiver/client communications and documents everything in WellSky. Voice is staged; SMS is live after-hours only.
+
+**Office hours**: Monday–Friday, 8:00 AM–5:00 PM (local). Weekends are always after-hours.
 
 **Phone Numbers**:
 - **Primary**: 719-428-3999 (Colorado Springs)
@@ -95,11 +98,12 @@ colorado-careassist-portal/
 **Capabilities**:
 | Feature | Status |
 |---------|--------|
-| Voice calls (Retell AI) | ✅ Live |
-| SMS auto-responses (RingCentral) | ✅ Live |
+| Voice calls (Retell AI) | 🕒 Staged (not live) |
+| SMS auto-responses (BeeTexting/RingCentral) | ✅ After-hours only |
 | Caregiver call-out handling | ✅ Live |
-| WellSky shift lookup | ⏳ Ready (needs API key) |
-| Clock in/out via phone | ⏳ Ready (needs API key) |
+| WellSky shift lookup | ✅ Live (needs credentials) |
+| Clock in/out via SMS | ✅ Live (needs credentials) |
+| WellSky task + care alert on clock issues | ✅ Live (after-hours) |
 
 **Technical**:
 - **Tech**: FastAPI, Retell AI (voice), RingCentral (SMS), Google Gemini (AI), WellSky API
@@ -233,7 +237,18 @@ GEMINI_API_KEY=your-gemini-api-key
 RINGCENTRAL_CLIENT_ID=your-client-id
 RINGCENTRAL_CLIENT_SECRET=your-client-secret
 RINGCENTRAL_JWT_TOKEN=your-jwt-token
-WELLSKY_API_KEY=your-wellsky-key  # Optional, enables WellSky features
+BEETEXTING_CLIENT_ID=your-client-id
+BEETEXTING_CLIENT_SECRET=your-client-secret
+BEETEXTING_API_KEY=your-api-key
+BEETEXTING_FROM_NUMBER=+1719xxxxxxx
+WELLSKY_CLIENT_ID=your-wellsky-client-id
+WELLSKY_CLIENT_SECRET=your-wellsky-client-secret
+WELLSKY_AGENCY_ID=your-agency-id
+WELLSKY_ENVIRONMENT=production
+GIGI_SMS_AUTOREPLY_ENABLED=true
+GIGI_SMS_AFTER_HOURS_ONLY=true
+GIGI_OFFICE_HOURS_START=08:00
+GIGI_OFFICE_HOURS_END=17:00
 ```
 
 ### Marketing Dashboard

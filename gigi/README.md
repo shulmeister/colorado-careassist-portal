@@ -9,9 +9,10 @@ Gigi is a real team member at Colorado Care Assist - an AI-powered voice assista
 - Identifies callers (caregiver vs client) by phone number lookup
 - Handles call-outs, schedule questions, clock issues
 - Logs interactions for office follow-up
+Status: staged (not live)
 
-### SMS Auto-Reply (RingCentral)
-- Automatically replies to all inbound text messages
+### SMS Auto-Reply (BeeTexting/RingCentral)
+- Automatically replies to inbound text messages **after hours only**
 - Detects intent: clock in/out, call-out, schedule, payroll, general
 - Takes action when possible (with WellSky integration)
 - Generates context-aware responses using Gemini AI
@@ -21,6 +22,7 @@ Gigi is a real team member at Colorado Care Assist - an AI-powered voice assista
 - Clocks caregivers in/out of shifts
 - Reports call-outs and triggers coverage finding
 - Provides schedule information
+- Creates WellSky admin task + care alert for clock-in/out issues
 
 ## Architecture
 
@@ -150,14 +152,27 @@ RINGCENTRAL_CLIENT_ID=cqaJllTcFyndtgsussicsd
 RINGCENTRAL_CLIENT_SECRET=xxxxx
 RINGCENTRAL_JWT_TOKEN=eyJxxxxx
 
+# BeeTexting SMS (primary for after-hours)
+BEETEXTING_CLIENT_ID=xxxxx
+BEETEXTING_CLIENT_SECRET=xxxxx
+BEETEXTING_API_KEY=xxxxx
+BEETEXTING_FROM_NUMBER=+1719xxxxxxx
+
 # WellSky (when available)
-WELLSKY_API_KEY=xxxxx
-WELLSKY_API_SECRET=xxxxx
+WELLSKY_CLIENT_ID=xxxxx
+WELLSKY_CLIENT_SECRET=xxxxx
 WELLSKY_AGENCY_ID=xxxxx
+WELLSKY_ENVIRONMENT=production
 
 # Operations Toggles (IMPORTANT - see Go-Live Checklist below)
 GIGI_OPERATIONS_SMS_ENABLED=false           # Set to "true" to enable SMS/notifications
 GIGI_ENABLE_TEST_ENDPOINTS=false            # Set to "true" only for debugging
+
+# After-hours behavior (Mon–Fri 8am–5pm only)
+GIGI_SMS_AUTOREPLY_ENABLED=true
+GIGI_SMS_AFTER_HOURS_ONLY=true
+GIGI_OFFICE_HOURS_START=08:00
+GIGI_OFFICE_HOURS_END=17:00
 
 # Escalation Contacts (RingCentral extensions)
 ESCALATION_CYNTHIA_EXT=105                  # Cynthia Pointe - Care Manager
@@ -170,12 +185,19 @@ ESCALATION_JASON_EXT=101                    # Jason Shulman - Owner
 
 ```bash
 # Run these commands on Heroku when going live:
-heroku config:set WELLSKY_API_KEY=your_api_key
-heroku config:set WELLSKY_API_SECRET=your_api_secret
+heroku config:set WELLSKY_CLIENT_ID=your_client_id
+heroku config:set WELLSKY_CLIENT_SECRET=your_client_secret
 heroku config:set WELLSKY_AGENCY_ID=your_agency_id
+heroku config:set WELLSKY_ENVIRONMENT=production
 
 # ENABLE OPERATIONS (without this, notifications don't send!)
 heroku config:set GIGI_OPERATIONS_SMS_ENABLED=true
+
+# After-hours only (SMS)
+heroku config:set GIGI_SMS_AUTOREPLY_ENABLED=true
+heroku config:set GIGI_SMS_AFTER_HOURS_ONLY=true
+heroku config:set GIGI_OFFICE_HOURS_START=08:00
+heroku config:set GIGI_OFFICE_HOURS_END=17:00
 ```
 
 ### What `GIGI_OPERATIONS_SMS_ENABLED=true` enables:
@@ -235,7 +257,7 @@ Gigi: "I'm sorry to hear that. I've logged your call-out for tomorrow's 9am shif
 Gigi is part of the main Portal deployment:
 
 ```bash
-cd /Users/shulmeister/Documents/GitHub/careassist-unified-portal
+cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal
 git add -A && git commit -m "Gigi changes" && git push origin main && git push heroku main
 ```
 
