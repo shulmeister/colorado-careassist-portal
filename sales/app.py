@@ -163,13 +163,14 @@ def ensure_deal_schema():
                         contact_ids TEXT NULL,
                         category VARCHAR(100) NULL,
                         stage VARCHAR(100) NULL,
+                        stage_entered_at TIMESTAMP NULL,
                         description TEXT NULL,
                         amount FLOAT NULL,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         archived_at TIMESTAMP NULL,
                         expected_closing_date TIMESTAMP NULL,
-                        sales_id INTEGER NULL,
+                        sales_id VARCHAR(255) NULL,
                         "index" INTEGER NULL,
                         est_weekly_hours FLOAT NULL
                     )
@@ -187,13 +188,14 @@ def ensure_deal_schema():
                         contact_ids TEXT NULL,
                         category VARCHAR(100) NULL,
                         stage VARCHAR(100) NULL,
+                        stage_entered_at TIMESTAMP NULL,
                         description TEXT NULL,
                         amount FLOAT NULL,
                         created_at TIMESTAMP DEFAULT NOW(),
                         updated_at TIMESTAMP DEFAULT NOW(),
                         archived_at TIMESTAMP NULL,
                         expected_closing_date TIMESTAMP NULL,
-                        sales_id INTEGER NULL,
+                        sales_id VARCHAR(255) NULL,
                         "index" INTEGER NULL,
                         est_weekly_hours FLOAT NULL
                     )
@@ -207,11 +209,12 @@ def ensure_deal_schema():
             "contact_ids": "TEXT",
             "category": "VARCHAR(100)",
             "stage": "VARCHAR(100)",
+            "stage_entered_at": "TIMESTAMP",
             "description": "TEXT",
             "amount": "FLOAT",
             "archived_at": "TIMESTAMP",
             "expected_closing_date": "TIMESTAMP",
-            "sales_id": "INTEGER",
+            "sales_id": "VARCHAR(255)",
             '"index"': "INTEGER",
             "est_weekly_hours": "FLOAT",
         }
@@ -241,6 +244,24 @@ def ensure_deal_schema():
                     conn.execute(
                         text(f"ALTER TABLE deals ADD COLUMN IF NOT EXISTS {col} {typ}")
                     )
+
+        # Migrate sales_id from INTEGER to VARCHAR if needed (for email storage)
+        if column_exists("sales_id"):
+            try:
+                if dialect == "postgresql":
+                    # PostgreSQL: ALTER COLUMN type
+                    conn.execute(
+                        text("ALTER TABLE deals ALTER COLUMN sales_id TYPE VARCHAR(255) USING sales_id::VARCHAR")
+                    )
+                elif dialect == "sqlite":
+                    # SQLite doesn't support ALTER COLUMN TYPE, would need table recreation
+                    # For now, just log - new installs will use VARCHAR
+                    logger.info("SQLite detected - sales_id type migration skipped (recreate table if needed)")
+                conn.commit()
+            except Exception as e:
+                # Column might already be VARCHAR, or other error - safe to continue
+                logger.info(f"sales_id migration skipped (already VARCHAR or error): {e}")
+                conn.rollback()
 
 
 ensure_deal_schema()
@@ -6348,6 +6369,7 @@ async def create_deal(
             contact_ids=_serialize_ids(payload.get("contact_ids")),
             category=payload.get("category"),
             stage=payload.get("stage", "opportunity"),
+            stage_entered_at=_coerce_datetime(payload.get("stage_entered_at"), now),
             description=payload.get("description"),
             amount=payload.get("amount") or 0,
             created_at=_coerce_datetime(payload.get("created_at"), now),
@@ -6356,6 +6378,7 @@ async def create_deal(
             expected_closing_date=_coerce_datetime(payload.get("expected_closing_date")),
             sales_id=payload.get("sales_id"),
             index=payload.get("index"),
+            est_weekly_hours=payload.get("est_weekly_hours"),
         )
         db.add(deal)
         db.commit()
@@ -6389,7 +6412,7 @@ async def update_deal(
         
         # Capture old stage
         old_stage = deal.stage
-        
+
         for field in [
             "name",
             "company_id",
@@ -6399,9 +6422,15 @@ async def update_deal(
             "amount",
             "sales_id",
             "index",
+            "est_weekly_hours",
         ]:
             if field in payload:
                 setattr(deal, field, payload.get(field))
+
+        # Update stage_entered_at if stage changed
+        if "stage" in payload and payload.get("stage") != old_stage:
+            deal.stage_entered_at = datetime.now(timezone.utc)
+
         if "contact_ids" in payload:
             deal.contact_ids = _serialize_ids(payload.get("contact_ids"))
         if "archived_at" in payload:

@@ -268,7 +268,7 @@ class Deal(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     archived_at = Column(DateTime, nullable=True)
     expected_closing_date = Column(DateTime, nullable=True)
-    sales_id = Column(Integer, nullable=True)
+    sales_id = Column(String(255), nullable=True)  # User email who owns this deal
     index = Column(Integer, nullable=True)
     est_weekly_hours = Column(Float, nullable=True)
 
