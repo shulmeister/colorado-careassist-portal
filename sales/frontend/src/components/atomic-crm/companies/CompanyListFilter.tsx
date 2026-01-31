@@ -57,6 +57,16 @@ export const CompanyListFilter = () => {
           label={"Me"}
           value={{ sales_id: identity?.id }}
         />
+        <ToggleFilterButton
+          className="w-full justify-between"
+          label={"Jacob"}
+          value={{ sales_id: "jacob@coloradocareassist.com" }}
+        />
+        <ToggleFilterButton
+          className="w-full justify-between"
+          label={"Jennifer"}
+          value={{ sales_id: "jen@coloradocareassist.com" }}
+        />
       </FilterCategory>
     </div>
   );

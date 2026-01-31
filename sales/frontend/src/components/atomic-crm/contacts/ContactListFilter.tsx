@@ -94,7 +94,7 @@ export const ContactListFilter = () => {
         ))}
       </FilterCategory>
 
-      <FilterCategory icon={<Users />} label="Account Manager">
+      <FilterCategory icon={<Users />} label="Contact Type">
         <ToggleFilterButton
           className="w-full justify-between"
           label={"Prospects"}
@@ -109,6 +109,19 @@ export const ContactListFilter = () => {
           className="w-full justify-between"
           label={"Clients"}
           value={{ contact_type: "client" }}
+        />
+      </FilterCategory>
+
+      <FilterCategory icon={<Users />} label="Account Manager">
+        <ToggleFilterButton
+          className="w-full justify-between"
+          label={"Jacob"}
+          value={{ account_manager: "jacob@coloradocareassist.com" }}
+        />
+        <ToggleFilterButton
+          className="w-full justify-between"
+          label={"Jennifer"}
+          value={{ account_manager: "jen@coloradocareassist.com" }}
         />
       </FilterCategory>
     </div>
