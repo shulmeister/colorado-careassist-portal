@@ -5,8 +5,8 @@ import os
 import sys
 
 # Set env vars
-os.environ["WELLSKY_CLIENT_ID"] = "bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS"
-os.environ["WELLSKY_CLIENT_SECRET"] = "Do06wgoZuV7ni4zO"
+os.environ["WELLSKY_CLIENT_ID"] = "[REDACTED_CLIENT_ID]"
+os.environ["WELLSKY_CLIENT_SECRET"] = "[REDACTED_CLIENT_SECRET]"
 os.environ["WELLSKY_AGENCY_ID"] = "4505"
 os.environ["WELLSKY_ENVIRONMENT"] = "production"
 

@@ -8,8 +8,8 @@
 ## Current Credentials
 
 ```
-Client ID:     bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS
-Client Secret: Do06wgoZuV7ni4zO
+Client ID:     [REDACTED_CLIENT_ID]
+Client Secret: [REDACTED_CLIENT_SECRET]
 Agency ID:     4505
 Environment:   production
 ```
@@ -26,8 +26,8 @@ curl -X POST https://connect.clearcareonline.com/oauth/accesstoken \
   -H "Content-Type: application/json" \
   -d '{
     "grant_type": "client_credentials",
-    "client_id": "bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS",
-    "client_secret": "Do06wgoZuV7ni4zO"
+    "client_id": "[REDACTED_CLIENT_ID]",
+    "client_secret": "[REDACTED_CLIENT_SECRET]"
   }'
 ```
 Returns: 200 OK with access_token

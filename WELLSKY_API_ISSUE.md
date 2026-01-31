@@ -13,8 +13,8 @@ Content-Type: application/json
 
 {
   "grant_type": "client_credentials",
-  "client_id": "bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS",
-  "client_secret": "Do06wgoZuV7ni4zO"
+  "client_id": "[REDACTED_CLIENT_ID]",
+  "client_secret": "[REDACTED_CLIENT_SECRET]"
 }
 ```
 
@@ -24,7 +24,7 @@ Content-Type: application/json
   "refresh_token_expires_in": "0",
   "token_type": "BearerToken",
   "issued_at": 1769754192,
-  "client_id": "bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS",
+  "client_id": "[REDACTED_CLIENT_ID]",
   "access_token": "2f46b3ff57f94bd7bd4ac19913d5d707",
   "scope": "",
   "expires_in": "3599",
@@ -93,8 +93,8 @@ From documentation you provided:
 ## Credentials Being Used
 
 ```
-Client ID:     bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS
-Client Secret: Do06wgoZuV7ni4zO
+Client ID:     [REDACTED_CLIENT_ID]
+Client Secret: [REDACTED_CLIENT_SECRET]
 Agency ID:     4505
 ```
 

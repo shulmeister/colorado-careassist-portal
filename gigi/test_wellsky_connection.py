@@ -14,8 +14,8 @@ import os
 
 # WellSky credentials (from Phil's email)
 AGENCY_ID = "4505"
-CLIENT_ID = "bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS"
-CLIENT_SECRET = "Do06wgoZuV7ni4zO"
+CLIENT_ID = "[REDACTED_CLIENT_ID]"
+CLIENT_SECRET = "[REDACTED_CLIENT_SECRET]"
 API_URL = "https://api.clearcareonline.com"
 
 

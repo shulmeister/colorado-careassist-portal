@@ -10,8 +10,8 @@ These are the verified production keys. If they aren't in your environment, **SE
 
 | Variable | Value |
 | :--- | :--- |
-| `WELLSKY_CLIENT_ID` | `bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS` |
-| `WELLSKY_CLIENT_SECRET` | `Do06wgoZuV7ni4zO` |
+| `WELLSKY_CLIENT_ID` | `[REDACTED]` |
+| `WELLSKY_CLIENT_SECRET` | `[REDACTED]` |
 | `WELLSKY_AGENCY_ID` | `4505` |
 | `WELLSKY_ENVIRONMENT` | `production` |
 
@@ -38,7 +38,7 @@ Run this in your terminal to verify you can actually talk to WellSky:
 curl -X POST https://connect.clearcareonline.com/oauth/accesstoken \
   -H "Content-Type: application/json" \
   -d 
-'{'\n    "grant_type": "client_credentials",'\n    "client_id": "bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS",'\n    "client_secret": "Do06wgoZuV7ni4zO"'\n  }'
+'{'\n    "grant_type": "client_credentials",'\n    "client_id": "[REDACTED]",'\n    "client_secret": "[REDACTED]"'\n  }'
 ```
 
 **Result:** You will get a JSON with `access_token`.

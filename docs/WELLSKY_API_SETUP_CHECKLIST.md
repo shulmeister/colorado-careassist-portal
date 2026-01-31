@@ -13,8 +13,8 @@ From Phil's email (Jan 29, 2026 8:37 PM):
 ```
 Agency ID: 4505
 App Name: colcareassist
-Client ID: bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS
-Client Secret: Do06wgoZuV7ni4zO
+Client ID: [REDACTED_CLIENT_ID]
+Client Secret: [REDACTED_CLIENT_SECRET]
 API Docs: https://apidocs.clearcareonline.com
 ```
 
@@ -185,7 +185,7 @@ We're trying to authenticate but getting 404 errors on all endpoints. Can you he
 
 Our credentials:
 - Agency ID: 4505
-- Client ID: bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS
+- Client ID: [REDACTED_CLIENT_ID]
 - App Name: colcareassist
 
 We're building an AI voice assistant (Gigi) to handle after-hours call-outs and would love to get this connected ASAP.
