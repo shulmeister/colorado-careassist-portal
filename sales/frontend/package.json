@@ -17,7 +17,7 @@
     "registry:gen": "node ./scripts/generate-registry.mjs",
     "ghpages:deploy": "node ./scripts/ghpages-deploy.mjs",
     "supabase:remote:init": "node ./scripts/supabase-remote-init.mjs",
-    "prepare": "husky"
+    "prepare": "test \"$CI\" = \"true\" || husky"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
