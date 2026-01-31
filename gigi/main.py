@@ -1699,7 +1699,14 @@ async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optio
 
     for shift in shifts:
         try:
-            start_time = datetime.fromisoformat(shift.get("start_time", "").replace("Z", "+00:00"))
+            start_time_str = shift.get("start_time") or ""
+            date_str = shift.get("date") or ""
+
+            if date_str and start_time_str:
+                start_time = datetime.fromisoformat(f"{date_str}T{start_time_str}")
+            else:
+                start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+
             if start_time > now:
                 upcoming_shifts.append((start_time, shift))
         except (ValueError, TypeError):
@@ -1712,8 +1719,19 @@ async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optio
     upcoming_shifts.sort(key=lambda x: x[0])
     _, next_shift = upcoming_shifts[0]
 
-    start_time = datetime.fromisoformat(next_shift.get("start_time", "").replace("Z", "+00:00"))
-    end_time = datetime.fromisoformat(next_shift.get("end_time", "").replace("Z", "+00:00"))
+    start_time_str = next_shift.get("start_time") or ""
+    end_time_str = next_shift.get("end_time") or ""
+    date_str = next_shift.get("date") or ""
+
+    if date_str and start_time_str:
+        start_time = datetime.fromisoformat(f"{date_str}T{start_time_str}")
+    else:
+        start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+
+    if date_str and end_time_str:
+        end_time = datetime.fromisoformat(f"{date_str}T{end_time_str}")
+    else:
+        end_time = datetime.fromisoformat(end_time_str.replace("Z", "+00:00"))
 
     return ShiftDetails(
         shift_id=next_shift.get("id", ""),
