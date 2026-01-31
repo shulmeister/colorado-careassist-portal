@@ -2205,6 +2205,11 @@ class WellSkyService:
         """
         Create a TaskLog object in WellSky for a specific encounter.
         POST /v1/encounter/{encounter_id}/tasklog/
+
+        THIS IS THE WORKING WAY TO DOCUMENT IN WELLSKY!
+        - Shows up as "Shift Notes" in mobile app and dashboard
+        - Requires encounter_id (NOT appointment_id)
+        - Get encounter_id from clock_in_shift() response
         """
         if self.is_mock_mode:
             logger.info(f"Mock: Created task log for encounter {encounter_id}")
@@ -2219,12 +2224,78 @@ class WellSkyService:
             "recorded": datetime.utcnow().isoformat() + "Z",
             "show_in_family_room": show_in_family_room
         }
-        
+
         success, response = self._make_request("POST", endpoint, data=data)
         if success:
             logger.info(f"Successfully created TaskLog for encounter {encounter_id}")
             return True, response
         return False, response
+
+    def document_shift_interaction(
+        self,
+        appointment_id: str,
+        title: str,
+        description: str,
+        clock_in_if_needed: bool = True,
+        lat: float = 39.7392,
+        lon: float = -104.9903
+    ) -> Tuple[bool, str]:
+        """
+        HIGH-LEVEL METHOD: Document an interaction on a shift in WellSky.
+
+        This is the CORRECT way to add documentation that shows in WellSky dashboard.
+        Uses the Encounter/TaskLog pattern:
+        1. Clock in to create encounter (if not already clocked in)
+        2. Add TaskLog to the encounter
+
+        Args:
+            appointment_id: The shift's appointment ID
+            title: Short title for the note (e.g., "Gigi AI - SMS Confirmation")
+            description: Full description of the interaction
+            clock_in_if_needed: If True, clock in to create encounter if needed
+            lat/lon: GPS coordinates for clock-in (defaults to Denver)
+
+        Returns:
+            Tuple of (success, message)
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Documented shift {appointment_id}: {title}")
+            return True, "Shift documented (Mock)"
+
+        # Step 1: Try to clock in (idempotent - returns existing encounter if already clocked in)
+        if clock_in_if_needed:
+            success, result = self.clock_in_shift(appointment_id, lat, lon)
+            if not success:
+                logger.warning(f"Clock-in failed for {appointment_id}: {result}")
+                return False, f"Could not access shift: {result}"
+
+            # Extract encounter_id from result
+            import re
+            match = re.search(r"Carelog ID: (\d+)", result)
+            if match:
+                encounter_id = match.group(1)
+            else:
+                logger.error(f"Could not extract encounter_id from clock-in response: {result}")
+                return False, "Could not get encounter ID from clock-in"
+        else:
+            # Caller must provide encounter_id as appointment_id
+            encounter_id = appointment_id
+
+        # Step 2: Add TaskLog to the encounter
+        success, response = self.create_task_log(
+            encounter_id=encounter_id,
+            title=title,
+            description=description,
+            status="COMPLETE",
+            show_in_family_room=False
+        )
+
+        if success:
+            task_log_id = response.get("taskLogId", "unknown")
+            logger.info(f"Documented shift {appointment_id} → encounter {encounter_id} → tasklog {task_log_id}")
+            return True, f"Shift documented in WellSky (TaskLog ID: {task_log_id})"
+
+        return False, f"TaskLog creation failed: {response}"
 
     def add_note_to_client(
         self,
