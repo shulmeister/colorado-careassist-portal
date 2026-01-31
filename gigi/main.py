@@ -178,6 +178,8 @@ BEETEXTING_API_URL = os.getenv("BEETEXTING_API_URL", "https://connect.beetexting
 
 # Phone numbers (safe defaults - these are public business numbers)
 BEETEXTING_FROM_NUMBER = os.getenv("BEETEXTING_FROM_NUMBER", "+17194283999")  # 719-428-3999
+RINGCENTRAL_FROM_NUMBER = os.getenv("RINGCENTRAL_FROM_NUMBER", "+17194283999")
+SMS_PROVIDER = os.getenv("GIGI_SMS_PROVIDER", "ringcentral").lower()
 ON_CALL_MANAGER_PHONE = os.getenv("ON_CALL_MANAGER_PHONE", "+13037571777")    # 303-757-1777
 JASON_PHONE = "+16039971495"  # Jason Shulman - for call transfers
 
@@ -1353,9 +1355,52 @@ async def _get_ringcentral_token() -> Optional[str]:
 
 
 async def _send_sms_ringcentral(to_phone: str, message: str) -> bool:
-    """Send SMS via RingCentral (not yet implemented)."""
-    logger.warning("RingCentral SMS not yet implemented")
-    return False
+    """Send SMS via RingCentral API."""
+    token = await _get_ringcentral_token()
+
+    if not token:
+        logger.warning("RingCentral not available - SMS not sent")
+        logger.info(f"[MOCK SMS] To: {to_phone}, Message: {message}")
+        return False
+
+    # Normalize phone number to E.164 format
+    clean_to = ''.join(filter(str.isdigit, to_phone))
+    if len(clean_to) == 10:
+        clean_to = f"+1{clean_to}"
+    elif len(clean_to) == 11 and clean_to.startswith('1'):
+        clean_to = f"+{clean_to}"
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/sms",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "from": {"phoneNumber": RINGCENTRAL_FROM_NUMBER},
+                    "to": [{"phoneNumber": clean_to}],
+                    "text": message
+                },
+                timeout=10.0
+            )
+            if response.status_code in (200, 201):
+                logger.info(f"SMS sent successfully via RingCentral to {to_phone}")
+                return True
+            else:
+                logger.error(f"RingCentral SMS error: {response.status_code} - {response.text}")
+                return False
+    except Exception as e:
+        logger.error(f"Error sending RingCentral SMS: {e}")
+        return False
+
+
+async def _send_sms_primary(to_phone: str, message: str) -> bool:
+    """Send SMS via primary provider (RingCentral or BeeTexting)."""
+    if SMS_PROVIDER == "beetexting":
+        return await _send_sms_beetexting(to_phone, message)
+    return await _send_sms_ringcentral(to_phone, message)
 
 
 async def send_glip_message(chat_id: str, text: str) -> bool:
@@ -1409,45 +1454,6 @@ async def assign_beetexting_conversation(from_phone: str, agent_email: str) -> b
             return response.status_code == 200
     except Exception as e:
         logger.error(f"Error assigning BeeTexting conversation: {e}")
-        return False
-    """Send SMS via RingCentral API (backup provider)."""
-    token = await _get_ringcentral_token()
-
-    if not token:
-        logger.warning("RingCentral not available - SMS not sent")
-        logger.info(f"[MOCK SMS] To: {to_phone}, Message: {message}")
-        return False
-
-    # Normalize phone number to E.164 format
-    clean_to = ''.join(filter(str.isdigit, to_phone))
-    if len(clean_to) == 10:
-        clean_to = f"+1{clean_to}"
-    elif len(clean_to) == 11 and clean_to.startswith('1'):
-        clean_to = f"+{clean_to}"
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/sms",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "from": {"phoneNumber": BEETEXTING_FROM_NUMBER},
-                    "to": [{"phoneNumber": clean_to}],
-                    "text": message
-                },
-                timeout=10.0
-            )
-            if response.status_code in (200, 201):
-                logger.info(f"SMS sent successfully via RingCentral to {to_phone}")
-                return True
-            else:
-                logger.error(f"RingCentral SMS error: {response.status_code} - {response.text}")
-                return False
-    except Exception as e:
-        logger.error(f"Error sending RingCentral SMS: {e}")
         return False
 
 
@@ -5548,7 +5554,7 @@ async def handle_inbound_sms(sms: InboundSMS):
                                 reply_text = "Thanks for your response. We'll be in touch if needed."
 
                             # Send the reply
-                            sms_sent = await _send_sms_ringcentral(sms.from_number, reply_text)
+                            sms_sent = await _send_sms_primary(sms.from_number, reply_text)
                             return SMSResponse(
                                 success=True,
                                 reply_sent=sms_sent,
@@ -5598,7 +5604,7 @@ async def handle_inbound_sms(sms: InboundSMS):
                     )
 
                     # Send reply
-                    sms_sent = await _send_sms_ringcentral(sms.from_number, reply_text)
+                    sms_sent = await _send_sms_primary(sms.from_number, reply_text)
 
                     return SMSResponse(
                         success=True,
@@ -5767,7 +5773,7 @@ async def handle_inbound_sms(sms: InboundSMS):
             )
 
         # Send reply via BeeTexting SMS (falls back to RingCentral)
-        sms_sent = await _send_sms_beetexting(sms.from_number, reply_text)
+        sms_sent = await _send_sms_primary(sms.from_number, reply_text)
 
         if sms_sent:
             logger.info(f"SMS reply sent to {sms.from_number}: {reply_text[:50]}...")

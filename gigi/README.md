@@ -151,6 +151,8 @@ GEMINI_API_KEY=AIzaSyxxxxx                  # Response generation
 RINGCENTRAL_CLIENT_ID=cqaJllTcFyndtgsussicsd
 RINGCENTRAL_CLIENT_SECRET=xxxxx
 RINGCENTRAL_JWT_TOKEN=eyJxxxxx
+RINGCENTRAL_FROM_NUMBER=+17194283999
+GIGI_SMS_PROVIDER=ringcentral
 
 # BeeTexting SMS (primary for after-hours)
 BEETEXTING_CLIENT_ID=xxxxx
