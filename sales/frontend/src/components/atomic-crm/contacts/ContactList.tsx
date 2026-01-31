@@ -5,15 +5,10 @@ import {
   useListContext,
   type Exporter,
 } from "ra-core";
-import { BulkActionsToolbar } from "@/components/admin/bulk-actions-toolbar";
-import { BulkDeleteButton } from "@/components/admin/bulk-delete-button";
-import { BulkExportButton } from "@/components/admin/bulk-export-button";
-import { BulkMergeButton } from "@/components/admin/bulk-merge-button";
 import { CreateButton } from "@/components/admin/create-button";
 import { ExportButton } from "@/components/admin/export-button";
 import { List } from "@/components/admin/list";
 import { SortButton } from "@/components/admin/sort-button";
-import { Card } from "@/components/ui/card";
 
 import type { Contact } from "../types";
 import { ContactEmpty } from "./ContactEmpty";
@@ -54,15 +49,8 @@ const ContactListLayout = () => {
     <div className="flex flex-row gap-8">
       <ContactListFilter />
       <div className="w-full flex flex-col gap-4">
-        <Card className="py-0">
-          <ContactListContent />
-        </Card>
+        <ContactListContent />
       </div>
-      <BulkActionsToolbar>
-        <BulkMergeButton />
-        <BulkExportButton />
-        <BulkDeleteButton />
-      </BulkActionsToolbar>
     </div>
   );
 };
