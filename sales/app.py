@@ -1009,6 +1009,30 @@ async def upload_file(
                         db.refresh(new_contact)
                         saved_contact = new_contact
 
+                    # Create Visit record for Jen Jeffers business card scans
+                    user_email = current_user.get("email", "").lower()
+                    if user_email == "jen@coloradocareassist.com" and contact_data.get('company'):
+                        try:
+                            visit_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                            new_visit = Visit(
+                                stop_number=1,
+                                business_name=contact_data['company'],
+                                address=contact_data.get('address', ''),
+                                city=contact_data.get('city', ''),
+                                notes=f"Business card from {contact_data.get('name', 'Unknown')}",
+                                visit_date=visit_date,
+                                user_email=user_email,
+                                created_at=datetime.utcnow(),
+                                updated_at=datetime.utcnow()
+                            )
+                            db.add(new_visit)
+                            db.commit()
+                            db.refresh(new_visit)
+                            logger.info(f"Created visit for Jen Jeffers business card: {contact_data['company']}")
+                        except Exception as e:
+                            logger.error(f"Failed to create visit for business card: {e}")
+                            db.rollback()  # Don't fail the whole request if visit creation fails
+
                     mailchimp_result = None
                     mailchimp_service = MailchimpService()
                     if mailchimp_service.enabled and contact_data.get('email'):
@@ -8421,9 +8445,33 @@ async def save_contact(request: Request, db: Session = Depends(get_db), current_
         db.add(contact)
         db.commit()
         db.refresh(contact)
-        
+
         logger.info(f"Successfully saved contact: {contact.name or contact.company}")
-        
+
+        # Create Visit record for Jen Jeffers business card scans
+        user_email = current_user.get("email", "").lower()
+        if user_email == "jen@coloradocareassist.com" and data.get('company'):
+            try:
+                visit_date = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                new_visit = Visit(
+                    stop_number=1,
+                    business_name=data['company'],
+                    address=data.get('address', ''),
+                    city=data.get('city', ''),
+                    notes=f"Business card from {data.get('name', 'Unknown')}",
+                    visit_date=visit_date,
+                    user_email=user_email,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                db.add(new_visit)
+                db.commit()
+                db.refresh(new_visit)
+                logger.info(f"Created visit for Jen Jeffers business card: {data['company']}")
+            except Exception as e:
+                logger.error(f"Failed to create visit for business card: {e}")
+                db.rollback()  # Don't fail the whole request if visit creation fails
+
         return JSONResponse({
             "success": True,
             "message": "Contact saved successfully",
