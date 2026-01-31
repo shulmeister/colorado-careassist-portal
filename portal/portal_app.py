@@ -52,12 +52,14 @@ except ImportError as e:
 
 # Import WellSky service directly for Operations Dashboard
 try:
-    from services.wellsky_service import wellsky_service, ShiftStatus
+    from services.wellsky_service import wellsky_service, ShiftStatus, ClientStatus, CaregiverStatus
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.warning(f"WellSky service not available: {e}")
     wellsky_service = None
     ShiftStatus = None
+    ClientStatus = None
+    CaregiverStatus = None
 
 from dotenv import load_dotenv
 from datetime import date
@@ -1238,6 +1240,93 @@ async def api_wellsky_status(
         "environment": wellsky.environment,
         "message": "WellSky service connected (mock mode)" if wellsky.is_mock_mode else "WellSky API connected"
     })
+
+# ============================================================================
+# WellSky Data API (Used by Gigi Daily Sync and Internal Services)
+# ============================================================================
+
+@app.get("/api/wellsky/caregivers")
+async def api_wellsky_caregivers(
+    status: Optional[str] = None,
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0)
+):
+    """Return caregivers from WellSky (no auth; internal sync)."""
+    if wellsky_service is None:
+        return JSONResponse({"success": False, "error": "WellSky service not available"}, status_code=503)
+
+    try:
+        status_enum = None
+        if status:
+            if CaregiverStatus is None:
+                return JSONResponse({"success": False, "error": "CaregiverStatus enum not available"}, status_code=503)
+            try:
+                status_enum = CaregiverStatus(status.lower())
+            except Exception:
+                return JSONResponse({"success": False, "error": f"Invalid status: {status}"}, status_code=400)
+
+        caregivers = wellsky_service.get_caregivers(status=status_enum, limit=limit, offset=offset)
+        return JSONResponse({
+            "caregivers": [cg.to_dict() for cg in caregivers],
+            "count": len(caregivers),
+        })
+    except Exception as e:
+        logger.error(f"Error getting caregivers: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/wellsky/clients")
+async def api_wellsky_clients(
+    status: Optional[str] = None,
+    limit: int = Query(200, ge=1, le=1000),
+    offset: int = Query(0, ge=0)
+):
+    """Return clients from WellSky (no auth; internal sync)."""
+    if wellsky_service is None:
+        return JSONResponse({"success": False, "error": "WellSky service not available"}, status_code=503)
+
+    try:
+        status_enum = None
+        if status:
+            if ClientStatus is None:
+                return JSONResponse({"success": False, "error": "ClientStatus enum not available"}, status_code=503)
+            try:
+                status_enum = ClientStatus(status.lower())
+            except Exception:
+                return JSONResponse({"success": False, "error": f"Invalid status: {status}"}, status_code=400)
+
+        clients = wellsky_service.get_clients(status=status_enum, limit=limit, offset=offset)
+        return JSONResponse({
+            "clients": [cl.to_dict() for cl in clients],
+            "count": len(clients),
+        })
+    except Exception as e:
+        logger.error(f"Error getting clients: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/wellsky/shifts")
+async def api_wellsky_shifts(
+    days: int = Query(30, ge=1, le=120),
+    limit: int = Query(500, ge=1, le=2000)
+):
+    """Return upcoming shifts from WellSky (no auth; internal sync)."""
+    if wellsky_service is None:
+        return JSONResponse({"success": False, "error": "WellSky service not available"}, status_code=503)
+
+    try:
+        date_from = date.today()
+        date_to = date_from + timedelta(days=days)
+        shifts = wellsky_service.get_shifts(date_from=date_from, date_to=date_to, limit=limit)
+        return JSONResponse({
+            "shifts": [s.to_dict() for s in shifts],
+            "count": len(shifts),
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+        })
+    except Exception as e:
+        logger.error(f"Error getting shifts: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
 # 
