@@ -23,7 +23,7 @@ from enum import Enum
 from types import SimpleNamespace
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Header
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, HTMLResponse
 from pydantic import BaseModel, Field
 import httpx
 import sys
