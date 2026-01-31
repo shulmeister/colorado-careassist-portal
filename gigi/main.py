@@ -5418,6 +5418,9 @@ def format_shift_context(shift) -> str:
 def _is_in_office_hours(now: Optional[datetime] = None) -> bool:
     """Return True if current time (America/Denver) is within office hours."""
     now = now or datetime.now(ZoneInfo("America/Denver"))
+    # Office hours are Monday-Friday only
+    if now.weekday() >= 5:
+        return False
     try:
         start_parts = [int(p) for p in OFFICE_HOURS_START.split(":")]
         end_parts = [int(p) for p in OFFICE_HOURS_END.split(":")]
