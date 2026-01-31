@@ -165,6 +165,7 @@ WELLSKY_CLIENT_ID=xxxxx
 WELLSKY_CLIENT_SECRET=xxxxx
 WELLSKY_AGENCY_ID=xxxxx
 WELLSKY_ENVIRONMENT=production
+WELLSKY_API_MODE=connect
 
 # Operations Toggles (IMPORTANT - see Go-Live Checklist below)
 GIGI_OPERATIONS_SMS_ENABLED=false           # Set to "true" to enable SMS/notifications
