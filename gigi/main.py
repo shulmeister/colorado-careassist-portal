@@ -17,10 +17,11 @@ import hmac
 import hashlib
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as time_cls
 from typing import Optional, Dict, Any, List, Literal, Tuple
 from enum import Enum
 from types import SimpleNamespace
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Header
 from fastapi.responses import JSONResponse, Response, HTMLResponse
@@ -184,6 +185,11 @@ ESCALATION_JASON_EXT = os.getenv("ESCALATION_JASON_EXT", "101")      # Jason Shu
 
 # SMS Auto-Reply Toggle (default OFF for safety)
 SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "false").lower() == "true"
+
+# After-hours auto-reply (default ON; replies only outside office hours)
+SMS_AFTER_HOURS_ONLY = os.getenv("GIGI_SMS_AFTER_HOURS_ONLY", "true").lower() == "true"
+OFFICE_HOURS_START = os.getenv("GIGI_OFFICE_HOURS_START", "08:00")
+OFFICE_HOURS_END = os.getenv("GIGI_OFFICE_HOURS_END", "17:00")
 
 # Operations SMS Toggle (set to "true" to enable SMS from call-out operations)
 # DEFAULT IS OFF - Must be explicitly enabled when WellSky is fully connected
@@ -5409,6 +5415,69 @@ def format_shift_context(shift) -> str:
     return "\n".join(parts)
 
 
+def _is_in_office_hours(now: Optional[datetime] = None) -> bool:
+    """Return True if current time (America/Denver) is within office hours."""
+    now = now or datetime.now(ZoneInfo("America/Denver"))
+    try:
+        start_parts = [int(p) for p in OFFICE_HOURS_START.split(":")]
+        end_parts = [int(p) for p in OFFICE_HOURS_END.split(":")]
+        start_t = time_cls(start_parts[0], start_parts[1])
+        end_t = time_cls(end_parts[0], end_parts[1])
+    except Exception:
+        start_t = time_cls(8, 0)
+        end_t = time_cls(17, 0)
+
+    now_t = now.time()
+    if start_t < end_t:
+        return start_t <= now_t < end_t
+    return now_t >= start_t or now_t < end_t
+
+
+def _should_reply_now() -> bool:
+    """Gate SMS replies to after-hours if configured."""
+    if not SMS_AUTOREPLY_ENABLED:
+        return False
+    if not SMS_AFTER_HOURS_ONLY:
+        return True
+    return not _is_in_office_hours()
+
+
+def _log_clock_issue_to_wellsky(
+    shift,
+    caller_name: Optional[str],
+    intent: str,
+    message: str
+) -> None:
+    """Create WellSky task + care alert note for clock-in/out issues."""
+    if not (WELLSKY_AVAILABLE and wellsky and shift):
+        return
+
+    action_label = "clock out" if intent == "clock_out" else "clock in"
+    caregiver_name = caller_name or "Caregiver"
+    client_id = getattr(shift, "client_id", None)
+    caregiver_id = getattr(shift, "caregiver_id", None)
+
+    if client_id:
+        wellsky.add_note_to_client(
+            client_id=client_id,
+            note=f"CARE ALERT: {caregiver_name} requested {action_label} via SMS. Msg: {message[:200]}",
+            note_type="callout"
+        )
+
+    wellsky.create_admin_task(
+        title=f"Clock {action_label} issue logged",
+        description=(
+            f"{caregiver_name} requested {action_label} via SMS.\n"
+            f"Message: {message}\n"
+            f"Shift ID: {getattr(shift, 'id', 'unknown')}"
+        ),
+        priority="normal",
+        related_client_id=client_id,
+        related_caregiver_id=caregiver_id,
+        assigned_to=os.getenv("WELLSKY_SCHEDULER_USER_ID")
+    )
+
+
 @app.post("/webhook/inbound-sms", response_model=SMSResponse)
 async def handle_inbound_sms(sms: InboundSMS):
     """
@@ -5422,17 +5491,9 @@ async def handle_inbound_sms(sms: InboundSMS):
     """
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
 
-    # Check if SMS auto-reply is disabled
-    if not SMS_AUTOREPLY_ENABLED:
-        logger.info("SMS auto-reply is DISABLED (GIGI_SMS_AUTOREPLY_ENABLED=false). Skipping reply.")
-        return SMSResponse(
-            from_number=sms.from_number,
-            original_message=sms.message,
-            caller_type="unknown",
-            caller_name=None,
-            generated_reply="[Auto-reply disabled - message logged for office follow-up]",
-            reply_sent=False
-        )
+    should_reply = _should_reply_now()
+    if not should_reply:
+        logger.info("SMS auto-reply is disabled or within office hours. Processing without reply.")
 
     try:
         # Look up caller info
@@ -5544,6 +5605,7 @@ async def handle_inbound_sms(sms: InboundSMS):
         shift_context = None
         action_taken = None
         current_shift = None
+        reply_text = None
 
         if WELLSKY_AVAILABLE and wellsky:
             try:
@@ -5560,6 +5622,12 @@ async def handle_inbound_sms(sms: InboundSMS):
                         if success:
                             action_taken = message
                             logger.info(f"Clocked out shift {current_shift.id}: {message}")
+                            _log_clock_issue_to_wellsky(current_shift, caller_info.name, "clock_out", sms.message)
+                            reply_text = f"Got it{f', {caller_info.name}' if caller_info.name else ''} — I’ve clocked you out."
+                        else:
+                            reply_text = "I’m having trouble clocking you out. I’ve logged this and the scheduler will follow up shortly."
+                    else:
+                        reply_text = "I couldn’t find your current shift. I’ve logged this for the scheduler to follow up."
 
                 elif intent == "clock_in":
                     # Get their upcoming shift
@@ -5574,6 +5642,12 @@ async def handle_inbound_sms(sms: InboundSMS):
                         if success:
                             action_taken = message
                             logger.info(f"Clocked in shift {current_shift.id}: {message}")
+                            _log_clock_issue_to_wellsky(current_shift, caller_info.name, "clock_in", sms.message)
+                            reply_text = f"Got it{f', {caller_info.name}' if caller_info.name else ''} — I’ve clocked you in."
+                        else:
+                            reply_text = "I’m having trouble clocking you in. I’ve logged this and the scheduler will follow up shortly."
+                    else:
+                        reply_text = "I couldn’t find your current shift. I’ve logged this for the scheduler to follow up."
 
                 elif intent == "callout":
                     # Smart Call-Out Handling (Continuity First)
@@ -5664,16 +5738,23 @@ async def handle_inbound_sms(sms: InboundSMS):
                 logger.warning(f"WellSky lookup failed: {ws_error}")
                 # Continue without WellSky data
 
-        # Generate AI response with shift context
-        reply_text = await generate_sms_response(
-            sms.message,
-            caller_info,
-            shift_context=shift_context,
-            action_taken=action_taken
-        )
+        if reply_text is None:
+            # Generate AI response with shift context
+            reply_text = await generate_sms_response(
+                sms.message,
+                caller_info,
+                shift_context=shift_context,
+                action_taken=action_taken
+            )
+
+        if not should_reply:
+            return SMSResponse(
+                success=True,
+                reply_sent=False,
+                reply_text=reply_text
+            )
 
         # Send reply via BeeTexting SMS (falls back to RingCentral)
-        # This ensures the reply shows up in the BeeTexting thread we just assigned
         sms_sent = await _send_sms_beetexting(sms.from_number, reply_text)
 
         if sms_sent:
@@ -5686,7 +5767,7 @@ async def handle_inbound_sms(sms: InboundSMS):
         else:
             logger.warning(f"Failed to send SMS reply to {sms.from_number}")
             return SMSResponse(
-                success=True,  # Message received OK
+                success=True,
                 reply_sent=False,
                 reply_text=reply_text,
                 error="Failed to send SMS reply"
