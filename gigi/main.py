@@ -33,6 +33,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# FastAPI app for Gigi routes
+app = FastAPI(title="Gigi AI Agent", version="1.0.0")
+
 # Import WellSky service for shift management
 try:
     from services.wellsky_service import WellSkyService, ShiftStatus
