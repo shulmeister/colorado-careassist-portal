@@ -170,7 +170,10 @@ class AsyncGigiBot:
     async def check_messages(self):
         if not self.token: return
 
+        # 12 hour lookback
         date_from = (datetime.utcnow() - timedelta(hours=12)).isoformat()
+        
+        # Fetch both Inbound and Outbound to see full context
         url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
         params = {"messageType": "SMS", "dateFrom": date_from, "perPage": 100}
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -184,31 +187,61 @@ class AsyncGigiBot:
                 return
 
             records = resp.json().get("records", [])
+            
+            # Group by remote phone number to handle conversations
+            conversations = {}
             for msg in records:
-                msg_id = str(msg.get("id"))
-                if msg_id in self.processed_ids:
-                    continue
-                
                 direction = msg.get("direction")
-                from_ph = msg.get("from", {}).get("phoneNumber")
-                text = msg.get("subject", "")
-                
+                # Identify the "other" party
                 if direction == "Inbound":
-                    logger.info(f"📩 New Message from {from_ph}: {text[:30]}...")
+                    remote_phone = msg.get("from", {}).get("phoneNumber")
+                else:
+                    remote_list = msg.get("to", [])
+                    remote_phone = remote_list[0].get("phoneNumber") if remote_list else None
+                
+                if not remote_phone: continue
+                
+                if remote_phone not in conversations:
+                    conversations[remote_phone] = []
+                conversations[remote_phone].append(msg)
+
+            # Process each conversation
+            for phone, msgs in conversations.items():
+                # Sort by creation time (oldest first)
+                msgs.sort(key=lambda x: x.get("creationTime", ""))
+                
+                # Get the very last message in the thread
+                last_msg = msgs[-1]
+                last_direction = last_msg.get("direction")
+                msg_id = str(last_msg.get("id"))
+                
+                # Logic: Only reply if the LAST action was them talking to us (Inbound)
+                # And we haven't processed this specific message ID in this session yet
+                if last_direction == "Inbound":
+                    if msg_id in self.processed_ids:
+                        continue
+                        
+                    text = last_msg.get("subject", "")
+                    logger.info(f"📩 Unanswered Message from {phone}: {text[:30]}...")
                     
-                    # 1. Document (Async)
-                    await self.document_message(text, from_ph)
+                    # 1. Document (Async) - Always document new inbound, even if we crash later
+                    await self.document_message(text, phone)
                     
-                    # 2. Reply (Async)
+                    # 2. Reply
                     reply_text = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
                     lower_text = text.lower()
                     if "call out" in lower_text or "sick" in lower_text:
                         reply_text = "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better!"
                     
-                    await self.send_sms(from_ph, reply_text)
+                    await self.send_sms(phone, reply_text)
+                    
+                    # Mark processed
                     self.processed_ids.add(msg_id)
                 else:
-                    self.processed_ids.add(msg_id)
+                    # The last message was Outbound (from us), so we are caught up.
+                    # Add the last inbound ID to processed so we don't trip up
+                    for m in msgs:
+                        self.processed_ids.add(str(m.get("id")))
 
         except Exception as e:
             logger.error(f"Poll Exception: {e}")
