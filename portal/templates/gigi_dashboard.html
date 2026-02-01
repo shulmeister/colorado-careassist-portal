@@ -509,9 +509,9 @@
                 </div>
                 {% elif active_tab == 'escalations' %}
                 <div class="row g-4">
-                    <div class="col-md-8">
-                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Critical & High Priority Issues</h5>
-                        <div class="table-container">
+                    <div class="col-md-7">
+                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Critical Escalations</h5>
+                        <div class="table-container mb-4">
                             <table class="table">
                                 <thead>
                                     <tr>
@@ -527,11 +527,18 @@
                                 </tbody>
                             </table>
                         </div>
+
+                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Gigi Activity Log (QA)</h5>
+                        <div class="table-container">
+                            <div id="bot-activity-list" class="p-0">
+                                <!-- Bot activity loaded here -->
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Recent Call Transfers</h5>
-                        <div id="transfers-list" class="d-flex flex-column gap-3">
-                            <!-- Transfers loaded here -->
+                    <div class="col-md-5">
+                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Voice Call Log</h5>
+                        <div id="voice-log-list" class="d-flex flex-column gap-3">
+                            <!-- Voice logs loaded here -->
                         </div>
                     </div>
                 </div>
@@ -660,10 +667,40 @@
                 
                 if (data.success) {
                     renderEscalations(data.issues);
-                    renderTransfers(data.transfers);
+                    renderVoiceLog(data.voice_activity);
                 }
+                
+                // Load bot conversations too
+                loadBotActivity();
             } catch (err) {
                 console.error('Failed to load escalations', err);
+            }
+        }
+
+        async function loadBotActivity() {
+            const container = document.getElementById('bot-activity-list');
+            try {
+                const resp = await fetch('/api/gigi/activity?limit=20');
+                const data = await resp.json();
+                
+                if (data.activities && data.activities.length > 0) {
+                    container.innerHTML = data.activities.map(a => `
+                        <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-bold small mb-1">${a.type.replace('_', ' ').toUpperCase()}</div>
+                                <div class="text-secondary small">${a.description}</div>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge ${a.status === 'success' ? 'bg-success' : 'bg-warning'} bg-opacity-10 text-opacity-75 small mb-1">${a.status}</span>
+                                <div class="text-secondary small" style="font-size: 10px;">${new Date(a.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div class="p-4 text-center text-secondary small">No recent bot activity recorded.</div>';
+                }
+            } catch (err) {
+                container.innerHTML = '<div class="p-4 text-center text-danger small">Failed to load activity log.</div>';
             }
         }
 
@@ -692,23 +729,34 @@
             `).join('');
         }
 
-        function renderTransfers(transfers) {
-            const container = document.getElementById('transfers-list');
-            if (!transfers || transfers.length === 0) {
-                container.innerHTML = '<div class="text-center py-4 text-secondary small">No recent transfers.</div>';
+        function renderVoiceLog(activity) {
+            const container = document.getElementById('voice-log-list');
+            if (!activity || activity.length === 0) {
+                container.innerHTML = '<div class="text-center py-4 text-secondary small">No recent voice calls recorded.</div>';
                 return;
             }
 
-            container.innerHTML = transfers.map(t => `
-                <div class="stat-card">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <span class="badge bg-primary bg-opacity-10 text-primary small">TRANSFER</span>
-                        <span class="text-secondary small">${t.time_ago}</span>
+            container.innerHTML = activity.map(v => {
+                const isTransfer = v.event_type === 'call_transfer';
+                const badgeClass = isTransfer ? 'bg-primary' : 'bg-success';
+                const icon = isTransfer ? '📲' : '📞';
+                
+                return `
+                    <div class="stat-card">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <span class="badge ${badgeClass} bg-opacity-10 text-opacity-100 small" style="font-size: 9px;">${v.event_type.replace('_', ' ').toUpperCase()}</span>
+                            <span class="text-secondary small" style="font-size: 10px;">${v.time_ago}</span>
+                        </div>
+                        <div class="fw-bold mb-1">${icon} ${v.description}</div>
+                        <div class="text-secondary small mb-2">${v.details || ''}</div>
+                        ${v.metadata && v.metadata.recording_url ? `
+                            <a href="${v.metadata.recording_url}" target="_blank" class="btn btn-link btn-sm p-0 text-info text-decoration-none" style="font-size: 11px;">
+                                <i class="bi bi-play-circle"></i> Listen to Recording
+                            </a>
+                        ` : ''}
                     </div>
-                    <div class="fw-bold mb-1">${t.description}</div>
-                    <div class="text-secondary small">${t.details || 'Call forwarded to owner'}</div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         // Schedule Tab

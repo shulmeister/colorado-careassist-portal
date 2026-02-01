@@ -204,6 +204,15 @@ async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any]
         )
         logger.info(f"✅ Created WellSky Task for Call Transfer: {client_name}")
 
+        # 3. Log to Portal Activity Feed (Dashboard)
+        await _log_portal_event(
+            description=f"Call Transferred to Jason: {client_name}",
+            event_type="call_transfer",
+            details=f"Reason: {reason} | Time: {timestamp}",
+            icon="📲",
+            metadata={"client_id": client_id, "client_name": client_name, "call_id": call_id}
+        )
+
     except Exception as e:
         logger.error(f"Error logging call transfer to WellSky: {e}")
 
@@ -4489,6 +4498,7 @@ async def retell_webhook(request: Request):
 
     elif event == "call_ended":
         transcript = body.get("transcript", "")
+        recording_url = body.get("recording_url", "")
         duration_ms = body.get("end_timestamp", 0) - body.get("start_timestamp", 0)
         duration_sec = duration_ms // 1000
         logger.info(f"Call ended. Duration: {duration_ms}ms")
@@ -4498,10 +4508,16 @@ async def retell_webhook(request: Request):
         summary = analysis.get("call_summary", "Call completed")
         
         await _log_portal_event(
-            description=f"Call completed ({duration_sec}s)",
+            description=f"Gigi Call Completed ({duration_sec}s)",
             event_type="call_ended",
             details=summary,
-            icon="📞"
+            icon="📞",
+            metadata={
+                "call_id": call_id, 
+                "duration": duration_sec, 
+                "recording_url": recording_url,
+                "transcript_preview": transcript[:200] if transcript else ""
+            }
         )
 
         return JSONResponse({"status": "ok"})

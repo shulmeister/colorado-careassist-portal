@@ -452,7 +452,7 @@ async def api_gigi_get_escalations(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get high-priority escalations (Urgent issues and Transfers)"""
+    """Get high-priority escalations (Urgent issues and Call Logs)"""
     from portal_models import ClientComplaint, ActivityFeedItem
     
     # 1. Get Urgent/High Issues
@@ -460,16 +460,16 @@ async def api_gigi_get_escalations(
         ClientComplaint.severity.in_(["high", "critical"])
     ).order_by(ClientComplaint.created_at.desc()).limit(limit).all()
     
-    # 2. Get Recent Call Transfers from Activity Feed
-    transfers = db.query(ActivityFeedItem).filter(
-        ActivityFeedItem.event_type.ilike("%transfer%")
+    # 2. Get Recent Voice Activity (Transfers and Completions)
+    voice_events = db.query(ActivityFeedItem).filter(
+        ActivityFeedItem.event_type.in_(["call_transfer", "call_ended"])
     ).order_by(ActivityFeedItem.created_at.desc()).limit(limit).all()
     
     return JSONResponse({
         "success": True,
         "issues": [i.to_dict() for i in urgent_issues],
-        "transfers": [t.to_dict() for t in transfers],
-        "count": len(urgent_issues) + len(transfers)
+        "voice_activity": [v.to_dict() for v in voice_events],
+        "count": len(urgent_issues) + len(voice_events)
     })
 
 @app.get("/api/gigi/conversations")
