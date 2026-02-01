@@ -264,13 +264,10 @@ class GigiRingCentralBot:
                 logger.error(f"Failed to document to WellSky: {e}")
 
     async def process_reply(self, msg: dict, text: str, reply_method: str = "chat", phone: str = None):
-        """Replier Logic: Respond to unanswered requests."""
+        """Replier Logic: Respond to EVERY unanswered request after-hours."""
         lower_text = text.lower()
-        is_request = any(kw in lower_text for kw in ["call out", "sick", "late", "cancel", "help", "shift"])
         
-        if not is_request:
-            return
-
+        # Determine the best reply using smart defaults (retell integration can follow)
         reply = None
         if "call out" in lower_text or "sick" in lower_text:
             reply = "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better!"
@@ -278,20 +275,37 @@ class GigiRingCentralBot:
             reply = "Thanks for letting us know. I've noted that you're running late in the system. Drive safe!"
         elif "cancel" in lower_text:
             reply = "I've processed that cancellation and notified the team. Thanks for the heads up."
-        elif "help" in lower_text or "shift" in lower_text:
+        elif "help" in lower_text or "shift" in lower_text or "question" in lower_text:
             reply = "Got it. I've notified the care team that you need assistance. Someone will get back to you shortly."
+        else:
+            # DEFAULT REPLY FOR EVERYTHING ELSE
+            reply = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
             
         if reply:
-            if reply_method == "chat":
-                self.rc_service.send_message_to_chat(TARGET_CHAT, reply)
-            elif reply_method == "sms" and phone:
-                # Use RC service to send generic SMS
-                self.rc_service._api_request("/account/~/extension/~/sms", method="POST", params={
-                    "from": {"phoneNumber": RINGCENTRAL_FROM_NUMBER},
-                    "to": [{"phoneNumber": phone}],
-                    "text": reply
-                })
-            logger.info(f"🌙 After-Hours {reply_method.upper()} Reply Sent to {phone or TARGET_CHAT}")
+            try:
+                if reply_method == "chat":
+                    self.rc_service.send_message_to_chat(TARGET_CHAT, reply)
+                elif reply_method == "sms" and phone:
+                    # Use RC service to send generic SMS
+                    # Normalize phone for sender
+                    clean_phone = ''.join(filter(str.isdigit, phone))
+                    if len(clean_phone) == 10: clean_phone = f"+1{clean_phone}"
+                    elif not clean_phone.startswith('+'): clean_phone = f"+{clean_phone}"
+
+                    logger.info(f"Sending SMS reply to {clean_phone} via {RINGCENTRAL_FROM_NUMBER}")
+                    
+                    self.rc_service._api_request(
+                        "/account/~/extension/~/sms", 
+                        method="POST", 
+                        data={
+                            "from": {"phoneNumber": RINGCENTRAL_FROM_NUMBER},
+                            "to": [{"phoneNumber": clean_phone}],
+                            "text": reply
+                        }
+                    )
+                logger.info(f"🌙 After-Hours {reply_method.upper()} Reply Sent to {phone or TARGET_CHAT}")
+            except Exception as e:
+                logger.error(f"Failed to send {reply_method} reply: {e}")
 
 async def main():
     bot = GigiRingCentralBot()
