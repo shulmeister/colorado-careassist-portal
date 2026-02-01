@@ -232,6 +232,9 @@ class AsyncGigiBot:
                 if last_direction == "Inbound":
                     if msg_id in self.processed_ids:
                         continue
+                    
+                    # Mark as processed IMMEDIATELY to prevent race conditions
+                    self.processed_ids.add(msg_id)
                         
                     text = last_msg.get("subject", "")
                     logger.info(f"📩 Unanswered Message from {phone}: {text[:30]}...")
@@ -250,9 +253,7 @@ class AsyncGigiBot:
                         reply_text = f"I hear you{', '+first_name if first_name else ''}. I've logged your call-out and we're already reaching out for coverage. Feel better!"
                     
                     await self.send_sms(phone, reply_text)
-                    
-                    # Mark processed
-                    self.processed_ids.add(msg_id)
+
                 else:
                     # The last message was Outbound (from us), so we are caught up.
                     # Add the last inbound ID to processed so we don't trip up
