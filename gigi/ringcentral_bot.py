@@ -128,23 +128,27 @@ class GigiRingCentralBot:
             return
 
         try:
-            # Use message-sync for more robust tracking
-            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-sync"
+            # Use message-store API (proven working) instead of message-sync
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
             params = {
-                "syncType": "FSync",
-                "messageType": "SMS"
+                "messageType": "SMS",
+                "dateFrom": (datetime.utcnow() - timedelta(minutes=10)).isoformat(),
+                "perPage": 100
             }
-            headers = {"Authorization": f"Bearer {token}"}
-            
-            logger.info("SMS: Running message-sync (Full Sync)")
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json"
+            }
+
+            logger.info("SMS: Polling message-store (last 10 minutes)")
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
-                logger.error(f"RC SMS Sync Error: {response.status_code} - {response.text}")
+                logger.error(f"RC SMS Store Error: {response.status_code} - {response.text}")
                 return
 
             data = response.json()
             records = data.get("records", [])
-            logger.info(f"SMS: Sync returned {len(records)} records")
+            logger.info(f"SMS: Found {len(records)} messages")
             
             for sms in records:
                 msg_id = str(sms.get("id"))
