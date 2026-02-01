@@ -302,32 +302,12 @@ async def diag_rc_status():
 
 @app.on_event("startup")
 async def start_gigi_bot_from_unified():
-    """Ensure Gigi's background bot starts when the unified app starts, with a lock to prevent duplicates"""
+    """Ensure Gigi's background bot starts when the unified app starts"""
     try:
-        # Use a file-based lock to prevent multiple workers from starting the bot
         import os
-        import fcntl
         import asyncio
         
-        lock_file_path = "/tmp/gigi_bot.lock"
-        
-        # Try to acquire the lock
-        lock_file = open(lock_file_path, "w")
-        try:
-            fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            logger.info("🔒 Acquired Gigi Bot lock - starting background loop")
-        except IOError:
-            logger.info("⏭️ Gigi Bot lock already held by another process - skipping startup")
-            return
-
-        gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
-        if os.path.exists(gigi_path):
-            sys.path.insert(0, gigi_path)
-            from gigi.ringcentral_bot import GigiRingCentralBot
-            
-            # Use environment variable check to match main.py logic
-            if os.getenv("GIGI_RC_BOT_ENABLED", "true").lower() == "true":
-                logger.info("🚀 Starting Gigi RingCentral Bot (via Unified App Startup)")
+        logger.info("🚀 Starting Gigi RingCentral Bot (via Unified App Startup)")
                 bot = GigiRingCentralBot()
                 await bot.initialize()
                 
