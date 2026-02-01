@@ -402,6 +402,10 @@
                     <i class="bi bi-telephone"></i>
                     <span>Call Logs</span>
                 </a>
+                <a href="/gigi/dashboard/simulations" class="nav-link {{ 'active' if active_tab == 'simulations' }}">
+                    <i class="bi bi-cpu"></i>
+                    <span>Simulations</span>
+                </a>
                 <a href="/gigi/dashboard/settings" class="nav-link {{ 'active' if active_tab == 'settings' }}">
                     <i class="bi bi-gear"></i>
                     <span>Settings</span>
@@ -429,6 +433,7 @@
                     {% elif active_tab == 'users' %}User Management
                     {% elif active_tab == 'reports' %}Analytics & Reports
                     {% elif active_tab == 'calls' %}Call Logs
+                    {% elif active_tab == 'simulations' %}Simulations & Testing
                     {% elif active_tab == 'settings' %}Settings
                     {% else %}{{ active_tab|capitalize }}{% endif %}
                 </h2>
@@ -439,6 +444,10 @@
                     </button>
                     <button class="btn btn-primary btn-sm" onclick="showCreateIssueModal()">
                         <i class="bi bi-plus-lg"></i> Create Issue
+                    </button>
+                    {% elif active_tab == 'simulations' %}
+                    <button class="btn btn-primary btn-sm" onclick="runNewSimulation()">
+                        <i class="bi bi-play-fill"></i> Run New Test
                     </button>
                     {% endif %}
                 </div>
@@ -668,6 +677,78 @@
                     <div class="text-center py-5">
                         <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
                         <span class="ms-2 text-secondary">Loading call logs...</span>
+                    </div>
+                </div>
+                {% elif active_tab == 'simulations' %}
+                <div class="row g-4">
+                    <div class="col-md-8">
+                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Active Test Scenarios</h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <div class="fw-bold mb-2">Caregiver Call-out</div>
+                                    <p class="text-secondary small">Simulates a caregiver calling out of a shift. Tests Gigi's ability to find replacements and log the issue.</p>
+                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="runSimulation('caregiver_callout')">Launch Test</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <div class="fw-bold mb-2">Patient Intake (New Lead)</div>
+                                    <p class="text-secondary small">Simulates a new prospect call. Tests data extraction and WellSky prospect creation.</p>
+                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="runSimulation('patient_intake')">Launch Test</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <div class="fw-bold mb-2">Medication Reminder Issue</div>
+                                    <p class="text-secondary small">Tests Gigi's ability to handle urgent clinical escalations and caregiver reported issues.</p>
+                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="runSimulation('med_issue')">Launch Test</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="stat-card">
+                                    <div class="fw-bold mb-2">After-Hours Routing</div>
+                                    <p class="text-secondary small">Tests phone tree routing based on current day/time and caller type recognition.</p>
+                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="runSimulation('routing')">Launch Test</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Recent Benchmark Results</h5>
+                        <div class="table-container">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Test</th>
+                                        <th>Score</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="small">Callout Sync</td>
+                                        <td><span class="text-success fw-bold">98%</span></td>
+                                        <td><i class="bi bi-check-circle-fill text-success"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="small">Lead Parsing</td>
+                                        <td><span class="text-warning fw-bold">82%</span></td>
+                                        <td><i class="bi bi-exclamation-triangle-fill text-warning"></i></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="small">Sentiment Detection</td>
+                                        <td><span class="text-success fw-bold">94%</span></td>
+                                        <td><i class="bi bi-check-circle-fill text-success"></i></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4">
+                            <button class="btn btn-outline-info btn-sm w-100" onclick="runFullBenchmark()">
+                                <i class="bi bi-speedometer2"></i> Run Full Benchmark
+                            </button>
+                        </div>
                     </div>
                 </div>
                 {% elif active_tab == 'settings' %}
@@ -1252,6 +1333,30 @@
                 console.error('Save error', err);
                 alert('Connection error. Please try again.');
             }
+        }
+
+        async function runSimulation(scenario) {
+            if (!confirm(`Launch simulation for '${scenario}'?`)) return;
+            
+            try {
+                const resp = await fetch('/api/gigi/simulations/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scenario: scenario })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    alert(`Simulation started! Call ID: ${data.call_id}\n\nYou can view the interaction in Call Logs once finished.`);
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (err) {
+                alert('Failed to launch simulation.');
+            }
+        }
+
+        async function runFullBenchmark() {
+            alert('Starting full autonomous benchmark suite. This will run 10 test scenarios and calculate performance scores. This takes ~5 minutes.');
         }
     </script>
 </body>

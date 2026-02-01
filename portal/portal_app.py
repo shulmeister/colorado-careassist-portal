@@ -417,23 +417,62 @@ async def gigi_dashboard_reports(request: Request, current_user: Dict[str, Any] 
         "active_tab": "reports"
     })
 
-@app.get("/gigi/dashboard/calls", response_class=HTMLResponse)
+@app.get("/gigi/dashboard/calls")
 async def gigi_dashboard_calls(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Serve the Gigi Management Dashboard - Calls Tab"""
-    return templates.TemplateResponse("gigi_dashboard.html", {
-        "request": request,
-        "user": current_user,
-        "active_tab": "calls"
-    })
+    return templates.TemplateResponse("gigi_dashboard.html", {"request": request, "active_tab": "calls", "user": current_user})
 
-@app.get("/gigi/dashboard/settings", response_class=HTMLResponse)
+@app.get("/gigi/dashboard/simulations")
+async def gigi_dashboard_simulations(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    return templates.TemplateResponse("gigi_dashboard.html", {"request": request, "active_tab": "simulations", "user": current_user})
+
+@app.get("/gigi/dashboard/settings")
 async def gigi_dashboard_settings(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Serve the Gigi Management Dashboard - Settings Tab"""
-    return templates.TemplateResponse("gigi_dashboard.html", {
-        "request": request,
-        "user": current_user,
-        "active_tab": "settings"
-    })
+    return templates.TemplateResponse("gigi_dashboard.html", {"request": request, "active_tab": "settings", "user": current_user})
+
+@app.post("/api/gigi/simulations/run")
+async def api_gigi_run_simulation(
+    payload: Dict[str, str],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Run a Retell AI web call simulation"""
+    scenario = payload.get("scenario", "caregiver_callout")
+    retell_api_key = os.getenv("RETELL_API_KEY")
+    agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
+    
+    if not retell_api_key:
+        return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
+        
+    try:
+        response = requests.post(
+            'https://api.retellai.com/v2/create-web-call',
+            headers={
+                'Authorization': f'Bearer {retell_api_key}',
+                'Content-Type': 'application/json'
+            },
+            json={
+                'agent_id': agent_id,
+                'metadata': {
+                    'test': True,
+                    'scenario': scenario,
+                    'launched_by': current_user.get("email")
+                }
+            },
+            timeout=10
+        )
+        
+        if response.status_code in (200, 201):
+            data = response.json()
+            return JSONResponse({
+                "success": True, 
+                "call_id": data.get("call_id"),
+                "access_token": data.get("access_token")
+            })
+        else:
+            return JSONResponse({"success": False, "error": response.text})
+            
+    except Exception as e:
+        logger.error(f"Simulation launch failed: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
 
 @app.get("/api/gigi/issues")
 async def api_gigi_get_issues(
