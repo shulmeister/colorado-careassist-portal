@@ -390,6 +390,22 @@
                     <i class="bi bi-arrow-up-right-circle"></i>
                     <span>Escalations</span>
                 </a>
+                <a href="/gigi/dashboard/users" class="nav-link {{ 'active' if active_tab == 'users' }}">
+                    <i class="bi bi-people"></i>
+                    <span>Users</span>
+                </a>
+                <a href="/gigi/dashboard/reports" class="nav-link {{ 'active' if active_tab == 'reports' }}">
+                    <i class="bi bi-graph-up"></i>
+                    <span>Reports</span>
+                </a>
+                <a href="/gigi/dashboard/calls" class="nav-link {{ 'active' if active_tab == 'calls' }}">
+                    <i class="bi bi-telephone"></i>
+                    <span>Call Logs</span>
+                </a>
+                <a href="/gigi/dashboard/settings" class="nav-link {{ 'active' if active_tab == 'settings' }}">
+                    <i class="bi bi-gear"></i>
+                    <span>Settings</span>
+                </a>
             </nav>
             <div class="p-4 mt-auto">
                 <div class="d-flex align-items-center gap-3">
@@ -405,14 +421,26 @@
         <!-- Main -->
         <div class="main-content">
             <header class="header">
-                <h2 class="mb-0 fw-bold">Issues</h2>
+                <h2 class="mb-0 fw-bold">
+                    {% if active_tab == 'issues' %}Issues
+                    {% elif active_tab == 'schedule' %}Schedule
+                    {% elif active_tab == 'knowledge' %}Knowledge Base
+                    {% elif active_tab == 'escalations' %}Escalations
+                    {% elif active_tab == 'users' %}User Management
+                    {% elif active_tab == 'reports' %}Analytics & Reports
+                    {% elif active_tab == 'calls' %}Call Logs
+                    {% elif active_tab == 'settings' %}Settings
+                    {% else %}{{ active_tab|capitalize }}{% endif %}
+                </h2>
                 <div class="d-flex gap-3">
+                    {% if active_tab == 'issues' %}
                     <button class="btn btn-outline-secondary btn-sm">
                         <i class="bi bi-download"></i> Export
                     </button>
                     <button class="btn btn-primary btn-sm" onclick="showCreateIssueModal()">
                         <i class="bi bi-plus-lg"></i> Create Issue
                     </button>
+                    {% endif %}
                 </div>
             </header>
 
@@ -580,6 +608,97 @@
                         <!-- Memories loaded here -->
                     </div>
                 </div>
+                {% elif active_tab == 'users' %}
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Last Active</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td class="fw-bold">Jason Shulman</td>
+                                <td>Owner / Admin</td>
+                                <td><span class="status-badge bg-success bg-opacity-10 text-success">Active Now</span></td>
+                                <td>Today, 11:45 PM</td>
+                                <td class="text-end"><button class="btn btn-link text-secondary p-0"><i class="bi bi-three-dots-vertical"></i></button></td>
+                            </tr>
+                            <tr>
+                                <td class="fw-bold">Gigi AI</td>
+                                <td>AI Agent</td>
+                                <td><span class="status-badge bg-success bg-opacity-10 text-success">Active Now</span></td>
+                                <td>Today, 11:50 PM</td>
+                                <td class="text-end"><button class="btn btn-link text-secondary p-0"><i class="bi bi-three-dots-vertical"></i></button></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                {% elif active_tab == 'reports' %}
+                <div class="row g-4">
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-label">Monthly Call Volume</div>
+                            <div class="stat-value">1,284</div>
+                            <div class="text-success small mt-2"><i class="bi bi-arrow-up"></i> 12% vs last month</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-label">AI Resolution Rate</div>
+                            <div class="stat-value">84%</div>
+                            <div class="text-success small mt-2"><i class="bi bi-arrow-up"></i> 5% vs last month</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card">
+                            <div class="stat-label">Avg Response Time</div>
+                            <div class="stat-value">1.2s</div>
+                            <div class="text-info small mt-2">Instant (Retell AI)</div>
+                        </div>
+                    </div>
+                </div>
+                {% elif active_tab == 'calls' %}
+                <div id="bot-activity-list" class="table-container">
+                    <!-- Reusing bot activity logic here -->
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                        <span class="ms-2 text-secondary">Loading call logs...</span>
+                    </div>
+                </div>
+                {% elif active_tab == 'settings' %}
+                <div class="card bg-dark border-secondary border-opacity-25">
+                    <div class="card-body p-4">
+                        <h5 class="mb-4">System Settings</h5>
+                        <form>
+                            <div class="mb-4">
+                                <label class="form-label text-secondary small fw-bold">BOT REPLIER MODE</label>
+                                <select class="form-select">
+                                    <option value="after_hours" selected>After-Hours Only (M-F 5pm-8am, Weekends)</option>
+                                    <option value="always">Always Active (24/7)</option>
+                                    <option value="disabled">Disabled (Internal Logging Only)</option>
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label text-secondary small fw-bold">WELLSKY SYNC FREQUENCY</label>
+                                <select class="form-select">
+                                    <option value="15">Every 15 Minutes</option>
+                                    <option value="30" selected>Every 30 Minutes</option>
+                                    <option value="60">Hourly</option>
+                                </select>
+                            </div>
+                            <div class="form-check form-switch mb-4">
+                                <input class="form-check-input" type="checkbox" checked>
+                                <label class="form-check-label">Automatic Escalations for High-Priority Issues</label>
+                            </div>
+                            <button type="button" class="btn btn-primary px-4">Save Configuration</button>
+                        </form>
+                    </div>
+                </div>
                 {% else %}
                 <div class="text-center py-5">
                     <i class="bi bi-tools fs-1 text-secondary opacity-25"></i>
@@ -606,6 +725,12 @@
                             <input type="text" class="form-control" id="clientSearch" placeholder="Search Client..." required autocomplete="off">
                             <input type="hidden" id="selectedClientId">
                             <div id="clientSuggestions" class="autocomplete-suggestions d-none"></div>
+                        </div>
+                        <div class="col-md-6 position-relative">
+                            <label class="form-label text-secondary small fw-bold">RELATED SHIFT</label>
+                            <input type="text" class="form-control" id="shiftSearch" placeholder="Search Shift..." autocomplete="off">
+                            <input type="hidden" id="selectedShiftId">
+                            <div id="shiftSuggestions" class="autocomplete-suggestions d-none"></div>
                         </div>
                         <div class="col-md-6 position-relative">
                             <label class="form-label text-secondary small fw-bold">CAREGIVER</label>
@@ -674,6 +799,8 @@
                 loadSchedule();
             } else if (activeTab === 'escalations') {
                 loadEscalations();
+            } else if (activeTab === 'calls') {
+                loadBotActivity();
             }
         });
 
@@ -1017,9 +1144,10 @@
         function setupAutocompletes() {
             setupSearch('clientSearch', 'clientSuggestions', '/api/wellsky/clients', 'selectedClientId');
             setupSearch('caregiverSearch', 'caregiverSuggestions', '/api/wellsky/caregivers', 'selectedCaregiverId');
+            setupSearch('shiftSearch', 'shiftSuggestions', '/api/wellsky/shifts', 'selectedShiftId', 'selectedClientId');
         }
 
-        function setupSearch(inputId, suggestionsId, apiPath, hiddenId) {
+        function setupSearch(inputId, suggestionsId, apiPath, hiddenId, dependentId = null) {
             const input = document.getElementById(inputId);
             const suggestions = document.getElementById(suggestionsId);
             let timeout;
@@ -1027,28 +1155,37 @@
             input.addEventListener('input', () => {
                 clearTimeout(timeout);
                 const query = input.value.trim();
-                if (query.length < 2) {
+                
+                // For shifts, we might want to show all for client even if query is empty
+                if (query.length < 2 && inputId !== 'shiftSearch') {
                     suggestions.classList.add('d-none');
                     return;
                 }
 
                 timeout = setTimeout(async () => {
                     try {
-                        const resp = await fetch(`${apiPath}?limit=5`);
-                        const data = await resp.json();
-                        const items = data.clients || data.caregivers || [];
+                        let url = `${apiPath}?limit=10&q=${encodeURIComponent(query)}`;
+                        if (dependentId) {
+                            const depVal = document.getElementById(dependentId).value;
+                            if (depVal) url += `&clientId=${depVal}`;
+                        }
                         
-                        // Filter locally for demo/speed if needed, or rely on API
-                        const filtered = items.filter(i => 
-                            (i.full_name || i.name).toLowerCase().includes(query.toLowerCase())
-                        );
-
-                        if (filtered.length > 0) {
-                            suggestions.innerHTML = filtered.map(item => `
-                                <div class="suggestion-item" onclick="selectItem('${inputId}', '${suggestionsId}', '${item.full_name || item.name}', '${item.id}', '${hiddenId}')">
-                                    ${item.full_name || item.name}
-                                </div>
-                            `).join('');
+                        const resp = await fetch(url);
+                        const data = await resp.json();
+                        const items = data.clients || data.caregivers || data.shifts || [];
+                        
+                        if (items.length > 0) {
+                            suggestions.innerHTML = items.map(item => {
+                                let displayName = item.full_name || item.name;
+                                if (inputId === 'shiftSearch') {
+                                    displayName = `${item.date} | ${item.start_time} - ${item.caregiver_name}`;
+                                }
+                                return `
+                                    <div class="suggestion-item" onclick="selectItem('${inputId}', '${suggestionsId}', '${displayName}', '${item.id}', '${hiddenId}')">
+                                        ${displayName}
+                                    </div>
+                                `;
+                            }).join('');
                             suggestions.classList.remove('d-none');
                         } else {
                             suggestions.classList.add('d-none');

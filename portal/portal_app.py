@@ -399,6 +399,42 @@ async def gigi_escalations_dashboard(request: Request, current_user: Dict[str, A
         "active_tab": "escalations"
     })
 
+@app.get("/gigi/dashboard/users", response_class=HTMLResponse)
+async def gigi_dashboard_users(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Users Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "users"
+    })
+
+@app.get("/gigi/dashboard/reports", response_class=HTMLResponse)
+async def gigi_dashboard_reports(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Reports Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "reports"
+    })
+
+@app.get("/gigi/dashboard/calls", response_class=HTMLResponse)
+async def gigi_dashboard_calls(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Calls Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "calls"
+    })
+
+@app.get("/gigi/dashboard/settings", response_class=HTMLResponse)
+async def gigi_dashboard_settings(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Settings Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "settings"
+    })
+
 @app.get("/api/gigi/issues")
 async def api_gigi_get_issues(
     status: Optional[str] = Query(None),
@@ -472,17 +508,64 @@ async def api_gigi_get_escalations(
         "count": len(urgent_issues) + len(voice_events)
     })
 
-@app.get("/api/gigi/conversations")
-async def api_gigi_get_conversations(
+@app.get("/api/wellsky/clients")
+async def api_wellsky_search_clients(
+    q: Optional[str] = Query(None),
     limit: int = Query(50),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get recent bot conversations (Logs from the Documenter)"""
-    # This pulls from the Activity Log we're using for the bot
-    # We'll use the existing internal log for now
+    if wellsky_service is None:
+        return JSONResponse({"success": False, "error": "WellSky service not available"})
+    
+    # Simple prefix search for now
+    clients = wellsky_service.get_clients(limit=limit)
+    if q:
+        q = q.lower()
+        clients = [c for c in clients if q in c.full_name.lower()]
+        
     return JSONResponse({
         "success": True,
-        "logs": _gigi_activity_log[:limit]
+        "clients": [c.to_dict() for c in clients]
+    })
+
+@app.get("/api/wellsky/caregivers")
+async def api_wellsky_search_caregivers(
+    q: Optional[str] = Query(None),
+    limit: int = Query(50),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    if wellsky_service is None:
+        return JSONResponse({"success": False, "error": "WellSky service not available"})
+    
+    caregivers = wellsky_service.get_caregivers(limit=limit)
+    if q:
+        q = q.lower()
+        caregivers = [c for c in caregivers if q in c.full_name.lower()]
+        
+    return JSONResponse({
+        "success": True,
+        "caregivers": [c.to_dict() for c in caregivers]
+    })
+
+@app.get("/api/wellsky/shifts")
+async def api_wellsky_search_shifts(
+    clientId: Optional[str] = Query(None),
+    limit: int = Query(50),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    if wellsky_service is None:
+        return JSONResponse({"success": False, "error": "WellSky service not available"})
+    
+    # Fetch today and future shifts for this client
+    shifts = wellsky_service.get_shifts(
+        client_id=clientId, 
+        date_from=date_cls.today(),
+        limit=limit
+    )
+        
+    return JSONResponse({
+        "success": True,
+        "shifts": [s.to_dict() for s in shifts]
     })
 
 @app.get("/api/gigi/knowledge/sop")

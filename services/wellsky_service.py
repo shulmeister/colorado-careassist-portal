@@ -857,7 +857,7 @@ class WellSkyService:
         last_name: Optional[str] = None,
         phone: Optional[str] = None,
         city: Optional[str] = None,
-        active: bool = True,
+        active: Optional[bool] = None,
         limit: int = 20,
         page: int = 0
     ) -> List[WellSkyClient]:
@@ -1159,18 +1159,29 @@ class WellSkyService:
                 referral_source = display
 
         # Determine status
+        # WellSky status IDs: 1=Lead, 60=Pending, 80=Care Started, 100=Discharged, 110=Lost
         if is_client:
-            if status_id >= 80:
+            if status_id >= 80 and status_id < 100:
                 status = ClientStatus.ACTIVE
+            elif status_id == 100:
+                status = ClientStatus.DISCHARGED
             elif status_id >= 60:
                 status = ClientStatus.PENDING
             else:
                 status = ClientStatus.PROSPECT
         else:
-            status = ClientStatus.PROSPECT
+            if status_id == 110:
+                status = ClientStatus.DISCHARGED # Lost prospect
+            else:
+                status = ClientStatus.PROSPECT
 
-        if not active:
-            status = ClientStatus.DISCHARGED
+        # Override with active flag if explicitly False and not already DISCHARGED
+        if not active and status != ClientStatus.DISCHARGED:
+            # If WellSky says inactive but status is 80, it might be a temporary hold
+            if status == ClientStatus.ACTIVE:
+                status = ClientStatus.ON_HOLD
+            else:
+                status = ClientStatus.DISCHARGED
 
         return WellSkyClient(
             id=client_id,
@@ -1351,7 +1362,7 @@ class WellSkyService:
         last_name: Optional[str] = None,
         phone: Optional[str] = None,
         city: Optional[str] = None,
-        active: bool = True,
+        active: Optional[bool] = None,
         is_hired: bool = True,
         profile_tags: Optional[List[str]] = None,
         limit: int = 20,
