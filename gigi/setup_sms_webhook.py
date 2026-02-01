@@ -69,7 +69,8 @@ print(f"\n📝 Creating new SMS webhook subscription...")
 
 subscription_data = {
     "eventFilters": [
-        "/restapi/v1.0/account/~/extension/~/message-store/instant?type=SMS"
+        # Use wildcard (+) for ALL extensions including group/auto-receptionist numbers
+        "/restapi/v1.0/account/~/extension/+/message-store/instant?type=SMS"
     ],
     "deliveryMode": {
         "transportType": "WebHook",
@@ -79,7 +80,7 @@ subscription_data = {
 }
 
 print(f"\nSubscription config:")
-print(f"  Event: SMS message-store instant notifications")
+print(f"  Event: SMS message-store instant notifications (ALL extensions)")
 print(f"  Webhook URL: {WEBHOOK_URL}")
 print(f"  Expires: ~20 years")
 
