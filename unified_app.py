@@ -308,6 +308,12 @@ async def start_gigi_bot_from_unified():
         import asyncio
         
         logger.info("🚀 Starting Gigi RingCentral Bot (via Unified App Startup)")
+        gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
+        if os.path.exists(gigi_path):
+            sys.path.insert(0, gigi_path)
+            from gigi.ringcentral_bot import GigiRingCentralBot
+            
+            if os.getenv("GIGI_RC_BOT_ENABLED", "true").lower() == "true":
                 bot = GigiRingCentralBot()
                 await bot.initialize()
                 
