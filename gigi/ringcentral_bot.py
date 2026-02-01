@@ -158,8 +158,9 @@ class GigiRingCentralBot:
             return
 
         try:
-            # Use ACCOUNT-level message-store to see ALL messages including group/auto-receptionist numbers
-            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/message-store"
+            # Use extension-level message-store (account-level returns 404)
+            # NOTE: This won't see group/auto-receptionist numbers - use Workflow webhook for those
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
             params = {
                 "messageType": "SMS",
                 "dateFrom": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
