@@ -6124,34 +6124,45 @@ async def ringcentral_sms_webhook(request: Request):
         body = await request.json()
         logger.info(f"RingCentral SMS webhook received: {json.dumps(body)[:500]}")
 
-        # RingCentral notification structure
-        # body contains: uuid, event, timestamp, subscriptionId, body (message data)
-        event = body.get("event", "")
-        message_body = body.get("body", {})
+        # Support both simple and complex formats
+        # Simple format: {"from": "+1234", "to": "+5678", "message": "text"}
+        # Complex format: {"event": "...", "body": {"from": {...}, "to": [...]}}
 
-        # Only process inbound SMS
-        if "message-store" not in event:
-            logger.info(f"Ignoring non-message event: {event}")
-            return JSONResponse({"status": "ok", "action": "ignored_event_type"})
+        if "from" in body and "message" in body:
+            # SIMPLE FORMAT from Workflow Builder
+            from_number = body.get("from")
+            to_number = body.get("to")
+            message = body.get("message")
+            contact_name = body.get("name")
+            logger.info(f"Processing simple format webhook: from={from_number}, to={to_number}")
+        else:
+            # COMPLEX FORMAT from native RingCentral webhook subscription
+            event = body.get("event", "")
+            message_body = body.get("body", {})
 
-        # Extract message details from RingCentral format
-        direction = message_body.get("direction", "").lower()
-        if direction != "inbound":
-            logger.info(f"Skipping {direction} message")
-            return JSONResponse({"status": "ok", "action": "skipped_outbound"})
+            # Only process inbound SMS
+            if "message-store" not in event:
+                logger.info(f"Ignoring non-message event: {event}")
+                return JSONResponse({"status": "ok", "action": "ignored_event_type"})
 
-        # Get phone numbers from RingCentral format
-        from_info = message_body.get("from", {})
-        to_info = message_body.get("to", [{}])[0] if message_body.get("to") else {}
+            # Extract message details from RingCentral format
+            direction = message_body.get("direction", "").lower()
+            if direction != "inbound":
+                logger.info(f"Skipping {direction} message")
+                return JSONResponse({"status": "ok", "action": "skipped_outbound"})
 
-        from_number = from_info.get("phoneNumber") or from_info.get("extensionNumber")
-        to_number = to_info.get("phoneNumber") or to_info.get("extensionNumber")
+            # Get phone numbers from RingCentral format
+            from_info = message_body.get("from", {})
+            to_info = message_body.get("to", [{}])[0] if message_body.get("to") else {}
 
-        # Get message text - RingCentral uses "subject" for SMS content
-        message = message_body.get("subject") or message_body.get("text", "")
+            from_number = from_info.get("phoneNumber") or from_info.get("extensionNumber")
+            to_number = to_info.get("phoneNumber") or to_info.get("extensionNumber")
 
-        # Get contact name if available
-        contact_name = from_info.get("name")
+            # Get message text - RingCentral uses "subject" for SMS content
+            message = message_body.get("subject") or message_body.get("text", "")
+
+            # Get contact name if available
+            contact_name = from_info.get("name")
 
         if not from_number or not message:
             logger.warning(f"Missing from_number or message in RingCentral payload")
