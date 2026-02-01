@@ -463,6 +463,50 @@
                         </tbody>
                     </table>
                 </div>
+                {% elif active_tab == 'schedule' %}
+                <!-- Schedule KPIs -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Today's Visits</div>
+                        <div class="stat-value" id="stat-sched-total">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Unassigned</div>
+                        <div class="stat-value text-danger" id="stat-sched-open">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">In Progress</div>
+                        <div class="stat-value text-info" id="stat-sched-progress">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Completed</div>
+                        <div class="stat-value text-success" id="stat-sched-done">-</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Client</th>
+                                <th>Caregiver</th>
+                                <th>Time</th>
+                                <th>Duration</th>
+                                <th>Location</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="schedule-table-body">
+                            <tr>
+                                <td colspan="7" class="text-center py-5">
+                                    <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                                    <span class="ms-2 text-secondary">Loading schedule...</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 {% elif active_tab == 'knowledge' %}
                 <div class="sub-nav">
                     <div class="sub-nav-item active" id="subnav-sop" onclick="switchKnowledge('sop')">SOPs (Knowledge Base)</div>
@@ -573,8 +617,67 @@
                 setupAutocompletes();
             } else if (activeTab === 'knowledge') {
                 loadSOP();
+            } else if (activeTab === 'schedule') {
+                loadSchedule();
             }
         });
+
+        // Schedule Tab
+        async function loadSchedule() {
+            const body = document.getElementById('schedule-table-body');
+            try {
+                const resp = await fetch('/api/gigi/schedule');
+                const data = await resp.json();
+                
+                if (data.success) {
+                    renderSchedule(data.shifts);
+                    updateScheduleStats(data.shifts);
+                }
+            } catch (err) {
+                console.error('Failed to load schedule', err);
+                body.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-danger">Failed to load schedule.</td></tr>';
+            }
+        }
+
+        function renderSchedule(shifts) {
+            const body = document.getElementById('schedule-table-body');
+            if (!shifts || shifts.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" class="text-center py-5 text-secondary">No shifts scheduled for today.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = shifts.map(s => {
+                const status = s.status.toLowerCase();
+                let badgeClass = 'bg-secondary';
+                if (status === 'open' || !s.caregiver_id) badgeClass = 'bg-danger';
+                else if (status === 'in_progress') badgeClass = 'bg-info';
+                else if (status === 'completed') badgeClass = 'bg-success';
+                else if (status === 'scheduled') badgeClass = 'bg-primary';
+
+                return `
+                    <tr>
+                        <td><span class="status-badge ${badgeClass} bg-opacity-10">${status}</span></td>
+                        <td class="fw-bold">${s.client_first_name} ${s.client_last_name}</td>
+                        <td>${s.caregiver_name || '<span class="text-danger fw-bold">UNASSIGNED</span>'}</td>
+                        <td>${s.start_time} - ${s.end_time}</td>
+                        <td>${s.duration_hours.toFixed(1)} hrs</td>
+                        <td class="small text-secondary">${s.city || 'CO'}</td>
+                        <td class="text-end">
+                            <button class="btn btn-link text-secondary p-0" onclick="viewShift('${s.id}')">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateScheduleStats(shifts) {
+            document.getElementById('stat-sched-total').textContent = shifts.length;
+            document.getElementById('stat-sched-open').textContent = shifts.filter(s => s.status.toLowerCase() === 'open' || !s.caregiver_id).length;
+            document.getElementById('stat-sched-progress').textContent = shifts.filter(s => s.status.toLowerCase() === 'in_progress').length;
+            document.getElementById('stat-sched-done').textContent = shifts.filter(s => s.status.toLowerCase() === 'completed').length;
+        }
 
         // Knowledge Tab Switcher
         function switchKnowledge(type) {

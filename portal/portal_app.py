@@ -421,6 +421,31 @@ async def api_gigi_get_issues(
         "count": len(issues)
     })
 
+@app.get("/api/gigi/schedule")
+async def api_gigi_get_schedule(
+    date_str: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get today's schedule for Gigi Dashboard from WellSky"""
+    if wellsky_service is None:
+        return JSONResponse({"success": False, "error": "WellSky service not available"})
+
+    try:
+        target_date = date_cls.fromisoformat(date_str) if date_str else date_cls.today()
+        
+        # Get all shifts for the day
+        shifts = wellsky_service.get_shifts(date_from=target_date, date_to=target_date, limit=200)
+        
+        return JSONResponse({
+            "success": True,
+            "date": target_date.isoformat(),
+            "shifts": [s.to_dict() for s in shifts],
+            "count": len(shifts)
+        })
+    except Exception as e:
+        logger.error(f"Failed to fetch schedule: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
+
 @app.get("/api/gigi/knowledge/sop")
 async def api_gigi_get_sop(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Get the Gigi SOP Knowledge Base (markdown)"""
