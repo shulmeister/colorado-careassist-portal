@@ -35,7 +35,7 @@ except ImportError as e:
     logger.warning(f"Client satisfaction service not available: {e}")
     client_satisfaction_service = None
 
-# Import AI Care Coordinator service (Zingage/Phoebe style automation)
+# Import AI Care Coordinator service (Gigi/Gigi style automation)
 try:
     from services.ai_care_coordinator import ai_care_coordinator
 except ImportError as e:
@@ -359,7 +359,7 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
     return response
 
 # ============================================================================
-# Gigi Management Dashboard (Zingage Replacement)
+# Gigi Management Dashboard (Gigi Replacement)
 # ============================================================================
 
 @app.get("/gigi/dashboard", response_class=HTMLResponse)
@@ -497,6 +497,25 @@ async def api_gigi_get_sop(current_user: Dict[str, Any] = Depends(get_current_us
         else:
             return JSONResponse({"success": False, "error": "SOP file not found"})
     except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.post("/api/gigi/knowledge/sop")
+async def api_gigi_save_sop(
+    payload: Dict[str, str],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Save the Gigi SOP Knowledge Base (markdown)"""
+    sop_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gigi", "knowledge_base.md")
+    content = payload.get("content")
+    if content is None:
+        return JSONResponse({"success": False, "error": "No content provided"})
+    
+    try:
+        with open(sop_path, "w") as f:
+            f.write(content)
+        return JSONResponse({"success": True, "message": "SOP updated successfully"})
+    except Exception as e:
+        logger.error(f"Failed to save SOP: {e}")
         return JSONResponse({"success": False, "error": str(e)})
 
 @app.get("/api/gigi/knowledge/memories")
@@ -1354,7 +1373,7 @@ async def api_ai_coordinator_dashboard(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get AI Care Coordinator dashboard (Zingage/Phoebe style)"""
+    """Get AI Care Coordinator dashboard (Gigi/Gigi style)"""
     if client_satisfaction_service is None:
         raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
@@ -2270,7 +2289,7 @@ async def goformz_wellsky_sync_status(
 
 
 # 
-# AI Care Coordinator API Endpoints (Zingage/Phoebe Style)
+# AI Care Coordinator API Endpoints (Gigi/Gigi Style)
 # 
 
 @app.get("/api/ai-coordinator/status")
