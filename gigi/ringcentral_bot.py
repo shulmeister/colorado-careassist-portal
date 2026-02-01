@@ -38,7 +38,7 @@ logging.basicConfig(
 logger = logging.getLogger("gigi_rc_bot")
 
 # Configuration
-CHECK_INTERVAL = 30  # seconds
+CHECK_INTERVAL = 60  # seconds
 TARGET_CHAT = "New Scheduling"
 TIMEZONE = pytz.timezone("America/Denver")
 
