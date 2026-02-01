@@ -28,7 +28,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.ringcentral_messaging_service import ringcentral_messaging_service, RINGCENTRAL_SERVER
 from services.wellsky_service import WellSkyService
 
-RINGCENTRAL_FROM_NUMBER = os.getenv("RINGCENTRAL_FROM_NUMBER", "+17194283999")
+# HARDCODED FOR SAFETY - The 719 number is the company main line
+RINGCENTRAL_FROM_NUMBER = "+17194283999"
 
 # ADMIN TOKEN (Jason x101) - Required for visibility into Company Lines (719/303)
 # Standard x111 token is blind to these numbers.
@@ -61,6 +62,10 @@ class GigiRingCentralBot:
         """Initialize connections"""
         logger.info("Initializing Gigi Manager Bot...")
 
+        # Perform immediate health check SMS
+        # This confirms the bot has started and has send permissions
+        await self.send_health_check_sms()
+
         status = self.rc_service.get_status()
         if not status.get("api_connected"):
             logger.error("RingCentral API not connected! Check credentials.")
@@ -84,6 +89,33 @@ class GigiRingCentralBot:
 
         logger.info(f"Monitoring chat: {TARGET_CHAT} and Direct SMS")
         return True
+
+    async def send_health_check_sms(self):
+        """Send a startup SMS to the admin to confirm vitality"""
+        try:
+            admin_phone = "+16039971495" # Jason's number
+            logger.info(f"🚑 Sending Health Check SMS to {admin_phone}...")
+            
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/sms"
+            headers = {
+                "Authorization": f"Bearer {ADMIN_JWT_TOKEN}",
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            data = {
+                "from": {"phoneNumber": RINGCENTRAL_FROM_NUMBER},
+                "to": [{"phoneNumber": admin_phone}],
+                "text": "🤖 Gigi Bot Online: Monitoring 719/303 lines via Admin Context."
+            }
+            
+            # Using synchronous requests in async init is fine for startup
+            response = requests.post(url, headers=headers, json=data, timeout=20)
+            if response.status_code == 200:
+                logger.info("✅ Health Check SMS Sent Successfully!")
+            else:
+                logger.error(f"❌ Health Check Failed: {response.status_code} - {response.text}")
+        except Exception as e:
+            logger.error(f"❌ Health Check Exception: {e}")
 
     def is_business_hours(self) -> bool:
         """Check if currently within M-F 8am-5pm Mountain Time"""
@@ -167,7 +199,7 @@ class GigiRingCentralBot:
             url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
             params = {
                 "messageType": "SMS",
-                "dateFrom": (datetime.utcnow() - timedelta(hours=12)).isoformat(), # Widen to 12h to catch missed morning texts
+                "dateFrom": (datetime.utcnow() - timedelta(hours=12)).isoformat(), # 12h lookback for missed msgs
                 "perPage": 100
             }
             headers = {
@@ -175,7 +207,7 @@ class GigiRingCentralBot:
                 "Accept": "application/json"
             }
 
-            logger.info("SMS: Polling extension message-store (x101 Admin context) - v3 RESTORED")
+            logger.info("SMS: Polling extension message-store (x101 Admin context) - v4 HEALTH CHECK")
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
                 logger.error(f"RC SMS Store Error: {response.status_code} - {response.text}")
