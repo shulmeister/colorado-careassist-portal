@@ -128,26 +128,23 @@ class GigiRingCentralBot:
             return
 
         try:
-            # Look back 24 hours to catch recent messages and debug
-            since = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            # Extension Level (since account-level 404'd) but NO direction filter
-            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
+            # Use message-sync for more robust tracking
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-sync"
             params = {
-                "messageType": "SMS",
-                "dateFrom": since,
-                "limit": 100
+                "syncType": "FSync",
+                "messageType": "SMS"
             }
             headers = {"Authorization": f"Bearer {token}"}
             
-            logger.info(f"SMS: Checking extension message-store since {since}")
+            logger.info("SMS: Running message-sync (Full Sync)")
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
-                logger.error(f"RC SMS API Error: {response.status_code} - {response.text}")
+                logger.error(f"RC SMS Sync Error: {response.status_code} - {response.text}")
                 return
 
             data = response.json()
             records = data.get("records", [])
-            logger.info(f"SMS: API returned {len(records)} records (Account Level)")
+            logger.info(f"SMS: Sync returned {len(records)} records")
             
             for sms in records:
                 msg_id = str(sms.get("id"))
