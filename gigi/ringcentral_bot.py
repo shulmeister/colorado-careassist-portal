@@ -132,7 +132,7 @@ class GigiRingCentralBot:
             url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
             params = {
                 "messageType": "SMS",
-                "dateFrom": (datetime.utcnow() - timedelta(minutes=10)).isoformat(),
+                "dateFrom": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
                 "perPage": 100
             }
             headers = {
