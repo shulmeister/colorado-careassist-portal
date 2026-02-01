@@ -180,12 +180,29 @@ class GoFormzWellSkySyncService:
         prospect = self._find_matching_prospect(customer_data, submission)
 
         if not prospect:
-            self._log_sync(
-                "client_packet_no_match",
-                submission_id=submission_id,
-                customer_data=customer_data
-            )
-            return False, "No matching prospect found"
+            # FALLBACK: If no prospect, create a NEW client record directly
+            logger.info(f"No matching prospect for {customer_data.get('name')}. Creating NEW client.")
+            
+            new_client = self.wellsky.create_client({
+                "first_name": customer_data.get("first_name"),
+                "last_name": customer_data.get("last_name"),
+                "email": customer_data.get("email"),
+                "phone": customer_data.get("phone"),
+                "start_date": date.today().isoformat(),
+                "notes": f"Created automatically via GoFormz submission {submission_id} (No prospect matched)",
+                "goformz_submission_id": submission_id
+            })
+            
+            if new_client:
+                self._log_sync(
+                    "client_created_new",
+                    submission_id=submission_id,
+                    client_id=new_client.id,
+                    client_name=new_client.full_name
+                )
+                return True, f"Created NEW client {new_client.id} for {new_client.full_name}"
+            
+            return False, "No matching prospect found and failed to create new client"
 
         # Check if already converted
         if prospect.is_converted:
@@ -401,12 +418,29 @@ class GoFormzWellSkySyncService:
         applicant = self._find_matching_applicant(employee_data, submission)
 
         if not applicant:
-            self._log_sync(
-                "employee_packet_no_match",
-                submission_id=submission_id,
-                employee_data=employee_data
-            )
-            return False, "No matching applicant found"
+            # FALLBACK: If no applicant, create a NEW caregiver record directly
+            logger.info(f"No matching applicant for {employee_data.get('name')}. Creating NEW caregiver.")
+            
+            new_caregiver = self.wellsky.create_caregiver({
+                "first_name": employee_data.get("first_name"),
+                "last_name": employee_data.get("last_name"),
+                "email": employee_data.get("email"),
+                "phone": employee_data.get("phone"),
+                "hire_date": date.today().isoformat(),
+                "notes": f"Created automatically via GoFormz submission {submission_id} (No applicant matched)",
+                "goformz_submission_id": submission_id
+            })
+            
+            if new_caregiver:
+                self._log_sync(
+                    "caregiver_created_new",
+                    submission_id=submission_id,
+                    caregiver_id=new_caregiver.id,
+                    caregiver_name=new_caregiver.full_name
+                )
+                return True, f"Created NEW caregiver {new_caregiver.id} for {new_caregiver.full_name}"
+                
+            return False, "No matching applicant found and failed to create new caregiver"
 
         # Check if already converted
         if applicant.is_hired and applicant.converted_caregiver_id:
