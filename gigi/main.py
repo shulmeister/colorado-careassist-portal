@@ -4405,6 +4405,23 @@ async def retell_webhook(request: Request):
         if ENHANCED_WEBHOOK_AVAILABLE:
             # Use enhanced lookup service with multiple sources
             def db_lookup(phone):
+                # 1. Try WellSky First (Source of Truth)
+                if WELLSKY_AVAILABLE and wellsky:
+                    try:
+                        # Try Caregiver
+                        cg = wellsky.get_caregiver_by_phone(phone)
+                        if cg:
+                            logger.info(f"Caller ID (WellSky): Found Caregiver {cg.full_name}")
+                            return {"name": cg.first_name, "type": "caregiver", "full_name": cg.full_name}
+                        
+                        # Try Client (heuristic search if direct lookup missing)
+                        # clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+                        # clients = wellsky.search_patients(...) 
+                        # (Skipping complex client search for speed, prioritizing CGs for now)
+                    except Exception as e:
+                        logger.warning(f"WellSky lookup failed: {e}")
+
+                # 2. Fallback to Local DB
                 db = _get_db()
                 if db:
                     try:
