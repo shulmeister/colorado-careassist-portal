@@ -134,11 +134,11 @@ class GigiRingCentralBot:
             params = {
                 "messageType": "SMS",
                 "dateFrom": since,
-                "direction": "Inbound"
+                "limit": 100
             }
             headers = {"Authorization": f"Bearer {token}"}
             
-            logger.info(f"SMS: Checking message-store since {since}")
+            logger.info(f"SMS: Checking message-store (ALL directions) since {since}")
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
                 logger.error(f"RC SMS API Error: {response.status_code} - {response.text}")
