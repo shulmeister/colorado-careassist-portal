@@ -1,6 +1,6 @@
 """
 Async Minimal Bot - Designed to run INSIDE FastAPI
-Now with WellSky Logging!
+Now with WellSky Logging & Personalization!
 """
 import os
 import sys
@@ -83,23 +83,25 @@ class AsyncGigiBot:
     # --- DOCUMENTATION LOGIC ---
     def _document_sync(self, text, phone, source="sms"):
         """Synchronous documentation logic run in thread pool"""
+        identified_name = None
+        
         if not WELLSKY_AVAILABLE or not wellsky_service:
-            return
+            return None
 
         try:
-            # 1. Identify Client Context
-            client_id = None
-            client_name = "Unknown"
-            
-            # Identify sender as caregiver if possible
+            # 1. Identify Sender (Is it a Caregiver?)
             try:
                 cg = wellsky_service.get_caregiver_by_phone(phone)
                 if cg:
+                    identified_name = cg.first_name
                     logger.info(f"Identified SMS sender as caregiver: {cg.full_name}")
             except Exception:
                 pass
 
-            # Find client name in text
+            # 2. Identify Client Context in Text (for logging purposes)
+            client_id = None
+            client_name = "Unknown"
+            
             possible_names = []
             name_match = re.search(r'(?:for|client|visit|shift|with|about)\s+([A-Z][a-z]+\.?(?:\s[A-Z][a-z]+)?)', text, re.IGNORECASE)
             if name_match:
@@ -159,13 +161,16 @@ class AsyncGigiBot:
                         related_client_id=client_id
                     )
             
+            return identified_name
+            
         except Exception as e:
             logger.error(f"Documentation Error: {e}")
+            return None
 
     async def document_message(self, text, phone):
-        """Run documentation in thread pool"""
+        """Run documentation in thread pool and return identified name"""
         loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self._document_sync, text, phone)
+        return await loop.run_in_executor(None, self._document_sync, text, phone)
 
     async def check_messages(self):
         if not self.token: return
@@ -224,14 +229,18 @@ class AsyncGigiBot:
                     text = last_msg.get("subject", "")
                     logger.info(f"📩 Unanswered Message from {phone}: {text[:30]}...")
                     
-                    # 1. Document (Async) - Always document new inbound, even if we crash later
-                    await self.document_message(text, phone)
+                    # 1. Document & Identify Name (Async)
+                    # Always document new inbound, even if we crash later
+                    first_name = await self.document_message(text, phone)
                     
-                    # 2. Reply
-                    reply_text = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
+                    # 2. Personalize Reply
+                    greeting = f"Hi {first_name}! " if first_name else "Thanks for your message! "
+                    
+                    reply_text = f"{greeting}This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
+                    
                     lower_text = text.lower()
                     if "call out" in lower_text or "sick" in lower_text:
-                        reply_text = "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better!"
+                        reply_text = f"I hear you{', '+first_name if first_name else ''}. I've logged your call-out and we're already reaching out for coverage. Feel better!"
                     
                     await self.send_sms(phone, reply_text)
                     
