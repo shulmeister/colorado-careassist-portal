@@ -251,6 +251,8 @@ logger.info("=========================")
 @app.get("/api/diag/rc-status")
 async def diag_rc_status():
     """Temporary diagnostic route for RC status"""
+    from datetime import datetime, timedelta
+    import requests
     from gigi.ringcentral_bot import GigiRingCentralBot
     bot = GigiRingCentralBot()
     token = await bot.rc_service._get_access_token()
