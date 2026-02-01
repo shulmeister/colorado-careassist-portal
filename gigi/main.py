@@ -47,12 +47,14 @@ async def startup_event():
         asyncio.create_task(rc_bot.initialize())
         
         async def run_bot_loop():
+            await asyncio.sleep(10) # Wait for app to stabilize
+            logger.info("🤖 Gigi RC Bot loop starting...")
             while True:
                 try:
                     await rc_bot.check_and_act()
                 except Exception as e:
                     logger.error(f"RC Bot Loop Error: {e}")
-                await asyncio.sleep(60) # Check every minute
+                await asyncio.sleep(20) # Check every 20 seconds for 'immediate' feel
                 
         asyncio.create_task(run_bot_loop())
 

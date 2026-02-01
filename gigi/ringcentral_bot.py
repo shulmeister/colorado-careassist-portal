@@ -71,6 +71,9 @@ class GigiRingCentralBot:
     async def check_and_act(self):
         """Main loop: Run Documentation (always) and Reply (after-hours)"""
         try:
+            status = "BUSINESS HOURS (Silent)" if self.is_business_hours() else "AFTER HOURS (Active)"
+            logger.info(f"--- Gigi Bot Cycle: {status} ---")
+            
             # 1. Check Team Chats (Glip)
             await self.check_team_chats()
             
@@ -84,6 +87,7 @@ class GigiRingCentralBot:
         """Monitor Glip channels for activity documentation and replies"""
         chat = self.rc_service.find_chat_by_name(TARGET_CHAT)
         if not chat:
+            logger.warning(f"Target chat {TARGET_CHAT} not found in check_team_chats")
             return
 
         messages = self.rc_service.get_chat_messages(
@@ -95,6 +99,7 @@ class GigiRingCentralBot:
         if not messages:
             return
 
+        logger.info(f"Glip: Found {len(messages)} recent messages in {TARGET_CHAT}")
         messages.sort(key=lambda x: x.get("creationTime", ""))
 
         for msg in messages:
@@ -103,6 +108,7 @@ class GigiRingCentralBot:
                 continue
 
             text = msg.get("text", "")
+            logger.info(f"Glip: Processing new message {msg_id}: {text[:30]}...")
             await self.process_documentation(msg, text, source_type="chat")
 
             if not self.is_business_hours():
@@ -114,9 +120,11 @@ class GigiRingCentralBot:
         """Monitor RingCentral SMS for caregiver requests and documentation"""
         token = self.rc_service._get_access_token()
         if not token:
+            logger.error("RC Token failed in check_direct_sms")
             return
 
         try:
+            
             # Look back 60 mins to catch recent messages
             since = (datetime.utcnow() - timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
             url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
@@ -129,9 +137,13 @@ class GigiRingCentralBot:
             
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
+                logger.error(f"RC SMS API Error: {response.status_code} - {response.text}")
                 return
 
             records = response.json().get("records", [])
+            if records:
+                logger.info(f"SMS: Found {len(records)} recent inbound texts")
+            
             for sms in records:
                 msg_id = str(sms.get("id"))
                 if msg_id in self.processed_message_ids:
@@ -141,10 +153,12 @@ class GigiRingCentralBot:
                 text = sms.get("subject", "") 
                 from_phone = sms.get("from", {}).get("phoneNumber")
                 
-                # Role 1: Documenter (Always)
+                logger.info(f"SMS: Processing new text {msg_id} from {from_phone}: {text[:30]}...")
+                
+                # Role 1: Documenter
                 await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
 
-                # Role 2: Replier (After-Hours)
+                # Role 2: Replier
                 if not self.is_business_hours():
                     await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
 
