@@ -127,9 +127,8 @@ class GigiRingCentralBot:
             return
 
         try:
-            
-            # Look back 60 mins to catch recent messages
-            since = (datetime.utcnow() - timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            # Look back 24 hours to catch recent messages and debug
+            since = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
             url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
             params = {
                 "messageType": "SMS",
@@ -138,14 +137,15 @@ class GigiRingCentralBot:
             }
             headers = {"Authorization": f"Bearer {token}"}
             
+            logger.info(f"SMS: Checking message-store since {since}")
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
                 logger.error(f"RC SMS API Error: {response.status_code} - {response.text}")
                 return
 
-            records = response.json().get("records", [])
-            if records:
-                logger.info(f"SMS: Found {len(records)} recent inbound texts")
+            data = response.json()
+            records = data.get("records", [])
+            logger.info(f"SMS: API returned {len(records)} records")
             
             for sms in records:
                 msg_id = str(sms.get("id"))
