@@ -333,6 +333,69 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
     response.headers["Expires"] = "0"
     return response
 
+# ============================================================================
+# Gigi Management Dashboard (Zingage Replacement)
+# ============================================================================
+
+@app.get("/gigi/dashboard", response_class=HTMLResponse)
+@app.get("/gigi/dashboard/issues", response_class=HTMLResponse)
+async def gigi_issues_dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Issues Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "issues"
+    })
+
+@app.get("/gigi/dashboard/schedule", response_class=HTMLResponse)
+async def gigi_schedule_dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Schedule Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "schedule"
+    })
+
+@app.get("/gigi/dashboard/knowledge", response_class=HTMLResponse)
+async def gigi_knowledge_dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Knowledge Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "knowledge"
+    })
+
+@app.get("/gigi/dashboard/escalations", response_class=HTMLResponse)
+async def gigi_escalations_dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Escalations Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "escalations"
+    })
+
+@app.get("/api/gigi/issues")
+async def api_gigi_get_issues(
+    status: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get issues for Gigi Dashboard (Uses ClientComplaint model)"""
+    from portal_models import ClientComplaint
+
+    query = db.query(ClientComplaint)
+    if status:
+        query = query.filter(ClientComplaint.status == status)
+
+    issues = query.order_by(ClientComplaint.created_at.desc()).limit(limit).all()
+
+    return JSONResponse({
+        "success": True,
+        "issues": [i.to_dict() for i in issues],
+        "count": len(issues)
+    })
+
 # API endpoints for tools
 @app.get("/api/tools")
 async def get_tools(
