@@ -25,8 +25,10 @@ import requests
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.ringcentral_messaging_service import ringcentral_messaging_service, RINGCENTRAL_SERVER, RINGCENTRAL_FROM_NUMBER
+from services.ringcentral_messaging_service import ringcentral_messaging_service, RINGCENTRAL_SERVER
 from services.wellsky_service import WellSkyService
+
+RINGCENTRAL_FROM_NUMBER = os.getenv("RINGCENTRAL_FROM_NUMBER", "+17194283999")
 
 # Configure logging
 logging.basicConfig(
