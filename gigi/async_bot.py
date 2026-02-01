@@ -85,18 +85,25 @@ class AsyncGigiBot:
         """Synchronous documentation logic run in thread pool"""
         identified_name = None
         
+        # 0. SPECIAL OWNER CHECK (Jason)
+        clean_phone = ''.join(filter(str.isdigit, phone))
+        if clean_phone.endswith("6039971495"):
+            logger.info("Identified SMS sender as Owner: Jason Shulman")
+            identified_name = "Jason"
+        
         if not WELLSKY_AVAILABLE or not wellsky_service:
-            return None
+            return identified_name
 
         try:
             # 1. Identify Sender (Is it a Caregiver?)
-            try:
-                cg = wellsky_service.get_caregiver_by_phone(phone)
-                if cg:
-                    identified_name = cg.first_name
-                    logger.info(f"Identified SMS sender as caregiver: {cg.full_name}")
-            except Exception:
-                pass
+            if not identified_name:
+                try:
+                    cg = wellsky_service.get_caregiver_by_phone(phone)
+                    if cg:
+                        identified_name = cg.first_name
+                        logger.info(f"Identified SMS sender as caregiver: {cg.full_name}")
+                except Exception:
+                    pass
 
             # 2. Identify Client Context in Text (for logging purposes)
             client_id = None
