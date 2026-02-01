@@ -164,6 +164,31 @@ async def startup_event():
     # Start the documentation loop
     asyncio.create_task(autonomous_documentation_sync())
     logger.info("Gigi Autonomous Documentation Engine started.")
+    
+    # Ensure Gigi Manager tile exists
+    try:
+        with db_manager.get_session() as db:
+            from portal_models import PortalTool
+            existing = db.query(PortalTool).filter(PortalTool.name == "Gigi Manager").first()
+            if not existing:
+                tool = PortalTool(
+                    name="Gigi Manager",
+                    url="/gigi/dashboard",
+                    icon="🧠",
+                    description="Management Portal for Gigi AI (Issues, Schedule, Escalations)",
+                    category="AI Operations",
+                    display_order=-1,
+                    is_active=True
+                )
+                db.add(tool)
+                db.commit()
+                logger.info("✅ Created Gigi Manager tool tile.")
+            else:
+                existing.url = "/gigi/dashboard"
+                existing.icon = "🧠"
+                db.commit()
+    except Exception as e:
+        logger.error(f"Error ensuring Gigi Manager tile: {e}")
 
 # Add session middleware for OAuth state management
 from starlette.middleware.sessions import SessionMiddleware
