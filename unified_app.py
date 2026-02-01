@@ -311,24 +311,13 @@ async def start_gigi_bot_from_unified():
         gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
         if os.path.exists(gigi_path):
             sys.path.insert(0, gigi_path)
-            from gigi.ringcentral_bot import GigiRingCentralBot
             
-            if os.getenv("GIGI_RC_BOT_ENABLED", "true").lower() == "true":
-                bot = GigiRingCentralBot()
-                await bot.initialize()
-                
-                async def run_bot_loop():
-                    await asyncio.sleep(5) # Wait for app to stabilize
-                    logger.info("🤖 Gigi RC Bot loop starting (Unified)...")
-                    while True:
-                        try:
-                            # Use a dedicated loop interval defined in ringcentral_bot or faster here
-                            await bot.check_and_act()
-                        except Exception as e:
-                            logger.error(f"Unified RC Bot Loop Error: {e}")
-                        await asyncio.sleep(10) # Faster loop for responsiveness
-                
-                asyncio.create_task(run_bot_loop())
+            # Import the new Async Bot
+            from gigi.async_bot import bot
+            
+            # Start the loop as a background task
+            asyncio.create_task(bot.run_loop())
+            
     except Exception as e:
         logger.error(f"❌ Failed to start Gigi Bot from Unified: {e}")
 
