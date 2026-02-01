@@ -1,5 +1,4 @@
-"""
-Gigi RingCentral Bot - Manager & After-Hours Coverage
+"Gigi RingCentral Bot - Manager & After-Hours Coverage
 
 Two Distinct Roles:
 1. THE REPLIER (After-Hours Only):
@@ -9,10 +8,10 @@ Two Distinct Roles:
 
 2. THE DOCUMENTER (24/7/365):
    - Acts as QA/Manager for the whole team (Israt, Cynthia, Zingage).
-   - Monitors 'New Scheduling' and other chats.
+   - Monitors 'New Scheduling' and Direct SMS.
    - Logs ALL Care Alerts and Tasks into WellSky.
    - Ensures nothing falls through the cracks, even if "handled" silently.
-"""
+"
 
 import os
 import sys
@@ -20,11 +19,12 @@ import logging
 import asyncio
 from datetime import datetime, time, timedelta
 import pytz
+import requests
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.ringcentral_messaging_service import ringcentral_messaging_service
+from services.ringcentral_messaging_service import ringcentral_messaging_service, RINGCENTRAL_SERVER, RINGCENTRAL_FROM_NUMBER
 from services.wellsky_service import WellSkyService
 
 # Configure logging
@@ -58,7 +58,7 @@ class GigiRingCentralBot:
             logger.error("RingCentral API not connected! Check credentials.")
             return False
 
-        logger.info(f"Monitoring chat: {TARGET_CHAT}")
+        logger.info(f"Monitoring chat: {TARGET_CHAT} and Direct SMS")
         return True
 
     def is_business_hours(self) -> bool:
@@ -71,77 +71,109 @@ class GigiRingCentralBot:
     async def check_and_act(self):
         """Main loop: Run Documentation (always) and Reply (after-hours)"""
         try:
-            # Fetch recent messages
-            chat = self.rc_service.find_chat_by_name(TARGET_CHAT)
-            if not chat:
-                return
-
-            # Get messages from last hour to catch up
-            messages = self.rc_service.get_chat_messages(
-                chat["id"], 
-                since=datetime.utcnow() - timedelta(minutes=60),
-                limit=50
-            )
+            # 1. Check Team Chats (Glip)
+            await self.check_team_chats()
             
-            if not messages:
-                return
-
-            # Sort oldest to newest
-            messages.sort(key=lambda x: x.get("creationTime", ""))
-
-            for msg in messages:
-                msg_id = msg.get("id")
-                if msg_id in self.processed_message_ids:
-                    continue
-
-                text = msg.get("text", "")
-                creator_id = msg.get("creatorId")
-                
-                # ---------------------------------------------------------
-                # ROLE 1: THE DOCUMENTER (24/7/365)
-                # ---------------------------------------------------------
-                # We analyze EVERY message to see if it needs WellSky logging
-                await self.process_documentation(msg, text)
-
-                # ---------------------------------------------------------
-                # ROLE 2: THE REPLIER (After-Hours Only)
-                # ---------------------------------------------------------
-                # If it's NOT business hours, we check if we need to reply
-                if not self.is_business_hours():
-                    await self.process_reply(msg, text)
-
-                # Mark as processed so we don't duplicate actions
-                self.processed_message_ids.add(msg_id)
-                
-            # Cleanup processed IDs to keep memory low (keep last 1000)
-            if len(self.processed_message_ids) > 1000:
-                self.processed_message_ids = set(list(self.processed_message_ids)[-500:])
+            # 2. Check Direct SMS (RingCentral SMS)
+            await self.check_direct_sms()
 
         except Exception as e:
             logger.error(f"Error in check_and_act: {e}")
 
-    async def process_documentation(self, msg: dict, text: str):
-        """
-        QA/Manager Logic: Document everything in WellSky.
-        Runs 24/7 on ALL messages (Israt, Cynthia, Zingage, Caregivers).
-        """
+    async def check_team_chats(self):
+        """Monitor Glip channels for activity documentation and replies"""
+        chat = self.rc_service.find_chat_by_name(TARGET_CHAT)
+        if not chat:
+            return
+
+        messages = self.rc_service.get_chat_messages(
+            chat["id"], 
+            since=datetime.utcnow() - timedelta(minutes=60),
+            limit=50
+        )
+        
+        if not messages:
+            return
+
+        messages.sort(key=lambda x: x.get("creationTime", ""))
+
+        for msg in messages:
+            msg_id = msg.get("id")
+            if msg_id in self.processed_message_ids:
+                continue
+
+            text = msg.get("text", "")
+            await self.process_documentation(msg, text, source_type="chat")
+
+            if not self.is_business_hours():
+                await self.process_reply(msg, text, reply_method="chat")
+
+            self.processed_message_ids.add(msg_id)
+
+    async def check_direct_sms(self):
+        """Monitor RingCentral SMS for caregiver requests and documentation"""
+        token = self.rc_service._get_access_token()
+        if not token:
+            return
+
+        try:
+            # Look back 60 mins to catch recent messages
+            since = (datetime.utcnow() - timedelta(minutes=60)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
+            params = {
+                "messageType": "SMS",
+                "dateFrom": since,
+                "direction": "Inbound"
+            }
+            headers = {"Authorization": f"Bearer {token}"}
+            
+            response = requests.get(url, headers=headers, params=params, timeout=20)
+            if response.status_code != 200:
+                return
+
+            records = response.json().get("records", [])
+            for sms in records:
+                msg_id = str(sms.get("id"))
+                if msg_id in self.processed_message_ids:
+                    continue
+
+                # SMS body is in 'subject' in RC API for inbound SMS
+                text = sms.get("subject", "") 
+                from_phone = sms.get("from", {}).get("phoneNumber")
+                
+                # Role 1: Documenter (Always)
+                await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
+
+                # Role 2: Replier (After-Hours)
+                if not self.is_business_hours():
+                    await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
+
+                self.processed_message_ids.add(msg_id)
+        except Exception as e:
+            logger.error(f"Failed to check direct SMS: {e}")
+
+    async def process_documentation(self, msg: dict, text: str, source_type: str = "chat", phone: str = None):
+        """QA/Manager Logic: Document everything in WellSky."""
         # 1. Identify Client Context
         client_id = None
         client_name = "Unknown"
         
+        # Try to identify caregiver if possible (for SMS sourcing)
+        if source_type == "sms" and phone:
+            try:
+                cg = self.wellsky.get_caregiver_by_phone(phone)
+                if cg:
+                    logger.info(f"Identified SMS sender as caregiver: {cg.full_name}")
+            except Exception:
+                pass
+
         # Try to find client name in text
-        # Regex 1: Contextual (High Confidence)
-        # Allow optional dot for titles (Mrs., Mr., Dr.)
         import re
-        name_match = re.search(r'(?:for|client|visit|shift|with|about)\s+([A-Z][a-z]+\.?(?:\s[A-Z][a-z]+)?)', text, re.IGNORECASE)
-        
         possible_names = []
+        name_match = re.search(r'(?:for|client|visit|shift|with|about)\s+([A-Z][a-z]+\.?(?:\s[A-Z][a-z]+)?)', text, re.IGNORECASE)
         if name_match:
             possible_names.append(name_match.group(1))
             
-        # Regex 2: Any Capitalized Name-like pattern (Fallback)
-        # Looks for "Mrs. Smith", "Jane Doe", etc.
-        # Modified to handle optional dot: [A-Z][a-z]+\.?\s[A-Z][a-z]+
         fallback_matches = re.findall(r'([A-Z][a-z]+\.?\s[A-Z][a-z]+)', text)
         for m in fallback_matches:
             if m not in possible_names:
@@ -149,23 +181,17 @@ class GigiRingCentralBot:
 
         # Verify against WellSky
         for pname in possible_names:
-            if client_id: break # Stop if found
+            if client_id: break
             try:
-                # Search by last name (split by space)
-                # Remove punctuation from search term
                 clean_name = pname.replace(".", "")
                 last_name_search = clean_name.split()[-1]
-                
-                if len(last_name_search) > 2: # Avoid short noise
+                if len(last_name_search) > 2:
                     clients = self.wellsky.search_patients(last_name=last_name_search)
                     if clients:
-                        # Simple check: is the full search name in the result name?
                         for c in clients:
-                            # Check normalized names
                             c_full = c.full_name.lower().replace(".", "")
                             c_last = c.last_name.lower().replace(".", "")
                             p_clean = clean_name.lower()
-                            
                             if p_clean in c_full or c_last in p_clean:
                                 client = c
                                 client_id = client.id
@@ -175,42 +201,32 @@ class GigiRingCentralBot:
                 pass
 
         # 2. Classify the Event
-
-        # 2. Classify the Event
         note_type = "general"
         is_alert = False
         is_task = False
-        
         lower_text = text.lower()
         
-        if any(w in lower_text for w in ["call out", "call-out", "sick", "emergency", "cancel"]):
+        if any(w in lower_text for w in ["call out", "call-out", "sick", "emergency", "cancel", "help"]):
             note_type = "callout"
             is_alert = True
-            is_task = True # Needs coverage finding
-            
+            is_task = True
         elif any(w in lower_text for w in ["late", "traffic", "delayed"]):
             note_type = "late"
             is_alert = True
-            
         elif any(w in lower_text for w in ["complain", "upset", "angry", "issue", "quit", "problem"]):
             note_type = "complaint"
             is_alert = True
-            is_task = True # Needs follow up
-            
+            is_task = True
         elif any(w in lower_text for w in ["accept", "take the shift", "can work", "available", "filled"]):
             note_type = "schedule"
-            is_task = False # Just a note, unless we want to confirm
             
         # 3. Log to WellSky
-        # We log if we found a client context AND it's a relevant event type (including schedule)
-        # OR if it's a "gigi" mention
         should_log = (client_id and (is_alert or is_task or note_type == "schedule")) or "gigi" in lower_text
         
         if should_log and client_id:
             try:
-                # Log the Note (The "Record")
                 note_prefix = "🚨 CARE ALERT" if is_alert else "ℹ️ RC ACTIVITY"
-                full_note = f"{note_prefix}: {text}\n(Source: RingCentral - {msg.get('creatorId')})"
+                full_note = f"{note_prefix} ({source_type.upper()}): {text}\n(From: {phone or msg.get('creatorId')})"
                 
                 self.wellsky.add_note_to_client(
                     client_id=client_id,
@@ -218,54 +234,47 @@ class GigiRingCentralBot:
                     note_type=note_type,
                     source="gigi_manager"
                 )
-                logger.info(f"✅ Documented RC activity for {client_name} in WellSky")
+                logger.info(f"✅ Documented {source_type} activity for {client_name} in WellSky")
 
-                # Create Admin Task if actionable (The "Follow-up")
                 if is_task:
                     self.wellsky.create_admin_task(
-                        title=f"RC Alert: {note_type.upper()} - {client_name}",
-                        description=f"Automated Task from RingCentral:\n{text}\n\nPlease verify this is resolved.",
+                        title=f"RC {source_type.upper()} Alert: {note_type.upper()} - {client_name}",
+                        description=f"Automated Task from {source_type}:\n{text}\n\nSender: {phone or msg.get('creatorId')}",
                         priority="urgent" if "call" in note_type or "complaint" in note_type else "normal",
                         related_client_id=client_id
                     )
-                    logger.info(f"✅ Created WellSky Task for {client_name}")
-                    
             except Exception as e:
                 logger.error(f"Failed to document to WellSky: {e}")
 
-    async def process_reply(self, msg: dict, text: str):
-        """
-        Replier Logic: Respond to unanswered requests.
-        Runs ONLY After-Hours.
-        """
-        # We only reply to requests, not random chatter
+    async def process_reply(self, msg: dict, text: str, reply_method: str = "chat", phone: str = None):
+        """Replier Logic: Respond to unanswered requests."""
         lower_text = text.lower()
         is_request = any(kw in lower_text for kw in ["call out", "sick", "late", "cancel", "help", "shift"])
         
         if not is_request:
             return
 
-        # Check if already replied to (by anyone)
-        # In a real event stream, we'd need to peek ahead or track thread state.
-        # For simplicity in this poller: we assume if we haven't seen it, we reply.
-        # But we must be careful not to spam.
-        
-        # Determine Reply
         reply = None
         if "call out" in lower_text or "sick" in lower_text:
-            reply = "I hear you. I've logged your call-out and we're reaching out for coverage. Feel better!"
+            reply = "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better!"
         elif "late" in lower_text:
-            reply = "Thanks for letting us know. I've noted that you're running late in the system."
+            reply = "Thanks for letting us know. I've noted that you're running late in the system. Drive safe!"
         elif "cancel" in lower_text:
             reply = "I've processed that cancellation and notified the team. Thanks for the heads up."
+        elif "help" in lower_text or "shift" in lower_text:
+            reply = "Got it. I've notified the care team that you need assistance. Someone will get back to you shortly."
             
         if reply:
-            # Send the reply
-            self.rc_service.send_message_to_chat(TARGET_CHAT, reply)
-            logger.info(f"🌙 After-Hours Reply Sent: {reply}")
-            
-            # Since we just took action, we should explicitly ensure THIS action is also documented
-            # (The process_documentation loop will catch our own message eventually, but good to be sure)
+            if reply_method == "chat":
+                self.rc_service.send_message_to_chat(TARGET_CHAT, reply)
+            elif reply_method == "sms" and phone:
+                # Use RC service to send generic SMS
+                self.rc_service._api_request("/account/~/extension/~/sms", method="POST", params={
+                    "from": {"phoneNumber": RINGCENTRAL_FROM_NUMBER},
+                    "to": [{"phoneNumber": phone}],
+                    "text": reply
+                })
+            logger.info(f"🌙 After-Hours {reply_method.upper()} Reply Sent to {phone or TARGET_CHAT}")
 
 async def main():
     bot = GigiRingCentralBot()
@@ -277,8 +286,7 @@ async def main():
                 logger.error(f"Error in bot loop: {e}")
             
             # Wait for next check
-            logger.info(f"Sleeping for {ZINGAGE_CHECK_INTERVAL}s...")
-            await asyncio.sleep(ZINGAGE_CHECK_INTERVAL)
+            await asyncio.sleep(CHECK_INTERVAL)
 
 if __name__ == "__main__":
     asyncio.run(main())
