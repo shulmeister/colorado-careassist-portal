@@ -59,12 +59,31 @@ if subs_response.status_code == 200:
             print(f"   Deleting old webhook: {sub.get('id')}")
             requests.delete(f"{SERVER}/restapi/v1.0/subscription/{sub.get('id')}", headers=headers)
 
-# Create account-wide webhook with wildcard
-print("\n4. Creating account-wide SMS webhook...")
+# Find all phone numbers and their extensions
+print("\n4. Finding all phone numbers and extensions...")
+phone_response = requests.get(f"{SERVER}/restapi/v1.0/account/~/phone-number", headers=headers, params={"perPage": 1000})
+TARGET_NUMBERS = ["+17194283999", "+13037571777", "+13074598220"]
+extension_ids = set()
+
+if phone_response.status_code == 200:
+    phone_numbers = phone_response.json().get('records', [])
+    for phone in phone_numbers:
+        if phone.get('phoneNumber') in TARGET_NUMBERS:
+            ext_id = phone.get('extension', {}).get('id')
+            if ext_id:
+                extension_ids.add(ext_id)
+                print(f"   {phone.get('phoneNumber')} → Extension {ext_id}")
+
+if not extension_ids:
+    print("   ⚠️  No extension IDs found for target numbers. Using current extension.")
+    extension_ids.add('262740009')  # Jason's extension as fallback
+
+# Create webhooks for each extension
+print(f"\n5. Creating SMS webhooks for {len(extension_ids)} extensions...")
 subscription_data = {
     "eventFilters": [
-        # Wildcard for ALL extensions including group numbers
-        "/restapi/v1.0/account/~/extension/+/message-store/instant?type=SMS"
+        f"/restapi/v1.0/account/~/extension/{ext_id}/message-store/instant?type=SMS"
+        for ext_id in extension_ids
     ],
     "deliveryMode": {
         "transportType": "WebHook",
@@ -72,6 +91,8 @@ subscription_data = {
     },
     "expiresIn": 630720000  # 20 years
 }
+
+print(f"   Event filters: {len(subscription_data['eventFilters'])} extensions")
 
 create_response = requests.post(
     f"{SERVER}/restapi/v1.0/subscription",
