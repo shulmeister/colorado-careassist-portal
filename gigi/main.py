@@ -159,6 +159,52 @@ except ImportError:
     ENTITY_RESOLUTION_AVAILABLE = False
     logger.warning("Entity Resolution Service not available")
 
+async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any], reason: str = "Call Transfer"):
+    """
+    Automatically log call transfers to WellSky as Care Alerts and Admin Tasks.
+    Ensures 24/7/365 documentation trail for phone interactions.
+    """
+    if not WELLSKY_AVAILABLE or not wellsky:
+        logger.warning("WellSky not available, skipping call transfer logging")
+        return
+
+    try:
+        # Extract client info
+        client_id = None
+        client_name = "Unknown Client"
+        
+        if caller_info and caller_info.get("caller_type") == "client":
+            client_id = caller_info.get("person_id")
+            client_name = caller_info.get("name", "Unknown Client")
+        
+        if not client_id:
+            logger.info(f"Transfer logging skipped: Caller is not an identified client ({client_name})")
+            return
+
+        # 1. Log Care Alert Note
+        timestamp = datetime.now().strftime("%I:%M %p")
+        note_text = f"🚨 CARE ALERT: Call forwarded to Jason Shulman at {timestamp}. Reason: {reason}. (Source: Gigi Voice Agent)"
+        
+        wellsky.add_note_to_client(
+            client_id=client_id,
+            note=note_text,
+            note_type="call",
+            source="gigi_voice"
+        )
+        logger.info(f"✅ Documented Call Transfer for {client_name} in WellSky Note")
+
+        # 2. Create Admin Task for Follow-up
+        wellsky.create_admin_task(
+            title=f"FOLLOW UP: Call Transfer - {client_name}",
+            description=f"Gigi forwarded a call to Jason at {timestamp}.\nReason: {reason}\n\nPlease verify that the client was helped and issue resolved.",
+            priority="high",
+            related_client_id=client_id
+        )
+        logger.info(f"✅ Created WellSky Task for Call Transfer: {client_name}")
+
+    except Exception as e:
+        logger.error(f"Error logging call transfer to WellSky: {e}")
+
 # Import enhanced webhook functionality for caller ID, transfer, and message taking
 try:
     from enhanced_webhook import (
@@ -4405,6 +4451,9 @@ async def retell_webhook(request: Request):
             if caller_info.get("should_transfer"):
                 response_data["action"] = "greet_and_transfer"
                 logger.info(f"Will transfer call to Jason after greeting: '{greeting}'")
+                
+                # Log to WellSky 24/7/365
+                asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Auto-routing (Known Client)"))
             elif caller_info.get("take_message"):
                 response_data["action"] = "take_message"
                 logger.info(f"Unknown caller - will take message. Greeting: '{greeting}'")
@@ -4486,8 +4535,14 @@ async def retell_webhook(request: Request):
                     logger.info(f"Weather requested for {location}: {weather_result}")
 
                 elif tool_name == "transfer_to_jason" and ENHANCED_WEBHOOK_AVAILABLE:
-                    reason = tool_args.get("reason", "Personal call")
+                    reason = tool_args.get("reason", "Requested by caller")
                     success = transfer_call(call_id, JASON_PHONE)
+                    
+                    # Log to WellSky if success
+                    if success:
+                        caller_info = _get_call_context(call_id)
+                        asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=reason))
+                        
                     results.append({
                         "tool_call_id": tool_call_id,
                         "result": {
@@ -4928,6 +4983,11 @@ async def retell_function_call(function_name: str, request: Request):
             # Transfer call to Jason's cell phone
             logger.info("Transferring call to Jason at 603-997-1495")
             record_tool_call(call_id, function_name)
+            
+            # Log to WellSky 24/7/365
+            caller_info = _get_call_context(call_id)
+            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Direct tool call: transfer_to_jason"))
+            
             return JSONResponse({
                 "response_type": "transfer_call",
                 "transfer_to": "+16039971495",
@@ -4938,6 +4998,11 @@ async def retell_function_call(function_name: str, request: Request):
             # Transfer call to on-call manager line
             logger.info("Transferring call to on-call line at 303-757-1777")
             record_tool_call(call_id, function_name)
+            
+            # Log to WellSky 24/7/365
+            caller_info = _get_call_context(call_id)
+            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Direct tool call: transfer_to_oncall"))
+            
             return JSONResponse({
                 "response_type": "transfer_call",
                 "transfer_to": "+13037571777",
@@ -4960,6 +5025,11 @@ async def retell_function_call(function_name: str, request: Request):
                 clean_number = "+" + clean_number
             logger.info(f"Transferring call to {clean_number}")
             record_tool_call(call_id, function_name)
+            
+            # Log to WellSky 24/7/365
+            caller_info = _get_call_context(call_id)
+            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=f"Direct tool call: transfer_call to {clean_number}"))
+            
             return JSONResponse({
                 "response_type": "transfer_call",
                 "transfer_to": clean_number,
