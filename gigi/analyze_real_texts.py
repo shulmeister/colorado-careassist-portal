@@ -279,7 +279,7 @@ async def analyze_conversations():
 
     print("\n💡 RECOMMENDATION:")
     if autonomous_score >= 90:
-        print("   ✅ READY FOR FULL ZINGAGE REPLACEMENT")
+        print("   ✅ READY FOR FULL CORE PERFORMANCE")
     elif autonomous_score >= 70:
         print("   ⚠️ READY FOR SOFT LAUNCH (with coordinator backup)")
     elif autonomous_score >= 50:

@@ -25,7 +25,7 @@
 - `services/sync_wellsky_cache.py` - Daily sync
 - `services/wellsky_fast_lookup.py` - Fast lookups
 - `gigi/main.py` - Caller ID fix (commit 6164a9f)
-- `tests/test_gigi_zingage_replacement.py` - Test suite
+- `tests/test_gigi_gigi_replacement.py` - Test suite
 
 ### Tests
 - 71.4% pass rate (10/14 tests) in mock mode
@@ -38,7 +38,7 @@
 
 **Technical details:** `/WELLSKY_API_ISSUE.md`
 **Credentials:** `/WELLSKY_CREDENTIALS_STATUS.md`
-**Test results:** `/GIGI_ZINGAGE_TEST_RESULTS.md`
+**Test results:** `/GIGI_GIGI_TEST_RESULTS.md`
 **Deployment guide:** `/MAC_MINI_SETUP.md` (for when API works)
 
 ---
@@ -50,7 +50,7 @@ Cannot access:
 - Caregiver information
 - Client information
 
-Impact: Cannot replace Zingage
+Impact: Cannot replace Gigi
 
 ---
 

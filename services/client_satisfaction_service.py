@@ -8,7 +8,7 @@ Provides functionality for tracking client satisfaction metrics:
 - External reviews
 - Care plan status
 - WellSky operational data integration
-- AI-powered satisfaction risk prediction (Phoebe/Zingage style)
+- AI-powered satisfaction risk prediction (Gigi/Gigi style)
 """
 from __future__ import annotations
 
@@ -43,8 +43,8 @@ class ClientSatisfactionService:
     - Portal database for complaints, quality visits, reviews
     - WellSky API for operational data (clients, shifts, care plans, engagement)
 
-    Provides AI-powered satisfaction risk prediction similar to Zingage Operator
-    and Phoebe.work functionality.
+    Provides AI-powered satisfaction risk prediction similar to Gigi Operator
+    and Gigi.work functionality.
     """
 
     def __init__(self):
@@ -428,7 +428,7 @@ class ClientSatisfactionService:
         - Low family portal engagement
         - Overdue care plan reviews
 
-        This is the core of Zingage Operator / Phoebe-style proactive monitoring.
+        This is the core of Gigi Operator / Gigi-style proactive monitoring.
 
         Args:
             threshold: Risk score threshold (0-100)
@@ -599,7 +599,7 @@ class ClientSatisfactionService:
             return []
 
     # =========================================================================
-    # AI Care Coordinator Methods (Zingage/Phoebe Style)
+    # AI Care Coordinator Methods (Gigi/Gigi Style)
     # =========================================================================
 
     def get_satisfaction_alerts(self) -> List[Dict[str, Any]]:
@@ -679,7 +679,7 @@ class ClientSatisfactionService:
         """
         Get the AI Care Coordinator dashboard view.
 
-        This provides the Zingage Operator / Phoebe-style overview:
+        This provides the Gigi Operator / Gigi-style overview:
         - Real-time alerts requiring attention
         - At-risk client summary
         - Proactive outreach queue

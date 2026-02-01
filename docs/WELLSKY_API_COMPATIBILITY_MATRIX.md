@@ -21,7 +21,7 @@
 
 ## ✅ THE WORKING DOCUMENTATION PATTERN
 
-**Key Discovery:** TaskLog works on ENCOUNTER ID (not appointment ID). This is how Zingage adds "Shift Notes".
+**Key Discovery:** TaskLog works on ENCOUNTER ID (not appointment ID). This is how Gigi adds "Shift Notes".
 
 ### Step 1: Get Appointment ID
 ```bash

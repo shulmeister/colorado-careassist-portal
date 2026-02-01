@@ -237,7 +237,7 @@ def main():
         print("   • Partial availability handling")
         print("   • All 5 production fixes deployed")
         print("\n💰 IMMEDIATE SAVINGS:")
-        print("   • Zingage: $12K/year")
+        print("   • Gigi: $12K/year")
         print("   • Offshore scheduler: 50% reduction = $10.8K/year")
         print("   • Total Year 1: $22.8K savings")
         print("\n📞 NEXT STEPS:")

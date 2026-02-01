@@ -11,7 +11,7 @@
 ### Primary Strategic Goal: Replace Hybrid Human + AI Scheduling
 
 Colorado Care Assist currently operates with a hybrid scheduling model:
-1. **Zingage AI** ($1,000/month) - AI phone assistant for shift filling
+1. **Gigi AI** ($1,000/month) - AI phone assistant for shift filling
 2. **Offshore Scheduler** ($1,800/month, 40 hrs/week) - Human scheduler handling complex tasks
 
 **Current Costs:** $2,800/month = $33,600/year
@@ -21,7 +21,7 @@ Colorado Care Assist currently operates with a hybrid scheduling model:
 - Scaling requires hiring Scheduler #2, #3, #4 (+$21,600/year each)
 - Limited to business hours for phone/text responses
 
-**The WellSky API is the key to building Gigi AI, which replaces both Zingage and enables 24/7/365 operations without additional human schedulers.**
+**The WellSky API is the key to building Gigi AI, which replaces both Gigi and enables 24/7/365 operations without additional human schedulers.**
 
 **Why Build Gigi AI:**
 1. **Massive Cost Savings** - Replace $33,600/year with ~$6,240/year (save $25K-27K/year)
@@ -33,9 +33,9 @@ Colorado Care Assist currently operates with a hybrid scheduling model:
 7. **Data Ownership** - Keep all caregiver/client interaction data in our systems
 
 **What We're Building (Gigi AI):**
-Our in-house replacement for Zingage, integrated with:
+Our in-house replacement for Gigi, integrated with:
 - **WellSky API** - Real-time access to shifts, caregiver availability, client data
-- **RingCentral** - Voice calls and SMS (same platform Zingage uses)
+- **RingCentral** - Voice calls and SMS (same platform Gigi uses)
 - **BeeTexting** - High-volume SMS campaigns for shift filling blasts
 - **Our Portal** - Sales CRM, recruiting database, and operational dashboards
 
@@ -46,7 +46,7 @@ Beyond AI scheduling, the WellSky API powers our unified operations portal acros
 **Integration Points:**
 - **Sales CRM** ↔ WellSky Prospects & Clients
 - **Recruiting Dashboard** ↔ WellSky Applicants & Caregivers
-- **Gigi AI Voice Assistant** ← WellSky real-time data feeds (Zingage replacement)
+- **Gigi AI Voice Assistant** ← WellSky real-time data feeds (Gigi replacement)
 - **Document Management (GoFormz)** → WellSky status conversions
 
 **Business Impact:**
@@ -310,13 +310,13 @@ lead.skills → applicant.skills (new fields added)
 
 ---
 
-### 3.3 Gigi AI Voice Assistant ↔ WellSky (Zingage Replacement)
+### 3.3 Gigi AI Voice Assistant ↔ WellSky (Gigi Replacement)
 
-**Strategic Context:** Gigi is our in-house AI voice assistant built to replace Zingage AI, which we currently use for automated scheduling and caregiver communications. By building Gigi with direct WellSky API access, we eliminate $6K-24K/year in SaaS fees while gaining full control over the AI logic and workflows.
+**Strategic Context:** Gigi is our in-house AI voice assistant built to replace Gigi AI, which we currently use for automated scheduling and caregiver communications. By building Gigi with direct WellSky API access, we eliminate $6K-24K/year in SaaS fees while gaining full control over the AI logic and workflows.
 
 **Integration Type:** Read-only data pull (no writes to WellSky)
-**Platform:** Retell AI voice agent (same conversational AI platform Zingage uses)
-**RingCentral Integration:** Voice calls and SMS (same phone platform Zingage uses)
+**Platform:** Retell AI voice agent (same conversational AI platform Gigi uses)
+**RingCentral Integration:** Voice calls and SMS (same phone platform Gigi uses)
 **Sync Frequency:** Daily at 3:00 AM MT via `gigi/daily_sync.py`
 
 **Data Pulled from WellSky:**
@@ -325,7 +325,7 @@ lead.skills → applicant.skills (new fields added)
 - **Shifts:** Today's and tomorrow's schedule (upcoming 48 hours)
 - **Open Shifts:** Unfilled shifts requiring coverage
 
-**Core Use Cases (Zingage Feature Parity):**
+**Core Use Cases (Gigi Feature Parity):**
 1. **Call-Off Management** - Caregiver calls Gigi to report absence, system pulls shift data and sends SMS blast to available replacements
 2. **Shift Filling Automation** - When open shifts detected, Gigi initiates parallel outreach to qualified caregivers
 3. **Client Complaints** - Client calls after hours, Gigi pulls client record and escalates to on-call manager
@@ -382,8 +382,8 @@ Colorado Care Assist is building Gigi AI to compete with established players in 
 
 | Competitor | Focus | Pricing (Est.) | Key Features (Jan 2026) |
 |-----------|-------|---------------|-------------------------|
-| **Zingage** (current provider) | AI phone assistant for shift filling, natural conversations | $500-2000/mo | Intent-driven conversations, RingCentral integration, "more natural" conversation flow, contextual outreach timing |
-| **Phoebe** | Proactive scheduling automation, caregiver engagement | $1000-3000/mo | Multi-shift outreach, caregiver recommendations (distance, history, overtime), multi-language SMS/voice, defer calls for on-shift caregivers, preference memory, care coordinator workflows, two-way WellSky sync |
+| **Gigi** (current provider) | AI phone assistant for shift filling, natural conversations | $500-2000/mo | Intent-driven conversations, RingCentral integration, "more natural" conversation flow, contextual outreach timing |
+| **Gigi** | Proactive scheduling automation, caregiver engagement | $1000-3000/mo | Multi-shift outreach, caregiver recommendations (distance, history, overtime), multi-language SMS/voice, defer calls for on-shift caregivers, preference memory, care coordinator workflows, two-way WellSky sync |
 | **Alden Health** | AI care coordinator, shift optimization | $1500-2500/mo | Clinical decision support, Medicare documentation |
 | **AxisCare** | All-in-one platform with AI features | Full platform replacement | Integrated scheduling + billing + EVV (requires leaving WellSky) |
 | **Careswitch** | No-call no-show elimination | $800-1500/mo | 90%+ accuracy predicting no-shows, automated backup scheduling |
@@ -397,7 +397,7 @@ Colorado Care Assist is building Gigi AI to compete with established players in 
 
 ---
 
-### 4.1 Real-Time Open Shift Alerts (Priority P0 - Zingage Replacement Core Feature)
+### 4.1 Real-Time Open Shift Alerts (Priority P0 - Gigi Replacement Core Feature)
 
 **Problem:** Open shifts typically take 2-4 hours to fill manually
 **Solution:** Automated SMS blast using WellSky availability data
@@ -420,9 +420,9 @@ Colorado Care Assist is building Gigi AI to compete with established players in 
 
 ---
 
-### 4.2 Gigi AI Feature Roadmap (Phoebe-Inspired)
+### 4.2 Gigi AI Feature Roadmap (Gigi-Inspired)
 
-Based on analysis of Phoebe's recent updates (Jan 2026), here are proven features we should build into Gigi:
+Based on analysis of Gigi's recent updates (Jan 2026), here are proven features we should build into Gigi:
 
 #### Phase 1: Core Scheduling (Months 1-2)
 
@@ -436,7 +436,7 @@ Based on analysis of Phoebe's recent updates (Jan 2026), here are proven feature
 ```python
 def rank_caregivers_for_shift(shift, wellsky_service):
     """
-    Phoebe's proven ranking algorithm
+    Gigi's proven ranking algorithm
     """
     caregivers = wellsky_service.get_caregivers(status="active")
 
@@ -458,7 +458,7 @@ def rank_caregivers_for_shift(shift, wellsky_service):
         if has_conflicting_shift(cg, shift):
             score = 0  # Hard exclude
 
-        # Overtime check (Phoebe surfaces this)
+        # Overtime check (Gigi surfaces this)
         if would_cause_overtime(cg, shift):
             score -= 20  # Penalty but not excluded
 
@@ -477,7 +477,7 @@ def rank_caregivers_for_shift(shift, wellsky_service):
 
 **Two-Way Sync: Assign → WellSky**
 - **Current:** Gigi finds caregiver → coordinator manually assigns in WellSky
-- **Phoebe Feature:** Gigi assigns directly in WellSky via API
+- **Gigi Feature:** Gigi assigns directly in WellSky via API
 - **API Call:** `POST /shifts/{shift_id}/assignments` with `caregiver_id`
 - **Impact:** Eliminate manual step, instant confirmation
 
@@ -506,7 +506,7 @@ really appreciate you. We'll keep you in mind for the next one! 🙏"
 ```python
 def should_call_now(caregiver, wellsky_service):
     """
-    Phoebe feature: Don't interrupt caregivers on shift
+    Gigi feature: Don't interrupt caregivers on shift
     """
     current_shifts = wellsky_service.get_shifts(
         caregiver_id=caregiver.id,
@@ -554,7 +554,7 @@ Reply ALL GOOD if these work, or let me know if you need changes."
 - **WellSky API:** `GET /shifts/{id}/evv` to check actual_start vs scheduled_start
 
 **Overtime Alerts**
-- **Phoebe Feature:** Surface WellSky overtime warnings before assignment
+- **Gigi Feature:** Surface WellSky overtime warnings before assignment
 - **API Call:** `GET /caregivers/{id}/schedule` + calculate total hours
 - **Alert:** "⚠️ Assigning this shift will put Maria into overtime (42 hours this week). Proceed?"
 
@@ -603,7 +603,7 @@ When coordinator cancels an outreach mid-flight:
 
 #### Phase 4: Advanced Intelligence (Months 7-9)
 
-**Predictive No-Show Prevention** (Careswitch/Phoebe feature)
+**Predictive No-Show Prevention** (Careswitch/Gigi feature)
 - Track caregiver reliability score
 - Weather correlation (caregivers less reliable on snowy days?)
 - Shift time correlation (more no-shows on early morning shifts?)

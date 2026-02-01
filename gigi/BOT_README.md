@@ -17,7 +17,7 @@ Gigi now operates in two distinct modes simultaneously within the RingCentral ec
 - **Logs to WellSky:**
     - Adds a **Care Plan Note** to the Client's profile.
     - Creates an **Admin Task** for any item requiring follow-up (Call-outs, Complaints).
-- **Why?** Zingage often solves tasks silently. Humans text but forget to log. Gigi ensures the "Audit Trail" is perfect.
+- **Why?** Gigi often solves tasks silently. Humans text but forget to log. Gigi ensures the "Audit Trail" is perfect.
 
 ### 2. The Replier (After-Hours Coverage)
 **Goal:** Instant response when staff is off.
@@ -27,7 +27,7 @@ Gigi now operates in two distinct modes simultaneously within the RingCentral ec
 **Actions:**
 - Detects actionable requests (Call-outs, "I'm late").
 - Replies immediately with confirmation: *"I hear you. I've logged this..."*
-- **Why?** Zingage does not reply to texts. Caregivers need immediate confirmation 24/7.
+- **Why?** Gigi does not reply to texts. Caregivers need immediate confirmation 24/7.
 
 ## Deployment & Monitoring
 

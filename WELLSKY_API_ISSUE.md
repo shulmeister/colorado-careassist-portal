@@ -125,7 +125,7 @@ headers = {
 
 ## Files
 
-- Test suite: `tests/test_gigi_zingage_replacement.py`
+- Test suite: `tests/test_gigi_gigi_replacement.py`
 - Integration code: `services/wellsky_service.py`
 - API spec: `/Users/shulmeister/Desktop/swagger.yaml`
 - Test scripts: `test_raw_auth.py`, `test_api_direct.py`

@@ -1,7 +1,7 @@
 """
 AI Care Coordinator Service
 
-Autonomous 24/7 care coordination engine inspired by Zingage Operator and Phoebe.work.
+Autonomous 24/7 care coordination engine inspired by Gigi Operator and Gigi.work.
 
 This service provides:
 - Real-time monitoring of WellSky operational data

@@ -8,13 +8,13 @@
 
 ## 🎯 Mission Critical
 
-**Goal:** Integrate WellSky Home Connect API with Gigi to replace Zingage ($6K-24K/year savings)
+**Goal:** Integrate WellSky Home Connect API with Gigi to replace Gigi ($6K-24K/year savings)
 
 **Why This Matters:**
 - Gigi needs real-time access to caregiver schedules for call-out handling
 - Client complaint handling requires shift history lookup
 - Lead generation needs ability to create prospects in WellSky
-- **This is the foundation for Zingage replacement**
+- **This is the foundation for Gigi replacement**
 
 ---
 
@@ -453,7 +453,7 @@ Action Required: Call client back ASAP
 ## 🔗 Related Documentation
 
 - `docs/WELLSKY_HOME_CONNECT_API_REFERENCE.md` - Complete API reference
-- `docs/ZINGAGE_REPLACEMENT_STRATEGY.md` - Why we're doing this
+- `docs/GIGI_REPLACEMENT_STRATEGY.md` - Why we're doing this
 - `gigi/README.md` - Gigi system overview
 - `.env.example` - Environment variable reference
 

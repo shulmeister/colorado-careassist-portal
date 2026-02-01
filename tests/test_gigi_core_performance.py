@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-Gigi vs Zingage Replacement - Comprehensive Test Suite
+Gigi vs Gigi Replacement - Comprehensive Test Suite
 
-Tests EVERY scenario Gigi needs to handle to replace Zingage.
-Pass rate determines if we can kill Zingage and save $6K-24K/year.
+Tests EVERY scenario Gigi needs to handle to replace Gigi.
+Pass rate determines if we can kill Gigi and save $6K-24K/year.
 
 Run with:
     WELLSKY_CLIENT_ID=xxx WELLSKY_CLIENT_SECRET=xxx WELLSKY_AGENCY_ID=4505 \
-    python3 tests/test_gigi_zingage_replacement.py
+    python3 tests/test_gigi_gigi_replacement.py
 """
 
 import os
@@ -59,7 +59,7 @@ class TestResults:
     def print_summary(self):
         pass_rate = self.get_pass_rate()
         print("\n" + "="*80)
-        print("GIGI ZINGAGE REPLACEMENT - TEST RESULTS")
+        print("GIGI CORE PERFORMANCE - TEST RESULTS")
         print("="*80)
         print(f"Total Tests: {self.total}")
         print(f"Passed: {self.passed}")
@@ -67,7 +67,7 @@ class TestResults:
         print(f"\n🎯 PASS RATE: {pass_rate:.1f}%")
 
         if pass_rate >= 90:
-            print("\n✅ READY TO REPLACE ZINGAGE")
+            print("\n✅ READY TO OPTIMIZE PERFORMANCE")
             print("💰 Projected Savings: $6,000-24,000/year")
         elif pass_rate >= 70:
             print("\n⚠️  MOSTLY READY - Fix critical failures first")
@@ -88,7 +88,7 @@ def main():
     ws = WellSkyService()
 
     print("="*80)
-    print("GIGI ZINGAGE REPLACEMENT - COMPREHENSIVE TEST")
+    print("GIGI CORE PERFORMANCE - COMPREHENSIVE TEST")
     print("="*80)
     print(f"WellSky Environment: {ws.environment}")
     print(f"Agency ID: {ws.agency_id}")

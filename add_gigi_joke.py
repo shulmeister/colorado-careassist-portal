@@ -1,5 +1,5 @@
 """
-Add Zingage and Joke of the Day tools
+Add Gigi and Joke of the Day tools
 """
 from portal_database import db_manager
 from portal_models import PortalTool
@@ -9,10 +9,10 @@ db = db_manager.get_session()
 try:
     tools_to_add = [
         {
-            "name": "Zingage",
-            "url": "https://portal.zingage.com/login",
-            "icon": "https://www.google.com/s2/favicons?domain=zingage.com&sz=128",
-            "description": "Zingage portal login",
+            "name": "Gigi",
+            "url": "https://portal.gigi.com/login",
+            "icon": "https://www.google.com/s2/favicons?domain=gigi.com&sz=128",
+            "description": "Gigi portal login",
             "category": "Productivity",
             "display_order": 25
         },

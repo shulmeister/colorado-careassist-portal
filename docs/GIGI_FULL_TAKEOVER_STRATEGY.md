@@ -1,4 +1,4 @@
-# Zingage Replacement Strategy
+# Gigi Replacement Strategy
 **Colorado Care Assist - Internal Strategic Documentation**
 **Last Updated:** January 29, 2026
 **Owner:** Jason Shulman
@@ -7,12 +7,12 @@
 
 ## PRIMARY STRATEGIC GOAL
 
-**The #1 reason Colorado Care Assist is getting WellSky API access is to replace Zingage AI and bring AI scheduling in-house.**
+**The #1 reason Colorado Care Assist is getting WellSky API access is to replace Gigi AI and bring AI scheduling in-house.**
 
 ### Current State: Hybrid Human + AI Scheduling
 
 **Current Monthly Costs:**
-1. **Zingage AI** - $1,000/month ($12,000/year)
+1. **Gigi AI** - $1,000/month ($12,000/year)
    - AI-powered phone assistant (RingCentral integration)
    - Inbound calls: Caregivers report absences, schedule changes
    - Outbound shift filling: Automated caregiver contact
@@ -28,28 +28,28 @@
 
 **TOTAL CURRENT COST: $2,800/month = $33,600/year**
 
-**Zingage's Recent Improvements (Jan 2026 email):**
+**Gigi's Recent Improvements (Jan 2026 email):**
 - More intentional outreach timing (considers recent contact history)
 - More natural conversations (intent-driven vs predefined flows)
 - Customizable voice, name, greeting, language
 
 ### Target State: Gigi AI (In-House Replacement)
 
-**Gigi** is our in-house AI voice assistant that will replace Zingage. Built on:
-- **Retell AI** (same conversational AI platform Zingage uses)
-- **RingCentral** (same phone platform Zingage uses)
+**Gigi** is our in-house AI voice assistant that will replace Gigi. Built on:
+- **Retell AI** (same conversational AI platform Gigi uses)
+- **RingCentral** (same phone platform Gigi uses)
 - **WellSky API** (THIS IS THE KEY - real-time access to shifts, caregivers, clients)
 - **BeeTexting** (high-volume SMS campaigns)
 - **Portal Integration** (Sales CRM, recruiting, marketing automation)
 
 ---
 
-## Why Replace Zingage?
+## Why Replace Gigi?
 
 ### 1. Massive Cost Savings
 
 **Current Costs:**
-- Zingage AI: $12,000/year
+- Gigi AI: $12,000/year
 - Offshore Scheduler: $21,600/year
 - **TOTAL: $33,600/year**
 
@@ -119,7 +119,7 @@
 - No vendor lock-in
 
 ### 5. Deep Integration
-- **Zingage + Offshore Scheduler:** Siloed in operations only
+- **Gigi + Offshore Scheduler:** Siloed in operations only
 - **Gigi:** Connected to Sales CRM, Recruiting, Marketing automation
   - Example: When a caregiver is hired in recruiting dashboard, Gigi instantly knows and can offer them shifts
   - Example: When a client churns in CRM, Gigi knows not to offer their shifts anymore
@@ -134,7 +134,7 @@
 
 ### 7. Competitive Moat
 - Proprietary AI operational capabilities
-- Competitors can buy Zingage - but they can't replicate our custom workflows
+- Competitors can buy Gigi - but they can't replicate our custom workflows
 - Competitors can hire offshore schedulers - but they can't scale 24/7/365 like we can
 - 24/7 AI scheduling is a recruiting advantage ("We fill shifts faster, you get more hours")
 - Faster iteration than generic SaaS platforms
@@ -143,7 +143,7 @@
 
 ## WellSky API: The Key Enabler
 
-**Without WellSky API access, we cannot replace Zingage.**
+**Without WellSky API access, we cannot replace Gigi.**
 
 Here's why:
 
@@ -186,11 +186,11 @@ Here's why:
 
 ---
 
-## Zingage Feature Parity Checklist
+## Gigi Feature Parity Checklist
 
-Before we can sunset Zingage, Gigi must have feature parity:
+Before we can sunset Gigi, Gigi must have feature parity:
 
-| Feature | Zingage | Gigi Status | WellSky API Dependency |
+| Feature | Gigi | Gigi Status | WellSky API Dependency |
 |---------|---------|-------------|------------------------|
 | **Inbound call handling** | ✅ Yes | ✅ Built (Retell AI) | ❌ No (just voice AI) |
 | **Caregiver call-off detection** | ✅ Yes | ✅ Built | ✅ `GET /shifts` to find which shift |
@@ -202,20 +202,20 @@ Before we can sunset Zingage, Gigi must have feature parity:
 | **Client complaint escalation** | ✅ Yes | ✅ Built | ✅ `GET /clients/{id}` for context |
 | **Prospect inquiry handling** | ❌ No | ✅ Built (creates CRM lead) | ❌ No (CRM integration) |
 
-**Gigi Advantages Over Zingage:**
-- ✅ Creates leads in Sales CRM (Zingage can't do this)
-- ✅ Two-way sync with WellSky (Zingage likely doesn't have this)
+**Gigi Advantages Over Gigi:**
+- ✅ Creates leads in Sales CRM (Gigi can't do this)
+- ✅ Two-way sync with WellSky (Gigi likely doesn't have this)
 - ✅ Cross-system intelligence (recruiting + sales + operations)
 
 ---
 
-## Phoebe-Inspired Feature Roadmap
+## Gigi-Inspired Feature Roadmap
 
-Phoebe (competitor, $1000-3000/mo) has proven these features work well. We should build them into Gigi:
+Gigi (competitor, $1000-3000/mo) has proven these features work well. We should build them into Gigi:
 
-### Phase 1: Core Scheduling (Months 1-2) - REPLACES ZINGAGE
+### Phase 1: Core Scheduling (Months 1-2) - REPLACES GIGI
 
-**Priority P0 - Must-Have to Replace Zingage:**
+**Priority P0 - Must-Have to Replace Gigi:**
 
 1. ✅ **Multi-Shift Outreach**
    - One text for multiple shifts (avoid message fatigue)
@@ -288,7 +288,7 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 
 ### Phase 4: Advanced Intelligence (Months 7-9)
 
-15. **Predictive No-Show Prevention** (Careswitch/Phoebe feature)
+15. **Predictive No-Show Prevention** (Careswitch/Gigi feature)
     - Track caregiver reliability score
     - Weather correlation? Shift time correlation?
     - Alert coordinator 24 hours before high-risk shifts
@@ -309,12 +309,12 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 
 ## Competitive Intelligence
 
-### Zingage (Current Provider)
+### Gigi (Current Provider)
 
 **Pricing:** $500-2000/month (Colorado Care Assist negotiated: $220/month)
 
 **Recent Email (Jan 2026):**
-> "We've made some exciting updates to how Zingage manages both inbound and outbound communication..."
+> "We've made some exciting updates to how Gigi manages both inbound and outbound communication..."
 
 **Key Features:**
 - ⏱️ **More intentional outreach** - Considers recent contact history, engagement, context before reaching out
@@ -333,7 +333,7 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 
 ---
 
-### Phoebe (Competitor - $1000-3000/month)
+### Gigi (Competitor - $1000-3000/month)
 
 **Recent Updates (Jan 2026):**
 
@@ -358,14 +358,14 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 - 👍 **Reaction Processing** - Thumbs up = valid response
 
 **Nov 21, 2025:**
-- ↔️ **Two-Way Sync** - Assign in Phoebe → writes to WellSky/AxisCare
+- ↔️ **Two-Way Sync** - Assign in Gigi → writes to WellSky/AxisCare
 - 🔁 **Recurring Shift Outreach** - Weekly confirmation flows
 
 **Nov 14, 2025:**
 - 💬 **Follow-Up Messaging** - "Shift filled, thanks for responding!"
 - ✏️ **Customizable Opening Messages** - Set tone, highlight details
 
-**What Phoebe Does Well:**
+**What Gigi Does Well:**
 - ✅ Deep WellSky/AxisCare integration (reads AND writes)
 - ✅ Caregiver preference learning and memory
 - ✅ Multi-language support (auto-detect + adapt in real-time)
@@ -373,7 +373,7 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 - ✅ Care coordinator-based workflows
 - ✅ Bundled shift offers (reduce message fatigue)
 
-**What We Can Learn from Phoebe:**
+**What We Can Learn from Gigi:**
 - Their feature roadmap is proven in production
 - Agencies are paying $1000-3000/mo for these features (market validation)
 - Multi-shift outreach is a big deal (reduces caregiver message fatigue)
@@ -390,8 +390,8 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 - ✅ Test in sandbox: `https://api-sandbox.clearcareonline.com/v1`
 - ✅ Verify all required endpoints work
 
-### Month 1-2: Gigi Phase 1 (Zingage Replacement)
-**Goal:** Feature parity with Zingage
+### Month 1-2: Gigi Phase 1 (Gigi Replacement)
+**Goal:** Feature parity with Gigi
 
 - ✅ Gigi can handle caregiver call-offs (already built)
 - 🔨 Pull open shifts from WellSky in real-time
@@ -406,13 +406,13 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 - 90%+ of shifts filled without coordinator intervention
 - Caregivers report positive experience ("felt personal, not spammy")
 
-**Decision Point:** SUNSET ZINGAGE
-- Cancel Zingage subscription
+**Decision Point:** SUNSET GIGI
+- Cancel Gigi subscription
 - Route all calls to Gigi
 - Monitor closely for 1 week, rollback plan ready
 
 ### Month 3-4: Gigi Phase 2 (Caregiver Experience)
-**Goal:** Better than Zingage
+**Goal:** Better than Gigi
 
 - Multi-language support (Spanish, Tagalog, Vietnamese)
 - Defer voice calls for on-shift caregivers
@@ -424,7 +424,7 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 - 50% reduction in "caregiver felt spammed" complaints
 
 ### Month 5-6: Gigi Phase 3 (Operations Intelligence)
-**Goal:** Competitive with Phoebe
+**Goal:** Competitive with Gigi
 
 - Clock in/out reminders
 - Overtime alerts
@@ -438,7 +438,7 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 - 100% of outreaches routed to correct coordinator
 
 ### Month 7-9: Gigi Phase 4 (Advanced Intelligence)
-**Goal:** Better than Phoebe (proprietary edge)
+**Goal:** Better than Gigi (proprietary edge)
 
 - Predictive no-show prevention
 - Bundled shift offers
@@ -456,7 +456,7 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 ## Success Metrics
 
 ### Financial
-- **Cost Savings:** $6K-24K/year (Zingage subscription eliminated)
+- **Cost Savings:** $6K-24K/year (Gigi subscription eliminated)
 - **ROI Timeline:** Break even after 6-12 months (depending on build cost)
 
 ### Operational
@@ -478,12 +478,12 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 
 ## Risk Mitigation
 
-### Risk 1: Gigi Not Ready, Zingage Cancelled Too Early
+### Risk 1: Gigi Not Ready, Gigi Cancelled Too Early
 **Mitigation:**
-- Run Gigi in parallel with Zingage for 1 month
-- A/B test: 50% of call-offs to Gigi, 50% to Zingage
+- Run Gigi in parallel with Gigi for 1 month
+- A/B test: 50% of call-offs to Gigi, 50% to Gigi
 - Measure fill rate, time to fill, caregiver satisfaction
-- Only sunset Zingage when Gigi hits 90%+ fill rate
+- Only sunset Gigi when Gigi hits 90%+ fill rate
 
 ### Risk 2: WellSky API Downtime
 **Mitigation:**
@@ -500,10 +500,10 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 
 ### Risk 4: Feature Parity Takes Longer Than Expected
 **Mitigation:**
-- Phase 1 is MVP (bare minimum to replace Zingage)
+- Phase 1 is MVP (bare minimum to replace Gigi)
 - If Phase 1 takes 3 months instead of 2, that's OK
 - Don't rush - quality matters more than speed
-- Keep Zingage subscription active until Gigi is rock-solid
+- Keep Gigi subscription active until Gigi is rock-solid
 
 ---
 
@@ -523,11 +523,11 @@ Phoebe (competitor, $1000-3000/mo) has proven these features work well. We shoul
 
 ## Frequently Asked Questions
 
-### Q: Why not just keep using Zingage?
+### Q: Why not just keep using Gigi?
 **A:** Three reasons:
 1. **Cost:** $6K-24K/year recurring (we can build once, own forever)
-2. **Control:** We can't customize Zingage for our workflows (generic SaaS)
-3. **Data:** Zingage owns all caregiver interaction data (we want it in our systems)
+2. **Control:** We can't customize Gigi for our workflows (generic SaaS)
+3. **Data:** Gigi owns all caregiver interaction data (we want it in our systems)
 
 ### Q: Why WellSky API instead of manual data entry?
 **A:** Gigi needs REAL-TIME data:
@@ -554,10 +554,10 @@ If WellSky doesn't support it, store in portal database.
 
 **Bottom line: WellSky API is the difference between "helpful AI" and "transformative AI."**
 
-### Q: What's the difference between Gigi and Zingage and Phoebe?
+### Q: What's the difference between Gigi and Gigi and Gigi?
 **A:**
-- **Zingage:** Generic AI phone assistant (works for any home care agency)
-- **Phoebe:** Generic AI scheduling tool (works for any agency using WellSky/AxisCare)
+- **Gigi:** Generic AI phone assistant (works for any home care agency)
+- **Gigi:** Generic AI scheduling tool (works for any agency using WellSky/AxisCare)
 - **Gigi:** CUSTOM AI for Colorado Care Assist
   - Connected to our Sales CRM (knows which clients came from which referral source)
   - Connected to our Recruiting Dashboard (knows which caregivers came from which recruiting source)
@@ -573,7 +573,7 @@ If WellSky doesn't support it, store in portal database.
 **WellSky API access is not about basic data sync. It's about building a proprietary AI scheduling engine that replaces $33,600/year in human + SaaS costs, enables 24/7/365 operations, and allows us to scale infinitely without hiring more schedulers.**
 
 **The Complete Picture:**
-- **Replace Zingage:** Save $12K/year (AI phone system)
+- **Replace Gigi:** Save $12K/year (AI phone system)
 - **Replace Offshore Scheduler:** Save $21,600/year (or keep her for complex tasks, but don't need Scheduler #2, #3, #4)
 - **Enable 24/7/365:** Answer phones and texts at 3 AM on Christmas (competitive advantage)
 - **Scale Infinitely:** Handle 50 clients or 500 clients with same Gigi cost (no additional scheduler hires)
@@ -582,17 +582,17 @@ If WellSky doesn't support it, store in portal database.
 - **Plus:** Data ownership, competitive moat, cross-system intelligence
 
 **The Roadmap:**
-- **Phase 1:** Replace Zingage + augment offshore scheduler (save $12K/year, enable 24/7)
-- **Phase 2:** Match Phoebe features (shift preference memory, multi-language, overtime alerts)
+- **Phase 1:** Replace Gigi + augment offshore scheduler (save $12K/year, enable 24/7)
+- **Phase 2:** Match Gigi features (shift preference memory, multi-language, overtime alerts)
 - **Phase 3:** Go beyond (cross-system intelligence, recruiting analytics, marketing ROI)
 - **Phase 4 (Optional):** Fully replace offshore scheduler or keep her for complex edge cases only
 
 **Next Steps:**
 1. ✅ Receive WellSky API credentials from Robin Ponte
 2. ✅ Test all required endpoints in sandbox
-3. 🔨 Build Gigi Phase 1 (Zingage replacement)
-4. 🔨 A/B test Gigi vs Zingage for 1 month
-5. 🎉 Sunset Zingage, own our AI scheduling forever
+3. 🔨 Build Gigi Phase 1 (Gigi replacement)
+4. 🔨 A/B test Gigi vs Gigi for 1 month
+5. 🎉 Sunset Gigi, own our AI scheduling forever
 
 ---
 

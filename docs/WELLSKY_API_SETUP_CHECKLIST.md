@@ -119,13 +119,13 @@ Once API is working, we'll measure:
 - Autonomous text handling (target: 85-95%)
 - Coordinator time saved (target: 70%)
 - Caregiver satisfaction (target: 4.5/5)
-- Cost savings vs Zingage (target: $22.8K/year)
+- Cost savings vs Gigi (target: $22.8K/year)
 
 ---
 
 ## 💰 ROI PROJECTION
 
-| Month | Capability | Zingage Savings | Scheduler Savings | Total |
+| Month | Capability | Gigi Savings | Scheduler Savings | Total |
 |---|---|---|---|---|
 | **1** | Voice call-outs + shift offers | $1,000 | $900 | $1,900/mo |
 | **2** | + Partial availability | $1,000 | $1,260 | $2,260/mo |
@@ -162,7 +162,7 @@ Once API is working, we'll measure:
 
 5. **Week 2:** Full rollout
    - All caregivers
-   - Replace Zingage
+   - Replace Gigi
    - Celebrate $2,800/month savings!
 
 ---

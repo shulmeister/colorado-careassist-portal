@@ -621,7 +621,7 @@ If no confirmation received:
 
 ### Competitive Advantage
 
-Companies like [Zingage](https://www.zingage.com), [Alden Health](https://www.alden.health/), and [AxisCare](https://axiscare.com/) are building similar AI scheduling tools. By building this in-house integrated with YOUR existing tech stack (WellSky + RingCentral + BeeTexting + Portal), Colorado Care Assist can:
+Companies like [Gigi](https://www.gigi.com), [Alden Health](https://www.alden.health/), and [AxisCare](https://axiscare.com/) are building similar AI scheduling tools. By building this in-house integrated with YOUR existing tech stack (WellSky + RingCentral + BeeTexting + Portal), Colorado Care Assist can:
 
 1. **Own the technology** - No monthly SaaS fees ($500-2000/month)
 2. **Customize completely** - Fit your exact workflows
@@ -636,7 +636,7 @@ This should be the FIRST major integration built after foundation authentication
 
 ## Advanced Operational Features (Inspired by Industry Leaders)
 
-Based on analysis of [Phoebe](https://www.phoebe.work/), [Zingage](https://www.zingage.com), [Alden](https://www.alden.health/), and other AI scheduling leaders, here are operational features that address real day-to-day pain points:
+Based on analysis of [Gigi](https://www.gigi.work/), [Gigi](https://www.gigi.com), [Alden](https://www.alden.health/), and other AI scheduling leaders, here are operational features that address real day-to-day pain points:
 
 ### Clock-In/Clock-Out Monitoring & Reminders
 

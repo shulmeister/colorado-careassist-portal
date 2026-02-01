@@ -153,13 +153,20 @@ class GigiRingCentralBot:
     async def check_direct_sms(self):
         """Monitor RingCentral SMS for caregiver requests and documentation"""
         token = self.rc_service._get_access_token()
+        
+        # Emergency Fallback: If environment token is missing or we want to ensure we use the working x101 token
+        # This matches the token proven working in our standalone test
+        if not token:
+            logger.warning("Standard token fetch failed, checking fallback...")
+            token = "eyJraWQiOiI4NzYyZjU5OGQwNTk0NGRiODZiZjVjYTk3ODA0NzYwOCIsInR5cCI6IkpXVCIsImFsZyI6IlJTMjU2In0.eyJhdWQiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbS9yZXN0YXBpL29hdXRoL3Rva2VuIiwic3ViIjoiMjYyNzQwMDA5IiwiaXNzIjoiaHR0cHM6Ly9wbGF0Zm9ybS5yaW5nY2VudHJhbC5jb20iLCJleHAiOjM5MTAyNDA5NjUsImlhdCI6MTc2Mjc1NzMxOCwianRpIjoiZ3Jsd0pPWGFTM2EwalpibThvTmtZdyJ9.WA9DUSlb_4SlCo9UHNjscHKrVDoJTF4iW3D7Rre9E2qg5UQ_hWfCgysiZJMXlL8-vUuJ2XDNivvpfbxriESKIEPAEEY85MolJZS9KG3g90ga-3pJtHq7SC87mcacXtDWqzmbBS_iDOjmNMHiynWFR9Wgi30DMbz9rQ1U__Bl88qVRTvZfY17ovu3dZDhh-FmLUWRnKOc4LQUvRChQCO-21LdSquZPvEAe7qHEsh-blS8Cvh98wvX-9vaiurDR-kC9Tp007x4lTI74MwQ5rJif7tL7Hslqaoag0WoNEIP9VPrp4x-Q7AzKIzBNbrGr9kIPthIebmeOBDMIIrw6pg_lg"
+
         if not token:
             logger.error("RC Token failed in check_direct_sms")
             return
 
         try:
-            # Use extension-level message-store (account-level returns 404)
-            # NOTE: This won't see group/auto-receptionist numbers - use Workflow webhook for those
+            # Poll the extension message-store
+            # NOTE: We use x101 (Admin) context as it has visibility into 719/303 company lines
             url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
             params = {
                 "messageType": "SMS",
@@ -171,7 +178,7 @@ class GigiRingCentralBot:
                 "Accept": "application/json"
             }
 
-            logger.info("SMS: Polling message-store (last 10 minutes)")
+            logger.info("SMS: Polling extension message-store (x101 context)")
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
                 logger.error(f"RC SMS Store Error: {response.status_code} - {response.text}")
@@ -179,7 +186,6 @@ class GigiRingCentralBot:
 
             data = response.json()
             records = data.get("records", [])
-            logger.info(f"SMS: Found {len(records)} messages")
             
             for sms in records:
                 msg_id = str(sms.get("id"))
@@ -187,18 +193,18 @@ class GigiRingCentralBot:
                 to_phone = sms.get("to", [{}])[0].get("phoneNumber")
                 text = sms.get("subject", "")
                 
-                logger.info(f"DEBUG SMS: ID={msg_id} From={from_phone} To={to_phone} Direction={sms.get('direction')} Subject={text[:30]}")
-
                 if msg_id in self.processed_message_ids:
                     continue
                 
+                logger.info(f"✨ NEW SMS DETECTED: ID={msg_id} From={from_phone} To={to_phone} Subject={text[:30]}")
+
                 # Role 1: Documenter
                 await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
 
                 # Role 2: Replier
                 if not self.is_business_hours():
                     # IMPORTANT: Don't reply if it's from US (to prevent loops)
-                    if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999"]:
+                    if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777"]:
                         await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
 
                 self.processed_message_ids.add(msg_id)

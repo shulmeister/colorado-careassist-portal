@@ -292,7 +292,7 @@ def main():
     print("="*80)
 
     if score >= 90:
-        print("\n✅ READY FOR FULL ZINGAGE REPLACEMENT")
+        print("\n✅ READY FOR FULL CORE PERFORMANCE")
         print("   Gigi can handle 90%+ of texts autonomously")
     elif score >= 70:
         print("\n⚠️ READY FOR SOFT LAUNCH")

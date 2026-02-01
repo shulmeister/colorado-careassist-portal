@@ -5,7 +5,7 @@ Colorado Care Assist - Services Layer
 Core services for portal operations:
 - WellSky API integration (operational data)
 - Client satisfaction tracking
-- AI Care Coordinator (Zingage/Phoebe-style automation)
+- AI Care Coordinator (Gigi/Gigi-style automation)
 - Hub-and-spoke integrations:
   - Sales Dashboard → WellSky Prospects
   - Recruiting Dashboard → WellSky Applicants
