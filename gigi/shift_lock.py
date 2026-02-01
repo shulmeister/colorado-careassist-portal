@@ -74,6 +74,14 @@ class ShiftLockManager:
             database_url: PostgreSQL connection string. Defaults to DATABASE_URL env var.
         """
         self.database_url = database_url or os.getenv("DATABASE_URL")
+        
+        # Fix for SQLAlchemy 1.4+ requiring postgresql:// instead of postgres://
+        if self.database_url:
+            if self.database_url.startswith("postgres://"):
+                self.database_url = self.database_url.replace("postgres://", "postgresql+psycopg2://", 1)
+            elif self.database_url.startswith("postgresql://"):
+                self.database_url = self.database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
         self.engine = None
         self.SessionLocal = None
 
