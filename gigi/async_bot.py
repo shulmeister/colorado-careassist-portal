@@ -134,8 +134,9 @@ class AsyncGigiBot:
             elif any(w in lower_text for w in ["accept", "take the shift", "can work", "available", "filled"]):
                 note_type = "schedule"
 
-            # 3. Log to WellSky (Simple: Log to sender's profile if CG, or try to find Client)
-            # For now, we'll try to find a client match to be smart
+            # 3. Log to WellSky
+            
+            # A. Try to find client from text
             for pname in possible_names:
                 if client_id: break
                 try:
@@ -148,7 +149,9 @@ class AsyncGigiBot:
                 except Exception:
                     pass
             
+            # B. LOGGING ACTIONS
             if client_id:
+                # Log to Client Profile if identified
                 note_prefix = "🚨 CARE ALERT" if is_alert else "ℹ️ RC SMS"
                 full_note = f"{note_prefix}: {text}\n(From: {phone})"
                 
@@ -167,6 +170,21 @@ class AsyncGigiBot:
                         priority="urgent",
                         related_client_id=client_id
                     )
+            else:
+                # FALLBACK: Create General Admin Task if no client found
+                # This ensures we don't "drop" messages from Caregivers
+                try:
+                    task_title = f"SMS: {identified_name or phone}"
+                    if is_task: task_title = f"🚨 ALERT: {identified_name or phone}"
+                    
+                    wellsky_service.create_admin_task(
+                        title=task_title,
+                        description=f"Incoming Text from {identified_name or phone}:\n\n\"{text}\"\n\n(No client identified in text)",
+                        priority="urgent" if is_task else "normal"
+                    )
+                    logger.info(f"✅ Created General Admin Task for {phone}")
+                except Exception as e:
+                    logger.error(f"Failed to create general task: {e}")
             
             return identified_name
             
