@@ -157,6 +157,11 @@ class GigiRingCentralBot:
                 text = sms.get("subject", "") 
                 from_phone = sms.get("from", {}).get("phoneNumber")
                 
+                # IMPORTANT: Ignore our own numbers to prevent loops
+                if from_phone in [RINGCENTRAL_FROM_NUMBER, "+13074598220"]:
+                    self.processed_message_ids.add(msg_id)
+                    continue
+                
                 logger.info(f"SMS: Processing new text {msg_id} from {from_phone}: {text[:30]}...")
                 
                 # Role 1: Documenter
