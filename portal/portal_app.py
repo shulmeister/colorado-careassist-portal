@@ -421,6 +421,54 @@ async def api_gigi_get_issues(
         "count": len(issues)
     })
 
+@app.get("/api/gigi/knowledge/sop")
+async def api_gigi_get_sop(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Get the Gigi SOP Knowledge Base (markdown)"""
+    sop_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gigi", "knowledge_base.md")
+    try:
+        if os.path.exists(sop_path):
+            with open(sop_path, "r") as f:
+                content = f.read()
+            return JSONResponse({"success": True, "content": content})
+        else:
+            return JSONResponse({"success": False, "error": "SOP file not found"})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.get("/api/gigi/knowledge/memories")
+async def api_gigi_get_memories(
+    category: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get Gigi's long-term memories from PostgreSQL"""
+    try:
+        # We need to import MemorySystem from gigi.memory_system
+        # Note: gigi directory might not be in path or might need relative import
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "gigi"))
+        from memory_system import MemorySystem, MemoryStatus
+        
+        ms = MemorySystem()
+        memories = ms.query_memories(category=category, status=MemoryStatus.ACTIVE, limit=limit)
+        
+        return JSONResponse({
+            "success": True, 
+            "memories": [
+                {
+                    "id": m.id,
+                    "content": m.content,
+                    "type": m.type.value,
+                    "confidence": m.confidence,
+                    "category": m.category,
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                    "impact": m.impact_level.value
+                } for m in memories
+            ]
+        })
+    except Exception as e:
+        logger.error(f"Failed to fetch memories: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
+
 # API endpoints for tools
 @app.get("/api/tools")
 async def get_tools(
