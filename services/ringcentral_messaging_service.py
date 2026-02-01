@@ -97,7 +97,7 @@ class RingCentralMessagingService:
             logger.error(f"Error getting RingCentral access token: {e}")
             return None
 
-    def _api_request(self, endpoint: str, method: str = "GET", params: Dict = None) -> Optional[Dict]:
+    def _api_request(self, endpoint: str, method: str = "GET", params: Dict = None, data: Dict = None) -> Optional[Dict]:
         """Make an authenticated API request to RingCentral."""
         token = self._get_access_token()
         if not token:
@@ -105,15 +105,28 @@ class RingCentralMessagingService:
 
         try:
             url = f"{RINGCENTRAL_SERVER}/restapi/v1.0{endpoint}"
-            headers = {"Authorization": f"Bearer {token}"}
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
 
-            if method == "GET":
+            if method.upper() == "GET":
                 response = requests.get(url, headers=headers, params=params, timeout=30)
+            elif method.upper() == "POST":
+                response = requests.post(url, headers=headers, params=params, json=data, timeout=30)
+            elif method.upper() == "PUT":
+                response = requests.put(url, headers=headers, params=params, json=data, timeout=30)
             else:
-                response = requests.post(url, headers=headers, json=params, timeout=30)
+                logger.error(f"Unsupported method: {method}")
+                return None
 
             if response.status_code in (200, 201):
                 return response.json()
+            elif response.status_code == 429:
+                retry_after = response.headers.get("Retry-After", "unknown")
+                logger.error(f"RC API Rate Limit (429). Retry after: {retry_after}s")
+                return None
             else:
                 logger.error(f"RingCentral API error: {response.status_code} - {response.text[:500]}")
                 return None
