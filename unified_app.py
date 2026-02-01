@@ -318,14 +318,15 @@ async def start_gigi_bot_from_unified():
                 await bot.initialize()
                 
                 async def run_bot_loop():
-                    await asyncio.sleep(15) # Wait for app to stabilize
+                    await asyncio.sleep(5) # Wait for app to stabilize
                     logger.info("🤖 Gigi RC Bot loop starting (Unified)...")
                     while True:
                         try:
+                            # Use a dedicated loop interval defined in ringcentral_bot or faster here
                             await bot.check_and_act()
                         except Exception as e:
                             logger.error(f"Unified RC Bot Loop Error: {e}")
-                        await asyncio.sleep(60) # Standardize on 60s
+                        await asyncio.sleep(10) # Faster loop for responsiveness
                 
                 asyncio.create_task(run_bot_loop())
     except Exception as e:
