@@ -1,7 +1,7 @@
-# Gigi AI Bot - Operations Manual (v3.0 - The "Trojan Horse" Edition)
+# Gigi AI Bot - Operations Manual (v3.1 - Stable & Personalized)
 
 **Last Updated:** Feb 1, 2026
-**Status:** ✅ FULLY OPERATIONAL
+**Status:** ✅ FULLY OPERATIONAL & STABLE
 
 ## 🚀 Quick Start (Deployment)
 
@@ -27,7 +27,7 @@ Gigi will start automatically.
 ## 🧠 System Architecture
 
 ### 1. The "Trojan Horse" Strategy
-Previously, Gigi ran as a separate `worker` process on Heroku. This was unreliable (process often didn't start).
+Previously, Gigi ran as a separate `worker` process on Heroku. This was unreliable.
 **Now:** Gigi is an async task (`gigi/async_bot.py`) launched by `unified_app.py` on startup.
 - If the website is up, Gigi is up.
 - Zero extra configuration needed.
@@ -38,15 +38,15 @@ To fix this, we hardcoded **Jason's Admin JWT (Extension 101)** into `gigi/async
 - **Why?** Only the Admin/Owner has permission to view/reply to the main company SMS numbers.
 - **Where:** `gigi/async_bot.py` -> `ADMIN_JWT_TOKEN` variable.
 
-### 3. Smart Reply & Spam Prevention
-Gigi uses "Conversation Awareness" to prevent duplicate replies on restart:
-1. She fetches the last 100 messages (Inbound & Outbound).
-2. She groups them by phone number.
-3. **Logic:**
-   - If the *last* message in the thread is **Outbound** (from us) → She assumes it's handled. **Skipped.**
-   - If the *last* message is **Inbound** (from them) → She replies.
+### 3. Smart Reply & Race Condition Prevention
+Gigi uses robust logic to prevent spam:
+1. **Conversation Awareness:** She checks if the *last* message was from us. If so, she skips (stateless).
+2. **Atomic Locking:** She marks a message as "processed" **immediately** upon seeing it, preventing concurrent loops from replying twice.
 
-This makes her "stateless" and robust. She won't spam you even if she restarts 50 times.
+### 4. Personalization (WellSky)
+- **SMS:** Checks WellSky for the sender's phone number.
+- **Owner Override:** Explicitly recognizes Jason's number (`6039971495`) to say "Hi Jason!".
+- **Voice:** The Retell webhook (`gigi/main.py`) performs the same WellSky lookup to greet callers by name.
 
 ---
 
@@ -76,7 +76,7 @@ This makes her "stateless" and robust. She won't spam you even if she restarts 5
 3. Restart the server/dyno to force a fresh poll.
 
 **Issue: Gigi replied multiple times.**
-*Fixed by Smart Reply Logic.* If it happens again, check if the "Outbound" message failed to send (so she thinks she hasn't replied yet).
+*Fixed by Atomic Locking.* If it happens, check if the deployment created multiple processes (ensure `Procfile` has NO `worker` line).
 
 **Issue: WellSky logs missing.**
 1. Ensure `WELLSKY_AVAILABLE` is True in logs.
