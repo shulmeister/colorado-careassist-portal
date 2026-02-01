@@ -130,8 +130,8 @@ class GigiRingCentralBot:
         try:
             # Look back 24 hours to catch recent messages and debug
             since = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
-            # ACCOUNT LEVEL endpoint to see everything
-            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/message-store"
+            # Extension Level (since account-level 404'd) but NO direction filter
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
             params = {
                 "messageType": "SMS",
                 "dateFrom": since,
@@ -139,7 +139,7 @@ class GigiRingCentralBot:
             }
             headers = {"Authorization": f"Bearer {token}"}
             
-            logger.info(f"SMS: Checking ACCOUNT message-store since {since}")
+            logger.info(f"SMS: Checking extension message-store since {since}")
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
                 logger.error(f"RC SMS API Error: {response.status_code} - {response.text}")
