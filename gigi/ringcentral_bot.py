@@ -77,11 +77,11 @@ class GigiRingCentralBot:
             status = "BUSINESS HOURS (Silent)" if self.is_business_hours() else "AFTER HOURS (Active)"
             logger.info(f"--- Gigi Bot Cycle: {status} ---")
             
-            # 1. Check Team Chats (Glip)
-            await self.check_team_chats()
-            
-            # 2. Check Direct SMS (RingCentral SMS)
+            # 1. Check Direct SMS (RingCentral SMS) - PRIORITY
             await self.check_direct_sms()
+            
+            # 2. Check Team Chats (Glip)
+            await self.check_team_chats()
 
         except Exception as e:
             logger.error(f"Error in check_and_act: {e}")
@@ -93,10 +93,11 @@ class GigiRingCentralBot:
             logger.warning(f"Target chat {TARGET_CHAT} not found in check_team_chats")
             return
 
+        # Reduced lookback for team chats to save quota
         messages = self.rc_service.get_chat_messages(
             chat["id"], 
-            since=datetime.utcnow() - timedelta(minutes=60),
-            limit=50
+            since=datetime.utcnow() - timedelta(minutes=10),
+            limit=20
         )
         
         if not messages:
