@@ -41,22 +41,28 @@ app = FastAPI(title="Gigi AI Agent", version="1.0.0")
 @app.on_event("startup")
 async def startup_event():
     """Start background services on app startup"""
-    # Start RC Bot if enabled (Zingage Backup)
+    logger.info(f"Gigi Startup: RC_BOT_AVAILABLE={RC_BOT_AVAILABLE}, bot_enabled={os.getenv('GIGI_RC_BOT_ENABLED')}")
+    
+    # Start RC Bot if enabled (Gigi Backup)
     if RC_BOT_AVAILABLE and rc_bot and os.getenv("GIGI_RC_BOT_ENABLED", "true").lower() == "true":
         logger.info("🚀 Starting Gigi RingCentral Bot (Background Task)")
-        asyncio.create_task(rc_bot.initialize())
+        init_success = await rc_bot.initialize()
+        logger.info(f"Gigi Bot Initialization: {'SUCCESS' if init_success else 'FAILED'}")
         
         async def run_bot_loop():
             await asyncio.sleep(10) # Wait for app to stabilize
             logger.info("🤖 Gigi RC Bot loop starting...")
             while True:
                 try:
+                    logger.info("🤖 Gigi RC Bot: Running check_and_act cycle")
                     await rc_bot.check_and_act()
                 except Exception as e:
                     logger.error(f"RC Bot Loop Error: {e}")
-                await asyncio.sleep(20) # Check every 20 seconds for 'immediate' feel
+                await asyncio.sleep(CHECK_INTERVAL if 'CHECK_INTERVAL' in globals() else 30)
                 
         asyncio.create_task(run_bot_loop())
+    else:
+        logger.warning("Gigi RC Bot NOT started (disabled or unavailable)")
 
 # Import WellSky service for shift management
 try:
@@ -119,7 +125,7 @@ except Exception as e:
     SHIFT_LOCK_AVAILABLE = False
     logger.warning(f"Shift Lock Manager not available: {e}")
 
-# Import Gigi RingCentral Bot (Zingage Backup)
+# Import Gigi RingCentral Bot (Gigi Backup)
 try:
     from gigi.ringcentral_bot import GigiRingCentralBot
     rc_bot = GigiRingCentralBot()
