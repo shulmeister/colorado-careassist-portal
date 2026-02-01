@@ -248,6 +248,55 @@ for route in app.routes:
         logger.info(f"Route (other): {route}")
 logger.info("=========================")
 
+@app.get("/api/diag/rc-status")
+async def diag_rc_status():
+    """Temporary diagnostic route for RC status"""
+    from gigi.ringcentral_bot import GigiRingCentralBot
+    bot = GigiRingCentralBot()
+    token = await bot.rc_service._get_access_token()
+    if not token:
+        return {"error": "Could not get token"}
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    server = os.getenv("RINGCENTRAL_SERVER_URL", "https://platform.ringcentral.com")
+    
+    # Extension info
+    ext = requests.get(f"{server}/restapi/v1.0/account/~/extension/~", headers=headers).json()
+    
+    # Phone numbers
+    nums = requests.get(f"{server}/restapi/v1.0/account/~/extension/~/phone-number", headers=headers).json()
+    
+    # Recent SMS
+    since = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    sms = requests.get(f"{server}/restapi/v1.0/account/~/extension/~/message-store", 
+                      headers=headers, 
+                      params={"messageType": "SMS", "dateFrom": since}).json()
+    
+    return {
+        "extension": {
+            "number": ext.get("extensionNumber"),
+            "name": ext.get("name"),
+            "id": ext.get("id")
+        },
+        "phone_numbers": [
+            {
+                "number": n.get("phoneNumber"),
+                "usage": n.get("usageType"),
+                "features": n.get("features")
+            } for n in nums.get("records", [])
+        ],
+        "recent_sms_count": len(sms.get("records", [])),
+        "recent_sms": [
+            {
+                "id": s.get("id"),
+                "direction": s.get("direction"),
+                "from": s.get("from", {}).get("phoneNumber"),
+                "to": s.get("to", [{}])[0].get("phoneNumber"),
+                "text": s.get("subject", "")[:50]
+            } for s in sms.get("records", [])[:10]
+        ]
+    }
+
 @app.on_event("startup")
 async def start_gigi_bot_from_unified():
     """Ensure Gigi's background bot starts when the unified app starts, with a lock to prevent duplicates"""
