@@ -1,13 +1,14 @@
-"Gigi RingCentral Bot - Manager & After-Hours Coverage
+"""
+Gigi RingCentral Bot - Manager & After-Hours Coverage
 
 Two Distinct Roles:
 1. THE REPLIER (After-Hours Only):
    - M-F 8am-5pm: SILENT (Israt handles replies).
    - Nights/Weekends: Replies IMMEDIATELY to texts/chats.
-   - Replaces Zingage's missing reply function.
+   - Replaces Gigi's missing reply function.
 
 2. THE DOCUMENTER (24/7/365):
-   - Acts as QA/Manager for the whole team (Israt, Cynthia, Zingage).
+   - Acts as QA/Manager for the whole team (Israt, Cynthia, Gigi).
    - Monitors 'New Scheduling' and Direct SMS.
    - Logs ALL Care Alerts and Tasks into WellSky.
    - Ensures nothing falls through the cracks, even if "handled" silently.
