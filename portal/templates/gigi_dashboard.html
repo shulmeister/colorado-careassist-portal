@@ -507,6 +507,34 @@
                         </tbody>
                     </table>
                 </div>
+                {% elif active_tab == 'escalations' %}
+                <div class="row g-4">
+                    <div class="col-md-8">
+                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Critical & High Priority Issues</h5>
+                        <div class="table-container">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Issue</th>
+                                        <th>Client</th>
+                                        <th>Reported</th>
+                                        <th>Status</th>
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="escalations-table-body">
+                                    <!-- Escalations loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Recent Call Transfers</h5>
+                        <div id="transfers-list" class="d-flex flex-column gap-3">
+                            <!-- Transfers loaded here -->
+                        </div>
+                    </div>
+                </div>
                 {% elif active_tab == 'knowledge' %}
                 <div class="sub-nav">
                     <div class="sub-nav-item active" id="subnav-sop" onclick="switchKnowledge('sop')">SOPs (Knowledge Base)</div>
@@ -619,8 +647,69 @@
                 loadSOP();
             } else if (activeTab === 'schedule') {
                 loadSchedule();
+            } else if (activeTab === 'escalations') {
+                loadEscalations();
             }
         });
+
+        // Escalations Tab
+        async function loadEscalations() {
+            try {
+                const resp = await fetch('/api/gigi/escalations');
+                const data = await resp.json();
+                
+                if (data.success) {
+                    renderEscalations(data.issues);
+                    renderTransfers(data.transfers);
+                }
+            } catch (err) {
+                console.error('Failed to load escalations', err);
+            }
+        }
+
+        function renderEscalations(issues) {
+            const body = document.getElementById('escalations-table-body');
+            if (!issues || issues.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" class="text-center py-5 text-secondary">No urgent escalations found.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = issues.map(i => `
+                <tr>
+                    <td>
+                        <div class="fw-bold">${i.category.replace('_', ' ').toUpperCase()}</div>
+                        <div class="text-secondary small text-truncate" style="max-width: 250px;">${i.description}</div>
+                    </td>
+                    <td class="fw-bold">${i.client_name}</td>
+                    <td>${new Date(i.created_at).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'})}</td>
+                    <td><span class="status-badge bg-danger bg-opacity-10 text-danger">${i.severity}</span></td>
+                    <td class="text-end">
+                        <button class="btn btn-link text-secondary p-0" onclick="viewIssue(${i.id})">
+                            <i class="bi bi-chevron-right"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function renderTransfers(transfers) {
+            const container = document.getElementById('transfers-list');
+            if (!transfers || transfers.length === 0) {
+                container.innerHTML = '<div class="text-center py-4 text-secondary small">No recent transfers.</div>';
+                return;
+            }
+
+            container.innerHTML = transfers.map(t => `
+                <div class="stat-card">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <span class="badge bg-primary bg-opacity-10 text-primary small">TRANSFER</span>
+                        <span class="text-secondary small">${t.time_ago}</span>
+                    </div>
+                    <div class="fw-bold mb-1">${t.description}</div>
+                    <div class="text-secondary small">${t.details || 'Call forwarded to owner'}</div>
+                </div>
+            `).join('');
+        }
 
         // Schedule Tab
         async function loadSchedule() {

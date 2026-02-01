@@ -446,6 +446,45 @@ async def api_gigi_get_schedule(
         logger.error(f"Failed to fetch schedule: {e}")
         return JSONResponse({"success": False, "error": str(e)})
 
+@app.get("/api/gigi/escalations")
+async def api_gigi_get_escalations(
+    limit: int = Query(50, ge=1, le=500),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get high-priority escalations (Urgent issues and Transfers)"""
+    from portal_models import ClientComplaint, ActivityFeedItem
+    
+    # 1. Get Urgent/High Issues
+    urgent_issues = db.query(ClientComplaint).filter(
+        ClientComplaint.severity.in_(["high", "critical"])
+    ).order_by(ClientComplaint.created_at.desc()).limit(limit).all()
+    
+    # 2. Get Recent Call Transfers from Activity Feed
+    transfers = db.query(ActivityFeedItem).filter(
+        ActivityFeedItem.event_type.ilike("%transfer%")
+    ).order_by(ActivityFeedItem.created_at.desc()).limit(limit).all()
+    
+    return JSONResponse({
+        "success": True,
+        "issues": [i.to_dict() for i in urgent_issues],
+        "transfers": [t.to_dict() for t in transfers],
+        "count": len(urgent_issues) + len(transfers)
+    })
+
+@app.get("/api/gigi/conversations")
+async def api_gigi_get_conversations(
+    limit: int = Query(50),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get recent bot conversations (Logs from the Documenter)"""
+    # This pulls from the Activity Log we're using for the bot
+    # We'll use the existing internal log for now
+    return JSONResponse({
+        "success": True,
+        "logs": _gigi_activity_log[:limit]
+    })
+
 @app.get("/api/gigi/knowledge/sop")
 async def api_gigi_get_sop(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Get the Gigi SOP Knowledge Base (markdown)"""
