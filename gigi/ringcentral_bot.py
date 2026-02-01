@@ -203,8 +203,16 @@ class GigiRingCentralBot:
                     # IMPORTANT: Don't reply if it's from US (to prevent loops)
                     if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777"]:
                         await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
+                    else:
+                        logger.info(f"⏭️ Skipping reply to internal/company number: {from_phone}")
 
                 self.processed_message_ids.add(msg_id)
+
+            # Cleanup processed IDs to keep memory low (keep last 1000)
+            if len(self.processed_message_ids) > 1000:
+                logger.info("Cleaning up processed message IDs cache...")
+                self.processed_message_ids = set(list(self.processed_message_ids)[-500:])
+
         except Exception as e:
             logger.error(f"Failed to check direct SMS: {e}")
 
