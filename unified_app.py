@@ -248,6 +248,39 @@ for route in app.routes:
         logger.info(f"Route (other): {route}")
 logger.info("=========================")
 
+@app.on_event("startup")
+async def start_gigi_bot_from_unified():
+    """Ensure Gigi's background bot starts when the unified app starts"""
+    try:
+        # We need to find the gigi_app module and call its startup if it exists
+        # or manually start the bot here since we have the path
+        import asyncio
+        gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
+        if os.path.exists(gigi_path):
+            sys.path.insert(0, gigi_path)
+            from gigi.ringcentral_bot import GigiRingCentralBot
+            
+            # Use environment variable check to match main.py logic
+            if os.getenv("GIGI_RC_BOT_ENABLED", "true").lower() == "true":
+                logger.info("🚀 Starting Gigi RingCentral Bot (via Unified App Startup)")
+                bot = GigiRingCentralBot()
+                await bot.initialize()
+                
+                async def run_bot_loop():
+                    await asyncio.sleep(15) # Wait for app to stabilize
+                    logger.info("🤖 Gigi RC Bot loop starting (Unified)...")
+                    while True:
+                        try:
+                            # Use logger from unified_app or create one
+                            await bot.check_and_act()
+                        except Exception as e:
+                            logger.error(f"Unified RC Bot Loop Error: {e}")
+                        await asyncio.sleep(30)
+                
+                asyncio.create_task(run_bot_loop())
+    except Exception as e:
+        logger.error(f"❌ Failed to start Gigi Bot from Unified: {e}")
+
 logger.info("✅ Portal app configured with sales, recruiting, payroll, powderpulse, and gigi")
 
 if __name__ == "__main__":
