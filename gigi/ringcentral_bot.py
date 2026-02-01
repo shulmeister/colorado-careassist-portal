@@ -150,12 +150,14 @@ class GigiRingCentralBot:
             
             for sms in records:
                 msg_id = str(sms.get("id"))
+                from_phone = sms.get("from", {}).get("phoneNumber")
+                to_phone = sms.get("to", [{}])[0].get("phoneNumber")
+                text = sms.get("subject", "")
+                
+                logger.info(f"DEBUG SMS: ID={msg_id} From={from_phone} To={to_phone} Direction={sms.get('direction')} Subject={text[:30]}")
+
                 if msg_id in self.processed_message_ids:
                     continue
-
-                # SMS body is in 'subject' in RC API for inbound SMS
-                text = sms.get("subject", "") 
-                from_phone = sms.get("from", {}).get("phoneNumber")
                 
                 # IMPORTANT: Ignore our own numbers to prevent loops
                 if from_phone in [RINGCENTRAL_FROM_NUMBER, "+13074598220"]:
