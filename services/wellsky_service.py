@@ -4318,6 +4318,14 @@ class WellSkyService:
 
         # Real API call
         try:
+            if self.api_mode == "connect":
+                return self.search_appointments(
+                    client_id=client_id,
+                    start_date=today,
+                    additional_days=min(days_ahead, 6),
+                    limit=100
+                )
+
             response = requests.get(
                 f"{self.api_base_url}/clients/{client_id}/shifts",
                 headers=self._get_headers(),
