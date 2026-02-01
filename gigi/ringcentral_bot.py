@@ -12,7 +12,8 @@ Two Distinct Roles:
    - Monitors 'New Scheduling' and Direct SMS.
    - Logs ALL Care Alerts and Tasks into WellSky.
    - Ensures nothing falls through the cracks, even if "handled" silently.
-"""
+
+"
 
 import os
 import sys
@@ -120,107 +121,56 @@ class GigiRingCentralBot:
 
             self.processed_message_ids.add(msg_id)
 
-        async def check_direct_sms(self):
+    async def check_direct_sms(self):
+        """Monitor RingCentral SMS for caregiver requests and documentation"""
+        token = self.rc_service._get_access_token()
+        if not token:
+            logger.error("RC Token failed in check_direct_sms")
+            return
 
-            """Monitor RingCentral SMS for caregiver requests and documentation"""
-
-            token = self.rc_service._get_access_token()
-
-            if not token:
-
-                logger.error("RC Token failed in check_direct_sms")
-
+        try:
+            # Look back 24 hours to catch recent messages and debug
+            since = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+            # ACCOUNT LEVEL endpoint to see everything
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/message-store"
+            params = {
+                "messageType": "SMS",
+                "dateFrom": since,
+                "limit": 100
+            }
+            headers = {"Authorization": f"Bearer {token}"}
+            
+            logger.info(f"SMS: Checking ACCOUNT message-store since {since}")
+            response = requests.get(url, headers=headers, params=params, timeout=20)
+            if response.status_code != 200:
+                logger.error(f"RC SMS API Error: {response.status_code} - {response.text}")
                 return
 
-    
-
-            try:
-
-                # Look back 24 hours to catch recent messages and debug
-
-                since = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-                # ACCOUNT LEVEL endpoint to see everything
-
-                url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/message-store"
-
-                params = {
-
-                    "messageType": "SMS",
-
-                    "dateFrom": since,
-
-                    "limit": 100
-
-                }
-
-                headers = {"Authorization": f"Bearer {token}"}
-
+            data = response.json()
+            records = data.get("records", [])
+            logger.info(f"SMS: API returned {len(records)} records (Account Level)")
+            
+            for sms in records:
+                msg_id = str(sms.get("id"))
+                from_phone = sms.get("from", {}).get("phoneNumber")
+                to_phone = sms.get("to", [{}])[0].get("phoneNumber")
+                text = sms.get("subject", "")
                 
+                logger.info(f"DEBUG SMS: ID={msg_id} From={from_phone} To={to_phone} Direction={sms.get('direction')} Subject={text[:30]}")
 
-                logger.info(f"SMS: Checking ACCOUNT message-store since {since}")
-
-                response = requests.get(url, headers=headers, params=params, timeout=20)
-
-                if response.status_code != 200:
-
-                    logger.error(f"RC SMS API Error: {response.status_code} - {response.text}")
-
-                    return
-
-    
-
-                data = response.json()
-
-                records = data.get("records", [])
-
-                logger.info(f"SMS: API returned {len(records)} records (Account Level)")
-
+                if msg_id in self.processed_message_ids:
+                    continue
                 
+                # Role 1: Documenter
+                await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
 
-                for sms in records:
+                # Role 2: Replier
+                if not self.is_business_hours():
+                    # IMPORTANT: Don't reply if it's from US (to prevent loops)
+                    if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999"]:
+                        await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
 
-                    msg_id = str(sms.get("id"))
-
-                    from_phone = sms.get("from", {}).get("phoneNumber")
-
-                    to_phone = sms.get("to", [{}])[0].get("phoneNumber")
-
-                    text = sms.get("subject", "")
-
-                    
-
-                    logger.info(f"DEBUG SMS: ID={msg_id} From={from_phone} To={to_phone} Direction={sms.get('direction')} Subject={text[:30]}")
-
-    
-
-                    if msg_id in self.processed_message_ids:
-
-                        continue
-
-                    
-
-                    # Role 1: Documenter
-
-                    await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
-
-    
-
-                    # Role 2: Replier
-
-                    if not self.is_business_hours():
-
-                        # IMPORTANT: Don't reply if it's from US (to prevent loops)
-
-                        if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999"]:
-
-                            await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
-
-    
-
-                    self.processed_message_ids.add(msg_id)
-
-    
+                self.processed_message_ids.add(msg_id)
         except Exception as e:
             logger.error(f"Failed to check direct SMS: {e}")
 
