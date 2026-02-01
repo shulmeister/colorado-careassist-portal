@@ -255,7 +255,8 @@ async def diag_rc_status():
     import requests
     from gigi.ringcentral_bot import GigiRingCentralBot
     bot = GigiRingCentralBot()
-    token = await bot.rc_service._get_access_token()
+    # Synchronous call
+    token = bot.rc_service._get_access_token()
     if not token:
         return {"error": "Could not get token"}
     
