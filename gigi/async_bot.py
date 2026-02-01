@@ -1,12 +1,27 @@
 """
 Async Minimal Bot - Designed to run INSIDE FastAPI
+Now with WellSky Logging!
 """
 import os
 import sys
 import asyncio
 import logging
 import requests
+import re
 from datetime import datetime, timedelta
+
+# Add project root to path for services import
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import WellSky Service
+try:
+    from services.wellsky_service import WellSkyService
+    wellsky_service = WellSkyService()
+    WELLSKY_AVAILABLE = True
+except Exception as e:
+    wellsky_service = None
+    WELLSKY_AVAILABLE = False
+    print(f"WellSky Import Failed: {e}")
 
 # Configure logging
 logger = logging.getLogger("gigi_bot")
@@ -24,7 +39,7 @@ class AsyncGigiBot:
         self.token = None
 
     def get_token(self):
-        # Synchronous token fetch (ok to block briefly on startup/refresh)
+        # Synchronous token fetch
         url = f"{RINGCENTRAL_SERVER}/restapi/oauth/token"
         data = {
             "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
@@ -45,8 +60,6 @@ class AsyncGigiBot:
 
     async def send_sms(self, to_phone, text):
         if not self.token: return
-        
-        # Run synchronous request in thread pool to avoid blocking FastAPI
         loop = asyncio.get_event_loop()
         await loop.run_in_executor(None, self._send_sms_sync, to_phone, text)
 
@@ -67,12 +80,97 @@ class AsyncGigiBot:
         except Exception as e:
             logger.error(f"Send Exception: {e}")
 
+    # --- DOCUMENTATION LOGIC ---
+    def _document_sync(self, text, phone, source="sms"):
+        """Synchronous documentation logic run in thread pool"""
+        if not WELLSKY_AVAILABLE or not wellsky_service:
+            return
+
+        try:
+            # 1. Identify Client Context
+            client_id = None
+            client_name = "Unknown"
+            
+            # Identify sender as caregiver if possible
+            try:
+                cg = wellsky_service.get_caregiver_by_phone(phone)
+                if cg:
+                    logger.info(f"Identified SMS sender as caregiver: {cg.full_name}")
+            except Exception:
+                pass
+
+            # Find client name in text
+            possible_names = []
+            name_match = re.search(r'(?:for|client|visit|shift|with|about)\s+([A-Z][a-z]+\.?(?:\s[A-Z][a-z]+)?)', text, re.IGNORECASE)
+            if name_match:
+                possible_names.append(name_match.group(1))
+            
+            # 2. Classify Event
+            note_type = "general"
+            is_alert = False
+            is_task = False
+            lower_text = text.lower()
+            
+            if any(w in lower_text for w in ["call out", "call-out", "sick", "emergency", "cancel", "help"]):
+                note_type = "callout"
+                is_alert = True
+                is_task = True
+            elif any(w in lower_text for w in ["late", "traffic", "delayed"]):
+                note_type = "late"
+                is_alert = True
+            elif any(w in lower_text for w in ["complain", "upset", "angry", "issue", "quit", "problem"]):
+                note_type = "complaint"
+                is_alert = True
+                is_task = True
+            elif any(w in lower_text for w in ["accept", "take the shift", "can work", "available", "filled"]):
+                note_type = "schedule"
+
+            # 3. Log to WellSky (Simple: Log to sender's profile if CG, or try to find Client)
+            # For now, we'll try to find a client match to be smart
+            for pname in possible_names:
+                if client_id: break
+                try:
+                    search_term = pname.split()[-1]
+                    clients = wellsky_service.search_patients(last_name=search_term)
+                    if clients:
+                        client = clients[0] # Take first match for speed
+                        client_id = client.id
+                        client_name = client.full_name
+                except Exception:
+                    pass
+            
+            if client_id:
+                note_prefix = "🚨 CARE ALERT" if is_alert else "ℹ️ RC SMS"
+                full_note = f"{note_prefix}: {text}\n(From: {phone})"
+                
+                wellsky_service.add_note_to_client(
+                    client_id=client_id,
+                    note=full_note,
+                    note_type=note_type,
+                    source="gigi_manager"
+                )
+                logger.info(f"✅ Documented to WellSky Client: {client_name}")
+                
+                if is_task:
+                    wellsky_service.create_admin_task(
+                        title=f"SMS Alert: {note_type.upper()} - {client_name}",
+                        description=f"Message: {text}\nFrom: {phone}",
+                        priority="urgent",
+                        related_client_id=client_id
+                    )
+            
+        except Exception as e:
+            logger.error(f"Documentation Error: {e}")
+
+    async def document_message(self, text, phone):
+        """Run documentation in thread pool"""
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self._document_sync, text, phone)
+
     async def check_messages(self):
         if not self.token: return
 
-        # 12 hour lookback
         date_from = (datetime.utcnow() - timedelta(hours=12)).isoformat()
-        
         url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
         params = {"messageType": "SMS", "dateFrom": date_from, "perPage": 100}
         headers = {"Authorization": f"Bearer {self.token}"}
@@ -95,14 +193,14 @@ class AsyncGigiBot:
                 from_ph = msg.get("from", {}).get("phoneNumber")
                 text = msg.get("subject", "")
                 
-                # Only reply to Inbound messages
                 if direction == "Inbound":
                     logger.info(f"📩 New Message from {from_ph}: {text[:30]}...")
                     
-                    # Send Reply
-                    reply_text = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
+                    # 1. Document (Async)
+                    await self.document_message(text, from_ph)
                     
-                    # Custom replies
+                    # 2. Reply (Async)
+                    reply_text = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
                     lower_text = text.lower()
                     if "call out" in lower_text or "sick" in lower_text:
                         reply_text = "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better!"
@@ -110,29 +208,22 @@ class AsyncGigiBot:
                     await self.send_sms(from_ph, reply_text)
                     self.processed_ids.add(msg_id)
                 else:
-                    # Mark outbound as processed so we don't re-read them
                     self.processed_ids.add(msg_id)
 
         except Exception as e:
             logger.error(f"Poll Exception: {e}")
 
     async def run_loop(self):
-        logger.info("🚀 Starting Async Bot Loop...")
+        logger.info("🚀 Starting Async Bot Loop (With WellSky Logging)...")
         self.token = self.get_token()
-        
-        if self.token:
-            await self.send_sms(ADMIN_PHONE, "🚑 Embedded Bot Online (running inside Web Process)")
         
         while True:
             try:
                 if not self.token:
                     self.token = self.get_token()
-                
                 await self.check_messages()
             except Exception as e:
                 logger.error(f"Bot Loop Error: {e}")
-            
-            await asyncio.sleep(5) # Poll every 5 seconds
+            await asyncio.sleep(5)
 
-# Singleton for import
 bot = AsyncGigiBot()
