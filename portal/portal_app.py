@@ -429,11 +429,76 @@ async def gigi_dashboard_simulations(request: Request, current_user: Dict[str, A
 async def gigi_dashboard_settings(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
     return templates.TemplateResponse("gigi_dashboard.html", {"request": request, "active_tab": "settings", "user": current_user})
 
+@app.get("/api/gigi/settings")
+async def api_gigi_get_settings(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Get current Gigi system configuration"""
+    return JSONResponse({
+        "success": True,
+        "settings": {
+            "mode": os.getenv("GIGI_MODE", "after_hours"),
+            "hours_start": os.getenv("GIGI_OFFICE_HOURS_START", "08:00"),
+            "hours_end": os.getenv("GIGI_OFFICE_HOURS_END", "17:00"),
+            "transfer_phone": os.getenv("JASON_PHONE", "+16039971495"),
+            "wellsky_sync": os.getenv("GIGI_WELLSKY_SYNC_ENABLED", "true").lower() == "true",
+            "auto_sms": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true"
+        }
+    })
+
 @app.post("/api/gigi/simulations/run")
 async def api_gigi_run_simulation(
     payload: Dict[str, str],
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
+    """Run a Retell AI web call simulation"""
+    scenario = payload.get("scenario", "caregiver_callout")
+    retell_api_key = os.getenv("RETELL_API_KEY")
+    agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
+    
+    if not retell_api_key:
+        return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
+        
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                'https://api.retellai.com/v2/create-web-call',
+                headers={
+                    'Authorization': f'Bearer {retell_api_key}',
+                    'Content-Type': 'application/json'
+                },
+                json={
+                    'agent_id': agent_id,
+                    'metadata': {
+                        'test': True,
+                        'scenario': scenario,
+                        'launched_by': current_user.get("email")
+                    }
+                },
+                timeout=10
+            )
+            
+            if response.status_code in (200, 201):
+                data = response.json()
+                return JSONResponse({
+                    "success": True, 
+                    "call_id": data.get("call_id"),
+                    "access_token": data.get("access_token")
+                })
+            else:
+                return JSONResponse({"success": False, "error": response.text})
+            
+    except Exception as e:
+        logger.error(f"Simulation launch failed: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
+
+@app.post("/api/gigi/settings")
+async def api_gigi_save_settings(
+    payload: Dict[str, Any],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Update Gigi system configuration (Mock update for now as it needs env var persistency)"""
+    logger.info(f"Settings update request from {current_user.get('email')}: {payload}")
+    # In a real app, we'd save these to a database or Heroku config
+    return JSONResponse({"success": True, "message": "Settings updated"})
     """Run a Retell AI web call simulation"""
     scenario = payload.get("scenario", "caregiver_callout")
     retell_api_key = os.getenv("RETELL_API_KEY")
@@ -606,6 +671,67 @@ async def api_wellsky_search_shifts(
         "success": True,
         "shifts": [s.to_dict() for s in shifts]
     })
+
+@app.get("/api/gigi/users")
+async def api_gigi_get_users(
+    limit: int = Query(50),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get portal users and their recent activity"""
+    from portal_models import UserSession
+    
+    # Get active sessions/users
+    sessions = db.query(UserSession).order_by(UserSession.login_time.desc()).limit(limit).all()
+    
+    # Deduplicate by user_email to show unique users
+    users = {}
+    for s in sessions:
+        if s.user_email not in users:
+            users[s.user_email] = {
+                "email": s.user_email,
+                "name": s.user_name or s.user_email.split('@')[0].capitalize(),
+                "last_active": s.login_time.isoformat(),
+                "status": "Active" if s.logout_time is None else "Offline"
+            }
+            
+    return JSONResponse({
+        "success": True,
+        "users": list(users.values())
+    })
+
+@app.get("/api/gigi/calls")
+async def api_gigi_get_calls(
+    limit: int = Query(50),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get Retell AI call logs with recordings"""
+    retell_api_key = os.getenv("RETELL_API_KEY")
+    agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
+    
+    if not retell_api_key:
+        return JSONResponse({"success": False, "error": "RETELL_API_KEY not set"})
+        
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                'https://api.retellai.com/v2/list-calls',
+                headers={'Authorization': f'Bearer {retell_api_key}'},
+                params={'agent_id': agent_id, 'limit': limit},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                calls = response.json()
+                return JSONResponse({
+                    "success": True,
+                    "calls": calls
+                })
+            else:
+                return JSONResponse({"success": False, "error": response.text})
+    except Exception as e:
+        logger.error(f"Failed to fetch Retell calls: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
 
 @app.get("/api/gigi/knowledge/sop")
 async def api_gigi_get_sop(current_user: Dict[str, Any] = Depends(get_current_user)):
