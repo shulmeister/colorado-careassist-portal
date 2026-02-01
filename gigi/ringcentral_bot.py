@@ -12,8 +12,7 @@ Two Distinct Roles:
    - Monitors 'New Scheduling' and Direct SMS.
    - Logs ALL Care Alerts and Tasks into WellSky.
    - Ensures nothing falls through the cracks, even if "handled" silently.
-
-"
+"""
 
 import os
 import sys
