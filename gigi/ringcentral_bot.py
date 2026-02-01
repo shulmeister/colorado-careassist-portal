@@ -128,8 +128,8 @@ class GigiRingCentralBot:
             return
 
         try:
-            # Use message-store API (proven working) instead of message-sync
-            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
+            # Use ACCOUNT-level message-store to see ALL messages including group/auto-receptionist numbers
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/message-store"
             params = {
                 "messageType": "SMS",
                 "dateFrom": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
