@@ -250,11 +250,24 @@ logger.info("=========================")
 
 @app.on_event("startup")
 async def start_gigi_bot_from_unified():
-    """Ensure Gigi's background bot starts when the unified app starts"""
+    """Ensure Gigi's background bot starts when the unified app starts, with a lock to prevent duplicates"""
     try:
-        # We need to find the gigi_app module and call its startup if it exists
-        # or manually start the bot here since we have the path
+        # Use a file-based lock to prevent multiple workers from starting the bot
+        import os
+        import fcntl
         import asyncio
+        
+        lock_file_path = "/tmp/gigi_bot.lock"
+        
+        # Try to acquire the lock
+        lock_file = open(lock_file_path, "w")
+        try:
+            fcntl.lockf(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            logger.info("🔒 Acquired Gigi Bot lock - starting background loop")
+        except IOError:
+            logger.info("⏭️ Gigi Bot lock already held by another process - skipping startup")
+            return
+
         gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
         if os.path.exists(gigi_path):
             sys.path.insert(0, gigi_path)
@@ -271,11 +284,10 @@ async def start_gigi_bot_from_unified():
                     logger.info("🤖 Gigi RC Bot loop starting (Unified)...")
                     while True:
                         try:
-                            # Use logger from unified_app or create one
                             await bot.check_and_act()
                         except Exception as e:
                             logger.error(f"Unified RC Bot Loop Error: {e}")
-                        await asyncio.sleep(30)
+                        await asyncio.sleep(60) # Standardize on 60s
                 
                 asyncio.create_task(run_bot_loop())
     except Exception as e:
