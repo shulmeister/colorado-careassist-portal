@@ -51,15 +51,32 @@ class GigiRingCentralBot:
         self.rc_service = ringcentral_messaging_service
         self.wellsky = WellSkyService()
         self.processed_message_ids = set()
+        self.bot_extension_id = None
 
     async def initialize(self):
         """Initialize connections"""
         logger.info("Initializing Gigi Manager Bot...")
-        
+
         status = self.rc_service.get_status()
         if not status.get("api_connected"):
             logger.error("RingCentral API not connected! Check credentials.")
             return False
+
+        # Get bot's own extension ID to avoid replying to self
+        try:
+            token = self.rc_service._get_access_token()
+            if token:
+                import requests
+                response = requests.get(
+                    f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~",
+                    headers={"Authorization": f"Bearer {token}"}
+                )
+                if response.status_code == 200:
+                    ext_data = response.json()
+                    self.bot_extension_id = str(ext_data.get("id"))
+                    logger.info(f"Bot extension ID: {self.bot_extension_id}")
+        except Exception as e:
+            logger.warning(f"Could not get bot extension ID: {e}")
 
         logger.info(f"Monitoring chat: {TARGET_CHAT} and Direct SMS")
         return True
@@ -111,7 +128,20 @@ class GigiRingCentralBot:
             if msg_id in self.processed_message_ids:
                 continue
 
+            # CRITICAL: Skip messages sent by the bot itself to prevent infinite loops
+            creator_id = str(msg.get("creatorId", ""))
+            if self.bot_extension_id and creator_id == self.bot_extension_id:
+                logger.debug(f"Skipping message from bot itself: {msg_id}")
+                self.processed_message_ids.add(msg_id)
+                continue
+
+            # Also skip messages that look like bot replies (double safety)
             text = msg.get("text", "")
+            if text.startswith(("Thanks for your message!", "I hear you.", "Got it.", "I've processed", "I've noted")):
+                logger.debug(f"Skipping bot-like message: {msg_id}")
+                self.processed_message_ids.add(msg_id)
+                continue
+
             logger.info(f"Glip: Processing new message {msg_id}: {text[:30]}...")
             await self.process_documentation(msg, text, source_type="chat")
 
