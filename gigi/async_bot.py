@@ -1,6 +1,6 @@
 """
 Async Minimal Bot - Designed to run INSIDE FastAPI
-Now with WellSky Logging, Personalization, AND Gemini Brain!
+Now with Persistent Memory & Gemini Debugging
 """
 import os
 import sys
@@ -8,6 +8,7 @@ import asyncio
 import logging
 import requests
 import re
+import json
 from datetime import datetime, timedelta
 import google.generativeai as genai
 
@@ -28,19 +29,23 @@ except Exception as e:
 logger = logging.getLogger("gigi_bot")
 
 # CREDENTIALS (HARDCODED FOR RELIABILITY)
-# RingCentral Admin (Jason x101)
 ADMIN_JWT_TOKEN = "eyJraWQiOiI4NzYyZjU5OGQwNTk0NGRiODZiZjVjYTk3ODA0NzYwOCIsInR5cCI6IkpXVCIsImFsZyI6IlJTMjU2In0.eyJhdWQiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbS9yZXN0YXBpL29hdXRoL3Rva2VuIiwic3ViIjoiMjYyNzQwMDA5IiwiaXNzIjoiaHR0cHM6Ly9wbGF0Zm9ybS5yaW5nY2VudHJhbC5jb20iLCJleHAiOjM5MTAyNDA5NjUsImlhdCI6MTc2Mjc1NzMxOCwianRpIjoiZ3Jsd0pPWGFTM2EwalpibThvTmtZdyJ9.WA9DUSlb_4SlCo9UHNjscHKrVDoJTF4iW3D7Rre9E2qg5UQ_hWfCgysiZJMXlL8-vUuJ2XDNivvpfbxriESKIEPAEEY85MolJZS9KG3g90ga-3pJtHq7SC87mcacXtDWqzmbBS_iDOjmNMHiynWFR9Wgi30DMbz9rQ1U__Bl88qVRTvZfY17ovu3dZDhh-FmLUWRnKOc4LQUvRChQCO-21LdSquZPvEAe7qHEsh-blS8Cvh98wvX-9vaiurDR-kC9Tp007x4lTI74MwQ5rJif7tL7Hslqaoag0WoNEIP9VPrp4x-Q7AzKIzBNbrGr9kIPthIebmeOBDMIIrw6pg_lg"
-# Google Gemini AI
 GEMINI_API_KEY = "AIzaSyB-67dmnNUmfJfvbEznwqLYcnMZBMPam8o"
 
 # Constants
 RINGCENTRAL_SERVER = "https://platform.ringcentral.com"
 RINGCENTRAL_FROM_NUMBER = "+17194283999"
 ADMIN_PHONE = "+16039971495"
+MEMORY_FILE = "gigi_sms_memory.json"
 
 # Initialize Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-pro')
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-pro')
+    GEMINI_OK = True
+except Exception as e:
+    GEMINI_OK = False
+    GEMINI_ERROR = str(e)
 
 SYSTEM_PROMPT = """
 You are Gigi, a real team member at Colorado Care Assist.
@@ -63,8 +68,30 @@ INSTRUCTIONS:
 
 class AsyncGigiBot:
     def __init__(self):
-        self.processed_ids = set()
+        self.processed_ids = self.load_memory()
         self.token = None
+
+    def load_memory(self):
+        """Load processed IDs from file to survive restarts"""
+        if os.path.exists(MEMORY_FILE):
+            try:
+                with open(MEMORY_FILE, 'r') as f:
+                    return set(json.load(f))
+            except:
+                return set()
+        return set()
+
+    def save_memory(self):
+        """Save processed IDs to file"""
+        try:
+            # Keep only last 1000 IDs to prevent file bloat
+            if len(self.processed_ids) > 1000:
+                self.processed_ids = set(list(self.processed_ids)[-500:])
+            
+            with open(MEMORY_FILE, 'w') as f:
+                json.dump(list(self.processed_ids), f)
+        except Exception as e:
+            logger.error(f"Memory Save Error: {e}")
 
     def get_token(self):
         url = f"{RINGCENTRAL_SERVER}/restapi/oauth/token"
@@ -85,6 +112,9 @@ class AsyncGigiBot:
 
     async def generate_smart_reply(self, incoming_text, name, sender_type):
         """Use Gemini to generate a context-aware reply"""
+        if not GEMINI_OK:
+            return f"Thanks {name if name else ''}. I've logged this. (Gemini Error: {GEMINI_ERROR})"
+            
         try:
             prompt = f"""
             {SYSTEM_PROMPT}
@@ -95,16 +125,11 @@ class AsyncGigiBot:
             
             Draft a reply:
             """
-            
-            # Run generation in thread pool
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(None, lambda: model.generate_content(prompt))
-            reply = response.text.strip().replace('"', '')
-            logger.info(f"🧠 Gemini Generated: {reply}")
-            return reply
+            return response.text.strip().replace('"', '')
         except Exception as e:
             logger.error(f"Gemini Error: {e}")
-            # Fallback
             return f"Thanks {name if name else ''}. I've logged this for the team."
 
     async def send_sms(self, to_phone, text):
@@ -126,7 +151,7 @@ class AsyncGigiBot:
         except Exception as e:
             logger.error(f"Send Error: {e}")
 
-    # --- DOCUMENTATION LOGIC (Simplified for brevity but functionally identical) ---
+    # --- DOCUMENTATION LOGIC (Simplified) ---
     def _document_sync(self, text, phone, source="sms"):
         identified_name = None
         sender_type = "Unknown"
@@ -146,18 +171,12 @@ class AsyncGigiBot:
                 if cg:
                     identified_name = cg.first_name
                     sender_type = "Caregiver"
-                    logger.info(f"Identified CG: {cg.full_name}")
             except Exception:
                 pass
 
-            # 2. Log to WellSky (Client Note or Admin Task)
-            # ... (Existing logging logic) ...
-            # For speed in this update, I'm assuming the previous logging logic works
-            # and just focusing on returning the NAME for Gemini.
-            
-            # Re-implementing the core logging logic briefly:
+            # 2. Log to WellSky
             client_id = None
-            possible_names = re.findall(r'([A-Z][a-z]+)', text) # Simple extraction
+            possible_names = re.findall(r'([A-Z][a-z]+)', text)
             for pname in possible_names:
                 if client_id: break
                 try:
@@ -208,7 +227,10 @@ class AsyncGigiBot:
                 if last_msg.get("direction") == "Inbound":
                     msg_id = str(last_msg.get("id"))
                     if msg_id in self.processed_ids: continue
+                    
+                    # Mark processed & save immediately
                     self.processed_ids.add(msg_id)
+                    self.save_memory()
                         
                     text = last_msg.get("subject", "")
                     logger.info(f"📩 New Message from {phone}: {text[:30]}...")
@@ -222,6 +244,9 @@ class AsyncGigiBot:
                     await self.send_sms(phone, reply_text)
                 else:
                     for m in msgs: self.processed_ids.add(str(m.get("id")))
+            
+            # Save memory after batch
+            self.save_memory()
 
         except Exception as e:
             logger.error(f"Poll Error: {e}")
