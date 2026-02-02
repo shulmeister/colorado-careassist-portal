@@ -316,7 +316,8 @@ async def start_gigi_bot_from_unified():
             from gigi.async_bot import bot
             
             # Start the loop as a background task
-            asyncio.create_task(bot.run_loop())
+            # DISABLED BY REQUEST - 2026-02-01
+            # asyncio.create_task(bot.run_loop())
             
     except Exception as e:
         logger.error(f"❌ Failed to start Gigi Bot from Unified: {e}")
