@@ -772,14 +772,23 @@ class WellSkyService:
             return []
 
         # Real API Implementation (FHIR)
-        active = None
-        if status == ClientStatus.ACTIVE:
-            active = True
-        elif status == ClientStatus.DISCHARGED:
-            active = False
+        # UPDATE: Fetch all and filter locally if needed, as 'active=true' filter is returning 0 incorrectly
+        active_filter = None
+        # if status == ClientStatus.ACTIVE:
+        #     active_filter = True
+        # elif status == ClientStatus.DISCHARGED:
+        #     active_filter = False
             
         page = offset // limit if limit > 0 else 0
-        return self.search_patients(active=active, limit=limit, page=page)
+        clients = self.search_patients(active=active_filter, limit=limit, page=page)
+        
+        # Local filtering for status if requested
+        if status == ClientStatus.ACTIVE:
+            return [c for c in clients if c.status == ClientStatus.ACTIVE]
+        elif status == ClientStatus.DISCHARGED:
+            return [c for c in clients if c.status == ClientStatus.DISCHARGED]
+            
+        return clients
 
     def get_client(self, client_id: str) -> Optional[WellSkyClient]:
         """Get a single client by ID"""
@@ -914,12 +923,21 @@ class WellSkyService:
             "_page": page
         }
 
-        success, data = self._make_request(
-            "POST",
-            "patients/_search/",
-            params=params,
-            data=search_payload
-        )
+        # UPDATE: If no search criteria other than active is provided, use GET /patients
+        # because POST /patients/_search/ with active=true is currently returning 0.
+        if not any([first_name, last_name, phone, city]):
+            success, data = self._make_request(
+                "GET",
+                "patients",
+                params=params
+            )
+        else:
+            success, data = self._make_request(
+                "POST",
+                "patients/_search/",
+                params=params,
+                data=search_payload
+            )
 
         if not success:
             logger.error(f"Patient search failed: {data}")
@@ -1162,11 +1180,13 @@ class WellSkyService:
 
         # Determine status
         # WellSky status IDs: 1=Lead, 60=Pending, 80=Care Started, 100=Discharged, 110=Lost
+        # IMPORTANT: Prioritize status_id over FHIR active flag since active=false is often incorrect
         if is_client:
-            if status_id >= 80 and status_id < 100:
-                status = ClientStatus.ACTIVE
-            elif status_id == 100:
+            if status_id == 100:
                 status = ClientStatus.DISCHARGED
+            elif status_id == 80:
+                # Care Started = ACTIVE (regardless of FHIR active flag)
+                status = ClientStatus.ACTIVE
             elif status_id >= 60:
                 status = ClientStatus.PENDING
             else:
@@ -1174,16 +1194,15 @@ class WellSkyService:
         else:
             if status_id == 110:
                 status = ClientStatus.DISCHARGED # Lost prospect
+            elif status_id == 100:
+                status = ClientStatus.DISCHARGED
             else:
                 status = ClientStatus.PROSPECT
 
-        # Override with active flag if explicitly False and not already DISCHARGED
-        if not active and status != ClientStatus.DISCHARGED:
-            # If WellSky says inactive but status is 80, it might be a temporary hold
-            if status == ClientStatus.ACTIVE:
-                status = ClientStatus.ON_HOLD
-            else:
-                status = ClientStatus.DISCHARGED
+        # Only override with active flag for truly discharged clients (status_id=100)
+        # Don't trust active=false for status_id=80 (Care Started) clients
+        if not active and status_id == 100:
+            status = ClientStatus.DISCHARGED
 
         return WellSkyClient(
             id=client_id,
@@ -3498,14 +3517,39 @@ class WellSkyService:
             }
 
         # Real API implementation would aggregate from multiple endpoints
-        clients = self.get_clients(status=ClientStatus.ACTIVE)
-        caregivers = self.get_caregivers(status=CaregiverStatus.ACTIVE)
-        shifts = self.get_shifts(
-            date_from=date.today() - timedelta(days=days),
-            date_to=date.today()
-        )
-        open_shifts = self.get_open_shifts()
-        care_plans_due = self.get_care_plans_due_for_review()
+        clients = []
+        caregivers = []
+        shifts = []
+        open_shifts = []
+        care_plans_due = []
+
+        try:
+            clients = self.get_clients(status=ClientStatus.ACTIVE)
+        except Exception as e:
+            logger.error(f"Failed to get clients for summary: {e}")
+
+        try:
+            caregivers = self.get_caregivers(status=CaregiverStatus.ACTIVE)
+        except Exception as e:
+            logger.error(f"Failed to get caregivers for summary: {e}")
+
+        try:
+            shifts = self.get_shifts(
+                date_from=date.today() - timedelta(days=days),
+                date_to=date.today()
+            )
+        except Exception as e:
+            logger.error(f"Failed to get shifts for summary: {e}")
+
+        try:
+            open_shifts = self.get_open_shifts()
+        except Exception as e:
+            logger.error(f"Failed to get open shifts for summary: {e}")
+
+        try:
+            care_plans_due = self.get_care_plans_due_for_review()
+        except Exception as e:
+            logger.error(f"Failed to get care plans for summary: {e}")
 
         completed = [s for s in shifts if s.status == ShiftStatus.COMPLETED]
         evv_verified = [s for s in completed if s.evv_verified]

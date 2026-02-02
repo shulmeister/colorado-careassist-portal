@@ -1961,10 +1961,9 @@ async def api_operations_clients(
         raise HTTPException(status_code=503, detail="WellSky service not available")
 
     try:
-        # Fetch ALL clients to ensure data visibility (since Active filter might be strict)
-        # Use limit=1000 to get more than the default 100
-        clients = wellsky_service.get_clients(status=None, limit=1000)
-        logger.info(f"DEBUG: get_clients returned {len(clients)} clients")
+        # Fetch ACTIVE clients only (not discharged/inactive)
+        clients = wellsky_service.get_clients(status=ClientStatus.ACTIVE, limit=1000)
+        logger.info(f"DEBUG: get_clients(ACTIVE) returned {len(clients)} clients")
         client_list = []
         for client in clients:
             # TODO: Re-enable risk indicators with caching to prevent timeouts
