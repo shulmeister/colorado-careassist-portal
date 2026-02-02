@@ -1961,8 +1961,8 @@ async def api_operations_clients(
         raise HTTPException(status_code=503, detail="WellSky service not available")
 
     try:
-        status_enum = ClientStatus.ACTIVE if ClientStatus is not None else None
-        clients = wellsky_service.get_clients(status=status_enum)
+        # Fetch ALL clients to ensure data visibility (since Active filter might be strict)
+        clients = wellsky_service.get_clients(status=None)
         client_list = []
         for client in clients:
             # Get risk indicators for each client
