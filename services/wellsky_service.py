@@ -629,10 +629,11 @@ class WellSkyService:
         }
 
         # Add agencyId to query params (required by WellSky API)
+        # UPDATE: For Connect/FHIR API, the token handles scope. Explicit agencyId might filter incorrectly.
         if params is None:
             params = {}
-        if "agencyId" not in params and self.agency_id:
-            params["agencyId"] = self.agency_id
+        # if "agencyId" not in params and self.agency_id:
+        #     params["agencyId"] = self.agency_id
 
         try:
             if method.upper() == "GET":
