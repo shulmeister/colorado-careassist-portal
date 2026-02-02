@@ -1,7 +1,3 @@
-""
-Async Minimal Bot - Designed to run INSIDE FastAPI
-Now with WellSky Logging, Personalization, AND Gemini Brain!
-""
 import os
 import sys
 import asyncio
