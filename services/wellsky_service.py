@@ -1164,6 +1164,12 @@ class WellSkyService:
         status_id = 1
         referral_source = ""
 
+        # Debug: Show raw meta tags for first client
+        if not hasattr(self, '_logged_meta'):
+            self._logged_meta = True
+            meta_tags = fhir_data.get("meta", {}).get("tag", [])
+            logger.info(f"DEBUG: Raw meta tags for client {client_id}: {meta_tags}")
+
         for tag in fhir_data.get("meta", {}).get("tag", []):
             code = tag.get("code", "")
             display = tag.get("display", "")
