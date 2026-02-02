@@ -1961,10 +1961,9 @@ async def api_operations_clients(
         raise HTTPException(status_code=503, detail="WellSky service not available")
 
     try:
-        # TEMPORARY: Fetch ALL clients to see what's in WellSky while debugging status parsing
-        # TODO: Change back to ClientStatus.ACTIVE once status_id issue is resolved
-        clients = wellsky_service.get_clients(status=None, limit=1000)
-        logger.info(f"DEBUG: get_clients(ALL) returned {len(clients)} clients")
+        # Fetch ACTIVE clients only (isClient=True in WellSky)
+        clients = wellsky_service.get_clients(status=ClientStatus.ACTIVE, limit=1000)
+        logger.info(f"DEBUG: get_clients(ACTIVE) returned {len(clients)} clients")
         client_list = []
         for client in clients:
             # TODO: Re-enable risk indicators with caching to prevent timeouts

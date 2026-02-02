@@ -1194,30 +1194,14 @@ class WellSkyService:
             logger.info(f"DEBUG Client {client_id}: status_id={status_id}, is_client={is_client}, active={active}")
 
         # Determine status
-        # WellSky status IDs: 1=Lead, 60=Pending, 80=Care Started, 100=Discharged, 110=Lost
-        # IMPORTANT: Prioritize status_id over FHIR active flag since active=false is often incorrect
+        # REALITY CHECK: WellSky returns status='None' (string literal) for active clients
+        # isClient=True is the actual indicator of active clients
         if is_client:
-            if status_id == 100:
-                status = ClientStatus.DISCHARGED
-            elif status_id == 80:
-                # Care Started = ACTIVE (regardless of FHIR active flag)
-                status = ClientStatus.ACTIVE
-            elif status_id >= 60:
-                status = ClientStatus.PENDING
-            else:
-                status = ClientStatus.PROSPECT
+            # If marked as client, they're ACTIVE
+            status = ClientStatus.ACTIVE
         else:
-            if status_id == 110:
-                status = ClientStatus.DISCHARGED # Lost prospect
-            elif status_id == 100:
-                status = ClientStatus.DISCHARGED
-            else:
-                status = ClientStatus.PROSPECT
-
-        # Only override with active flag for truly discharged clients (status_id=100)
-        # Don't trust active=false for status_id=80 (Care Started) clients
-        if not active and status_id == 100:
-            status = ClientStatus.DISCHARGED
+            # Not marked as client = prospect
+            status = ClientStatus.PROSPECT
 
         # Debug: Show final status for first 5 clients
         if self._debug_count <= 5:
