@@ -1178,6 +1178,15 @@ class WellSkyService:
             elif code == "referralSource":
                 referral_source = display
 
+        # Debug: Log first 5 clients to understand status_id values
+        if hasattr(self, '_debug_count'):
+            self._debug_count += 1
+        else:
+            self._debug_count = 1
+
+        if self._debug_count <= 5:
+            logger.info(f"DEBUG Client {client_id}: status_id={status_id}, is_client={is_client}, active={active}")
+
         # Determine status
         # WellSky status IDs: 1=Lead, 60=Pending, 80=Care Started, 100=Discharged, 110=Lost
         # IMPORTANT: Prioritize status_id over FHIR active flag since active=false is often incorrect
@@ -1203,6 +1212,10 @@ class WellSkyService:
         # Don't trust active=false for status_id=80 (Care Started) clients
         if not active and status_id == 100:
             status = ClientStatus.DISCHARGED
+
+        # Debug: Show final status for first 5 clients
+        if self._debug_count <= 5:
+            logger.info(f"DEBUG Client {client_id}: Final status={status.value}")
 
         return WellSkyClient(
             id=client_id,
