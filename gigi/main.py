@@ -3221,17 +3221,21 @@ async def log_client_issue(
         })
     else:
         # 1. Create WellSky Task for client issue
-        if WELLSKY_AVAILABLE and wellsky and effective_client_id != "UNKNOWN":
+        if WELLSKY_AVAILABLE and wellsky:
             task_priority = "urgent" if priority == "urgent" else "high" if priority == "high" else "normal"
+            
+            # Use effective_client_id or fallback to None for generic task
+            ws_client_id = effective_client_id if effective_client_id != "UNKNOWN" else None
+            
             task_created = wellsky.create_admin_task(
                 title=f"Client Issue: {issue_type}",
                 description=f"{note}\n\nPriority: {priority}\nLogged by: Gigi AI\nRequires follow-up call within 30 minutes",
                 priority=task_priority,
-                related_client_id=effective_client_id,
+                related_client_id=ws_client_id,
                 assigned_to=os.getenv("WELLSKY_CARE_MANAGER_USER_ID")  # Assign to care manager if configured
             )
             if task_created:
-                logger.info(f"✅ WellSky Task created for client issue: {issue_type}")
+                logger.info(f"✅ WellSky Task created for client issue: {issue_type} (Client: {ws_client_id or 'GENERAL'})")
             else:
                 logger.warning(f"⚠️ Failed to create WellSky Task for client issue")
 

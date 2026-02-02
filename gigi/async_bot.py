@@ -1,7 +1,7 @@
-"""
+""
 Async Minimal Bot - Designed to run INSIDE FastAPI
-Now with Persistent Memory & Gemini Debugging
-"""
+Now with WellSky Logging, Personalization, AND Gemini Brain!
+""
 import os
 import sys
 import asyncio
@@ -36,13 +36,13 @@ GEMINI_API_KEY = "AIzaSyB-67dmnNUmfJfvbEznwqLYcnMZBMPam8o"
 RINGCENTRAL_SERVER = "https://platform.ringcentral.com"
 RINGCENTRAL_FROM_NUMBER = "+17194283999"
 ADMIN_PHONE = "+16039971495"
-MEMORY_FILE = "gigi_sms_memory.json"
 
 # Initialize Gemini
 try:
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-pro')
     GEMINI_OK = True
+    GEMINI_ERROR = None
 except Exception as e:
     GEMINI_OK = False
     GEMINI_ERROR = str(e)
@@ -55,7 +55,7 @@ Tone: Professional, calm, empathetic, and concise. You are NOT a robot.
 Action: You have ALREADY logged their request to the WellSky system.
 
 SCENARIOS:
-1. Sick/Call-out: "I hear you. I've logged your call-out and we're reaching out for coverage. Feel better."
+1. Sick/Call-out: "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better."
 2. Late: "Thanks for letting us know. Drive safe."
 3. General: "Got it. I've logged this for the team."
 
@@ -68,30 +68,10 @@ INSTRUCTIONS:
 
 class AsyncGigiBot:
     def __init__(self):
-        self.processed_ids = self.load_memory()
+        # We'll use a local session-based set for deduplication
+        # But our main defense is checking if WE were the last sender in RC history
+        self.processed_ids = set()
         self.token = None
-
-    def load_memory(self):
-        """Load processed IDs from file to survive restarts"""
-        if os.path.exists(MEMORY_FILE):
-            try:
-                with open(MEMORY_FILE, 'r') as f:
-                    return set(json.load(f))
-            except:
-                return set()
-        return set()
-
-    def save_memory(self):
-        """Save processed IDs to file"""
-        try:
-            # Keep only last 1000 IDs to prevent file bloat
-            if len(self.processed_ids) > 1000:
-                self.processed_ids = set(list(self.processed_ids)[-500:])
-            
-            with open(MEMORY_FILE, 'w') as f:
-                json.dump(list(self.processed_ids), f)
-        except Exception as e:
-            logger.error(f"Memory Save Error: {e}")
 
     def get_token(self):
         url = f"{RINGCENTRAL_SERVER}/restapi/oauth/token"
@@ -113,7 +93,7 @@ class AsyncGigiBot:
     async def generate_smart_reply(self, incoming_text, name, sender_type):
         """Use Gemini to generate a context-aware reply"""
         if not GEMINI_OK:
-            return f"Thanks {name if name else ''}. I've logged this. (Gemini Error: {GEMINI_ERROR})"
+            return f"Hi {name or ''}! I've logged your message for the team. (Diag: AI Offline - {GEMINI_ERROR})"
             
         try:
             prompt = f"""
@@ -130,7 +110,7 @@ class AsyncGigiBot:
             return response.text.strip().replace('"', '')
         except Exception as e:
             logger.error(f"Gemini Error: {e}")
-            return f"Thanks {name if name else ''}. I've logged this for the team."
+            return f"Hi {name or ''}! I've logged your message. Someone will follow up shortly."
 
     async def send_sms(self, to_phone, text):
         if not self.token: return
@@ -146,12 +126,15 @@ class AsyncGigiBot:
             "text": text
         }
         try:
-            requests.post(url, headers=headers, json=data)
-            logger.info(f"✅ SMS Sent to {to_phone}")
+            resp = requests.post(url, headers=headers, json=data)
+            if resp.status_code == 200:
+                logger.info(f"✅ SMS Sent to {to_phone}")
+            else:
+                logger.error(f"❌ Send Failed: {resp.text}")
         except Exception as e:
             logger.error(f"Send Error: {e}")
 
-    # --- DOCUMENTATION LOGIC (Simplified) ---
+    # --- DOCUMENTATION LOGIC ---
     def _document_sync(self, text, phone, source="sms"):
         identified_name = None
         sender_type = "Unknown"
@@ -171,6 +154,7 @@ class AsyncGigiBot:
                 if cg:
                     identified_name = cg.first_name
                     sender_type = "Caregiver"
+                    logger.info(f"Identified CG: {cg.full_name}")
             except Exception:
                 pass
 
@@ -180,14 +164,20 @@ class AsyncGigiBot:
             for pname in possible_names:
                 if client_id: break
                 try:
-                    clients = wellsky_service.search_patients(last_name=pname)
+                    search_term = pname.split()[-1]
+                    clients = wellsky_service.search_patients(last_name=search_term)
                     if clients: client_id = clients[0].id
                 except: pass
             
             if client_id:
-                wellsky_service.add_note_to_client(client_id=client_id, note=f"SMS from {phone}: {text}", note_type="general", source="gigi_ai")
+                wellsky_service.add_note_to_client(client_id=client_id, note=f"Gigi SMS from {phone}: {text}", note_type="general", source="gigi_ai")
             else:
-                wellsky_service.create_admin_task(title=f"SMS: {identified_name or phone}", description=f"{text}", priority="normal")
+                # Always create at least an Admin Task
+                wellsky_service.create_admin_task(
+                    title=f"SMS from {identified_name or phone}", 
+                    description=f"Message: {text}\nSender: {phone}", 
+                    priority="normal"
+                )
 
             return identified_name, sender_type
             
@@ -224,13 +214,14 @@ class AsyncGigiBot:
                 msgs.sort(key=lambda x: x.get("creationTime", ""))
                 last_msg = msgs[-1]
                 
+                # CRITICAL DEFENSE: Only reply if the LAST message was from THEM
                 if last_msg.get("direction") == "Inbound":
                     msg_id = str(last_msg.get("id"))
-                    if msg_id in self.processed_ids: continue
                     
-                    # Mark processed & save immediately
+                    # Deduplicate in current session
+                    if msg_id in self.processed_ids:
+                        continue
                     self.processed_ids.add(msg_id)
-                    self.save_memory()
                         
                     text = last_msg.get("subject", "")
                     logger.info(f"📩 New Message from {phone}: {text[:30]}...")
@@ -241,12 +232,12 @@ class AsyncGigiBot:
                     # 2. GENERATE SMART REPLY
                     reply_text = await self.generate_smart_reply(text, first_name, sender_type)
                     
+                    # 3. Send SMS
                     await self.send_sms(phone, reply_text)
                 else:
-                    for m in msgs: self.processed_ids.add(str(m.get("id")))
-            
-            # Save memory after batch
-            self.save_memory()
+                    # Mark all messages in this thread as handled
+                    for m in msgs:
+                        self.processed_ids.add(str(m.get("id")))
 
         except Exception as e:
             logger.error(f"Poll Error: {e}")
