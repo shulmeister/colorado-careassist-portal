@@ -31,6 +31,9 @@ class GoFormzService:
         self.access_token = None
         self.token_expires_at = None
         
+        # Cache for form IDs to reduce API calls
+        self._form_id_cache = {}
+        
         if not self.enabled:
             logger.warning("GoFormz credentials not configured. GoFormz integration disabled.")
     
@@ -170,15 +173,24 @@ class GoFormzService:
             if form_id:
                 params["formId"] = form_id
             elif form_name:
-                # First find form by name
-                forms_result = self.get_forms(limit=1000)
-                if forms_result.get('success'):
-                    forms = forms_result.get('forms', {}).get('data', [])
-                    matching_form = next((f for f in forms if f.get('name', '').lower() == form_name.lower()), None)
-                    if matching_form:
-                        params["formId"] = matching_form.get('id')
-                    else:
-                        return {"success": False, "error": f"Form '{form_name}' not found"}
+                # Check cache first
+                if form_name in self._form_id_cache:
+                    params["formId"] = self._form_id_cache[form_name]
+                else:
+                    # First find form by name
+                    forms_result = self.get_forms(limit=1000)
+                    if forms_result.get('success'):
+                        forms = forms_result.get('forms', {}).get('data', [])
+                        # Populate cache
+                        for f in forms:
+                            self._form_id_cache[f.get('name', '')] = f.get('id')
+                            
+                        matching_form = next((f for f in forms if f.get('name', '').lower() == form_name.lower()), None)
+                        if matching_form:
+                            params["formId"] = matching_form.get('id')
+                            self._form_id_cache[form_name] = matching_form.get('id')
+                        else:
+                            return {"success": False, "error": f"Form '{form_name}' not found"}
             
             # Add date filter if provided
             if since:
@@ -208,21 +220,33 @@ class GoFormzService:
             return {"success": False, "error": "GoFormz not configured"}
         
         try:
-            # Get all forms to find Client Packet
-            forms_result = self.get_forms(limit=1000)
-            if not forms_result.get('success'):
-                return forms_result
+            client_packet_ids = []
             
-            forms = forms_result.get('forms', {}).get('data', [])
-            client_packet_forms = [f for f in forms if 'client packet' in f.get('name', '').lower()]
+            # Check if we have cached IDs for 'Client Packet'
+            cached_ids = [fid for name, fid in self._form_id_cache.items() if 'client packet' in name.lower()]
             
-            if not client_packet_forms:
+            if cached_ids:
+                client_packet_ids = cached_ids
+            else:
+                # Get all forms to find Client Packet
+                forms_result = self.get_forms(limit=1000)
+                if not forms_result.get('success'):
+                    return forms_result
+                
+                forms = forms_result.get('forms', {}).get('data', [])
+                # Update cache
+                for f in forms:
+                    self._form_id_cache[f.get('name', '')] = f.get('id')
+                    
+                client_packet_forms = [f for f in forms if 'client packet' in f.get('name', '').lower()]
+                client_packet_ids = [f.get('id') for f in client_packet_forms]
+            
+            if not client_packet_ids:
                 return {"success": True, "submissions": [], "message": "No Client Packet forms found"}
             
             # Get submissions for all Client Packet forms
             all_submissions = []
-            for form in client_packet_forms:
-                form_id = form.get('id')
+            for form_id in client_packet_ids:
                 submissions_result = self.get_form_submissions(form_id=form_id, limit=1000, since=since)
                 if submissions_result.get('success'):
                     submissions = submissions_result.get('submissions', {}).get('data', [])
