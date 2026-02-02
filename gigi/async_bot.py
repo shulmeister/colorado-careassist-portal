@@ -55,7 +55,7 @@ Tone: Professional, calm, empathetic, and concise. You are NOT a robot.
 Action: You have ALREADY logged their request to the WellSky system.
 
 SCENARIOS:
-1. Sick/Call-out: "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better."
+1. Sick/Call-out: "I hear you. I've logged your call-out and we're reaching out for coverage. Feel better."
 2. Late: "Thanks for letting us know. Drive safe."
 3. General: "Got it. I've logged this for the team."
 
@@ -132,10 +132,11 @@ class AsyncGigiBot:
             else:
                 logger.error(f"❌ Send Failed: {resp.text}")
         except Exception as e:
-            logger.error(f"Send Error: {e}")
+            logger.error(f"Send Exception: {e}")
 
     # --- DOCUMENTATION LOGIC ---
     def _document_sync(self, text, phone, source="sms"):
+        """Synchronous documentation logic run in thread pool"""
         identified_name = None
         sender_type = "Unknown"
         
