@@ -1967,12 +1967,9 @@ async def api_operations_clients(
         logger.info(f"DEBUG: get_clients returned {len(clients)} clients")
         client_list = []
         for client in clients:
-            # Get risk indicators for each client
-            try:
-                indicators = wellsky_service.get_client_satisfaction_indicators(client.id)
-            except Exception as e:
-                logger.warning(f"Error getting indicators for client {client.id}: {e}")
-                indicators = {}
+            # TODO: Re-enable risk indicators with caching to prevent timeouts
+            # For now, skip individual API calls to speed up response
+            indicators = {}
 
             name = getattr(client, "full_name", None)
             if not name:
