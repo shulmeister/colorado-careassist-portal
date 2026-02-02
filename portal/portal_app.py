@@ -1962,7 +1962,9 @@ async def api_operations_clients(
 
     try:
         # Fetch ALL clients to ensure data visibility (since Active filter might be strict)
-        clients = wellsky_service.get_clients(status=None)
+        # Use limit=1000 to get more than the default 100
+        clients = wellsky_service.get_clients(status=None, limit=1000)
+        logger.info(f"DEBUG: get_clients returned {len(clients)} clients")
         client_list = []
         for client in clients:
             # Get risk indicators for each client
@@ -1995,6 +1997,7 @@ async def api_operations_clients(
                 "risk_score": indicators.get("risk_score", 0) if indicators else 0,
                 "last_visit": getattr(client, 'last_visit_date', None),
             })
+        logger.info(f"DEBUG: Returning {len(client_list)} clients to frontend")
         return JSONResponse({"clients": client_list})
     except Exception as e:
         logger.error(f"Error getting operations clients: {e}")
