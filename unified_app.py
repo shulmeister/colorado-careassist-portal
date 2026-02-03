@@ -12,6 +12,13 @@ Architecture:
 """
 import os
 import sys
+
+# CRITICAL: Set up Python path BEFORE any other imports
+# This ensures all submodules can find services, gigi, etc.
+_ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
+if _ROOT_PATH not in sys.path:
+    sys.path.insert(0, _ROOT_PATH)
+
 from fastapi import FastAPI
 import logging
 
@@ -21,12 +28,7 @@ logger = logging.getLogger(__name__)
 
 # Import and set up the portal app as the main app
 try:
-    # Ensure root path is in sys.path first so portal can import root-level services
-    root_path = os.path.dirname(__file__)
-    if root_path not in sys.path:
-        sys.path.insert(0, root_path)
-
-    portal_path = os.path.join(os.path.dirname(__file__), "portal")
+    portal_path = os.path.join(_ROOT_PATH, "portal")
     sys.path.insert(0, portal_path)
 
     import importlib.util
@@ -50,18 +52,18 @@ from fastapi.middleware.wsgi import WSGIMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # ==================== MOUNT SALES DASHBOARD ====================
-try:
-    # Set DATABASE_URL for sales dashboard
-    if os.getenv("SALES_DATABASE_URL"):
-        os.environ["DATABASE_URL"] = os.getenv("SALES_DATABASE_URL")
-        logger.info("✅ Set DATABASE_URL for sales dashboard")
+# Set DATABASE_URL for sales dashboard
+if os.getenv("SALES_DATABASE_URL"):
+    os.environ["DATABASE_URL"] = os.getenv("SALES_DATABASE_URL")
+    logger.info("✅ Set DATABASE_URL for sales dashboard")
 
-    sales_path = os.path.join(os.path.dirname(__file__), "sales")
-    if os.path.exists(sales_path):
+sales_path = os.path.join(os.path.dirname(__file__), "sales")
+saved_services_modules = {}
+if os.path.exists(sales_path):
+    try:
         # Save AND REMOVE root-level services modules before loading sales
         # Sales has its own services/ directory, so we need to clear the cache
         # to let sales import its own services modules, then restore root's after
-        saved_services_modules = {}
         for mod_name in list(sys.modules.keys()):
             if mod_name == 'services' or mod_name.startswith('services.'):
                 saved_services_modules[mod_name] = sys.modules.pop(mod_name)  # pop removes from cache
@@ -91,22 +93,22 @@ try:
         app.mount("/sales", sales_app)
 
         logger.info("✅ Mounted Sales Dashboard at /sales")
-
-        # Restore root path to front of sys.path so portal's services.marketing imports work
-        if root_path in sys.path:
-            sys.path.remove(root_path)
-        sys.path.insert(0, root_path)
+    except Exception as e:
+        logger.error(f"❌ Failed to mount sales dashboard: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+    finally:
+        # ALWAYS restore root path and services modules, even if sales failed
+        if _ROOT_PATH in sys.path:
+            sys.path.remove(_ROOT_PATH)
+        sys.path.insert(0, _ROOT_PATH)
 
         # Restore root services modules (especially services.marketing.*) for portal's use
-        # This overwrites sales' services in sys.modules, but sales already has references to its modules
-        sys.modules.update(saved_services_modules)
-        logger.info(f"✅ Restored {len(saved_services_modules)} root services modules to cache")
-    else:
-        logger.warning("⚠️  Sales dashboard not found")
-except Exception as e:
-    logger.error(f"❌ Failed to mount sales dashboard: {e}")
-    import traceback
-    logger.error(traceback.format_exc())
+        if saved_services_modules:
+            sys.modules.update(saved_services_modules)
+            logger.info(f"✅ Restored {len(saved_services_modules)} root services modules to cache")
+else:
+    logger.warning("⚠️  Sales dashboard not found")
 
 # ==================== MOUNT RECRUITER DASHBOARD ====================
 try:
@@ -203,10 +205,12 @@ except Exception as e:
 # ==================== MOUNT GIGI AI AGENT ====================
 # Gigi is the AI voice assistant powered by Retell AI
 try:
-    gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
+    gigi_path = os.path.join(_ROOT_PATH, "gigi")
     if os.path.exists(gigi_path):
-        sys.path.insert(0, gigi_path)
-        logger.info(f"✅ Added gigi path: {gigi_path}")
+        # Ensure project root is in path (not gigi folder) so gigi can import services
+        if _ROOT_PATH not in sys.path:
+            sys.path.insert(0, _ROOT_PATH)
+        logger.info(f"✅ Loading Gigi from: {gigi_path}")
 
         # Import Gigi FastAPI app
         gigi_app_file = os.path.join(gigi_path, "main.py")
@@ -306,19 +310,25 @@ async def start_gigi_bot_from_unified():
     try:
         import os
         import asyncio
-        
+
         logger.info("🚀 Starting Gigi RingCentral Bot (via Unified App Startup)")
-        gigi_path = os.path.join(os.path.dirname(__file__), "gigi")
-        if os.path.exists(gigi_path):
-            sys.path.insert(0, gigi_path)
-            
-            # Import the new Async Bot
-            from gigi.async_bot import bot
-            
-            # Start the loop as a background task
-            # DISABLED BY REQUEST - 2026-02-01
-            # asyncio.create_task(bot.run_loop())
-            
+        from gigi.ringcentral_bot import GigiRingCentralBot
+
+        if os.getenv("GIGI_RC_BOT_ENABLED", "true").lower() == "true":
+            bot = GigiRingCentralBot()
+            await bot.initialize()
+
+            async def run_bot_loop():
+                await asyncio.sleep(15)  # Wait for app to stabilize
+                logger.info("🤖 Gigi RC Bot loop starting (Unified)...")
+                while True:
+                    try:
+                        await bot.check_and_act()
+                    except Exception as e:
+                        logger.error(f"Unified RC Bot Loop Error: {e}")
+                    await asyncio.sleep(60)  # Check every 60s
+
+            asyncio.create_task(run_bot_loop())
     except Exception as e:
         logger.error(f"❌ Failed to start Gigi Bot from Unified: {e}")
 
