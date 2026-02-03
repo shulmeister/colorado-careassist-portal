@@ -42,7 +42,7 @@ def load_tools_schema():
         openai_tools = data.get("tools", [])
 
     # Convert from OpenAI format to Retell format
-    WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function"
+    WEBHOOK_BASE = "https://portal.coloradocareassist.com/gigi/webhook/retell/function"
     retell_tools = []
 
     for tool in openai_tools:

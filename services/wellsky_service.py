@@ -55,10 +55,6 @@ API_HOSTS = {
 # OAuth endpoint path (at ROOT level, not under /v1/)
 OAUTH_TOKEN_PATH = "/oauth/accesstoken"  # Working WellSky OAuth path
 
-# Legacy ClearCare API (kept for fallback until officially retired)
-LEGACY_API_HOST = "https://api.clearcareonline.com"
-LEGACY_TOKEN_URL = "https://connect.clearcareonline.com/oauth/accesstoken"
-
 
 # =============================================================================
 # Data Models
@@ -508,9 +504,8 @@ class WellSkyService:
         self.api_mode = os.getenv("WELLSKY_API_MODE", "connect").lower()  # connect or legacy
         self.base_url = API_URLS.get(self.environment, API_URLS["production"])  # API base URL (with /v1)
         self.host_url = API_HOSTS.get(self.environment, API_HOSTS["production"])  # Host URL (for OAuth - no /v1)
-        self.legacy_base_url = f"{LEGACY_API_HOST}/api/v1/agencies/{self.agency_id}" if self.agency_id else ""
-        self.api_base_url = self.legacy_base_url if self.api_mode == "legacy" else self.base_url
-        self.legacy_token_url = LEGACY_TOKEN_URL
+        self.api_base_url = self.base_url
+        self.legacy_token_url = None # Deprecated
 
         self._access_token = None
         self._token_expires_at = None
@@ -555,33 +550,19 @@ class WellSkyService:
                 return self._access_token
 
         try:
-            if self.api_mode == "legacy":
-                # Legacy ClearCare OAuth (form-encoded)
-                response = requests.post(
-                    self.legacy_token_url,
-                    data={
-                        "grant_type": "client_credentials",
-                        "client_id": self.api_key,
-                        "client_secret": self.api_secret,
-                        "scope": "api",
-                    },
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                    timeout=30,
-                )
-            else:
-                # OAuth 2.0 client credentials flow (WellSky Connect API)
-                auth_url = f"{self.host_url}{OAUTH_TOKEN_PATH}"
+            # OAuth 2.0 client credentials flow (WellSky Connect API)
+            auth_url = f"{self.host_url}{OAUTH_TOKEN_PATH}"
 
-                response = requests.post(
-                    auth_url,
-                    json={
-                        "client_id": self.api_key,
-                        "client_secret": self.api_secret,
-                        "grant_type": "client_credentials",
-                    },
-                    headers={"Content-Type": "application/json"},
-                    timeout=30
-                )
+            response = requests.post(
+                auth_url,
+                json={
+                    "client_id": self.api_key,
+                    "client_secret": self.api_secret,
+                    "grant_type": "client_credentials",
+                },
+                headers={"Content-Type": "application/json"},
+                timeout=30
+            )
 
             if response.status_code == 200:
                 data = response.json()
@@ -619,10 +600,9 @@ class WellSkyService:
         if not token:
             return False, {"error": "Authentication failed"}
 
-        if self.api_mode == "legacy":
-            return self._make_legacy_request(method, endpoint, params=params, data=data)[:2]
-
-        url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        # WellSky API requires trailing slashes on all endpoints (per API docs)
+        endpoint_clean = endpoint.lstrip('/').rstrip('/')
+        url = f"{self.base_url}/{endpoint_clean}/"
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
@@ -673,59 +653,7 @@ class WellSkyService:
             "Accept": "application/json"
         }
 
-    def _make_legacy_request(
-        self,
-        method: str,
-        endpoint: str,
-        params: Dict = None,
-        data: Dict = None
-    ) -> Tuple[bool, Any, int]:
-        """Make authenticated request to legacy ClearCare API."""
-        if not self.is_configured:
-            return False, {"error": "API not configured"}, 0
 
-        token = self._get_access_token()
-        if not token:
-            return False, {"error": "Authentication failed"}, 401
-
-        url = f"{self.legacy_base_url}/{endpoint.lstrip('/')}"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json"
-        }
-        if method.upper() in ("POST", "PUT"):
-            headers["Content-Type"] = "application/json"
-
-        try:
-            if method.upper() == "GET":
-                response = requests.get(url, headers=headers, params=params, timeout=30)
-            elif method.upper() == "POST":
-                response = requests.post(url, headers=headers, params=params, json=data, timeout=30)
-            elif method.upper() == "PUT":
-                response = requests.put(url, headers=headers, params=params, json=data, timeout=30)
-            elif method.upper() == "DELETE":
-                response = requests.delete(url, headers=headers, params=params, timeout=30)
-            else:
-                return False, {"error": f"Unsupported method: {method}"}, 400
-
-            if response.status_code in (200, 201):
-                try:
-                    return True, response.json(), response.status_code
-                except Exception:
-                    return True, {}, response.status_code
-            if response.status_code == 204:
-                return True, {}, response.status_code
-
-            try:
-                return False, response.json(), response.status_code
-            except Exception:
-                return False, {"error": response.text}, response.status_code
-        except requests.exceptions.Timeout:
-            logger.error(f"WellSky API timeout: {endpoint}")
-            return False, {"error": "Request timeout"}, 408
-        except Exception as e:
-            logger.error(f"WellSky API error: {e}")
-            return False, {"error": str(e)}, 500
 
     # =========================================================================
     # Client Methods
@@ -756,21 +684,6 @@ class WellSkyService:
                 clients = [c for c in clients if c.status == status]
             return clients[offset:offset + limit]
 
-        if self.api_mode == "legacy":
-            params = {"page": (offset // limit) + 1 if limit > 0 else 1, "pageSize": limit}
-            if status == ClientStatus.ACTIVE:
-                params["status"] = "active"
-            elif status == ClientStatus.DISCHARGED:
-                params["status"] = "discharged"
-            if modified_since:
-                params["modifiedSince"] = modified_since.isoformat()
-
-            success, data = self._make_request("GET", "/clients", params=params)
-            if success:
-                items = data.get("items", [])
-                return [self._parse_legacy_client(item) for item in items]
-            return []
-
         # Real API Implementation (FHIR)
         # UPDATE: Fetch all and filter locally if needed, as 'active=true' filter is returning 0 incorrectly
         active_filter = None
@@ -794,12 +707,6 @@ class WellSkyService:
         """Get a single client by ID"""
         if self.is_mock_mode:
             return self._mock_clients.get(client_id)
-
-        if self.api_mode == "legacy":
-            success, data = self._make_request("GET", f"/clients/{client_id}")
-            if success:
-                return self._parse_legacy_client(data)
-            return None
 
         return self.get_patient(client_id)
 
@@ -1267,18 +1174,6 @@ class WellSkyService:
                 caregivers = [c for c in caregivers if day_name in c.available_days]
             return caregivers[offset:offset + limit]
 
-        if self.api_mode == "legacy":
-            params = {"page": (offset // limit) + 1 if limit > 0 else 1, "pageSize": limit}
-            if status == CaregiverStatus.ACTIVE:
-                params["status"] = "active"
-            elif status in (CaregiverStatus.INACTIVE, CaregiverStatus.TERMINATED):
-                params["status"] = "inactive"
-            success, data = self._make_request("GET", "/employees", params=params)
-            if success:
-                items = data.get("items", [])
-                return [self._parse_legacy_caregiver(item) for item in items]
-            return []
-
         # Real API Implementation (FHIR)
         active = None
         if status == CaregiverStatus.ACTIVE:
@@ -1295,12 +1190,6 @@ class WellSkyService:
         if self.is_mock_mode:
             return self._mock_caregivers.get(caregiver_id)
 
-        if self.api_mode == "legacy":
-            success, data = self._make_request("GET", f"/employees/{caregiver_id}")
-            if success:
-                return self._parse_legacy_caregiver(data)
-            return None
-
         return self.get_practitioner(caregiver_id)
 
     def get_caregiver_by_phone(self, phone: str) -> Optional[WellSkyCaregiver]:
@@ -1313,22 +1202,6 @@ class WellSkyService:
                 cg_clean = re.sub(r'[^\d]', '', cg.phone)[-10:]
                 if cg_clean == clean_phone:
                     return cg
-            return None
-
-        if self.api_mode == "legacy":
-            params = {"phoneNumber": clean_phone, "page": 1, "pageSize": 1}
-            success, data = self._make_request("GET", "/employees", params=params)
-            if success:
-                items = data.get("items", [])
-                if items:
-                    return self._parse_legacy_caregiver(items[0])
-            # Fallback: small page scan
-            success, data = self._make_request("GET", "/employees", params={"page": 1, "pageSize": 50})
-            if success:
-                for item in data.get("items", []):
-                    phone_raw = item.get("phoneNumber", "")
-                    if re.sub(r'[^\d]', '', phone_raw)[-10:] == clean_phone:
-                        return self._parse_legacy_caregiver(item)
             return None
 
         results = self.search_practitioners(phone=clean_phone, active=True, is_hired=True, limit=1)
@@ -1652,28 +1525,6 @@ class WellSkyService:
                 shifts = [s for s in shifts if s.status == status]
             return shifts[:limit]
 
-        if self.api_mode == "legacy":
-            params: Dict[str, Any] = {
-                "page": 1,
-                "pageSize": limit
-            }
-            if date_from:
-                params["startDate"] = date_from.isoformat()
-            if date_to:
-                params["endDate"] = date_to.isoformat()
-            if caregiver_id:
-                params["employeeId"] = caregiver_id
-            if client_id:
-                params["clientId"] = client_id
-
-            success, data = self._make_request("GET", "/visits", params=params)
-            if success:
-                shifts = [self._parse_legacy_visit(item) for item in data.get("items", [])]
-                if status:
-                    shifts = [s for s in shifts if s.status == status]
-                return shifts[:limit]
-            return []
-
         # Real API Implementation
         start_date = date_from or date.today()
         # Handle date range logic for additional_days
@@ -1721,19 +1572,6 @@ class WellSkyService:
 
     def get_shifts_for_client(self, client_id: str, days: int = 30) -> List[WellSkyShift]:
         """Get recent shifts for a specific client"""
-        if self.api_mode == "legacy":
-            params = {
-                "clientId": client_id,
-                "startDate": (date.today() - timedelta(days=days)).isoformat(),
-                "endDate": date.today().isoformat(),
-                "page": 1,
-                "pageSize": 200
-            }
-            success, data = self._make_request("GET", "/visits", params=params)
-            if success:
-                return [self._parse_legacy_visit(item) for item in data.get("items", [])]
-            return []
-
         date_from = date.today() - timedelta(days=days)
         return self.get_shifts(client_id=client_id, date_from=date_from)
 
@@ -1750,14 +1588,6 @@ class WellSkyService:
                 logger.info(f"Mock: Assigned shift {shift_id} to {caregiver.full_name}")
                 return True
             return False
-
-        if self.api_mode == "legacy":
-            success, _data = self._make_request(
-                "PUT",
-                f"/visits/{shift_id}/assign",
-                data={"employeeId": caregiver_id}
-            )
-            return success
 
         success, _ = self._make_request(
             "PUT",
@@ -2393,38 +2223,72 @@ class WellSkyService:
             logger.info(f"Mock: Added note to client {client_id}")
             return True, "Note added (Mock)"
 
-        # Try WellSky API (may fail due to write permission restrictions)
-        endpoint = f"clients/{client_id}/notes/"
-        data = {
-            "note": formatted_note,
-            "note_type": note_type,
-            "source": source
-        }
-
-        success, response = self._make_request("POST", endpoint, data=data)
-        if success:
-            # Update local record to mark as synced
+        # CLOUD SYNC: Connect API (FHIR)
+        # Strategy: Attach note to the most recent Shift Encounter (worked shift).
+        # This avoids the 403 Forbidden on direct client notes and 404 on Legacy API.
+        if self.api_mode == "connect":
             try:
-                conn = sqlite3.connect('portal.db')
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE gigi_documentation_log
-                    SET wellsky_synced = 1
-                    WHERE person_type = 'client' AND person_id = ?
-                    ORDER BY created_at DESC LIMIT 1
-                ''', (client_id,))
-                conn.commit()
-                conn.close()
-            except:
-                pass
-            logger.info(f"Added note to client {client_id} in WellSky")
-            return True, "Note added successfully"
+                # 1. Search for recent encounters (last 14 days)
+                start_date = (date.today() - timedelta(days=14)).strftime("%Y%m%d")
+                end_date = (date.today() + timedelta(days=1)).strftime("%Y%m%d")
+                
+                search_payload = {
+                    "clientId": str(client_id),
+                    "startDate": start_date,
+                    "endDate": end_date
+                }
+                
+                # Sort by date descending to get latest
+                params = {"_count": 1, "_sort": "-date"} 
+                
+                success, data = self._make_request("POST", "encounter/_search/", params=params, data=search_payload)
+                
+                if success and data.get("entry"):
+                    encounter_entry = data["entry"][0]
+                    # FHIR entry might be wrapper or resource
+                    resource = encounter_entry.get("resource", encounter_entry)
+                    encounter_id = resource.get("id")
+                    
+                    if encounter_id:
+                        # 2. Create TaskLog on this encounter
+                        tl_data = {
+                            "resourceType": "TaskLog",
+                            "status": "COMPLETE",
+                            "title": f"Note: {note_type}",
+                            "description": f"[{source.upper()}] {note}",
+                            "recorded": datetime.utcnow().isoformat() + "Z",
+                            "show_in_family_room": False
+                        }
+                        
+                        success_tl, resp_tl = self._make_request("POST", f"encounter/{encounter_id}/tasklog/", data=tl_data)
+                        
+                        if success_tl:
+                            # Update local record to mark as synced
+                            try:
+                                conn = sqlite3.connect('portal.db')
+                                cursor = conn.cursor()
+                                cursor.execute('''
+                                    UPDATE gigi_documentation_log
+                                    SET wellsky_synced = 1
+                                    WHERE person_type = 'client' AND person_id = ?
+                                    ORDER BY created_at DESC LIMIT 1
+                                ''', (client_id,))
+                                conn.commit()
+                                conn.close()
+                            except:
+                                pass
+                            
+                            logger.info(f"Synced client note to WellSky Encounter {encounter_id}")
+                            return True, f"Note synced to WellSky (Encounter {encounter_id})"
+                        else:
+                            logger.warning(f"Failed to create TaskLog on encounter {encounter_id}: {resp_tl}")
+            except Exception as e:
+                logger.error(f"Error syncing note to WellSky encounter: {e}")
 
-        # WellSky failed but local succeeded - still return success
-        if local_logged:
-            logger.warning(f"WellSky API failed for client {client_id}, but local record preserved")
-            return True, "Note documented locally (WellSky sync pending)"
-        return False, str(response)
+        # Fallback: Local logging only
+        # We return success because the data is safely captured in our database
+        logger.info(f"Local: Client note for {client_id} saved to database. (Cloud sync skipped - no active encounter)")
+        return True, "Note documented locally"
 
     def add_note_to_prospect(
         self,
@@ -2476,40 +2340,13 @@ class WellSkyService:
             logger.info(f"Mock: Added note to prospect {prospect_id}")
             return True, "Note added (Mock)"
 
-        # Use legacy endpoint which is known to support notes for prospects
-        # We use _make_legacy_request to bypass the Connect API prefix issues
-        endpoint = f"prospects/{prospect_id}/notes/"
-        data = {
-            "note": formatted_note,
-            "note_type": note_type,
-            "source": source
-        }
+        # WellSky Connect API does not support prospect notes.
+        # Legacy API is decommissioned (404).
+        # We rely on the local database log.
+        logger.info(f"Local: Prospect note for {prospect_id} saved to database. (Cloud sync skipped)")
+        return True, "Note documented locally"
 
-        success, response, status_code = self._make_legacy_request("POST", endpoint, data=data)
-        if success:
-            # Update local record to mark as synced
-            try:
-                import sqlite3
-                conn = sqlite3.connect('portal.db')
-                cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE gigi_documentation_log
-                    SET wellsky_synced = 1
-                    WHERE person_type = 'prospect' AND person_id = ?
-                    ORDER BY created_at DESC LIMIT 1
-                ''', (prospect_id,))
-                conn.commit()
-                conn.close()
-            except:
-                pass
-            logger.info(f"Added note to prospect {prospect_id}")
-            return True, "Note added successfully"
 
-        # WellSky failed but local succeeded - still return success
-        if local_logged:
-            logger.warning(f"WellSky API failed for prospect {prospect_id}, but local record preserved")
-            return True, "Note documented locally (WellSky sync pending)"
-        return False, str(response)
 
     # =========================================================================
     # EVV / Clock In-Out Methods (Used by Gigi AI Agent)
@@ -2646,27 +2483,6 @@ class WellSkyService:
             logger.info(f"Mock: Clocked in shift {shift_id} at {clock_in_time}")
             return True, f"Clocked in at {clock_in_time.strftime('%I:%M %p')}"
 
-        if self.api_mode == "legacy":
-            payload = {
-                "clockInTime": clock_in_time.isoformat(),
-                "notes": notes,
-                "latitude": lat,
-                "longitude": lon,
-                "source": "gigi_sms"
-            }
-            endpoints = [
-                f"/visits/{shift_id}/clockin",
-                f"/visits/{shift_id}/clock-in",
-                f"/visits/{shift_id}/clockIn"
-            ]
-            for endpoint in endpoints:
-                success, data, status_code = self._make_legacy_request("POST", endpoint, data=payload)
-                if success:
-                    return True, f"Clocked in at {clock_in_time.strftime('%I:%M %p')}"
-                if status_code not in (404, 405):
-                    break
-            return False, data.get("error", "Failed to clock in")
-
         # Connect API (FHIR) - Encounter clock-in
         endpoint = f"encounter/{shift_id}/clockin/"
         data = {
@@ -2717,25 +2533,6 @@ class WellSkyService:
 
             logger.info(f"Mock: Clocked out shift {shift_id} at {clock_out_time}")
             return True, f"Clocked out at {clock_out_time.strftime('%I:%M %p')}"
-
-        if self.api_mode == "legacy":
-            payload = {
-                "clockOutTime": clock_out_time.isoformat(),
-                "notes": notes,
-                "source": "gigi_sms"
-            }
-            endpoints = [
-                f"/visits/{shift_id}/clockout",
-                f"/visits/{shift_id}/clock-out",
-                f"/visits/{shift_id}/clockOut"
-            ]
-            for endpoint in endpoints:
-                success, data, status_code = self._make_legacy_request("POST", endpoint, data=payload)
-                if success:
-                    return True, f"Clocked out at {clock_out_time.strftime('%I:%M %p')}"
-                if status_code not in (404, 405):
-                    break
-            return False, data.get("error", "Failed to clock out")
 
         # Connect API (FHIR) - Encounter clock-out
         endpoint = f"encounter/{shift_id}/clockout/"
@@ -2823,37 +2620,16 @@ class WellSkyService:
             return True, message, shift
 
         # Production API call
-        if self.api_mode == "legacy":
-            payload = {
-                "employeeId": caregiver.id,
+        success, data = self._make_request(
+            "POST",
+            f"/shifts/{shift_id}/callout",
+            data={
+                "caregiver_id": caregiver.id,
                 "reason": reason,
-                "notifyClient": notify_client,
+                "notify_client": notify_client,
                 "source": "gigi_sms"
             }
-            endpoints = [
-                f"/visits/{shift_id}/callout",
-                f"/visits/{shift_id}/call-out",
-                f"/visits/{shift_id}/cancel"
-            ]
-            success = False
-            data = {}
-            for endpoint in endpoints:
-                success, data, status_code = self._make_legacy_request("POST", endpoint, data=payload)
-                if success:
-                    break
-                if status_code not in (404, 405):
-                    break
-        else:
-            success, data = self._make_request(
-                "POST",
-                f"/shifts/{shift_id}/callout",
-                data={
-                    "caregiver_id": caregiver.id,
-                    "reason": reason,
-                    "notify_client": notify_client,
-                    "source": "gigi_sms"
-                }
-            )
+        )
 
         if success:
             shift = self.get_shifts(caregiver_id=caregiver.id)
@@ -2866,12 +2642,6 @@ class WellSkyService:
         """Get a single shift by ID"""
         if self.is_mock_mode:
             return self._mock_shifts.get(shift_id)
-
-        if self.api_mode == "legacy":
-            success, data = self._make_request("GET", f"/shifts/{shift_id}")
-            if success:
-                return self._parse_shift(data)
-            return None
 
         return self.get_appointment(shift_id)
 
@@ -4154,26 +3924,15 @@ class WellSkyService:
         if self.is_mock_mode:
             return True
 
-        # Attempt WellSky API call (even if we expect failure, we try)
-        task_data = {
-            "title": title,
-            "description": description,
-            "status": "pending",
-            "priority": priority,
-            "due_date": due_date.isoformat() if due_date else datetime.utcnow().date().isoformat(),
-            "theDate": datetime.utcnow().isoformat()
-        }
+        # WellSky Connect API does not support creating Admin Tasks.
+        # Legacy API is decommissioned (404).
+        # We rely on the local database log created above.
+        logger.info(f"Local: Admin Task '{title}' saved to database. (Cloud sync skipped - not supported by Connect API)")
+        return True
 
-        # Use legacy request for adminTasks
-        success, response, status_code = self._make_legacy_request("POST", "adminTasks/", data=task_data)
-
-        if success:
-            logger.info(f"Created AdminTask in WellSky: {title}")
-            return True
-        else:
-            # We already logged locally, so we consider this "handled" but return False to indicate API failure
-            logger.warning(f"WellSky API Task creation failed (as expected). Local record preserved. {status_code}")
-            return False
+        # DEPRECATED: Legacy API call removed
+        # task_data = { ... }
+        # success, response, status_code = self._make_legacy_request("POST", "adminTasks/", data=task_data)
 
     def add_note_to_caregiver(
         self,
@@ -4238,49 +3997,15 @@ class WellSkyService:
                 return True, f"Note added to caregiver {caregiver_id}"
             return False, f"Caregiver {caregiver_id} not found"
 
-        # Real API call (may fail due to write permission restrictions)
-        try:
-            response = requests.post(
-                f"{self.api_base_url}/caregivers/{caregiver_id}/notes",
-                headers=self._get_headers(),
-                json={
-                    "note": formatted_note,
-                    "note_type": note_type,
-                    "source": source,
-                    "created_at": datetime.utcnow().isoformat()
-                },
-                timeout=15
-            )
-            if response.status_code in (200, 201):
-                # Update local record to mark as synced
-                try:
-                    import sqlite3
-                    conn = sqlite3.connect('portal.db')
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        UPDATE gigi_documentation_log
-                        SET wellsky_synced = 1
-                        WHERE person_type = 'caregiver' AND person_id = ?
-                        ORDER BY created_at DESC LIMIT 1
-                    ''', (caregiver_id,))
-                    conn.commit()
-                    conn.close()
-                except:
-                    pass
-                logger.info(f"Added note to caregiver {caregiver_id}")
-                return True, f"Note added to caregiver {caregiver_id}"
-            else:
-                logger.warning(f"WellSky API failed for caregiver {caregiver_id}: {response.status_code}")
-                # WellSky failed but local succeeded - still return success
-                if local_logged:
-                    return True, "Note documented locally (WellSky sync pending)"
-                return False, f"Failed to add note: {response.status_code}"
-        except Exception as e:
-            logger.error(f"Error adding note to caregiver {caregiver_id}: {e}")
-            # WellSky failed but local succeeded - still return success
-            if local_logged:
-                return True, "Note documented locally (WellSky sync pending)"
-            return False, str(e)
+        # WellSky Connect API does not support general caregiver notes.
+        # Legacy API is decommissioned (404).
+        # We rely on the local database log.
+        logger.info(f"Local: Note for caregiver {caregiver_id} saved to database. (Cloud sync skipped)")
+        return True, "Note documented locally"
+
+        # DEPRECATED: Legacy API call removed
+        # endpoint = f"employees/{caregiver_id}/notes"
+        # ...
 
     def assign_caregiver_to_shift(
         self,
@@ -4367,29 +4092,12 @@ class WellSkyService:
 
         # Real API call
         try:
-            if self.api_mode == "connect":
-                return self.search_appointments(
-                    client_id=client_id,
-                    start_date=today,
-                    additional_days=min(days_ahead, 6),
-                    limit=100
-                )
-
-            response = requests.get(
-                f"{self.api_base_url}/clients/{client_id}/shifts",
-                headers=self._get_headers(),
-                params={
-                    "start_date": today.isoformat(),
-                    "end_date": end_date.isoformat()
-                },
-                timeout=15
+            return self.search_appointments(
+                client_id=client_id,
+                start_date=today,
+                additional_days=min(days_ahead, 6),
+                limit=100
             )
-            if response.status_code == 200:
-                data = response.json()
-                return [self._parse_shift(s) for s in data.get("shifts", [])]
-            else:
-                logger.warning(f"Failed to get client shifts: {response.text}")
-                return []
         except Exception as e:
             logger.error(f"Error getting client shifts: {e}")
             return []

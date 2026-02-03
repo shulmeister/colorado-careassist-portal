@@ -33,7 +33,10 @@ RINGCENTRAL_FROM_NUMBER = "+17194283999"
 
 # ADMIN TOKEN (Jason x101) - Required for visibility into Company Lines (719/303)
 # Standard x111 token is blind to these numbers.
-ADMIN_JWT_TOKEN = "eyJraWQiOiI4NzYyZjU5OGQwNTk0NGRiODZiZjVjYTk3ODA0NzYwOCIsInR5cCI6IkpXVCIsImFsZyI6IlJTMjU2In0.eyJhdWQiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbS9yZXN0YXBpL29hdXRoL3Rva2VuIiwic3ViIjoiMjYyNzQwMDA5IiwiaXNzIjoiaHR0cHM6Ly9wbGF0Zm9ybS5yaW5nY2VudHJhbC5jb20iLCJleHAiOjM5MTAyNDA5NjUsImlhdCI6MTc2Mjc1NzMxOCwianRpIjoiZ3Jsd0pPWGFTM2EwalpibThvTmtZdyJ9.WA9DUSlb_4SlCo9UHNjscHKrVDoJTF4iW3D7Rre9E2qg5UQ_hWfCgysiZJMXlL8-vUuJ2XDNivvpfbxriESKIEPAEEY85MolJZS9KG3g90ga-3pJtHq7SC87mcacXtDWqzmbBS_iDOjmNMHiynWFR9Wgi30DMbz9rQ1U__Bl88qVRTvZfY17ovu3dZDhh-FmLUWRnKOc4LQUvRChQCO-21LdSquZPvEAe7qHEsh-blS8Cvh98wvX-9vaiurDR-kC9Tp007x4lTI74MwQ5rJif7tL7Hslqaoag0WoNEIP9VPrp4x-Q7AzKIzBNbrGr9kIPthIebmeOBDMIIrw6pg_lg"
+# Use JWT from environment variable (refreshed regularly)
+ADMIN_JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN",
+    "eyJraWQiOiI4NzYyZjU5OGQwNTk0NGRiODZiZjVjYTk3ODA0NzYwOCIsInR5cCI6IkpXVCIsImFsZyI6IlJTMjU2In0.eyJhdWQiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbS9yZXN0YXBpL29hdXRoL3Rva2VuIiwic3ViIjoiNjM1NzA0NTYwMDgiLCJpc3MiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbSIsImV4cCI6MzkxNjYyNDk3NywiaWF0IjoxNzY5MTQxMzMwLCJqdGkiOiIyWHZDR2haSlFFLVl1bXRJa2I3eGZ3In0.P29KNaMXc0cDfWU23Yh5pOV8xg2MgVPt5VhWeMi_6YE4_Tz_KLaMnyvM7YZ-ov3RUbMUwsSGZFtziJnz1Ru0Vq_GQ-L5yMABnMH3e3DEvHdydL4Yuo-hekiK0nC32OMXwPsNQu-sthrQp7T6YT1-1jhofDBY9_dLcB8G95B0amplloQDjP_LF9UhBwC4tFu--E2tdmURkbEHFntLDI39s9F6eeW4JiEXqac70-z57bXsOX7P1bOpt79ONYTg8fjqnE7CDGF_HdOXkFwip_FfBXgf6a-AaVRh9QdN9pN2pMxBhu24aXluN0FCDSXYD-SJx0FSfooMNKQ6ffZ_qz9jjA"
+)
 
 # Configure logging
 logging.basicConfig(
@@ -90,15 +93,48 @@ class GigiRingCentralBot:
         logger.info(f"Monitoring chat: {TARGET_CHAT} and Direct SMS")
         return True
 
+    def _get_admin_access_token(self):
+        """Exchange JWT for access token"""
+        try:
+            # Get RC credentials from environment
+            client_id = os.getenv("RINGCENTRAL_CLIENT_ID", "VbxfL4RkN8ncFItIqSP5k7")
+            client_secret = os.getenv("RINGCENTRAL_CLIENT_SECRET", "W3NjGB4CFnJdhGrYsQsovD3dlIzliPo3Oejdw2pB0puW")
+
+            response = requests.post(
+                f"{RINGCENTRAL_SERVER}/restapi/oauth/token",
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                auth=(client_id, client_secret),  # Basic auth with client credentials
+                data={
+                    "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                    "assertion": ADMIN_JWT_TOKEN
+                },
+                timeout=20
+            )
+            if response.status_code == 200:
+                logger.info("✅ JWT exchanged for access token")
+                return response.json().get("access_token")
+            else:
+                logger.error(f"JWT exchange failed: {response.status_code} - {response.text}")
+                return None
+        except Exception as e:
+            logger.error(f"JWT exchange error: {e}")
+            return None
+
     async def send_health_check_sms(self):
         """Send a startup SMS to the admin to confirm vitality"""
         try:
             admin_phone = "+16039971495" # Jason's number
             logger.info(f"🚑 Sending Health Check SMS to {admin_phone}...")
-            
+
+            # Get access token from JWT
+            access_token = self._get_admin_access_token()
+            if not access_token:
+                logger.error("❌ Could not get access token from JWT")
+                return
+
             url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/sms"
             headers = {
-                "Authorization": f"Bearer {ADMIN_JWT_TOKEN}",
+                "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
                 "Accept": "application/json"
             }
@@ -107,7 +143,7 @@ class GigiRingCentralBot:
                 "to": [{"phoneNumber": admin_phone}],
                 "text": "🤖 Gigi Bot Online: Monitoring 719/303 lines via Admin Context."
             }
-            
+
             # Using synchronous requests in async init is fine for startup
             response = requests.post(url, headers=headers, json=data, timeout=20)
             if response.status_code == 200:
@@ -188,10 +224,11 @@ class GigiRingCentralBot:
 
     async def check_direct_sms(self):
         """Monitor RingCentral SMS using Admin Token for full visibility"""
-        token = ADMIN_JWT_TOKEN
+        # Get access token from JWT
+        token = self._get_admin_access_token()
 
         if not token:
-            logger.error("Admin Token missing in check_direct_sms")
+            logger.error("Admin Token missing or invalid in check_direct_sms")
             return
 
         try:
@@ -207,7 +244,7 @@ class GigiRingCentralBot:
                 "Accept": "application/json"
             }
 
-            logger.info("SMS: Polling extension message-store (x101 Admin context) - v4 HEALTH CHECK")
+            logger.info("SMS: Polling extension message-store (x101 Admin context) - JWT→Token")
             response = requests.get(url, headers=headers, params=params, timeout=20)
             if response.status_code != 200:
                 logger.error(f"RC SMS Store Error: {response.status_code} - {response.text}")
@@ -233,7 +270,7 @@ class GigiRingCentralBot:
                 # Role 2: Replier
                 if not self.is_business_hours():
                     # IMPORTANT: Don't reply if it's from US (to prevent loops)
-                    if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777"]:
+                    if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777", "+16039971495"]:
                         await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
                     else:
                         logger.info(f"⏭️ Skipping reply to internal/company number: {from_phone}")
@@ -253,13 +290,19 @@ class GigiRingCentralBot:
         # 1. Identify Client Context
         client_id = None
         client_name = "Unknown"
-        
-        # Try to identify caregiver if possible (for SMS sourcing)
+
+        # 2. Identify Caregiver Context (for linking alerts)
+        caregiver_id = None
+        caregiver_name = "Unknown"
+
+        # Try to identify caregiver from phone number
         if source_type == "sms" and phone:
             try:
                 cg = self.wellsky.get_caregiver_by_phone(phone)
                 if cg:
-                    logger.info(f"Identified SMS sender as caregiver: {cg.full_name}")
+                    caregiver_id = cg.id
+                    caregiver_name = cg.full_name
+                    logger.info(f"Identified SMS sender as caregiver: {caregiver_name}")
             except Exception:
                 pass
 
@@ -317,28 +360,61 @@ class GigiRingCentralBot:
             note_type = "schedule"
             
         # 3. Log to WellSky
-        should_log = (client_id and (is_alert or is_task or note_type == "schedule")) or "gigi" in lower_text
-        
-        if should_log and client_id:
-            try:
-                note_prefix = "🚨 CARE ALERT" if is_alert else "ℹ️ RC ACTIVITY"
-                full_note = f"{note_prefix} ({source_type.upper()}): {text}\n(From: {phone or msg.get('creatorId')})"
-                
-                self.wellsky.add_note_to_client(
-                    client_id=client_id,
-                    note=full_note,
-                    note_type=note_type,
-                    source="gigi_manager"
-                )
-                logger.info(f"✅ Documented {source_type} activity for {client_name} in WellSky")
+        should_log = (is_alert or is_task or note_type == "schedule") or "gigi" in lower_text
 
-                if is_task:
-                    self.wellsky.create_admin_task(
-                        title=f"RC {source_type.upper()} Alert: {note_type.upper()} - {client_name}",
-                        description=f"Automated Task from {source_type}:\n{text}\n\nSender: {phone or msg.get('creatorId')}",
-                        priority="urgent" if "call" in note_type or "complaint" in note_type else "normal",
-                        related_client_id=client_id
+        if should_log:
+            try:
+                # If we have a client, log to their record
+                if client_id:
+                    note_prefix = "🚨 CARE ALERT" if is_alert else "ℹ️ RC ACTIVITY"
+                    full_note = f"{note_prefix} ({source_type.upper()}): {text}\n(From: {phone or msg.get('creatorId')})"
+
+                    self.wellsky.add_note_to_client(
+                        client_id=client_id,
+                        note=full_note,
+                        note_type=note_type,
+                        source="gigi_manager"
                     )
+                    logger.info(f"✅ Documented {source_type} activity for {client_name} in WellSky")
+
+                    if is_task:
+                        self.wellsky.create_admin_task(
+                            title=f"RC {source_type.upper()} Alert: {note_type.upper()} - {client_name}",
+                            description=f"Automated Task from {source_type}:\n{text}\n\nSender: {phone or msg.get('creatorId')}",
+                            priority="urgent" if "call" in note_type or "complaint" in note_type else "normal",
+                            related_client_id=client_id
+                        )
+
+                # If NO client but we have caregiver, link to caregiver record
+                elif caregiver_id and (is_alert or is_task):
+                    self.wellsky.create_admin_task(
+                        title=f"📋 {note_type.upper()} from {caregiver_name} ({source_type.upper()})",
+                        description=f"🚨 Care Alert from caregiver - client not specified\n\n"
+                                  f"Caregiver: {caregiver_name}\n"
+                                  f"Source: {source_type.upper()}\n"
+                                  f"From: {phone or msg.get('creatorId')}\n"
+                                  f"Message: {text}\n\n"
+                                  f"ACTION: Check {caregiver_name}'s schedule to identify affected client.",
+                        priority="urgent" if "call" in note_type or "complaint" in note_type else "high",
+                        related_caregiver_id=caregiver_id,
+                        related_client_id=None
+                    )
+                    logger.info(f"✅ Created {note_type} task for caregiver {caregiver_name} in WellSky")
+
+                # If NO client AND NO caregiver, create truly unassigned task
+                elif is_alert or is_task:
+                    self.wellsky.create_admin_task(
+                        title=f"⚠️ UNASSIGNED {note_type.upper()} Alert ({source_type.upper()})",
+                        description=f"🚨 Care Alert - sender and client unknown\n\n"
+                                  f"Source: {source_type.upper()}\n"
+                                  f"From: {phone or msg.get('creatorId')}\n"
+                                  f"Message: {text}\n\n"
+                                  f"ACTION REQUIRED: Identify both caregiver and client.",
+                        priority="urgent" if "call" in note_type or "complaint" in note_type else "high",
+                        related_client_id=None
+                    )
+                    logger.info(f"✅ Created UNASSIGNED {note_type} task in WellSky (no client or caregiver identified)")
+
             except Exception as e:
                 logger.error(f"Failed to document to WellSky: {e}")
 
@@ -374,9 +450,14 @@ class GigiRingCentralBot:
                     logger.info(f"Sending SMS reply to {clean_phone} via {RINGCENTRAL_FROM_NUMBER} (using Admin Token)")
                     
                     # USE ADMIN TOKEN to Send
+                    access_token = self._get_admin_access_token()
+                    if not access_token:
+                        logger.error("Could not get access token for SMS reply")
+                        return
+
                     url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/sms"
                     headers = {
-                        "Authorization": f"Bearer {ADMIN_JWT_TOKEN}",
+                        "Authorization": f"Bearer {access_token}",
                         "Content-Type": "application/json",
                         "Accept": "application/json"
                     }
