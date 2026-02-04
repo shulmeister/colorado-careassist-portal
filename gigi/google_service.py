@@ -25,9 +25,10 @@ from google.auth.transport.requests import Request
 
 logger = logging.getLogger(__name__)
 
-# Load from environment with fallback defaults
-WORK_CLIENT_ID = os.getenv("GOOGLE_WORK_CLIENT_ID", "516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com")
-WORK_CLIENT_SECRET = os.getenv("GOOGLE_WORK_CLIENT_SECRET", "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")
+# Load from environment (no defaults - must be configured via .env or ~/.gigi-env)
+# Use Clawd Desktop OAuth client for localhost redirects
+WORK_CLIENT_ID = os.getenv("GOOGLE_WORK_CLIENT_ID")
+WORK_CLIENT_SECRET = os.getenv("GOOGLE_WORK_CLIENT_SECRET")
 WORK_REFRESH_TOKEN = os.getenv("GOOGLE_WORK_REFRESH_TOKEN")  # This MUST be set - requires OAuth flow
 
 PERS_CLIENT_ID = os.getenv("GOOGLE_PERS_CLIENT_ID")

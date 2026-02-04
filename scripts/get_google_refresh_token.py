@@ -21,9 +21,15 @@ try:
 except ImportError:
     pass
 
-# Google OAuth settings
-CLIENT_ID = os.getenv("GOOGLE_WORK_CLIENT_ID", "516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com")
-CLIENT_SECRET = os.getenv("GOOGLE_WORK_CLIENT_SECRET", "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")
+# Google OAuth settings - use Clawd Desktop client (supports localhost redirects)
+# Must be set via environment variable or .env file
+CLIENT_ID = os.getenv("GOOGLE_WORK_CLIENT_ID")
+CLIENT_SECRET = os.getenv("GOOGLE_WORK_CLIENT_SECRET")
+
+if not CLIENT_ID or not CLIENT_SECRET:
+    print("ERROR: GOOGLE_WORK_CLIENT_ID and GOOGLE_WORK_CLIENT_SECRET must be set")
+    print("Set these in your .env file or environment")
+    sys.exit(1)
 
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",  # Read, send, delete emails
