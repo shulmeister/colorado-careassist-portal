@@ -408,7 +408,7 @@ def main():
         
         print("\n🎉 Import completed successfully!")
         print("\nNext steps:")
-        print("1. Deploy this script to Heroku")
+        print("1. Deploy this script to Mac Mini (Local)")
         print("2. Run it to populate your database")
         print("3. Refresh your dashboard to see the data")
         

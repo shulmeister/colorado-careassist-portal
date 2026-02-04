@@ -1,19 +1,19 @@
 #!/bin/bash
-# Gmail API Setup Script for Heroku
+# Gmail API Setup Script for Mac Mini (Local)
 
 echo "=========================================="
 echo "Gmail API Setup for Sales Dashboard"
 echo "=========================================="
 echo ""
 
-# Check if Heroku CLI is installed
-if ! command -v heroku &> /dev/null; then
-    echo "❌ Heroku CLI not found. Please install it first:"
-    echo "   https://devcenter.heroku.com/articles/heroku-cli"
+# Check if Mac Mini (Local) CLI is installed
+if ! command -v mac-mini &> /dev/null; then
+    echo "❌ Mac Mini (Local) CLI not found. Please install it first:"
+    echo "   https://devcenter.mac-mini.com/articles/mac-mini-cli"
     exit 1
 fi
 
-echo "Step 1: Setting up Heroku environment variables"
+echo "Step 1: Setting up Mac Mini (Local) environment variables"
 echo "=========================================="
 echo ""
 echo "You need to provide the following:"
@@ -27,12 +27,12 @@ read -p "Enter user email to impersonate [maryssa@coloradocareassist.com]: " use
 user_email=${user_email:-maryssa@coloradocareassist.com}
 
 echo ""
-echo "Setting Heroku config variables..."
+echo "Setting Mac Mini (Local) config variables..."
 
 # Set the environment variables
-heroku config:set GMAIL_SERVICE_ACCOUNT_EMAIL="github@marketing-dashboard-463608.iam.gserviceaccount.com"
-heroku config:set GMAIL_SERVICE_ACCOUNT_KEY="$json_key"
-heroku config:set GMAIL_USER_EMAIL="$user_email"
+mac-mini config:set GMAIL_SERVICE_ACCOUNT_EMAIL="github@marketing-dashboard-463608.iam.gserviceaccount.com"
+mac-mini config:set GMAIL_SERVICE_ACCOUNT_KEY="$json_key"
+mac-mini config:set GMAIL_USER_EMAIL="$user_email"
 
 echo ""
 echo "✅ Environment variables set!"
@@ -41,7 +41,7 @@ echo "Step 2: Testing Gmail connection"
 echo "=========================================="
 echo ""
 echo "Testing connection..."
-heroku run python3 sync_gmail_emails.py
+mac-mini run python3 sync_gmail_emails.py
 
 echo ""
 echo "=========================================="
@@ -55,4 +55,4 @@ echo "   - Scope: https://www.googleapis.com/auth/gmail.readonly"
 echo ""
 echo "2. The dashboard will now show 'Emails Sent - Last 7 Days' KPI"
 echo ""
-echo "3. To sync emails manually, run: heroku run python3 sync_gmail_emails.py"
+echo "3. To sync emails manually, run: mac-mini run python3 sync_gmail_emails.py"

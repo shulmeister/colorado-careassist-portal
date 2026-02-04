@@ -13,7 +13,7 @@ All repositories are synced and ready. You can access everything from any comput
 **Repository**: `colorado-careassist-portal`  
 **GitHub**: https://github.com/shulmeister/colorado-careassist-portal  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal`  
-**Heroku**: `portal-coloradocareassist` → `portal-coloradocareassist-3e1a4bb34793.herokuapp.com`
+**Mac Mini (Local)**: `portal-coloradocareassist` → `portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com`
 
 **Contains**:
 - Main portal application (FastAPI)
@@ -38,7 +38,7 @@ cd colorado-careassist-portal
 **Repository**: `sales-dashboard`  
 **GitHub**: https://github.com/shulmeister/sales-dashboard  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales/`  
-**Heroku**: `careassist-tracker` → `careassist-tracker-0fcf2cecdb22.herokuapp.com`
+**Mac Mini (Local)**: `careassist-tracker` → `careassist-tracker-0fcf2cecdb22.mac-miniapp.com`
 
 **Contains**:
 - Sales tracking application (Python FastAPI)
@@ -60,7 +60,7 @@ cd sales-dashboard
 **Repository**: `recruiter-dashboard`  
 **GitHub**: https://github.com/shulmeister/recruiter-dashboard  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment/`  
-**Heroku**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com`
+**Mac Mini (Local)**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com`
 
 **Contains**:
 - Caregiver recruitment application (Flask)
@@ -81,7 +81,7 @@ cd recruiter-dashboard
 **Repository**: `marketing-dashboard`  
 **GitHub**: https://github.com/shulmeister/marketing-dashboard  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/marketing/`  
-**Heroku**: Deploys as part of portal (no separate Heroku app)
+**Mac Mini (Local)**: Deploys as part of portal (no separate Mac Mini (Local) app)
 
 **Contains**:
 - Marketing dashboard template (`marketing.html`)
@@ -106,7 +106,7 @@ cd marketing-dashboard
 **Repository**: `Colorado-CareAssist-Route-Tracker`  
 **GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker/`  
-**Heroku**: `cca-activity-tracker` → `https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com`
+**Mac Mini (Local)**: `cca-activity-tracker` → `https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com`
 
 **Contains**:
 - Original Visits/Activity Tracker (FastAPI)
@@ -118,7 +118,7 @@ cd marketing-dashboard
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards
 git clone https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git activity-tracker
 cd activity-tracker
-heroku git:remote -a cca-activity-tracker
+mac-mini git:remote -a cca-activity-tracker
 ```
 
 ---
@@ -137,13 +137,13 @@ cd colorado-careassist-portal
 cd dashboards
 git clone https://github.com/shulmeister/sales-dashboard.git sales
 cd sales
-heroku git:remote -a careassist-tracker
+mac-mini git:remote -a careassist-tracker
 cd ..
 
 # Recruiter Dashboard
 git clone https://github.com/shulmeister/recruiter-dashboard.git recruitment
 cd recruitment
-heroku git:remote -a caregiver-lead-tracker
+mac-mini git:remote -a caregiver-lead-tracker
 cd ..
 
 # Marketing Dashboard
@@ -153,21 +153,21 @@ cd ..
 # Activity Tracker
 git clone https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker.git activity-tracker
 cd activity-tracker
-heroku git:remote -a cca-activity-tracker
+mac-mini git:remote -a cca-activity-tracker
 cd ..
 ```
 
-### Step 3: Set Up Portal Heroku Remote
+### Step 3: Set Up Portal Mac Mini (Local) Remote
 ```bash
 cd /path/to/colorado-careassist-portal
-heroku git:remote -a portal-coloradocareassist
+mac-mini git:remote -a portal-coloradocareassist
 ```
 
 ### Step 4: Verify Remotes
 ```bash
 # Portal
 git remote -v
-# Should show: origin (GitHub) and heroku
+# Should show: origin (GitHub) and mac-mini
 
 # Each dashboard
 cd dashboards/sales && git remote -v
@@ -194,19 +194,19 @@ cd ../marketing && git remote -v
 - [x] Recruiter Dashboard repo exists on GitHub
 - [x] Marketing Dashboard repo exists on GitHub
 - [x] All repos have recent commits
-- [x] All repos are synced (Desktop → GitHub → Heroku)
+- [x] All repos are synced (Desktop → GitHub → Mac Mini (Local))
 - [x] Documentation updated in README.md
 - [x] Sync status documented in SYNC_STATUS.md
 
 ---
 
-## 🚀 Standard Workflow (Desktop → GitHub → Heroku)
+## 🚀 Standard Workflow (Desktop → GitHub → Mac Mini (Local))
 
 **For any changes**:
 1. Make changes locally
 2. Commit: `git add . && git commit -m "message"`
 3. Push to GitHub: `git push origin main`
-4. Push to Heroku: `git push heroku main`
+4. Push to Mac Mini (Local): `git push mac-mini main`
 
 **Or use the sync script**:
 ```bash
@@ -221,7 +221,7 @@ cd /path/to/colorado-careassist-portal
 All code is backed up on GitHub. Even if your desktop folder is inaccessible, you can:
 1. Clone any repo from GitHub
 2. Continue development
-3. Deploy to Heroku
+3. Deploy to Mac Mini (Local)
 4. Everything will work exactly as before
 
 **No data will be lost!** 🎉

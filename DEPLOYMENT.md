@@ -1,6 +1,6 @@
-# Colorado CareAssist Portal - Heroku Deployment Guide
+# Colorado CareAssist Portal - Mac Mini (Local) Deployment Guide
 
-> **Complete step-by-step guide** to deploy the Colorado CareAssist Portal from GitHub to Heroku in production mode.
+> **Complete step-by-step guide** to deploy the Colorado CareAssist Portal from GitHub to Mac Mini (Local) in production mode.
 
 **Estimated time**: 1-2 hours (first-time setup)
 
@@ -10,8 +10,8 @@
 
 Before you begin, ensure you have:
 
-- [x] Heroku account (https://signup.heroku.com)
-- [x] Heroku CLI installed (https://devcenter.heroku.com/articles/heroku-cli)
+- [x] Mac Mini (Local) account (https://signup.mac-mini.com)
+- [x] Mac Mini (Local) CLI installed (https://devcenter.mac-mini.com/articles/mac-mini-cli)
 - [x] Git installed
 - [x] Access to all required API keys (see Environment Variables section)
 
@@ -26,23 +26,23 @@ cd colorado-careassist-portal
 
 ---
 
-## Step 2: Create Heroku App
+## Step 2: Create Mac Mini (Local) App
 
 ```bash
-# Login to Heroku
-heroku login
+# Login to Mac Mini (Local)
+mac-mini login
 
-# Create new app (use a unique name or let Heroku generate one)
-heroku create careassist-unified
+# Create new app (use a unique name or let Mac Mini (Local) generate one)
+mac-mini create careassist-unified
 
 # Or create with specific name:
-# heroku create your-app-name
+# mac-mini create your-app-name
 
 # Verify app was created
-heroku apps:info -a careassist-unified
+mac-mini apps:info -a careassist-unified
 ```
 
-**Note**: If `careassist-unified` is already taken, Heroku will suggest an alternative name. Use that name for all subsequent commands.
+**Note**: If `careassist-unified` is already taken, Mac Mini (Local) will suggest an alternative name. Use that name for all subsequent commands.
 
 ---
 
@@ -52,16 +52,16 @@ This application requires **3 separate PostgreSQL databases**:
 
 ```bash
 # 1. Main portal database (auto-attached as DATABASE_URL)
-heroku addons:create heroku-postgresql:essential-0 -a careassist-unified
+mac-mini addons:create mac-mini-postgresql:essential-0 -a careassist-unified
 
 # 2. Sales dashboard database
-heroku addons:create heroku-postgresql:essential-0 --as SALES_DATABASE -a careassist-unified
+mac-mini addons:create mac-mini-postgresql:essential-0 --as SALES_DATABASE -a careassist-unified
 
 # 3. Recruiting dashboard database
-heroku addons:create heroku-postgresql:essential-0 --as RECRUITING_DATABASE -a careassist-unified
+mac-mini addons:create mac-mini-postgresql:essential-0 --as RECRUITING_DATABASE -a careassist-unified
 
 # Verify databases were created
-heroku addons -a careassist-unified
+mac-mini addons -a careassist-unified
 ```
 
 **Database Tiers**:
@@ -73,7 +73,7 @@ heroku addons -a careassist-unified
 
 ```bash
 # Check database URLs were created
-heroku config -a careassist-unified | grep DATABASE
+mac-mini config -a careassist-unified | grep DATABASE
 
 # You should see:
 # DATABASE_URL (main portal)
@@ -89,12 +89,12 @@ The unified app requires multiple buildpacks for different components:
 
 ```bash
 # Add buildpacks in this order (order matters!)
-heroku buildpacks:add https://github.com/heroku/heroku-buildpack-apt -a careassist-unified
-heroku buildpacks:add heroku/nodejs -a careassist-unified
-heroku buildpacks:add heroku/python -a careassist-unified
+mac-mini buildpacks:add https://github.com/mac-mini/mac-mini-buildpack-apt -a careassist-unified
+mac-mini buildpacks:add mac-mini/nodejs -a careassist-unified
+mac-mini buildpacks:add mac-mini/python -a careassist-unified
 
 # Verify buildpacks
-heroku buildpacks -a careassist-unified
+mac-mini buildpacks -a careassist-unified
 ```
 
 **Why these buildpacks?**:
@@ -110,53 +110,53 @@ heroku buildpacks -a careassist-unified
 
 ```bash
 # Security
-heroku config:set APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))") -a careassist-unified
+mac-mini config:set APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))") -a careassist-unified
 
 # Google OAuth (Portal Login)
 # Get from: https://console.cloud.google.com/apis/credentials
-heroku config:set GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com -a careassist-unified
-heroku config:set GOOGLE_CLIENT_SECRET=your-google-client-secret -a careassist-unified
-heroku config:set GOOGLE_REDIRECT_URI=https://careassist-unified-0a11ddb45ac0.herokuapp.com/auth/callback -a careassist-unified
+mac-mini config:set GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com -a careassist-unified
+mac-mini config:set GOOGLE_CLIENT_SECRET=your-google-client-secret -a careassist-unified
+mac-mini config:set GOOGLE_REDIRECT_URI=https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/auth/callback -a careassist-unified
 
 # Allowed login domains
-heroku config:set ALLOWED_DOMAINS=coloradocareassist.com -a careassist-unified
+mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com -a careassist-unified
 ```
 
 ### Gigi AI Voice Assistant
 
 ```bash
 # Retell AI (Voice Agent)
-heroku config:set RETELL_API_KEY=your-retell-api-key -a careassist-unified
-heroku config:set RETELL_AGENT_ID=your-retell-agent-id -a careassist-unified
+mac-mini config:set RETELL_API_KEY=your-retell-api-key -a careassist-unified
+mac-mini config:set RETELL_AGENT_ID=your-retell-agent-id -a careassist-unified
 
 # Google Gemini AI
-heroku config:set GEMINI_API_KEY=your-gemini-api-key -a careassist-unified
+mac-mini config:set GEMINI_API_KEY=your-gemini-api-key -a careassist-unified
 
 # RingCentral (Phone & SMS)
-heroku config:set RINGCENTRAL_CLIENT_ID=your-client-id -a careassist-unified
-heroku config:set RINGCENTRAL_CLIENT_SECRET=your-client-secret -a careassist-unified
-heroku config:set RINGCENTRAL_JWT_TOKEN=your-jwt-token -a careassist-unified
-heroku config:set RINGCENTRAL_SERVER_URL=https://platform.ringcentral.com -a careassist-unified
+mac-mini config:set RINGCENTRAL_CLIENT_ID=your-client-id -a careassist-unified
+mac-mini config:set RINGCENTRAL_CLIENT_SECRET=your-client-secret -a careassist-unified
+mac-mini config:set RINGCENTRAL_JWT_TOKEN=your-jwt-token -a careassist-unified
+mac-mini config:set RINGCENTRAL_SERVER_URL=https://platform.ringcentral.com -a careassist-unified
 
 # Gigi operations SMS (set to true when WellSky API is configured)
-heroku config:set GIGI_OPERATIONS_SMS_ENABLED=false -a careassist-unified
+mac-mini config:set GIGI_OPERATIONS_SMS_ENABLED=false -a careassist-unified
 
 # Escalation contacts
-heroku config:set ESCALATION_CYNTHIA_EXT=105 -a careassist-unified
-heroku config:set ESCALATION_JASON_EXT=101 -a careassist-unified
+mac-mini config:set ESCALATION_CYNTHIA_EXT=105 -a careassist-unified
+mac-mini config:set ESCALATION_JASON_EXT=101 -a careassist-unified
 ```
 
 ### WellSky EVV API (Optional - for operations dashboard)
 
 ```bash
 # Only set if you have WellSky API access
-heroku config:set WELLSKY_API_KEY=your-wellsky-api-key -a careassist-unified
-heroku config:set WELLSKY_API_SECRET=your-wellsky-api-secret -a careassist-unified
-heroku config:set WELLSKY_AGENCY_ID=your-wellsky-agency-id -a careassist-unified
-heroku config:set WELLSKY_BASE_URL=https://api.wellsky.com/v1 -a careassist-unified
+mac-mini config:set WELLSKY_API_KEY=your-wellsky-api-key -a careassist-unified
+mac-mini config:set WELLSKY_API_SECRET=your-wellsky-api-secret -a careassist-unified
+mac-mini config:set WELLSKY_AGENCY_ID=your-wellsky-agency-id -a careassist-unified
+mac-mini config:set WELLSKY_BASE_URL=https://api.wellsky.com/v1 -a careassist-unified
 
 # When WellSky is configured, enable Gigi's operations SMS
-heroku config:set GIGI_OPERATIONS_SMS_ENABLED=true -a careassist-unified
+mac-mini config:set GIGI_OPERATIONS_SMS_ENABLED=true -a careassist-unified
 ```
 
 ### Sales Dashboard Variables
@@ -164,66 +164,66 @@ heroku config:set GIGI_OPERATIONS_SMS_ENABLED=true -a careassist-unified
 ```bash
 # Google Drive (Business Card Auto-Scanner)
 # Copy entire JSON service account key as one line
-heroku config:set GOOGLE_SERVICE_ACCOUNT_KEY='{"type":"service_account","project_id":"..."}' -a careassist-unified
-heroku config:set GOOGLE_DRIVE_BUSINESS_CARDS_FOLDER_ID=your-folder-id -a careassist-unified
+mac-mini config:set GOOGLE_SERVICE_ACCOUNT_KEY='{"type":"service_account","project_id":"..."}' -a careassist-unified
+mac-mini config:set GOOGLE_DRIVE_BUSINESS_CARDS_FOLDER_ID=your-folder-id -a careassist-unified
 
 # Brevo Email Marketing
-heroku config:set BREVO_API_KEY=xkeysib-your-api-key -a careassist-unified
+mac-mini config:set BREVO_API_KEY=xkeysib-your-api-key -a careassist-unified
 
 # QuickBooks Online
-heroku config:set QUICKBOOKS_CLIENT_ID=your-client-id -a careassist-unified
-heroku config:set QUICKBOOKS_CLIENT_SECRET=your-client-secret -a careassist-unified
-heroku config:set QUICKBOOKS_REALM_ID=your-company-id -a careassist-unified
-heroku config:set QUICKBOOKS_ACCESS_TOKEN=your-access-token -a careassist-unified
-heroku config:set QUICKBOOKS_REFRESH_TOKEN=your-refresh-token -a careassist-unified
+mac-mini config:set QUICKBOOKS_CLIENT_ID=your-client-id -a careassist-unified
+mac-mini config:set QUICKBOOKS_CLIENT_SECRET=your-client-secret -a careassist-unified
+mac-mini config:set QUICKBOOKS_REALM_ID=your-company-id -a careassist-unified
+mac-mini config:set QUICKBOOKS_ACCESS_TOKEN=your-access-token -a careassist-unified
+mac-mini config:set QUICKBOOKS_REFRESH_TOKEN=your-refresh-token -a careassist-unified
 
 # Gmail API (Optional - for email tracking)
-heroku config:set GMAIL_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com -a careassist-unified
-heroku config:set GMAIL_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}' -a careassist-unified
-heroku config:set GMAIL_USER_EMAILS=jacob@coloradocareassist.com,jen@coloradocareassist.com -a careassist-unified
+mac-mini config:set GMAIL_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com -a careassist-unified
+mac-mini config:set GMAIL_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}' -a careassist-unified
+mac-mini config:set GMAIL_USER_EMAILS=jacob@coloradocareassist.com,jen@coloradocareassist.com -a careassist-unified
 ```
 
 ### Recruiting Dashboard Variables
 
 ```bash
 # Facebook Lead Ads
-heroku config:set FACEBOOK_ACCESS_TOKEN=your-long-lived-token -a careassist-unified
-heroku config:set FACEBOOK_AD_ACCOUNT_ID=act_your-account-id -a careassist-unified
-heroku config:set FACEBOOK_APP_ID=your-app-id -a careassist-unified
-heroku config:set FACEBOOK_APP_SECRET=your-app-secret -a careassist-unified
-heroku config:set FACEBOOK_PAGE_ID=your-page-id -a careassist-unified
+mac-mini config:set FACEBOOK_ACCESS_TOKEN=your-long-lived-token -a careassist-unified
+mac-mini config:set FACEBOOK_AD_ACCOUNT_ID=act_your-account-id -a careassist-unified
+mac-mini config:set FACEBOOK_APP_ID=your-app-id -a careassist-unified
+mac-mini config:set FACEBOOK_APP_SECRET=your-app-secret -a careassist-unified
+mac-mini config:set FACEBOOK_PAGE_ID=your-page-id -a careassist-unified
 ```
 
 ### Marketing Dashboard Variables
 
 ```bash
 # Google Analytics 4
-heroku config:set GA4_PROPERTY_ID=your-property-id -a careassist-unified
+mac-mini config:set GA4_PROPERTY_ID=your-property-id -a careassist-unified
 
 # Google Business Profile
-heroku config:set GBP_LOCATION_IDS=comma,separated,location,ids -a careassist-unified
+mac-mini config:set GBP_LOCATION_IDS=comma,separated,location,ids -a careassist-unified
 
 # Google Ads API
-heroku config:set GOOGLE_ADS_DEVELOPER_TOKEN=your-token -a careassist-unified
-heroku config:set GOOGLE_ADS_CUSTOMER_ID=1234567890 -a careassist-unified
-heroku config:set GOOGLE_ADS_REFRESH_TOKEN=your-refresh-token -a careassist-unified
-heroku config:set GOOGLE_ADS_OAUTH_CLIENT_ID=your-oauth-client-id -a careassist-unified
-heroku config:set GOOGLE_ADS_OAUTH_CLIENT_SECRET=your-oauth-client-secret -a careassist-unified
+mac-mini config:set GOOGLE_ADS_DEVELOPER_TOKEN=your-token -a careassist-unified
+mac-mini config:set GOOGLE_ADS_CUSTOMER_ID=1234567890 -a careassist-unified
+mac-mini config:set GOOGLE_ADS_REFRESH_TOKEN=your-refresh-token -a careassist-unified
+mac-mini config:set GOOGLE_ADS_OAUTH_CLIENT_ID=your-oauth-client-id -a careassist-unified
+mac-mini config:set GOOGLE_ADS_OAUTH_CLIENT_SECRET=your-oauth-client-secret -a careassist-unified
 
 # Google Service Account (for GA4, GBP)
-heroku config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}' -a careassist-unified
+mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}' -a careassist-unified
 
 # Social Media APIs (Optional)
-heroku config:set LINKEDIN_ACCESS_TOKEN=your-token -a careassist-unified
-heroku config:set PINTEREST_ACCESS_TOKEN=your-token -a careassist-unified
-heroku config:set TIKTOK_ACCESS_TOKEN=your-token -a careassist-unified
-heroku config:set TIKTOK_ADVERTISER_ID=your-id -a careassist-unified
+mac-mini config:set LINKEDIN_ACCESS_TOKEN=your-token -a careassist-unified
+mac-mini config:set PINTEREST_ACCESS_TOKEN=your-token -a careassist-unified
+mac-mini config:set TIKTOK_ACCESS_TOKEN=your-token -a careassist-unified
+mac-mini config:set TIKTOK_ADVERTISER_ID=your-id -a careassist-unified
 ```
 
 **Verify all variables are set**:
 
 ```bash
-heroku config -a careassist-unified
+mac-mini config -a careassist-unified
 ```
 
 ---
@@ -231,28 +231,28 @@ heroku config -a careassist-unified
 ## Step 6: Deploy Application
 
 ```bash
-# Add Heroku remote (if not already added)
-git remote add heroku https://git.heroku.com/careassist-unified.git
+# Add Mac Mini (Local) remote (if not already added)
+git remote add mac-mini https://git.mac-mini.com/careassist-unified.git
 
-# Deploy to Heroku
-git push heroku main
+# Deploy to Mac Mini (Local)
+git push mac-mini main
 ```
 
 **Watch deployment logs**:
 
 ```bash
-heroku logs --tail -a careassist-unified
+mac-mini logs --tail -a careassist-unified
 ```
 
 **Expected output**:
 ```
-remote: -----> Building on the Heroku-22 stack
-remote: -----> Using buildpack: https://github.com/heroku/heroku-buildpack-apt
-remote: -----> Using buildpack: heroku/nodejs
-remote: -----> Using buildpack: heroku/python
+remote: -----> Building on the Mac Mini (Local)-22 stack
+remote: -----> Using buildpack: https://github.com/mac-mini/mac-mini-buildpack-apt
+remote: -----> Using buildpack: mac-mini/nodejs
+remote: -----> Using buildpack: mac-mini/python
 remote: -----> Launching...
 remote: -----> Build succeeded!
-remote:        https://careassist-unified-0a11ddb45ac0.herokuapp.com/ deployed to Heroku
+remote:        https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/ deployed to Mac Mini (Local)
 ```
 
 **If build fails**, check:
@@ -266,10 +266,10 @@ remote:        https://careassist-unified-0a11ddb45ac0.herokuapp.com/ deployed t
 
 ```bash
 # Run Alembic migrations
-heroku run alembic upgrade head -a careassist-unified
+mac-mini run alembic upgrade head -a careassist-unified
 
 # Initialize portal data (if needed)
-heroku run python portal/portal_setup.py -a careassist-unified
+mac-mini run python portal/portal_setup.py -a careassist-unified
 ```
 
 **If migrations fail**, check:
@@ -279,19 +279,19 @@ heroku run python portal/portal_setup.py -a careassist-unified
 
 ---
 
-## Step 8: Set Up Heroku Scheduler Jobs
+## Step 8: Set Up Mac Mini (Local) Scheduler Jobs
 
 Some features require scheduled jobs to run automatically:
 
 ```bash
-# Add Heroku Scheduler add-on (free)
-heroku addons:create scheduler:standard -a careassist-unified
+# Add Mac Mini (Local) Scheduler add-on (free)
+mac-mini addons:create scheduler:standard -a careassist-unified
 
 # Open scheduler dashboard
-heroku addons:open scheduler -a careassist-unified
+mac-mini addons:open scheduler -a careassist-unified
 ```
 
-**Add these scheduled jobs** in the Heroku Scheduler dashboard:
+**Add these scheduled jobs** in the Mac Mini (Local) Scheduler dashboard:
 
 | Job Command | Frequency | Purpose |
 |-------------|-----------|---------|
@@ -299,7 +299,7 @@ heroku addons:open scheduler -a careassist-unified
 | `cd recruiting && python sync_facebook_leads.py` | Daily at 9:00 AM | Facebook Lead Ads sync |
 | `cd sales && python scripts/sync_quickbooks.py` | Daily at 12:00 PM | QuickBooks customer sync |
 
-**Note**: Heroku Scheduler only supports 10-minute, hourly, or daily frequencies. For more precise scheduling (e.g., every 5 minutes), use a custom clock dyno or external cron service.
+**Note**: Mac Mini (Local) Scheduler only supports 10-minute, hourly, or daily frequencies. For more precise scheduling (e.g., every 5 minutes), use a custom clock dyno or external cron service.
 
 ---
 
@@ -307,14 +307,14 @@ heroku addons:open scheduler -a careassist-unified
 
 ```bash
 # Scale web dyno to 1 instance
-heroku ps:scale web=1 -a careassist-unified
+mac-mini ps:scale web=1 -a careassist-unified
 
 # Check dyno status
-heroku ps -a careassist-unified
+mac-mini ps -a careassist-unified
 ```
 
 **Dyno tiers**:
-- **Free**: Not available anymore (deprecated by Heroku)
+- **Free**: Not available anymore (deprecated by Mac Mini (Local))
 - **Eco**: $5/month for all apps (sleeps after 30 min inactivity)
 - **Basic**: $7/month per dyno (never sleeps)
 - **Standard-1X**: $25/month per dyno (recommended for production)
@@ -322,7 +322,7 @@ heroku ps -a careassist-unified
 **For production, use Basic or higher**:
 
 ```bash
-heroku dyno:type basic -a careassist-unified
+mac-mini dyno:type basic -a careassist-unified
 ```
 
 ---
@@ -333,17 +333,17 @@ If you have a custom domain (e.g., `portal.coloradocareassist.com`):
 
 ```bash
 # Add custom domain
-heroku domains:add portal.coloradocareassist.com -a careassist-unified
+mac-mini domains:add portal.coloradocareassist.com -a careassist-unified
 
 # Get DNS target
-heroku domains -a careassist-unified
+mac-mini domains -a careassist-unified
 ```
 
 **DNS Configuration** (in your domain registrar):
 
 | Type | Name | Value |
 |------|------|-------|
-| CNAME | portal | your-app-name-xxxxx.herokudns.com |
+| CNAME | portal | your-app-name-xxxxx.mac-minidns.com |
 
 **Wait 24-48 hours** for DNS propagation.
 
@@ -352,7 +352,7 @@ heroku domains -a careassist-unified
 ```bash
 # ACM is automatically enabled for custom domains
 # Verify SSL certificate
-heroku certs -a careassist-unified
+mac-mini certs -a careassist-unified
 ```
 
 ---
@@ -361,14 +361,14 @@ heroku certs -a careassist-unified
 
 Set up automatic deployments when you push to GitHub:
 
-1. **Go to Heroku Dashboard**: https://dashboard.heroku.com
+1. **Go to Mac Mini (Local) Dashboard**: https://dashboard.mac-mini.com
 2. **Select your app**: `careassist-unified`
 3. **Go to Deploy tab**
 4. **Connect to GitHub**: Connect your `colorado-careassist-portal` repository
 5. **Enable Automatic Deploys**: Choose `main` branch
 6. **Enable CI wait** (optional): Wait for CI tests to pass before deploying
 
-**Now every push to `main` will automatically deploy to Heroku!**
+**Now every push to `main` will automatically deploy to Mac Mini (Local)!**
 
 ---
 
@@ -378,33 +378,33 @@ Set up automatic deployments when you push to GitHub:
 
 ```bash
 # Open app in browser
-heroku open -a careassist-unified
+mac-mini open -a careassist-unified
 
 # Check logs for errors
-heroku logs --tail -a careassist-unified
+mac-mini logs --tail -a careassist-unified
 
 # Check dyno status
-heroku ps -a careassist-unified
+mac-mini ps -a careassist-unified
 ```
 
 ### Test Individual Endpoints
 
-**Portal Hub**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/
+**Portal Hub**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/
 - Should show login page or portal dashboard
 
-**Gigi AI**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/
+**Gigi AI**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/
 - Should show Gigi documentation page
 
-**Sales Dashboard**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/sales/
+**Sales Dashboard**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/
 - Should redirect to login or show sales CRM
 
-**Recruiting**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/recruiting/
+**Recruiting**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/recruiting/
 - Should show recruiting dashboard
 
-**Marketing**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/marketing/
+**Marketing**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/marketing/
 - Should show marketing analytics
 
-**Operations**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/operations/
+**Operations**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/operations/
 - Should show operations dashboard
 
 ### Test Business Card Scanner
@@ -417,7 +417,7 @@ heroku ps -a careassist-unified
 
 1. Call 719-428-3999 (or your configured number)
 2. Speak with Gigi
-3. Check Heroku logs for call transcript
+3. Check Mac Mini (Local) logs for call transcript
 
 ---
 
@@ -437,19 +437,19 @@ heroku ps -a careassist-unified
 ### Runtime Errors
 
 **Error**: `Application error` (H10 error)
-- **Check logs**: `heroku logs --tail -a careassist-unified`
+- **Check logs**: `mac-mini logs --tail -a careassist-unified`
 - **Common causes**:
   - Missing environment variables
   - Database connection failure
   - Import errors (missing Python packages)
 
 **Error**: `Database connection refused`
-- **Fix**: Verify `DATABASE_URL` is set: `heroku config:get DATABASE_URL -a careassist-unified`
-- **Fix**: Check PostgreSQL add-on is attached: `heroku addons -a careassist-unified`
+- **Fix**: Verify `DATABASE_URL` is set: `mac-mini config:get DATABASE_URL -a careassist-unified`
+- **Fix**: Check PostgreSQL add-on is attached: `mac-mini addons -a careassist-unified`
 
 **Error**: `ImportError: No module named 'X'`
 - **Fix**: Ensure package is in `requirements.txt`
-- **Fix**: Redeploy: `git commit --allow-empty -m "Trigger rebuild" && git push heroku main`
+- **Fix**: Redeploy: `git commit --allow-empty -m "Trigger rebuild" && git push mac-mini main`
 
 ### Performance Issues
 
@@ -476,43 +476,43 @@ heroku ps -a careassist-unified
 
 ## Monitoring & Maintenance
 
-### Heroku Logs
+### Mac Mini (Local) Logs
 
 ```bash
 # View recent logs
-heroku logs --tail -a careassist-unified
+mac-mini logs --tail -a careassist-unified
 
 # View logs for specific dyno
-heroku logs --dyno web.1 -a careassist-unified
+mac-mini logs --dyno web.1 -a careassist-unified
 
 # View logs for specific time range
-heroku logs --since 1h -a careassist-unified
+mac-mini logs --since 1h -a careassist-unified
 ```
 
 ### Application Metrics
 
 ```bash
 # View dyno metrics
-heroku ps -a careassist-unified
+mac-mini ps -a careassist-unified
 
 # View database metrics
-heroku pg:info -a careassist-unified
+mac-mini pg:info -a careassist-unified
 
 # View database connections
-heroku pg:ps -a careassist-unified
+mac-mini pg:ps -a careassist-unified
 ```
 
 ### Backup Database
 
 ```bash
 # Create manual backup
-heroku pg:backups:capture -a careassist-unified
+mac-mini pg:backups:capture -a careassist-unified
 
 # Download backup
-heroku pg:backups:download -a careassist-unified
+mac-mini pg:backups:download -a careassist-unified
 
 # Schedule automatic backups (requires paid plan)
-heroku pg:backups:schedule DATABASE_URL --at '02:00 America/Denver' -a careassist-unified
+mac-mini pg:backups:schedule DATABASE_URL --at '02:00 America/Denver' -a careassist-unified
 ```
 
 ### Update Dependencies
@@ -530,7 +530,7 @@ npm audit fix
 # Commit and deploy
 git add requirements.txt sales/frontend/package-lock.json
 git commit -m "Update dependencies"
-git push heroku main
+git push mac-mini main
 ```
 
 ---
@@ -541,13 +541,13 @@ If a deployment breaks the application:
 
 ```bash
 # View recent releases
-heroku releases -a careassist-unified
+mac-mini releases -a careassist-unified
 
 # Rollback to previous release
-heroku rollback -a careassist-unified
+mac-mini rollback -a careassist-unified
 
 # Or rollback to specific version
-heroku rollback v123 -a careassist-unified
+mac-mini rollback v123 -a careassist-unified
 ```
 
 ---
@@ -560,7 +560,7 @@ heroku rollback v123 -a careassist-unified
 |------|------|
 | Basic dyno (web) | $7/month |
 | PostgreSQL Essential-0 (x3 databases) | $15/month |
-| Heroku Scheduler | $0 (included) |
+| Mac Mini (Local) Scheduler | $0 (included) |
 | **Total** | **$22/month** |
 
 **Recommended production setup**:
@@ -569,7 +569,7 @@ heroku rollback v123 -a careassist-unified
 |------|------|
 | Standard-1X dyno (web) | $25/month |
 | PostgreSQL Essential-1 (x3 databases) | $150/month |
-| Heroku Scheduler | $0 |
+| Mac Mini (Local) Scheduler | $0 |
 | Papertrail logging (Choklad plan) | $7/month |
 | **Total** | **$182/month** |
 
@@ -587,11 +587,11 @@ heroku rollback v123 -a careassist-unified
 
 ## Security Checklist
 
-- [x] All environment variables set via `heroku config:set` (not in code)
+- [x] All environment variables set via `mac-mini config:set` (not in code)
 - [x] `.env` file in `.gitignore` (never committed)
 - [x] `APP_SECRET_KEY` is random and secure (32+ character hex)
 - [x] Google OAuth credentials are for production domain
-- [x] SSL/TLS enabled via Heroku ACM
+- [x] SSL/TLS enabled via Mac Mini (Local) ACM
 - [x] Database backups scheduled
 - [x] Only `coloradocareassist.com` emails can log in (`ALLOWED_DOMAINS`)
 - [x] API keys rotated regularly
@@ -602,11 +602,11 @@ heroku rollback v123 -a careassist-unified
 
 ## Additional Resources
 
-- **Heroku Dev Center**: https://devcenter.heroku.com
-- **Heroku CLI Reference**: https://devcenter.heroku.com/articles/heroku-cli-commands
-- **PostgreSQL on Heroku**: https://devcenter.heroku.com/articles/heroku-postgresql
-- **Heroku Scheduler**: https://devcenter.heroku.com/articles/scheduler
-- **Buildpacks**: https://devcenter.heroku.com/articles/buildpacks
+- **Mac Mini (Local) Dev Center**: https://devcenter.mac-mini.com
+- **Mac Mini (Local) CLI Reference**: https://devcenter.mac-mini.com/articles/mac-mini-cli-commands
+- **PostgreSQL on Mac Mini (Local)**: https://devcenter.mac-mini.com/articles/mac-mini-postgresql
+- **Mac Mini (Local) Scheduler**: https://devcenter.mac-mini.com/articles/scheduler
+- **Buildpacks**: https://devcenter.mac-mini.com/articles/buildpacks
 
 ---
 
@@ -614,7 +614,7 @@ heroku rollback v123 -a careassist-unified
 
 If you've completed all steps, your application should now be live at:
 
-**Primary URL**: https://careassist-unified-0a11ddb45ac0.herokuapp.com
+**Primary URL**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com
 **Custom Domain** (if configured): https://portal.coloradocareassist.com
 
 **Next steps**:

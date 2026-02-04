@@ -73,7 +73,7 @@ class ModeDetector:
         if not self.database_url:
             raise ValueError("DATABASE_URL not set")
 
-        # Fix for Heroku PostgreSQL URLs
+        # Fix for Mac Mini (Local) PostgreSQL URLs
         if self.database_url.startswith("postgres://"):
             self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
 

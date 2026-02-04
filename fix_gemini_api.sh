@@ -15,10 +15,10 @@ git commit -m "Fix Gemini API call - use headers instead of query param
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 echo ""
-echo "🚀 Deploying to Heroku..."
-git push heroku main
+echo "🚀 Deploying to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✅ Fix deployed!"
 echo ""
-echo "Test again at: https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care"
+echo "Test again at: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care"

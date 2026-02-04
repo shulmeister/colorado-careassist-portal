@@ -682,8 +682,8 @@ async def _log_portal_event(description: str, event_type: str = "info", details:
         portal_url = f"http://localhost:{port}"
         
         # If external URL is preferred or required (e.g. strict SSL), use it
-        if os.getenv("HEROKU_APP_NAME"):
-            portal_url = f"https://{os.getenv('HEROKU_APP_NAME')}.herokuapp.com"
+        if os.getenv("Mac Mini (Local)_APP_NAME"):
+            portal_url = f"https://{os.getenv('Mac Mini (Local)_APP_NAME')}.mac-miniapp.com"
             
         async with httpx.AsyncClient() as client:
             await client.post(

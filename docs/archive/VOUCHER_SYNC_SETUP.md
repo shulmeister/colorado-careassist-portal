@@ -91,12 +91,12 @@ The ID is between `/d/` and `/edit` → `1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASG
 In Google Cloud Console, you'll see your project ID at the top (or in the project selector).
 It looks like: `your-project-123456`
 
-## Step 5: Set Heroku Environment Variables
+## Step 5: Set Mac Mini (Local) Environment Variables
 
-We need to add 4 environment variables to Heroku:
+We need to add 4 environment variables to Mac Mini (Local):
 
-### Option A: Via Heroku Dashboard
-1. Go to https://dashboard.heroku.com/apps/portal-coloradocareassist/settings
+### Option A: Via Mac Mini (Local) Dashboard
+1. Go to https://dashboard.mac-mini.com/apps/portal-coloradocareassist/settings
 2. Click "Reveal Config Vars"
 3. Add these variables:
 
@@ -107,32 +107,32 @@ We need to add 4 environment variables to Heroku:
 | `GOOGLE_CLOUD_PROJECT_ID` | Your project ID from Step 4.3 |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | **Entire contents** of the JSON key file from Step 1.5 (copy and paste all of it) |
 
-### Option B: Via Heroku CLI
+### Option B: Via Mac Mini (Local) CLI
 ```bash
 # Set Drive folder ID
-heroku config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="your-folder-id" --app portal-coloradocareassist
+mac-mini config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="your-folder-id" --app portal-coloradocareassist
 
 # Set Sheets ID (if different from default)
-heroku config:set GOOGLE_SHEETS_VOUCHER_ID="1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASGjMZAM" --app portal-coloradocareassist
+mac-mini config:set GOOGLE_SHEETS_VOUCHER_ID="1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASGjMZAM" --app portal-coloradocareassist
 
 # Set Project ID
-heroku config:set GOOGLE_CLOUD_PROJECT_ID="your-project-id" --app portal-coloradocareassist
+mac-mini config:set GOOGLE_CLOUD_PROJECT_ID="your-project-id" --app portal-coloradocareassist
 
 # Set Service Account JSON (paste entire contents)
-heroku config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"..."}' --app portal-coloradocareassist
+mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"..."}' --app portal-coloradocareassist
 ```
 
 ## Step 6: Set Up Automated Syncing
 
-We can use Heroku Scheduler to automatically sync vouchers every hour.
+We can use Mac Mini (Local) Scheduler to automatically sync vouchers every hour.
 
-### 6.1 Install Heroku Scheduler
+### 6.1 Install Mac Mini (Local) Scheduler
 ```bash
-heroku addons:create scheduler:standard --app portal-coloradocareassist
+mac-mini addons:create scheduler:standard --app portal-coloradocareassist
 ```
 
 ### 6.2 Add Sync Job
-1. Open scheduler: `heroku addons:open scheduler --app portal-coloradocareassist`
+1. Open scheduler: `mac-mini addons:open scheduler --app portal-coloradocareassist`
 2. Click "Add Job"
 3. Set schedule: **Every hour at :00**
 4. Command: `python -c "from voucher_sync_service import run_sync; run_sync(hours_back=2)"`
@@ -143,13 +143,13 @@ This will check for new vouchers every hour (looking back 2 hours to catch any m
 ## Step 7: Test the Setup
 
 ### 7.1 Manual Test via Portal
-1. Go to https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/vouchers
+1. Go to https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/vouchers
 2. Click "🔄 Sync from Drive"
 3. It should find and process your two new vouchers
 
-### 7.2 Manual Test via Heroku CLI
+### 7.2 Manual Test via Mac Mini (Local) CLI
 ```bash
-heroku run python voucher_sync_service.py --app portal-coloradocareassist
+mac-mini run python voucher_sync_service.py --app portal-coloradocareassist
 ```
 
 This will run a sync and show you detailed output.
@@ -198,12 +198,12 @@ For best OCR results, vouchers should:
 ### "Permission denied" errors
 - Verify service account has proper access
 - Check that APIs are enabled in Google Cloud
-- Confirm the JSON key is correctly set in Heroku
+- Confirm the JSON key is correctly set in Mac Mini (Local)
 
 ## Support
 
 If you encounter issues:
-1. Check Heroku logs: `heroku logs --tail --app portal-coloradocareassist`
+1. Check Mac Mini (Local) logs: `mac-mini logs --tail --app portal-coloradocareassist`
 2. Try a manual sync to see detailed error messages
 3. Verify all environment variables are set correctly
 
@@ -212,7 +212,7 @@ If you encounter issues:
 ⚠️ **Important**:
 - Keep the service account JSON key secure
 - Never commit it to git
-- Only store it in Heroku environment variables
+- Only store it in Mac Mini (Local) environment variables
 - The service account has limited permissions (read-only on Drive, editor on Sheets only)
 - Revoke the key immediately if it's compromised
 

@@ -37,7 +37,7 @@ A complete caregiver recruitment pipeline with Facebook Lead Ads integration, ap
 - **Database**: PostgreSQL (separate database from main portal)
 - **Deployment**: Mounted at `/recruiting` in unified portal via `unified_app.py`
 
-**Deployment**: Part of the unified portal app (`careassist-unified` on Heroku)
+**Deployment**: Part of the unified portal app (`careassist-unified` on Mac Mini (Local))
 
 ---
 
@@ -161,7 +161,7 @@ curl -G "https://graph.facebook.com/v18.0/YOUR_AD_ACCOUNT_ID/leadgen_forms" \
 
 ### Step 5: Configure Environment Variables
 
-Set the variables from steps above in your `.env` file or Heroku config.
+Set the variables from steps above in your `.env` file or Mac Mini (Local) config.
 
 ---
 
@@ -174,16 +174,16 @@ Set the variables from steps above in your `.env` file or Heroku config.
 3. Click **Pull Leads** button
 4. Status text shows: "Last pull: X minutes ago. Ingested Y leads."
 
-### Automated Sync (Heroku Scheduler)
+### Automated Sync (Mac Mini (Local) Scheduler)
 
 **Recommended**: Set up daily automated sync
 
 ```bash
-# Add Heroku Scheduler (if not already added)
-heroku addons:create scheduler:standard -a careassist-unified
+# Add Mac Mini (Local) Scheduler (if not already added)
+mac-mini addons:create scheduler:standard -a careassist-unified
 
 # Open scheduler dashboard
-heroku addons:open scheduler -a careassist-unified
+mac-mini addons:open scheduler -a careassist-unified
 ```
 
 **Add job**:
@@ -263,36 +263,36 @@ GET    /dashboard/pipeline         # Pipeline view
 
 ---
 
-## Deployment to Heroku
+## Deployment to Mac Mini (Local)
 
 The recruiting dashboard is part of the **unified portal** and deploys together.
 
-### Environment Variables (Heroku)
+### Environment Variables (Mac Mini (Local))
 
 ```bash
 # Set recruiting database URL
-heroku config:set RECRUITING_DATABASE_URL=postgresql://... -a careassist-unified
+mac-mini config:set RECRUITING_DATABASE_URL=postgresql://... -a careassist-unified
 
 # Set Facebook credentials
-heroku config:set FACEBOOK_APP_ID=your-app-id -a careassist-unified
-heroku config:set FACEBOOK_APP_SECRET=your-app-secret -a careassist-unified
-heroku config:set FACEBOOK_ACCESS_TOKEN=your-long-lived-token -a careassist-unified
-heroku config:set FACEBOOK_AD_ACCOUNT_ID=your-account-id -a careassist-unified
-heroku config:set FACEBOOK_PAGE_ID=your-page-id -a careassist-unified
+mac-mini config:set FACEBOOK_APP_ID=your-app-id -a careassist-unified
+mac-mini config:set FACEBOOK_APP_SECRET=your-app-secret -a careassist-unified
+mac-mini config:set FACEBOOK_ACCESS_TOKEN=your-long-lived-token -a careassist-unified
+mac-mini config:set FACEBOOK_AD_ACCOUNT_ID=your-account-id -a careassist-unified
+mac-mini config:set FACEBOOK_PAGE_ID=your-page-id -a careassist-unified
 
 # Verify
-heroku config -a careassist-unified | grep FACEBOOK
+mac-mini config -a careassist-unified | grep FACEBOOK
 ```
 
 ### Deploy
 
 ```bash
 # From repository root
-git push heroku main
+git push mac-mini main
 ```
 
 The recruiting dashboard will be available at:
-- https://careassist-unified-0a11ddb45ac0.herokuapp.com/recruiting/
+- https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/recruiting/
 - https://portal.coloradocareassist.com/recruiting/ (if custom domain configured)
 
 ---
@@ -352,7 +352,7 @@ CREATE INDEX idx_leads_facebook_id ON leads(facebook_lead_id);
 1. Generate new long-lived token (see Facebook Setup)
 2. Update environment variable:
    ```bash
-   heroku config:set FACEBOOK_ACCESS_TOKEN=new-token -a careassist-unified
+   mac-mini config:set FACEBOOK_ACCESS_TOKEN=new-token -a careassist-unified
    ```
 
 ### No Leads Being Pulled
@@ -380,7 +380,7 @@ curl -G "https://graph.facebook.com/v18.0/YOUR_AD_ACCOUNT_ID/leadgen_forms" \
 **Fix**:
 ```bash
 # Remove duplicates manually
-heroku run python -a careassist-unified
+mac-mini run python -a careassist-unified
 >>> from app import db, Lead
 >>> # Find duplicates
 >>> duplicates = db.session.query(Lead.email, func.count(Lead.id)).group_by(Lead.email).having(func.count(Lead.id) > 1).all()
@@ -394,13 +394,13 @@ heroku run python -a careassist-unified
 **Fix**:
 ```bash
 # Verify database URL
-heroku config:get RECRUITING_DATABASE_URL -a careassist-unified
+mac-mini config:get RECRUITING_DATABASE_URL -a careassist-unified
 
 # Check database status
-heroku pg:info -a careassist-unified
+mac-mini pg:info -a careassist-unified
 
 # Verify tables exist
-heroku run python -a careassist-unified
+mac-mini run python -a careassist-unified
 >>> from app import db
 >>> db.create_all()
 ```
@@ -506,7 +506,7 @@ Proprietary - Colorado CareAssist © 2025-2026
 
 **Technical Issues**:
 - Email: jason@coloradocareassist.com
-- Check Heroku logs: `heroku logs --tail -a careassist-unified | grep recruiting`
+- Check Mac Mini (Local) logs: `mac-mini logs --tail -a careassist-unified | grep recruiting`
 
 **Facebook API Issues**:
 - Meta Developer Support: https://developers.facebook.com/support/
@@ -517,7 +517,7 @@ Proprietary - Colorado CareAssist © 2025-2026
 ## Recent Updates (Jan 2026)
 
 - ✅ Facebook Lead Ads integration live
-- ✅ Automated daily sync via Heroku Scheduler
+- ✅ Automated daily sync via Mac Mini (Local) Scheduler
 - ✅ Duplicate protection via native Lead IDs
 - ✅ Manual lead entry support
 - ✅ Mounted at `/recruiting` in unified portal

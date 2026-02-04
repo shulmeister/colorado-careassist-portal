@@ -47,7 +47,7 @@ To turn Gigi back on:
 Currently, critical credentials (RingCentral Admin JWT, WellSky Client/Secret, Gemini Key) are **HARDCODED** in:
 - `gigi/async_bot.py`
 - `services/wellsky_service.py`
-This was done to bypass Heroku environment issues. **Action:** Restore `.env` loading and move these back to config variables for security.
+This was done to bypass Mac Mini (Local) environment issues. **Action:** Restore `.env` loading and move these back to config variables for security.
 
 ### 4. WellSky Data Cleanup
 The 1,058 clients returned by the API seem to be mostly historic/inactive (`active: false`).

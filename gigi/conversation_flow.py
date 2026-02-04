@@ -36,7 +36,7 @@ import sys
 
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
 RETELL_API_BASE = "https://api.retellai.com"
-WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function"
+WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function"
 
 # Current agent ID (we'll update to conversation flow)
 CURRENT_AGENT_ID = "agent_d5c3f32bdf48fa4f7f24af7d36"  # Gigi v2 - Conversation Flow
@@ -1373,7 +1373,7 @@ Then call the transfer_to_oncall function to transfer the call."""
         "start_speaker": "agent",
         "voice_id": "11labs-Myra",  # Keep existing voice
         "language": "en-US",
-        "webhook_url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell",
+        "webhook_url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell",
         "begin_message": "Hi, this is Gigi with Colorado Care Assist. How can I help you?"
     }
 

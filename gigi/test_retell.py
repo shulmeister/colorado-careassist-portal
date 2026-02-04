@@ -25,7 +25,7 @@ RETELL_AGENT_ID = "agent_363f3725498b851037ea84bda5"
 RETELL_API_BASE = "https://api.retellai.com"
 
 # Webhook base for local testing
-WEBHOOK_BASE = os.getenv("GIGI_WEBHOOK_BASE", "https://careassist-unified-0a11ddb45ac0.herokuapp.com")
+WEBHOOK_BASE = os.getenv("GIGI_WEBHOOK_BASE", "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com")
 
 # Test scenarios for Retell Dashboard
 TEST_SCENARIOS = [

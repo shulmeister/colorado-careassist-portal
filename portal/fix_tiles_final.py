@@ -28,7 +28,7 @@ def get_tool_info(url, current_name):
     if 'goformz' in u: return 'GoFormz', 'Mobile Forms'
     if 'brevo' in u: return 'Brevo', 'CRM & Email'
     if 'hostinger' in u: return 'Hostinger', 'Web Hosting'
-    if 'heroku' in u: return 'Salesforce', 'Heroku Cloud'
+    if 'mac-mini' in u: return 'Salesforce', 'Mac Mini (Local) Cloud'
     if 'github' in u: return 'GitHub', 'Repositories'
     
     # Marketing

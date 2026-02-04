@@ -77,10 +77,10 @@ git commit -m "Fix voice agent: Add caller ID, transfer, weather, and message ta
 echo -e "${GREEN}✓ Changes committed${NC}"
 echo ""
 
-echo -e "${YELLOW}Step 6: Deploy to Heroku${NC}"
-echo "Pushing to Heroku..."
-git push heroku main
-echo -e "${GREEN}✓ Deployed to Heroku${NC}"
+echo -e "${YELLOW}Step 6: Deploy to Mac Mini (Local)${NC}"
+echo "Pushing to Mac Mini (Local)..."
+git push mac-mini main
+echo -e "${GREEN}✓ Deployed to Mac Mini (Local)${NC}"
 echo ""
 
 echo -e "${YELLOW}Step 7: Sync tools with Retell AI${NC}"
@@ -91,8 +91,8 @@ echo -e "${GREEN}✓ Retell AI tools synced${NC}"
 echo ""
 
 echo -e "${YELLOW}Step 8: Verify deployment${NC}"
-echo "Checking Heroku app health..."
-curl -s https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/health | python3 -m json.tool
+echo "Checking Mac Mini (Local) app health..."
+curl -s https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/health | python3 -m json.tool
 echo ""
 echo -e "${GREEN}✓ Deployment verification complete${NC}"
 echo ""

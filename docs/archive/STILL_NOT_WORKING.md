@@ -2,7 +2,7 @@
 
 ## Current Status
 
-You've added the correct URI: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback`
+You've added the correct URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 
 But still getting redirect_uri_mismatch error.
 
@@ -22,7 +22,7 @@ Make sure you're editing the **correct** OAuth client ID. You might have multipl
 
 **Check:**
 - The Client ID should start with: `516104802353-...`
-- Make sure you're editing the one that's configured in Heroku
+- Make sure you're editing the one that's configured in Mac Mini (Local)
 
 ### 3. Browser Cache
 
@@ -44,7 +44,7 @@ When you see the error page:
 
 In Google Cloud Console, you should have:
 1. `https://tracker.coloradocareassist.com/auth/callback` ✅
-2. `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback` ✅
+2. `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` ✅
 
 Make sure BOTH are there and saved.
 
@@ -59,7 +59,7 @@ Make sure BOTH are there and saved.
 
 If it's still not working after waiting:
 - What does "see error details" show? (the exact redirect URI Google received)
-- Can you confirm the Client ID you're editing matches what's in Heroku config?
+- Can you confirm the Client ID you're editing matches what's in Mac Mini (Local) config?
 
 
 

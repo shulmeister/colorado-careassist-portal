@@ -155,7 +155,7 @@
                 "situation"
               ]
             },
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/escalate_emergency"
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/escalate_emergency"
           }
         }
       ],
@@ -205,7 +205,7 @@
                 "reason"
               ]
             },
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/report_call_out"
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/report_call_out"
           }
         },
         {
@@ -241,7 +241,7 @@
                 "client_name"
               ]
             },
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/start_shift_filling_campaign"
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/start_shift_filling_campaign"
           }
         }
       ],
@@ -291,7 +291,7 @@
                 "delay_minutes"
               ]
             },
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/report_late"
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/report_late"
           }
         }
       ],
@@ -421,7 +421,7 @@
                 "priority"
               ]
             },
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/log_client_issue"
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/log_client_issue"
           }
         }
       ],
@@ -466,7 +466,7 @@
                 "client_name"
               ]
             },
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/get_client_schedule"
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/get_client_schedule"
           }
         },
         {
@@ -512,7 +512,7 @@
                 "priority"
               ]
             },
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/log_client_issue"
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/log_client_issue"
           }
         }
       ],
@@ -563,7 +563,7 @@
                 "reason"
               ]
             },
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/cancel_client_visit"
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/cancel_client_visit"
           }
         }
       ],

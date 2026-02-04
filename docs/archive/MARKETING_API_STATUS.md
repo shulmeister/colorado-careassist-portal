@@ -65,7 +65,7 @@ The Marketing Dashboard has multiple API integrations. Here's the current status
    
    Once you have the token, set it:
    ```bash
-   heroku config:set GOOGLE_ADS_DEVELOPER_TOKEN="your_token" -a portal-coloradocareassist
+   mac-mini config:set GOOGLE_ADS_DEVELOPER_TOKEN="your_token" -a portal-coloradocareassist
    ```
 
 2. **Get Refresh Token (OAuth):**
@@ -151,9 +151,9 @@ A test script has been created: `test_marketing_apis.py`
 python3 test_marketing_apis.py
 ```
 
-**Run on Heroku (tests actual production config):**
+**Run on Mac Mini (Local) (tests actual production config):**
 ```bash
-heroku run python3 test_marketing_apis.py -a portal-coloradocareassist
+mac-mini run python3 test_marketing_apis.py -a portal-coloradocareassist
 ```
 
 ### Test Endpoints
@@ -162,27 +162,27 @@ You can also test the API endpoints directly:
 
 1. **Google Ads + Facebook Ads:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/ads
+   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads
    ```
 
 2. **Social Metrics:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/social
+   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/social
    ```
 
 3. **Website/GA4/GBP:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/website
+   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/website
    ```
 
 4. **GA4 Connection Test:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/test-ga4
+   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/test-ga4
    ```
 
 5. **GBP Connection Test:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/test-gbp
+   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/test-gbp
    ```
 
 ---
@@ -208,7 +208,7 @@ Since you just started buying Google keywords again, here's what you need to do:
 
 2. **Set the Developer Token:**
    ```bash
-   heroku config:set GOOGLE_ADS_DEVELOPER_TOKEN="your_developer_token_here" -a portal-coloradocareassist
+   mac-mini config:set GOOGLE_ADS_DEVELOPER_TOKEN="your_developer_token_here" -a portal-coloradocareassist
    ```
 
 3. **Get OAuth Refresh Token:**
@@ -219,10 +219,10 @@ Since you just started buying Google keywords again, here's what you need to do:
 4. **Verify Connection:**
    ```bash
    # Check logs
-   heroku logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
+   mac-mini logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
    
    # Or test the endpoint
-   curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/ads | jq '.data.google_ads'
+   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads | jq '.data.google_ads'
    ```
 
 5. **Check Dashboard:**
@@ -292,7 +292,7 @@ If you need help setting up the Google Ads API:
 1. Check the Google Ads API documentation
 2. Verify your Developer Token is active in Google Ads
 3. Ensure OAuth tokens have the correct scopes
-4. Check Heroku logs for detailed error messages
+4. Check Mac Mini (Local) logs for detailed error messages
 
 ---
 

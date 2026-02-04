@@ -699,7 +699,7 @@ class BusinessCardScanner:
         return self._post_process_text(combined)
     
     def _extract_text_with_ocr(self, processed_images: List[Image.Image], original_image: Image.Image) -> str:
-        """Extract text quickly while staying within Heroku's 30s request limit"""
+        """Extract text quickly while staying within Mac Mini (Local)'s 30s request limit"""
         if processed_images is None:
             processed_images = []
         

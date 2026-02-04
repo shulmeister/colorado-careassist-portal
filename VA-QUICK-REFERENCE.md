@@ -1,6 +1,6 @@
 # VA Plan of Care Generator - Quick Reference Card
 
-**URL:** https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care
+**URL:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care
 
 ---
 

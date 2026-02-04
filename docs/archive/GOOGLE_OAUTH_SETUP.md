@@ -16,7 +16,7 @@ If you see a warning icon next to "CCA Portal" in Google Cloud Console, it's lik
 In the "Authorized redirect URIs" section, add:
 
 ```
-https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 ```
 
 ### 3. Save Changes
@@ -36,16 +36,16 @@ After adding the redirect URI, the warning icon should disappear.
 
 ## Current Configuration
 
-Your Heroku app is configured with:
+Your Mac Mini (Local) app is configured with:
 - **Client ID**: `516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com`
-- **Redirect URI**: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback`
+- **Redirect URI**: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 
 Make sure this redirect URI is in your Google OAuth settings for "CCA Portal".
 
 ## Test
 
 After adding the redirect URI, visit:
-https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
+https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 
 You should be able to log in with your `coloradocareassist.com` account.
 

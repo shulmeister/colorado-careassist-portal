@@ -182,8 +182,8 @@ cd ~/clawd/careassist-unified
 git add gigi/enhanced_webhook.py gigi/apple_contacts_lookup.py gigi/retell_tools_schema.json
 git commit -m "Fix voice agent: Add caller ID, transfer, weather, and message taking"
 
-# 2. Deploy to Heroku
-git push heroku main
+# 2. Deploy to Mac Mini (Local)
+git push mac-mini main
 
 # 3. Sync tools with Retell AI
 cd gigi
@@ -191,7 +191,7 @@ python3 sync_retell.py
 cd ..
 
 # 4. Verify deployment
-curl https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/health
+curl https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/health
 ```
 
 ## Testing Checklist
@@ -243,7 +243,7 @@ The Apple Contacts lookup is currently a placeholder. To complete:
 
 ## Configuration
 
-### Environment Variables (Heroku)
+### Environment Variables (Mac Mini (Local))
 ```bash
 # Already configured:
 RETELL_API_KEY=key_5d0bc4168659a5df305b8ac2a7fd
@@ -275,14 +275,14 @@ cp gigi/retell_tools_schema.json.backup.[timestamp] gigi/retell_tools_schema.jso
 # Redeploy
 git add gigi/main.py gigi/retell_tools_schema.json
 git commit -m "Rollback voice agent changes"
-git push heroku main
+git push mac-mini main
 cd gigi && python3 sync_retell.py && cd ..
 ```
 
 ## Troubleshooting
 
 ### Call immediately hangs up
-- Check webhook logs: `heroku logs --tail -a careassist-unified`
+- Check webhook logs: `mac-mini logs --tail -a careassist-unified`
 - Verify tool handlers are added correctly
 - Check Retell dashboard for errors
 
@@ -297,7 +297,7 @@ cd gigi && python3 sync_retell.py && cd ..
 - Test manually: `curl https://api.telegram.org/bot[TOKEN]/getUpdates`
 
 ### Weather not responding
-- Test endpoint: `curl https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/gigi/voice/weather`
+- Test endpoint: `curl https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/gigi/voice/weather`
 - Check Open-Meteo API is accessible
 - Review location mapping in get_weather function
 
@@ -313,7 +313,7 @@ cd gigi && python3 sync_retell.py && cd ..
 ## Next Steps
 
 1. Complete manual code integration in main.py
-2. Deploy to Heroku
+2. Deploy to Mac Mini (Local)
 3. Test all scenarios
 4. Connect Mac node for Apple Contacts
 5. Monitor initial calls for issues

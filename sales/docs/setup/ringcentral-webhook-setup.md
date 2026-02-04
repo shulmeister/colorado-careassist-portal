@@ -39,7 +39,7 @@ curl -X POST https://platform.ringcentral.com/restapi/v1.0/subscription \
     ],
     "deliveryMode": {
       "transportType": "WebHook",
-      "address": "https://careassist-tracker-0fcf2cecdb22.herokuapp.com/webhooks/ringcentral"
+      "address": "https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/webhooks/ringcentral"
     },
     "expiresIn": 630720000
   }'
@@ -55,7 +55,7 @@ RingCentral may have a webhooks UI in their admin portal:
 2. Navigate to: **Admin Portal** → **Integrations** or **Webhooks**
 3. Look for "Webhooks" or "Event Subscriptions"
 4. Create new webhook:
-   - **URL**: `https://careassist-tracker-0fcf2cecdb22.herokuapp.com/webhooks/ringcentral`
+   - **URL**: `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/webhooks/ringcentral`
    - **Events**: Select call/telephony events
    - Save
 
@@ -78,7 +78,7 @@ Would you like me to implement this polling approach instead?
 Once set up, test it:
 
 1. Make a call from your RingCentral phone
-2. Check your CRM at: https://careassist-tracker-0fcf2cecdb22.herokuapp.com/
+2. Check your CRM at: https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/
 3. Go to "Activity" tab
 4. The call should appear in the activity feed
 

@@ -48,13 +48,13 @@ SHEET_ID=1rKBP_5eLgvIVprVEzOYRnyL9J3FMf9H-6SLjIvIYFgg
 
 ### **Step 3: Update Your Hosting Environment**
 
-**If using Heroku:**
+**If using Mac Mini (Local):**
 ```bash
-heroku config:set GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-heroku config:set GOOGLE_CLIENT_SECRET=your-client-secret
-heroku config:set GOOGLE_REDIRECT_URI=https://tracker.coloradocareassist.com/auth/callback
-heroku config:set ALLOWED_DOMAINS=coloradocareassist.com
-heroku config:set APP_SECRET_KEY=your-secure-random-key
+mac-mini config:set GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+mac-mini config:set GOOGLE_CLIENT_SECRET=your-client-secret
+mac-mini config:set GOOGLE_REDIRECT_URI=https://tracker.coloradocareassist.com/auth/callback
+mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com
+mac-mini config:set APP_SECRET_KEY=your-secure-random-key
 ```
 
 **If using other hosting:**

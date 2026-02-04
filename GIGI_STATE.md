@@ -12,8 +12,8 @@
 
 ## Infrastructure
 
-- **No Heroku** - All Heroku apps deleted
-- **No DigitalOcean** - Droplet decommissioned
+- **No Mac Mini (Local)** - All Mac Mini (Local) apps deleted
+- **No Mac Mini** - Local Server decommissioned
 - **Database:** Local PostgreSQL 17 on Mac Mini
 - **Access:** Cloudflare Tunnel (secure, no open ports)
 - **Remote:** Tailscale at 100.124.88.105
@@ -63,8 +63,8 @@ To disable: Set `GIGI_RC_BOT_ENABLED=false` in LaunchAgent plist.
 
 ## Code Location
 
-- **Main App:** `/Users/shulmeister/heroku-apps/careassist-unified/`
-- **Gigi Code:** `/Users/shulmeister/heroku-apps/careassist-unified/gigi/`
+- **Main App:** `/Users/shulmeister/mac-mini-apps/careassist-unified/`
+- **Gigi Code:** `/Users/shulmeister/mac-mini-apps/careassist-unified/gigi/`
 - **LaunchAgent:** `~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist`
 - **Logs:** `~/logs/gigi-unified.log` and `~/logs/gigi-unified-error.log`
 

@@ -8,13 +8,13 @@ This script runs automatically every 24 hours to:
 3. Pull upcoming shifts for next 30 days
 4. Save everything to contacts_cache.json for instant lookup
 
-Scheduled via Heroku Scheduler to run daily at 3 AM Mountain Time.
+Scheduled via Mac Mini (Local) Scheduler to run daily at 3 AM Mountain Time.
 
 Usage:
     python gigi/daily_sync.py
 
-    # On Heroku:
-    heroku run python gigi/daily_sync.py -a careassist-unified
+    # On Mac Mini (Local):
+    mac-mini run python gigi/daily_sync.py -a careassist-unified
 """
 
 import os
@@ -32,7 +32,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Configuration
-PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://careassist-unified-0a11ddb45ac0.herokuapp.com")
+PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(SCRIPT_DIR, "contacts_cache.json")
 

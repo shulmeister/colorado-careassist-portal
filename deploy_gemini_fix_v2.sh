@@ -17,11 +17,11 @@ git commit -m "Improve Gemini API error handling and model fallback
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 echo ""
-echo "🚀 Deploying to Heroku..."
-git push heroku main
+echo "🚀 Deploying to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✅ Deployed!"
 echo ""
 echo "Now you'll see the actual error message in the UI."
-echo "Test at: https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care"
+echo "Test at: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care"

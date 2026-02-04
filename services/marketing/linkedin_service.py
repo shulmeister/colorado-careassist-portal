@@ -512,7 +512,7 @@ class LinkedInService:
             "is_placeholder": True,
             "source": "placeholder",
             "needs_oauth": needs_oauth,
-            "oauth_url": self.get_oauth_url("https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/linkedin/callback") if needs_oauth else None,
+            "oauth_url": self.get_oauth_url("https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/linkedin/callback") if needs_oauth else None,
             "fetched_at": datetime.utcnow().isoformat(),
         }
 

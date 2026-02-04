@@ -23,9 +23,9 @@ curl -X POST https://open.tiktokapis.com/v2/oauth/token/ \
   -d "grant_type=client_credentials"
 ```
 
-**Note:** Replace `YOUR_CLIENT_SECRET` with your actual secret from Heroku:
+**Note:** Replace `YOUR_CLIENT_SECRET` with your actual secret from Mac Mini (Local):
 ```bash
-heroku config:get TIKTOK_CLIENT_SECRET --app portal-coloradocareassist
+mac-mini config:get TIKTOK_CLIENT_SECRET --app portal-coloradocareassist
 ```
 
 The response will include:
@@ -47,8 +47,8 @@ The response will include:
 ### Step 3: Set Environment Variables
 
 ```bash
-heroku config:set TIKTOK_ACCESS_TOKEN=your_access_token_here --app portal-coloradocareassist
-heroku config:set TIKTOK_ADVERTISER_ID=your_advertiser_id --app portal-coloradocareassist
+mac-mini config:set TIKTOK_ACCESS_TOKEN=your_access_token_here --app portal-coloradocareassist
+mac-mini config:set TIKTOK_ADVERTISER_ID=your_advertiser_id --app portal-coloradocareassist
 ```
 
 ## Alternative: Using TikTok Developer Portal
@@ -58,7 +58,7 @@ heroku config:set TIKTOK_ADVERTISER_ID=your_advertiser_id --app portal-coloradoc
 3. Navigate to your app
 4. Generate an access token from the dashboard
 5. Copy the token and advertiser ID
-6. Set both in Heroku (see Step 3 above)
+6. Set both in Mac Mini (Local) (see Step 3 above)
 
 ## Notes
 
@@ -72,5 +72,5 @@ heroku config:set TIKTOK_ADVERTISER_ID=your_advertiser_id --app portal-coloradoc
 After setting both variables, the TikTok metrics should appear in your marketing dashboard. Check the logs if you encounter any issues:
 
 ```bash
-heroku logs --tail --app portal-coloradocareassist | grep -i tiktok
+mac-mini logs --tail --app portal-coloradocareassist | grep -i tiktok
 ```

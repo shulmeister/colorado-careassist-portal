@@ -25,8 +25,8 @@ PDF PRINTING FIX:
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 echo ""
-echo "🚀 Deploying to Heroku..."
-git push heroku main
+echo "🚀 Deploying to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✅ Deployed!"
@@ -35,7 +35,7 @@ echo "FIXES:"
 echo "  1. ✓ Filename now uses ONE date (start date only)"
 echo "  2. ✓ PDF should print correctly without blank pages"
 echo ""
-echo "Test at: https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care"
+echo "Test at: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care"
 echo ""
 echo "Expected filename format:"
 echo "  Crowley.W.3414_VA0055325584.Reeder.C.CC.D.02.04.2026.001.pdf"

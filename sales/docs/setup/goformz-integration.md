@@ -17,14 +17,14 @@ If GoFormz supports webhooks, set up a webhook to call our endpoint when a Clien
 
 **Webhook URL:**
 ```
-https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/goformz/webhook
+https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/goformz/webhook
 ```
 
 **Webhook Configuration in GoFormz:**
 1. Go to your GoFormz account settings
 2. Navigate to **Integrations** or **Webhooks**
 3. Create a new webhook:
-   - **URL**: `https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/goformz/webhook`
+   - **URL**: `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/goformz/webhook`
    - **Event**: Form completion / Form submitted
    - **Form**: Client Packet (or filter for forms containing "Client Packet" in the name)
    - **Method**: POST
@@ -41,19 +41,19 @@ If GoFormz doesn't support webhooks, we can run a scheduled sync script that che
 
 **Manual Sync:**
 ```bash
-heroku run "python3 sync_goformz_to_brevo.py" -a careassist-tracker
+mac-mini run "python3 sync_goformz_to_brevo.py" -a careassist-tracker
 ```
 
-**Scheduled Sync (Heroku Scheduler):**
-1. Go to Heroku Dashboard → careassist-tracker → **Resources**
-2. Add **Heroku Scheduler** addon
+**Scheduled Sync (Mac Mini (Local) Scheduler):**
+1. Go to Mac Mini (Local) Dashboard → careassist-tracker → **Resources**
+2. Add **Mac Mini (Local) Scheduler** addon
 3. Create a new job:
    - **Command**: `python3 sync_goformz_to_brevo.py`
    - **Frequency**: Every 10 minutes (or hourly)
 
 **Or via API endpoint:**
 ```bash
-curl -X POST https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/goformz/sync-to-brevo?since_hours=24 \
+curl -X POST https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/goformz/sync-to-brevo?since_hours=24 \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -61,17 +61,17 @@ curl -X POST https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/goformz/s
 
 ### Test GoFormz Connection
 ```bash
-heroku run "python3 -c 'from goformz_service import GoFormzService; g = GoFormzService(); print(g.test_connection())'" -a careassist-tracker
+mac-mini run "python3 -c 'from goformz_service import GoFormzService; g = GoFormzService(); print(g.test_connection())'" -a careassist-tracker
 ```
 
 ### Test Sync (Dry Run)
 ```bash
-heroku run "python3 sync_goformz_to_brevo.py --since-hours 24" -a careassist-tracker
+mac-mini run "python3 sync_goformz_to_brevo.py --since-hours 24" -a careassist-tracker
 ```
 
 ### Test Webhook Endpoint
 ```bash
-curl -X POST https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/goformz/webhook \
+curl -X POST https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/goformz/webhook \
   -H "Content-Type: application/json" \
   -d '{
     "event": "completed",
@@ -102,9 +102,9 @@ If a field isn't found, the script will try common variations.
 ## Troubleshooting
 
 ### "GoFormz not configured"
-- Check that `GOFORMZ_CLIENT_ID` and `GOFORMZ_CLIENT_SECRET` are set on Heroku:
+- Check that `GOFORMZ_CLIENT_ID` and `GOFORMZ_CLIENT_SECRET` are set on Mac Mini (Local):
   ```bash
-  heroku config -a careassist-tracker | grep GOFORMZ
+  mac-mini config -a careassist-tracker | grep GOFORMZ
   ```
 
 ### "Failed to get token"
@@ -127,7 +127,7 @@ If a field isn't found, the script will try common variations.
 3. **Verify welcome email is sent** from Brevo automation
 4. **Monitor logs** for any issues:
    ```bash
-   heroku logs --tail -a careassist-tracker | grep goformz
+   mac-mini logs --tail -a careassist-tracker | grep goformz
    ```
 
 ## Notes

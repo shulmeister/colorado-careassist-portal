@@ -9,7 +9,7 @@ This is the build order. Each phase unlocks the next.
 ## Phase 0: Foundation (What Exists Now)
 
 **Current State:**
-- ✅ Retell AI voice agent running on Heroku
+- ✅ Retell AI voice agent running on Mac Mini (Local)
 - ✅ Conversation flow with 18 nodes
 - ✅ Webhook tools (call-outs, scheduling, financial data)
 - ✅ Basic caregiver/client routing

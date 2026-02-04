@@ -43,10 +43,10 @@ def va_plan_of_care():
 
 Then access at: `http://localhost:5000/va-plan-of-care`
 
-### Option 3: Deploy to Heroku
-The file is already in the `static/` directory and will be deployed automatically with your Heroku app.
+### Option 3: Deploy to Mac Mini (Local)
+The file is already in the `static/` directory and will be deployed automatically with your Mac Mini (Local) app.
 
-Access at: `https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care.html`
+Access at: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care.html`
 
 ## VA Naming Convention
 

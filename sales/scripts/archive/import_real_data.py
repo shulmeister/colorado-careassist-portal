@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Import real CSV data to Heroku database
+Import real CSV data to Mac Mini (Local) database
 This script creates the actual data from your CSV files
 """
 

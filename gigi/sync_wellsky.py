@@ -6,7 +6,7 @@ This script pulls caregivers, clients, shifts, and unavailability from WellSky
 and stores them in the local database for fast lookups during calls.
 
 Run manually: python gigi/sync_wellsky.py
-Run via scheduler: heroku run python gigi/sync_wellsky.py --app careassist-unified
+Run via scheduler: mac-mini run python gigi/sync_wellsky.py --app careassist-unified
 
 Recommended schedule: Every 15-30 minutes during business hours.
 """

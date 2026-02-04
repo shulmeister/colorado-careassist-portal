@@ -53,30 +53,30 @@ Currently configured for 2025. When 2026 starts, just update one environment var
 4. Permission: **Editor** (so it can add rows)
 5. Send
 
-### Step 3: Set Heroku Environment Variables
+### Step 3: Set Mac Mini (Local) Environment Variables
 
 ```bash
 # Set 2025 voucher folder (current)
-heroku config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="11dehnpNV-QfwdU_6DHXAuul8v9KW2mD2" --app portal-coloradocareassist
+mac-mini config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="11dehnpNV-QfwdU_6DHXAuul8v9KW2mD2" --app portal-coloradocareassist
 
 # Set Google Sheets ID (already correct)
-heroku config:set GOOGLE_SHEETS_VOUCHER_ID="1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASGjMZAM" --app portal-coloradocareassist
+mac-mini config:set GOOGLE_SHEETS_VOUCHER_ID="1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASGjMZAM" --app portal-coloradocareassist
 
 # Set your Google Cloud project ID (from console)
-heroku config:set GOOGLE_CLOUD_PROJECT_ID="your-project-id-here" --app portal-coloradocareassist
+mac-mini config:set GOOGLE_CLOUD_PROJECT_ID="your-project-id-here" --app portal-coloradocareassist
 
 # Set Service Account JSON (copy entire contents of downloaded JSON file)
-heroku config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"your-project",...}' --app portal-coloradocareassist
+mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"your-project",...}' --app portal-coloradocareassist
 ```
 
-**Or via Heroku Dashboard**:
-1. Go to: https://dashboard.heroku.com/apps/portal-coloradocareassist/settings
+**Or via Mac Mini (Local) Dashboard**:
+1. Go to: https://dashboard.mac-mini.com/apps/portal-coloradocareassist/settings
 2. Click "Reveal Config Vars"
 3. Add these 4 variables with values above
 
 ### Step 4: Test It!
 
-1. Go to: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/vouchers
+1. Go to: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/vouchers
 2. Click "🔄 Sync from Drive"
 3. Watch it process your vouchers!
 
@@ -92,11 +92,11 @@ The system will:
 Set up automatic hourly checks:
 
 ```bash
-# Install Heroku Scheduler
-heroku addons:create scheduler:standard --app portal-coloradocareassist
+# Install Mac Mini (Local) Scheduler
+mac-mini addons:create scheduler:standard --app portal-coloradocareassist
 
 # Open scheduler dashboard
-heroku addons:open scheduler --app portal-coloradocareassist
+mac-mini addons:open scheduler --app portal-coloradocareassist
 ```
 
 In the dashboard:
@@ -112,7 +112,7 @@ Now it checks every hour automatically!
 When 2026 starts, just update one variable:
 
 ```bash
-heroku config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="10xYKU5E3tQy1WvlOELJRjkzyRotHClgO" --app portal-coloradocareassist
+mac-mini config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="10xYKU5E3tQy1WvlOELJRjkzyRotHClgO" --app portal-coloradocareassist
 ```
 
 That's it! The system will start monitoring the 2026 folder.
@@ -167,7 +167,7 @@ Once configured, click "Sync from Drive" and these will be processed if they're 
 
 Check logs anytime:
 ```bash
-heroku logs --tail --app portal-coloradocareassist
+mac-mini logs --tail --app portal-coloradocareassist
 ```
 
 Need help? Just ask! 🚀

@@ -27,8 +27,8 @@ This is the quickest way to get a refresh token:
 2. **Configure OAuth Playground:**
    - Click the gear icon (⚙️) in the top right
    - Check "Use your own OAuth credentials"
-   - Enter your OAuth Client ID: (check Heroku config for `GOOGLE_CLIENT_ID`)
-   - Enter your OAuth Client Secret: (check Heroku config for `GOOGLE_CLIENT_SECRET`)
+   - Enter your OAuth Client ID: (check Mac Mini (Local) config for `GOOGLE_CLIENT_ID`)
+   - Enter your OAuth Client Secret: (check Mac Mini (Local) config for `GOOGLE_CLIENT_SECRET`)
 
 3. **Select Scope:**
    - In the left panel, find and select:
@@ -46,9 +46,9 @@ This is the quickest way to get a refresh token:
 6. **Copy the Refresh Token:**
    - Copy the refresh token value (it's a long string)
 
-7. **Set on Heroku:**
+7. **Set on Mac Mini (Local):**
    ```bash
-   heroku config:set GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-coloradocareassist
+   mac-mini config:set GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-coloradocareassist
    ```
 
 ---
@@ -81,7 +81,7 @@ If you need to set up OAuth from scratch:
    - Go to: APIs & Services → Credentials
    - Edit your OAuth 2.0 Client ID
    - Add Authorized redirect URI:
-     - `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/google-ads/callback`
+     - `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/google-ads/callback`
    - Save
 
 2. **Use OAuth Playground** (same as Option 1)
@@ -94,14 +94,14 @@ Once you've set the refresh token, verify it's working:
 
 ### 1. Check Logs
 ```bash
-heroku logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
+mac-mini logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
 ```
 
 You should **NOT** see: "Google Ads service not fully configured"
 
 ### 2. Test the API Endpoint
 ```bash
-curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/ads | jq '.data.google_ads'
+curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads | jq '.data.google_ads'
 ```
 
 Look for:
@@ -121,8 +121,8 @@ Look for:
 **Your Configuration:**
 - Developer Token: `-fWctng9yGnr3fiv6I4gXQ` ✅
 - Customer ID: `6780818726053668` ✅
-- Client ID: ✅ (set in Heroku)
-- Client Secret: ✅ (set in Heroku)
+- Client ID: ✅ (set in Mac Mini (Local))
+- Client Secret: ✅ (set in Mac Mini (Local))
 - Refresh Token: ⚠️ **NEEDED**
 
 **Required Scope:**

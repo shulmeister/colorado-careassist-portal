@@ -1,28 +1,28 @@
 #!/bin/bash
 
-# Caregiver Recruitment Dashboard - Heroku Deployment Script
+# Caregiver Recruitment Dashboard - Mac Mini (Local) Deployment Script
 
-echo "🚀 Starting Heroku deployment for Caregiver Recruitment Dashboard..."
+echo "🚀 Starting Mac Mini (Local) deployment for Caregiver Recruitment Dashboard..."
 
-# Check if Heroku CLI is installed
-if ! command -v heroku &> /dev/null; then
-    echo "❌ Heroku CLI is not installed. Please install it first:"
-    echo "   https://devcenter.heroku.com/articles/heroku-cli"
+# Check if Mac Mini (Local) CLI is installed
+if ! command -v mac-mini &> /dev/null; then
+    echo "❌ Mac Mini (Local) CLI is not installed. Please install it first:"
+    echo "   https://devcenter.mac-mini.com/articles/mac-mini-cli"
     exit 1
 fi
 
-# Check if user is logged in to Heroku
-if ! heroku auth:whoami &> /dev/null; then
-    echo "🔐 Please login to Heroku first:"
-    heroku login
+# Check if user is logged in to Mac Mini (Local)
+if ! mac-mini auth:whoami &> /dev/null; then
+    echo "🔐 Please login to Mac Mini (Local) first:"
+    mac-mini login
 fi
 
 # Get app name from user
-read -p "Enter your Heroku app name (or press Enter to create new): " APP_NAME
+read -p "Enter your Mac Mini (Local) app name (or press Enter to create new): " APP_NAME
 
 if [ -z "$APP_NAME" ]; then
-    echo "Creating new Heroku app..."
-    APP_NAME=$(heroku create --region us | grep -o 'https://[^.]*' | sed 's/https:\/\///')
+    echo "Creating new Mac Mini (Local) app..."
+    APP_NAME=$(mac-mini create --region us | grep -o 'https://[^.]*' | sed 's/https:\/\///')
     echo "✅ Created app: $APP_NAME"
 else
     echo "Using existing app: $APP_NAME"
@@ -30,7 +30,7 @@ fi
 
 # Add PostgreSQL addon
 echo "📊 Adding PostgreSQL database..."
-heroku addons:create heroku-postgresql:hobby-dev --app $APP_NAME
+mac-mini addons:create mac-mini-postgresql:hobby-dev --app $APP_NAME
 
 # Set environment variables
 echo "⚙️ Setting up environment variables..."
@@ -38,17 +38,17 @@ echo "⚙️ Setting up environment variables..."
 # Generate a secret key
 SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 
-heroku config:set SECRET_KEY="$SECRET_KEY" --app $APP_NAME
+mac-mini config:set SECRET_KEY="$SECRET_KEY" --app $APP_NAME
 
 echo "📧 Email configuration (optional - you can set these later):"
 read -p "Enter your Gmail address (or press Enter to skip): " EMAIL_USER
 if [ ! -z "$EMAIL_USER" ]; then
     read -s -p "Enter your Gmail app password: " EMAIL_PASSWORD
     echo
-    heroku config:set EMAIL_USER="$EMAIL_USER" --app $APP_NAME
-    heroku config:set EMAIL_PASSWORD="$EMAIL_PASSWORD" --app $APP_NAME
-    heroku config:set SMTP_SERVER="smtp.gmail.com" --app $APP_NAME
-    heroku config:set SMTP_PORT="587" --app $APP_NAME
+    mac-mini config:set EMAIL_USER="$EMAIL_USER" --app $APP_NAME
+    mac-mini config:set EMAIL_PASSWORD="$EMAIL_PASSWORD" --app $APP_NAME
+    mac-mini config:set SMTP_SERVER="smtp.gmail.com" --app $APP_NAME
+    mac-mini config:set SMTP_PORT="587" --app $APP_NAME
 fi
 
 # Initialize git if not already done
@@ -59,26 +59,26 @@ if [ ! -d ".git" ]; then
     git commit -m "Initial commit"
 fi
 
-# Add Heroku remote
-echo "🔗 Adding Heroku remote..."
-heroku git:remote -a $APP_NAME
+# Add Mac Mini (Local) remote
+echo "🔗 Adding Mac Mini (Local) remote..."
+mac-mini git:remote -a $APP_NAME
 
-# Deploy to Heroku
-echo "🚀 Deploying to Heroku..."
+# Deploy to Mac Mini (Local)
+echo "🚀 Deploying to Mac Mini (Local)..."
 git add .
 git commit -m "Deploy caregiver recruitment dashboard"
-git push heroku main
+git push mac-mini main
 
 # Run database migrations
 echo "🗄️ Setting up database..."
-heroku run python -c "from app import db; db.create_all()" --app $APP_NAME
+mac-mini run python -c "from app import db; db.create_all()" --app $APP_NAME
 
 # Open the app
 echo "🌐 Opening your app..."
-heroku open --app $APP_NAME
+mac-mini open --app $APP_NAME
 
 echo "✅ Deployment complete!"
-echo "📱 Your app is available at: https://$APP_NAME.herokuapp.com"
+echo "📱 Your app is available at: https://$APP_NAME.mac-miniapp.com"
 echo ""
 echo "📋 Next steps:"
 echo "1. Test the upload functionality with the sample data"

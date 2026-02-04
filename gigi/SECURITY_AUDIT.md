@@ -80,7 +80,7 @@ async def retell_webhook(request: Request):
 **Risk if not implemented:** Low (but reduces response time to attacks)
 
 ### 4. HTTPS Enforcement
-**Status:** Heroku automatically enforces HTTPS
+**Status:** Mac Mini (Local) automatically enforces HTTPS
 
 **Recommendation:** Verify all webhooks use HTTPS URLs
 - Retell webhook: ✓ HTTPS
@@ -94,7 +94,7 @@ async def retell_webhook(request: Request):
 - [x] Test endpoints disabled (`GIGI_ENABLE_TEST_ENDPOINTS=false`)
 - [x] Webhook signature verification (Retell)
 - [x] SQLAlchemy ORM (no SQL injection)
-- [x] HTTPS enforced by Heroku
+- [x] HTTPS enforced by Mac Mini (Local)
 - [x] Pydantic input validation
 - [ ] Rate limiting (recommended but not critical)
 - [ ] Failed auth attempt monitoring (recommended)
@@ -136,7 +136,7 @@ GIGI_ENABLE_TEST_ENDPOINTS=false  # MUST be false in production
 
 ### If credentials are compromised:
 1. Immediately rotate the compromised key in the provider dashboard
-2. Update Heroku config: `heroku config:set KEY_NAME=new_value`
+2. Update Mac Mini (Local) config: `mac-mini config:set KEY_NAME=new_value`
 3. Monitor logs for suspicious activity
 4. Review recent usage in provider dashboards
 

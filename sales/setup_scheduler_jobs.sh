@@ -1,20 +1,20 @@
 #!/bin/bash
-# Setup Heroku Scheduler Jobs
+# Setup Mac Mini (Local) Scheduler Jobs
 
 APP_NAME="careassist-tracker"
 
 echo "Setting up scheduled jobs for $APP_NAME..."
 
-# Note: Heroku Scheduler jobs can only be created via the dashboard
+# Note: Mac Mini (Local) Scheduler jobs can only be created via the dashboard
 # This script opens the dashboard and provides the commands to paste
 
 echo ""
 echo "========================================"
-echo "HEROKU SCHEDULER SETUP"
+echo "Mac Mini (Local) SCHEDULER SETUP"
 echo "========================================"
 echo ""
-echo "The Heroku Scheduler dashboard should be open in your browser."
-echo "If not, go to: https://dashboard.heroku.com/apps/$APP_NAME/scheduler"
+echo "The Mac Mini (Local) Scheduler dashboard should be open in your browser."
+echo "If not, go to: https://dashboard.mac-mini.com/apps/$APP_NAME/scheduler"
 echo ""
 echo "Create 2 scheduled jobs:"
 echo ""

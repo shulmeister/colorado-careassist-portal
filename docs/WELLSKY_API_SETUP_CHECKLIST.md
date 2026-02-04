@@ -18,7 +18,7 @@ Client Secret: [REDACTED_CLIENT_SECRET]
 API Docs: https://apidocs.clearcareonline.com
 ```
 
-**Status:** ✅ Configured in Heroku
+**Status:** ✅ Configured in Mac Mini (Local)
 
 ---
 

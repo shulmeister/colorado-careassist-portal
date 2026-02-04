@@ -78,10 +78,10 @@
    - Both will be iframe embeds of existing functionality
 
 ### Deployment
-4. **📝 Deploy to Heroku**
+4. **📝 Deploy to Mac Mini (Local)**
    - Add frontend build to git
    - Update Procfile if needed
-   - Push to Heroku
+   - Push to Mac Mini (Local)
    - Test live
 
 ## 📊 Progress Summary
@@ -112,9 +112,9 @@ This is a **GORGEOUS, professional CRM** that:
    - Wire up Visits Tracker
    - Wire up Activity Logs
 
-3. **Deploy to Heroku** (15 min)
+3. **Deploy to Mac Mini (Local)** (15 min)
    - Commit frontend build
-   - Push to Heroku
+   - Push to Mac Mini (Local)
    - Test live
 
 **Total remaining: ~1 hour of work!**

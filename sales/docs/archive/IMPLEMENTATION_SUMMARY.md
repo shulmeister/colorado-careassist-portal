@@ -80,7 +80,7 @@
 - Matches calls to contacts by phone number
 - Links calls to active deals
 
-**Webhook URL**: `https://your-app.herokuapp.com/webhooks/ringcentral`
+**Webhook URL**: `https://your-app.mac-miniapp.com/webhooks/ringcentral`
 
 ---
 
@@ -176,7 +176,7 @@ The app will automatically add new columns on startup:
 1. Log into RingCentral Admin Portal
 2. Go to Webhooks
 3. Create new webhook:
-   - URL: `https://careassist-tracker-0fcf2cecdb22.herokuapp.com/webhooks/ringcentral`
+   - URL: `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/webhooks/ringcentral`
    - Events: `call.completed`, `call.ended`
    - Save
 
@@ -241,7 +241,7 @@ DELETE /api/deal-tasks/{id}
 3. Test with a call
 
 ### Gmail Background Sync (Optional):
-Add to Heroku Scheduler or cron:
+Add to Mac Mini (Local) Scheduler or cron:
 ```bash
 python -c "from gmail_activity_sync import sync_gmail_activities_job; sync_gmail_activities_job()"
 ```

@@ -1,9 +1,9 @@
 #!/bin/bash
-# Deploy VA RFS Converter to Heroku
+# Deploy VA RFS Converter to Mac Mini (Local)
 
 cd ~/colorado-careassist-portal
 
-echo "🚀 Deploying VA RFS Converter to Heroku..."
+echo "🚀 Deploying VA RFS Converter to Mac Mini (Local)..."
 echo ""
 
 # Stage files
@@ -52,15 +52,15 @@ echo ""
 echo "✅ Changes committed!"
 echo ""
 
-# Push to Heroku
-echo "📤 Pushing to Heroku..."
-git push heroku main
+# Push to Mac Mini (Local)
+echo "📤 Pushing to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✅ Deployment complete!"
 echo ""
 echo "📋 Next steps:"
 echo "  1. Run: python add_va_rfs_tile.py (to add database tile)"
-echo "  2. Visit: https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-rfs-converter"
+echo "  2. Visit: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-rfs-converter"
 echo "  3. Test with sample referral PDFs"
 echo ""

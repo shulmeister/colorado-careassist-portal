@@ -17,19 +17,19 @@ All your code is backed up on GitHub/shulmeister. Even if your desktop folder is
 - **GitHub**: https://github.com/shulmeister/colorado-careassist-portal
 - **Status**: ✅ Synced
 - **Latest Commit**: `e632e53` - "Add comprehensive GitHub repos documentation for new computer setup"
-- **Remote**: `origin` → GitHub ✅ | `heroku` → Heroku ✅
+- **Remote**: `origin` → GitHub ✅ | `mac-mini` → Mac Mini (Local) ✅
 
 ### ✅ 2. Sales Dashboard
 - **GitHub**: https://github.com/shulmeister/sales-dashboard
 - **Status**: ✅ Synced
 - **Latest Commit**: `99a6e94` - "Add Lead Tracker tab to Python dashboard"
-- **Remote**: `origin` → GitHub ✅ | `heroku` → Heroku ✅
+- **Remote**: `origin` → GitHub ✅ | `mac-mini` → Mac Mini (Local) ✅
 
 ### ✅ 3. Recruiter Dashboard
 - **GitHub**: https://github.com/shulmeister/recruiter-dashboard
 - **Status**: ✅ Synced
 - **Latest Commit**: `6fb52f5` - "Add portal token authentication support for iframe embedding"
-- **Remote**: `origin` → GitHub ✅ | `heroku` → Heroku ✅
+- **Remote**: `origin` → GitHub ✅ | `mac-mini` → Mac Mini (Local) ✅
 
 ### ✅ 4. Marketing Dashboard
 - **GitHub**: https://github.com/shulmeister/marketing-dashboard
@@ -61,7 +61,7 @@ All your code is backed up on GitHub/shulmeister. Even if your desktop folder is
 ```bash
 git clone https://github.com/shulmeister/colorado-careassist-portal.git
 cd colorado-careassist-portal
-heroku git:remote -a portal-coloradocareassist
+mac-mini git:remote -a portal-coloradocareassist
 ```
 
 ### Step 2: Clone Dashboards
@@ -71,13 +71,13 @@ cd dashboards
 # Sales Dashboard
 git clone https://github.com/shulmeister/sales-dashboard.git sales
 cd sales
-heroku git:remote -a careassist-tracker
+mac-mini git:remote -a careassist-tracker
 cd ..
 
 # Recruiter Dashboard
 git clone https://github.com/shulmeister/recruiter-dashboard.git recruitment
 cd recruitment
-heroku git:remote -a caregiver-lead-tracker
+mac-mini git:remote -a caregiver-lead-tracker
 cd ..
 
 # Marketing Dashboard
@@ -112,7 +112,7 @@ cd dashboards/marketing && git remote -v && cd ..
 ## 💾 Your Code is Safe!
 
 ✅ **All code is backed up on GitHub**  
-✅ **All repos are synced (Desktop → GitHub → Heroku)**  
+✅ **All repos are synced (Desktop → GitHub → Mac Mini (Local))**  
 ✅ **All remotes are configured correctly**  
 ✅ **You can clone everything on your new computer**  
 ✅ **No data will be lost**
@@ -129,13 +129,13 @@ All documentation is also on GitHub:
 
 ---
 
-## 🎯 Standard Workflow (Desktop → GitHub → Heroku)
+## 🎯 Standard Workflow (Desktop → GitHub → Mac Mini (Local))
 
 **For any changes**:
 1. Make changes locally
 2. Commit: `git add . && git commit -m "message"`
 3. Push to GitHub: `git push origin main`
-4. Push to Heroku: `git push heroku main`
+4. Push to Mac Mini (Local): `git push mac-mini main`
 
 **Or use the sync script**:
 ```bash

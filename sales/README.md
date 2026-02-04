@@ -4,7 +4,7 @@ A comprehensive full-stack sales CRM and activity tracking application for Color
 
 **Live URLs**:
 - Portal: https://portal.coloradocareassist.com/sales/
-- Heroku: https://careassist-unified-0a11ddb45ac0.herokuapp.com/sales/
+- Mac Mini (Local): https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/
 
 **GitHub**: https://github.com/shulmeister/colorado-careassist-portal (sales dashboard is in `/sales` directory)
 
@@ -18,7 +18,7 @@ This sales dashboard is part of the **Colorado CareAssist Unified Portal**. The 
 - `/recruiting` → Recruiter dashboard
 - `/marketing` → Marketing dashboard
 
-Everything deploys together to the `careassist-unified` Heroku app.
+Everything deploys together to the `careassist-unified` Mac Mini (Local) app.
 
 ## Features
 
@@ -140,8 +140,8 @@ python scripts/auto_scan_drive.py
 - **Vite** for building
 
 ### Infrastructure
-- **Heroku** for hosting (unified portal app)
-- **PostgreSQL** on Heroku
+- **Mac Mini (Local)** for hosting (unified portal app)
+- **PostgreSQL** on Mac Mini (Local)
 - **Google Cloud** for Drive/Gmail APIs
 - **Cron** for auto-scanning business card uploads
 
@@ -245,7 +245,7 @@ The Sales Dashboard automatically logs email activities from Brevo marketing cam
 
 **Setup:**
 1. In Brevo, go to **SMTP & API** → **Webhooks**
-2. Create a new webhook with URL: `https://careassist-unified-0a11ddb45ac0.herokuapp.com/sales/webhooks/brevo`
+2. Create a new webhook with URL: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/webhooks/brevo`
 3. Select events to track:
    - `delivered` - Email delivered (logged as activity)
    - `opened` - Email opened (logged as activity)
@@ -269,7 +269,7 @@ Automatically logs phone calls as activities. Configure in RingCentral dashboard
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL
-- Heroku CLI (for deployment)
+- Mac Mini (Local) CLI (for deployment)
 - Google Cloud Project with Drive API enabled
 
 ### 1. Clone Repository
@@ -365,7 +365,7 @@ npm run dev
 
 Visit: http://localhost:8000
 
-### 7. Deploy to Heroku
+### 7. Deploy to Mac Mini (Local)
 
 The sales dashboard is part of the unified portal and deploys together:
 
@@ -374,11 +374,11 @@ The sales dashboard is part of the unified portal and deploys together:
 cd ..
 
 # Deploy unified app (includes portal + sales + gigi)
-git push heroku main
+git push mac-mini main
 ```
 
 The sales dashboard will be available at:
-- https://careassist-unified-0a11ddb45ac0.herokuapp.com/sales/
+- https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/
 - https://portal.coloradocareassist.com/sales/ (if custom domain configured)
 
 **Important**: The Procfile at the repository root uses `unified_app.py` which mounts the sales app at `/sales`.
@@ -400,7 +400,7 @@ colorado-careassist-portal/
     ├── google_drive_service.py # Google Drive integration
     ├── business_card_scanner.py # Business card AI parsing
     ├── requirements.txt       # Python dependencies
-    ├── Procfile              # Heroku process file
+    ├── Procfile              # Mac Mini (Local) process file
     ├── Aptfile               # System dependencies
     │
     ├── services/         # Business logic services
@@ -472,7 +472,7 @@ Tasks and activities can be assigned to:
 2. Test locally: `uvicorn app:app --reload`
 3. Build frontend: `cd frontend && npm run build`
 4. Commit changes: `git commit -am "Your message"`
-5. Deploy unified app: `git push heroku main` (from repository root)
+5. Deploy unified app: `git push mac-mini main` (from repository root)
 
 ## Troubleshooting
 

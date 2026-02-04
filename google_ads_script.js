@@ -12,11 +12,11 @@
  */
 
 // ⚠️ UPDATE THIS URL TO YOUR BACKEND ENDPOINT
-const WEBHOOK_URL = 'https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/google-ads/webhook';
+const WEBHOOK_URL = 'https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/google-ads/webhook';
 
 // Secret key for authentication (optional but recommended)
 // Set this in both the script and your backend WEBHOOK_SECRET env var
-// ⚠️ UPDATE THIS with the secret from Heroku: heroku config:get GOOGLE_ADS_WEBHOOK_SECRET --app portal-coloradocareassist
+// ⚠️ UPDATE THIS with the secret from Mac Mini (Local): mac-mini config:get GOOGLE_ADS_WEBHOOK_SECRET --app portal-coloradocareassist
 const WEBHOOK_SECRET = '36d65febabc5df0d2a67d6e604ff652de681b8923590425c298f1cd7ed6c80ff';
 
 /**

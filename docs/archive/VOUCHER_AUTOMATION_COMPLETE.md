@@ -14,7 +14,7 @@ A complete automated voucher reconciliation system that:
    - Hours and amounts (rate always $30/hour: 6 hrs = $180, 15 hrs = $450)
    - Invoice dates (calculated as first day of month after voucher expires)
 4. **Updates two systems**:
-   - Internal portal database (https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/vouchers)
+   - Internal portal database (https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/vouchers)
    - Google Sheet for reconciliation
 
 ### How to Use
@@ -75,7 +75,7 @@ LIG → Dawn Light (Ed Witt)
 - Invoice date: Dec 1
 - Rule: First day of month AFTER service period ends
 
-### Environment Variables (Heroku)
+### Environment Variables (Mac Mini (Local))
 
 Required for sync to work:
 ```
@@ -126,7 +126,7 @@ GOOGLE_CLOUD_PROJECT_ID = cca-website-c822e
 #### OCR extracts no text
 - Ensure `tesseract-ocr` is installed (check Aptfile)
 - Verify PDF is text-based or scanned image (not corrupted)
-- Check Heroku logs for specific OCR errors
+- Check Mac Mini (Local) logs for specific OCR errors
 
 #### Wrong amounts
 - System looks for "Units of Service X@" or "X hours"
@@ -149,14 +149,14 @@ GOOGLE_CLOUD_PROJECT_ID = cca-website-c822e
 
 **Last Deployed**: v94
 **Status**: ✅ Production Ready
-**URL**: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/vouchers
+**URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/vouchers
 
 ---
 
 ## Quick Reference
 
 **Sync Button**: Portal → Vouchers → "🔄 Sync from Drive"
-**View Logs**: `heroku logs --tail --app portal-coloradocareassist`
+**View Logs**: `mac-mini logs --tail --app portal-coloradocareassist`
 **Status Check**: `/api/vouchers/sync/status` endpoint
 
 Everything is locked down, clean, and ready to go! 🚀

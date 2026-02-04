@@ -23,12 +23,12 @@
 5. **Verify sync**:
    ```bash
    git remote -v
-   # Should show both origin (GitHub) and heroku remotes
+   # Should show both origin (GitHub) and mac-mini remotes
    ```
 
 ## Once Created:
 
 The repo will be available at: https://github.com/shulmeister/recruiter-dashboard
 
-Then all repos will follow the flow: **Desktop → GitHub → Heroku**
+Then all repos will follow the flow: **Desktop → GitHub → Mac Mini (Local)**
 

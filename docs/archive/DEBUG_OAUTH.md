@@ -2,8 +2,8 @@
 
 ## Current Configuration
 
-**Heroku Config:**
-- Redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback`
+**Mac Mini (Local) Config:**
+- Redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 - Client ID: `516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com`
 
 ## Common Issues
@@ -12,7 +12,7 @@
 
 The redirect URI in Google Cloud Console must match **exactly** (including https://):
 ```
-https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 ```
 
 **Check:**
@@ -28,7 +28,7 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 4. Scroll to "Authorized redirect URIs"
 5. Verify you see:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
    ```
 
 ### 3. Make Sure It's Saved
@@ -55,14 +55,14 @@ Common mistakes:
 
 ### 6. Verify App is Using Correct URI
 
-The app should be using the URI from Heroku config. Check:
+The app should be using the URI from Mac Mini (Local) config. Check:
 ```bash
-heroku config:get GOOGLE_REDIRECT_URI --app portal-coloradocareassist
+mac-mini config:get GOOGLE_REDIRECT_URI --app portal-coloradocareassist
 ```
 
 Should show:
 ```
-https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 ```
 
 ## Step-by-Step Fix
@@ -70,7 +70,7 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 1. **Verify in Google Cloud Console:**
    - Open your OAuth client
    - Check "Authorized redirect URIs"
-   - Make sure `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback` is there
+   - Make sure `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` is there
    - Save if needed
 
 2. **Wait 30-60 seconds** for Google to update
@@ -79,9 +79,9 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 
 4. **Try again** in incognito mode
 
-5. **Check Heroku logs** if still failing:
+5. **Check Mac Mini (Local) logs** if still failing:
    ```bash
-   heroku logs --tail --app portal-coloradocareassist
+   mac-mini logs --tail --app portal-coloradocareassist
    ```
 
 ## Alternative: Test with Different Browser

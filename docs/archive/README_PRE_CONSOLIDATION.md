@@ -1,17 +1,17 @@
 # Colorado CareAssist Portal
 
-## 🗺️ Quick Map (Desktop → Repos → Heroku)
+## 🗺️ Quick Map (Desktop → Repos → Mac Mini (Local))
 
 On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** that matches the tile you click in the portal. Those folders are symbolic links that point into this repo so you can jump straight to the correct nested git repo:
 
-| Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Heroku App / URL + Deploy Status                                                                 |
+| Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Mac Mini (Local) App / URL + Deploy Status                                                                 |
 |---------------------|-------------------------------------------|------------------------------------------------------|--------------------------------------------------------|---------------------------------------------------------------------------------------------------|
-| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `careassist-unified` → https://careassist-unified-0a11ddb45ac0.herokuapp.com (auto deploy ✅) |
-| **Gigi AI Agent**   | (part of portal)                          | `gigi/`                                              | (same as portal)                                       | Ships with portal → https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/ |
+| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `careassist-unified` → https://careassist-unified-0a11ddb45ac0.mac-miniapp.com (auto deploy ✅) |
+| **Gigi AI Agent**   | (part of portal)                          | `gigi/`                                              | (same as portal)                                       | Ships with portal → https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/ |
 | Sales Dashboard     | `sales-dashboard`                         | `dashboards/sales`                                   | `shulmeister/sales-dashboard`                          | `careassist-tracker` / `cca-crm` (both auto deploy from GitHub `main` ✅)                          |
 | Activity Tracker    | `activity-tracker`                        | `dashboards/activity-tracker`                        | `shulmeister/Colorado-CareAssist-Route-Tracker`        | `cca-activity-tracker-6d9a1d8e3933` (auto deploy from GitHub `main` ✅)                             |
 | Recruiter Dashboard | `recruiter-dashboard`                     | `dashboards/recruitment`                             | `shulmeister/recruiter-dashboard`                      | `caregiver-lead-tracker-9d0e6a8c7c20` (auto deploy from GitHub `main` ✅)                           |
-| Marketing Dashboard | `marketing-dashboard`                     | `dashboards/marketing` (served via portal templates) | `shulmeister/marketing-dashboard`                      | Ships with portal auto deploy (no separate Heroku app)                                            |
+| Marketing Dashboard | `marketing-dashboard`                     | `dashboards/marketing` (served via portal templates) | `shulmeister/marketing-dashboard`                      | Ships with portal auto deploy (no separate Mac Mini (Local) app)                                            |
 
 > 🔁 Any time you “work on Sales”, just `cd ~/Documents/GitHub/sales-dashboard` and you’ll end up in `colorado-careassist-portal/dashboards/sales`, which is the real repo that deploys the Sales tile. Same pattern for every other spoke.
 
@@ -22,7 +22,7 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 ### THE HUB (Main Portal + Gigi)
 - **Repository**: `colorado-careassist-portal`
 - **GitHub**: https://github.com/shulmeister/colorado-careassist-portal
-- **Heroku**: `careassist-unified` → `careassist-unified-0a11ddb45ac0.herokuapp.com`
+- **Mac Mini (Local)**: `careassist-unified` → `careassist-unified-0a11ddb45ac0.mac-miniapp.com`
 - **Local Path**: `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal`
 - **Tech**: FastAPI, Jinja2, PostgreSQL
 - **Purpose**: Central launchpad with tiles that link to other apps
@@ -32,7 +32,7 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 Gigi is the AI-powered after-hours assistant that handles caregiver and client communications when the office is closed.
 
 - **Location**: `gigi/` folder within portal repo
-- **Live URL**: https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/
+- **Live URL**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/
 - **Phone Numbers**: 719-428-3999 (primary), 303-757-1777 (secondary)
 - **Tech**: FastAPI, Retell AI (voice), RingCentral (SMS), Gemini AI, WellSky API
 
@@ -56,8 +56,8 @@ See `gigi/README.md` for full technical documentation.
 #### 1. Sales Dashboard
 - **Repository**: `sales-dashboard` (nested repo)
 - **GitHub**: https://github.com/shulmeister/sales-dashboard
-- **Heroku**: `careassist-tracker` → `https://careassist-tracker-0fcf2cecdb22.herokuapp.com/`  
-  (Portal env `SALES_DASHBOARD_URL` can override with `https://cca-crm-cd555628f933.herokuapp.com` when needed.)
+- **Mac Mini (Local)**: `careassist-tracker` → `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/`  
+  (Portal env `SALES_DASHBOARD_URL` can override with `https://cca-crm-cd555628f933.mac-miniapp.com` when needed.)
 - **Local Path**: `~/Documents/GitHub/sales-dashboard` (symlink) → `dashboards/sales/`
 - **Tech**: Python FastAPI, Jinja2, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
@@ -67,7 +67,7 @@ See `gigi/README.md` for full technical documentation.
 #### 2. Recruiter Dashboard
 - **Repository**: `recruiter-dashboard` (nested repo)
 - **GitHub**: https://github.com/shulmeister/recruiter-dashboard
-- **Heroku**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com`
+- **Mac Mini (Local)**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com`
 - **Local Path**: `~/Documents/GitHub/recruiter-dashboard` (symlink) → `dashboards/recruitment/`
 - **Tech**: Flask, SQLAlchemy, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
@@ -86,21 +86,21 @@ See `gigi/README.md` for full technical documentation.
 #### 4. Activity Tracker
 - **Repository**: `Colorado-CareAssist-Route-Tracker` (nested repo)
 - **GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
-- **Heroku**: `cca-activity-tracker-6d9a1d8e3933` → https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com/
+- **Mac Mini (Local)**: `cca-activity-tracker-6d9a1d8e3933` → https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com/
 - **Local Path**: `~/Documents/GitHub/activity-tracker` (symlink) → `dashboards/activity-tracker/`
 - **Tech**: FastAPI, SQLAlchemy, PDF parser, Tesseract OCR
 - **Git Structure**: Nested git repo (has its own `.git` folder)
 - **Portal Route**: `/activity-tracker` (portal redirects with SSO token)
 - **Features**: PDF route import, time tracking, business-card OCR, Google Sheets sync
-- **Helper Script**: Run `python add_activity_tracker_tile.py` from portal root (or `heroku run` equivalent) to keep the portal tile pointing at `/activity-tracker`.
+- **Helper Script**: Run `python add_activity_tracker_tile.py` from portal root (or `mac-mini run` equivalent) to keep the portal tile pointing at `/activity-tracker`.
 
 ### ⚠️ CRITICAL DEPLOYMENT RULES
 
 **Standard flow (now live for every tile):**
 
-`Desktop commit → git push origin main → Heroku auto deploys` ✅
+`Desktop commit → git push origin main → Mac Mini (Local) auto deploys` ✅
 
-All apps (portal + every spoke) are connected to their GitHub repo with automatic deploys from the `main` branch. The commands below are only needed if auto deploys are intentionally disabled and you want to push directly to Heroku.
+All apps (portal + every spoke) are connected to their GitHub repo with automatic deploys from the `main` branch. The commands below are only needed if auto deploys are intentionally disabled and you want to push directly to Mac Mini (Local).
 
 **Manual override (only if GitHub integration is disabled):**
 
@@ -110,7 +110,7 @@ cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub
-git push heroku main      # Push to Heroku (only if NOT using GitHub integration)
+git push mac-mini main      # Push to Mac Mini (Local) (only if NOT using GitHub integration)
 ```
 
 #### Sales Dashboard (Spoke)
@@ -118,7 +118,7 @@ git push heroku main      # Push to Heroku (only if NOT using GitHub integration
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/sales
 git add .
 git commit -m "Describe changes"
-git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
+git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! ✅
 ```
 
 #### Recruiter Dashboard (Spoke)
@@ -126,7 +126,7 @@ git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Describe changes"
-git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
+git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! ✅
 ```
 
 #### Activity Tracker (Spoke)
@@ -134,15 +134,15 @@ git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
 git add .
 git commit -m "Describe changes"
-git push origin main      # Push to GitHub → Heroku auto-deploys! ✅
+git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! ✅
 # Only push directly if auto deploys are off:
-# git push heroku main
+# git push mac-mini main
 ```
 
 ### 📁 Git Repository Structure
 
 ```
-colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
+colorado-careassist-portal/          # Main portal repo (GitHub + Mac Mini (Local))
 ├── .git/                            # Portal's git repo
 ├── gigi/                            # GIGI AI AGENT (after-hours assistant)
 │   ├── main.py                      # FastAPI app (voice + SMS)
@@ -175,7 +175,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 
 ### 🔄 Syncing Status (Last Updated: January 21, 2026)
 
-| Component | GitHub Repo | Heroku App / URL | Status |
+| Component | GitHub Repo | Mac Mini (Local) App / URL | Status |
 |-----------|-------------|------------------|--------|
 | Portal + Gigi | `shulmeister/colorado-careassist-portal` | `careassist-unified` | ✅ Auto deploy on `main` |
 | Sales Dashboard | `shulmeister/sales-dashboard` | `careassist-tracker` / `cca-crm` | ✅ Auto deploys on `main` |
@@ -187,7 +187,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 
 1. **Don't commit from portal root when working on dashboards** - Each dashboard has its own git repo
 2. **Don't assume all code is in one place** - Check which repo you're in with `git remote -v`
-3. **Always push to BOTH GitHub AND Heroku** - They're separate remotes
+3. **Always push to BOTH GitHub AND Mac Mini (Local)** - They're separate remotes
 4. **Marketing Dashboard is NOT a separate repo** - It's in `templates/marketing.html` in the portal repo
 
 ## Features
@@ -267,7 +267,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 
 ## Deployment
 
-### ⚠️ ALWAYS DEPLOY TO BOTH GIT AND HEROKU
+### ⚠️ ALWAYS DEPLOY TO BOTH GIT AND Mac Mini (Local)
 
 **After making ANY code changes, ALWAYS run these commands:**
 
@@ -275,44 +275,44 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Heroku)
 git add .
 git commit -m "Describe your changes"
 git push origin main      # Push to GitHub
-git push heroku main      # Push to Heroku (REQUIRED!)
+git push mac-mini main      # Push to Mac Mini (Local) (REQUIRED!)
 ```
 
-### Heroku
+### Mac Mini (Local)
 
-The app is configured for Heroku deployment:
+The app is configured for Mac Mini (Local) deployment:
 
 1. **Set Environment Variables**
    ```bash
-   heroku config:set GOOGLE_CLIENT_ID=your_client_id
-   heroku config:set GOOGLE_CLIENT_SECRET=your_client_secret
-   heroku config:set GOOGLE_REDIRECT_URI=https://portal-coloradocareassist.herokuapp.com/auth/callback
-   heroku config:set APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
-   heroku config:set ALLOWED_DOMAINS=coloradocareassist.com
+   mac-mini config:set GOOGLE_CLIENT_ID=your_client_id
+   mac-mini config:set GOOGLE_CLIENT_SECRET=your_client_secret
+   mac-mini config:set GOOGLE_REDIRECT_URI=https://portal-coloradocareassist.mac-miniapp.com/auth/callback
+   mac-mini config:set APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+   mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com
    # Optional RingCentral embeddable widget
-   heroku config:set RINGCENTRAL_EMBED_CLIENT_ID=your_ringcentral_browser_app_id
-   heroku config:set RINGCENTRAL_EMBED_SERVER=https://platform.ringcentral.com
-   heroku config:set RINGCENTRAL_EMBED_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
-   heroku config:set RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
-   heroku config:set RINGCENTRAL_EMBED_DEFAULT_TAB=messages
-   heroku config:set RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
+   mac-mini config:set RINGCENTRAL_EMBED_CLIENT_ID=your_ringcentral_browser_app_id
+   mac-mini config:set RINGCENTRAL_EMBED_SERVER=https://platform.ringcentral.com
+   mac-mini config:set RINGCENTRAL_EMBED_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
+   mac-mini config:set RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
+   mac-mini config:set RINGCENTRAL_EMBED_DEFAULT_TAB=messages
+   mac-mini config:set RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
    # Marketing Dashboard APIs
-   heroku config:set BREVO_API_KEY=your_brevo_api_key
+   mac-mini config:set BREVO_API_KEY=your_brevo_api_key
    ```
 
 2. **Add PostgreSQL**
    ```bash
-   heroku addons:create heroku-postgresql:mini
+   mac-mini addons:create mac-mini-postgresql:mini
    ```
 
 3. **Deploy**
    ```bash
-   git push heroku main
+   git push mac-mini main
    ```
 
 4. **Initialize Database**
    ```bash
-   heroku run python portal_setup.py
+   mac-mini run python portal_setup.py
    ```
 
 ## Smoke Tests (Tiles + Health Checks)
@@ -355,7 +355,7 @@ Override the URLs via environment variables (`PORTAL_URL`, `SALES_DASHBOARD_URL`
 ├── templates/
 │   ├── portal.html        # Portal UI template
 │   └── marketing.html     # Marketing Dashboard
-├── Procfile               # Heroku process file
+├── Procfile               # Mac Mini (Local) process file
 ├── requirements.txt       # Python dependencies
 └── runtime.txt            # Python version
 ```
@@ -405,7 +405,7 @@ To guarantee the “Activity Tracker” tile always points at `/activity-tracker
 python add_activity_tracker_tile.py
 
 # Update production portal
-heroku run python add_activity_tracker_tile.py -a portal-coloradocareassist
+mac-mini run python add_activity_tracker_tile.py -a portal-coloradocareassist
 ```
 
 This script will upsert the tile (icon 📋, Field Ops category, display order 4) without disturbing other tiles.

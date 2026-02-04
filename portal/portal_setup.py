@@ -176,9 +176,9 @@ def setup_default_tools():
                 "display_order": 19
             },
             {
-                "name": "Heroku",
-                "url": "https://dashboard.heroku.com",
-                "icon": "https://www.herokucdn.com/favicons/favicon.ico",
+                "name": "Mac Mini (Local)",
+                "url": "https://dashboard.mac-mini.com",
+                "icon": "https://www.mac-minicdn.com/favicons/favicon.ico",
                 "description": "Cloud platform dashboard",
                 "category": "Development",
                 "display_order": 20
@@ -240,9 +240,9 @@ def setup_default_tools():
                 "display_order": 27
             },
             {
-                "name": "DigitalOcean",
-                "url": "https://cloud.digitalocean.com/login",
-                "icon": "https://www.digitalocean.com/_next/static/media/favicon.594d6067.ico",
+                "name": "Mac Mini",
+                "url": "https://cloud.Mac Mini.com/login",
+                "icon": "https://www.Mac Mini.com/_next/static/media/favicon.594d6067.ico",
                 "description": "Cloud infrastructure and hosting",
                 "category": "Development",
                 "display_order": 28

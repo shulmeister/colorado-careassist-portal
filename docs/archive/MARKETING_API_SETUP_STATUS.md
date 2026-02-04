@@ -74,7 +74,7 @@
   4. Get your Customer ID (format: XXX-XXX-XXXX)
   5. Create OAuth 2.0 credentials in Google Cloud Console
   6. Complete OAuth flow to get refresh token
-  7. Set environment variables in Heroku
+  7. Set environment variables in Mac Mini (Local)
 
 ### 2. **TikTok Marketing** ❌
 - **Status:** Partially Configured
@@ -88,7 +88,7 @@
   2. Create an app in TikTok Ads Manager
   3. Generate access token using OAuth flow
   4. Get your Advertiser ID from TikTok Ads Manager
-  5. Set environment variables in Heroku
+  5. Set environment variables in Mac Mini (Local)
 
 ---
 
@@ -115,26 +115,26 @@
 
 ### Check Current Configuration
 ```bash
-heroku config --app portal-coloradocareassist | grep -E "(FACEBOOK|LINKEDIN|GOOGLE|GA4|GBP|PINTEREST|TIKTOK|BREVO)"
+mac-mini config --app portal-coloradocareassist | grep -E "(FACEBOOK|LINKEDIN|GOOGLE|GA4|GBP|PINTEREST|TIKTOK|BREVO)"
 ```
 
 ### Set Google Ads Variables (when ready)
 ```bash
-heroku config:set GOOGLE_ADS_DEVELOPER_TOKEN=your_token --app portal-coloradocareassist
-heroku config:set GOOGLE_ADS_CUSTOMER_ID=123-456-7890 --app portal-coloradocareassist
-heroku config:set GOOGLE_ADS_OAUTH_CLIENT_ID=your_client_id --app portal-coloradocareassist
-heroku config:set GOOGLE_ADS_OAUTH_CLIENT_SECRET=your_secret --app portal-coloradocareassist
+mac-mini config:set GOOGLE_ADS_DEVELOPER_TOKEN=your_token --app portal-coloradocareassist
+mac-mini config:set GOOGLE_ADS_CUSTOMER_ID=123-456-7890 --app portal-coloradocareassist
+mac-mini config:set GOOGLE_ADS_OAUTH_CLIENT_ID=your_client_id --app portal-coloradocareassist
+mac-mini config:set GOOGLE_ADS_OAUTH_CLIENT_SECRET=your_secret --app portal-coloradocareassist
 ```
 
 ### Set TikTok Variables (when ready)
 ```bash
-heroku config:set TIKTOK_ACCESS_TOKEN=your_token --app portal-coloradocareassist
-heroku config:set TIKTOK_ADVERTISER_ID=your_advertiser_id --app portal-coloradocareassist
+mac-mini config:set TIKTOK_ACCESS_TOKEN=your_token --app portal-coloradocareassist
+mac-mini config:set TIKTOK_ADVERTISER_ID=your_advertiser_id --app portal-coloradocareassist
 ```
 
 ### Set LinkedIn Organization ID (if needed)
 ```bash
-heroku config:set LINKEDIN_ORGANIZATION_ID=your_org_id --app portal-coloradocareassist
+mac-mini config:set LINKEDIN_ORGANIZATION_ID=your_org_id --app portal-coloradocareassist
 ```
 
 ---

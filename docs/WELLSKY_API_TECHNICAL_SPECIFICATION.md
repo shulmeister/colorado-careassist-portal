@@ -65,18 +65,18 @@ Beyond AI scheduling, the WellSky API powers our unified operations portal acros
 **Backend Framework:** FastAPI (Python 3.11+)
 **Database:** PostgreSQL (separate databases for Sales and Recruiting)
 **Authentication:** OAuth 2.0 with WellSky API credentials
-**Deployment:** Heroku (production) with unified portal architecture
+**Deployment:** Mac Mini (Local) (production) with unified portal architecture
 
 ### 1.2 Application Structure
 
 ```
 Colorado Care Assist Unified Portal
-├── Main Website (coloradocareassist.herokuapp.com)
-├── Unified Operations Portal (careassist-unified.herokuapp.com)
+├── Main Website (coloradocareassist.mac-miniapp.com)
+├── Unified Operations Portal (careassist-unified.mac-miniapp.com)
 │   ├── Sales CRM Dashboard
 │   ├── Recruiting Dashboard
 │   └── Hub/Dashboard Selector
-└── Gigi AI Voice Assistant (gigi-careassist.herokuapp.com)
+└── Gigi AI Voice Assistant (gigi-careassist.mac-miniapp.com)
 ```
 
 ### 1.3 WellSky Service Layer
@@ -335,7 +335,7 @@ lead.skills → applicant.skills (new fields added)
 **Critical Operations Integration:**
 ```bash
 # When WellSky API key is added, MUST set:
-heroku config:set GIGI_OPERATIONS_SMS_ENABLED=true
+mac-mini config:set GIGI_OPERATIONS_SMS_ENABLED=true
 
 # Without this flag:
 # ❌ No SMS to on-call manager for call-outs
@@ -715,11 +715,11 @@ Analyze by Recruiting Source → Optimize sourcing strategy
 
 **Production Security:**
 ```bash
-# Environment variables set in Heroku
-heroku config:set WELLSKY_API_KEY="***" --app careassist-unified
-heroku config:set WELLSKY_API_SECRET="***" --app careassist-unified
-heroku config:set WELLSKY_AGENCY_ID="***" --app careassist-unified
-heroku config:set WELLSKY_ENVIRONMENT="production" --app careassist-unified
+# Environment variables set in Mac Mini (Local)
+mac-mini config:set WELLSKY_API_KEY="***" --app careassist-unified
+mac-mini config:set WELLSKY_API_SECRET="***" --app careassist-unified
+mac-mini config:set WELLSKY_AGENCY_ID="***" --app careassist-unified
+mac-mini config:set WELLSKY_ENVIRONMENT="production" --app careassist-unified
 ```
 
 ### 5.2 Data Privacy & HIPAA Compliance

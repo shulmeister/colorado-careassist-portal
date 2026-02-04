@@ -10,7 +10,7 @@ import requests
 from datetime import datetime, timedelta
 from collections import Counter
 
-# RingCentral credentials from Heroku
+# RingCentral credentials from Mac Mini (Local)
 RINGCENTRAL_CLIENT_ID = "VbxfL4RkN8ncFItIqSP5k7"
 RINGCENTRAL_CLIENT_SECRET = "W3NjGB4CFnJdhGrYsQsovD3dlIzliPo3Oejdw2pB0puW"
 RINGCENTRAL_JWT_TOKEN = "[REDACTED_JWT]"

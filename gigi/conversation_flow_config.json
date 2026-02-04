@@ -155,7 +155,7 @@
           "function": {
             "name": "escalate_emergency",
             "description": "URGENT: Escalate a potential client safety emergency - notifies management immediately via SMS and RingCentral",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/escalate_emergency",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/escalate_emergency",
             "parameters": {
               "type": "object",
               "properties": {
@@ -213,7 +213,7 @@
           "function": {
             "name": "report_call_out",
             "description": "Log a caregiver call-out and notify the team",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/report_call_out",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/report_call_out",
             "parameters": {
               "type": "object",
               "properties": {
@@ -242,7 +242,7 @@
           "function": {
             "name": "start_shift_filling_campaign",
             "description": "Start texting available caregivers to fill the open shift",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/start_shift_filling_campaign",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/start_shift_filling_campaign",
             "parameters": {
               "type": "object",
               "properties": {
@@ -299,7 +299,7 @@
           "function": {
             "name": "report_late",
             "description": "Report that a caregiver will be late and notify the client",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/report_late",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/report_late",
             "parameters": {
               "type": "object",
               "properties": {
@@ -420,7 +420,7 @@
           "function": {
             "name": "log_client_issue",
             "description": "Log a client complaint or concern for follow-up",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/log_client_issue",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/log_client_issue",
             "parameters": {
               "type": "object",
               "properties": {
@@ -495,7 +495,7 @@
           "function": {
             "name": "get_client_schedule",
             "description": "Look up a client's upcoming visits and schedule",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/get_client_schedule",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/get_client_schedule",
             "parameters": {
               "type": "object",
               "properties": {
@@ -519,7 +519,7 @@
           "function": {
             "name": "log_client_issue",
             "description": "Log a no-show or schedule issue for urgent follow-up",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/log_client_issue",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/log_client_issue",
             "parameters": {
               "type": "object",
               "properties": {
@@ -586,7 +586,7 @@
           "function": {
             "name": "cancel_client_visit",
             "description": "Cancel a client's scheduled visit and notify the caregiver",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/cancel_client_visit",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/cancel_client_visit",
             "parameters": {
               "type": "object",
               "properties": {
@@ -677,7 +677,7 @@
           "function": {
             "name": "get_stock_price",
             "description": "Get current stock price for a ticker symbol (AAPL, TSLA, GOOG, etc.)",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/get_stock_price",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/get_stock_price",
             "parameters": {
               "type": "object",
               "properties": {
@@ -697,7 +697,7 @@
           "function": {
             "name": "get_crypto_price",
             "description": "Get current cryptocurrency price (BTC, ETH, DOGE, etc.)",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/get_crypto_price",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/get_crypto_price",
             "parameters": {
               "type": "object",
               "properties": {
@@ -742,7 +742,7 @@
           "function": {
             "name": "get_events",
             "description": "Get upcoming events, concerts, sports, theater in Denver/Colorado area",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/get_events",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/get_events",
             "parameters": {
               "type": "object",
               "properties": {
@@ -780,7 +780,7 @@
           "function": {
             "name": "get_setlist",
             "description": "Get recent concert setlists for an artist or band - shows what songs they played at recent shows",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/get_setlist",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/get_setlist",
             "parameters": {
               "type": "object",
               "properties": {
@@ -872,7 +872,7 @@
           "function": {
             "name": "transfer_to_jason",
             "description": "Transfer the call to Jason's cell phone at 603-997-1495",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/transfer_to_jason",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/transfer_to_jason",
             "parameters": {
               "type": "object",
               "properties": {},
@@ -906,7 +906,7 @@
           "function": {
             "name": "transfer_to_oncall",
             "description": "Transfer the call to the on-call manager line at 303-757-1777",
-            "url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell/function/transfer_to_oncall",
+            "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/transfer_to_oncall",
             "parameters": {
               "type": "object",
               "properties": {},
@@ -940,6 +940,6 @@
   "start_speaker": "agent",
   "voice_id": "11labs-Myra",
   "language": "en-US",
-  "webhook_url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell",
+  "webhook_url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell",
   "begin_message": "Hi, this is Gigi with Colorado Care Assist. How can I help you?"
 }

@@ -16,7 +16,7 @@ colorado-careassist-portal/          # Unified repo (source of truth)
 └── powderpulse/                     # Vue SPA
 ```
 
-Everything deploys together to a single Heroku app via `unified_app.py`.
+Everything deploys together to a single Mac Mini (Local) app via `unified_app.py`.
 
 ## 2) Canonical Location
 
@@ -30,24 +30,24 @@ All work should happen from this canonical path:
 
 ### Hub (Portal + Gigi)
 - GitHub: https://github.com/shulmeister/colorado-careassist-portal
-- Heroku app: `careassist-unified`
-- Live URL: https://careassist-unified-0a11ddb45ac0.herokuapp.com
-- Gigi URL: https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/
+- Mac Mini (Local) app: `careassist-unified`
+- Live URL: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com
+- Gigi URL: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/
 
 ### Spoke: Sales Dashboard
 - Repo: https://github.com/shulmeister/sales-dashboard
-- Heroku app: `careassist-tracker`
-- Live URL: https://careassist-tracker-0fcf2cecdb22.herokuapp.com
+- Mac Mini (Local) app: `careassist-tracker`
+- Live URL: https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com
 
 ### Spoke: Recruiter Dashboard
 - Repo: https://github.com/shulmeister/recruiter-dashboard
-- Heroku app: `caregiver-lead-tracker`
-- Live URL: https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com
+- Mac Mini (Local) app: `caregiver-lead-tracker`
+- Live URL: https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com
 
 ### Spoke: Activity Tracker
 - Repo: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
-- Heroku app: `cca-activity-tracker`
-- Live URL: https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com
+- Mac Mini (Local) app: `cca-activity-tracker`
+- Live URL: https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com
 
 ### Marketing Dashboard (Built into Portal)
 - Template: `templates/marketing.html`
@@ -55,8 +55,8 @@ All work should happen from this canonical path:
 
 ## 4) Deployment Rule (Always)
 
-All deployments flow from GitHub `main` to Heroku. Do not push directly to Heroku.
-Planned hosting change: move off Heroku to a self-hosted Mac mini starting Monday, February 2, 2026.
+All deployments flow from GitHub `main` to Mac Mini (Local). Do not push directly to Mac Mini (Local).
+Planned hosting change: move off Mac Mini (Local) to a self-hosted Mac mini starting Monday, February 2, 2026.
 
 ```bash
 git add -A
@@ -161,7 +161,7 @@ Details: `gigi/README.md`
 
 **Tech stack:** FastAPI + PostgreSQL backend, React Admin frontend (build in `frontend/dist`).
 **Repo:** https://github.com/shulmeister/sales-dashboard
-**Heroku app:** `careassist-tracker`
+**Mac Mini (Local) app:** `careassist-tracker`
 
 **Key files**:
 - `dashboards/sales/app.py` - main FastAPI app
@@ -188,7 +188,7 @@ npm run build
 
 **Tech stack:** Flask + SQLAlchemy + PostgreSQL.
 **Repo:** https://github.com/shulmeister/recruiter-dashboard
-**Heroku app:** `caregiver-lead-tracker`
+**Mac Mini (Local) app:** `caregiver-lead-tracker`
 
 **Key files**:
 - `dashboards/recruitment/app.py` - main Flask app
@@ -235,10 +235,10 @@ Expected endpoints:
 High-level steps:
 1. Create/locate Google OAuth client in Google Cloud Console.
 2. Add redirect URI(s): `https://<portal-host>/auth/callback`.
-3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` on Heroku.
+3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` on Mac Mini (Local).
 4. Ensure `ALLOWED_DOMAINS=coloradocareassist.com`.
 
-## 14) Heroku Apps + DNS Notes
+## 14) Mac Mini (Local) Apps + DNS Notes
 
 Primary apps:
 - `careassist-unified` (Portal + Gigi)
@@ -247,7 +247,7 @@ Primary apps:
 - `cca-activity-tracker` (Activity Tracker)
 
 DNS (current):
-- Portal domain points to Heroku app `careassist-unified`.
+- Portal domain points to Mac Mini (Local) app `careassist-unified`.
 
 ## 15) Troubleshooting / Common Fixes
 

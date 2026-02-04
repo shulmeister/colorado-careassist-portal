@@ -7,11 +7,11 @@
 
 ## 🎯 MISSION ACCOMPLISHED
 
-All services migrated from cloud (DigitalOcean, Heroku) to Mac Mini.
+All services migrated from cloud (Mac Mini, Mac Mini (Local)) to Mac Mini.
 
 **ZERO dependencies on:**
-- ❌ DigitalOcean (droplet at 69.55.59.212 can be destroyed)
-- ❌ Heroku
+- ❌ Mac Mini (local-server at 69.55.59.212 can be destroyed)
+- ❌ Mac Mini (Local)
 - ❌ Any cloud hosting
 
 **Everything runs on:**
@@ -88,7 +88,7 @@ All services migrated from cloud (DigitalOcean, Heroku) to Mac Mini.
 | PostgreSQL 17 | 5432 | localhost | homebrew.mxcl.postgresql@17 | ✅ |
 
 **REMOVED:**
-- ❌ com.coloradocareassist.gigi-gateway (old DigitalOcean proxy - NO LONGER NEEDED)
+- ❌ com.coloradocareassist.gigi-gateway (old Mac Mini proxy - NO LONGER NEEDED)
 
 ---
 
@@ -161,14 +161,14 @@ launchctl load ~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist
 
 ---
 
-## 🗑️ CLEANUP - DESTROY THE DROPLET
+## 🗑️ CLEANUP - DESTROY THE Local Server
 
-The DigitalOcean droplet at **69.55.59.212** is still alive but NO LONGER NEEDED.
+The Mac Mini local-server at **69.55.59.212** is still alive but NO LONGER NEEDED.
 
 **To destroy it:**
-1. Log into DigitalOcean
-2. Go to Droplets
-3. Find "clawdbot" or the droplet at 69.55.59.212
+1. Log into Mac Mini
+2. Go to Local Servers
+3. Find "clawdbot" or the local-server at 69.55.59.212
 4. Click "Destroy"
 5. Confirm destruction
 
@@ -201,13 +201,13 @@ The DigitalOcean droplet at **69.55.59.212** is still alive but NO LONGER NEEDED
 
 | Component | Before | After | Status |
 |-----------|--------|-------|--------|
-| Portal GIGI | Heroku | Mac Mini port 8765 | ✅ MIGRATED |
-| Telegram Bot | DigitalOcean droplet | Mac Mini telegram_bot.py | ✅ MIGRATED |
-| Database | Heroku Postgres | Mac Mini PostgreSQL 17 | ✅ MIGRATED |
-| Websites | Heroku | Mac Mini (Next.js) | ✅ MIGRATED |
-| Public Access | Heroku URLs | Cloudflare Tunnel | ✅ MIGRATED |
-| Remote Access | SSH to droplet | Tailscale VPN | ✅ MIGRATED |
-| Backups | Heroku/DO snapshots | Google Drive daily | ✅ MIGRATED |
+| Portal GIGI | Mac Mini (Local) | Mac Mini port 8765 | ✅ MIGRATED |
+| Telegram Bot | Mac Mini local-server | Mac Mini telegram_bot.py | ✅ MIGRATED |
+| Database | Mac Mini (Local) Postgres | Mac Mini PostgreSQL 17 | ✅ MIGRATED |
+| Websites | Mac Mini (Local) | Mac Mini (Next.js) | ✅ MIGRATED |
+| Public Access | Mac Mini (Local) URLs | Cloudflare Tunnel | ✅ MIGRATED |
+| Remote Access | SSH to local-server | Tailscale VPN | ✅ MIGRATED |
+| Backups | Mac Mini (Local)/DO snapshots | Google Drive daily | ✅ MIGRATED |
 
 ---
 

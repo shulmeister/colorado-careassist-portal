@@ -10,7 +10,7 @@
 
 AI-powered tool that converts VA Form 10-7080 (Approved Referral for Medical Care) into a professional Home Health Certification and Plan of Care (485) with automatic data extraction, PDF generation, and VA-compliant file naming.
 
-**Live URL:** https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care
+**Live URL:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care
 
 ---
 
@@ -58,7 +58,7 @@ AI-powered tool that converts VA Form 10-7080 (Approved Referral for Medical Car
 2. Click "VA Plan of Care Generator" tile (Operations category)
 
 **Option B:** Direct URL
-- Navigate to: `https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care`
+- Navigate to: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care`
 
 ### Step 2: Upload VA Form 10-7080
 
@@ -220,7 +220,7 @@ Always verify these critical fields:
 | **AI Engine** | Google Gemini 2.0 Flash |
 | **PDF Generation** | html2pdf.js (client-side) |
 | **Database** | PostgreSQL (portal tiles) |
-| **Hosting** | Heroku |
+| **Hosting** | Mac Mini (Local) |
 | **Authentication** | Portal SSO |
 
 ### API Endpoints
@@ -254,7 +254,7 @@ Response:
 
 ### Environment Variables
 
-Required on Heroku:
+Required on Mac Mini (Local):
 ```bash
 GEMINI_API_KEY=<your-gemini-api-key>
 # OR

@@ -23,8 +23,8 @@ Focuses on extracting:
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 echo ""
-echo "🚀 Deploying to Heroku..."
-git push heroku main
+echo "🚀 Deploying to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✅ Deployed!"
@@ -34,7 +34,7 @@ echo "  - More specific prompts for date extraction"
 echo "  - Console logging (check browser DevTools)"
 echo "  - Better date format handling"
 echo ""
-echo "Test at: https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care"
+echo "Test at: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care"
 echo ""
 echo "After upload, open browser DevTools (F12) -> Console tab to see:"
 echo "  - What data Gemini extracted"

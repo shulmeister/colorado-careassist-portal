@@ -13,7 +13,7 @@ def get_company_from_url(url):
     if 'brevo' in u: return 'Brevo'
     if 'predis' in u: return 'Predis.ai'
     if 'hostinger' in u: return 'Hostinger'
-    if 'heroku' in u: return 'Salesforce'
+    if 'mac-mini' in u: return 'Salesforce'
     if 'weather' in u: return 'IBM'
     if 'joke' in u: return 'Joke of the Day'
     if 'github' in u: return 'GitHub'

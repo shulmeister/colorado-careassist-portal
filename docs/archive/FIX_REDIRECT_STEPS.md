@@ -10,7 +10,7 @@ You're getting "Error 400: redirect_uri_mismatch" which means Google is receivin
 
 The portal is trying to use:
 ```
-https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 ```
 
 ### Step 2: Add to Google Cloud Console
@@ -21,7 +21,7 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 4. **Click "+ ADD URI"** button
 5. **Paste this EXACTLY** (copy from here):
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
    ```
 6. **Click "SAVE"** button at the bottom (very important!)
 
@@ -29,23 +29,23 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 
 After saving, you should see TWO URIs in the list:
 1. `https://tracker.coloradocareassist.com/auth/callback` (sales dashboard)
-2. `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback` (portal) ← NEW ONE
+2. `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` (portal) ← NEW ONE
 
 ### Step 4: Wait and Test
 
 1. Wait 30-60 seconds for Google to update
-2. Try logging in again: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
+2. Try logging in again: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 
 ## Common Mistakes
 
 ❌ **Wrong:**
-- `http://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback` (missing 's')
-- `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback/` (trailing slash)
-- `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/` (missing /auth/callback)
+- `http://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` (missing 's')
+- `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback/` (trailing slash)
+- `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/` (missing /auth/callback)
 - Forgot to click "Save"
 
 ✅ **Correct:**
-- `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback` (exact match)
+- `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` (exact match)
 
 ## Still Not Working?
 
@@ -77,7 +77,7 @@ After adding the URI and saving:
 
 1. Wait 60 seconds
 2. Open a NEW incognito window
-3. Go to: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
+3. Go to: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 4. Click login
 5. Should work now!
 

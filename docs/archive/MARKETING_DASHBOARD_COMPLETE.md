@@ -15,14 +15,14 @@ git commit -m "Your commit message here"
 # 3. Push to GitHub
 git push origin main
 
-# 4. Push to Heroku (ALWAYS!)
-git push heroku main
+# 4. Push to Mac Mini (Local) (ALWAYS!)
+git push mac-mini main
 ```
 
 **✅ These changes have already been deployed!**
 - Git: `66cf8d7` - "Rebuild marketing dashboard to match Databox design"
-- Heroku: Deployed as release v174
-- Live at: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/marketing
+- Mac Mini (Local): Deployed as release v174
+- Live at: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/marketing
 
 ---
 
@@ -162,16 +162,16 @@ If API credentials are not configured or APIs fail, the dashboard automatically 
 
 ## Deployment
 
-The dashboard is ready for deployment to Heroku:
+The dashboard is ready for deployment to Mac Mini (Local):
 
 1. **Set environment variables** (see above)
-2. **Deploy to Heroku:**
+2. **Deploy to Mac Mini (Local):**
    ```bash
    git add .
    git commit -m "Add new marketing dashboard"
-   git push heroku main
+   git push mac-mini main
    ```
-3. **Access at:** `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/marketing`
+3. **Access at:** `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/marketing`
 
 ## Testing Locally
 

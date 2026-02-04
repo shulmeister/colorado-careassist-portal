@@ -8,7 +8,7 @@
 
 ## 🎉 Consolidation Complete
 
-Successfully consolidated 7 Heroku apps down to 3 apps, saving **$336/year**.
+Successfully consolidated 7 Mac Mini (Local) apps down to 3 apps, saving **$336/year**.
 
 ### Apps Before Consolidation (7 apps):
 1. portal-coloradocareassist ❌ (deleted)
@@ -31,7 +31,7 @@ Successfully consolidated 7 Heroku apps down to 3 apps, saving **$336/year**.
 **Main App**: `careassist-unified` (v32)
 - **URL**: https://portal.coloradocareassist.com
 - **Domain**: portal.coloradocareassist.com (DNS updated)
-- **SSL**: TLS 1.3 via Heroku ACM
+- **SSL**: TLS 1.3 via Mac Mini (Local) ACM
 
 ### Mounted Applications:
 
@@ -82,7 +82,7 @@ All tools with proper logos optimized for dark background:
 16. **Facebook Ads Manager** - Facebook advertising
 17. **Adams Keegan** - HR & payroll services
 18. **HPanel** - Hostinger control panel
-19. **Heroku** - Cloud platform dashboard
+19. **Mac Mini (Local)** - Cloud platform dashboard
 20. **GitHub** - Source code (github.com/shulmeister)
 21. **Google Tag Manager** - Website tracking
 22. **Google Groups** - Email groups
@@ -116,8 +116,8 @@ All tools with proper logos optimized for dark background:
 ### Domain Configuration:
 - **Domain**: portal.coloradocareassist.com
 - **DNS Provider**: Hostinger
-- **DNS Target**: sinuous-aardwolf-hvneccfg36nequcxlnsdaaju.herokudns.com
-- **SSL Certificate**: Heroku ACM (Let's Encrypt)
+- **DNS Target**: sinuous-aardwolf-hvneccfg36nequcxlnsdaaju.mac-minidns.com
+- **SSL Certificate**: Mac Mini (Local) ACM (Let's Encrypt)
 - **SSL Status**: ✅ Active (TLS 1.3)
 
 ---
@@ -187,13 +187,13 @@ careassist-unified-portal/
 │   └── ...
 ├── unified_app.py         # Main entry point
 ├── requirements.txt       # Python dependencies
-├── Procfile              # Heroku process config
+├── Procfile              # Mac Mini (Local) process config
 └── runtime.txt           # Python version
 ```
 
 ---
 
-## Environment Variables (Heroku)
+## Environment Variables (Mac Mini (Local))
 
 ### Required Variables:
 - `GOOGLE_CLIENT_ID` - Google OAuth client ID
@@ -202,7 +202,7 @@ careassist-unified-portal/
 - `SALES_GOOGLE_REDIRECT_URI` - Sales OAuth callback
 - `SALES_DATABASE_URL` - Sales PostgreSQL connection
 - `RECRUITING_DATABASE_URL` - Recruiting PostgreSQL connection
-- `DATABASE_URL` - Portal PostgreSQL connection (auto-set by Heroku)
+- `DATABASE_URL` - Portal PostgreSQL connection (auto-set by Mac Mini (Local))
 - `APP_SECRET_KEY` - Session encryption key
 
 ---
@@ -212,7 +212,7 @@ careassist-unified-portal/
 ### If tools don't appear:
 ```bash
 # Re-run setup script to populate database
-heroku run -a careassist-unified 'cd portal && python portal_setup.py'
+mac-mini run -a careassist-unified 'cd portal && python portal_setup.py'
 ```
 
 ### If OAuth fails:
@@ -222,7 +222,7 @@ heroku run -a careassist-unified 'cd portal && python portal_setup.py'
 
 ### To view logs:
 ```bash
-heroku logs --tail -a careassist-unified
+mac-mini logs --tail -a careassist-unified
 ```
 
 ---
@@ -237,9 +237,9 @@ heroku logs --tail -a careassist-unified
 5. Add custom analytics tracking
 
 ### Monitoring:
-- PostgreSQL usage: `heroku pg:info -a careassist-unified`
-- App metrics: `heroku ps -a careassist-unified`
-- Dyno usage: Check Heroku dashboard
+- PostgreSQL usage: `mac-mini pg:info -a careassist-unified`
+- App metrics: `mac-mini ps -a careassist-unified`
+- Dyno usage: Check Mac Mini (Local) dashboard
 
 ---
 

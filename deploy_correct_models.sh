@@ -17,11 +17,11 @@ git commit -m "Fix Gemini models - use correct API versions and model names
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 echo ""
-echo "🚀 Deploying to Heroku..."
-git push heroku main
+echo "🚀 Deploying to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✅ Deployed!"
 echo ""
 echo "The tool will now try 5 different Gemini models/versions."
-echo "Test at: https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care"
+echo "Test at: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care"

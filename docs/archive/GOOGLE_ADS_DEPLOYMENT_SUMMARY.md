@@ -7,7 +7,7 @@
 
 ## ✅ Completed
 
-### Credentials Configured on Heroku
+### Credentials Configured on Mac Mini (Local)
 - ✅ **Developer Token**: `-fWctng9yGnr3fiv6I4gXQ`
 - ✅ **Customer ID**: `6780818726053668`
 - ✅ **OAuth Client ID**: `888987085559-k0mbk3qah1h6dmjbce1kaebsolgsu2au.apps.googleusercontent.com`
@@ -16,7 +16,7 @@
 
 ### Code Fixes
 - ✅ Added `use_proto_plus: True` to Google Ads client configuration
-- ✅ Code deployed to GitHub and Heroku (v343)
+- ✅ Code deployed to GitHub and Mac Mini (Local) (v343)
 
 ### Documentation Created
 - ✅ `GOOGLE_ADS_SETUP.md` - Complete setup guide
@@ -33,7 +33,7 @@
 After deployment, test the API:
 
 ```bash
-curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/ads
+curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads
 ```
 
 Check the marketing dashboard:
@@ -45,9 +45,9 @@ Check the marketing dashboard:
 
 ## 📝 Notes
 
-- All environment variables are set on Heroku
+- All environment variables are set on Mac Mini (Local)
 - Code fix has been deployed
-- If still seeing placeholder data, check Heroku logs for specific errors
+- If still seeing placeholder data, check Mac Mini (Local) logs for specific errors
 - The refresh token was obtained via OAuth Playground
 - OAuth client created in Google Cloud project: `cca-website-c822e`
 

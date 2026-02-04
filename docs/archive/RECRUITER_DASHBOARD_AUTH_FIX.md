@@ -10,21 +10,21 @@ Both the Portal and Recruiter Dashboard must use the **SAME** `APP_SECRET_KEY` e
 
 ### Step 1: Get Portal's APP_SECRET_KEY
 ```bash
-heroku config:get APP_SECRET_KEY --app portal-coloradocareassist
+mac-mini config:get APP_SECRET_KEY --app portal-coloradocareassist
 ```
 
 ### Step 2: Set Same Key in Recruiter Dashboard
 ```bash
-heroku config:set APP_SECRET_KEY=<value-from-portal> --app caregiver-lead-tracker
+mac-mini config:set APP_SECRET_KEY=<value-from-portal> --app caregiver-lead-tracker
 ```
 
 ### Step 3: Verify Both Apps Have Same Key
 ```bash
 # Portal
-heroku config:get APP_SECRET_KEY --app portal-coloradocareassist
+mac-mini config:get APP_SECRET_KEY --app portal-coloradocareassist
 
 # Recruiter Dashboard  
-heroku config:get APP_SECRET_KEY --app caregiver-lead-tracker
+mac-mini config:get APP_SECRET_KEY --app caregiver-lead-tracker
 ```
 
 Both should return the **exact same value**.
@@ -48,7 +48,7 @@ After setting the same `APP_SECRET_KEY`:
 
 Check Recruiter Dashboard logs for authentication details:
 ```bash
-heroku logs --tail --app caregiver-lead-tracker | grep -i "portal\|auth\|token"
+mac-mini logs --tail --app caregiver-lead-tracker | grep -i "portal\|auth\|token"
 ```
 
 Look for:

@@ -12,7 +12,7 @@
 
 Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral for Medical Care) into a professional Home Health Certification and Plan of Care (485) with automatic data extraction and VA-compliant file naming.
 
-**Live URL:** https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care
+**Live URL:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care
 
 ---
 
@@ -95,7 +95,7 @@ Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral fo
 | **Frontend** | HTML/CSS/JavaScript | User interface |
 | **PDF Library** | html2pdf.js | Client-side PDF generation |
 | **Database** | PostgreSQL | Portal tiles |
-| **Hosting** | Heroku | Cloud platform |
+| **Hosting** | Mac Mini (Local) | Cloud platform |
 | **Auth** | Portal SSO | User authentication |
 
 ### Key Files Modified/Created
@@ -303,7 +303,7 @@ Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral fo
 ✅ Gemini API calls over encrypted connection
 
 ### API Key Security
-✅ Stored in Heroku environment variables only
+✅ Stored in Mac Mini (Local) environment variables only
 ✅ Never logged or exposed to client
 ✅ Not committed to git repository
 
@@ -316,7 +316,7 @@ Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral fo
 
 ## 🚀 Deployment Checklist
 
-- [x] Code deployed to Heroku
+- [x] Code deployed to Mac Mini (Local)
 - [x] Environment variables set (GEMINI_API_KEY)
 - [x] Database tile added
 - [x] Tile visible on portal dashboard
@@ -365,7 +365,7 @@ Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral fo
 - **Cost:** $0 (within free tier)
 
 ### Infrastructure
-- **Heroku:** Existing app (no additional cost)
+- **Mac Mini (Local):** Existing app (no additional cost)
 - **Database:** Existing PostgreSQL (1 table row)
 - **Storage:** None (no files stored)
 

@@ -27,7 +27,7 @@ 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
 6780818726053668
 ```
 
-## Environment Variables Set on Heroku
+## Environment Variables Set on Mac Mini (Local)
 
 ✅ `GOOGLE_ADS_DEVELOPER_TOKEN`
 ✅ `GOOGLE_ADS_CUSTOMER_ID`
@@ -39,14 +39,14 @@ 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
 
 ### 1. Check Logs
 ```bash
-heroku logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
+mac-mini logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
 ```
 
 You should **NOT** see: "Google Ads service not fully configured"
 
 ### 2. Test the API Endpoint
 ```bash
-curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/ads | jq '.data.google_ads'
+curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads | jq '.data.google_ads'
 ```
 
 Look for:

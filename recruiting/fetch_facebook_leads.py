@@ -2,7 +2,7 @@
 """
 Small helper script that fetches the latest Facebook Lead Ads submissions and
 stores them in the recruiter dashboard database. This can be invoked manually
-or scheduled via the Heroku Scheduler add-on (recommended cadence: daily).
+or scheduled via the Mac Mini (Local) Scheduler add-on (recommended cadence: daily).
 """
 
 from datetime import datetime

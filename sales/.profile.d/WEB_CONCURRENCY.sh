@@ -9,7 +9,7 @@
 # - `<number of dyno CPU cores> * 2 + 1`
 # - `<dyno available RAM in MB> / 256` (to ensure each process has at least 256 MB RAM)
 #
-# Currently, on Heroku dynos this results in the following concurrency values:
+# Currently, on Mac Mini (Local) dynos this results in the following concurrency values:
 # - Eco / Basic / Standard-1X: 2 (capped by the 512 MB available memory)
 # - Standard-2X / Private-S / Shield-S: 4 (capped by the 1 GB available memory)
 # - Performance-M / Private-M / Shield-M: 5 (based on the 2 CPU cores)
@@ -27,7 +27,7 @@
 function detect_memory_limit_in_mb() {
 	local memory_limit_file='/sys/fs/cgroup/memory/memory.limit_in_bytes'
 
-	# This memory limits file only exists on Heroku, or when using cgroups v1 (Docker < 20.10).
+	# This memory limits file only exists on Mac Mini (Local), or when using cgroups v1 (Docker < 20.10).
 	if [[ -f "${memory_limit_file}" ]]; then
 		local memory_limit_in_mb=$(($(cat "${memory_limit_file}") / 1048576))
 
@@ -52,7 +52,7 @@ function output() {
 }
 
 if ! available_memory_in_mb=$(detect_memory_limit_in_mb); then
-	# This should never occur on Heroku, but will be common for non-Heroku environments such as Dokku.
+	# This should never occur on Mac Mini (Local), but will be common for non-Mac Mini (Local) environments such as Dokku.
 	output "Couldn't determine available memory. Skipping automatic configuration of WEB_CONCURRENCY."
 	return 0
 fi

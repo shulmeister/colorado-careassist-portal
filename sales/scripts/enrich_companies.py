@@ -21,13 +21,13 @@ if not api_key:
     # Attempt to read from config if not in env
     try:
         import subprocess
-        result = subprocess.run(["heroku", "config:get", "GEMINI_API_KEY", "-a", "careassist-unified"], 
+        result = subprocess.run(["mac-mini", "config:get", "GEMINI_API_KEY", "-a", "careassist-unified"], 
                                 capture_output=True, text=True)
         if result.returncode == 0:
             api_key = result.stdout.strip()
-            print("✅ Retrieved GEMINI_API_KEY from Heroku config")
+            print("✅ Retrieved GEMINI_API_KEY from Mac Mini (Local) config")
     except Exception as e:
-        print(f"⚠️ Could not retrieve API key from Heroku: {e}")
+        print(f"⚠️ Could not retrieve API key from Mac Mini (Local): {e}")
 
 if not api_key:
     print("❌ Cannot proceed without GEMINI_API_KEY")

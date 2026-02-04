@@ -4,7 +4,7 @@
 
 ## Current Sync Status
 
-| Component | Desktop | GitHub | Heroku | Status |
+| Component | Desktop | GitHub | Mac Mini (Local) | Status |
 |-----------|---------|--------|--------|--------|
 | **Portal** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
 | **Sales Dashboard** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
@@ -20,19 +20,19 @@
 - **Marketing Dashboard**: https://github.com/shulmeister/marketing-dashboard
 - **Activity Tracker**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
 
-## Standard Workflow (Desktop → GitHub → Heroku)
+## Standard Workflow (Desktop → GitHub → Mac Mini (Local))
 
 **Recommended: GitHub Integration (Auto-Deploy)**
-- Connect Heroku to GitHub in Heroku dashboard
+- Connect Mac Mini (Local) to GitHub in Mac Mini (Local) dashboard
 - Enable "Automatic deploys" from `main` branch
-- Push to GitHub → Heroku automatically deploys!
+- Push to GitHub → Mac Mini (Local) automatically deploys!
 
 **For Portal**:
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
+git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys) ✅
 ```
 
 **For Sales Dashboard**:
@@ -40,7 +40,7 @@ git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
+git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys) ✅
 ```
 
 **For Marketing Dashboard** (deploys with Portal):
@@ -48,8 +48,8 @@ git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/marketing
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Heroku (auto-deploys with portal)
-# Note: Marketing Dashboard deploys as part of portal (no separate Heroku app)
+git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys with portal)
+# Note: Marketing Dashboard deploys as part of portal (no separate Mac Mini (Local) app)
 ```
 
 **For Recruiter Dashboard**:
@@ -57,7 +57,7 @@ git push origin main    # Desktop → GitHub → Heroku (auto-deploys with porta
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Heroku (auto-deploys) ✅
+git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys) ✅
 ```
 
 **For Activity Tracker**:
@@ -66,7 +66,7 @@ cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/ac
 git add .
 git commit -m "Your message"
 git push origin main
-git push heroku main
+git push mac-mini main
 ```
 
 **Or use the sync script**:
@@ -90,10 +90,10 @@ git fetch origin
 git log HEAD..origin/main --oneline  # Commits on GitHub not local
 git log origin/main..HEAD --oneline  # Commits local not on GitHub
 
-# Compare local vs Heroku
-git fetch heroku
-git log HEAD..heroku/main --oneline  # Commits on Heroku not local
-git log heroku/main..HEAD --oneline  # Commits local not on Heroku
+# Compare local vs Mac Mini (Local)
+git fetch mac-mini
+git log HEAD..mac-mini/main --oneline  # Commits on Mac Mini (Local) not local
+git log mac-mini/main..HEAD --oneline  # Commits local not on Mac Mini (Local)
 ```
 
 ## Git Repository Locations

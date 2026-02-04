@@ -121,10 +121,10 @@ Gigi can be controlled from the **Operations Dashboard** → **Gigi AI Agent** t
 **Toggle via API:**
 ```bash
 # Get current settings
-curl https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/gigi/settings
+curl https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/gigi/settings
 
 # Enable SMS auto-reply (requires auth)
-curl -X PUT https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/gigi/settings \
+curl -X PUT https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/gigi/settings \
   -H "Content-Type: application/json" \
   -d '{"sms_autoreply": true}'
 ```
@@ -154,9 +154,9 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 |----------|-------|
 | **Local Path** | `/Users/shulmeister/Documents/GitHub/careassist-unified-portal` |
 | **GitHub** | `https://github.com/shulmeister/colorado-careassist-portal` |
-| **Heroku App** | `careassist-unified` |
-| **Live URL** | `https://careassist-unified-0a11ddb45ac0.herokuapp.com` |
-| **Gigi URL** | `https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/` |
+| **Mac Mini (Local) App** | `careassist-unified` |
+| **Live URL** | `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com` |
+| **Gigi URL** | `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/` |
 | **Tech Stack** | FastAPI, Jinja2, PostgreSQL, Python 3.11 |
 
 ### Phone Numbers
@@ -172,8 +172,8 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 |----------|-------|
 | **Local Path** | `dashboards/sales` |
 | **GitHub** | `https://github.com/shulmeister/sales-dashboard` |
-| **Heroku App** | `careassist-tracker` |
-| **Live URL** | `https://careassist-tracker-0fcf2cecdb22.herokuapp.com` |
+| **Mac Mini (Local) App** | `careassist-tracker` |
+| **Live URL** | `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com` |
 | **Tech Stack** | FastAPI, PostgreSQL |
 | **Features** | CRM, Contacts, Companies, Deals, Activity Tracking, Document Scanning |
 
@@ -183,8 +183,8 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 |----------|-------|
 | **Local Path** | `dashboards/recruitment` |
 | **GitHub** | `https://github.com/shulmeister/recruiter-dashboard` |
-| **Heroku App** | `caregiver-lead-tracker` |
-| **Live URL** | `https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com` |
+| **Mac Mini (Local) App** | `caregiver-lead-tracker` |
+| **Live URL** | `https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com` |
 | **Tech Stack** | Flask, SQLAlchemy, PostgreSQL |
 | **Features** | Caregiver recruitment, candidate pipeline, Facebook Lead Ads sync |
 
@@ -194,7 +194,7 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 |----------|-------|
 | **Local Path** | `templates/marketing.html` |
 | **GitHub** | Same as Portal |
-| **Heroku App** | Same as Portal |
+| **Mac Mini (Local) App** | Same as Portal |
 | **Live URL** | `https://portal.coloradocareassist.com/marketing` |
 | **Tech Stack** | Jinja2, Chart.js, FastAPI routes |
 | **Features** | Social media metrics, Google Ads, GA4, GBP, Facebook, Instagram, LinkedIn, Pinterest, TikTok |
@@ -205,7 +205,7 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 |----------|-------|
 | **Local Path** | `templates/operations.html`, `static/js/operations-dashboard.js` |
 | **GitHub** | Same as Portal |
-| **Heroku App** | Same as Portal |
+| **Mac Mini (Local) App** | Same as Portal |
 | **Live URL** | `https://portal.coloradocareassist.com/operations` |
 | **Tech Stack** | Jinja2, Chart.js, FastAPI routes, WellSky API |
 | **Features** | Client operations, care plans, shift coverage, at-risk client monitoring |
@@ -246,8 +246,8 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 |----------|-------|
 | **Local Path** | `dashboards/activity-tracker` |
 | **GitHub** | `https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker` |
-| **Heroku App** | `cca-activity-tracker` |
-| **Live URL** | `https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com` |
+| **Mac Mini (Local) App** | `cca-activity-tracker` |
+| **Live URL** | `https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com` |
 | **Tech Stack** | FastAPI, PDF Parser, Tesseract OCR |
 | **Features** | PDF route import, mileage tracking, business card OCR |
 
@@ -258,26 +258,26 @@ The `services/wellsky_service.py` provides these functions for Gigi:
 ### For Portal + Gigi Changes
 ```bash
 cd /Users/shulmeister/Documents/GitHub/careassist-unified-portal
-git add -A && git commit -m "Description" && git push origin main && git push heroku main
-# Heroku app: careassist-unified
+git add -A && git commit -m "Description" && git push origin main && git push mac-mini main
+# Mac Mini (Local) app: careassist-unified
 ```
 
 ### For Sales Dashboard Changes
 ```bash
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/sales
-git add -A && git commit -m "Description" && git push origin main && git push heroku main
+git add -A && git commit -m "Description" && git push origin main && git push mac-mini main
 ```
 
 ### For Recruiter Dashboard Changes
 ```bash
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
-git add -A && git commit -m "Description" && git push origin main && git push heroku main
+git add -A && git commit -m "Description" && git push origin main && git push mac-mini main
 ```
 
 ### For Activity Tracker Changes
 ```bash
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
-git add -A && git commit -m "Description" && git push origin main && git push heroku main
+git add -A && git commit -m "Description" && git push origin main && git push mac-mini main
 ```
 
 ---
@@ -328,25 +328,25 @@ git remote -v
 ```
 
 ### Push to Both Remotes
-Always push to both GitHub AND Heroku:
+Always push to both GitHub AND Mac Mini (Local):
 ```bash
-git push origin main && git push heroku main
+git push origin main && git push mac-mini main
 ```
 
-### Heroku Logs
+### Mac Mini (Local) Logs
 ```bash
-heroku logs -n 100 -a careassist-unified      # Portal + Gigi
-heroku logs -n 100 -a careassist-tracker      # Sales Dashboard
+mac-mini logs -n 100 -a careassist-unified      # Portal + Gigi
+mac-mini logs -n 100 -a careassist-tracker      # Sales Dashboard
 ```
 
-### Restart Heroku
+### Restart Mac Mini (Local)
 ```bash
-heroku restart -a careassist-unified
+mac-mini restart -a careassist-unified
 ```
 
 ### Test Gigi SMS
 ```bash
-curl -X POST https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/test/sms-reply \
+curl -X POST https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/test/sms-reply \
   -d "from_number=+17205551234" \
   -d "message=I cant clock out of my shift"
 ```
@@ -356,7 +356,7 @@ curl -X POST https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/test/sms
 ## 7. User Preferences
 
 ### The User Wants:
-- ✅ All changes synced to Local + GitHub + Heroku
+- ✅ All changes synced to Local + GitHub + Mac Mini (Local)
 - ✅ Clear documentation
 - ✅ Problems fixed completely, not just identified
 - ✅ Minimal back-and-forth

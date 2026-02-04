@@ -4,15 +4,15 @@
 
 **✅ DEPLOYED AND RUNNING**
 
-- **App URL**: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
-- **Heroku App**: `portal-coloradocareassist`
+- **App URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
+- **Mac Mini (Local) App**: `portal-coloradocareassist`
 - **Status**: Live and running
 
 ## What Was Done
 
 1. ✅ Environment variables configured
 2. ✅ PostgreSQL database added
-3. ✅ App deployed to Heroku
+3. ✅ App deployed to Mac Mini (Local)
 4. ✅ Database initialized with default tools
 5. ✅ Favicon route fixed
 
@@ -25,7 +25,7 @@ You need to add the portal's redirect URI to your Google OAuth settings:
 3. Edit your OAuth 2.0 Client ID
 4. Add to **Authorized redirect URIs**:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
    ```
 
 ## Default Tools Added
@@ -38,7 +38,7 @@ The database has been initialized with:
 
 ## Test It
 
-Visit: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
+Visit: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 
 You should be able to:
 1. Login with your `coloradocareassist.com` Google account
@@ -56,16 +56,16 @@ You should be able to:
 
 ```bash
 # View logs
-heroku logs --tail --app portal-coloradocareassist
+mac-mini logs --tail --app portal-coloradocareassist
 
 # Restart app
-heroku restart --app portal-coloradocareassist
+mac-mini restart --app portal-coloradocareassist
 
 # Check status
-heroku ps --app portal-coloradocareassist
+mac-mini ps --app portal-coloradocareassist
 
 # Open app
-heroku open --app portal-coloradocareassist
+mac-mini open --app portal-coloradocareassist
 ```
 
 ## Next Steps

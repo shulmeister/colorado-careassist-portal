@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Add Google Admin, Google Cloud, Heroku, and Hostinger tools to the portal database
+Add Google Admin, Google Cloud, Mac Mini (Local), and Hostinger tools to the portal database
 """
 import sys
 import os
@@ -32,10 +32,10 @@ def add_cloud_tools():
                 "display_order": 1001
             },
             {
-                "name": "Heroku",
-                "url": "https://dashboard.heroku.com/apps",
+                "name": "Mac Mini (Local)",
+                "url": "https://dashboard.mac-mini.com/apps",
                 "icon": "💜",  # Using emoji for now, can be updated to logo later
-                "description": "Heroku application dashboard",
+                "description": "Mac Mini (Local) application dashboard",
                 "category": "CLOUD",
                 "display_order": 1002
             },

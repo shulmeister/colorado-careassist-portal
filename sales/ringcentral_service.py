@@ -221,7 +221,7 @@ class RingCentralService:
 def sync_ringcentral_calls_job():
     """
     Background job to sync RingCentral call logs.
-    Add this to Heroku Scheduler to run every 30 minutes.
+    Add this to Mac Mini (Local) Scheduler to run every 30 minutes.
     """
     try:
         from database import get_db

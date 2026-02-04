@@ -11,7 +11,7 @@ Run this script to check:
 
 Usage:
     python test_marketing_apis.py
-    heroku run python test_marketing_apis.py -a portal-coloradocareassist
+    mac-mini run python test_marketing_apis.py -a portal-coloradocareassist
 """
 
 import os

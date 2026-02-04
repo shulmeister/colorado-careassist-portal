@@ -1,19 +1,19 @@
 #!/bin/bash
 # Check for Gemini API key and deploy VA tool
 
-echo "🔍 Checking Heroku config for Gemini API key..."
-GEMINI_KEY=$(heroku config:get GEMINI_API_KEY -a careassist-unified 2>&1)
-GOOGLE_KEY=$(heroku config:get GOOGLE_API_KEY -a careassist-unified 2>&1)
+echo "🔍 Checking Mac Mini (Local) config for Gemini API key..."
+GEMINI_KEY=$(mac-mini config:get GEMINI_API_KEY -a careassist-unified 2>&1)
+GOOGLE_KEY=$(mac-mini config:get GOOGLE_API_KEY -a careassist-unified 2>&1)
 
 if [ -n "$GEMINI_KEY" ] && [ "$GEMINI_KEY" != "" ]; then
-    echo "✅ GEMINI_API_KEY is set on Heroku"
+    echo "✅ GEMINI_API_KEY is set on Mac Mini (Local)"
 elif [ -n "$GOOGLE_KEY" ] && [ "$GOOGLE_KEY" != "" ]; then
-    echo "✅ GOOGLE_API_KEY is set on Heroku"
+    echo "✅ GOOGLE_API_KEY is set on Mac Mini (Local)"
 else
-    echo "⚠️  WARNING: No Gemini/Google API key found on Heroku"
+    echo "⚠️  WARNING: No Gemini/Google API key found on Mac Mini (Local)"
     echo ""
     echo "Set one with:"
-    echo "  heroku config:set GEMINI_API_KEY=your-key -a careassist-unified"
+    echo "  mac-mini config:set GEMINI_API_KEY=your-key -a careassist-unified"
     echo ""
     read -p "Continue with deployment anyway? (y/n) " -n 1 -r
     echo
@@ -43,10 +43,10 @@ Gemini AI extracts 20+ fields vs 10 with pdfplumber regex.
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 echo ""
-echo "🚀 Pushing to Heroku..."
-git push heroku main
+echo "🚀 Pushing to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✅ Deployment complete!"
 echo ""
-echo "Test at: https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care"
+echo "Test at: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care"

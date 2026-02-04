@@ -9,8 +9,8 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Paths to existing automation tools
-BUYING_AUTO_PATH = "/Users/shulmeister/heroku-apps/clawd/tools/buying-automation"
-CONCERT_ALERTS_PATH = "/Users/shulmeister/heroku-apps/clawd/tools/concert-alerts"
+BUYING_AUTO_PATH = "/Users/shulmeister/mac-mini-apps/clawd/tools/buying-automation"
+CONCERT_ALERTS_PATH = "/Users/shulmeister/mac-mini-apps/clawd/tools/concert-alerts"
 
 # In-memory session store for pending purchases
 pending_sessions = {}

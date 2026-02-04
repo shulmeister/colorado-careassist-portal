@@ -1,13 +1,13 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
 **Last Updated:** February 2, 2026
-**Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (No Heroku, No DigitalOcean)
+**Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (No Mac Mini (Local), No Mac Mini)
 
 ---
 
 ## CRITICAL: Current Infrastructure
 
-**EVERYTHING runs on Jason's Mac Mini.** No cloud hosting. No Heroku. No DigitalOcean.
+**EVERYTHING runs on Jason's Mac Mini.** No cloud hosting. No Mac Mini (Local). No Mac Mini.
 
 ### Services Running on Mac Mini
 
@@ -28,7 +28,7 @@
 - **Database:** `careassist`
 - **User:** `careassist` / Password: `careassist2026`
 - **Connection:** `postgresql://careassist:careassist2026@localhost:5432/careassist`
-- **82 tables** migrated from Heroku
+- **82 tables** migrated from Mac Mini (Local)
 
 ### Remote Access
 
@@ -55,7 +55,7 @@
 ## File Locations
 
 ```
-~/heroku-apps/
+~/mac-mini-apps/
 ├── careassist-unified/     # Portal + Gigi (Python/FastAPI) → port 8765
 ├── coloradocareassist/     # Main website (Next.js) → port 3000
 ├── hesedhomecare/          # Hesed website (Next.js) → port 3001
@@ -186,9 +186,9 @@ From any device with Tailscale:
 
 ## History
 
-- **Feb 2, 2026:** Migrated everything from Heroku + DigitalOcean to Mac Mini
-- All Heroku apps deleted
-- DigitalOcean droplet (clawdbot) decommissioned
+- **Feb 2, 2026:** Migrated everything from Mac Mini (Local) + Mac Mini to Mac Mini
+- All Mac Mini (Local) apps deleted
+- Mac Mini local-server (clawdbot) decommissioned
 - Local PostgreSQL 17 with all data migrated
 - Cloudflare tunnel for secure access
 - Tailscale for remote management

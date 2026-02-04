@@ -17,8 +17,8 @@ git commit -m "Use working Gemini model names from ai_document_parser
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
 echo ""
-echo "🚀 Deploying to Heroku..."
-git push heroku main
+echo "🚀 Deploying to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✅ Deployed with working model names!"
@@ -28,4 +28,4 @@ echo "  1. gemini-2.0-flash"
 echo "  2. gemini-1.5-flash"
 echo "  3. gemini-1.5-pro"
 echo ""
-echo "Test at: https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care"
+echo "Test at: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care"

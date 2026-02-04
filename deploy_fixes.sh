@@ -15,7 +15,7 @@ git commit -m "Fix WellSky API and Gigi Bot Auth
 
 Verified with test_wellsky_mitigation.py."
 
-echo "🚀 Deploying to Heroku..."
-git push heroku main
+echo "🚀 Deploying to Mac Mini (Local)..."
+git push mac-mini main
 
 echo "✅ Fixes deployed!"

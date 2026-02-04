@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 
 # Point to app root
-APP_ROOT = "/Users/shulmeister/heroku-apps/careassist-unified"
+APP_ROOT = "/Users/shulmeister/mac-mini-apps/careassist-unified"
 sys.path.insert(0, APP_ROOT)
 
 def test_rc_auth():

@@ -9,8 +9,8 @@ the cache fresh.
 Usage:
     python gigi/sync_contacts.py
 
-    # On Heroku:
-    heroku run python gigi/sync_contacts.py -a careassist-unified
+    # On Mac Mini (Local):
+    mac-mini run python gigi/sync_contacts.py -a careassist-unified
 """
 
 import os
@@ -19,7 +19,7 @@ import requests
 from datetime import datetime
 
 # Configuration
-PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://careassist-unified-0a11ddb45ac0.herokuapp.com")
+PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(SCRIPT_DIR, "contacts_cache.json")
 

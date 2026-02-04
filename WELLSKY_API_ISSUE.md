@@ -98,7 +98,7 @@ Client Secret: [REDACTED_CLIENT_SECRET]
 Agency ID:     4505
 ```
 
-**Source:** Currently in Heroku config for `careassist-unified`
+**Source:** Currently in Mac Mini (Local) config for `careassist-unified`
 
 ---
 

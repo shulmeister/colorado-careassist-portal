@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Comprehensive duplicate cleanup script for Visits, Contacts, and Companies.
-Run on Heroku: heroku run python scripts/cleanup_duplicates.py --app careassist-tracker
+Run on Mac Mini (Local): mac-mini run python scripts/cleanup_duplicates.py --app careassist-tracker
 """
 
 import os

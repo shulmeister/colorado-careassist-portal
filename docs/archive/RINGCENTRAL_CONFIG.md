@@ -55,8 +55,8 @@ RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcent
 
 ### Git Status
 - ✅ Latest changes committed: `d6981dd`
-- ✅ Deployed to Heroku: v75
-- ✅ Local and Heroku in sync
+- ✅ Deployed to Mac Mini (Local): v75
+- ✅ Local and Mac Mini (Local) in sync
 
 ### Important Notes
 1. **Text tab requires SMS enabled** on your RingCentral account

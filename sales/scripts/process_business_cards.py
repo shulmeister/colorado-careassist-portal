@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Bulk process business cards from a Google Drive folder.
-Run on Heroku: heroku run python3 scripts/process_business_cards.py <folder_url>
+Run on Mac Mini (Local): mac-mini run python3 scripts/process_business_cards.py <folder_url>
 
 Uses Gemini Vision (faster, no rate limits) with OpenAI fallback.
 """
@@ -251,7 +251,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python3 scripts/process_business_cards.py <folder_url> [assign_to_email]")
         print("\nExample:")
-        print("  heroku run python3 scripts/process_business_cards.py 'https://drive.google.com/drive/folders/1aGO6vxe50yA-1UcanPDEVlIFrXOMRYK4'")
+        print("  mac-mini run python3 scripts/process_business_cards.py 'https://drive.google.com/drive/folders/1aGO6vxe50yA-1UcanPDEVlIFrXOMRYK4'")
         sys.exit(1)
     
     folder_url = sys.argv[1]

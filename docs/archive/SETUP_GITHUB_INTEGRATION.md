@@ -1,6 +1,6 @@
 # Setup GitHub Integration for Sales & Recruiter Dashboards
 
-**Goal**: Enable automatic Heroku deployments from GitHub (just like Portal)
+**Goal**: Enable automatic Mac Mini (Local) deployments from GitHub (just like Portal)
 
 ---
 
@@ -15,14 +15,14 @@
 
 ### 1. Sales Dashboard (`careassist-tracker`)
 
-#### Step 1: Go to Heroku Dashboard
-1. Go to: https://dashboard.heroku.com/apps/careassist-tracker
+#### Step 1: Go to Mac Mini (Local) Dashboard
+1. Go to: https://dashboard.mac-mini.com/apps/careassist-tracker
 2. Click **"Deploy"** tab
 
 #### Step 2: Connect to GitHub
 1. Under **"Deployment method"**, click **"GitHub"**
 2. Click **"Connect to GitHub"**
-3. Authorize Heroku to access your GitHub account (if prompted)
+3. Authorize Mac Mini (Local) to access your GitHub account (if prompted)
 4. Search for: `sales-dashboard`
 5. Select: `shulmeister/sales-dashboard`
 6. Click **"Connect"**
@@ -39,14 +39,14 @@
 
 ### 2. Recruiter Dashboard (`caregiver-lead-tracker`)
 
-#### Step 1: Go to Heroku Dashboard
-1. Go to: https://dashboard.heroku.com/apps/caregiver-lead-tracker
+#### Step 1: Go to Mac Mini (Local) Dashboard
+1. Go to: https://dashboard.mac-mini.com/apps/caregiver-lead-tracker
 2. Click **"Deploy"** tab
 
 #### Step 2: Connect to GitHub
 1. Under **"Deployment method"**, click **"GitHub"**
 2. Click **"Connect to GitHub"**
-3. Authorize Heroku to access your GitHub account (if prompted)
+3. Authorize Mac Mini (Local) to access your GitHub account (if prompted)
 4. Search for: `recruiter-dashboard`
 5. Select: `shulmeister/recruiter-dashboard`
 6. Click **"Connect"**
@@ -68,7 +68,7 @@
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
 git add .
 git commit -m "Your changes"
-git push origin main    # ✅ Heroku auto-deploys!
+git push origin main    # ✅ Mac Mini (Local) auto-deploys!
 ```
 
 ### Recruiter Dashboard Workflow:
@@ -76,14 +76,14 @@ git push origin main    # ✅ Heroku auto-deploys!
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Your changes"
-git push origin main    # ✅ Heroku auto-deploys!
+git push origin main    # ✅ Mac Mini (Local) auto-deploys!
 ```
 
 ---
 
 ## ✅ Verification
 
-After setup, verify in Heroku dashboard:
+After setup, verify in Mac Mini (Local) dashboard:
 - **Deploy tab** shows "Connected to GitHub" with green checkmark
 - **Automatic deploys** section shows "Automatic deploys from main are enabled"
 - Next push to GitHub will trigger automatic deployment
@@ -92,7 +92,7 @@ After setup, verify in Heroku dashboard:
 
 ## 📊 Summary
 
-| Dashboard | Heroku App | GitHub Repo | Status |
+| Dashboard | Mac Mini (Local) App | GitHub Repo | Status |
 |-----------|------------|-------------|--------|
 | Portal | `portal-coloradocareassist` | `shulmeister/colorado-careassist-portal` | ✅ Connected |
 | Sales | `careassist-tracker` | `shulmeister/sales-dashboard` | ✅ Connected |
@@ -102,8 +102,8 @@ After setup, verify in Heroku dashboard:
 
 ## 🚀 Quick Links
 
-- **Sales Dashboard Heroku**: https://dashboard.heroku.com/apps/careassist-tracker/deploy
-- **Recruiter Dashboard Heroku**: https://dashboard.heroku.com/apps/caregiver-lead-tracker/deploy
+- **Sales Dashboard Mac Mini (Local)**: https://dashboard.mac-mini.com/apps/careassist-tracker/deploy
+- **Recruiter Dashboard Mac Mini (Local)**: https://dashboard.mac-mini.com/apps/caregiver-lead-tracker/deploy
 - **Sales Dashboard GitHub**: https://github.com/shulmeister/sales-dashboard
 - **Recruiter Dashboard GitHub**: https://github.com/shulmeister/recruiter-dashboard
 

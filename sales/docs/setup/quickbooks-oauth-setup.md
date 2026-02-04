@@ -11,7 +11,7 @@ This integration syncs customers from QuickBooks to Brevo's Client list, trigger
 5. Fill in app details:
    - **App Name**: Colorado CareAssist CRM Sync
    - **App Type**: Production (or Sandbox for testing)
-   - **Redirect URI**: `https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/quickbooks/oauth/callback`
+   - **Redirect URI**: `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/quickbooks/oauth/callback`
 6. Save and note your **Client ID** and **Client Secret**
 
 ## Step 2: Authorize Your App
@@ -27,7 +27,7 @@ I can create a helper script that makes this easier. For now, you can use the Qu
    https://appcenter.intuit.com/connect/oauth2?
    client_id=YOUR_CLIENT_ID&
    scope=com.intuit.quickbooks.accounting&
-   redirect_uri=https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/quickbooks/oauth/callback&
+   redirect_uri=https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/quickbooks/oauth/callback&
    response_type=code
    ```
 
@@ -43,14 +43,14 @@ I can create a helper script that makes this easier. For now, you can use the Qu
 
 ## Step 3: Set Environment Variables
 
-Once you have your credentials, set them on Heroku:
+Once you have your credentials, set them on Mac Mini (Local):
 
 ```bash
-heroku config:set QUICKBOOKS_CLIENT_ID=your_client_id -a careassist-tracker
-heroku config:set QUICKBOOKS_CLIENT_SECRET=your_client_secret -a careassist-tracker
-heroku config:set QUICKBOOKS_REALM_ID=your_realm_id -a careassist-tracker
-heroku config:set QUICKBOOKS_ACCESS_TOKEN=your_access_token -a careassist-tracker
-heroku config:set QUICKBOOKS_REFRESH_TOKEN=your_refresh_token -a careassist-tracker
+mac-mini config:set QUICKBOOKS_CLIENT_ID=your_client_id -a careassist-tracker
+mac-mini config:set QUICKBOOKS_CLIENT_SECRET=your_client_secret -a careassist-tracker
+mac-mini config:set QUICKBOOKS_REALM_ID=your_realm_id -a careassist-tracker
+mac-mini config:set QUICKBOOKS_ACCESS_TOKEN=your_access_token -a careassist-tracker
+mac-mini config:set QUICKBOOKS_REFRESH_TOKEN=your_refresh_token -a careassist-tracker
 ```
 
 **Where to find Realm ID:**
@@ -60,13 +60,13 @@ heroku config:set QUICKBOOKS_REFRESH_TOKEN=your_refresh_token -a careassist-trac
 ## Step 4: Test Connection
 
 ```bash
-heroku run "python3 -c 'from quickbooks_service import QuickBooksService; qb = QuickBooksService(); result = qb.test_connection(); print(result)'" -a careassist-tracker
+mac-mini run "python3 -c 'from quickbooks_service import QuickBooksService; qb = QuickBooksService(); result = qb.test_connection(); print(result)'" -a careassist-tracker
 ```
 
 ## Step 5: Run Sync
 
 ```bash
-heroku run "python3 sync_quickbooks_to_brevo.py" -a careassist-tracker
+mac-mini run "python3 sync_quickbooks_to_brevo.py" -a careassist-tracker
 ```
 
 Or trigger via API:
@@ -84,13 +84,13 @@ POST /api/quickbooks/sync-to-brevo
 
 ## Scheduled Sync (Optional)
 
-You can set up a Heroku Scheduler to run this daily:
+You can set up a Mac Mini (Local) Scheduler to run this daily:
 
 ```bash
-heroku addons:create scheduler:standard -a careassist-tracker
+mac-mini addons:create scheduler:standard -a careassist-tracker
 ```
 
-Then in Heroku dashboard, add a job:
+Then in Mac Mini (Local) dashboard, add a job:
 - **Command**: `python3 sync_quickbooks_to_brevo.py`
 - **Frequency**: Daily at 2 AM (or whenever you prefer)
 

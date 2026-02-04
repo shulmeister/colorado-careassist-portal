@@ -92,12 +92,12 @@ RINGCENTRAL_EMBED_REDIRECT_URI = os.getenv(
 
 CLIENT_SATISFACTION_APP_URL = os.getenv(
     "CLIENT_SATISFACTION_URL",
-    "https://client-satisfaction-15d412babc2f.herokuapp.com/",
+    "https://client-satisfaction-15d412babc2f.mac-miniapp.com/",
 )
 
 ACTIVITY_TRACKER_URL = os.getenv(
     "ACTIVITY_TRACKER_URL",
-    "https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com/",
+    "https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com/",
 )
 
 # SECURITY: PORTAL_SECRET must be set via environment variable - no weak defaults
@@ -201,7 +201,7 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
 # Add security middleware - CORS configuration
 # SECURITY: Only allow production origins (localhost removed for security)
-_cors_origins = ["https://portal.coloradocareassist.com", "https://careassist-unified-0a11ddb45ac0.herokuapp.com"]
+_cors_origins = ["https://portal.coloradocareassist.com", "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com"]
 if os.getenv("ALLOW_LOCALHOST_CORS", "false").lower() == "true":
     _cors_origins.append("http://localhost:8000")
     logger.warning("CORS: localhost enabled (development mode)")
@@ -217,7 +217,7 @@ app.add_middleware(
 # Add trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "*.herokuapp.com", "portal.coloradocareassist.com"]
+    allowed_hosts=["localhost", "127.0.0.1", "*.mac-miniapp.com", "portal.coloradocareassist.com"]
 )
 
 # Rate limiting configuration
@@ -497,7 +497,7 @@ async def api_gigi_save_settings(
 ):
     """Update Gigi system configuration (Mock update for now as it needs env var persistency)"""
     logger.info(f"Settings update request from {current_user.get('email')}: {payload}")
-    # In a real app, we'd save these to a database or Heroku config
+    # In a real app, we'd save these to a database or Mac Mini (Local) config
     return JSONResponse({"success": True, "message": "Settings updated"})
     """Run a Retell AI web call simulation"""
     scenario = payload.get("scenario", "caregiver_callout")
@@ -1516,7 +1516,7 @@ async def recruitment_dashboard_embedded(
     """Embedded Recruitment Dashboard (iframe)"""
     recruitment_dashboard_url = os.getenv(
         "RECRUITMENT_DASHBOARD_URL",
-        "https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com/"
+        "https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com/"
     )
     
     # Get session token from cookie to pass to dashboard
@@ -4330,7 +4330,7 @@ async def pinterest_oauth_start():
             "error": "Pinterest App ID not configured"
         })
 
-    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/pinterest/callback"
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/pinterest/callback"
     scopes = "boards:read,pins:read,user_accounts:read"
 
     oauth_url = (
@@ -4374,7 +4374,7 @@ async def pinterest_oauth_callback(
 
     app_id = os.getenv("PINTEREST_APP_ID")
     app_secret = os.getenv("PINTEREST_APP_SECRET")
-    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/pinterest/callback"
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/pinterest/callback"
 
     # Exchange code for token
     try:
@@ -4404,7 +4404,7 @@ async def pinterest_oauth_callback(
                 "expires_in": token_data.get("expires_in"),
                 "token_type": token_data.get("token_type"),
                 "scope": token_data.get("scope"),
-                "instructions": "Set this access_token as PINTEREST_ACCESS_TOKEN on Heroku"
+                "instructions": "Set this access_token as PINTEREST_ACCESS_TOKEN on Mac Mini (Local)"
             })
         else:
             return JSONResponse({
@@ -4494,7 +4494,7 @@ async def test_linkedin_connection(
         status["connection_successful"] = False
         status["needs_oauth"] = True
         status["oauth_url"] = linkedin_service.get_oauth_url(
-            "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/linkedin/callback"
+            "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/linkedin/callback"
         )
         status["message"] = "Visit the oauth_url to authorize LinkedIn access"
     else:
@@ -4533,7 +4533,7 @@ async def linkedin_oauth_callback(
         })
     
     # Exchange code for token
-    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/linkedin/callback"
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/linkedin/callback"
     token_data = linkedin_service.exchange_code_for_token(code, redirect_uri)
     
     if token_data and "access_token" in token_data:
@@ -4543,7 +4543,7 @@ async def linkedin_oauth_callback(
             "message": "LinkedIn authorized successfully!",
             "access_token": token_data["access_token"],
             "expires_in": token_data.get("expires_in"),
-            "instructions": "Set this access token as LINKEDIN_ACCESS_TOKEN environment variable on Heroku",
+            "instructions": "Set this access token as LINKEDIN_ACCESS_TOKEN environment variable on Mac Mini (Local)",
         })
     else:
         return JSONResponse({
@@ -4699,7 +4699,7 @@ async def gbp_oauth_callback(
             "access_token": token_data["access_token"],
             "refresh_token": token_data.get("refresh_token"),
             "expires_in": token_data.get("expires_in"),
-            "instructions": "Set these tokens as GBP_ACCESS_TOKEN and GBP_REFRESH_TOKEN environment variables on Heroku. The refresh token is used to automatically get new access tokens.",
+            "instructions": "Set these tokens as GBP_ACCESS_TOKEN and GBP_REFRESH_TOKEN environment variables on Mac Mini (Local). The refresh token is used to automatically get new access tokens.",
         })
     else:
         return JSONResponse({

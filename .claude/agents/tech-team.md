@@ -42,7 +42,7 @@
 
 - **Languages:** TypeScript, Python, SQL
 - **Frameworks:** Next.js, Express, React, Prisma
-- **Infrastructure:** Heroku, PostgreSQL, Redis
+- **Infrastructure:** Mac Mini (Local), PostgreSQL, Redis
 - **Integrations:** Stripe, Meta Ads API, Brevo, WellSky
 - **Practices:** CI/CD, automated testing, accessibility (WCAG)
 

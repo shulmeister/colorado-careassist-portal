@@ -222,7 +222,7 @@ class VoucherSyncService:
             import io as image_io
             import os as os_module
             
-            # Set Tesseract data directory for Heroku
+            # Set Tesseract data directory for Mac Mini (Local)
             if 'TESSDATA_PREFIX' not in os_module.environ:
                 os_module.environ['TESSDATA_PREFIX'] = '/app/.apt/usr/share/tesseract-ocr/5/tessdata/'
             

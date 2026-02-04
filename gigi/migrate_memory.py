@@ -16,7 +16,7 @@ if not DATABASE_URL:
     print("ERROR: DATABASE_URL environment variable not set")
     sys.exit(1)
 
-# Fix for Heroku PostgreSQL URLs (postgres:// -> postgresql://)
+# Fix for Mac Mini (Local) PostgreSQL URLs (postgres:// -> postgresql://)
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 

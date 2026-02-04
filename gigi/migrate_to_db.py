@@ -8,8 +8,8 @@ Run this once after deploying the database models.
 Usage:
     python gigi/migrate_to_db.py
 
-    # On Heroku:
-    heroku run python gigi/migrate_to_db.py -a careassist-unified
+    # On Mac Mini (Local):
+    mac-mini run python gigi/migrate_to_db.py -a careassist-unified
 """
 
 import os

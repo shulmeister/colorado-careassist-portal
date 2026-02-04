@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Direct data import script for Heroku
+Direct data import script for Mac Mini (Local)
 This script creates sample data based on your CSV files
 """
 

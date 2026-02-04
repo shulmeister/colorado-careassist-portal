@@ -29,7 +29,7 @@ WHAT WAS ACCOMPLISHED
 
 2. ✅ VERIFIED WELLSKY API CONNECTION
 
-   Problem: API URL was wrong in Heroku config
+   Problem: API URL was wrong in Mac Mini (Local) config
 
    Fixed:
    - Changed WELLSKY_API_URL from:
@@ -64,7 +64,7 @@ WHAT WAS ACCOMPLISHED
 DEPLOYMENTS
 ================================================================================
 
-Heroku Deployments:
+Mac Mini (Local) Deployments:
 - v590: WELLSKY_API_URL fix
 - v591: WellSky Task integration deployed
 
@@ -74,7 +74,7 @@ Git Commits:
 
 All changes pushed to:
 - GitHub: main branch
-- Heroku: production environment
+- Mac Mini (Local): production environment
 
 ================================================================================
 CURRENT STATE - GIGI + WELLSKY
@@ -115,11 +115,11 @@ When you're back, test these workflows:
 
 3. VERIFY WEBHOOKS:
    - Send test SMS to 719-428-3999
-   - Check Heroku logs for webhook receipt
+   - Check Mac Mini (Local) logs for webhook receipt
    - Verify Gigi responds
 
 Optional: Switch to active mode when ready
-   heroku config:set GIGI_MODE=active --app careassist-unified
+   mac-mini config:set GIGI_MODE=active --app careassist-unified
 
 ================================================================================
 WHAT STILL NEEDS MANUAL SETUP
@@ -128,10 +128,10 @@ WHAT STILL NEEDS MANUAL SETUP
 1. BeeTexting Webhook (5 minutes):
    - Login: https://app.beetexting.com
    - Settings → Integrations → Webhooks
-   - Add URL: https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/beetexting
+   - Add URL: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/beetexting
    - Events: "Inbound SMS"
 
-2. Heroku Scheduler (5 minutes):
+2. Mac Mini (Local) Scheduler (5 minutes):
    - Add job: `python gigi/renew_team_webhook.py`
    - Frequency: Daily at 3:00 AM
    - Purpose: Auto-renew RingCentral Team Messaging webhook
@@ -158,7 +158,7 @@ VERIFICATION CHECKLIST
 
 Before marking this work as complete, verify:
 
-[  ] Heroku app restarted successfully (check logs)
+[  ] Mac Mini (Local) app restarted successfully (check logs)
 [  ] WellSky API connection still working (test auth)
 [  ] Gigi webhooks receiving messages (send test SMS)
 [  ] Call-out workflow creates task in WellSky (test end-to-end)

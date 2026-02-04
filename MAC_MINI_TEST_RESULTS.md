@@ -42,11 +42,11 @@ All services migrated from cloud to Mac Mini and fully operational.
 **Expected Time:** 5-10 minutes total
 
 **Changes Made:**
-- ✅ Updated webhook from Heroku to Mac Mini
+- ✅ Updated webhook from Mac Mini (Local) to Mac Mini
 - ✅ Synced all 17 tools to Retell
 - ✅ Webhook URL: https://portal.coloradocareassist.com/gigi/webhook/retell/function
 
-**Previous Results (Heroku webhook):**
+**Previous Results (Mac Mini (Local) webhook):**
 - Pass Rate: 21% (3/14 passing)
 - Many incomplete transcripts (webhook unreachable)
 
@@ -80,7 +80,7 @@ EOF
 - ✅ Claude Sonnet 4.5 integration working
 - ✅ WellSky access configured
 
-**No more DigitalOcean needed!**
+**No more Mac Mini needed!**
 
 ---
 
@@ -126,7 +126,7 @@ All running on Mac Mini (100.124.88.105):
 ### 3. Telegram
 **Bot:** @Shulmeisterbot
 **Platform:** Telegram → Mac Mini
-**Status:** ✅ READY (NEW - migrated from DigitalOcean)
+**Status:** ✅ READY (NEW - migrated from Mac Mini)
 
 **Test:**
 - Message @Shulmeisterbot on Telegram
@@ -137,7 +137,7 @@ All running on Mac Mini (100.124.88.105):
 
 ## 🗑️ READY TO DESTROY
 
-### DigitalOcean Droplet: 69.55.59.212
+### Mac Mini Local Server: 69.55.59.212
 **Status:** Still alive but NO LONGER NEEDED
 **Safe to destroy:** YES ✅
 
@@ -148,8 +148,8 @@ All functionality migrated to Mac Mini:
 - ✅ Daily backups to Google Drive
 
 **To destroy:**
-1. Log into DigitalOcean
-2. Find droplet at 69.55.59.212
+1. Log into Mac Mini
+2. Find local-server at 69.55.59.212
 3. Click "Destroy"
 4. Never think about cloud hosting again
 
@@ -158,8 +158,8 @@ All functionality migrated to Mac Mini:
 ## 💰 COST SAVINGS
 
 **Monthly cloud costs eliminated:**
-- DigitalOcean droplet: ~$12/month
-- Heroku dynos: ~$25/month
+- Mac Mini local-server: ~$12/month
+- Mac Mini (Local) dynos: ~$25/month
 - **Total savings:** ~$37/month = **$444/year**
 
 **Plus benefits:**
@@ -176,7 +176,7 @@ All functionality migrated to Mac Mini:
 1. ✅ **SMS/Text System** - Production ready (92.9% pass rate)
 2. ⏳ **Voice System** - Wait for test results (check script above)
 3. ✅ **Telegram** - Production ready
-4. 🗑️ **Destroy DigitalOcean** - When ready
+4. 🗑️ **Destroy Mac Mini** - When ready
 5. 🍎 **Apple Integrations** - Siri shortcuts, Calendar, etc.
 
 ---

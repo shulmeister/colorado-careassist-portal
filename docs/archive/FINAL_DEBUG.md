@@ -3,7 +3,7 @@
 ## What Google Received
 
 From the error page, Google received:
-- **redirect_uri**: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback` ✅
+- **redirect_uri**: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` ✅
 - **client_id**: `516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com` ✅
 
 This is exactly correct! But Google is still rejecting it.
@@ -28,7 +28,7 @@ Sometimes there are invisible spaces or characters.
 
 **Fix:**
 - Delete URI 1 completely
-- Type it fresh: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback`
+- Type it fresh: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 - Make sure no spaces before or after
 - Save
 
@@ -44,7 +44,7 @@ Make sure you're editing the OAuth client in the **correct Google Cloud project*
 
 1. Delete URI 1 (click the trash icon)
 2. Click "+ Add URI"
-3. Type fresh: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback`
+3. Type fresh: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 4. Save
 5. Wait 2-3 minutes
 

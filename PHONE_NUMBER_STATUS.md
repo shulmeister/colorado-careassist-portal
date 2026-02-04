@@ -4,13 +4,13 @@
 
 ### 1. +17208176600 - Gigi Personal Line
 - **Agent:** agent_e54167532428a1bc72c3375417 (Gigi Personal)
-- **Webhook:** https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell ✅
+- **Webhook:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell ✅
 - **Tools:** 16 tools (including get_weather, transfer_to_jason, take_message) ✅
 - **Status:** UPDATED & READY ✅
 
 ### 2. +17194274641 - Gigi's Line (CCA Business)
 - **Agent:** agent_d5c3f32bdf48fa4f7f24af7d36 (Gigi v2 - Conversation Flow)
-- **Webhook:** https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell ✅
+- **Webhook:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell ✅
 - **Tools:** 16 tools (including get_weather, transfer_to_jason, take_message) ✅
 - **Status:** CONFIGURED ✅
 

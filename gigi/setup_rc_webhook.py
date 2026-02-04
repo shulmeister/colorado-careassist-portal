@@ -17,7 +17,7 @@ JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN")
 SERVER_URL = "https://platform.ringcentral.com"
 
 # Webhook endpoint for Gigi commands
-WEBHOOK_URL = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/gigi/ringcentral/command"
+WEBHOOK_URL = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/gigi/ringcentral/command"
 
 if not all([CLIENT_ID, CLIENT_SECRET, JWT_TOKEN]):
     print("ERROR: Missing RingCentral credentials")

@@ -42,8 +42,8 @@ def _log_portal_event(description, event_type="info", details=None, icon=None):
         port = os.getenv("PORT", "8000")
         portal_url = f"http://localhost:{port}"
         
-        if os.getenv("HEROKU_APP_NAME"):
-            portal_url = f"https://{os.getenv('HEROKU_APP_NAME')}.herokuapp.com"
+        if os.getenv("Mac Mini (Local)_APP_NAME"):
+            portal_url = f"https://{os.getenv('Mac Mini (Local)_APP_NAME')}.mac-miniapp.com"
             
         requests.post(
             f"{portal_url}/api/internal/event",

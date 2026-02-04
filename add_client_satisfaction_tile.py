@@ -9,7 +9,7 @@ load_dotenv()
 db = db_manager.get_session()
 
 CLIENT_SAT_NAME = "Client Satisfaction"
-# Now using internal route instead of external Heroku app
+# Now using internal route instead of external Mac Mini (Local) app
 CLIENT_SAT_URL = "/client-satisfaction"
 
 try:

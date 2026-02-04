@@ -84,7 +84,7 @@ Test: I'm sick and can't come in today
 tail -f ~/logs/gigi-unified-error.log | grep -E "NEW SMS|Documented|Created.*task"
 
 # Check database after
-sqlite3 ~/heroku-apps/careassist-unified/portal.db "SELECT * FROM wellsky_documentation ORDER BY created_at DESC LIMIT 1;"
+sqlite3 ~/mac-mini-apps/careassist-unified/portal.db "SELECT * FROM wellsky_documentation ORDER BY created_at DESC LIMIT 1;"
 ```
 
 ### Option 2: Wait for Real Alert

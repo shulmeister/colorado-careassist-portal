@@ -74,17 +74,17 @@ Your service account (`voucher-sync@cca-website-c822e.iam.gserviceaccount.com`) 
 
 ## Testing
 
-1. Go to: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/marketing
+1. Go to: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/marketing
 2. Click on the "Website & GBP" tab in the sidebar
 3. If you see real data (not the mock numbers), it's working!
-4. If you see mock data, check the Heroku logs: `heroku logs --tail -a portal-coloradocareassist`
+4. If you see mock data, check the Mac Mini (Local) logs: `mac-mini logs --tail -a portal-coloradocareassist`
 
 ## Troubleshooting
 
 **If GA4 data isn't loading:**
 - Check that the service account has "Viewer" or "Analyst" access in GA4
 - Verify the GA4 Property ID is correct (445403783)
-- Check Heroku logs for authentication errors
+- Check Mac Mini (Local) logs for authentication errors
 
 **If GBP data isn't loading:**
 - GBP API can be tricky. It may require additional setup or business verification
@@ -106,7 +106,7 @@ This ensures the dashboard always displays something useful while we work throug
 1. Grant the service account access to GA4 (see above)
 2. Grant the service account access to GBP (see above)
 3. Test the dashboard
-4. Let me know if you see any errors in the Heroku logs
+4. Let me know if you see any errors in the Mac Mini (Local) logs
 
 The dashboard is live and ready to use! 🚀
 

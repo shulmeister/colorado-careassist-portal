@@ -69,7 +69,7 @@ If your portal has a Google Ads OAuth connection:
    - Go to: APIs & Services → Credentials
    - Use your existing OAuth 2.0 Client ID (or create one)
    - Add scope: `https://www.googleapis.com/auth/adwords`
-   - Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/google-ads/callback`
+   - Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/google-ads/callback`
 
 2. **Get Refresh Token:**
    - Use Google's OAuth 2.0 Playground: https://developers.google.com/oauthplayground/
@@ -81,17 +81,17 @@ If your portal has a Google Ads OAuth connection:
 
 ## Step 4: Configure Environment Variables
 
-Set these on Heroku:
+Set these on Mac Mini (Local):
 
 ```bash
 # Developer Token (from API Center)
-heroku config:set GOOGLE_ADS_DEVELOPER_TOKEN="your_developer_token_here" -a portal-coloradocareassist
+mac-mini config:set GOOGLE_ADS_DEVELOPER_TOKEN="your_developer_token_here" -a portal-coloradocareassist
 
 # Customer ID (you already have this)
 # GOOGLE_ADS_CUSTOMER_ID=6780818726053668 ✅ Already set
 
 # Refresh Token (from OAuth)
-heroku config:set GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-coloradocareassist
+mac-mini config:set GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-coloradocareassist
 
 # OAuth Client ID/Secret (you already have these)
 # GOOGLE_CLIENT_ID ✅ Already set
@@ -104,13 +104,13 @@ heroku config:set GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-c
 
 1. **Check Logs:**
    ```bash
-   heroku logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
+   mac-mini logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
    ```
    You should NOT see: "Google Ads service not fully configured"
 
 2. **Test the API Endpoint:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/api/marketing/ads | jq '.data.google_ads'
+   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads | jq '.data.google_ads'
    ```
    
    Look for:
@@ -164,7 +164,7 @@ If you cannot create or access a Manager Account:
 → Verify: `GOOGLE_ADS_CUSTOMER_ID=6780818726053668`
 
 ### Still seeing placeholder data
-→ Check Heroku logs for specific error messages
+→ Check Mac Mini (Local) logs for specific error messages
 → Verify all environment variables are set correctly
 → Ensure the Manager Account has access to the customer account
 

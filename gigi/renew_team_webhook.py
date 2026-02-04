@@ -3,7 +3,7 @@
 Auto-renew RingCentral Team Messaging webhook.
 
 RingCentral limits Team Messaging webhooks to 7 days max.
-Run this script every 6 days via Heroku Scheduler to prevent expiration.
+Run this script every 6 days via Mac Mini (Local) Scheduler to prevent expiration.
 
 Schedule: Daily at 3am (checks if renewal needed)
 """
@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID")
 CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET")
 JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN")
-WEBHOOK_URL = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/gigi/ringcentral/command"
+WEBHOOK_URL = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/gigi/ringcentral/command"
 
 def get_token():
     response = requests.post(

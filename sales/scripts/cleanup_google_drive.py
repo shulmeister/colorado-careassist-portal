@@ -13,8 +13,8 @@ Usage:
     python sales/scripts/cleanup_google_drive.py --dry-run  # Preview only
     python sales/scripts/cleanup_google_drive.py           # Actually move files
 
-Or via Heroku:
-    heroku run python sales/scripts/cleanup_google_drive.py --app careassist-unified
+Or via Mac Mini (Local):
+    mac-mini run python sales/scripts/cleanup_google_drive.py --app careassist-unified
 """
 
 import os

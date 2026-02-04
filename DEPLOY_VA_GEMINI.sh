@@ -20,11 +20,11 @@ Gemini AI extracts 20+ fields vs 10 with pdfplumber regex.
 
 Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>"
 
-echo "Pushing to Heroku..."
-git push heroku main
+echo "Pushing to Mac Mini (Local)..."
+git push mac-mini main
 
 echo ""
 echo "✓ Deployment complete!"
 echo ""
-echo "IMPORTANT: Set GEMINI_API_KEY on Heroku if not already set:"
-echo "heroku config:set GEMINI_API_KEY=your-key-here -a careassist-unified"
+echo "IMPORTANT: Set GEMINI_API_KEY on Mac Mini (Local) if not already set:"
+echo "mac-mini config:set GEMINI_API_KEY=your-key-here -a careassist-unified"

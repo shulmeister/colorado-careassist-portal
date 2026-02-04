@@ -69,8 +69,8 @@ async def _log_portal_event(description: str, event_type: str = "info", details:
         port = os.getenv("PORT", "8000")
         portal_url = f"http://localhost:{port}"
         
-        if os.getenv("HEROKU_APP_NAME"):
-            portal_url = f"https://{os.getenv('HEROKU_APP_NAME')}.herokuapp.com"
+        if os.getenv("Mac Mini (Local)_APP_NAME"):
+            portal_url = f"https://{os.getenv('Mac Mini (Local)_APP_NAME')}.mac-miniapp.com"
             
         async with httpx.AsyncClient() as client:
             await client.post(
@@ -616,7 +616,7 @@ app.add_middleware(
 # Add trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "*.herokuapp.com", "tracker.coloradocareassist.com", "portal.coloradocareassist.com"]  # Production domains
+    allowed_hosts=["localhost", "127.0.0.1", "*.mac-miniapp.com", "tracker.coloradocareassist.com", "portal.coloradocareassist.com"]  # Production domains
 )
 
 # Mount static files and templates
@@ -4734,7 +4734,7 @@ async def bulk_process_business_cards(
     folder_url = request.folder_url
     assign_to = request.assign_to or current_user.get("email", "")
     start_index = request.start_index
-    batch_size = min(request.batch_size, 2)  # Max 2 per request to stay under Heroku 30s timeout
+    batch_size = min(request.batch_size, 2)  # Max 2 per request to stay under Mac Mini (Local) 30s timeout
 
     drive_service = GoogleDriveService()
     if not drive_service.enabled:
@@ -7055,7 +7055,7 @@ async def quickbooks_oauth_authorize(
         # Generate a random state parameter for CSRF protection
         state = secrets.token_urlsafe(32)
         
-        redirect_uri = "https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/quickbooks/oauth/callback"
+        redirect_uri = "https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/quickbooks/oauth/callback"
         scope = "com.intuit.quickbooks.accounting"
         
         auth_url = (
@@ -7117,7 +7117,7 @@ async def quickbooks_oauth_callback(
         
         client_id = os.getenv('QB_CLIENT_ID') or os.getenv('QUICKBOOKS_CLIENT_ID')
         client_secret = os.getenv('QB_CLIENT_SECRET') or os.getenv('QUICKBOOKS_CLIENT_SECRET')
-        redirect_uri = "https://careassist-tracker-0fcf2cecdb22.herokuapp.com/api/quickbooks/oauth/callback"
+        redirect_uri = "https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/quickbooks/oauth/callback"
         
         if not client_id or not client_secret:
             return HTMLResponse("""
@@ -7187,12 +7187,12 @@ async def quickbooks_oauth_callback(
                     </div>
                     
                     <h2>Next Steps:</h2>
-                    <p>Set these environment variables on Heroku:</p>
+                    <p>Set these environment variables on Mac Mini (Local):</p>
                     
                     <div class="code-block">
-heroku config:set QB_REALM_ID={realm_id} -a careassist-tracker<br>
-heroku config:set QB_ACCESS_TOKEN={access_token} -a careassist-tracker<br>
-heroku config:set QB_REFRESH_TOKEN={refresh_token} -a careassist-tracker
+mac-mini config:set QB_REALM_ID={realm_id} -a careassist-tracker<br>
+mac-mini config:set QB_ACCESS_TOKEN={access_token} -a careassist-tracker<br>
+mac-mini config:set QB_REFRESH_TOKEN={refresh_token} -a careassist-tracker
                     </div>
                     
                     <div class="warning">
@@ -7209,7 +7209,7 @@ heroku config:set QB_REFRESH_TOKEN={refresh_token} -a careassist-tracker
                     <h2>After Setting Variables:</h2>
                     <p>Test the connection:</p>
                     <div class="code-block">
-heroku run "python3 -c 'from quickbooks_service import QuickBooksService; qb = QuickBooksService(); print(qb.test_connection())'" -a careassist-tracker
+mac-mini run "python3 -c 'from quickbooks_service import QuickBooksService; qb = QuickBooksService(); print(qb.test_connection())'" -a careassist-tracker
                     </div>
                 </body>
             </html>

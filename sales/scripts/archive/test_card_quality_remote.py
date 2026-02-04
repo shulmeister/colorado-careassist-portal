@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Test business card extraction quality with different models - runs on Heroku."""
+"""Test business card extraction quality with different models - runs on Mac Mini (Local)."""
 
 # CRITICAL: Register HEIF opener BEFORE importing PIL
 try:

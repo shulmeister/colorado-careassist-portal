@@ -9,7 +9,7 @@
 
 ### Required Environment Variables
 
-On Heroku (careassist-unified app):
+On Mac Mini (Local) (careassist-unified app):
 
 ```bash
 # Gemini API Key (required for AI extraction)
@@ -21,13 +21,13 @@ GOOGLE_API_KEY=<your-key>
 ### Check if API Key is Set
 
 ```bash
-heroku config -a careassist-unified | grep -i "GEMINI\|GOOGLE"
+mac-mini config -a careassist-unified | grep -i "GEMINI\|GOOGLE"
 ```
 
 ### Set API Key (if missing)
 
 ```bash
-heroku config:set GEMINI_API_KEY=<your-key> -a careassist-unified
+mac-mini config:set GEMINI_API_KEY=<your-key> -a careassist-unified
 ```
 
 ---
@@ -48,7 +48,7 @@ uvicorn portal.portal_app:app --reload --port 8000
 # Test at: http://localhost:8000/va-plan-of-care
 ```
 
-### 2. Deploy to Heroku
+### 2. Deploy to Mac Mini (Local)
 
 ```bash
 cd ~/colorado-careassist-portal
@@ -60,17 +60,17 @@ git add portal/portal_app.py
 git commit -m "Update VA Plan of Care Generator"
 
 # Deploy
-git push heroku main
+git push mac-mini main
 ```
 
 ### 3. Verify Deployment
 
 ```bash
 # Check build logs
-heroku logs --tail -a careassist-unified
+mac-mini logs --tail -a careassist-unified
 
 # Visit live URL
-open https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-plan-of-care
+open https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care
 ```
 
 ### 4. Test After Deployment
@@ -116,10 +116,10 @@ INSERT INTO portal_tools (
 );
 ```
 
-**Option C: Heroku CLI**
+**Option C: Mac Mini (Local) CLI**
 
 ```bash
-heroku run python add_va_tile.py -a careassist-unified
+mac-mini run python add_va_tile.py -a careassist-unified
 ```
 
 ---
@@ -160,7 +160,7 @@ httpx==0.27.0                   # Async HTTP client
 
 ```bash
 # View logs for Gemini API calls
-heroku logs --tail -a careassist-unified | grep "Gemini"
+mac-mini logs --tail -a careassist-unified | grep "Gemini"
 ```
 
 ### Common Log Messages
@@ -208,11 +208,11 @@ git log --oneline -10
 
 # Rollback to previous version
 git revert <commit-hash>
-git push heroku main
+git push mac-mini main
 
-# OR use Heroku rollback
-heroku releases -a careassist-unified
-heroku rollback v<number> -a careassist-unified
+# OR use Mac Mini (Local) rollback
+mac-mini releases -a careassist-unified
+mac-mini rollback v<number> -a careassist-unified
 ```
 
 ### Emergency Disable
@@ -220,7 +220,7 @@ heroku rollback v<number> -a careassist-unified
 If the tool is broken, disable the tile in database:
 
 ```bash
-heroku run python -a careassist-unified
+mac-mini run python -a careassist-unified
 ```
 
 ```python
@@ -301,7 +301,7 @@ The tool processes:
 ```bash
 # NEVER commit API keys to git
 # NEVER log API keys
-# Store only in Heroku config vars
+# Store only in Mac Mini (Local) config vars
 ```
 
 ---
@@ -316,14 +316,14 @@ The tool processes:
 echo "google-generativeai==0.8.6" >> requirements.txt
 git add requirements.txt
 git commit -m "Add Gemini SDK"
-git push heroku main
+git push mac-mini main
 ```
 
 ### Issue: "GEMINI_API_KEY not configured"
 
 **Solution:**
 ```bash
-heroku config:set GEMINI_API_KEY=<your-key> -a careassist-unified
+mac-mini config:set GEMINI_API_KEY=<your-key> -a careassist-unified
 ```
 
 ### Issue: Tile not showing on portal
@@ -331,14 +331,14 @@ heroku config:set GEMINI_API_KEY=<your-key> -a careassist-unified
 **Solution:**
 ```bash
 # Run tile setup script
-heroku run python add_va_tile.py -a careassist-unified
+mac-mini run python add_va_tile.py -a careassist-unified
 ```
 
 ### Issue: 500 error on /va-plan-of-care
 
 **Check logs:**
 ```bash
-heroku logs --tail -a careassist-unified
+mac-mini logs --tail -a careassist-unified
 ```
 
 **Common causes:**
@@ -395,7 +395,7 @@ Before marking deployment as successful:
 - Check if logged into portal
 
 ### Level 2: Technical Issues
-- Check Heroku logs
+- Check Mac Mini (Local) logs
 - Verify Gemini API status
 - Test locally to reproduce
 

@@ -28,19 +28,19 @@ If the current client is causing issues, create a new one:
 2. Click "+ CREATE CREDENTIALS" → "OAuth client ID"
 3. Application type: "Web application"
 4. Name: "CCA Portal"
-5. Authorized redirect URIs: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback`
+5. Authorized redirect URIs: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 6. Save
 7. Copy the new Client ID and Client Secret
-8. Update Heroku:
+8. Update Mac Mini (Local):
    ```bash
-   heroku config:set GOOGLE_CLIENT_ID=new_client_id --app portal-coloradocareassist
-   heroku config:set GOOGLE_CLIENT_SECRET=new_client_secret --app portal-coloradocareassist
+   mac-mini config:set GOOGLE_CLIENT_ID=new_client_id --app portal-coloradocareassist
+   mac-mini config:set GOOGLE_CLIENT_SECRET=new_client_secret --app portal-coloradocareassist
    ```
 
 ### Option 2: Check URI Encoding
 
 Sometimes URIs get URL-encoded. Check if Google is receiving:
-- `https%3A%2F%2Fportal-coloradocareassist-3e1a4bb34793.herokuapp.com%2Fauth%2Fcallback`
+- `https%3A%2F%2Fportal-coloradocareassist-3e1a4bb34793.mac-miniapp.com%2Fauth%2Fcallback`
 
 If so, that's the encoded version and should still work, but let's verify.
 
@@ -50,13 +50,13 @@ If so, that's the encoded version and should still work, but let's verify.
 2. **What Client ID are you editing?** (the full value)
 3. **Are both URIs visible in the authorized list?**
    - `https://tracker.coloradocareassist.com/auth/callback`
-   - `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback`
+   - `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 
 ## Quick Test
 
 Try visiting this URL directly and check what redirect_uri it uses:
 ```
-https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/login
+https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/login
 ```
 
 Look at the Google OAuth URL in the address bar - it should contain `redirect_uri=...` - what does it say?

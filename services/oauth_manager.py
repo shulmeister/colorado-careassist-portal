@@ -16,7 +16,7 @@ class OAuthManager:
     """Manages OAuth 2.0 authentication flows for multiple services"""
     
     def __init__(self):
-        self.base_url = os.getenv("APP_BASE_URL", "https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com")
+        self.base_url = os.getenv("APP_BASE_URL", "https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com")
         
         # OAuth configurations for each service
         self.configs = {

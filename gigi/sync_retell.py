@@ -129,7 +129,7 @@ def update_llm(system_prompt: str, tools: list):
 def update_agent_webhook():
     """Update the agent's webhook URL."""
     payload = {
-        "webhook_url": "https://careassist-unified-0a11ddb45ac0.herokuapp.com/gigi/webhook/retell",
+        "webhook_url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell",
     }
 
     response = requests.patch(

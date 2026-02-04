@@ -1,10 +1,10 @@
 #!/bin/bash
-# Sync All Repos: Desktop → GitHub → Heroku
-# This script ensures all repos are synced across Desktop, GitHub, and Heroku
+# Sync All Repos: Desktop → GitHub → Mac Mini (Local)
+# This script ensures all repos are synced across Desktop, GitHub, and Mac Mini (Local)
 
 set -e  # Exit on error
 
-echo "🔄 Syncing All Repos: Desktop → GitHub → Heroku"
+echo "🔄 Syncing All Repos: Desktop → GitHub → Mac Mini (Local)"
 echo "================================================"
 echo ""
 
@@ -19,7 +19,7 @@ sync_repo() {
     local repo_name=$1
     local repo_path=$2
     local github_repo=$3
-    local heroku_app=$4
+    local mac-mini_app=$4
     
     echo -e "${YELLOW}📦 Syncing: $repo_name${NC}"
     echo "   Path: $repo_path"
@@ -50,12 +50,12 @@ sync_repo() {
         return 1
     fi
     
-    # Push to Heroku
-    echo "   📤 Pushing to Heroku..."
-    if git push heroku main 2>&1; then
-        echo -e "${GREEN}   ✅ Heroku synced${NC}"
+    # Push to Mac Mini (Local)
+    echo "   📤 Pushing to Mac Mini (Local)..."
+    if git push mac-mini main 2>&1; then
+        echo -e "${GREEN}   ✅ Mac Mini (Local) synced${NC}"
     else
-        echo -e "${RED}   ❌ Heroku push failed${NC}"
+        echo -e "${RED}   ❌ Mac Mini (Local) push failed${NC}"
         return 1
     fi
     
@@ -95,5 +95,5 @@ sync_repo \
 
 echo -e "${GREEN}✅ All repos synced!${NC}"
 echo ""
-echo "Desktop → GitHub → Heroku flow complete!"
+echo "Desktop → GitHub → Mac Mini (Local) flow complete!"
 

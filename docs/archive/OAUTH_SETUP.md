@@ -21,20 +21,20 @@ I've built a complete OAuth 2.0 infrastructure for self-service authentication w
 
 ## 🔑 Required OAuth Credentials
 
-To enable each service, you need to set environment variables on Heroku. Here's what's needed for each:
+To enable each service, you need to set environment variables on Mac Mini (Local). Here's what's needed for each:
 
 ### 1. LinkedIn
 
 **Create LinkedIn App:**
 1. Go to: https://www.linkedin.com/developers/apps
 2. Create new app
-3. Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/linkedin/callback`
+3. Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/linkedin/callback`
 4. Request access to: Marketing Developer Platform
 
 **Environment Variables:**
 ```bash
-heroku config:set LINKEDIN_CLIENT_ID="your_client_id" -a portal-coloradocareassist
-heroku config:set LINKEDIN_CLIENT_SECRET="your_client_secret" -a portal-coloradocareassist
+mac-mini config:set LINKEDIN_CLIENT_ID="your_client_id" -a portal-coloradocareassist
+mac-mini config:set LINKEDIN_CLIENT_SECRET="your_client_secret" -a portal-coloradocareassist
 ```
 
 ### 2. Google Ads
@@ -48,7 +48,7 @@ Already set:
 - `GOOGLE_CLIENT_SECRET` ✅
 
 **Update Redirect URI in Google Cloud Console:**
-Add: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/google-ads/callback`
+Add: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/google-ads/callback`
 
 ### 3. Meta Ads (Facebook)
 
@@ -63,19 +63,19 @@ Already set:
 **Update Redirect URI in Facebook App:**
 1. Go to: https://developers.facebook.com/apps/
 2. Select your app
-3. Add OAuth Redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/facebook/callback`
+3. Add OAuth Redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/facebook/callback`
 
 ### 4. Mailchimp
 
 **Create Mailchimp OAuth App:**
 1. Go to: https://admin.mailchimp.com/account/oauth2/
 2. Register new app
-3. Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/mailchimp/callback`
+3. Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/mailchimp/callback`
 
 **Environment Variables:**
 ```bash
-heroku config:set MAILCHIMP_CLIENT_ID="your_client_id" -a portal-coloradocareassist
-heroku config:set MAILCHIMP_CLIENT_SECRET="your_client_secret" -a portal-coloradocareassist
+mac-mini config:set MAILCHIMP_CLIENT_ID="your_client_id" -a portal-coloradocareassist
+mac-mini config:set MAILCHIMP_CLIENT_SECRET="your_client_secret" -a portal-coloradocareassist
 ```
 
 ### 5. QuickBooks
@@ -83,7 +83,7 @@ heroku config:set MAILCHIMP_CLIENT_SECRET="your_client_secret" -a portal-colorad
 **Create QuickBooks App:**
 1. Go to: https://developer.intuit.com/app/developer/myapps
 2. Create new app
-3. Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/quickbooks/callback`
+3. Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/quickbooks/callback`
 4. Get Client ID and Client Secret
 
 **Environment Variables:**
@@ -92,13 +92,13 @@ Already set:
 - `QUICKBOOKS_CLIENT_SECRET` ✅
 
 **Update Redirect URI in QuickBooks App:**
-Add: `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/quickbooks/callback`
+Add: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/quickbooks/callback`
 
 ## 🚀 Testing OAuth Flows
 
 Once credentials are set:
 
-1. Go to: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/connections
+1. Go to: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/connections
 2. Click "Connect" on any service
 3. Popup window opens for authentication
 4. Authenticate with the service

@@ -1,7 +1,7 @@
 # 🎉 ATOMIC CRM - DEPLOYMENT SUCCESSFUL! 
 
 ## 🚀 Live URL
-**https://careassist-tracker-0fcf2cecdb22.herokuapp.com/**
+**https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/**
 
 ---
 
@@ -115,7 +115,7 @@ PostgreSQL Database
 - **Drag & Drop**: React DnD 16
 - **Backend**: FastAPI (Python)
 - **Database**: PostgreSQL
-- **Deployment**: Heroku
+- **Deployment**: Mac Mini (Local)
 - **Auth**: Google OAuth (session-based)
 
 ---
@@ -261,12 +261,12 @@ dashboards/sales/
 4. Check `/health` endpoint to verify backend is running
 
 ### If API calls fail:
-1. Check Heroku logs: `heroku logs --tail --app careassist-tracker`
+1. Check Mac Mini (Local) logs: `mac-mini logs --tail --app careassist-tracker`
 2. Verify DATABASE_URL is set correctly
 3. Check CORS settings in `app.py`
 
 ### If authentication fails:
-1. Verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in Heroku config
+1. Verify GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set in Mac Mini (Local) config
 2. Check redirect URIs in Google Cloud Console
 3. Try logging out and back in
 
@@ -279,12 +279,12 @@ dashboards/sales/
 - Branch: `main`
 - Latest commit: `913be32` - "ATOMIC CRM - Backend integration complete"
 
-### Heroku:
+### Mac Mini (Local):
 - App: `careassist-tracker`
-- URL: https://careassist-tracker-0fcf2cecdb22.herokuapp.com/
+- URL: https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/
 - Buildpacks: 
-  1. `heroku-community/apt` (for Tesseract OCR)
-  2. `heroku/python`
+  1. `mac-mini-community/apt` (for Tesseract OCR)
+  2. `mac-mini/python`
 
 ### Deploy command:
 ```bash
@@ -292,7 +292,7 @@ cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sa
 git add -A
 git commit -m "Your commit message"
 git push origin main     # Push to GitHub
-git push heroku main     # Deploy to Heroku
+git push mac-mini main     # Deploy to Mac Mini (Local)
 ```
 
 ---
@@ -303,7 +303,7 @@ You now have a **BEAUTIFUL, PROFESSIONAL CRM** that:
 - Looks EXACTLY like the Atomic CRM demo
 - Is fully integrated with your existing backend
 - Has all your data (leads, contacts, companies, tasks)
-- Is deployed and LIVE on Heroku
+- Is deployed and LIVE on Mac Mini (Local)
 - Is responsive on all devices
 - Has a dark theme matching your portal
 
@@ -319,7 +319,7 @@ You now have a **BEAUTIFUL, PROFESSIONAL CRM** that:
 ## 📞 Support
 
 If you need any help or have questions:
-1. Check the logs: `heroku logs --tail --app careassist-tracker`
+1. Check the logs: `mac-mini logs --tail --app careassist-tracker`
 2. Review this documentation
 3. Check the React Admin docs: https://marmelab.com/react-admin/
 4. Ask me! I'm here to help! 😊

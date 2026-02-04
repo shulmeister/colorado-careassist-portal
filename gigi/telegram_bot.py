@@ -64,7 +64,7 @@ logging.basicConfig(
 logger = logging.getLogger("gigi_telegram")
 
 # Read Clawd knowledge base files
-CLAWD_PATH = "/Users/shulmeister/heroku-apps/clawd"
+CLAWD_PATH = "/Users/shulmeister/mac-mini-apps/clawd"
 SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal assistant.
 
 # Core Identity
@@ -102,7 +102,7 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal
 Today is {datetime.now().strftime("%A, %B %d, %Y")}
 
 # Important Context
-Jason hates cloud services (no more DigitalOcean or Heroku). Everything runs on his Mac Mini now.
+Jason hates cloud services (no more Mac Mini or Mac Mini (Local)). Everything runs on his Mac Mini now.
 He's testing you right now to make sure you work perfectly from the Mac Mini.
 """
 
@@ -119,7 +119,7 @@ class GigiTelegramBot:
         if user_id == JASON_TELEGRAM_ID:
             await update.message.reply_text(
                 "👋 Hi Jason! I'm Gigi, your AI Chief of Staff.\n\n"
-                "I'm now running on your Mac Mini (no more DigitalOcean!).\n\n"
+                "I'm now running on your Mac Mini (no more Mac Mini!).\n\n"
                 "Just send me a message and I'll help with whatever you need."
             )
         else:

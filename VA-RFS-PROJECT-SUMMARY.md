@@ -1,7 +1,7 @@
 # VA RFS Converter - Project Summary
 
 **Status:** ✅ **PRODUCTION READY - ALL FEATURES WORKING**
-**Version:** 1.0 (Heroku v524)
+**Version:** 1.0 (Mac Mini (Local) v524)
 **Completed:** January 27, 2026
 **Developer:** Jason Shulman with Claude Sonnet 4.5
 
@@ -19,7 +19,7 @@ The **VA RFS Converter** is an AI-powered tool that converts referral documents 
 5. **Downloads print-ready PDF** with automatic filename generation
 
 ### Live URL
-**https://careassist-unified-0a11ddb45ac0.herokuapp.com/va-rfs-converter**
+**https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-rfs-converter**
 
 ---
 
@@ -154,7 +154,7 @@ The **VA RFS Converter** is an AI-powered tool that converts referral documents 
 
 ## 🔑 Environment Variables
 
-Required in Heroku:
+Required in Mac Mini (Local):
 ```bash
 GEMINI_API_KEY=<your-gemini-api-key>
 # OR
@@ -170,15 +170,15 @@ GOOGLE_API_KEY=<your-google-api-key>
 cd ~/colorado-careassist-portal
 git add .
 git commit -m "Update VA RFS Converter"
-git push heroku main
+git push mac-mini main
 ```
 
 ### Verify Deployment
 ```bash
-heroku logs --tail --app careassist-unified
+mac-mini logs --tail --app careassist-unified
 ```
 
-### Current Heroku Version
+### Current Mac Mini (Local) Version
 **v524** (production)
 
 ---
@@ -326,7 +326,7 @@ heroku logs --tail --app careassist-unified
 - **Wellsky Payroll Converter:** `/payroll`
   - Converts Wellsky payroll for Alaska
 
-- **Portal Dashboard:** https://careassist-unified-0a11ddb45ac0.herokuapp.com/
+- **Portal Dashboard:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/
 
 ---
 
@@ -342,7 +342,7 @@ All requested features implemented and working:
 - ✅ Automatic filename generation
 - ✅ Portal integration
 - ✅ Mobile responsive
-- ✅ Production deployed (Heroku v524)
+- ✅ Production deployed (Mac Mini (Local) v524)
 - ✅ Fully documented
 
 **🎉 Ready for production use!**
@@ -351,4 +351,4 @@ All requested features implemented and working:
 
 **Last Updated:** January 27, 2026
 **Git Commit:** 5bb7fb6
-**Heroku Version:** v524
+**Mac Mini (Local) Version:** v524

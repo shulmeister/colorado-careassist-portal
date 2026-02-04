@@ -10,7 +10,7 @@
 
 ### **1. Go to Google Cloud Console:**
 - Visit: https://console.cloud.google.com/
-- Select project: `visit-summary-app-heroku` (your existing project)
+- Select project: `visit-summary-app-mac-mini` (your existing project)
 
 ### **2. Enable Google+ API:**
 - Go to **APIs & Services** → **Library**
@@ -46,7 +46,7 @@ GOOGLE_CLIENT_SECRET=GOCSPX-your-actual-secret
 ```
 
 ### **6. Deploy/Restart Your App:**
-- If using Heroku: `git add . && git commit -m "Add OAuth" && git push heroku main`
+- If using Mac Mini (Local): `git add . && git commit -m "Add OAuth" && git push mac-mini main`
 - If using other hosting: Restart your application
 
 ## 🎉 **That's It!**

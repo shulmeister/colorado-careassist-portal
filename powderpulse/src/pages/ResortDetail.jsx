@@ -4,7 +4,7 @@ import {
   ArrowLeft,
   Thermometer,
   Wind,
-  Droplets,
+  Local Servers,
   Eye,
   Cloud,
   Sun,
@@ -470,7 +470,7 @@ const ResortDetail = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-slate-800/30 rounded-lg p-4">
                     <div className="flex items-center gap-2 text-slate-400 mb-2">
-                      <Droplets className="w-4 h-4" />
+                      <Local Servers className="w-4 h-4" />
                       <span className="text-sm">Humidity</span>
                     </div>
                     <div className="text-2xl font-bold text-white">

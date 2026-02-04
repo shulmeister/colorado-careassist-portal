@@ -14,8 +14,8 @@
 |----------|-------|
 | **Local Path** | `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment` |
 | **GitHub** | `https://github.com/shulmeister/recruiter-dashboard` |
-| **Heroku App** | `caregiver-lead-tracker` |
-| **Live URL** | `https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com` |
+| **Mac Mini (Local) App** | `caregiver-lead-tracker` |
+| **Live URL** | `https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com` |
 | **Tech Stack** | Flask, SQLAlchemy, PostgreSQL |
 
 ---
@@ -24,7 +24,7 @@
 
 ```bash
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
-git add -A && git commit -m "Description" && git push origin main && git push heroku main
+git add -A && git commit -m "Description" && git push origin main && git push mac-mini main
 ```
 
 ---
@@ -67,7 +67,7 @@ Click "Pull Leads" button in the Facebook Campaign Management card.
 ```bash
 python fetch_facebook_leads.py
 ```
-Add to Heroku Scheduler for automatic daily sync.
+Add to Mac Mini (Local) Scheduler for automatic daily sync.
 
 ---
 
@@ -75,10 +75,10 @@ Add to Heroku Scheduler for automatic daily sync.
 
 ```bash
 # Check logs
-heroku logs -n 100 -a caregiver-lead-tracker
+mac-mini logs -n 100 -a caregiver-lead-tracker
 
 # Restart
-heroku restart -a caregiver-lead-tracker
+mac-mini restart -a caregiver-lead-tracker
 
 # Run locally
 flask run --port 5000
@@ -89,7 +89,7 @@ flask run --port 5000
 ## 7. Important Notes
 
 - This is a **nested git repo** - it has its own `.git` folder
-- Always push to BOTH `origin` (GitHub) AND `heroku`
+- Always push to BOTH `origin` (GitHub) AND `mac-mini`
 - Uses Flask (not FastAPI like other dashboards)
 - Portal embeds this via iframe at `/recruitment` route
 

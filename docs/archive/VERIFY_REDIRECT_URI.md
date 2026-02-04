@@ -5,7 +5,7 @@
 Copy this **exactly** (no spaces, no trailing slash):
 
 ```
-https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 ```
 
 ## Step-by-Step Verification
@@ -18,7 +18,7 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 4. You should see a list like:
    ```
    https://tracker.coloradocareassist.com/auth/callback
-   https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
    ```
 
 ### 2. If Portal URI is Missing
@@ -26,7 +26,7 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 1. Click **"+ ADD URI"** button
 2. Paste exactly:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
    ```
 3. Click **"Save"** at the bottom (very important!)
 4. Wait 30-60 seconds
@@ -34,13 +34,13 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 ### 3. Common Mistakes to Avoid
 
 ❌ **DON'T add:**
-- `http://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback` (missing 's')
-- `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback/` (trailing slash)
-- `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/` (missing /auth/callback)
+- `http://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` (missing 's')
+- `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback/` (trailing slash)
+- `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/` (missing /auth/callback)
 - Space before or after the URI
 
 ✅ **DO add:**
-- `https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback` (exact match)
+- `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` (exact match)
 
 ### 4. After Saving
 
@@ -53,7 +53,7 @@ https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
 ### 5. Test in Incognito Mode
 
 1. Open Chrome Incognito (Cmd+Shift+N)
-2. Go to: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
+2. Go to: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 3. Try logging in
 
 This bypasses browser cache issues.

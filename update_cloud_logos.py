@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Update Google Admin, Heroku, and Hostinger tools to use their logos
+Update Google Admin, Mac Mini (Local), and Hostinger tools to use their logos
 """
 import sys
 import os
@@ -20,8 +20,8 @@ def update_cloud_tool_logos():
                 "icon": "/static/logos/google-admin.png"
             },
             {
-                "name": "Heroku",
-                "icon": "/static/logos/heroku.png"
+                "name": "Mac Mini (Local)",
+                "icon": "/static/logos/mac-mini.png"
             },
             {
                 "name": "Hostinger",

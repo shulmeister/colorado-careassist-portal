@@ -2,7 +2,7 @@
 """
 Auto-Scan Google Drive Folders for Business Cards, MyWay Routes, and Expenses
 
-This script runs daily via Heroku Scheduler and:
+This script runs daily via Mac Mini (Local) Scheduler and:
 1. Scans three Google Drive folders
 2. Processes only NEW files (tracks processed files in DB)
 3. Extracts data using Gemini AI
@@ -16,8 +16,8 @@ Folders:
 Usage:
     python scripts/auto_scan_drive.py
 
-Or via Heroku:
-    heroku run python scripts/auto_scan_drive.py --app careassist-unified
+Or via Mac Mini (Local):
+    mac-mini run python scripts/auto_scan_drive.py --app careassist-unified
 """
 
 import os
@@ -71,7 +71,7 @@ def get_db_session():
     if not database_url:
         raise Exception("DATABASE_URL not set")
 
-    # Handle Heroku's postgres:// vs postgresql://
+    # Handle Mac Mini (Local)'s postgres:// vs postgresql://
     if database_url.startswith('postgres://'):
         database_url = database_url.replace('postgres://', 'postgresql://', 1)
 

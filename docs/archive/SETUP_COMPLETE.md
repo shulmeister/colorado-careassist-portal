@@ -6,17 +6,17 @@
 2. ✅ Copied all portal files (app, auth, database, models, templates)
 3. ✅ Initialized Git repository
 4. ✅ Made initial commit
-5. ✅ Created Heroku app: `portal-coloradocareassist`
-6. ✅ Added Heroku remote
+5. ✅ Created Mac Mini (Local) app: `portal-coloradocareassist`
+6. ✅ Added Mac Mini (Local) remote
 7. ✅ Added PostgreSQL database (essential-0 plan)
 8. ✅ Created README.md
 9. ✅ Created setup scripts
 
 ## 🎯 Your Portal App
 
-**Heroku URL**: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
+**Mac Mini (Local) URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 
-**Heroku App Name**: `portal-coloradocareassist`
+**Mac Mini (Local) App Name**: `portal-coloradocareassist`
 
 ## 📋 Final Steps (You Need to Do)
 
@@ -25,17 +25,17 @@
 Run the setup script:
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
-./setup-heroku.sh
+./setup-mac-mini.sh
 ```
 
 Or manually (get your Google OAuth credentials from your sales dashboard setup):
 
 ```bash
-heroku config:set GOOGLE_CLIENT_ID=your_client_id --app portal-coloradocareassist
-heroku config:set GOOGLE_CLIENT_SECRET=your_client_secret --app portal-coloradocareassist
-heroku config:set GOOGLE_REDIRECT_URI=https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback --app portal-coloradocareassist
-heroku config:set APP_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))") --app portal-coloradocareassist
-heroku config:set ALLOWED_DOMAINS=coloradocareassist.com --app portal-coloradocareassist
+mac-mini config:set GOOGLE_CLIENT_ID=your_client_id --app portal-coloradocareassist
+mac-mini config:set GOOGLE_CLIENT_SECRET=your_client_secret --app portal-coloradocareassist
+mac-mini config:set GOOGLE_REDIRECT_URI=https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback --app portal-coloradocareassist
+mac-mini config:set APP_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))") --app portal-coloradocareassist
+mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com --app portal-coloradocareassist
 ```
 
 ### 2. Update Google OAuth Settings
@@ -45,25 +45,25 @@ heroku config:set ALLOWED_DOMAINS=coloradocareassist.com --app portal-coloradoca
 3. Edit your OAuth 2.0 Client ID
 4. Add to **Authorized redirect URIs**:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com/auth/callback
+   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
    ```
 
-### 3. Deploy to Heroku
+### 3. Deploy to Mac Mini (Local)
 
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
-git push heroku main
+git push mac-mini main
 ```
 
 ### 4. Initialize Database
 
 ```bash
-heroku run python portal_setup.py --app portal-coloradocareassist
+mac-mini run python portal_setup.py --app portal-coloradocareassist
 ```
 
 ### 5. Test It!
 
-Visit: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
+Visit: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 
 ## 📁 Repository Structure
 
@@ -78,19 +78,19 @@ Visit: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
 │   └── portal.html        # Portal UI
 ├── static/
 │   └── favicon.ico        # Favicon
-├── Procfile               # Heroku process
+├── Procfile               # Mac Mini (Local) process
 ├── requirements.txt       # Dependencies
 ├── runtime.txt           # Python version
 ├── README.md             # Documentation
 ├── DEPLOY.md             # Deployment guide
-└── setup-heroku.sh       # Setup script
+└── setup-mac-mini.sh       # Setup script
 ```
 
 ## 🔗 Quick Links
 
-- **Heroku Dashboard**: https://dashboard.heroku.com/apps/portal-coloradocareassist
-- **App URL**: https://portal-coloradocareassist-3e1a4bb34793.herokuapp.com
-- **View Logs**: `heroku logs --tail --app portal-coloradocareassist`
+- **Mac Mini (Local) Dashboard**: https://dashboard.mac-mini.com/apps/portal-coloradocareassist
+- **App URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
+- **View Logs**: `mac-mini logs --tail --app portal-coloradocareassist`
 
 ## 🚀 All Set!
 

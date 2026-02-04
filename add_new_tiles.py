@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Add new portal tiles: Retell AI, DigitalOcean, Cloudflare, EbizCharge, Fax.Plus
+Add new portal tiles: Retell AI, Mac Mini, Cloudflare, EbizCharge, Fax.Plus
 """
 import os
 from dotenv import load_dotenv
@@ -25,9 +25,9 @@ def add_new_tiles():
                 "is_active": True
             },
             {
-                "name": "DigitalOcean",
-                "url": "https://cloud.digitalocean.com/login",
-                "icon": "https://www.digitalocean.com/_next/static/media/favicon.594d6067.ico",
+                "name": "Mac Mini",
+                "url": "https://cloud.Mac Mini.com/login",
+                "icon": "https://www.Mac Mini.com/_next/static/media/favicon.594d6067.ico",
                 "description": "Cloud infrastructure and hosting",
                 "category": "Development",
                 "display_order": 28,

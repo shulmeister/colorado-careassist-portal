@@ -49,12 +49,12 @@ RINGCENTRAL_EMBED_REDIRECT_URI = os.getenv(
 
 CLIENT_SATISFACTION_APP_URL = os.getenv(
     "CLIENT_SATISFACTION_URL",
-    "https://client-satisfaction-15d412babc2f.herokuapp.com/",
+    "https://client-satisfaction-15d412babc2f.mac-miniapp.com/",
 )
 
 ACTIVITY_TRACKER_URL = os.getenv(
     "ACTIVITY_TRACKER_URL",
-    "https://cca-activity-tracker-6d9a1d8e3933.herokuapp.com/",
+    "https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com/",
 )
 
 PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
@@ -88,7 +88,7 @@ app.add_middleware(
 # Add trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware, 
-    allowed_hosts=["localhost", "127.0.0.1", "*.herokuapp.com", "portal.coloradocareassist.com"]
+    allowed_hosts=["localhost", "127.0.0.1", "*.mac-miniapp.com", "portal.coloradocareassist.com"]
 )
 
 # Mount static files and templates
@@ -841,7 +841,7 @@ async def get_sync_status(
 #     """Redirect to Sales Dashboard using portal-issued SSO token"""
 #     sales_dashboard_url = os.getenv(
 #         "SALES_DASHBOARD_URL",
-#         "https://careassist-tracker-0fcf2cecdb22.herokuapp.com"
+#         "https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com"
 #     )
 #
 #     token_payload = {
@@ -902,7 +902,7 @@ async def recruitment_dashboard_embedded(
     """Embedded Recruitment Dashboard (iframe)"""
     recruitment_dashboard_url = os.getenv(
         "RECRUITMENT_DASHBOARD_URL",
-        "https://caregiver-lead-tracker-9d0e6a8c7c20.herokuapp.com/"
+        "https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com/"
     )
     
     # Get session token from cookie to pass to dashboard
@@ -2125,7 +2125,7 @@ async def pinterest_oauth_start():
             "error": "Pinterest App ID not configured"
         })
 
-    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/pinterest/callback"
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/pinterest/callback"
     scopes = "boards:read,pins:read,user_accounts:read"
 
     oauth_url = (
@@ -2168,7 +2168,7 @@ async def pinterest_oauth_callback(
 
     app_id = os.getenv("PINTEREST_APP_ID")
     app_secret = os.getenv("PINTEREST_APP_SECRET")
-    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/pinterest/callback"
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/pinterest/callback"
 
     # Exchange code for token
     try:
@@ -2198,7 +2198,7 @@ async def pinterest_oauth_callback(
                 "expires_in": token_data.get("expires_in"),
                 "token_type": token_data.get("token_type"),
                 "scope": token_data.get("scope"),
-                "instructions": "Set this access_token as PINTEREST_ACCESS_TOKEN on Heroku"
+                "instructions": "Set this access_token as PINTEREST_ACCESS_TOKEN on Mac Mini (Local)"
             })
         else:
             return JSONResponse({
@@ -2285,7 +2285,7 @@ async def test_linkedin_connection():
         status["connection_successful"] = False
         status["needs_oauth"] = True
         status["oauth_url"] = linkedin_service.get_oauth_url(
-            "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/linkedin/callback"
+            "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/linkedin/callback"
         )
         status["message"] = "Visit the oauth_url to authorize LinkedIn access"
     else:
@@ -2324,7 +2324,7 @@ async def linkedin_oauth_callback(
         })
     
     # Exchange code for token
-    redirect_uri = "https://careassist-unified-0a11ddb45ac0.herokuapp.com/api/linkedin/callback"
+    redirect_uri = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/linkedin/callback"
     token_data = linkedin_service.exchange_code_for_token(code, redirect_uri)
     
     if token_data and "access_token" in token_data:
@@ -2334,7 +2334,7 @@ async def linkedin_oauth_callback(
             "message": "LinkedIn authorized successfully!",
             "access_token": token_data["access_token"],
             "expires_in": token_data.get("expires_in"),
-            "instructions": "Set this access token as LINKEDIN_ACCESS_TOKEN environment variable on Heroku",
+            "instructions": "Set this access token as LINKEDIN_ACCESS_TOKEN environment variable on Mac Mini (Local)",
         })
     else:
         return JSONResponse({
@@ -2487,7 +2487,7 @@ async def gbp_oauth_callback(
             "access_token": token_data["access_token"],
             "refresh_token": token_data.get("refresh_token"),
             "expires_in": token_data.get("expires_in"),
-            "instructions": "Set these tokens as GBP_ACCESS_TOKEN and GBP_REFRESH_TOKEN environment variables on Heroku. The refresh token is used to automatically get new access tokens.",
+            "instructions": "Set these tokens as GBP_ACCESS_TOKEN and GBP_REFRESH_TOKEN environment variables on Mac Mini (Local). The refresh token is used to automatically get new access tokens.",
         })
     else:
         return JSONResponse({
@@ -2556,7 +2556,7 @@ async def gbp_status():
 
 QB_CLIENT_ID = os.getenv("QB_CLIENT_ID")
 QB_CLIENT_SECRET = os.getenv("QB_CLIENT_SECRET")
-QB_REDIRECT_URI = os.getenv("QB_REDIRECT_URI", "https://careassist-unified-0a11ddb45ac0.herokuapp.com/qb/callback")
+QB_REDIRECT_URI = os.getenv("QB_REDIRECT_URI", "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/qb/callback")
 
 @app.get("/qb/callback")
 async def quickbooks_callback(
@@ -2592,7 +2592,7 @@ async def quickbooks_callback(
         return HTMLResponse(f"""
         <html><body style="font-family: sans-serif; padding: 40px;">
         <h1>⚠️ QuickBooks Credentials Not Configured</h1>
-        <p>Set QB_CLIENT_ID and QB_CLIENT_SECRET in Heroku config.</p>
+        <p>Set QB_CLIENT_ID and QB_CLIENT_SECRET in Mac Mini (Local) config.</p>
         <h2>Manual Token Exchange</h2>
         <p>Use these values in your local CLI:</p>
         <pre style="background: #f0f0f0; padding: 20px; border-radius: 8px;">

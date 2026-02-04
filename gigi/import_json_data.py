@@ -3,7 +3,7 @@
 Import WellSky JSON data into Gigi's PostgreSQL database.
 
 This script reads from gigi/data/*.json files and imports into PostgreSQL.
-Run on Heroku: heroku run python gigi/import_json_data.py --app careassist-unified
+Run on Mac Mini (Local): mac-mini run python gigi/import_json_data.py --app careassist-unified
 """
 
 import os

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Daily memory decay process - Run this via Heroku Scheduler
+Daily memory decay process - Run this via Mac Mini (Local) Scheduler
 
 Usage:
     python run_decay.py
