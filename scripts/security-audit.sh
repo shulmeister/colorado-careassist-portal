@@ -1,7 +1,14 @@
 #!/bin/bash
-# Security Audit Script for Mac Mini
+# Security Audit Script for Mac Mini (macOS only)
 # Run periodically to check for security issues
 # Usage: bash security-audit.sh
+
+# Check if running on macOS
+if [[ "$(uname)" != "Darwin" ]]; then
+    echo "ERROR: This script is designed for macOS only."
+    echo "Current OS: $(uname)"
+    exit 1
+fi
 
 echo "=================================================="
 echo "Colorado Care Assist - Security Audit"

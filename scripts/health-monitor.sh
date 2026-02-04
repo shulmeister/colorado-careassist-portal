@@ -1,7 +1,13 @@
 #!/bin/bash
-# Health Monitor for Colorado Care Assist Services
+# Health Monitor for Colorado Care Assist Services (macOS only)
 # Runs periodically to check services and restart if needed
 # Location: ~/scripts/health-monitor.sh
+
+# Check if running on macOS
+if [[ "$(uname)" != "Darwin" ]]; then
+    echo "ERROR: This script is designed for macOS only."
+    exit 1
+fi
 
 LOG_FILE="$HOME/logs/health-monitor.log"
 ALERT_FILE="$HOME/logs/health-alerts.log"
