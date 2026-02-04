@@ -482,41 +482,86 @@ class GigiTelegramBot:
         logger.error(f"Update {update} caused error {context.error}")
 
 async def main():
-    """Run the bot"""
-    logger.info("🤖 Starting Gigi Telegram Bot on Mac Mini...")
-    logger.info(f"   Bot Token: {TELEGRAM_BOT_TOKEN[:20]}...")
-    logger.info(f"   Jason's Chat ID: {JASON_TELEGRAM_ID}")
+    """Run the bot with automatic restart on failure"""
+    max_retries = 10
+    retry_delay = 5  # seconds
 
-    # Create bot instance
-    gigi = GigiTelegramBot()
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"🤖 Starting Gigi Telegram Bot on Mac Mini (attempt {attempt + 1}/{max_retries})...")
+            logger.info(f"   Bot Token: {TELEGRAM_BOT_TOKEN[:20]}...")
+            logger.info(f"   Jason's Chat ID: {JASON_TELEGRAM_ID}")
 
-    # Create application
-    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+            # Create bot instance
+            gigi = GigiTelegramBot()
 
-    # Add handlers
-    app.add_handler(CommandHandler("start", gigi.start_command))
-    app.add_handler(CommandHandler("help", gigi.help_command))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gigi.handle_message))
-    app.add_error_handler(gigi.error_handler)
+            # Create application with connection pool settings for reliability
+            app = (
+                Application.builder()
+                .token(TELEGRAM_BOT_TOKEN)
+                .connect_timeout(30.0)
+                .read_timeout(30.0)
+                .write_timeout(30.0)
+                .pool_timeout(30.0)
+                .build()
+            )
 
-    # Start bot
-    logger.info("✅ Gigi Telegram Bot is running!")
-    logger.info("   Send a message to @Shulmeisterbot to test")
+            # Add handlers
+            app.add_handler(CommandHandler("start", gigi.start_command))
+            app.add_handler(CommandHandler("help", gigi.help_command))
+            app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gigi.handle_message))
+            app.add_error_handler(gigi.error_handler)
 
-    # Run bot until stopped
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
+            # Start bot
+            logger.info("✅ Gigi Telegram Bot is running!")
+            logger.info("   Send a message to @Shulmeisterbot to test")
 
-    # Keep running
-    try:
-        while True:
-            await asyncio.sleep(1)
-    except KeyboardInterrupt:
-        logger.info("🛑 Shutting down Gigi Telegram Bot...")
-        await app.updater.stop()
-        await app.stop()
-        await app.shutdown()
+            # Run bot until stopped
+            await app.initialize()
+            await app.start()
+            await app.updater.start_polling(
+                drop_pending_updates=True,  # Don't process old messages on restart
+                allowed_updates=["message"],  # Only listen for messages
+            )
+
+            # Keep running
+            while True:
+                await asyncio.sleep(60)
+                # Heartbeat log every minute
+                logger.debug("Heartbeat: Bot is running")
+
+        except KeyboardInterrupt:
+            logger.info("🛑 Shutting down Gigi Telegram Bot (user requested)...")
+            break
+        except Exception as e:
+            logger.error(f"❌ Bot crashed with error: {e}", exc_info=True)
+            if attempt < max_retries - 1:
+                wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
+                logger.info(f"   Retrying in {wait_time} seconds...")
+                await asyncio.sleep(wait_time)
+            else:
+                logger.error("   Max retries reached. Exiting.")
+                raise
+        finally:
+            try:
+                if 'app' in locals():
+                    await app.updater.stop()
+                    await app.stop()
+                    await app.shutdown()
+            except Exception as cleanup_error:
+                logger.warning(f"Cleanup error: {cleanup_error}")
+
+def run_bot():
+    """Entry point with process-level restart"""
+    while True:
+        try:
+            asyncio.run(main())
+            break  # Clean exit
+        except Exception as e:
+            logger.error(f"Fatal error in bot: {e}")
+            logger.info("Restarting bot in 30 seconds...")
+            import time
+            time.sleep(30)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    run_bot()
