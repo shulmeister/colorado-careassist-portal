@@ -400,9 +400,26 @@ class GigiTelegramBot:
                             assistant_content.append(block)
 
                     # Add assistant message with tool use to history
+                    # Tool use blocks: type, id, name, input (NO text field)
+                    # Text blocks: type, text
+                    formatted_content = []
+                    for b in assistant_content:
+                        if b.type == "tool_use":
+                            formatted_content.append({
+                                "type": "tool_use",
+                                "id": b.id,
+                                "name": b.name,
+                                "input": b.input
+                            })
+                        elif b.type == "text":
+                            formatted_content.append({
+                                "type": "text",
+                                "text": b.text
+                            })
+
                     self.conversation_history[user_id].append({
                         "role": "assistant",
-                        "content": [{"type": b.type, "id": getattr(b, 'id', None), "name": getattr(b, 'name', None), "input": getattr(b, 'input', None), "text": getattr(b, 'text', None)} if b.type == "tool_use" else {"type": "text", "text": b.text} for b in assistant_content]
+                        "content": formatted_content
                     })
 
                     # Add tool results to history
