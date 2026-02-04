@@ -104,16 +104,18 @@ class GoogleService:
         try:
             service = self._get_service('calendar', 'v3')
             if not service: return []
-            
+
             now = datetime.utcnow().isoformat() + 'Z'
             end = (datetime.utcnow() + timedelta(days=days)).isoformat() + 'Z'
-            
+
             # Get list of all calendars
             calendar_list = service.calendarList().list().execute().get('items', [])
-            
+
             all_events = []
             for cal in calendar_list:
-                if cal.get('selected'):
+                # Check ALL calendars, not just "selected" ones
+                # Include primary calendar and any calendar with accessRole
+                if cal.get('primary') or cal.get('accessRole') in ['owner', 'writer', 'reader']:
                     events_result = service.events().list(
                         calendarId=cal['id'], timeMin=now, timeMax=end,
                         maxResults=max_results, singleEvents=True,
