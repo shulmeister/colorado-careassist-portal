@@ -46,7 +46,7 @@ logging.basicConfig(
 logger = logging.getLogger("gigi_rc_bot")
 
 # Configuration
-CHECK_INTERVAL = 5  # seconds (Reduced for faster testing)
+CHECK_INTERVAL = 30  # seconds
 TARGET_CHAT = "New Scheduling"
 TIMEZONE = pytz.timezone("America/Denver")
 
@@ -60,6 +60,8 @@ class GigiRingCentralBot:
         self.wellsky = WellSkyService()
         self.processed_message_ids = set()
         self.bot_extension_id = None
+        self.startup_time = datetime.utcnow()
+        logger.info(f"Bot initialized. Startup time (UTC): {self.startup_time}")
 
     async def initialize(self):
         """Initialize connections"""
@@ -200,6 +202,23 @@ class GigiRingCentralBot:
             if msg_id in self.processed_message_ids:
                 continue
 
+            # Skip historical messages (older than startup) to prevent bursts on restart
+            creation_time_str = msg.get("creationTime", "")
+            if creation_time_str:
+                try:
+                    # RC timestamp format: 2026-02-03T18:10:34Z
+                    creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                except ValueError:
+                    try:
+                        creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%SZ")
+                    except ValueError:
+                        creation_time = None
+                
+                if creation_time and creation_time < self.startup_time:
+                    logger.debug(f"Skipping historical Glip message {msg_id} (pre-startup)")
+                    self.processed_message_ids.add(msg_id)
+                    continue
+
             # CRITICAL: Skip messages sent by the bot itself to prevent infinite loops
             creator_id = str(msg.get("creatorId", ""))
             if self.bot_extension_id and creator_id == self.bot_extension_id:
@@ -261,8 +280,24 @@ class GigiRingCentralBot:
                 
                 if msg_id in self.processed_message_ids:
                     continue
+
+                # Skip historical SMS (older than startup) to prevent bursts on restart
+                creation_time_str = sms.get("creationTime", "")
+                if creation_time_str:
+                    try:
+                        creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                    except ValueError:
+                        try:
+                            creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%SZ")
+                        except ValueError:
+                            creation_time = None
+                    
+                    if creation_time and creation_time < self.startup_time:
+                        logger.debug(f"Skipping historical SMS {msg_id} (pre-startup)")
+                        self.processed_message_ids.add(msg_id)
+                        continue
                 
-                logger.info(f"✨ NEW SMS DETECTED: ID={msg_id} From={from_phone} To={to_phone} Subject={text[:30]}")
+                # Check for duplicate replies within 60s window (cooldown)
 
                 # Role 1: Documenter
                 await self.process_documentation(sms, text, source_type="sms", phone=from_phone)

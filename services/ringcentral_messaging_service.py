@@ -962,7 +962,7 @@ class RingCentralMessagingService:
             if attachments:
                 data["attachments"] = attachments
 
-            result = self._api_request(f"/glip/chats/{chat_id}/posts", method="POST", params=data)
+            result = self._api_request(f"/glip/chats/{chat_id}/posts", method="POST", data=data)
 
             if result:
                 logger.info(f"Message sent to chat '{chat_name}': {message[:50]}...")
@@ -1005,7 +1005,7 @@ class RingCentralMessagingService:
             create_result = self._api_request(
                 "/glip/conversations",
                 method="POST",
-                params={"members": [{"email": person_email}]}
+                data={"members": [{"email": person_email}]}
             )
 
             if not create_result:
@@ -1018,7 +1018,7 @@ class RingCentralMessagingService:
 
             # Now send the message
             data = {"text": message}
-            result = self._api_request(f"/glip/chats/{chat_id}/posts", method="POST", params=data)
+            result = self._api_request(f"/glip/chats/{chat_id}/posts", method="POST", data=data)
 
             if result:
                 logger.info(f"Direct message sent to {person_email}: {message[:50]}...")

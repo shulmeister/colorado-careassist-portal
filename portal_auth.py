@@ -28,6 +28,7 @@ class GoogleOAuthManager:
         self.client_id = os.getenv("GOOGLE_CLIENT_ID")
         self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
         self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "https://portal.coloradocareassist.com/auth/callback")
+        logger.info(f"Initialized GoogleOAuthManager with redirect_uri: {self.redirect_uri}")
         self.scopes = [
             "https://www.googleapis.com/auth/userinfo.email",
             "https://www.googleapis.com/auth/userinfo.profile",
@@ -59,12 +60,12 @@ class GoogleOAuthManager:
                     "client_secret": self.client_secret,
                     "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                     "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [self.redirect_uri]
                 }
             },
-            scopes=self.scopes
+            scopes=self.scopes,
+            redirect_uri=self.redirect_uri
         )
-        flow.redirect_uri = self.redirect_uri
+        # flow.redirect_uri = self.redirect_uri  # Redundant but safe
 
         authorization_url, state = flow.authorization_url(
             access_type='offline',

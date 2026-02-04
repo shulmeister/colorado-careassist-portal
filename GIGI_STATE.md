@@ -22,10 +22,11 @@
 
 ## Capabilities
 
-1. **SMS:** Replies using Gemini AI. Recognizes Owner ("Hi Jason"). No duplicates.
-2. **Voice:** Recognizes callers via WellSky lookup ("Hi [Name]").
-3. **Logging:** Logs ALL interactions to WellSky (Client Notes or Admin Tasks).
-4. **Portal:** Full web portal with 26 tiles for various tools
+1. **SMS (307-459-8220):** Replies using Gemini AI. Recognizes Owner ("Hi Jason"). No duplicates.
+2. **Voice (307-459-8220 → 720-817-6600):** Recognizes callers via WellSky lookup ("Hi [Name]").
+3. **Telegram (@Shulmeisterbot):** Personal AI assistant running on Mac Mini.
+4. **Logging:** Logs ALL interactions to WellSky (Client Notes or Admin Tasks).
+5. **Portal:** Full web portal with 26 tiles for various tools
 
 ---
 

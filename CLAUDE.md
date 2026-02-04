@@ -18,7 +18,7 @@
 | Hesed Home Care | 3001 | hesedhomecare.org | com.coloradocareassist.hesedhomecare |
 | Elite Trading | 3002 | elitetrading.coloradocareassist.com | com.coloradocareassist.elite-trading |
 | PowderPulse | 3003 | powderpulse.coloradocareassist.com | com.coloradocareassist.powderpulse |
-| Clawd Gateway | 8080 | clawd.coloradocareassist.com | com.coloradocareassist.gigi-gateway |
+| Telegram Bot (@Shulmeisterbot) | - | - | com.coloradocareassist.telegram-bot |
 | Cloudflare Tunnel | - | - | com.cloudflare.cloudflared |
 | PostgreSQL 17 | 5432 | localhost | homebrew.mxcl.postgresql@17 |
 

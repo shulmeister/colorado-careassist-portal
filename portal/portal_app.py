@@ -1485,8 +1485,9 @@ async def get_sync_status(
 async def activity_tracker_redirect(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Redirect to Activity Tracker using portal-issued SSO token"""
-    tracker_url = ACTIVITY_TRACKER_URL.rstrip("/")
+    """Redirect to Sales Dashboard (Activity tracking is now part of Sales CRM)"""
+    # Activity tracker is now integrated into the Sales Dashboard
+    # Redirect to /go/sales which handles SSO properly
     token_payload = {
         "user_id": current_user.get("email"),
         "email": current_user.get("email"),
@@ -1497,15 +1498,14 @@ async def activity_tracker_redirect(
     }
 
     portal_token = PORTAL_SSO_SERIALIZER.dumps(token_payload)
-    tracker_portal_auth = tracker_url + "/portal-auth"
-
     query = urlencode({
         "portal_token": portal_token,
         "portal_user_email": current_user.get("email", "")
     })
 
-    redirect_url = f"{tracker_portal_auth}?{query}"
-    logger.info(f"Redirecting {current_user.get('email')} to Activity Tracker with portal token")
+    # Redirect to sales dashboard with activity tab
+    redirect_url = f"/sales/portal-auth?{query}"
+    logger.info(f"Redirecting {current_user.get('email')} to Sales Dashboard (Activity Tracker)")
     return RedirectResponse(url=redirect_url, status_code=302)
 
 @app.get("/recruitment", response_class=HTMLResponse)
@@ -1567,6 +1567,32 @@ async def go_recruiting(
         redirect_url = "/recruiting/"
         logger.warning("No session token - redirecting without auth")
 
+    return RedirectResponse(url=redirect_url, status_code=302)
+
+
+@app.get("/go/sales")
+async def go_sales(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Redirect to sales dashboard with portal SSO token"""
+    token_payload = {
+        "user_id": current_user.get("email"),
+        "email": current_user.get("email"),
+        "name": current_user.get("name"),
+        "domain": current_user.get("email", "").split("@")[-1] if current_user.get("email") else "",
+        "via_portal": True,
+        "login_time": datetime.utcnow().isoformat()
+    }
+
+    portal_token = PORTAL_SSO_SERIALIZER.dumps(token_payload)
+    query = urlencode({
+        "portal_token": portal_token,
+        "portal_user_email": current_user.get("email", "")
+    })
+
+    redirect_url = f"/sales/portal-auth?{query}"
+    logger.info(f"Redirecting {current_user.get('email')} to Sales Dashboard with portal token")
     return RedirectResponse(url=redirect_url, status_code=302)
 
 

@@ -94,6 +94,26 @@ except Exception as e:
     FAILURE_HANDLER_AVAILABLE = False
     logger.warning(f"Failure Handler not available: {e}")
 
+# Import Google Service for Email/Calendar
+try:
+    from gigi.google_service import google_service
+    GOOGLE_AVAILABLE = True
+    logger.info("✓ Gigi Google Service initialized")
+except Exception as e:
+    google_service = None
+    GOOGLE_AVAILABLE = False
+    logger.warning(f"Google Service not available: {e}")
+
+# Import Chief of Staff Tools (Concerts, Restaurants)
+try:
+    from gigi.chief_of_staff_tools import cos_tools
+    COS_AVAILABLE = True
+    logger.info("✓ Gigi Chief of Staff Tools initialized")
+except Exception as e:
+    cos_tools = None
+    COS_AVAILABLE = False
+    logger.warning(f"Chief of Staff Tools not available: {e}")
+
 # Import Gigi Shift Lock System for coordinator coordination
 try:
     from gigi.shift_lock import get_shift_lock_manager, ShiftLockConflictError as CoordinatorLockError
@@ -4808,6 +4828,52 @@ async def retell_function_call(function_name: str, request: Request):
         elif function_name == "cancel_shift_acceptance":
             result = await cancel_shift_acceptance(**args)
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
+            return JSONResponse(result)
+
+        elif function_name == "gmail_search":
+            if not GOOGLE_AVAILABLE:
+                return JSONResponse({"error": "Google service not available"})
+            query = args.get("query", "is:unread")
+            limit = args.get("limit", 5)
+            results = google_service.search_emails(query=query, max_results=limit)
+            return JSONResponse({"emails": results, "count": len(results)})
+
+        elif function_name == "get_calendar_events":
+            if not GOOGLE_AVAILABLE:
+                return JSONResponse({"error": "Google service not available"})
+            days = args.get("days", 1)
+            limit = args.get("limit", 10)
+            results = google_service.get_calendar_events(days=days, max_results=limit)
+            return JSONResponse({"events": results, "count": len(results)})
+
+        # === CHIEF OF STAFF TOOLS ===
+        elif function_name == "search_concerts":
+            if not COS_AVAILABLE: return JSONResponse({"error": "COS tools not available"})
+            query = args.get("query", "")
+            result = await cos_tools.search_concerts(query)
+            return JSONResponse(result)
+
+        elif function_name == "buy_tickets":
+            if not COS_AVAILABLE: return JSONResponse({"error": "COS tools not available"})
+            artist = args.get("artist")
+            venue = args.get("venue")
+            quantity = args.get("quantity", 2)
+            result = await cos_tools.buy_tickets_request(artist, venue, quantity)
+            return JSONResponse(result)
+
+        elif function_name == "book_table":
+            if not COS_AVAILABLE: return JSONResponse({"error": "COS tools not available"})
+            restaurant = args.get("restaurant")
+            party_size = args.get("party_size", 2)
+            date = args.get("date", "today")
+            time = args.get("time")
+            result = await cos_tools.book_table_request(restaurant, party_size, date, time)
+            return JSONResponse(result)
+
+        elif function_name == "confirm_chief_action":
+            if not COS_AVAILABLE: return JSONResponse({"error": "COS tools not available"})
+            session_id = args.get("session_id")
+            result = await cos_tools.confirm_purchase(session_id)
             return JSONResponse(result)
 
         elif function_name == "report_call_out":

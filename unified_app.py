@@ -13,6 +13,13 @@ Architecture:
 import os
 import sys
 
+# CRITICAL: Force local PostgreSQL for ALL database connections
+# This must happen BEFORE any module imports that read DATABASE_URL
+_LOCAL_DB = 'postgresql://careassist:careassist2026@localhost:5432/careassist'
+os.environ['DATABASE_URL'] = _LOCAL_DB
+os.environ['SALES_DATABASE_URL'] = _LOCAL_DB
+os.environ['RECRUITING_DATABASE_URL'] = _LOCAL_DB
+
 # CRITICAL: Set up Python path BEFORE any other imports
 # This ensures all submodules can find services, gigi, etc.
 _ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
