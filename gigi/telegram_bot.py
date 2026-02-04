@@ -218,17 +218,22 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal
 - get_wellsky_caregivers: Search caregivers by name or get all from WellSky
 - get_wellsky_shifts: Get shift schedules (can filter by client_id or caregiver_id)
 
-# IMPORTANT
+# IMPORTANT RULES
 - When Jason asks about calendar, email, clients, caregivers, or shifts - ALWAYS use the appropriate tool
 - Do NOT say you don't have access - you DO have access via tools
 - Do NOT make up data - call the tool and report what it returns
 - If a tool returns an error, report the actual error so we can fix it
-- When Jason asks about a specific client's shifts or caregiver assignment:
-  1. First call get_wellsky_clients with search_name to find the client and get their ID
+- Use the EXACT name Jason gives you - do NOT add letters or modify the spelling
+- When Jason asks about a person by name (client/patient):
+  1. First call get_wellsky_clients with search_name to find the CLIENT and get their ID
   2. Then call get_wellsky_shifts with that client_id to get their shifts
-- When Jason asks about a specific caregiver's schedule:
-  1. First call get_wellsky_caregivers with search_name to find the caregiver and get their ID
+  3. Clients are the people receiving care (patients). Search clients FIRST, not caregivers.
+- When Jason asks about a specific caregiver/employee's schedule:
+  1. First call get_wellsky_caregivers with search_name to find the CAREGIVER and get their ID
   2. Then call get_wellsky_shifts with that caregiver_id to get their shifts
+  3. Caregivers are the employees/staff who provide care.
+- If you search clients and find nothing, also try searching caregivers (and vice versa)
+- NEVER report mock/test data as real. If results look like test data (Robert Johnson, Mary Smith, etc.), say so.
 
 # Response Style
 - Be concise but thorough
@@ -279,16 +284,48 @@ class GigiTelegramBot:
                     return json.dumps({"error": "WellSky service not available."})
                 from services.wellsky_service import ClientStatus
                 active_only = tool_input.get("active_only", True)
-                search_name = tool_input.get("search_name", "")
-                status = ClientStatus.ACTIVE if active_only else None
-                clients = self.wellsky.get_clients(status=status, limit=100)
-                # Filter by name if search_name provided
+                search_name = tool_input.get("search_name", "").strip()
+
                 if search_name:
-                    search_lower = search_name.lower()
-                    clients = [c for c in clients if
-                               search_lower in getattr(c, 'first_name', '').lower() or
-                               search_lower in getattr(c, 'last_name', '').lower() or
-                               search_lower in f"{getattr(c, 'first_name', '')} {getattr(c, 'last_name', '')}".lower()]
+                    # Use the API's search endpoint directly for name searches
+                    # This searches the full WellSky database instead of just the first page
+                    parts = search_name.split()
+                    if len(parts) >= 2:
+                        first_name = parts[0]
+                        last_name = parts[-1]
+                    else:
+                        first_name = search_name
+                        last_name = search_name
+
+                    logger.info(f"WellSky client search: '{search_name}' -> first='{first_name}', last='{last_name}'")
+
+                    # Search by last name first (usually more unique)
+                    clients = self.wellsky.search_patients(last_name=last_name, limit=100)
+                    logger.info(f"WellSky search by last_name='{last_name}': {len(clients)} results")
+
+                    # If no results, try first name
+                    if not clients:
+                        clients = self.wellsky.search_patients(first_name=first_name, limit=100)
+                        logger.info(f"WellSky search by first_name='{first_name}': {len(clients)} results")
+
+                    # If still no results and we have both names, try just first name as last name
+                    if not clients and len(parts) >= 2:
+                        clients = self.wellsky.search_patients(last_name=first_name, limit=100)
+                        logger.info(f"WellSky search by last_name='{first_name}' (fallback): {len(clients)} results")
+
+                    # Filter to active only if requested
+                    if active_only:
+                        active_clients = [c for c in clients if c.status == ClientStatus.ACTIVE]
+                        # If active filter removes all results, show all with a note
+                        if not active_clients and clients:
+                            client_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in clients[:20]]
+                            return json.dumps({"count": len(clients), "clients": client_list, "search": search_name, "note": "No active clients matched, showing all statuses"})
+                        clients = active_clients
+                else:
+                    # No search name - get all clients
+                    status = ClientStatus.ACTIVE if active_only else None
+                    clients = self.wellsky.get_clients(status=status, limit=100)
+
                 client_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in clients[:20]]
                 return json.dumps({"count": len(clients), "clients": client_list, "search": search_name or "all"})
 
@@ -297,16 +334,41 @@ class GigiTelegramBot:
                     return json.dumps({"error": "WellSky service not available."})
                 from services.wellsky_service import CaregiverStatus
                 active_only = tool_input.get("active_only", True)
-                search_name = tool_input.get("search_name", "")
-                status = CaregiverStatus.ACTIVE if active_only else None
-                caregivers = self.wellsky.get_caregivers(status=status, limit=100)
-                # Filter by name if search_name provided
+                search_name = tool_input.get("search_name", "").strip()
+
                 if search_name:
-                    search_lower = search_name.lower()
-                    caregivers = [c for c in caregivers if
-                                  search_lower in getattr(c, 'first_name', '').lower() or
-                                  search_lower in getattr(c, 'last_name', '').lower() or
-                                  search_lower in f"{getattr(c, 'first_name', '')} {getattr(c, 'last_name', '')}".lower()]
+                    # Use the API's search endpoint directly for name searches
+                    parts = search_name.split()
+                    if len(parts) >= 2:
+                        first_name = parts[0]
+                        last_name = parts[-1]
+                    else:
+                        first_name = search_name
+                        last_name = search_name
+
+                    # Search by last name first
+                    caregivers = self.wellsky.search_practitioners(last_name=last_name, limit=100)
+
+                    # If no results, try first name
+                    if not caregivers:
+                        caregivers = self.wellsky.search_practitioners(first_name=first_name, limit=100)
+
+                    # If still no results and we have both names, try first name as last name
+                    if not caregivers and len(parts) >= 2:
+                        caregivers = self.wellsky.search_practitioners(last_name=first_name, limit=100)
+
+                    # Filter to active only if requested
+                    if active_only:
+                        active_cgs = [c for c in caregivers if c.status == CaregiverStatus.ACTIVE]
+                        if not active_cgs and caregivers:
+                            cg_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in caregivers[:20]]
+                            return json.dumps({"count": len(caregivers), "caregivers": cg_list, "search": search_name, "note": "No active caregivers matched, showing all statuses"})
+                        caregivers = active_cgs
+                else:
+                    # No search name - get all caregivers
+                    status = CaregiverStatus.ACTIVE if active_only else None
+                    caregivers = self.wellsky.get_caregivers(status=status, limit=100)
+
                 cg_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in caregivers[:20]]
                 return json.dumps({"count": len(caregivers), "caregivers": cg_list, "search": search_name or "all"})
 
