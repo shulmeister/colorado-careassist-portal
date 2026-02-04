@@ -26,9 +26,9 @@ CLIENT_ID = os.getenv("GOOGLE_WORK_CLIENT_ID", "516104802353-sgilgrdn7ohmfapbfuu
 CLIENT_SECRET = os.getenv("GOOGLE_WORK_CLIENT_SECRET", "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")
 
 SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/drive.readonly"
+    "https://www.googleapis.com/auth/gmail.modify",  # Read, send, delete emails
+    "https://www.googleapis.com/auth/calendar",  # Full calendar access
+    "https://www.googleapis.com/auth/drive",  # Full drive access
 ]
 
 def main():
@@ -40,14 +40,14 @@ def main():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "google-auth-oauthlib"])
         from google_auth_oauthlib.flow import InstalledAppFlow
 
-    # Create OAuth config
+    # Create OAuth config - use loopback for desktop apps
     client_config = {
         "installed": {
             "client_id": CLIENT_ID,
             "client_secret": CLIENT_SECRET,
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
             "token_uri": "https://oauth2.googleapis.com/token",
-            "redirect_uris": ["http://localhost:8080/", "urn:ietf:wg:oauth:2.0:oob"]
+            "redirect_uris": ["http://localhost", "http://127.0.0.1"]
         }
     }
 
@@ -65,12 +65,18 @@ def main():
     flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
 
     try:
-        # Try to run local server (works if you have a display)
-        credentials = flow.run_local_server(port=8080)
-    except Exception:
-        # Fallback to console-based flow
-        print("\nBrowser not available. Using manual flow...")
-        credentials = flow.run_console()
+        # Try to run local server on port 0 (auto-select available port)
+        # This works better with Google's loopback redirect
+        credentials = flow.run_local_server(port=0, open_browser=True)
+    except Exception as e:
+        print(f"\nLocal server failed: {e}")
+        print("Trying manual authorization flow...")
+        # Fallback to console-based flow (copy/paste URL)
+        auth_url, _ = flow.authorization_url(prompt='consent')
+        print(f"\nOpen this URL in your browser:\n{auth_url}\n")
+        code = input("Enter the authorization code: ")
+        flow.fetch_token(code=code)
+        credentials = flow.credentials
 
     # Print the refresh token
     print("\n" + "="*60)

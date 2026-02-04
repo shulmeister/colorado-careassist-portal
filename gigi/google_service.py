@@ -34,9 +34,9 @@ PERS_CLIENT_ID = os.getenv("GOOGLE_PERS_CLIENT_ID")
 PERS_CLIENT_SECRET = os.getenv("GOOGLE_PERS_CLIENT_SECRET")
 
 SCOPES = [
-    "https://www.googleapis.com/auth/gmail.readonly", 
-    "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/drive.readonly"
+    "https://www.googleapis.com/auth/gmail.modify",  # Read, send, delete emails
+    "https://www.googleapis.com/auth/calendar",  # Full calendar access
+    "https://www.googleapis.com/auth/drive",  # Full drive access
 ]
 
 class GoogleService:
