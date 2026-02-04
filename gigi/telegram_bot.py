@@ -2,13 +2,15 @@
 """
 Gigi Telegram Bot - Personal AI Assistant
 Handles Telegram messages for Jason via @Shulmeisterbot
+WITH ACTUAL TOOL CALLING - Calendar, Email, WellSky
 """
 
 import os
 import sys
 import logging
 import asyncio
-from datetime import datetime
+import json
+from datetime import datetime, date
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -51,6 +53,13 @@ except Exception as e:
     print(f"⚠️  WellSky service not available: {e}")
     WellSkyService = None
 
+# Import Google service for calendar/email
+try:
+    from gigi.google_service import GoogleService
+except Exception as e:
+    print(f"⚠️  Google service not available: {e}")
+    GoogleService = None
+
 # Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8508806105:AAExZ25ZN19X3xjBQAZ3Q9fHgAQmWWklX8U")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -63,15 +72,101 @@ logging.basicConfig(
 )
 logger = logging.getLogger("gigi_telegram")
 
-# Read Clawd knowledge base files
-CLAWD_PATH = "/Users/shulmeister/mac-mini-apps/clawd"
+# Tool definitions for Claude
+TOOLS = [
+    {
+        "name": "get_calendar_events",
+        "description": "Get upcoming calendar events from Jason's Google Calendar. Use this when Jason asks about his schedule, meetings, or what's coming up.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "description": "Number of days to look ahead (default 1, max 7)",
+                    "default": 1
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "search_emails",
+        "description": "Search Jason's Gmail for emails. Use this when Jason asks about emails, messages, or wants to find something in his inbox.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Gmail search query (e.g., 'is:unread', 'from:someone@example.com', 'subject:invoice')",
+                    "default": "is:unread"
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": "Maximum number of emails to return (default 5)",
+                    "default": 5
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_wellsky_clients",
+        "description": "Get list of clients from WellSky. Use when Jason asks about clients, patients, or who we're serving.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "active_only": {
+                    "type": "boolean",
+                    "description": "Only return active clients (default true)",
+                    "default": True
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_wellsky_caregivers",
+        "description": "Get list of caregivers from WellSky. Use when Jason asks about caregivers, staff, or employees.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "active_only": {
+                    "type": "boolean",
+                    "description": "Only return active caregivers (default true)",
+                    "default": True
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_wellsky_shifts",
+        "description": "Get shifts from WellSky. Use when Jason asks about shifts, schedules, or appointments.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "description": "Number of days to look ahead (default 7)",
+                    "default": 7
+                },
+                "open_only": {
+                    "type": "boolean",
+                    "description": "Only return open/unfilled shifts (default false)",
+                    "default": False
+                }
+            },
+            "required": []
+        }
+    }
+]
+
 SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal assistant.
 
 # Core Identity
 - Named after Jason's youngest daughter
 - Direct, warm, proactive personality
-- Elite team coordinator for Jason and Colorado Care Assist
-- Access to all business systems (WellSky, RingCentral, QuickBooks, etc.)
+- You have REAL access to Jason's systems via tools - USE THEM
 
 # Jason's Profile
 - Owner of Colorado Care Assist (home care agency)
@@ -82,35 +177,105 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal
 - Three daughters: Brooke, Avery, Gigi
 - Runs multiple businesses from Mac Mini (no cloud hosting)
 
-# Your Capabilities
-- Manage Jason's calendar and tasks
-- Handle business operations (caregivers, clients, scheduling)
-- Coordinate with Elite Teams (@tech-team, @marketing-team, @finance-team, @ops-team)
-- Access WellSky for caregiver/client data
-- Monitor RingCentral for calls/SMS
-- Provide weather, concert info, restaurant recommendations
-- Remember important details and follow up proactively
+# Your REAL Capabilities (you have tools for these - USE THEM)
+- get_calendar_events: Check Jason's Google Calendar
+- search_emails: Search Jason's Gmail
+- get_wellsky_clients: Get client list from WellSky
+- get_wellsky_caregivers: Get caregiver list from WellSky
+- get_wellsky_shifts: Get shift schedules from WellSky
+
+# IMPORTANT
+- When Jason asks about calendar, email, clients, caregivers, or shifts - ALWAYS use the appropriate tool
+- Do NOT say you don't have access - you DO have access via tools
+- Do NOT make up data - call the tool and report what it returns
+- If a tool returns an error, report the actual error so we can fix it
 
 # Response Style
 - Be concise but thorough
-- Use emojis sparingly (only when they add clarity)
+- Use emojis sparingly
 - Be proactive - anticipate needs
-- Always professional but warm
-- If you don't know something, say so and offer to find out
+- If a tool fails, say what failed and why
 
 # Current Date
 Today is {datetime.now().strftime("%A, %B %d, %Y")}
-
-# Important Context
-Jason hates cloud services (no more Mac Mini or Mac Mini (Local)). Everything runs on his Mac Mini now.
-He's testing you right now to make sure you work perfectly from the Mac Mini.
 """
 
 class GigiTelegramBot:
     def __init__(self):
         self.claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
         self.wellsky = WellSkyService() if WellSkyService else None
+        self.google = GoogleService() if GoogleService else None
         self.conversation_history = {}
+
+        # Log service status on startup
+        logger.info(f"   Claude API: {'✓ Ready' if self.claude else '✗ Missing ANTHROPIC_API_KEY'}")
+        logger.info(f"   WellSky: {'✓ Ready' if self.wellsky else '✗ Not available'}")
+        logger.info(f"   Google: {'✓ Ready' if self.google else '✗ Not available'}")
+
+    def execute_tool(self, tool_name: str, tool_input: dict) -> str:
+        """Execute a tool and return the result as a string"""
+        try:
+            if tool_name == "get_calendar_events":
+                if not self.google:
+                    return json.dumps({"error": "Google service not configured. Missing GOOGLE_WORK_* environment variables."})
+                days = tool_input.get("days", 1)
+                events = self.google.get_calendar_events(days=min(days, 7))
+                if not events:
+                    return json.dumps({"message": "No upcoming events found", "events": []})
+                return json.dumps({"events": events})
+
+            elif tool_name == "search_emails":
+                if not self.google:
+                    return json.dumps({"error": "Google service not configured. Missing GOOGLE_WORK_* environment variables."})
+                query = tool_input.get("query", "is:unread")
+                max_results = tool_input.get("max_results", 5)
+                emails = self.google.search_emails(query=query, max_results=max_results)
+                if not emails:
+                    return json.dumps({"message": f"No emails found for query: {query}", "emails": []})
+                return json.dumps({"emails": emails})
+
+            elif tool_name == "get_wellsky_clients":
+                if not self.wellsky:
+                    return json.dumps({"error": "WellSky service not available."})
+                # Import enum here to avoid circular imports
+                from services.wellsky_service import ClientStatus
+                active_only = tool_input.get("active_only", True)
+                status = ClientStatus.ACTIVE if active_only else None
+                clients = self.wellsky.get_clients(status=status, limit=50)
+                client_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in clients[:20]]
+                return json.dumps({"count": len(clients), "clients": client_list})
+
+            elif tool_name == "get_wellsky_caregivers":
+                if not self.wellsky:
+                    return json.dumps({"error": "WellSky service not available."})
+                from services.wellsky_service import CaregiverStatus
+                active_only = tool_input.get("active_only", True)
+                status = CaregiverStatus.ACTIVE if active_only else None
+                caregivers = self.wellsky.get_caregivers(status=status, limit=50)
+                cg_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in caregivers[:20]]
+                return json.dumps({"count": len(caregivers), "caregivers": cg_list})
+
+            elif tool_name == "get_wellsky_shifts":
+                if not self.wellsky:
+                    return json.dumps({"error": "WellSky service not available."})
+                from datetime import timedelta
+                days = tool_input.get("days", 7)
+                open_only = tool_input.get("open_only", False)
+                date_from = date.today()
+                date_to = date.today() + timedelta(days=days)
+                if open_only:
+                    shifts = self.wellsky.get_open_shifts(date_from=date_from, date_to=date_to)
+                else:
+                    shifts = self.wellsky.get_shifts(date_from=date_from, date_to=date_to, limit=50)
+                shift_list = [s.to_dict() if hasattr(s, 'to_dict') else str(s) for s in shifts[:30]]
+                return json.dumps({"count": len(shifts), "shifts": shift_list})
+
+            else:
+                return json.dumps({"error": f"Unknown tool: {tool_name}"})
+
+        except Exception as e:
+            logger.error(f"Tool execution error ({tool_name}): {e}")
+            return json.dumps({"error": f"Tool {tool_name} failed: {str(e)}"})
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
@@ -143,7 +308,7 @@ class GigiTelegramBot:
         )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle incoming messages"""
+        """Handle incoming messages with tool calling support"""
         user_id = update.effective_user.id
         message_text = update.message.text
 
@@ -164,40 +329,112 @@ class GigiTelegramBot:
             "content": message_text
         })
 
-        # Keep only last 10 messages (5 exchanges)
-        if len(self.conversation_history[user_id]) > 10:
-            self.conversation_history[user_id] = self.conversation_history[user_id][-10:]
+        # Keep only last 20 messages (10 exchanges) - need more for tool calling
+        if len(self.conversation_history[user_id]) > 20:
+            self.conversation_history[user_id] = self.conversation_history[user_id][-20:]
 
         # Send typing indicator
         await update.message.chat.send_action("typing")
 
-        # Get response from Claude
+        # Get response from Claude WITH TOOLS
         if self.claude:
             try:
+                # Call Claude with tools
                 response = self.claude.messages.create(
                     model="claude-sonnet-4-20250514",
-                    max_tokens=2000,
+                    max_tokens=4096,
                     system=SYSTEM_PROMPT,
+                    tools=TOOLS,
                     messages=self.conversation_history[user_id]
                 )
 
-                assistant_message = response.content[0].text
+                # Process response - may need multiple rounds for tool calls
+                max_tool_rounds = 5  # Prevent infinite loops
+                tool_round = 0
 
-                # Add assistant response to history
+                while response.stop_reason == "tool_use" and tool_round < max_tool_rounds:
+                    tool_round += 1
+                    logger.info(f"🔧 Tool call round {tool_round}")
+
+                    # Extract tool uses from response
+                    tool_results = []
+                    assistant_content = []
+
+                    for block in response.content:
+                        if block.type == "tool_use":
+                            tool_name = block.name
+                            tool_input = block.input
+                            tool_use_id = block.id
+
+                            logger.info(f"   Executing tool: {tool_name} with input: {tool_input}")
+
+                            # Execute the tool
+                            result = self.execute_tool(tool_name, tool_input)
+                            logger.info(f"   Tool result: {result[:200]}...")
+
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": tool_use_id,
+                                "content": result
+                            })
+                            assistant_content.append(block)
+                        elif block.type == "text":
+                            assistant_content.append(block)
+
+                    # Add assistant message with tool use to history
+                    self.conversation_history[user_id].append({
+                        "role": "assistant",
+                        "content": [{"type": b.type, "id": getattr(b, 'id', None), "name": getattr(b, 'name', None), "input": getattr(b, 'input', None), "text": getattr(b, 'text', None)} if b.type == "tool_use" else {"type": "text", "text": b.text} for b in assistant_content]
+                    })
+
+                    # Add tool results to history
+                    self.conversation_history[user_id].append({
+                        "role": "user",
+                        "content": tool_results
+                    })
+
+                    # Keep typing indicator going
+                    await update.message.chat.send_action("typing")
+
+                    # Get next response from Claude
+                    response = self.claude.messages.create(
+                        model="claude-sonnet-4-20250514",
+                        max_tokens=4096,
+                        system=SYSTEM_PROMPT,
+                        tools=TOOLS,
+                        messages=self.conversation_history[user_id]
+                    )
+
+                # Extract final text response
+                final_text = ""
+                for block in response.content:
+                    if block.type == "text":
+                        final_text += block.text
+
+                if not final_text:
+                    final_text = "I processed your request but have no text response. Please try again."
+
+                # Add final assistant response to history
                 self.conversation_history[user_id].append({
                     "role": "assistant",
-                    "content": assistant_message
+                    "content": final_text
                 })
 
-                # Send response
-                await update.message.reply_text(assistant_message)
-                logger.info(f"✅ Sent response to Jason")
+                # Send response (split if too long for Telegram)
+                if len(final_text) > 4000:
+                    # Split into chunks
+                    for i in range(0, len(final_text), 4000):
+                        await update.message.reply_text(final_text[i:i+4000])
+                else:
+                    await update.message.reply_text(final_text)
+
+                logger.info(f"✅ Sent response to Jason (tool rounds: {tool_round})")
 
             except Exception as e:
-                logger.error(f"Claude API error: {e}")
+                logger.error(f"Claude API error: {e}", exc_info=True)
                 await update.message.reply_text(
-                    "Sorry, I'm having trouble connecting to my AI brain right now. "
-                    "Let me get back to you in a moment."
+                    f"Error: {str(e)}\n\nI encountered an issue processing your request. "
+                    "Check the logs for details."
                 )
         else:
             await update.message.reply_text(
