@@ -129,10 +129,14 @@ TOOLS = [
     },
     {
         "name": "get_wellsky_clients",
-        "description": "Get list of clients from WellSky. Use when Jason asks about clients, patients, or who we're serving.",
+        "description": "Search for clients in WellSky by name, or get all clients. Use when Jason asks about a specific client or wants to see the client list.",
         "input_schema": {
             "type": "object",
             "properties": {
+                "search_name": {
+                    "type": "string",
+                    "description": "Search for a client by name (first, last, or full name). Leave empty to get all clients."
+                },
                 "active_only": {
                     "type": "boolean",
                     "description": "Only return active clients (default true)",
@@ -144,10 +148,14 @@ TOOLS = [
     },
     {
         "name": "get_wellsky_caregivers",
-        "description": "Get list of caregivers from WellSky. Use when Jason asks about caregivers, staff, or employees.",
+        "description": "Search for caregivers in WellSky by name, or get all caregivers. Use when Jason asks about a specific caregiver or the staff list.",
         "input_schema": {
             "type": "object",
             "properties": {
+                "search_name": {
+                    "type": "string",
+                    "description": "Search for a caregiver by name (first, last, or full name). Leave empty to get all caregivers."
+                },
                 "active_only": {
                     "type": "boolean",
                     "description": "Only return active caregivers (default true)",
@@ -159,13 +167,21 @@ TOOLS = [
     },
     {
         "name": "get_wellsky_shifts",
-        "description": "Get shifts from WellSky. Use when Jason asks about shifts, schedules, or appointments.",
+        "description": "Get shifts from WellSky. Can filter by client or caregiver. IMPORTANT: When asking about a specific person's shifts, first use get_wellsky_clients or get_wellsky_caregivers to find their ID, then pass it here.",
         "input_schema": {
             "type": "object",
             "properties": {
+                "client_id": {
+                    "type": "string",
+                    "description": "WellSky client ID to get shifts for a specific client"
+                },
+                "caregiver_id": {
+                    "type": "string",
+                    "description": "WellSky caregiver ID to get shifts for a specific caregiver"
+                },
                 "days": {
                     "type": "integer",
-                    "description": "Number of days to look ahead (default 7)",
+                    "description": "Number of days to look ahead (default 7, max 7)",
                     "default": 7
                 },
                 "open_only": {
@@ -198,15 +214,21 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal
 # Your REAL Capabilities (you have tools for these - USE THEM)
 - get_calendar_events: Check Jason's Google Calendar
 - search_emails: Search Jason's Gmail
-- get_wellsky_clients: Get client list from WellSky
-- get_wellsky_caregivers: Get caregiver list from WellSky
-- get_wellsky_shifts: Get shift schedules from WellSky
+- get_wellsky_clients: Search clients by name or get all clients from WellSky
+- get_wellsky_caregivers: Search caregivers by name or get all from WellSky
+- get_wellsky_shifts: Get shift schedules (can filter by client_id or caregiver_id)
 
 # IMPORTANT
 - When Jason asks about calendar, email, clients, caregivers, or shifts - ALWAYS use the appropriate tool
 - Do NOT say you don't have access - you DO have access via tools
 - Do NOT make up data - call the tool and report what it returns
 - If a tool returns an error, report the actual error so we can fix it
+- When Jason asks about a specific client's shifts or caregiver assignment:
+  1. First call get_wellsky_clients with search_name to find the client and get their ID
+  2. Then call get_wellsky_shifts with that client_id to get their shifts
+- When Jason asks about a specific caregiver's schedule:
+  1. First call get_wellsky_caregivers with search_name to find the caregiver and get their ID
+  2. Then call get_wellsky_shifts with that caregiver_id to get their shifts
 
 # Response Style
 - Be concise but thorough
@@ -255,36 +277,57 @@ class GigiTelegramBot:
             elif tool_name == "get_wellsky_clients":
                 if not self.wellsky:
                     return json.dumps({"error": "WellSky service not available."})
-                # Import enum here to avoid circular imports
                 from services.wellsky_service import ClientStatus
                 active_only = tool_input.get("active_only", True)
+                search_name = tool_input.get("search_name", "")
                 status = ClientStatus.ACTIVE if active_only else None
-                clients = self.wellsky.get_clients(status=status, limit=50)
+                clients = self.wellsky.get_clients(status=status, limit=100)
+                # Filter by name if search_name provided
+                if search_name:
+                    search_lower = search_name.lower()
+                    clients = [c for c in clients if
+                               search_lower in getattr(c, 'first_name', '').lower() or
+                               search_lower in getattr(c, 'last_name', '').lower() or
+                               search_lower in f"{getattr(c, 'first_name', '')} {getattr(c, 'last_name', '')}".lower()]
                 client_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in clients[:20]]
-                return json.dumps({"count": len(clients), "clients": client_list})
+                return json.dumps({"count": len(clients), "clients": client_list, "search": search_name or "all"})
 
             elif tool_name == "get_wellsky_caregivers":
                 if not self.wellsky:
                     return json.dumps({"error": "WellSky service not available."})
                 from services.wellsky_service import CaregiverStatus
                 active_only = tool_input.get("active_only", True)
+                search_name = tool_input.get("search_name", "")
                 status = CaregiverStatus.ACTIVE if active_only else None
-                caregivers = self.wellsky.get_caregivers(status=status, limit=50)
+                caregivers = self.wellsky.get_caregivers(status=status, limit=100)
+                # Filter by name if search_name provided
+                if search_name:
+                    search_lower = search_name.lower()
+                    caregivers = [c for c in caregivers if
+                                  search_lower in getattr(c, 'first_name', '').lower() or
+                                  search_lower in getattr(c, 'last_name', '').lower() or
+                                  search_lower in f"{getattr(c, 'first_name', '')} {getattr(c, 'last_name', '')}".lower()]
                 cg_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in caregivers[:20]]
-                return json.dumps({"count": len(caregivers), "caregivers": cg_list})
+                return json.dumps({"count": len(caregivers), "caregivers": cg_list, "search": search_name or "all"})
 
             elif tool_name == "get_wellsky_shifts":
                 if not self.wellsky:
                     return json.dumps({"error": "WellSky service not available."})
                 from datetime import timedelta
-                days = tool_input.get("days", 7)
+                days = min(tool_input.get("days", 7), 7)
                 open_only = tool_input.get("open_only", False)
+                client_id = tool_input.get("client_id")
+                caregiver_id = tool_input.get("caregiver_id")
                 date_from = date.today()
                 date_to = date.today() + timedelta(days=days)
                 if open_only:
                     shifts = self.wellsky.get_open_shifts(date_from=date_from, date_to=date_to)
                 else:
-                    shifts = self.wellsky.get_shifts(date_from=date_from, date_to=date_to, limit=50)
+                    shifts = self.wellsky.get_shifts(
+                        date_from=date_from, date_to=date_to,
+                        client_id=client_id, caregiver_id=caregiver_id,
+                        limit=50
+                    )
                 shift_list = [s.to_dict() if hasattr(s, 'to_dict') else str(s) for s in shifts[:30]]
                 return json.dumps({"count": len(shifts), "shifts": shift_list})
 
