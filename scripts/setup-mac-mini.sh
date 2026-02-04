@@ -101,9 +101,11 @@ if [ -f "$HOME/.gigi-env" ]; then
     log_success "Environment file secured (chmod 600)"
 fi
 
-# Check for exposed credentials in repo
-if grep -r "GOCSPX-\|sk-ant-\|sk-\|api_key.*=" "$REPO_DIR"/*.py 2>/dev/null | grep -v ".pyc" | grep -v "__pycache__"; then
+# Check for exposed credentials in repo (exclude os.getenv patterns which are safe)
+if grep -rE "(GOCSPX-[a-zA-Z0-9]+|sk-ant-[a-zA-Z0-9]+|sk-[a-zA-Z0-9]{30,}|['\"][A-Za-z0-9_-]{20,}['\"].*SECRET|refresh_token\s*=\s*['\"][^o])" "$REPO_DIR"/*.py "$REPO_DIR"/**/*.py 2>/dev/null | grep -v ".pyc" | grep -v "__pycache__" | grep -v "os.getenv" | grep -v "os.environ" | head -5; then
     log_warning "Found potential hardcoded credentials in Python files!"
+else
+    log_success "No hardcoded credentials found in Python files"
 fi
 
 # Ensure SSH key permissions
