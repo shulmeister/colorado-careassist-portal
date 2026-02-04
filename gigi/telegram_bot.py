@@ -11,6 +11,24 @@ import logging
 import asyncio
 import json
 from datetime import datetime, date
+from pathlib import Path
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    # Try multiple locations for .env
+    env_paths = [
+        Path(__file__).parent.parent / '.env',  # repo root
+        Path.home() / '.gigi-env',  # Mac Mini location
+        Path('/Users/shulmeister/.gigi-env'),  # Explicit Mac Mini path
+    ]
+    for env_path in env_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            print(f"✓ Loaded environment from {env_path}")
+            break
+except ImportError:
+    print("⚠️  python-dotenv not installed, using environment variables only")
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

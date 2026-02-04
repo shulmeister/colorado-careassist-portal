@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""
+Generate Google OAuth Refresh Token for Gigi
+
+Run this script ONCE to get a refresh token for Gmail/Calendar access.
+The refresh token will be printed - add it to your .env file as:
+GOOGLE_WORK_REFRESH_TOKEN=<the token>
+
+Usage:
+    python scripts/get_google_refresh_token.py
+"""
+
+import os
+import sys
+from pathlib import Path
+
+# Try to load dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent.parent / '.env')
+except ImportError:
+    pass
+
+# Google OAuth settings
+CLIENT_ID = os.getenv("GOOGLE_WORK_CLIENT_ID", "516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com")
+CLIENT_SECRET = os.getenv("GOOGLE_WORK_CLIENT_SECRET", "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")
+
+SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/drive.readonly"
+]
+
+def main():
+    try:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+    except ImportError:
+        print("Installing google-auth-oauthlib...")
+        import subprocess
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "google-auth-oauthlib"])
+        from google_auth_oauthlib.flow import InstalledAppFlow
+
+    # Create OAuth config
+    client_config = {
+        "installed": {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "redirect_uris": ["http://localhost:8080/", "urn:ietf:wg:oauth:2.0:oob"]
+        }
+    }
+
+    print("\n" + "="*60)
+    print("GOOGLE OAUTH SETUP FOR GIGI")
+    print("="*60)
+    print("\nThis will open a browser window to authorize Gigi to access:")
+    print("  - Gmail (read-only)")
+    print("  - Calendar (read-only)")
+    print("  - Drive (read-only)")
+    print("\nLog in with: jason@coloradocareassist.com")
+    print("="*60 + "\n")
+
+    # Run OAuth flow
+    flow = InstalledAppFlow.from_client_config(client_config, SCOPES)
+
+    try:
+        # Try to run local server (works if you have a display)
+        credentials = flow.run_local_server(port=8080)
+    except Exception:
+        # Fallback to console-based flow
+        print("\nBrowser not available. Using manual flow...")
+        credentials = flow.run_console()
+
+    # Print the refresh token
+    print("\n" + "="*60)
+    print("SUCCESS! Here's your refresh token:")
+    print("="*60)
+    print(f"\nGOOGLE_WORK_REFRESH_TOKEN={credentials.refresh_token}")
+    print("\n" + "="*60)
+    print("\nAdd this to your .env file or ~/.gigi-env on Mac Mini")
+    print("="*60 + "\n")
+
+    # Try to update .env file
+    env_file = Path(__file__).parent.parent / '.env'
+    if env_file.exists():
+        content = env_file.read_text()
+        if "GOOGLE_WORK_REFRESH_TOKEN=" in content:
+            # Update existing
+            lines = content.split('\n')
+            new_lines = []
+            for line in lines:
+                if line.startswith("GOOGLE_WORK_REFRESH_TOKEN=") or line.startswith("# GOOGLE_WORK_REFRESH_TOKEN="):
+                    new_lines.append(f"GOOGLE_WORK_REFRESH_TOKEN={credentials.refresh_token}")
+                else:
+                    new_lines.append(line)
+            env_file.write_text('\n'.join(new_lines))
+            print(f"Updated {env_file} with refresh token")
+        else:
+            # Append
+            with open(env_file, 'a') as f:
+                f.write(f"\nGOOGLE_WORK_REFRESH_TOKEN={credentials.refresh_token}\n")
+            print(f"Added refresh token to {env_file}")
+
+if __name__ == "__main__":
+    main()

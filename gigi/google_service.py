@@ -2,16 +2,33 @@ import os
 import json
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    env_paths = [
+        Path(__file__).parent.parent / '.env',
+        Path.home() / '.gigi-env',
+        Path('/Users/shulmeister/.gigi-env'),
+    ]
+    for env_path in env_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            break
+except ImportError:
+    pass
+
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 
 logger = logging.getLogger(__name__)
 
-# Load from environment (security first)
-WORK_CLIENT_ID = os.getenv("GOOGLE_WORK_CLIENT_ID")
-WORK_CLIENT_SECRET = os.getenv("GOOGLE_WORK_CLIENT_SECRET")
-WORK_REFRESH_TOKEN = os.getenv("GOOGLE_WORK_REFRESH_TOKEN")
+# Load from environment with fallback defaults
+WORK_CLIENT_ID = os.getenv("GOOGLE_WORK_CLIENT_ID", "516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com")
+WORK_CLIENT_SECRET = os.getenv("GOOGLE_WORK_CLIENT_SECRET", "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")
+WORK_REFRESH_TOKEN = os.getenv("GOOGLE_WORK_REFRESH_TOKEN")  # This MUST be set - requires OAuth flow
 
 PERS_CLIENT_ID = os.getenv("GOOGLE_PERS_CLIENT_ID")
 PERS_CLIENT_SECRET = os.getenv("GOOGLE_PERS_CLIENT_SECRET")
