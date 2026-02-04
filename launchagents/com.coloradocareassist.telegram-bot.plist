@@ -7,7 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/opt/homebrew/bin/python3</string>
+        <string>/usr/bin/python3</string>
         <string>/Users/shulmeister/mac-mini-apps/careassist-unified/gigi/telegram_bot.py</string>
     </array>
 
@@ -17,7 +17,7 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>/usr/bin:/usr/local/bin:/opt/homebrew/bin:/bin</string>
         <key>HOME</key>
         <string>/Users/shulmeister</string>
         <key>PYTHONUNBUFFERED</key>
