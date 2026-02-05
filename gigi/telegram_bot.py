@@ -211,24 +211,26 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal
 - Three daughters: Brooke, Avery, Gigi
 - Runs multiple businesses from Mac Mini (no cloud hosting)
 
-# Your REAL Capabilities (you have tools for these - USE THEM)
+# Your REAL Capabilities (you have tools for these - ALWAYS USE THEM)
 - get_calendar_events: Check Jason's Google Calendar
-- search_emails: Search Jason's Gmail
-- get_wellsky_clients: Search clients by name or get all clients from WellSky
-- get_wellsky_caregivers: Search caregivers by name or get all from WellSky
-- get_wellsky_shifts: Get shift schedules (can filter by client_id or caregiver_id)
+- search_emails: Search Jason's Gmail (it works - CALL IT, do not say it's unavailable)
+- get_wellsky_clients: Search CCA's 70 active clients by name from local database cache
+- get_wellsky_caregivers: Search CCA's 55 active caregivers by name from local database cache
+- get_wellsky_shifts: Get shift schedules from WellSky (filter by client_id or caregiver_id)
 
-# IMPORTANT
-- When Jason asks about calendar, email, clients, caregivers, or shifts - ALWAYS use the appropriate tool
-- Do NOT say you don't have access - you DO have access via tools
-- Do NOT make up data - call the tool and report what it returns
-- If a tool returns an error, report the actual error so we can fix it
-- When Jason asks about a specific client's shifts or caregiver assignment:
-  1. First call get_wellsky_clients with search_name to find the client and get their ID
-  2. Then call get_wellsky_shifts with that client_id to get their shifts
-- When Jason asks about a specific caregiver's schedule:
-  1. First call get_wellsky_caregivers with search_name to find the caregiver and get their ID
-  2. Then call get_wellsky_shifts with that caregiver_id to get their shifts
+# CRITICAL RULES — READ CAREFULLY
+- NEVER say you don't have access to email, calendar, WellSky, or client data. You DO. Use the tools.
+- NEVER mention "CLI", "gog", "command line", or "configuration needed" for email. Just call search_emails.
+- NEVER say a client or caregiver doesn't exist without calling the tool first. The database has ALL clients.
+- NEVER make up data — call the tool and report exactly what it returns.
+- If a tool returns an error, report the ACTUAL error message so we can fix it.
+- When Jason asks about a client (shifts, coverage, who is assigned):
+  1. FIRST call get_wellsky_clients with search_name to find the client's ID
+  2. THEN call get_wellsky_shifts with that client_id to get their schedule
+- When Jason asks about a caregiver's schedule:
+  1. FIRST call get_wellsky_caregivers with search_name to find their ID
+  2. THEN call get_wellsky_shifts with that caregiver_id
+- For daily briefings or email summaries: call search_emails with query "is:unread" — it WILL work.
 
 # Response Style
 - Be concise but thorough
@@ -275,40 +277,76 @@ class GigiTelegramBot:
                 return json.dumps({"emails": emails})
 
             elif tool_name == "get_wellsky_clients":
-                if not self.wellsky:
-                    return json.dumps({"error": "WellSky service not available."})
-                from services.wellsky_service import ClientStatus
-                active_only = tool_input.get("active_only", True)
+                # Use cached database for reliable client lookup (synced daily from WellSky)
+                import psycopg2
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
-                status = ClientStatus.ACTIVE if active_only else None
-                clients = self.wellsky.get_clients(status=status, limit=100)
-                # Filter by name if search_name provided
-                if search_name:
-                    search_lower = search_name.lower()
-                    clients = [c for c in clients if
-                               search_lower in getattr(c, 'first_name', '').lower() or
-                               search_lower in getattr(c, 'last_name', '').lower() or
-                               search_lower in f"{getattr(c, 'first_name', '')} {getattr(c, 'last_name', '')}".lower()]
-                client_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in clients[:20]]
-                return json.dumps({"count": len(clients), "clients": client_list, "search": search_name or "all"})
+                active_only = tool_input.get("active_only", True)
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    if search_name:
+                        search_lower = f"%{search_name.lower()}%"
+                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email
+                                 FROM cached_patients WHERE (lower(full_name) LIKE %s
+                                 OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
+                        params = [search_lower, search_lower, search_lower]
+                        if active_only:
+                            sql += " AND is_active = true"
+                        sql += " ORDER BY full_name LIMIT 20"
+                        cur.execute(sql, params)
+                    else:
+                        sql = "SELECT id, first_name, last_name, full_name, phone, home_phone, email FROM cached_patients"
+                        if active_only:
+                            sql += " WHERE is_active = true"
+                        sql += " ORDER BY full_name LIMIT 100"
+                        cur.execute(sql)
+                    rows = cur.fetchall()
+                    client_list = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2],
+                                    "name": r[3], "phone": r[4] or r[5] or "", "email": r[6] or ""} for r in rows]
+                    conn.close()
+                    return json.dumps({"count": len(client_list), "clients": client_list, "search": search_name or "all"})
+                except Exception as e:
+                    logger.error(f"Client cache lookup failed: {e}")
+                    return json.dumps({"error": f"Client lookup failed: {str(e)}"})
 
             elif tool_name == "get_wellsky_caregivers":
-                if not self.wellsky:
-                    return json.dumps({"error": "WellSky service not available."})
-                from services.wellsky_service import CaregiverStatus
-                active_only = tool_input.get("active_only", True)
+                # Use cached database for reliable caregiver lookup (synced daily from WellSky)
+                import psycopg2
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
-                status = CaregiverStatus.ACTIVE if active_only else None
-                caregivers = self.wellsky.get_caregivers(status=status, limit=100)
-                # Filter by name if search_name provided
-                if search_name:
-                    search_lower = search_name.lower()
-                    caregivers = [c for c in caregivers if
-                                  search_lower in getattr(c, 'first_name', '').lower() or
-                                  search_lower in getattr(c, 'last_name', '').lower() or
-                                  search_lower in f"{getattr(c, 'first_name', '')} {getattr(c, 'last_name', '')}".lower()]
-                cg_list = [c.to_dict() if hasattr(c, 'to_dict') else str(c) for c in caregivers[:20]]
-                return json.dumps({"count": len(caregivers), "caregivers": cg_list, "search": search_name or "all"})
+                active_only = tool_input.get("active_only", True)
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    if search_name:
+                        search_lower = f"%{search_name.lower()}%"
+                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email,
+                                        preferred_language
+                                 FROM cached_practitioners WHERE (lower(full_name) LIKE %s
+                                 OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
+                        params = [search_lower, search_lower, search_lower]
+                        if active_only:
+                            sql += " AND is_active = true"
+                        sql += " ORDER BY full_name LIMIT 20"
+                        cur.execute(sql, params)
+                    else:
+                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email,
+                                        preferred_language
+                                 FROM cached_practitioners"""
+                        if active_only:
+                            sql += " WHERE is_active = true"
+                        sql += " ORDER BY full_name LIMIT 100"
+                        cur.execute(sql)
+                    rows = cur.fetchall()
+                    cg_list = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2],
+                                "name": r[3], "phone": r[4] or r[5] or "", "email": r[6] or "",
+                                "preferred_language": r[7] or "English"} for r in rows]
+                    conn.close()
+                    return json.dumps({"count": len(cg_list), "caregivers": cg_list, "search": search_name or "all"})
+                except Exception as e:
+                    logger.error(f"Caregiver cache lookup failed: {e}")
+                    return json.dumps({"error": f"Caregiver lookup failed: {str(e)}"})
 
             elif tool_name == "get_wellsky_shifts":
                 if not self.wellsky:

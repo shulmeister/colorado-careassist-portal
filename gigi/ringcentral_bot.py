@@ -1165,30 +1165,54 @@ class GigiRingCentralBot:
                 return json.dumps({"count": len(shifts), "shifts": shift_list})
 
             elif tool_name == "get_wellsky_clients":
-                from services.wellsky_service import ClientStatus
+                # Use cached database for reliable client lookup (synced daily from WellSky)
+                import psycopg2
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
-                clients = self.wellsky.get_clients(status=ClientStatus.ACTIVE, limit=100)
-                if search_name:
-                    search_lower = search_name.lower()
-                    clients = [c for c in clients if
-                               search_lower in c.first_name.lower() or
-                               search_lower in c.last_name.lower() or
-                               search_lower in c.full_name.lower()]
-                client_list = [{"id": c.id, "name": c.full_name} for c in clients[:10]]
-                return json.dumps({"count": len(clients), "clients": client_list})
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    if search_name:
+                        search_lower = f"%{search_name.lower()}%"
+                        cur.execute("""SELECT id, full_name, phone FROM cached_patients
+                                      WHERE is_active = true AND (lower(full_name) LIKE %s
+                                      OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
+                                      ORDER BY full_name LIMIT 10""",
+                                   (search_lower, search_lower, search_lower))
+                    else:
+                        cur.execute("SELECT id, full_name, phone FROM cached_patients WHERE is_active = true ORDER BY full_name LIMIT 100")
+                    rows = cur.fetchall()
+                    client_list = [{"id": str(r[0]), "name": r[1], "phone": r[2] or ""} for r in rows]
+                    conn.close()
+                    return json.dumps({"count": len(client_list), "clients": client_list})
+                except Exception as e:
+                    logger.error(f"Client cache lookup failed: {e}")
+                    return json.dumps({"error": f"Client lookup failed: {str(e)}"})
 
             elif tool_name == "get_wellsky_caregivers":
-                from services.wellsky_service import CaregiverStatus
+                # Use cached database for reliable caregiver lookup (synced daily from WellSky)
+                import psycopg2
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
-                caregivers = self.wellsky.get_caregivers(status=CaregiverStatus.ACTIVE, limit=100)
-                if search_name:
-                    search_lower = search_name.lower()
-                    caregivers = [c for c in caregivers if
-                                  search_lower in c.first_name.lower() or
-                                  search_lower in c.last_name.lower() or
-                                  search_lower in c.full_name.lower()]
-                cg_list = [{"id": c.id, "name": c.full_name} for c in caregivers[:10]]
-                return json.dumps({"count": len(caregivers), "caregivers": cg_list})
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    if search_name:
+                        search_lower = f"%{search_name.lower()}%"
+                        cur.execute("""SELECT id, full_name, phone FROM cached_practitioners
+                                      WHERE is_active = true AND (lower(full_name) LIKE %s
+                                      OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
+                                      ORDER BY full_name LIMIT 10""",
+                                   (search_lower, search_lower, search_lower))
+                    else:
+                        cur.execute("SELECT id, full_name, phone FROM cached_practitioners WHERE is_active = true ORDER BY full_name LIMIT 100")
+                    rows = cur.fetchall()
+                    cg_list = [{"id": str(r[0]), "name": r[1], "phone": r[2] or ""} for r in rows]
+                    conn.close()
+                    return json.dumps({"count": len(cg_list), "caregivers": cg_list})
+                except Exception as e:
+                    logger.error(f"Caregiver cache lookup failed: {e}")
+                    return json.dumps({"error": f"Caregiver lookup failed: {str(e)}"})
 
             elif tool_name == "log_call_out":
                 caregiver_id = tool_input.get("caregiver_id")
