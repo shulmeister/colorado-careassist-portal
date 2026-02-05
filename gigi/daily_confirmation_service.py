@@ -18,10 +18,16 @@ try:
 except ImportError:
     TIMEZONE = None
 
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
 logger = logging.getLogger(__name__)
 
 DAILY_CONFIRMATION_ENABLED = os.getenv("DAILY_CONFIRMATION_ENABLED", "false").lower() == "true"
 CONFIRMATION_HOUR = 14  # 2pm Mountain
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
 
 
 class DailyConfirmationService:
@@ -35,7 +41,7 @@ class DailyConfirmationService:
         """
         self.wellsky = wellsky_service
         self.send_sms = sms_send_fn
-        self._last_confirmation_date: Optional[date] = None
+        self._last_confirmation_date: Optional[date] = self._load_last_date()
 
     def check_and_send(self) -> List[str]:
         """
@@ -60,6 +66,7 @@ class DailyConfirmationService:
             return []
 
         self._last_confirmation_date = today
+        self._save_last_date(today)
         logger.info("Starting daily shift confirmations...")
         return self._send_all_confirmations()
 
@@ -180,3 +187,40 @@ class DailyConfirmationService:
         elif start:
             return f"starting {start}"
         return ""
+
+    def _load_last_date(self) -> Optional[date]:
+        """Load last confirmation date from persistent storage (survives restart)."""
+        if not psycopg2:
+            return None
+        try:
+            conn = psycopg2.connect(DATABASE_URL)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT value FROM gigi_dedup_state WHERE key = 'daily_confirmation_last_date'"
+            )
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            if row:
+                return date.fromisoformat(row[0])
+        except Exception as e:
+            logger.warning(f"Could not load last confirmation date: {e}")
+        return None
+
+    def _save_last_date(self, d: date):
+        """Persist last confirmation date so it survives restart."""
+        if not psycopg2:
+            return
+        try:
+            conn = psycopg2.connect(DATABASE_URL)
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO gigi_dedup_state (key, value, created_at)
+                VALUES ('daily_confirmation_last_date', %s, NOW())
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, created_at = NOW()
+            """, (d.isoformat(),))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Could not save last confirmation date: {e}")

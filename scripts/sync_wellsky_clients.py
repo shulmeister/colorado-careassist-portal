@@ -145,7 +145,7 @@ def sync_patients(token, db):
 
     # Write to database
     cur = db.cursor()
-    cur.execute("UPDATE cached_patients SET is_active = false, synced_at = NOW()")
+    cur.execute("UPDATE cached_patients SET is_active = false, status = 'INACTIVE', synced_at = NOW()")
     for pid, d in all_active.items():
         cur.execute("""
             INSERT INTO cached_patients (id,first_name,last_name,full_name,phone,home_phone,work_phone,
@@ -155,7 +155,7 @@ def sync_patients(token, db):
                 first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,full_name=EXCLUDED.full_name,
                 phone=EXCLUDED.phone,home_phone=EXCLUDED.home_phone,work_phone=EXCLUDED.work_phone,
                 email=EXCLUDED.email,address=EXCLUDED.address,city=EXCLUDED.city,state=EXCLUDED.state,
-                zip_code=EXCLUDED.zip_code,is_active=true,wellsky_data=EXCLUDED.wellsky_data,
+                zip_code=EXCLUDED.zip_code,status='ACTIVE',is_active=true,wellsky_data=EXCLUDED.wellsky_data,
                 synced_at=NOW(),updated_at=NOW()
         """, (pid, d["fn"], d["ln"], d["full"], d["phone"], d["hphone"], d["wphone"],
               d["email"], d["addr"], d["city"], d["state"], d["zip"], Json(d["data"])))

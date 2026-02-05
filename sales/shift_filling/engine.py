@@ -63,8 +63,11 @@ class ShiftFillingEngine:
         self.on_shift_filled = on_shift_filled
         self.on_escalation = on_escalation
 
-        # Active outreach campaigns
+        # Active outreach campaigns (keyed by campaign.id)
         self.active_campaigns: Dict[str, ShiftOutreach] = {}
+
+        # Shift-to-campaign index for dedup (shift_id -> campaign_id)
+        self._shift_campaign_index: Dict[str, str] = {}
 
         # Voice outreach service
         self.voice_service = None
@@ -111,6 +114,17 @@ class ShiftFillingEngine:
         """
         logger.info(f"Processing calloff for shift {shift_id} by caregiver {caregiver_id}")
 
+        # 0. Check for existing campaign for this shift (dedup)
+        existing_campaign_id = self._shift_campaign_index.get(shift_id)
+        if existing_campaign_id and existing_campaign_id in self.active_campaigns:
+            existing = self.active_campaigns[existing_campaign_id]
+            if existing.status == OutreachStatus.IN_PROGRESS:
+                logger.warning(
+                    f"Campaign {existing_campaign_id} already active for shift {shift_id}. "
+                    f"Skipping duplicate calloff."
+                )
+                return existing
+
         # 1. Record the calloff in WellSky
         shift = self.wellsky.create_calloff(
             shift_id=shift_id,
@@ -141,8 +155,9 @@ class ShiftFillingEngine:
         # 4. Start parallel outreach
         self._initiate_outreach(campaign, matches)
 
-        # 5. Store campaign
+        # 5. Store campaign (with shift_id index for dedup)
         self.active_campaigns[campaign.id] = campaign
+        self._shift_campaign_index[shift_id] = campaign.id
 
         logger.info(f"Calloff processed. Campaign {campaign.id} started with {campaign.total_contacted} caregivers")
         return campaign
@@ -584,6 +599,7 @@ class ShiftFillingEngine:
             campaign.add_caregiver_outreach(outreach)
 
         self.active_campaigns[campaign.id] = campaign
+        self._shift_campaign_index[shift.id] = campaign.id
 
         # Simulate first response (acceptance)
         if matches:

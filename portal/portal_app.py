@@ -5617,19 +5617,65 @@ async def internal_get_campaign_status(campaign_id: str):
         })
 
 
+# In-memory set for Retell call_id idempotency (backed by DB)
+_processed_retell_call_ids: set = set()
+
+
 @app.post("/webhook/retell/shift-offer-complete")
 async def retell_shift_offer_complete(request: Request):
     """
     Webhook for Retell AI voice call completion on shift offer calls.
     Captures the caregiver's verbal response and feeds it into the shift filling engine.
+    Idempotent: duplicate webhook deliveries (retries) are safely ignored via call_id tracking.
     """
     try:
         body = await request.json()
         event = body.get("event", "")
+        call_id = body.get("call_id", "")
         metadata = body.get("metadata", {})
 
         if event != "call_ended":
             return JSONResponse({"status": "ignored", "event": event})
+
+        # Idempotency check: skip if we already processed this call_id
+        if call_id:
+            if call_id in _processed_retell_call_ids:
+                logger.info(f"Duplicate Retell webhook for call_id {call_id}, ignoring")
+                return JSONResponse({"status": "duplicate", "call_id": call_id})
+
+            # Also check DB for persistence across restarts
+            try:
+                import psycopg2
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT 1 FROM gigi_dedup_state WHERE key = %s",
+                    (f"retell_call:{call_id}",)
+                )
+                if cur.fetchone():
+                    cur.close()
+                    conn.close()
+                    _processed_retell_call_ids.add(call_id)
+                    logger.info(f"Duplicate Retell webhook for call_id {call_id} (from DB), ignoring")
+                    return JSONResponse({"status": "duplicate", "call_id": call_id})
+
+                # Mark as processed in DB (expires after 24h)
+                cur.execute("""
+                    INSERT INTO gigi_dedup_state (key, value, created_at, expires_at)
+                    VALUES (%s, 'processed', NOW(), NOW() + INTERVAL '24 hours')
+                    ON CONFLICT (key) DO NOTHING
+                """, (f"retell_call:{call_id}",))
+                conn.commit()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Retell dedup DB check failed (proceeding): {e}")
+
+            _processed_retell_call_ids.add(call_id)
+            # Cap in-memory set size
+            if len(_processed_retell_call_ids) > 1000:
+                _processed_retell_call_ids.clear()
 
         campaign_id = metadata.get("campaign_id")
         caregiver_phone = metadata.get("caregiver_phone")
@@ -5670,7 +5716,7 @@ async def retell_shift_offer_complete(request: Request):
         except Exception as e:
             logger.error(f"Error processing voice call response: {e}")
 
-        return JSONResponse({"status": "processed", "campaign_id": campaign_id})
+        return JSONResponse({"status": "processed", "campaign_id": campaign_id, "call_id": call_id})
 
     except Exception as e:
         logger.error(f"Retell shift offer webhook error: {e}")

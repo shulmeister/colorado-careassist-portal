@@ -8,6 +8,7 @@ Scores and ranks caregivers based on:
 - Availability and overtime status
 - Performance metrics
 - Response history
+- Caregiver preferences/constraints (from gigi_memories)
 """
 
 import logging
@@ -18,6 +19,15 @@ from dataclasses import dataclass
 from .models import Shift, Caregiver, Client, CaregiverOutreach
 
 logger = logging.getLogger(__name__)
+
+# Try to import preference extractor (optional dependency)
+_preference_extractor = None
+try:
+    from gigi.caregiver_preference_extractor import CaregiverPreferenceExtractor
+    _preference_extractor = CaregiverPreferenceExtractor()
+    logger.info("Caregiver preference extractor loaded for matcher")
+except Exception:
+    pass
 
 
 @dataclass
@@ -97,9 +107,14 @@ class CaregiverMatcher:
 
         logger.info(f"Found {len(available_caregivers)} available caregivers for {shift.date}")
 
-        # Score each caregiver
+        # Score each caregiver (filtering by hard constraints)
         results = []
         for caregiver in available_caregivers:
+            # Check hard constraints from caregiver preferences
+            if _preference_extractor and self._violates_hard_constraints(caregiver, shift, client):
+                logger.info(f"Skipping {caregiver.full_name}: violates hard constraint")
+                continue
+
             score, reasons = self._calculate_match_score(caregiver, shift, client)
 
             # Determine tier
@@ -222,6 +237,15 @@ class CaregiverMatcher:
             score += 2
             reasons.append("+2: Established (6+ months tenure)")
 
+        # 8. Caregiver Preference Alignment (+5 / -5)
+        pref_adjustment = self._get_preference_score(caregiver, shift, client)
+        if pref_adjustment != 0:
+            score += pref_adjustment
+            if pref_adjustment > 0:
+                reasons.append(f"+{pref_adjustment}: Preference alignment (prefers this type of shift)")
+            else:
+                reasons.append(f"{pref_adjustment}: Preference mismatch (soft preference against)")
+
         # Cap at 100
         score = min(score, 100)
 
@@ -294,6 +318,75 @@ class CaregiverMatcher:
 
         # Default estimate
         return 15.0
+
+    def _violates_hard_constraints(self, caregiver: Caregiver, shift: Shift, client: Client) -> bool:
+        """Check if caregiver has hard constraints that conflict with this shift."""
+        try:
+            constraints = _preference_extractor.get_hard_constraints(caregiver.id)
+            if not constraints:
+                return False
+
+            shift_day = shift.date.strftime("%A").lower() if shift.date else ""
+            client_name = client.full_name.lower() if client else ""
+            client_city = (client.city or "").lower() if client else ""
+
+            for c in constraints:
+                content = (c.content or "").lower()
+                meta = c.metadata or {}
+                pref_type = meta.get("preference_type", "")
+
+                # Schedule constraint: "can't work Thursdays"
+                if pref_type == "schedule" and shift_day and shift_day in content:
+                    logger.info(f"{caregiver.full_name} has hard constraint against {shift_day}: {c.content}")
+                    return True
+
+                # Client constraint: "won't work with <client>"
+                if pref_type == "client" and client_name:
+                    if any(part in content for part in client_name.split() if len(part) > 2):
+                        logger.info(f"{caregiver.full_name} has hard constraint against client {client.full_name}: {c.content}")
+                        return True
+
+                # Location constraint: "won't drive to <city>"
+                if pref_type == "location" and client_city and client_city in content:
+                    logger.info(f"{caregiver.full_name} has hard constraint against {client_city}: {c.content}")
+                    return True
+
+        except Exception as e:
+            logger.warning(f"Error checking constraints for {caregiver.id}: {e}")
+
+        return False
+
+    def _get_preference_score(self, caregiver: Caregiver, shift: Shift, client: Client) -> float:
+        """Get preference alignment score (+5 for alignment, -5 for mismatch)."""
+        if not _preference_extractor:
+            return 0
+
+        try:
+            soft_prefs = _preference_extractor.get_soft_preferences(caregiver.id)
+            if not soft_prefs:
+                return 0
+
+            alignment = 0
+            client_name = client.full_name.lower() if client else ""
+
+            for pref in soft_prefs:
+                content = (pref.content or "").lower()
+                meta = pref.metadata or {}
+                pref_type = meta.get("preference_type", "")
+
+                # Positive client preference: "loves working with <client>"
+                if pref_type == "client" and client_name:
+                    if any(part in content for part in client_name.split() if len(part) > 2):
+                        if any(w in content for w in ["loves", "likes", "prefers", "enjoys", "great"]):
+                            alignment += 5
+                        elif any(w in content for w in ["doesn't", "won't", "avoids", "dislikes"]):
+                            alignment -= 5
+
+            return max(-5, min(5, alignment))
+
+        except Exception as e:
+            logger.warning(f"Error scoring preferences for {caregiver.id}: {e}")
+            return 0
 
     def create_outreach_list(self, matches: List[MatchResult]) -> List[CaregiverOutreach]:
         """

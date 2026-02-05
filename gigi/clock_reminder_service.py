@@ -12,7 +12,14 @@ import logging
 from datetime import datetime, date, timedelta, time as dt_time
 from typing import Dict, List, Optional, Tuple, Callable
 
+try:
+    import psycopg2
+except ImportError:
+    psycopg2 = None
+
 logger = logging.getLogger(__name__)
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
 
 CLOCK_REMINDER_ENABLED = os.getenv("CLOCK_REMINDER_ENABLED", "false").lower() == "true"
 REMINDER_THRESHOLD_MINUTES = 5   # Send reminder after this many minutes past shift start/end
@@ -38,7 +45,7 @@ class ClockReminderService:
         self._cache_refresh_interval = timedelta(hours=1)
 
         # Track sent reminders to avoid duplicates: "shift_id:type" -> sent_at
-        self._sent_reminders: Dict[str, datetime] = {}
+        self._sent_reminders: Dict[str, datetime] = self._load_sent_reminders()
 
     def check_and_remind(self) -> List[str]:
         """
@@ -224,7 +231,9 @@ class ClockReminderService:
 
         success, _ = self.send_sms(shift["caregiver_phone"], msg)
         if success:
-            self._sent_reminders[f"{shift['shift_id']}:clock_in"] = datetime.now()
+            key = f"{shift['shift_id']}:clock_in"
+            self._sent_reminders[key] = datetime.now()
+            self._persist_reminder(key)
             logger.info(f"Clock-in reminder sent to {name} for shift {shift['shift_id']}")
         return success
 
@@ -240,7 +249,9 @@ class ClockReminderService:
 
         success, _ = self.send_sms(shift["caregiver_phone"], msg)
         if success:
-            self._sent_reminders[f"{shift['shift_id']}:clock_out"] = datetime.now()
+            key = f"{shift['shift_id']}:clock_out"
+            self._sent_reminders[key] = datetime.now()
+            self._persist_reminder(key)
             logger.info(f"Clock-out reminder sent to {name} for shift {shift['shift_id']}")
         return success
 
@@ -253,3 +264,60 @@ class ClockReminderService:
         ]
         for k in keys_to_remove:
             del self._sent_reminders[k]
+        # Also clean DB
+        if keys_to_remove and psycopg2:
+            try:
+                conn = psycopg2.connect(DATABASE_URL)
+                cur = conn.cursor()
+                cur.execute(
+                    "DELETE FROM gigi_dedup_state WHERE key LIKE 'clock_reminder:%%' AND expires_at < NOW()"
+                )
+                conn.commit()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Could not clean old reminders from DB: {e}")
+
+    def _load_sent_reminders(self) -> Dict[str, datetime]:
+        """Load sent reminders from persistent storage (survives restart)."""
+        reminders = {}
+        if not psycopg2:
+            return reminders
+        try:
+            conn = psycopg2.connect(DATABASE_URL)
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT key, created_at FROM gigi_dedup_state "
+                "WHERE key LIKE 'clock_reminder:%%' AND (expires_at IS NULL OR expires_at > NOW())"
+            )
+            for row in cur.fetchall():
+                # Strip prefix to get the original key
+                original_key = row[0].replace('clock_reminder:', '', 1)
+                reminders[original_key] = row[1]
+            cur.close()
+            conn.close()
+            if reminders:
+                logger.info(f"Loaded {len(reminders)} clock reminders from persistent storage")
+        except Exception as e:
+            logger.warning(f"Could not load sent reminders: {e}")
+        return reminders
+
+    def _persist_reminder(self, key: str):
+        """Persist a sent reminder to DB so it survives restart."""
+        if not psycopg2:
+            return
+        try:
+            db_key = f"clock_reminder:{key}"
+            expires = datetime.now() + timedelta(minutes=REMINDER_COOLDOWN_MINUTES)
+            conn = psycopg2.connect(DATABASE_URL)
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO gigi_dedup_state (key, value, created_at, expires_at)
+                VALUES (%s, 'sent', NOW(), %s)
+                ON CONFLICT (key) DO UPDATE SET value = 'sent', created_at = NOW(), expires_at = EXCLUDED.expires_at
+            """, (db_key, expires))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Could not persist clock reminder: {e}")

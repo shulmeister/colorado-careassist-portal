@@ -1077,7 +1077,36 @@ class GigiRingCentralBot:
         try:
             if tool_name == "identify_caller":
                 phone = tool_input.get("phone_number", caller_phone or "")
-                # Try caregiver first (most common SMS senders)
+                # Use fast SQL lookup (checks all 4 tables: staff, practitioners, patients, family)
+                try:
+                    from services.wellsky_fast_lookup import identify_caller as fast_identify
+                    caller = fast_identify(phone)
+                    if caller:
+                        caller_type = caller.get('type', 'unknown')
+                        # Map type to identified_as value
+                        type_map = {
+                            'practitioner': 'caregiver',
+                            'patient': 'client',
+                            'staff': 'staff',
+                            'family': 'family'
+                        }
+                        result = {
+                            "identified_as": type_map.get(caller_type, caller_type),
+                            "id": caller.get('id', ''),
+                            "name": caller.get('full_name', caller.get('name', '')),
+                            "first_name": caller.get('first_name', ''),
+                            "status": caller.get('status', caller.get('role', ''))
+                        }
+                        # Add extra context for family members
+                        if caller_type == 'family':
+                            result["relationship"] = caller.get('relationship', '')
+                            result["client_name"] = caller.get('client_name', '')
+                            result["patient_id"] = caller.get('patient_id', '')
+                        return json.dumps(result)
+                except Exception as e:
+                    logger.warning(f"Fast caller ID failed, trying fallback: {e}")
+
+                # Fallback to WellSky API if fast lookup fails
                 try:
                     cg = self.wellsky.get_caregiver_by_phone(phone)
                     if cg:
@@ -1087,21 +1116,6 @@ class GigiRingCentralBot:
                             "name": cg.full_name,
                             "first_name": cg.first_name,
                             "status": cg.status.value if hasattr(cg.status, 'value') else str(cg.status)
-                        })
-                except Exception:
-                    pass
-
-                # Try client
-                try:
-                    clients = self.wellsky.search_patients(phone=phone, active=True)
-                    if clients:
-                        c = clients[0]
-                        return json.dumps({
-                            "identified_as": "client",
-                            "id": c.id,
-                            "name": c.full_name,
-                            "first_name": c.first_name,
-                            "status": c.status.value if hasattr(c.status, 'value') else str(c.status)
                         })
                 except Exception:
                     pass
