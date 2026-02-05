@@ -342,6 +342,10 @@ class ClientComplaint(Base):
     resolution_notes = Column(Text, nullable=True)
     resolved_by = Column(String(255), nullable=True)
 
+    # Task claiming ("I'm handling this")
+    claimed_by = Column(String(255), nullable=True)
+    claimed_at = Column(DateTime, nullable=True)
+
     # Follow-up
     follow_up_required = Column(Boolean, default=False)
     follow_up_date = Column(Date, nullable=True)
@@ -375,6 +379,8 @@ class ClientComplaint(Base):
             "follow_up_date": self.follow_up_date.isoformat() if self.follow_up_date else None,
             "source": self.source,
             "reported_by": self.reported_by,
+            "claimed_by": self.claimed_by,
+            "claimed_at": self.claimed_at.isoformat() if self.claimed_at else None,
             "days_open": self._days_open(),
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

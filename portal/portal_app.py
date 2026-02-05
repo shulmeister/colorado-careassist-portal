@@ -561,6 +561,69 @@ async def api_gigi_get_issues(
         "count": len(issues)
     })
 
+@app.post("/api/gigi/issues/{issue_id}/claim")
+async def api_gigi_claim_issue(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Claim an issue - 'I'm handling this'"""
+    from portal_models import ClientComplaint
+    issue = db.query(ClientComplaint).filter(ClientComplaint.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    user_name = current_user.get("name", current_user.get("email", "Unknown"))
+    if issue.claimed_by and issue.claimed_by != user_name:
+        return JSONResponse({"success": False, "error": f"Already claimed by {issue.claimed_by}"}, status_code=409)
+
+    issue.claimed_by = user_name
+    issue.claimed_at = datetime.utcnow()
+    issue.status = "in_progress"
+    db.commit()
+    return JSONResponse({"success": True, "claimed_by": issue.claimed_by})
+
+@app.post("/api/gigi/issues/{issue_id}/release")
+async def api_gigi_release_issue(
+    issue_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Release a claimed issue back to the queue."""
+    from portal_models import ClientComplaint
+    issue = db.query(ClientComplaint).filter(ClientComplaint.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    issue.claimed_by = None
+    issue.claimed_at = None
+    issue.status = "open"
+    db.commit()
+    return JSONResponse({"success": True})
+
+@app.post("/api/gigi/issues/{issue_id}/resolve")
+async def api_gigi_resolve_issue(
+    issue_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Mark an issue as resolved with notes."""
+    from portal_models import ClientComplaint
+    data = await request.json()
+
+    issue = db.query(ClientComplaint).filter(ClientComplaint.id == issue_id).first()
+    if not issue:
+        raise HTTPException(status_code=404, detail="Issue not found")
+
+    user_name = current_user.get("name", current_user.get("email", "Unknown"))
+    issue.status = "resolved"
+    issue.resolution_notes = data.get("resolution_notes", "")
+    issue.resolved_by = user_name
+    issue.resolution_date = date_cls.today()
+    db.commit()
+    return JSONResponse({"success": True})
+
 @app.get("/api/gigi/schedule")
 async def api_gigi_get_schedule(
     date_str: Optional[str] = Query(None),

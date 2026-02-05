@@ -1315,23 +1315,34 @@
             body.innerHTML = issues.map(issue => {
                 const date = new Date(issue.created_at).toLocaleDateString();
                 const time = new Date(issue.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                
+                const claimedBadge = issue.claimed_by
+                    ? `<span class="badge bg-info bg-opacity-25 text-info ms-1" title="Claimed at ${issue.claimed_at || ''}">${issue.claimed_by.split('@')[0]}</span>`
+                    : '';
+
+                const claimBtn = issue.status === 'resolved'
+                    ? ''
+                    : issue.claimed_by
+                        ? `<button class="btn btn-sm btn-outline-secondary" onclick="releaseIssue(${issue.id})" title="Release"><i class="bi bi-arrow-counterclockwise"></i></button>`
+                        : `<button class="btn btn-sm btn-outline-primary" onclick="claimIssue(${issue.id})" title="I'm handling this"><i class="bi bi-hand-index"></i> Claim</button>`;
+
+                const resolveBtn = issue.status === 'resolved'
+                    ? '<span class="badge bg-success bg-opacity-25 text-success">Resolved</span>'
+                    : `<button class="btn btn-sm btn-outline-success ms-1" onclick="resolveIssue(${issue.id})" title="Mark resolved"><i class="bi bi-check-circle"></i></button>`;
+
                 return `
                     <tr>
                         <td class="text-secondary small">#${issue.id}</td>
                         <td class="fw-bold">${issue.client_name}</td>
                         <td>${issue.caregiver_involved || '<span class="text-muted">—</span>'}</td>
                         <td><span class="text-capitalize">${issue.category.replace('_', ' ')}</span></td>
-                        <td><span class="priority-${issue.severity} fw-bold">● ${issue.severity.toUpperCase()}</span></td>
-                        <td><span class="status-badge bg-secondary bg-opacity-10">${issue.status}</span></td>
+                        <td><span class="priority-${issue.severity} fw-bold">${issue.severity.toUpperCase()}</span></td>
+                        <td><span class="status-badge bg-secondary bg-opacity-10">${issue.status}</span>${claimedBadge}</td>
                         <td>
                             <div>${date}</div>
                             <div class="text-secondary small">${time}</div>
                         </td>
-                        <td class="text-end">
-                            <button class="btn btn-link text-secondary p-0" onclick="viewIssue(${issue.id})">
-                                <i class="bi bi-chevron-right"></i>
-                            </button>
+                        <td class="text-end text-nowrap">
+                            ${claimBtn} ${resolveBtn}
                         </td>
                     </tr>
                 `;
@@ -1343,6 +1354,38 @@
             document.getElementById('stat-urgent').textContent = issues.filter(i => i.severity === 'high' || i.severity === 'critical').length;
             document.getElementById('stat-progress').textContent = issues.filter(i => i.status === 'in_progress').length;
             document.getElementById('stat-resolved').textContent = issues.filter(i => i.status === 'resolved').length;
+        }
+
+        async function claimIssue(id) {
+            try {
+                const resp = await fetch(`/api/gigi/issues/${id}/claim`, {method: 'POST'});
+                if (resp.ok) { loadIssues(); }
+                else {
+                    const err = await resp.json();
+                    alert(err.error || 'Could not claim issue');
+                }
+            } catch(e) { alert('Error claiming issue'); }
+        }
+
+        async function releaseIssue(id) {
+            try {
+                const resp = await fetch(`/api/gigi/issues/${id}/release`, {method: 'POST'});
+                if (resp.ok) { loadIssues(); }
+            } catch(e) { alert('Error releasing issue'); }
+        }
+
+        async function resolveIssue(id) {
+            const notes = prompt('Resolution notes (what was done):');
+            if (notes === null) return;
+            try {
+                const resp = await fetch(`/api/gigi/issues/${id}/resolve`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({resolution_notes: notes})
+                });
+                if (resp.ok) { loadIssues(); }
+                else { alert('Could not resolve issue'); }
+            } catch(e) { alert('Error resolving issue'); }
         }
 
         function showCreateIssueModal() {

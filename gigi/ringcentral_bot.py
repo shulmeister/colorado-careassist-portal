@@ -69,6 +69,11 @@ MAX_REPLIES_PER_DAY_PER_NUMBER = 3  # Max replies to any single number per day
 MAX_REPLIES_PER_HOUR_GLOBAL = 20  # Max total SMS per hour
 REPLY_HISTORY_FILE = "/Users/shulmeister/.gigi-reply-history.json"
 
+# Autonomous Shift Coordination
+GIGI_SHIFT_MONITOR_ENABLED = os.getenv("GIGI_SHIFT_MONITOR_ENABLED", "false").lower() == "true"
+CAMPAIGN_CHECK_INTERVAL_SECONDS = 300  # Check campaigns every 5 minutes
+CAMPAIGN_ESCALATION_MINUTES = 30  # Escalate unfilled campaigns after 30 min
+
 # Claude API Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CLAUDE_MODEL = "claude-sonnet-4-20250514"
@@ -219,6 +224,13 @@ class GigiRingCentralBot:
             self.claude = None
             logger.warning("Claude API not available - using static SMS replies")
         self.sms_conversations = self._load_sms_conversations()
+        # Autonomous shift coordination
+        self._active_campaigns = {}  # campaign_id -> {shift_id, started_at, client_name}
+        self._last_campaign_check = datetime.utcnow()
+        if GIGI_SHIFT_MONITOR_ENABLED:
+            logger.info("Autonomous shift monitor ENABLED")
+        else:
+            logger.info("Autonomous shift monitor disabled (set GIGI_SHIFT_MONITOR_ENABLED=true to enable)")
         logger.info(f"Bot initialized. Startup time (UTC): {self.startup_time}")
         logger.info(f"Reply history loaded: {len(self.reply_history.get('replies', []))} recent replies tracked")
 
@@ -409,12 +421,19 @@ class GigiRingCentralBot:
         try:
             status = "BUSINESS HOURS (Silent)" if self.is_business_hours() else "AFTER HOURS (Active)"
             logger.info(f"--- Gigi Bot Cycle: {status} ---")
-            
+
             # 1. Check Direct SMS (RingCentral SMS) - PRIORITY
             await self.check_direct_sms()
-            
+
             # 2. Check Team Chats (Glip)
             await self.check_team_chats()
+
+            # 3. Check active shift-filling campaigns (every 5 min)
+            if GIGI_SHIFT_MONITOR_ENABLED and self._active_campaigns:
+                now = datetime.utcnow()
+                if (now - self._last_campaign_check).total_seconds() >= CAMPAIGN_CHECK_INTERVAL_SECONDS:
+                    self._last_campaign_check = now
+                    await self._check_campaign_status()
 
         except Exception as e:
             logger.error(f"Error in check_and_act: {e}")
@@ -696,6 +715,170 @@ class GigiRingCentralBot:
 
             except Exception as e:
                 logger.error(f"Failed to document to WellSky: {e}")
+
+        # Autonomous shift filling: trigger when callout detected
+        if note_type == "callout" and GIGI_SHIFT_MONITOR_ENABLED:
+            # Extract caregiver name from text for shift lookup
+            await self._trigger_shift_filling(possible_names, caregiver_name if caregiver_id else None, text[:100])
+
+    # =========================================================================
+    # Autonomous Shift Coordination
+    # =========================================================================
+
+    async def _trigger_shift_filling(self, possible_names: list, caregiver_name: str, reason: str):
+        """When a callout is documented, find affected shifts and start filling campaigns."""
+        try:
+            import re
+            # Try to identify the caregiver who called out
+            caregiver_id = None
+            cg_name = ""
+
+            # First try names from the message text
+            for name in possible_names:
+                clean = name.replace(".", "").strip()
+                if len(clean.split()) < 2:
+                    continue
+                last_name = clean.split()[-1]
+                if len(last_name) < 3:
+                    continue
+                try:
+                    practitioners = self.wellsky.search_practitioners(last_name=last_name)
+                    for p in practitioners:
+                        if clean.lower() in p.full_name.lower() or p.last_name.lower() == last_name.lower():
+                            caregiver_id = p.id
+                            cg_name = p.full_name
+                            break
+                except Exception:
+                    pass
+                if caregiver_id:
+                    break
+
+            if not caregiver_id:
+                logger.info("Shift monitor: Could not identify caregiver for auto-fill")
+                return
+
+            # Get this caregiver's shifts for the next 48 hours
+            from datetime import timedelta
+            shifts = self.wellsky.get_shifts(
+                caregiver_id=caregiver_id,
+                date_from=date.today(),
+                date_to=date.today() + timedelta(days=2),
+                limit=10
+            )
+
+            if not shifts:
+                logger.info(f"Shift monitor: No upcoming shifts found for {cg_name}")
+                return
+
+            import requests as http_requests
+            for shift in shifts:
+                shift_status = shift.status.value if hasattr(shift.status, 'value') else str(shift.status)
+                if shift_status not in ('scheduled', 'open', 'confirmed'):
+                    continue
+
+                # Don't re-trigger for shifts we already started campaigns for
+                if shift.id in self._active_campaigns:
+                    continue
+
+                logger.info(f"Shift monitor: Auto-triggering fill for shift {shift.id} ({cg_name} → {getattr(shift, 'client_name', 'unknown client')})")
+
+                try:
+                    resp = http_requests.post(
+                        "http://localhost:8765/api/internal/shift-filling/calloff",
+                        json={
+                            "shift_id": shift.id,
+                            "caregiver_id": caregiver_id,
+                            "reason": reason
+                        },
+                        timeout=30
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        campaign_id = data.get("campaign_id")
+                        if campaign_id:
+                            self._active_campaigns[campaign_id] = {
+                                "shift_id": shift.id,
+                                "started_at": datetime.utcnow().isoformat(),
+                                "client_name": getattr(shift, 'client_name', 'unknown'),
+                                "caregiver_name": cg_name
+                            }
+                            logger.info(f"Shift filling campaign started: {campaign_id}, contacted {data.get('candidates_contacted', 0)} caregivers")
+
+                            # Notify team chat
+                            try:
+                                self.rc_service.send_message_to_chat(
+                                    TARGET_CHAT,
+                                    f"[Gigi] Shift filling started for {getattr(shift, 'client_name', 'client')} "
+                                    f"(was: {cg_name}). Contacting {data.get('candidates_contacted', 0)} replacement caregivers."
+                                )
+                            except Exception:
+                                pass
+                    else:
+                        logger.error(f"Shift filling API error: {resp.status_code} - {resp.text[:200]}")
+                except Exception as e:
+                    logger.error(f"Failed to call shift filling API: {e}")
+
+        except Exception as e:
+            logger.error(f"Error in callout-triggered shift filling: {e}")
+
+    async def _check_campaign_status(self):
+        """Check active shift-filling campaigns and escalate/notify as needed."""
+        if not self._active_campaigns:
+            return
+
+        import requests as http_requests
+        completed = []
+
+        for campaign_id, info in self._active_campaigns.items():
+            try:
+                resp = http_requests.get(
+                    f"http://localhost:8765/api/internal/shift-filling/campaigns/{campaign_id}",
+                    timeout=10
+                )
+                if resp.status_code != 200:
+                    continue
+
+                data = resp.json()
+                if not data.get("found"):
+                    completed.append(campaign_id)
+                    continue
+
+                if data.get("shift_filled"):
+                    winner = data.get("winning_caregiver", "someone")
+                    logger.info(f"Campaign {campaign_id} FILLED by {winner}")
+                    try:
+                        self.rc_service.send_message_to_chat(
+                            TARGET_CHAT,
+                            f"[Gigi] Shift FILLED: {info.get('client_name', 'client')} now covered by {winner}. "
+                            f"(was: {info.get('caregiver_name', 'unknown')})"
+                        )
+                    except Exception:
+                        pass
+                    completed.append(campaign_id)
+
+                elif not data.get("escalated"):
+                    # Check if campaign has been running too long
+                    started_at = datetime.fromisoformat(info["started_at"])
+                    elapsed_min = (datetime.utcnow() - started_at).total_seconds() / 60
+
+                    if elapsed_min >= CAMPAIGN_ESCALATION_MINUTES:
+                        logger.warning(f"Campaign {campaign_id} unfilled after {elapsed_min:.0f} min — escalating")
+                        try:
+                            self.rc_service.send_message_to_chat(
+                                TARGET_CHAT,
+                                f"[Gigi] URGENT: Shift for {info.get('client_name', 'client')} still unfilled after "
+                                f"{int(elapsed_min)} min. {data.get('total_contacted', 0)} contacted, "
+                                f"{data.get('total_responded', 0)} responded. Manual action needed."
+                            )
+                        except Exception:
+                            pass
+                        completed.append(campaign_id)  # Stop tracking to avoid repeat notifications
+
+            except Exception as e:
+                logger.error(f"Campaign status check error for {campaign_id}: {e}")
+
+        for cid in completed:
+            self._active_campaigns.pop(cid, None)
 
     # =========================================================================
     # Claude SMS Conversation History

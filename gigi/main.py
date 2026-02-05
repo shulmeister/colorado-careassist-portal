@@ -275,6 +275,8 @@ RINGCENTRAL_FROM_NUMBER = os.getenv("RINGCENTRAL_FROM_NUMBER", "+17194283999")
 SMS_PROVIDER = os.getenv("GIGI_SMS_PROVIDER", "ringcentral").lower()
 ON_CALL_MANAGER_PHONE = os.getenv("ON_CALL_MANAGER_PHONE", "+13037571777")    # 303-757-1777
 JASON_PHONE = "+16039971495"  # Jason Shulman - for call transfers
+SCHEDULING_PHONE = os.getenv("SCHEDULING_PHONE", "+13038794468")  # Israt - scheduling team
+SALES_PHONE = os.getenv("SALES_PHONE", "+12272335188")            # Jacob - sales team
 
 # Escalation contacts (RingCentral extensions for urgent client issues)
 ESCALATION_CYNTHIA_EXT = os.getenv("ESCALATION_CYNTHIA_EXT", "105")  # Cynthia Pointe - Care Manager
@@ -4653,17 +4655,36 @@ async def retell_webhook(request: Request):
         # Log to Portal
         analysis = body.get("call_analysis", {})
         summary = analysis.get("call_summary", "Call completed")
-        
+
+        # Voicemail detection (outbound calls only)
+        is_voicemail = False
+        direction = body.get("direction", "")
+        if direction == "outbound":
+            if analysis.get("answering_machine_detected"):
+                is_voicemail = True
+            elif duration_sec < 15 and len(transcript.strip()) < 30:
+                is_voicemail = True
+            else:
+                vm_keywords = ["leave a message", "voicemail", "after the tone", "not available", "please record"]
+                if any(kw in transcript.lower() for kw in vm_keywords):
+                    is_voicemail = True
+
+        event_type = "voicemail_detected" if is_voicemail else "call_ended"
+        event_desc = f"Voicemail detected ({duration_sec}s)" if is_voicemail else f"Gigi Call Completed ({duration_sec}s)"
+        if is_voicemail:
+            logger.info(f"Voicemail detected for call {call_id} to {body.get('to_number', 'unknown')}")
+
         await _log_portal_event(
-            description=f"Gigi Call Completed ({duration_sec}s)",
-            event_type="call_ended",
+            description=event_desc,
+            event_type=event_type,
             details=summary,
-            icon="📞",
+            icon="voicemail" if is_voicemail else "phone",
             metadata={
-                "call_id": call_id, 
-                "duration": duration_sec, 
+                "call_id": call_id,
+                "duration": duration_sec,
                 "recording_url": recording_url,
-                "transcript_preview": transcript[:200] if transcript else ""
+                "transcript_preview": transcript[:200] if transcript else "",
+                "voicemail": is_voicemail
             }
         )
 
@@ -5218,6 +5239,72 @@ async def retell_function_call(function_name: str, request: Request):
                 "response_type": "transfer_call",
                 "transfer_to": "+13037571777",
                 "message": "I'm transferring you to our on-call manager now. Please hold."
+            })
+
+        elif function_name == "transfer_to_scheduling":
+            logger.info(f"Transferring call to scheduling at {SCHEDULING_PHONE}")
+            record_tool_call(call_id, function_name)
+            caller_info = _get_call_context(call_id)
+            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=f"Transfer to scheduling: {args.get('reason', '')}"))
+            return JSONResponse({
+                "response_type": "transfer_call",
+                "transfer_to": SCHEDULING_PHONE,
+                "message": "I'm transferring you to our scheduling team now. Please hold."
+            })
+
+        elif function_name == "transfer_to_sales":
+            logger.info(f"Transferring call to sales at {SALES_PHONE}")
+            record_tool_call(call_id, function_name)
+            caller_info = _get_call_context(call_id)
+            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=f"Transfer to sales: {args.get('reason', '')}"))
+            return JSONResponse({
+                "response_type": "transfer_call",
+                "transfer_to": SALES_PHONE,
+                "message": "I'm connecting you with our care team now to discuss your options. Please hold."
+            })
+
+        elif function_name == "create_prospect_in_wellsky":
+            first_name = args.get("first_name", "")
+            last_name = args.get("last_name", "Unknown")
+            phone = args.get("phone", "")
+            city = args.get("city", "Colorado Springs")
+            care_needs = args.get("care_needs", "")
+            payer_type = args.get("payer_type", "unknown")
+
+            prospect_data = {
+                "first_name": first_name,
+                "last_name": last_name,
+                "phone": phone,
+                "city": city,
+                "state": "CO",
+                "care_needs": [n.strip() for n in care_needs.split(",") if n.strip()] if care_needs else [],
+                "payer_type": payer_type,
+                "referral_source": "inbound_call_gigi",
+                "notes": f"Lead captured by Gigi AI during inbound call. Care needs: {care_needs}"
+            }
+
+            prospect_id = None
+            if WELLSKY_AVAILABLE and wellsky:
+                try:
+                    result_prospect = wellsky.create_prospect(prospect_data)
+                    if result_prospect:
+                        prospect_id = result_prospect.id
+                        logger.info(f"Prospect created in WellSky: {prospect_id} - {first_name} {last_name}")
+                except Exception as e:
+                    logger.error(f"Error creating prospect in WellSky: {e}")
+
+            # Notify via Telegram
+            notification = f"NEW LEAD from Gigi: {first_name} {last_name}, Phone: {phone}, City: {city}, Needs: {care_needs}"
+            try:
+                send_telegram_message(notification)
+            except Exception:
+                pass
+
+            record_tool_call(call_id, function_name)
+            return JSONResponse({
+                "response_type": "response",
+                "response": f"I've created a record for {first_name} and our care team will call them at {phone} within 30 minutes.",
+                "prospect_id": prospect_id
             })
 
         elif function_name == "transfer_call":

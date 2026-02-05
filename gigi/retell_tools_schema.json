@@ -54,6 +54,95 @@
     {
       "type": "function",
       "function": {
+        "name": "transfer_to_scheduling",
+        "description": "Transfer the call to the scheduling team (Israt). Use when callers need schedule changes, shift swaps, availability updates, or time-off requests that you cannot resolve yourself.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "description": "Brief reason for transfer (e.g., 'Schedule change request', 'Shift swap needed')"
+            }
+          },
+          "required": ["reason"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "transfer_to_oncall",
+        "description": "Transfer the call to the on-call manager. Use for urgent issues outside business hours, client emergencies, or situations requiring immediate human judgment.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "description": "Brief reason for transfer (e.g., 'Client emergency', 'Urgent after-hours issue')"
+            }
+          },
+          "required": ["reason"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "transfer_to_sales",
+        "description": "Transfer the call to the sales team (Jacob). Use when a prospective client or referral source wants to discuss services in detail, get pricing, or schedule an in-home assessment.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string",
+              "description": "Brief reason for transfer (e.g., 'New client inquiry', 'Referral from discharge planner')"
+            }
+          },
+          "required": ["reason"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "create_prospect_in_wellsky",
+        "description": "Create a new prospective client record in WellSky after collecting their information. Use this at the END of a prospective client call, after you have at least their name and phone number. This creates the lead and notifies the sales team for follow-up within 30 minutes.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "first_name": {
+              "type": "string",
+              "description": "Prospect's first name"
+            },
+            "last_name": {
+              "type": "string",
+              "description": "Prospect's last name (use 'Unknown' if not provided)"
+            },
+            "phone": {
+              "type": "string",
+              "description": "Prospect's phone number for callback"
+            },
+            "city": {
+              "type": "string",
+              "description": "City where care is needed (defaults to Colorado Springs)"
+            },
+            "care_needs": {
+              "type": "string",
+              "description": "Brief description of care needs mentioned by the caller"
+            },
+            "payer_type": {
+              "type": "string",
+              "enum": ["private_pay", "medicaid", "va", "ltc_insurance", "unknown"],
+              "description": "Payment type if mentioned"
+            }
+          },
+          "required": ["first_name", "phone"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
         "name": "take_message",
         "description": "Take a message from an unknown caller who wants to speak with Jason. Records their message and sends it to Jason via Telegram. Use when caller is NOT in contacts database and wants to leave a message.",
         "parameters": {
