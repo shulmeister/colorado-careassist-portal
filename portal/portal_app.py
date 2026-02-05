@@ -5617,6 +5617,66 @@ async def internal_get_campaign_status(campaign_id: str):
         })
 
 
+@app.post("/webhook/retell/shift-offer-complete")
+async def retell_shift_offer_complete(request: Request):
+    """
+    Webhook for Retell AI voice call completion on shift offer calls.
+    Captures the caregiver's verbal response and feeds it into the shift filling engine.
+    """
+    try:
+        body = await request.json()
+        event = body.get("event", "")
+        metadata = body.get("metadata", {})
+
+        if event != "call_ended":
+            return JSONResponse({"status": "ignored", "event": event})
+
+        campaign_id = metadata.get("campaign_id")
+        caregiver_phone = metadata.get("caregiver_phone")
+        purpose = metadata.get("purpose")
+
+        if purpose != "shift_offer" or not campaign_id or not caregiver_phone:
+            return JSONResponse({"status": "ignored", "reason": "not a shift offer call"})
+
+        transcript = body.get("transcript", "")
+        analysis = body.get("call_analysis", {})
+        call_summary = analysis.get("call_summary", "")
+
+        # Determine acceptance from call analysis
+        summary_lower = call_summary.lower()
+        accept_keywords = ["accepted", "confirmed", "will take", "agreed", "yes"]
+        decline_keywords = ["declined", "refused", "can't", "unable", "no", "not available"]
+
+        accepted = any(kw in summary_lower for kw in accept_keywords)
+        declined = any(kw in summary_lower for kw in decline_keywords)
+
+        # Build synthetic response text for the shift filling engine
+        if accepted:
+            message_text = "Yes, I'll take the shift"
+        elif declined:
+            message_text = "No, I can't work that shift"
+        else:
+            message_text = transcript[:200] if transcript else "ambiguous voice response"
+
+        # Feed into shift filling engine
+        try:
+            from sales.shift_filling.engine import shift_filling_engine
+            result = shift_filling_engine.process_response(
+                campaign_id=campaign_id,
+                phone=caregiver_phone,
+                message_text=message_text
+            )
+            logger.info(f"Voice call response processed for campaign {campaign_id}: {result}")
+        except Exception as e:
+            logger.error(f"Error processing voice call response: {e}")
+
+        return JSONResponse({"status": "processed", "campaign_id": campaign_id})
+
+    except Exception as e:
+        logger.error(f"Retell shift offer webhook error: {e}")
+        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
+
+
 @app.post("/api/internal/shift-filling/offer")
 async def internal_send_shift_offer(request: Request):
     """

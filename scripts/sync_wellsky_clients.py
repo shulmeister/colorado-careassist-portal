@@ -16,6 +16,7 @@ API approach (per WellSky Connect API docs):
 
 import os
 import sys
+import json
 import string
 import logging
 from pathlib import Path
@@ -186,18 +187,37 @@ def sync_practitioners(token, db):
         phone, hphone, wphone, email = parse_telecom(res.get("telecom"))
         addr, city, state, zipcode = parse_address(res.get("address"))
 
+        # Extract language from FHIR communication[] array
+        languages = []
+        preferred_language = "English"
+        for comm in res.get("communication", []):
+            lang = comm.get("language", {})
+            coding = lang.get("coding", [{}])
+            display = coding[0].get("display", "") if coding else ""
+            if display:
+                languages.append(display)
+            if comm.get("preferred", False) and display:
+                preferred_language = display
+        if not languages:
+            languages = ["English"]
+        languages_json = json.dumps(languages)
+
         cur.execute("""
             INSERT INTO cached_practitioners (id,first_name,last_name,full_name,phone,home_phone,work_phone,
-                email,address,city,state,zip_code,status,is_hired,is_active,wellsky_data,synced_at,updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'HIRED',true,true,%s,NOW(),NOW())
+                email,address,city,state,zip_code,status,is_hired,is_active,
+                preferred_language,languages,wellsky_data,synced_at,updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'HIRED',true,true,%s,%s,%s,NOW(),NOW())
             ON CONFLICT (id) DO UPDATE SET
                 first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,full_name=EXCLUDED.full_name,
                 phone=EXCLUDED.phone,home_phone=EXCLUDED.home_phone,work_phone=EXCLUDED.work_phone,
                 email=EXCLUDED.email,address=EXCLUDED.address,city=EXCLUDED.city,state=EXCLUDED.state,
-                zip_code=EXCLUDED.zip_code,is_hired=true,is_active=true,wellsky_data=EXCLUDED.wellsky_data,
+                zip_code=EXCLUDED.zip_code,is_hired=true,is_active=true,
+                preferred_language=EXCLUDED.preferred_language,languages=EXCLUDED.languages,
+                wellsky_data=EXCLUDED.wellsky_data,
                 synced_at=NOW(),updated_at=NOW()
         """, (res.get("id"), fn, ln, f"{fn} {ln}".strip(), phone, hphone, wphone,
-              email, addr, city, state, zipcode, Json(res)))
+              email, addr, city, state, zipcode,
+              preferred_language, languages_json, Json(res)))
     db.commit()
 
 

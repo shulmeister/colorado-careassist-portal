@@ -76,6 +76,7 @@ class Caregiver:
     certifications: List[str] = field(default_factory=list)
     skills: List[str] = field(default_factory=list)
     languages: List[str] = field(default_factory=lambda: ["English"])
+    preferred_language: str = "English"
 
     # Performance Metrics (Organizational Memory)
     response_rate: float = 0.5  # % of offers they respond to
@@ -226,6 +227,7 @@ class ShiftOutreach:
     timeout_minutes: int = 15
     max_caregivers_to_contact: int = 20
     include_voice_calls: bool = False
+    voice_delay_minutes: int = 5  # Minutes to wait after SMS before voice call
 
     def add_caregiver_outreach(self, outreach: CaregiverOutreach):
         self.caregivers_contacted.append(outreach)

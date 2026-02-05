@@ -9,6 +9,7 @@ Coordinates the entire shift filling process:
 5. Assigns shift and notifies all parties
 """
 
+import os
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Any, Callable
@@ -22,6 +23,8 @@ from .sms_service import sms_service, SMSService
 from .db_lock import ShiftAssignmentLock, ShiftLockConflictError, ShiftLockDatabaseError
 
 logger = logging.getLogger(__name__)
+
+VOICE_OUTREACH_ENABLED = os.getenv("VOICE_OUTREACH_ENABLED", "false").lower() == "true"
 
 
 class ShiftFillingEngine:
@@ -62,6 +65,19 @@ class ShiftFillingEngine:
 
         # Active outreach campaigns
         self.active_campaigns: Dict[str, ShiftOutreach] = {}
+
+        # Voice outreach service
+        self.voice_service = None
+        if VOICE_OUTREACH_ENABLED:
+            try:
+                from .voice_service import voice_service
+                self.voice_service = voice_service
+                logger.info("Voice outreach service loaded")
+            except ImportError:
+                logger.info("Voice outreach service not available")
+
+        # Voice follow-up queue: outreach_id -> {sent_at, caregiver, shift, campaign_id, language}
+        self.voice_followup_queue: Dict[str, Dict] = {}
 
         # Database lock for preventing race conditions
         try:
@@ -165,6 +181,18 @@ class ShiftFillingEngine:
             outreach.match_score = match.score
             outreach.tier = match.tier
             campaign.add_caregiver_outreach(outreach)
+
+            # Queue voice follow-up if enabled
+            if (campaign.include_voice_calls
+                    and self.voice_service
+                    and self.voice_service.enabled):
+                self.voice_followup_queue[outreach.id] = {
+                    "sent_at": datetime.now(),
+                    "caregiver": match.caregiver,
+                    "shift": shift,
+                    "campaign_id": campaign.id,
+                    "language": getattr(match.caregiver, 'preferred_language', 'English'),
+                }
 
         # Store remaining matches for potential second wave
         campaign._pending_matches = tier2_matches[10:] + tier3_matches
@@ -449,6 +477,62 @@ class ShiftFillingEngine:
         clean1 = re.sub(r'[^\d]', '', phone1)[-10:]
         clean2 = re.sub(r'[^\d]', '', phone2)[-10:]
         return clean1 == clean2 and len(clean1) >= 10
+
+    def check_voice_followups(self, voice_delay_minutes: int = 5):
+        """
+        Check for SMS outreaches that need voice call follow-up.
+        Called periodically from the RC bot.
+        """
+        if not self.voice_service or not self.voice_service.enabled:
+            return
+
+        now = datetime.now()
+        to_call = []
+
+        for outreach_id, info in list(self.voice_followup_queue.items()):
+            elapsed = (now - info["sent_at"]).total_seconds() / 60
+            if elapsed < voice_delay_minutes:
+                continue
+
+            # Check if campaign is still active
+            campaign = self.active_campaigns.get(info["campaign_id"])
+            if not campaign or campaign.status != OutreachStatus.IN_PROGRESS:
+                del self.voice_followup_queue[outreach_id]
+                continue
+
+            # Check if caregiver already responded
+            outreach = next(
+                (o for o in campaign.caregivers_contacted if o.id == outreach_id),
+                None
+            )
+            if outreach and outreach.response_type == CaregiverResponseType.NO_RESPONSE:
+                to_call.append((outreach_id, info))
+            else:
+                # Already responded, no need for voice call
+                del self.voice_followup_queue[outreach_id]
+
+        for outreach_id, info in to_call:
+            caregiver = info["caregiver"]
+            shift = info["shift"]
+
+            success, call_id = self.voice_service.create_shift_offer_call(
+                caregiver_phone=caregiver.phone,
+                caregiver_name=caregiver.first_name,
+                client_name=shift.client.first_name if shift.client else "a client",
+                shift_date=shift.date.strftime("%A, %B %d"),
+                shift_time=shift.to_display_time(),
+                shift_duration=shift.duration_hours,
+                campaign_id=info["campaign_id"],
+                language=info.get("language", "English"),
+            )
+
+            if success:
+                logger.info(
+                    f"Voice follow-up call initiated for {caregiver.full_name} "
+                    f"(call_id: {call_id})"
+                )
+
+            del self.voice_followup_queue[outreach_id]
 
     def get_campaign_status(self, campaign_id: str) -> Optional[Dict[str, Any]]:
         """Get status of an active campaign."""

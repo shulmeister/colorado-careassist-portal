@@ -20,6 +20,9 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+# Feature flags
+MULTILANG_SMS_ENABLED = os.getenv("MULTILANG_SMS_ENABLED", "false").lower() == "true"
+
 # RingCentral credentials
 RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID")
 RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET")
@@ -50,6 +53,24 @@ class SMSService:
         'ok', 'yw', 'will do', 'okay, will do', 'correct', 'yes ma\'am',
         'i can take this shift', 'i can work', 'i can for', 'i will do',
         '1',  # Quick numeric response
+    }
+
+    # International acceptance phrases
+    ACCEPTANCE_EXACT_INTL = {
+        'si', 'si puedo', 'si, puedo', 'claro', 'claro que si',
+        'por supuesto', 'si por favor',                    # Spanish
+        'oui', 'bien sur', 'oui je peux',                  # French
+        'da', 'da, mogu',                                   # Russian/Romanian
+        'vang', 'co', 'duoc',                               # Vietnamese
+        'ne', 'ye',                                          # Korean
+    }
+
+    # International decline phrases
+    DECLINE_EXACT_INTL = {
+        'no puedo', 'no estoy disponible', 'lo siento',    # Spanish
+        'non', 'je ne peux pas', 'desole',                  # French
+        'net', 'nyet',                                       # Russian
+        'khong', 'khong duoc',                              # Vietnamese
     }
 
     # Response patterns for parsing caregiver replies (regex)
@@ -262,7 +283,39 @@ class SMSService:
             f"Reply YES to accept or NO to decline."
         )
 
+        # Translate if caregiver prefers non-English
+        if (MULTILANG_SMS_ENABLED
+                and hasattr(caregiver, 'preferred_language')
+                and caregiver.preferred_language
+                and caregiver.preferred_language != "English"):
+            message = self._translate_message(message, caregiver.preferred_language)
+
         return message
+
+    def _translate_message(self, message: str, target_language: str) -> str:
+        """Translate an SMS message using Claude API."""
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=500,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Translate this SMS to {target_language}. "
+                        f"Keep it under 300 characters. Keep emojis and formatting. "
+                        f"Keep 'YES' and 'NO' in the reply instruction so the system "
+                        f"can parse responses. Only output the translation:\n\n{message}"
+                    )
+                }]
+            )
+            translated = response.content[0].text.strip()
+            logger.info(f"Translated SMS to {target_language}: {len(translated)} chars")
+            return translated
+        except Exception as e:
+            logger.warning(f"Translation failed ({target_language}): {e}")
+            return message  # Fallback to English
 
     def parse_response(self, message_text: str) -> CaregiverResponseType:
         """
@@ -287,8 +340,12 @@ class SMSService:
         # Check exact matches first (highest confidence)
         if text_lower in self.ACCEPTANCE_EXACT:
             return CaregiverResponseType.ACCEPTED
+        if text_lower in self.ACCEPTANCE_EXACT_INTL:
+            return CaregiverResponseType.ACCEPTED
 
         if text_lower in self.DECLINE_EXACT:
+            return CaregiverResponseType.DECLINED
+        if text_lower in self.DECLINE_EXACT_INTL:
             return CaregiverResponseType.DECLINED
 
         # Check if it's a question (needs clarification, not a response)
@@ -323,7 +380,51 @@ class SMSService:
         if decline_score > accept_score:
             return CaregiverResponseType.DECLINED
 
-        # If no clear pattern, mark as ambiguous
+        # If no clear pattern, try Claude for non-English messages
+        if MULTILANG_SMS_ENABLED and self._is_likely_non_english(text_lower):
+            claude_result = self._classify_with_claude(message_text)
+            if claude_result != CaregiverResponseType.AMBIGUOUS:
+                return claude_result
+
+        return CaregiverResponseType.AMBIGUOUS
+
+    def _is_likely_non_english(self, text: str) -> bool:
+        """Quick heuristic to detect non-English text."""
+        # Check for common non-ASCII characters or non-English patterns
+        non_ascii_count = sum(1 for c in text if ord(c) > 127)
+        if non_ascii_count > 0:
+            return True
+        # Check for Spanish/French indicators
+        indicators = ['puedo', 'estoy', 'puede', 'quiero', 'tengo',
+                      'je', 'suis', 'peux', 'veux', 'khong', 'duoc']
+        return any(word in text for word in indicators)
+
+    def _classify_with_claude(self, text: str) -> CaregiverResponseType:
+        """Use Claude to classify non-English shift offer responses."""
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=20,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"A caregiver was offered a work shift and replied with this message. "
+                        f"Are they accepting or declining? Reply only with one word: "
+                        f"ACCEPTED or DECLINED or AMBIGUOUS\n\nMessage: '{text}'"
+                    )
+                }]
+            )
+            result = response.content[0].text.strip().upper()
+            if "ACCEPTED" in result:
+                logger.info(f"Claude classified non-English response as ACCEPTED: {text[:50]}")
+                return CaregiverResponseType.ACCEPTED
+            elif "DECLINED" in result:
+                logger.info(f"Claude classified non-English response as DECLINED: {text[:50]}")
+                return CaregiverResponseType.DECLINED
+        except Exception as e:
+            logger.warning(f"Claude response classification failed: {e}")
         return CaregiverResponseType.AMBIGUOUS
 
     def send_shift_offer(

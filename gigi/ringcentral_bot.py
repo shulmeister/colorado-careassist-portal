@@ -231,6 +231,57 @@ class GigiRingCentralBot:
             logger.info("Autonomous shift monitor ENABLED")
         else:
             logger.info("Autonomous shift monitor disabled (set GIGI_SHIFT_MONITOR_ENABLED=true to enable)")
+
+        # --- Caregiver preference extraction (GAP 3) ---
+        self.preference_extractor = None
+        try:
+            from gigi.memory_system import MemorySystem
+            from gigi.caregiver_preference_extractor import (
+                CaregiverPreferenceExtractor, CAREGIVER_MEMORY_ENABLED
+            )
+            if CAREGIVER_MEMORY_ENABLED and self.claude:
+                memory_sys = MemorySystem()
+                self.preference_extractor = CaregiverPreferenceExtractor(
+                    memory_system=memory_sys,
+                    anthropic_api_key=ANTHROPIC_API_KEY
+                )
+                logger.info("Caregiver preference extractor ENABLED")
+            else:
+                logger.info("Caregiver preference extractor disabled")
+        except Exception as e:
+            logger.warning(f"Caregiver preference extractor not available: {e}")
+
+        # --- Clock in/out reminders (GAP 4) ---
+        self.clock_reminder = None
+        self._last_clock_check = datetime.utcnow()
+        try:
+            from gigi.clock_reminder_service import ClockReminderService, CLOCK_REMINDER_ENABLED
+            if CLOCK_REMINDER_ENABLED:
+                self.clock_reminder = ClockReminderService(
+                    wellsky_service=self.wellsky,
+                    sms_send_fn=self._send_sms_via_rc
+                )
+                logger.info("Clock reminder service ENABLED")
+            else:
+                logger.info("Clock reminder service disabled")
+        except Exception as e:
+            logger.warning(f"Clock reminder service not available: {e}")
+
+        # --- Daily shift confirmations (GAP 5) ---
+        self.daily_confirmation = None
+        try:
+            from gigi.daily_confirmation_service import DailyConfirmationService, DAILY_CONFIRMATION_ENABLED
+            if DAILY_CONFIRMATION_ENABLED:
+                self.daily_confirmation = DailyConfirmationService(
+                    wellsky_service=self.wellsky,
+                    sms_send_fn=self._send_sms_via_rc
+                )
+                logger.info("Daily confirmation service ENABLED")
+            else:
+                logger.info("Daily confirmation service disabled")
+        except Exception as e:
+            logger.warning(f"Daily confirmation service not available: {e}")
+
         logger.info(f"Bot initialized. Startup time (UTC): {self.startup_time}")
         logger.info(f"Reply history loaded: {len(self.reply_history.get('replies', []))} recent replies tracked")
 
@@ -376,6 +427,44 @@ class GigiRingCentralBot:
             logger.error(f"JWT exchange error: {e}")
             return None
 
+    def _send_sms_via_rc(self, to_phone: str, message: str):
+        """Send SMS using the admin JWT token. Used by clock reminders and daily confirmations."""
+        access_token = self._get_admin_access_token()
+        if not access_token:
+            return False, "No access token"
+
+        import re
+        clean_phone = re.sub(r'[^\d]', '', to_phone)
+        if len(clean_phone) == 10:
+            clean_phone = f"+1{clean_phone}"
+        elif len(clean_phone) == 11 and clean_phone.startswith('1'):
+            clean_phone = f"+{clean_phone}"
+        elif not clean_phone.startswith('+'):
+            clean_phone = f"+{clean_phone}"
+
+        try:
+            response = requests.post(
+                f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/sms",
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "from": {"phoneNumber": RINGCENTRAL_FROM_NUMBER},
+                    "to": [{"phoneNumber": clean_phone}],
+                    "text": message
+                },
+                timeout=20
+            )
+            if response.status_code in (200, 201):
+                return True, response.json().get("id")
+            else:
+                logger.error(f"SMS send failed: {response.status_code}")
+                return False, f"HTTP {response.status_code}"
+        except Exception as e:
+            logger.error(f"SMS send error: {e}")
+            return False, str(e)
+
     async def send_health_check_sms(self):
         """Send a startup SMS to the admin to confirm vitality"""
         try:
@@ -434,6 +523,27 @@ class GigiRingCentralBot:
                 if (now - self._last_campaign_check).total_seconds() >= CAMPAIGN_CHECK_INTERVAL_SECONDS:
                     self._last_campaign_check = now
                     await self._check_campaign_status()
+
+            # 4. Clock in/out reminders (every 5 min during business hours)
+            if self.clock_reminder and self.is_business_hours():
+                now = datetime.utcnow()
+                if (now - self._last_clock_check).total_seconds() >= 300:
+                    self._last_clock_check = now
+                    try:
+                        actions = self.clock_reminder.check_and_remind()
+                        if actions:
+                            logger.info(f"Clock reminders sent: {actions}")
+                    except Exception as e:
+                        logger.error(f"Clock reminder error: {e}")
+
+            # 5. Daily shift confirmations (service handles its own 2pm timing)
+            if self.daily_confirmation:
+                try:
+                    notified = self.daily_confirmation.check_and_send()
+                    if notified:
+                        logger.info(f"Daily confirmations sent to: {notified}")
+                except Exception as e:
+                    logger.error(f"Daily confirmation error: {e}")
 
         except Exception as e:
             logger.error(f"Error in check_and_act: {e}")
@@ -715,6 +825,19 @@ class GigiRingCentralBot:
 
             except Exception as e:
                 logger.error(f"Failed to document to WellSky: {e}")
+
+        # Extract caregiver preferences from conversation (GAP 3)
+        if caregiver_id and self.preference_extractor:
+            try:
+                memory_ids = await self.preference_extractor.extract_and_store(
+                    caregiver_id=caregiver_id,
+                    caregiver_name=caregiver_name or "Unknown",
+                    message_text=text
+                )
+                if memory_ids:
+                    logger.info(f"Extracted {len(memory_ids)} preferences for {caregiver_name}")
+            except Exception as e:
+                logger.warning(f"Preference extraction failed: {e}")
 
         # Autonomous shift filling: trigger when callout detected
         if note_type == "callout" and GIGI_SHIFT_MONITOR_ENABLED:
