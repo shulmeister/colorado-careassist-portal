@@ -5625,6 +5625,23 @@ async def internal_get_campaign_status(campaign_id: str):
         })
 
 
+@app.post("/api/internal/shift-filling/voice-followups")
+async def internal_check_voice_followups():
+    """
+    Trigger voice follow-up calls for SMS outreaches that haven't received responses.
+    Called by Gigi bot on the same 5-min campaign check cycle.
+    """
+    if not SHIFT_FILLING_AVAILABLE:
+        return JSONResponse({"calls_made": 0, "error": "Shift filling not available"})
+
+    try:
+        results = shift_filling_engine.check_voice_followups()
+        return JSONResponse({"calls_made": len(results) if results else 0, "results": results or []})
+    except Exception as e:
+        logger.error(f"Voice followup check error: {e}")
+        return JSONResponse({"calls_made": 0, "error": str(e)})
+
+
 # In-memory set for Retell call_id idempotency (backed by DB)
 _processed_retell_call_ids: set = set()
 

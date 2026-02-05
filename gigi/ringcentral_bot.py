@@ -71,6 +71,7 @@ REPLY_HISTORY_FILE = "/Users/shulmeister/.gigi-reply-history.json"
 GIGI_SHIFT_MONITOR_ENABLED = os.getenv("GIGI_SHIFT_MONITOR_ENABLED", "false").lower() == "true"
 CAMPAIGN_CHECK_INTERVAL_SECONDS = 300  # Check campaigns every 5 minutes
 CAMPAIGN_ESCALATION_MINUTES = 30  # Escalate unfilled campaigns after 30 min
+VOICE_OUTREACH_ENABLED = os.getenv("VOICE_OUTREACH_ENABLED", "false").lower() == "true"
 
 # Claude API Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -1005,6 +1006,20 @@ class GigiRingCentralBot:
 
         for cid in completed:
             self._active_campaigns.pop(cid, None)
+
+        # Trigger voice follow-up calls for non-responding caregivers
+        if VOICE_OUTREACH_ENABLED:
+            try:
+                resp = http_requests.post(
+                    "http://localhost:8765/api/internal/shift-filling/voice-followups",
+                    timeout=15
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("calls_made", 0) > 0:
+                        logger.info(f"Voice follow-ups initiated: {data['calls_made']} calls")
+            except Exception as e:
+                logger.error(f"Voice followup check error: {e}")
 
     # =========================================================================
     # Claude SMS Conversation History
