@@ -58,7 +58,8 @@ class SMSService:
     # International acceptance phrases
     ACCEPTANCE_EXACT_INTL = {
         'si', 'si puedo', 'si, puedo', 'claro', 'claro que si',
-        'por supuesto', 'si por favor',                    # Spanish
+        'por supuesto', 'si por favor', 'si acepto',
+        'si, acepto', 'acepto', 'con gusto', 'esta bien',  # Spanish
         'oui', 'bien sur', 'oui je peux',                  # French
         'da', 'da, mogu',                                   # Russian/Romanian
         'vang', 'co', 'duoc',                               # Vietnamese
@@ -395,7 +396,8 @@ class SMSService:
         if non_ascii_count > 0:
             return True
         # Check for Spanish/French indicators
-        indicators = ['puedo', 'estoy', 'puede', 'quiero', 'tengo',
+        indicators = ['puedo', 'estoy', 'puede', 'quiero', 'tengo', 'acepto',
+                      'disponible', 'trabajo', 'turno', 'gusto',
                       'je', 'suis', 'peux', 'veux', 'khong', 'duoc']
         return any(word in text for word in indicators)
 
