@@ -6,8 +6,8 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 
 | Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Mac Mini App / URL + Deploy Status                                                                 |
 |---------------------|-------------------------------------------|------------------------------------------------------|--------------------------------------------------------|---------------------------------------------------------------------------------------------------|
-| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `careassist-unified` → https://careassist-unified-0a11ddb45ac0.mac-miniapp.com (auto deploy ✅) |
-| **Gigi AI Agent**   | (part of portal)                          | `gigi/`                                              | (same as portal)                                       | Ships with portal → https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/ |
+| Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `careassist-unified` → https://portal.coloradocareassist.com (auto deploy ✅) |
+| **Gigi AI Agent**   | (part of portal)                          | `gigi/`                                              | (same as portal)                                       | Ships with portal → https://portal.coloradocareassist.com/gigi/ |
 | Sales Dashboard     | `sales-dashboard`                         | `dashboards/sales`                                   | `shulmeister/sales-dashboard`                          | `careassist-tracker` / `cca-crm` (both auto deploy from GitHub `main` ✅)                          |
 | Activity Tracker    | `activity-tracker`                        | `dashboards/activity-tracker`                        | `shulmeister/Colorado-CareAssist-Route-Tracker`        | `cca-activity-tracker-6d9a1d8e3933` (auto deploy from GitHub `main` ✅)                             |
 | Recruiter Dashboard | `recruiter-dashboard`                     | `dashboards/recruitment`                             | `shulmeister/recruiter-dashboard`                      | `caregiver-lead-tracker-9d0e6a8c7c20` (auto deploy from GitHub `main` ✅)                           |
@@ -22,7 +22,7 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 ### THE HUB (Main Portal + Gigi)
 - **Repository**: `colorado-careassist-portal`
 - **GitHub**: https://github.com/shulmeister/colorado-careassist-portal
-- **Mac Mini**: `careassist-unified` → `careassist-unified-0a11ddb45ac0.mac-miniapp.com`
+- **Mac Mini**: `careassist-unified` → `careassist-unified-0a11ddb45ac0.coloradocareassist.com`
 - **Local Path**: `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal`
 - **Tech**: FastAPI, Jinja2, PostgreSQL
 - **Purpose**: Central launchpad with tiles that link to other apps
@@ -32,7 +32,7 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 Gigi is the AI-powered after-hours assistant that handles caregiver and client communications when the office is closed.
 
 - **Location**: `gigi/` folder within portal repo
-- **Live URL**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/
+- **Live URL**: https://portal.coloradocareassist.com/gigi/
 - **Phone Numbers**: 719-428-3999 (primary), 303-757-1777 (secondary)
 - **Tech**: FastAPI, Retell AI (voice), RingCentral (SMS), Gemini AI, WellSky API
 
@@ -56,8 +56,8 @@ See `gigi/README.md` for full technical documentation.
 #### 1. Sales Dashboard
 - **Repository**: `sales-dashboard` (nested repo)
 - **GitHub**: https://github.com/shulmeister/sales-dashboard
-- **Mac Mini**: `careassist-tracker` → `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/`  
-  (Portal env `SALES_DASHBOARD_URL` can override with `https://cca-crm-cd555628f933.mac-miniapp.com` when needed.)
+- **Mac Mini**: `careassist-tracker` → `https://portal.coloradocareassist.com/sales/`  
+  (Portal env `SALES_DASHBOARD_URL` can override with `https://portal.coloradocareassist.com` when needed.)
 - **Local Path**: `~/Documents/GitHub/sales-dashboard` (symlink) → `dashboards/sales/`
 - **Tech**: Python FastAPI, Jinja2, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
@@ -67,7 +67,7 @@ See `gigi/README.md` for full technical documentation.
 #### 2. Recruiter Dashboard
 - **Repository**: `recruiter-dashboard` (nested repo)
 - **GitHub**: https://github.com/shulmeister/recruiter-dashboard
-- **Mac Mini**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com`
+- **Mac Mini**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.coloradocareassist.com`
 - **Local Path**: `~/Documents/GitHub/recruiter-dashboard` (symlink) → `dashboards/recruitment/`
 - **Tech**: Flask, SQLAlchemy, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
@@ -86,7 +86,7 @@ See `gigi/README.md` for full technical documentation.
 #### 4. Activity Tracker
 - **Repository**: `Colorado-CareAssist-Route-Tracker` (nested repo)
 - **GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
-- **Mac Mini**: `cca-activity-tracker-6d9a1d8e3933` → https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com/
+- **Mac Mini**: `cca-activity-tracker-6d9a1d8e3933` → https://portal.coloradocareassist.com/activity/
 - **Local Path**: `~/Documents/GitHub/activity-tracker` (symlink) → `dashboards/activity-tracker/`
 - **Tech**: FastAPI, SQLAlchemy, PDF parser, Tesseract OCR
 - **Git Structure**: Nested git repo (has its own `.git` folder)
@@ -110,7 +110,7 @@ cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub
-git push mac-mini main      # Push to Mac Mini (only if NOT using GitHub integration)
+git push origin main      # Push to Mac Mini (only if NOT using GitHub integration)
 ```
 
 #### Sales Dashboard (Spoke)
@@ -136,7 +136,7 @@ git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub → Mac Mini auto-deploys! ✅
 # Only push directly if auto deploys are off:
-# git push mac-mini main
+# git push origin main
 ```
 
 ### 📁 Git Repository Structure
@@ -275,7 +275,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Mac Mini)
 git add .
 git commit -m "Describe your changes"
 git push origin main      # Push to GitHub
-git push mac-mini main      # Push to Mac Mini (REQUIRED!)
+git push origin main      # Push to Mac Mini (REQUIRED!)
 ```
 
 ### Mac Mini
@@ -284,20 +284,20 @@ The app is configured for Mac Mini deployment:
 
 1. **Set Environment Variables**
    ```bash
-   mac-mini config:set GOOGLE_CLIENT_ID=your_client_id
-   mac-mini config:set GOOGLE_CLIENT_SECRET=your_client_secret
-   mac-mini config:set GOOGLE_REDIRECT_URI=https://portal-coloradocareassist.mac-miniapp.com/auth/callback
-   mac-mini config:set APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
-   mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com
+   # Set in ~/.gigi-env instead: GOOGLE_CLIENT_ID=your_client_id
+   # Set in ~/.gigi-env instead: GOOGLE_CLIENT_SECRET=your_client_secret
+   # Set in ~/.gigi-env instead: GOOGLE_REDIRECT_URI=https://portal.coloradocareassist.com/auth/callback
+   # Set in ~/.gigi-env instead: APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+   # Set in ~/.gigi-env instead: ALLOWED_DOMAINS=coloradocareassist.com
    # Optional RingCentral embeddable widget
-   mac-mini config:set RINGCENTRAL_EMBED_CLIENT_ID=your_ringcentral_browser_app_id
-   mac-mini config:set RINGCENTRAL_EMBED_SERVER=https://platform.ringcentral.com
-   mac-mini config:set RINGCENTRAL_EMBED_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
-   mac-mini config:set RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
-   mac-mini config:set RINGCENTRAL_EMBED_DEFAULT_TAB=messages
-   mac-mini config:set RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
+   # Set in ~/.gigi-env instead: RINGCENTRAL_EMBED_CLIENT_ID=your_ringcentral_browser_app_id
+   # Set in ~/.gigi-env instead: RINGCENTRAL_EMBED_SERVER=https://platform.ringcentral.com
+   # Set in ~/.gigi-env instead: RINGCENTRAL_EMBED_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
+   # Set in ~/.gigi-env instead: RINGCENTRAL_EMBED_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
+   # Set in ~/.gigi-env instead: RINGCENTRAL_EMBED_DEFAULT_TAB=messages
+   # Set in ~/.gigi-env instead: RINGCENTRAL_EMBED_REDIRECT_URI=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/redirect.html
    # Marketing Dashboard APIs
-   mac-mini config:set BREVO_API_KEY=your_brevo_api_key
+   # Set in ~/.gigi-env instead: BREVO_API_KEY=your_brevo_api_key
    ```
 
 2. **Add PostgreSQL**
@@ -307,7 +307,7 @@ The app is configured for Mac Mini deployment:
 
 3. **Deploy**
    ```bash
-   git push mac-mini main
+   git push origin main
    ```
 
 4. **Initialize Database**

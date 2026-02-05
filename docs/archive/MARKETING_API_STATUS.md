@@ -65,7 +65,7 @@ The Marketing Dashboard has multiple API integrations. Here's the current status
    
    Once you have the token, set it:
    ```bash
-   mac-mini config:set GOOGLE_ADS_DEVELOPER_TOKEN="your_token" -a portal-coloradocareassist
+   # Set in ~/.gigi-env instead: GOOGLE_ADS_DEVELOPER_TOKEN="your_token" -a portal-coloradocareassist
    ```
 
 2. **Get Refresh Token (OAuth):**
@@ -162,27 +162,27 @@ You can also test the API endpoints directly:
 
 1. **Google Ads + Facebook Ads:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads
+   curl https://portal.coloradocareassist.com/api/marketing/ads
    ```
 
 2. **Social Metrics:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/social
+   curl https://portal.coloradocareassist.com/api/marketing/social
    ```
 
 3. **Website/GA4/GBP:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/website
+   curl https://portal.coloradocareassist.com/api/marketing/website
    ```
 
 4. **GA4 Connection Test:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/test-ga4
+   curl https://portal.coloradocareassist.com/api/marketing/test-ga4
    ```
 
 5. **GBP Connection Test:**
    ```bash
-   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/test-gbp
+   curl https://portal.coloradocareassist.com/api/marketing/test-gbp
    ```
 
 ---
@@ -208,7 +208,7 @@ Since you just started buying Google keywords again, here's what you need to do:
 
 2. **Set the Developer Token:**
    ```bash
-   mac-mini config:set GOOGLE_ADS_DEVELOPER_TOKEN="your_developer_token_here" -a portal-coloradocareassist
+   # Set in ~/.gigi-env instead: GOOGLE_ADS_DEVELOPER_TOKEN="your_developer_token_here" -a portal-coloradocareassist
    ```
 
 3. **Get OAuth Refresh Token:**
@@ -222,7 +222,7 @@ Since you just started buying Google keywords again, here's what you need to do:
    mac-mini logs -n 50 -a portal-coloradocareassist | grep -i "google.*ads"
    
    # Or test the endpoint
-   curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads | jq '.data.google_ads'
+   curl https://portal.coloradocareassist.com/api/marketing/ads | jq '.data.google_ads'
    ```
 
 5. **Check Dashboard:**

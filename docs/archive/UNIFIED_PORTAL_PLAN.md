@@ -11,9 +11,9 @@
 |-----|-----|---------|--------|
 | `coloradocareassist` | https://coloradocareassist.com/ | Main public website | ✅ LIVE |
 | `hesedhomecare` | https://hesedhomecare.com/ | Hesed website | ✅ LIVE |
-| `portal-coloradocareassist` | https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/ | Portal hub (dashboard selector) | ✅ LIVE |
-| `careassist-tracker` | https://careassist-tracker-1a6df2c7822c.mac-miniapp.com/ | Sales CRM (614 contacts, 40 deals) | ✅ LIVE |
-| `caregiver-lead-tracker` | https://caregiver-lead-tracker-1e2f551680c9.mac-miniapp.com/ | Recruiter dashboard (454 leads) | ✅ LIVE |
+| `portal-coloradocareassist` | https://portal.coloradocareassist.com/ | Portal hub (dashboard selector) | ✅ LIVE |
+| `careassist-tracker` | https://portal.coloradocareassist.com/ | Sales CRM (614 contacts, 40 deals) | ✅ LIVE |
+| `caregiver-lead-tracker` | https://portal.coloradocareassist.com/ | Recruiter dashboard (454 leads) | ✅ LIVE |
 | `wellsky-converter-shulmeister` | http://payroll.coloradocareassist.com/ | Wellsky payroll converter | ✅ LIVE |
 
 **Total**: 6 Mac Mini apps
@@ -47,7 +47,7 @@ The Wellsky converter at `payroll.coloradocareassist.com` is hosted on Mac Mini 
 
 ## Staging Environment
 
-**URL**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/
+**URL**: https://portal.coloradocareassist.com/
 
 **Status**: Currently deploying with full sales + recruiting integration
 
@@ -245,7 +245,7 @@ Plus:
 ## Current Status
 
 **Deployment**: ✅ COMPLETE
-**Portal Homepage**: ✅ Working (https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/)
+**Portal Homepage**: ✅ Working (https://portal.coloradocareassist.com/)
 **Sales Dashboard**: ✅ Mounted at /sales (redirecting to OAuth login)
 **Recruiting Dashboard**: ✅ Mounted at /recruiting (loading successfully)
 
@@ -257,12 +257,12 @@ Plus:
 
 ### Next Steps:
 1. **OAuth Setup**: Update Google OAuth redirect URIs to include staging URLs:
-   - Add: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/auth/callback`
-   - Add: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/recruiting/auth/callback`
+   - Add: `https://portal.coloradocareassist.com/sales/auth/callback`
+   - Add: `https://portal.coloradocareassist.com/recruiting/auth/callback`
 2. **Full Testing**: Test all features (contacts, deals, leads, analytics)
 3. **User Acceptance**: Get your approval before production cutover
 
-**Staging URL**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/
+**Staging URL**: https://portal.coloradocareassist.com/
 
 ---
 

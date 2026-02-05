@@ -48,7 +48,7 @@ This is the quickest way to get a refresh token:
 
 7. **Set on Mac Mini:**
    ```bash
-   mac-mini config:set GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-coloradocareassist
+   # Set in ~/.gigi-env instead: GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-coloradocareassist
    ```
 
 ---
@@ -81,7 +81,7 @@ If you need to set up OAuth from scratch:
    - Go to: APIs & Services → Credentials
    - Edit your OAuth 2.0 Client ID
    - Add Authorized redirect URI:
-     - `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/google-ads/callback`
+     - `https://portal.coloradocareassist.com/auth/google-ads/callback`
    - Save
 
 2. **Use OAuth Playground** (same as Option 1)
@@ -101,7 +101,7 @@ You should **NOT** see: "Google Ads service not fully configured"
 
 ### 2. Test the API Endpoint
 ```bash
-curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads | jq '.data.google_ads'
+curl https://portal.coloradocareassist.com/api/marketing/ads | jq '.data.google_ads'
 ```
 
 Look for:

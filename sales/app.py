@@ -65,12 +65,9 @@ _COMPANY_LOGO_TTL_SECONDS = 86400  # 1 day
 async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None):
     """Log event to the central portal activity stream"""
     try:
-        # Determine URL
-        port = os.getenv("PORT", "8000")
-        portal_url = f"http://localhost:{port}"
-        
-        if os.getenv("Mac Mini (Local)_APP_NAME"):
-            portal_url = f"https://{os.getenv('Mac Mini (Local)_APP_NAME')}.mac-miniapp.com"
+        # Determine URL - all services run on localhost (Mac Mini)
+        port = os.getenv("PORT", "8765")
+        portal_url = os.getenv("PORTAL_URL", f"http://localhost:{port}")
             
         async with httpx.AsyncClient() as client:
             await client.post(
@@ -616,7 +613,7 @@ app.add_middleware(
 # Add trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "*.mac-miniapp.com", "tracker.coloradocareassist.com", "portal.coloradocareassist.com"]  # Production domains
+    allowed_hosts=["localhost", "127.0.0.1", "tracker.coloradocareassist.com", "portal.coloradocareassist.com"]
 )
 
 # Mount static files and templates
@@ -7055,7 +7052,7 @@ async def quickbooks_oauth_authorize(
         # Generate a random state parameter for CSRF protection
         state = secrets.token_urlsafe(32)
         
-        redirect_uri = "https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/quickbooks/oauth/callback"
+        redirect_uri = "https://portal.coloradocareassist.com/sales/api/quickbooks/oauth/callback"
         scope = "com.intuit.quickbooks.accounting"
         
         auth_url = (
@@ -7117,7 +7114,7 @@ async def quickbooks_oauth_callback(
         
         client_id = os.getenv('QB_CLIENT_ID') or os.getenv('QUICKBOOKS_CLIENT_ID')
         client_secret = os.getenv('QB_CLIENT_SECRET') or os.getenv('QUICKBOOKS_CLIENT_SECRET')
-        redirect_uri = "https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/quickbooks/oauth/callback"
+        redirect_uri = "https://portal.coloradocareassist.com/sales/api/quickbooks/oauth/callback"
         
         if not client_id or not client_secret:
             return HTMLResponse("""

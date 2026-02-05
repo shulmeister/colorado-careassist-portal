@@ -33,7 +33,7 @@
 After deployment, test the API:
 
 ```bash
-curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads
+curl https://portal.coloradocareassist.com/api/marketing/ads
 ```
 
 Check the marketing dashboard:

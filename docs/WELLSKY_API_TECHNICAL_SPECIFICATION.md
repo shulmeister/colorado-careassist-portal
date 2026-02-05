@@ -71,12 +71,12 @@ Beyond AI scheduling, the WellSky API powers our unified operations portal acros
 
 ```
 Colorado Care Assist Unified Portal
-├── Main Website (coloradocareassist.mac-miniapp.com)
-├── Unified Operations Portal (careassist-unified.mac-miniapp.com)
+├── Main Website (coloradocareassist.coloradocareassist.com)
+├── Unified Operations Portal (careassist-unified.coloradocareassist.com)
 │   ├── Sales CRM Dashboard
 │   ├── Recruiting Dashboard
 │   └── Hub/Dashboard Selector
-└── Gigi AI Voice Assistant (gigi-careassist.mac-miniapp.com)
+└── Gigi AI Voice Assistant (gigi-careassist.coloradocareassist.com)
 ```
 
 ### 1.3 WellSky Service Layer
@@ -335,7 +335,7 @@ lead.skills → applicant.skills (new fields added)
 **Critical Operations Integration:**
 ```bash
 # When WellSky API key is added, MUST set:
-mac-mini config:set GIGI_OPERATIONS_SMS_ENABLED=true
+# Set in ~/.gigi-env instead: GIGI_OPERATIONS_SMS_ENABLED=true
 
 # Without this flag:
 # ❌ No SMS to on-call manager for call-outs
@@ -716,10 +716,10 @@ Analyze by Recruiting Source → Optimize sourcing strategy
 **Production Security:**
 ```bash
 # Environment variables set in Mac Mini
-mac-mini config:set WELLSKY_API_KEY="***" --app careassist-unified
-mac-mini config:set WELLSKY_API_SECRET="***" --app careassist-unified
-mac-mini config:set WELLSKY_AGENCY_ID="***" --app careassist-unified
-mac-mini config:set WELLSKY_ENVIRONMENT="production" --app careassist-unified
+# Set in ~/.gigi-env instead: WELLSKY_API_KEY="***" --app careassist-unified
+# Set in ~/.gigi-env instead: WELLSKY_API_SECRET="***" --app careassist-unified
+# Set in ~/.gigi-env instead: WELLSKY_AGENCY_ID="***" --app careassist-unified
+# Set in ~/.gigi-env instead: WELLSKY_ENVIRONMENT="production" --app careassist-unified
 ```
 
 ### 5.2 Data Privacy & HIPAA Compliance

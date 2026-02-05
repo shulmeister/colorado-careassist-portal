@@ -150,7 +150,7 @@ VITE_RINGCENTRAL_CLIENT_ID=<browser-app-client-id>
 VITE_RINGCENTRAL_APP_SERVER=https://platform.ringcentral.com
 VITE_RINGCENTRAL_APP_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/app.html
 VITE_RINGCENTRAL_ADAPTER_URL=https://apps.ringcentral.com/integration/ringcentral-embeddable/latest/adapter.js
-VITE_RINGCENTRAL_REDIRECT_URI=https://cca-crm-cd555628f933.mac-miniapp.com/auth-callback.html
+VITE_RINGCENTRAL_REDIRECT_URI=https://portal.coloradocareassist.com/auth-callback.html
 VITE_RINGCENTRAL_DEFAULT_TAB=messages
 ```
 

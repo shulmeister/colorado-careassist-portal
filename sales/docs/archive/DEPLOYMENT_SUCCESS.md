@@ -1,7 +1,7 @@
 # 🎉 ATOMIC CRM - DEPLOYMENT SUCCESSFUL! 
 
 ## 🚀 Live URL
-**https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/**
+**https://portal.coloradocareassist.com/sales/**
 
 ---
 
@@ -261,7 +261,7 @@ dashboards/sales/
 4. Check `/health` endpoint to verify backend is running
 
 ### If API calls fail:
-1. Check Mac Mini logs: `mac-mini logs --tail --app careassist-tracker`
+1. Check Mac Mini logs: `tail -f ~/logs/gigi-unified.log --app careassist-tracker`
 2. Verify DATABASE_URL is set correctly
 3. Check CORS settings in `app.py`
 
@@ -281,7 +281,7 @@ dashboards/sales/
 
 ### Mac Mini:
 - App: `careassist-tracker`
-- URL: https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/
+- URL: https://portal.coloradocareassist.com/sales/
 - Buildpacks: 
   1. `mac-mini-community/apt` (for Tesseract OCR)
   2. `mac-mini/python`
@@ -292,7 +292,7 @@ cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sa
 git add -A
 git commit -m "Your commit message"
 git push origin main     # Push to GitHub
-git push mac-mini main     # Deploy to Mac Mini
+git push origin main     # Deploy to Mac Mini
 ```
 
 ---
@@ -319,7 +319,7 @@ You now have a **BEAUTIFUL, PROFESSIONAL CRM** that:
 ## 📞 Support
 
 If you need any help or have questions:
-1. Check the logs: `mac-mini logs --tail --app careassist-tracker`
+1. Check the logs: `tail -f ~/logs/gigi-unified.log --app careassist-tracker`
 2. Review this documentation
 3. Check the React Admin docs: https://marmelab.com/react-admin/
 4. Ask me! I'm here to help! 😊

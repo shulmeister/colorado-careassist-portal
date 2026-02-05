@@ -57,16 +57,16 @@ Currently configured for 2025. When 2026 starts, just update one environment var
 
 ```bash
 # Set 2025 voucher folder (current)
-mac-mini config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="11dehnpNV-QfwdU_6DHXAuul8v9KW2mD2" --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_DRIVE_VOUCHER_FOLDER_ID="11dehnpNV-QfwdU_6DHXAuul8v9KW2mD2" --app portal-coloradocareassist
 
 # Set Google Sheets ID (already correct)
-mac-mini config:set GOOGLE_SHEETS_VOUCHER_ID="1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASGjMZAM" --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_SHEETS_VOUCHER_ID="1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASGjMZAM" --app portal-coloradocareassist
 
 # Set your Google Cloud project ID (from console)
-mac-mini config:set GOOGLE_CLOUD_PROJECT_ID="your-project-id-here" --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_CLOUD_PROJECT_ID="your-project-id-here" --app portal-coloradocareassist
 
 # Set Service Account JSON (copy entire contents of downloaded JSON file)
-mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"your-project",...}' --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"your-project",...}' --app portal-coloradocareassist
 ```
 
 **Or via Mac Mini Dashboard**:
@@ -76,7 +76,7 @@ mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","proj
 
 ### Step 4: Test It!
 
-1. Go to: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/vouchers
+1. Go to: https://portal.coloradocareassist.com/vouchers
 2. Click "🔄 Sync from Drive"
 3. Watch it process your vouchers!
 
@@ -112,7 +112,7 @@ Now it checks every hour automatically!
 When 2026 starts, just update one variable:
 
 ```bash
-mac-mini config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="10xYKU5E3tQy1WvlOELJRjkzyRotHClgO" --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_DRIVE_VOUCHER_FOLDER_ID="10xYKU5E3tQy1WvlOELJRjkzyRotHClgO" --app portal-coloradocareassist
 ```
 
 That's it! The system will start monitoring the 2026 folder.
@@ -167,7 +167,7 @@ Once configured, click "Sync from Drive" and these will be processed if they're 
 
 Check logs anytime:
 ```bash
-mac-mini logs --tail --app portal-coloradocareassist
+tail -f ~/logs/gigi-unified.log --app portal-coloradocareassist
 ```
 
 Need help? Just ask! 🚀

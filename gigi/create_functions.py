@@ -5,7 +5,7 @@ import os
 import requests
 
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
-WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function"
+WEBHOOK_BASE = "https://portal.coloradocareassist.com/gigi/webhook/retell/function"
 
 headers = {
     "Authorization": f"Bearer {RETELL_API_KEY}",

@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID")
 CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET")
 JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN")
-WEBHOOK_URL = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/api/gigi/ringcentral/command"
+WEBHOOK_URL = "https://portal.coloradocareassist.com/api/gigi/ringcentral/command"
 
 def get_token():
     response = requests.post(

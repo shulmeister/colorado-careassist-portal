@@ -50,7 +50,7 @@
 cat path/to/your-service-account-key.json | jq -c . > temp.json
 
 # Then set it as config var
-mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON="$(cat temp.json)" -a portal-coloradocareassist-3e1a4bb34793
+# Set in ~/.gigi-env instead: GOOGLE_SERVICE_ACCOUNT_JSON="$(cat temp.json)" -a portal-coloradocareassist-3e1a4bb34793
 
 # Clean up
 rm temp.json
@@ -60,7 +60,7 @@ rm temp.json
 
 After setting the environment variable, the app will automatically restart. You can verify GA4 is working by:
 
-1. Visiting: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/test-ga4
+1. Visiting: https://portal.coloradocareassist.com/api/marketing/test-ga4
 2. You should see:
    ```json
    {
@@ -81,5 +81,5 @@ If you get permission errors:
 
 If you need a different property ID:
 ```bash
-mac-mini config:set GA4_PROPERTY_ID=YOUR_PROPERTY_ID -a portal-coloradocareassist-3e1a4bb34793
+# Set in ~/.gigi-env instead: GA4_PROPERTY_ID=YOUR_PROPERTY_ID -a portal-coloradocareassist-3e1a4bb34793
 ```

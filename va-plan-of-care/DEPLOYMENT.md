@@ -21,13 +21,13 @@ GOOGLE_API_KEY=<your-key>
 ### Check if API Key is Set
 
 ```bash
-mac-mini config -a careassist-unified | grep -i "GEMINI\|GOOGLE"
+# Check ~/.gigi-env -a careassist-unified | grep -i "GEMINI\|GOOGLE"
 ```
 
 ### Set API Key (if missing)
 
 ```bash
-mac-mini config:set GEMINI_API_KEY=<your-key> -a careassist-unified
+# Set in ~/.gigi-env instead: GEMINI_API_KEY=<your-key> -a careassist-unified
 ```
 
 ---
@@ -60,17 +60,17 @@ git add portal/portal_app.py
 git commit -m "Update VA Plan of Care Generator"
 
 # Deploy
-git push mac-mini main
+git push origin main
 ```
 
 ### 3. Verify Deployment
 
 ```bash
 # Check build logs
-mac-mini logs --tail -a careassist-unified
+tail -f ~/logs/gigi-unified.log -a careassist-unified
 
 # Visit live URL
-open https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care
+open https://portal.coloradocareassist.com/va-plan-of-care
 ```
 
 ### 4. Test After Deployment
@@ -160,7 +160,7 @@ httpx==0.27.0                   # Async HTTP client
 
 ```bash
 # View logs for Gemini API calls
-mac-mini logs --tail -a careassist-unified | grep "Gemini"
+tail -f ~/logs/gigi-unified.log -a careassist-unified | grep "Gemini"
 ```
 
 ### Common Log Messages
@@ -208,7 +208,7 @@ git log --oneline -10
 
 # Rollback to previous version
 git revert <commit-hash>
-git push mac-mini main
+git push origin main
 
 # OR use Mac Mini rollback
 mac-mini releases -a careassist-unified
@@ -316,14 +316,14 @@ The tool processes:
 echo "google-generativeai==0.8.6" >> requirements.txt
 git add requirements.txt
 git commit -m "Add Gemini SDK"
-git push mac-mini main
+git push origin main
 ```
 
 ### Issue: "GEMINI_API_KEY not configured"
 
 **Solution:**
 ```bash
-mac-mini config:set GEMINI_API_KEY=<your-key> -a careassist-unified
+# Set in ~/.gigi-env instead: GEMINI_API_KEY=<your-key> -a careassist-unified
 ```
 
 ### Issue: Tile not showing on portal
@@ -338,7 +338,7 @@ mac-mini run python add_va_tile.py -a careassist-unified
 
 **Check logs:**
 ```bash
-mac-mini logs --tail -a careassist-unified
+tail -f ~/logs/gigi-unified.log -a careassist-unified
 ```
 
 **Common causes:**

@@ -7,7 +7,7 @@ import json
 
 # RingCentral credentials from Mac Mini (Local)
 JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN", "[REDACTED_JWT]")
-WEBHOOK_URL = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/ringcentral-sms"
+WEBHOOK_URL = "https://portal.coloradocareassist.com/gigi/webhook/ringcentral-sms"
 
 def get_access_token():
     """Get RingCentral access token using JWT."""

@@ -11,7 +11,7 @@ This integration syncs customers from QuickBooks to Brevo's Client list, trigger
 5. Fill in app details:
    - **App Name**: Colorado CareAssist CRM Sync
    - **App Type**: Production (or Sandbox for testing)
-   - **Redirect URI**: `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/quickbooks/oauth/callback`
+   - **Redirect URI**: `https://portal.coloradocareassist.com/sales/api/quickbooks/oauth/callback`
 6. Save and note your **Client ID** and **Client Secret**
 
 ## Step 2: Authorize Your App
@@ -27,7 +27,7 @@ I can create a helper script that makes this easier. For now, you can use the Qu
    https://appcenter.intuit.com/connect/oauth2?
    client_id=YOUR_CLIENT_ID&
    scope=com.intuit.quickbooks.accounting&
-   redirect_uri=https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/quickbooks/oauth/callback&
+   redirect_uri=https://portal.coloradocareassist.com/sales/api/quickbooks/oauth/callback&
    response_type=code
    ```
 
@@ -46,11 +46,11 @@ I can create a helper script that makes this easier. For now, you can use the Qu
 Once you have your credentials, set them on Mac Mini:
 
 ```bash
-mac-mini config:set QUICKBOOKS_CLIENT_ID=your_client_id -a careassist-tracker
-mac-mini config:set QUICKBOOKS_CLIENT_SECRET=your_client_secret -a careassist-tracker
-mac-mini config:set QUICKBOOKS_REALM_ID=your_realm_id -a careassist-tracker
-mac-mini config:set QUICKBOOKS_ACCESS_TOKEN=your_access_token -a careassist-tracker
-mac-mini config:set QUICKBOOKS_REFRESH_TOKEN=your_refresh_token -a careassist-tracker
+# Set in ~/.gigi-env instead: QUICKBOOKS_CLIENT_ID=your_client_id -a careassist-tracker
+# Set in ~/.gigi-env instead: QUICKBOOKS_CLIENT_SECRET=your_client_secret -a careassist-tracker
+# Set in ~/.gigi-env instead: QUICKBOOKS_REALM_ID=your_realm_id -a careassist-tracker
+# Set in ~/.gigi-env instead: QUICKBOOKS_ACCESS_TOKEN=your_access_token -a careassist-tracker
+# Set in ~/.gigi-env instead: QUICKBOOKS_REFRESH_TOKEN=your_refresh_token -a careassist-tracker
 ```
 
 **Where to find Realm ID:**

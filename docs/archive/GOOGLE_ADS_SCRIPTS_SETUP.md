@@ -15,7 +15,7 @@ The script file is located at: `google_ads_script.js` in the project root.
 ### 2. Set Webhook Secret (Optional but Recommended)
 
 ```bash
-mac-mini config:set GOOGLE_ADS_WEBHOOK_SECRET=your-random-secret-here --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_ADS_WEBHOOK_SECRET=your-random-secret-here --app portal-coloradocareassist
 ```
 
 Generate a random secret:
@@ -28,7 +28,7 @@ openssl rand -hex 32
 1. Open `google_ads_script.js`
 2. Update line 15 with your webhook URL (should already be correct):
    ```javascript
-   const WEBHOOK_URL = 'https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/google-ads/webhook';
+   const WEBHOOK_URL = 'https://portal.coloradocareassist.com/api/marketing/google-ads/webhook';
    ```
 3. Update line 19 with the same secret you set in step 2:
    ```javascript
@@ -60,7 +60,7 @@ openssl rand -hex 32
 2. Check the logs to see if it successfully sends data
 3. Check your backend logs:
    ```bash
-   mac-mini logs --tail --app portal-coloradocareassist | grep "Google Ads webhook"
+   tail -f ~/logs/gigi-unified.log --app portal-coloradocareassist | grep "Google Ads webhook"
    ```
 
 ## 🔍 How It Works
@@ -96,7 +96,7 @@ openssl rand -hex 32
 
 ### No Data in Dashboard
 - Verify script ran successfully (check Google Ads script logs)
-- Check backend logs: `mac-mini logs --tail | grep webhook`
+- Check backend logs: `tail -f ~/logs/gigi-unified.log | grep webhook`
 - Verify webhook secret matches in script and backend
 - Try running script manually with "Preview" button
 

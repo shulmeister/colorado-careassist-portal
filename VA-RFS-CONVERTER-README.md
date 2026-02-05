@@ -17,7 +17,7 @@ Converts multiple document types into **VA Form 10-10172 RFS (Request for Servic
 2. **Referral face sheets** (nursing homes, hospitals, ALFs, rehab centers) → RFS for **NEW SERVICES**
 3. **Contact sheets** and other medical referrals → RFS for **NEW SERVICES**
 
-**Live URL:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-rfs-converter
+**Live URL:** https://portal.coloradocareassist.com/va-rfs-converter
 
 ---
 
@@ -88,7 +88,7 @@ Converts multiple document types into **VA Form 10-10172 RFS (Request for Servic
 ## 🚀 Quick Start (3 Steps)
 
 ### Step 1: Upload Referral PDF
-1. Navigate to https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-rfs-converter
+1. Navigate to https://portal.coloradocareassist.com/va-rfs-converter
 2. Click "Select PDF" or drag-and-drop your referral face sheet
 3. Wait 2-5 seconds for AI extraction
 
@@ -712,12 +712,12 @@ git commit -m "Update VA RFS Converter"
 
 **2. Deploy to Mac Mini:**
 ```bash
-git push mac-mini main
+git push origin main
 ```
 
 **3. Verify deployment:**
 ```bash
-mac-mini logs --tail --app careassist-unified
+tail -f ~/logs/gigi-unified.log --app careassist-unified
 ```
 
 **4. Add portal tile (if not already added):**
@@ -726,7 +726,7 @@ python add_va_rfs_tile.py
 ```
 
 **5. Test the tool:**
-- Navigate to: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-rfs-converter
+- Navigate to: https://portal.coloradocareassist.com/va-rfs-converter
 - Upload a test referral PDF
 - Verify extraction works
 - Download and verify PDF has filled fields
@@ -792,4 +792,4 @@ For questions or support: jason@coloradocareassist.com
 
 **Related Tools:**
 - VA Plan of Care Generator: `/va-plan-of-care`
-- Portal Dashboard: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/
+- Portal Dashboard: https://portal.coloradocareassist.com/

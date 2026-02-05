@@ -80,7 +80,7 @@
 - Matches calls to contacts by phone number
 - Links calls to active deals
 
-**Webhook URL**: `https://your-app.mac-miniapp.com/webhooks/ringcentral`
+**Webhook URL**: `https://portal.coloradocareassist.com/webhooks/ringcentral`
 
 ---
 
@@ -176,7 +176,7 @@ The app will automatically add new columns on startup:
 1. Log into RingCentral Admin Portal
 2. Go to Webhooks
 3. Create new webhook:
-   - URL: `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/webhooks/ringcentral`
+   - URL: `https://portal.coloradocareassist.com/sales/webhooks/ringcentral`
    - Events: `call.completed`, `call.ended`
    - Save
 

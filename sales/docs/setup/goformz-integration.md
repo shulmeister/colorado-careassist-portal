@@ -17,14 +17,14 @@ If GoFormz supports webhooks, set up a webhook to call our endpoint when a Clien
 
 **Webhook URL:**
 ```
-https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/goformz/webhook
+https://portal.coloradocareassist.com/sales/api/goformz/webhook
 ```
 
 **Webhook Configuration in GoFormz:**
 1. Go to your GoFormz account settings
 2. Navigate to **Integrations** or **Webhooks**
 3. Create a new webhook:
-   - **URL**: `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/goformz/webhook`
+   - **URL**: `https://portal.coloradocareassist.com/sales/api/goformz/webhook`
    - **Event**: Form completion / Form submitted
    - **Form**: Client Packet (or filter for forms containing "Client Packet" in the name)
    - **Method**: POST
@@ -53,7 +53,7 @@ mac-mini run "python3 sync_goformz_to_brevo.py" -a careassist-tracker
 
 **Or via API endpoint:**
 ```bash
-curl -X POST https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/goformz/sync-to-brevo?since_hours=24 \
+curl -X POST https://portal.coloradocareassist.com/sales/api/goformz/sync-to-brevo?since_hours=24 \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
@@ -71,7 +71,7 @@ mac-mini run "python3 sync_goformz_to_brevo.py --since-hours 24" -a careassist-t
 
 ### Test Webhook Endpoint
 ```bash
-curl -X POST https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/goformz/webhook \
+curl -X POST https://portal.coloradocareassist.com/sales/api/goformz/webhook \
   -H "Content-Type: application/json" \
   -d '{
     "event": "completed",
@@ -104,7 +104,7 @@ If a field isn't found, the script will try common variations.
 ### "GoFormz not configured"
 - Check that `GOFORMZ_CLIENT_ID` and `GOFORMZ_CLIENT_SECRET` are set on Mac Mini:
   ```bash
-  mac-mini config -a careassist-tracker | grep GOFORMZ
+  # Check ~/.gigi-env -a careassist-tracker | grep GOFORMZ
   ```
 
 ### "Failed to get token"
@@ -127,7 +127,7 @@ If a field isn't found, the script will try common variations.
 3. **Verify welcome email is sent** from Brevo automation
 4. **Monitor logs** for any issues:
    ```bash
-   mac-mini logs --tail -a careassist-tracker | grep goformz
+   tail -f ~/logs/gigi-unified.log -a careassist-tracker | grep goformz
    ```
 
 ## Notes

@@ -84,7 +84,7 @@
 ✅ KPI cards with trend indicators
 
 ### Dashboard URL:
-https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/marketing
+https://portal.coloradocareassist.com/marketing
 
 ---
 

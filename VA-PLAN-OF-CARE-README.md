@@ -10,7 +10,7 @@
 
 AI-powered tool that converts VA Form 10-7080 (Approved Referral for Medical Care) into a professional Home Health Certification and Plan of Care (485) with automatic data extraction, PDF generation, and VA-compliant file naming.
 
-**Live URL:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care
+**Live URL:** https://portal.coloradocareassist.com/va-plan-of-care
 
 ---
 
@@ -58,7 +58,7 @@ AI-powered tool that converts VA Form 10-7080 (Approved Referral for Medical Car
 2. Click "VA Plan of Care Generator" tile (Operations category)
 
 **Option B:** Direct URL
-- Navigate to: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care`
+- Navigate to: `https://portal.coloradocareassist.com/va-plan-of-care`
 
 ### Step 2: Upload VA Form 10-7080
 

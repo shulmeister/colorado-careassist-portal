@@ -4,7 +4,7 @@ A comprehensive full-stack sales CRM and activity tracking application for Color
 
 **Live URLs**:
 - Portal: https://portal.coloradocareassist.com/sales/
-- Mac Mini: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/
+- Mac Mini: https://portal.coloradocareassist.com/sales/
 
 **GitHub**: https://github.com/shulmeister/colorado-careassist-portal (sales dashboard is in `/sales` directory)
 
@@ -245,7 +245,7 @@ The Sales Dashboard automatically logs email activities from Brevo marketing cam
 
 **Setup:**
 1. In Brevo, go to **SMTP & API** → **Webhooks**
-2. Create a new webhook with URL: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/webhooks/brevo`
+2. Create a new webhook with URL: `https://portal.coloradocareassist.com/sales/webhooks/brevo`
 3. Select events to track:
    - `delivered` - Email delivered (logged as activity)
    - `opened` - Email opened (logged as activity)
@@ -374,11 +374,11 @@ The sales dashboard is part of the unified portal and deploys together:
 cd ..
 
 # Deploy unified app (includes portal + sales + gigi)
-git push mac-mini main
+git push origin main
 ```
 
 The sales dashboard will be available at:
-- https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/
+- https://portal.coloradocareassist.com/sales/
 - https://portal.coloradocareassist.com/sales/ (if custom domain configured)
 
 **Important**: The Procfile at the repository root uses `unified_app.py` which mounts the sales app at `/sales`.
@@ -472,7 +472,7 @@ Tasks and activities can be assigned to:
 2. Test locally: `uvicorn app:app --reload`
 3. Build frontend: `cd frontend && npm run build`
 4. Commit changes: `git commit -am "Your message"`
-5. Deploy unified app: `git push mac-mini main` (from repository root)
+5. Deploy unified app: `git push origin main` (from repository root)
 
 ## Troubleshooting
 

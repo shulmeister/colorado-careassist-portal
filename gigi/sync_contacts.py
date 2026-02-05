@@ -19,7 +19,7 @@ import requests
 from datetime import datetime
 
 # Configuration
-PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com")
+PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://portal.coloradocareassist.com")
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CACHE_FILE = os.path.join(SCRIPT_DIR, "contacts_cache.json")
 

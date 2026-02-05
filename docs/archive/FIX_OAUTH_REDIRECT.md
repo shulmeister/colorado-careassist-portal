@@ -23,7 +23,7 @@ Since you're using the same client ID, just add the portal's redirect URI to the
    - `https://tracker.coloradocareassist.com/auth/callback` (sales dashboard)
 5. **Add this new URI**:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
+   https://portal.coloradocareassist.com/auth/callback
    ```
 6. Click **"Save"**
 
@@ -33,11 +33,11 @@ If you want to keep them separate (optional):
 
 1. Create a new OAuth 2.0 Client ID in Google Cloud Console
 2. Name it "CCA Portal"
-3. Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
+3. Add redirect URI: `https://portal.coloradocareassist.com/auth/callback`
 4. Update Mac Mini config:
    ```bash
-   mac-mini config:set GOOGLE_CLIENT_ID=new_client_id --app portal-coloradocareassist
-   mac-mini config:set GOOGLE_CLIENT_SECRET=new_client_secret --app portal-coloradocareassist
+   # Set in ~/.gigi-env instead: GOOGLE_CLIENT_ID=new_client_id --app portal-coloradocareassist
+   # Set in ~/.gigi-env instead: GOOGLE_CLIENT_SECRET=new_client_secret --app portal-coloradocareassist
    ```
 
 ## Quick Fix (Recommended)
@@ -48,7 +48,7 @@ If you want to keep them separate (optional):
 2. Click on your OAuth 2.0 Client ID
 3. Under "Authorized redirect URIs", add:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
+   https://portal.coloradocareassist.com/auth/callback
    ```
 4. Save
 
@@ -64,7 +64,7 @@ After saving, the portal login should work!
 ## After Adding the URI
 
 1. Wait a few seconds for Google to update
-2. Try logging in again at: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
+2. Try logging in again at: https://portal.coloradocareassist.com
 3. It should work now!
 
 

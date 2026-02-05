@@ -110,16 +110,16 @@ We need to add 4 environment variables to Mac Mini:
 ### Option B: Via Mac Mini CLI
 ```bash
 # Set Drive folder ID
-mac-mini config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="your-folder-id" --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_DRIVE_VOUCHER_FOLDER_ID="your-folder-id" --app portal-coloradocareassist
 
 # Set Sheets ID (if different from default)
-mac-mini config:set GOOGLE_SHEETS_VOUCHER_ID="1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASGjMZAM" --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_SHEETS_VOUCHER_ID="1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASGjMZAM" --app portal-coloradocareassist
 
 # Set Project ID
-mac-mini config:set GOOGLE_CLOUD_PROJECT_ID="your-project-id" --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_CLOUD_PROJECT_ID="your-project-id" --app portal-coloradocareassist
 
 # Set Service Account JSON (paste entire contents)
-mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"..."}' --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"..."}' --app portal-coloradocareassist
 ```
 
 ## Step 6: Set Up Automated Syncing
@@ -143,7 +143,7 @@ This will check for new vouchers every hour (looking back 2 hours to catch any m
 ## Step 7: Test the Setup
 
 ### 7.1 Manual Test via Portal
-1. Go to https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/vouchers
+1. Go to https://portal.coloradocareassist.com/vouchers
 2. Click "🔄 Sync from Drive"
 3. It should find and process your two new vouchers
 
@@ -203,7 +203,7 @@ For best OCR results, vouchers should:
 ## Support
 
 If you encounter issues:
-1. Check Mac Mini logs: `mac-mini logs --tail --app portal-coloradocareassist`
+1. Check Mac Mini logs: `tail -f ~/logs/gigi-unified.log --app portal-coloradocareassist`
 2. Try a manual sync to see detailed error messages
 3. Verify all environment variables are set correctly
 

@@ -14,7 +14,7 @@
 
 ## 🎯 Your Portal App
 
-**Mac Mini URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
+**Mac Mini URL**: https://portal.coloradocareassist.com
 
 **Mac Mini App Name**: `portal-coloradocareassist`
 
@@ -31,11 +31,11 @@ cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
 Or manually (get your Google OAuth credentials from your sales dashboard setup):
 
 ```bash
-mac-mini config:set GOOGLE_CLIENT_ID=your_client_id --app portal-coloradocareassist
-mac-mini config:set GOOGLE_CLIENT_SECRET=your_client_secret --app portal-coloradocareassist
-mac-mini config:set GOOGLE_REDIRECT_URI=https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback --app portal-coloradocareassist
-mac-mini config:set APP_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))") --app portal-coloradocareassist
-mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_CLIENT_ID=your_client_id --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_CLIENT_SECRET=your_client_secret --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: GOOGLE_REDIRECT_URI=https://portal.coloradocareassist.com/auth/callback --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: APP_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))") --app portal-coloradocareassist
+# Set in ~/.gigi-env instead: ALLOWED_DOMAINS=coloradocareassist.com --app portal-coloradocareassist
 ```
 
 ### 2. Update Google OAuth Settings
@@ -45,14 +45,14 @@ mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com --app portal-colorado
 3. Edit your OAuth 2.0 Client ID
 4. Add to **Authorized redirect URIs**:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
+   https://portal.coloradocareassist.com/auth/callback
    ```
 
 ### 3. Deploy to Mac Mini
 
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
-git push mac-mini main
+git push origin main
 ```
 
 ### 4. Initialize Database
@@ -63,7 +63,7 @@ mac-mini run python portal_setup.py --app portal-coloradocareassist
 
 ### 5. Test It!
 
-Visit: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
+Visit: https://portal.coloradocareassist.com
 
 ## 📁 Repository Structure
 
@@ -89,8 +89,8 @@ Visit: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 ## 🔗 Quick Links
 
 - **Mac Mini Dashboard**: https://dashboard.mac-mini.com/apps/portal-coloradocareassist
-- **App URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
-- **View Logs**: `mac-mini logs --tail --app portal-coloradocareassist`
+- **App URL**: https://portal.coloradocareassist.com
+- **View Logs**: `tail -f ~/logs/gigi-unified.log --app portal-coloradocareassist`
 
 ## 🚀 All Set!
 

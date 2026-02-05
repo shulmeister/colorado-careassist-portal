@@ -30,13 +30,13 @@ cd colorado-careassist-portal
 
 ```bash
 # Login to Mac Mini
-mac-mini login
+# (obsolete - services run via launchd on Mac Mini)
 
 # Create new app (use a unique name or let Mac Mini generate one)
-mac-mini create careassist-unified
+# (obsolete - services run via launchd on Mac Mini)
 
 # Or create with specific name:
-# mac-mini create your-app-name
+# # (obsolete - services run via launchd on Mac Mini)
 
 # Verify app was created
 mac-mini apps:info -a careassist-unified
@@ -73,7 +73,7 @@ mac-mini addons -a careassist-unified
 
 ```bash
 # Check database URLs were created
-mac-mini config -a careassist-unified | grep DATABASE
+# Check ~/.gigi-env -a careassist-unified | grep DATABASE
 
 # You should see:
 # DATABASE_URL (main portal)
@@ -110,53 +110,53 @@ mac-mini buildpacks -a careassist-unified
 
 ```bash
 # Security
-mac-mini config:set APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))") -a careassist-unified
+# Set in ~/.gigi-env instead: APP_SECRET_KEY=$(python -c "import secrets; print(secrets.token_hex(32))") -a careassist-unified
 
 # Google OAuth (Portal Login)
 # Get from: https://console.cloud.google.com/apis/credentials
-mac-mini config:set GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com -a careassist-unified
-mac-mini config:set GOOGLE_CLIENT_SECRET=your-google-client-secret -a careassist-unified
-mac-mini config:set GOOGLE_REDIRECT_URI=https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/auth/callback -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_CLIENT_SECRET=your-google-client-secret -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_REDIRECT_URI=https://portal.coloradocareassist.com/auth/callback -a careassist-unified
 
 # Allowed login domains
-mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com -a careassist-unified
+# Set in ~/.gigi-env instead: ALLOWED_DOMAINS=coloradocareassist.com -a careassist-unified
 ```
 
 ### Gigi AI Voice Assistant
 
 ```bash
 # Retell AI (Voice Agent)
-mac-mini config:set RETELL_API_KEY=your-retell-api-key -a careassist-unified
-mac-mini config:set RETELL_AGENT_ID=your-retell-agent-id -a careassist-unified
+# Set in ~/.gigi-env instead: RETELL_API_KEY=your-retell-api-key -a careassist-unified
+# Set in ~/.gigi-env instead: RETELL_AGENT_ID=your-retell-agent-id -a careassist-unified
 
 # Google Gemini AI
-mac-mini config:set GEMINI_API_KEY=your-gemini-api-key -a careassist-unified
+# Set in ~/.gigi-env instead: GEMINI_API_KEY=your-gemini-api-key -a careassist-unified
 
 # RingCentral (Phone & SMS)
-mac-mini config:set RINGCENTRAL_CLIENT_ID=your-client-id -a careassist-unified
-mac-mini config:set RINGCENTRAL_CLIENT_SECRET=your-client-secret -a careassist-unified
-mac-mini config:set RINGCENTRAL_JWT_TOKEN=your-jwt-token -a careassist-unified
-mac-mini config:set RINGCENTRAL_SERVER_URL=https://platform.ringcentral.com -a careassist-unified
+# Set in ~/.gigi-env instead: RINGCENTRAL_CLIENT_ID=your-client-id -a careassist-unified
+# Set in ~/.gigi-env instead: RINGCENTRAL_CLIENT_SECRET=your-client-secret -a careassist-unified
+# Set in ~/.gigi-env instead: RINGCENTRAL_JWT_TOKEN=your-jwt-token -a careassist-unified
+# Set in ~/.gigi-env instead: RINGCENTRAL_SERVER_URL=https://platform.ringcentral.com -a careassist-unified
 
 # Gigi operations SMS (set to true when WellSky API is configured)
-mac-mini config:set GIGI_OPERATIONS_SMS_ENABLED=false -a careassist-unified
+# Set in ~/.gigi-env instead: GIGI_OPERATIONS_SMS_ENABLED=false -a careassist-unified
 
 # Escalation contacts
-mac-mini config:set ESCALATION_CYNTHIA_EXT=105 -a careassist-unified
-mac-mini config:set ESCALATION_JASON_EXT=101 -a careassist-unified
+# Set in ~/.gigi-env instead: ESCALATION_CYNTHIA_EXT=105 -a careassist-unified
+# Set in ~/.gigi-env instead: ESCALATION_JASON_EXT=101 -a careassist-unified
 ```
 
 ### WellSky EVV API (Optional - for operations dashboard)
 
 ```bash
 # Only set if you have WellSky API access
-mac-mini config:set WELLSKY_API_KEY=your-wellsky-api-key -a careassist-unified
-mac-mini config:set WELLSKY_API_SECRET=your-wellsky-api-secret -a careassist-unified
-mac-mini config:set WELLSKY_AGENCY_ID=your-wellsky-agency-id -a careassist-unified
-mac-mini config:set WELLSKY_BASE_URL=https://api.wellsky.com/v1 -a careassist-unified
+# Set in ~/.gigi-env instead: WELLSKY_API_KEY=your-wellsky-api-key -a careassist-unified
+# Set in ~/.gigi-env instead: WELLSKY_API_SECRET=your-wellsky-api-secret -a careassist-unified
+# Set in ~/.gigi-env instead: WELLSKY_AGENCY_ID=your-wellsky-agency-id -a careassist-unified
+# Set in ~/.gigi-env instead: WELLSKY_BASE_URL=https://api.wellsky.com/v1 -a careassist-unified
 
 # When WellSky is configured, enable Gigi's operations SMS
-mac-mini config:set GIGI_OPERATIONS_SMS_ENABLED=true -a careassist-unified
+# Set in ~/.gigi-env instead: GIGI_OPERATIONS_SMS_ENABLED=true -a careassist-unified
 ```
 
 ### Sales Dashboard Variables
@@ -164,66 +164,66 @@ mac-mini config:set GIGI_OPERATIONS_SMS_ENABLED=true -a careassist-unified
 ```bash
 # Google Drive (Business Card Auto-Scanner)
 # Copy entire JSON service account key as one line
-mac-mini config:set GOOGLE_SERVICE_ACCOUNT_KEY='{"type":"service_account","project_id":"..."}' -a careassist-unified
-mac-mini config:set GOOGLE_DRIVE_BUSINESS_CARDS_FOLDER_ID=your-folder-id -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_SERVICE_ACCOUNT_KEY='{"type":"service_account","project_id":"..."}' -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_DRIVE_BUSINESS_CARDS_FOLDER_ID=your-folder-id -a careassist-unified
 
 # Brevo Email Marketing
-mac-mini config:set BREVO_API_KEY=xkeysib-your-api-key -a careassist-unified
+# Set in ~/.gigi-env instead: BREVO_API_KEY=xkeysib-your-api-key -a careassist-unified
 
 # QuickBooks Online
-mac-mini config:set QUICKBOOKS_CLIENT_ID=your-client-id -a careassist-unified
-mac-mini config:set QUICKBOOKS_CLIENT_SECRET=your-client-secret -a careassist-unified
-mac-mini config:set QUICKBOOKS_REALM_ID=your-company-id -a careassist-unified
-mac-mini config:set QUICKBOOKS_ACCESS_TOKEN=your-access-token -a careassist-unified
-mac-mini config:set QUICKBOOKS_REFRESH_TOKEN=your-refresh-token -a careassist-unified
+# Set in ~/.gigi-env instead: QUICKBOOKS_CLIENT_ID=your-client-id -a careassist-unified
+# Set in ~/.gigi-env instead: QUICKBOOKS_CLIENT_SECRET=your-client-secret -a careassist-unified
+# Set in ~/.gigi-env instead: QUICKBOOKS_REALM_ID=your-company-id -a careassist-unified
+# Set in ~/.gigi-env instead: QUICKBOOKS_ACCESS_TOKEN=your-access-token -a careassist-unified
+# Set in ~/.gigi-env instead: QUICKBOOKS_REFRESH_TOKEN=your-refresh-token -a careassist-unified
 
 # Gmail API (Optional - for email tracking)
-mac-mini config:set GMAIL_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com -a careassist-unified
-mac-mini config:set GMAIL_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}' -a careassist-unified
-mac-mini config:set GMAIL_USER_EMAILS=jacob@coloradocareassist.com,jen@coloradocareassist.com -a careassist-unified
+# Set in ~/.gigi-env instead: GMAIL_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com -a careassist-unified
+# Set in ~/.gigi-env instead: GMAIL_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}' -a careassist-unified
+# Set in ~/.gigi-env instead: GMAIL_USER_EMAILS=jacob@coloradocareassist.com,jen@coloradocareassist.com -a careassist-unified
 ```
 
 ### Recruiting Dashboard Variables
 
 ```bash
 # Facebook Lead Ads
-mac-mini config:set FACEBOOK_ACCESS_TOKEN=your-long-lived-token -a careassist-unified
-mac-mini config:set FACEBOOK_AD_ACCOUNT_ID=act_your-account-id -a careassist-unified
-mac-mini config:set FACEBOOK_APP_ID=your-app-id -a careassist-unified
-mac-mini config:set FACEBOOK_APP_SECRET=your-app-secret -a careassist-unified
-mac-mini config:set FACEBOOK_PAGE_ID=your-page-id -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_ACCESS_TOKEN=your-long-lived-token -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_AD_ACCOUNT_ID=act_your-account-id -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_APP_ID=your-app-id -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_APP_SECRET=your-app-secret -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_PAGE_ID=your-page-id -a careassist-unified
 ```
 
 ### Marketing Dashboard Variables
 
 ```bash
 # Google Analytics 4
-mac-mini config:set GA4_PROPERTY_ID=your-property-id -a careassist-unified
+# Set in ~/.gigi-env instead: GA4_PROPERTY_ID=your-property-id -a careassist-unified
 
 # Google Business Profile
-mac-mini config:set GBP_LOCATION_IDS=comma,separated,location,ids -a careassist-unified
+# Set in ~/.gigi-env instead: GBP_LOCATION_IDS=comma,separated,location,ids -a careassist-unified
 
 # Google Ads API
-mac-mini config:set GOOGLE_ADS_DEVELOPER_TOKEN=your-token -a careassist-unified
-mac-mini config:set GOOGLE_ADS_CUSTOMER_ID=1234567890 -a careassist-unified
-mac-mini config:set GOOGLE_ADS_REFRESH_TOKEN=your-refresh-token -a careassist-unified
-mac-mini config:set GOOGLE_ADS_OAUTH_CLIENT_ID=your-oauth-client-id -a careassist-unified
-mac-mini config:set GOOGLE_ADS_OAUTH_CLIENT_SECRET=your-oauth-client-secret -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_ADS_DEVELOPER_TOKEN=your-token -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_ADS_CUSTOMER_ID=1234567890 -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_ADS_REFRESH_TOKEN=your-refresh-token -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_ADS_OAUTH_CLIENT_ID=your-oauth-client-id -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_ADS_OAUTH_CLIENT_SECRET=your-oauth-client-secret -a careassist-unified
 
 # Google Service Account (for GA4, GBP)
-mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}' -a careassist-unified
+# Set in ~/.gigi-env instead: GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}' -a careassist-unified
 
 # Social Media APIs (Optional)
-mac-mini config:set LINKEDIN_ACCESS_TOKEN=your-token -a careassist-unified
-mac-mini config:set PINTEREST_ACCESS_TOKEN=your-token -a careassist-unified
-mac-mini config:set TIKTOK_ACCESS_TOKEN=your-token -a careassist-unified
-mac-mini config:set TIKTOK_ADVERTISER_ID=your-id -a careassist-unified
+# Set in ~/.gigi-env instead: LINKEDIN_ACCESS_TOKEN=your-token -a careassist-unified
+# Set in ~/.gigi-env instead: PINTEREST_ACCESS_TOKEN=your-token -a careassist-unified
+# Set in ~/.gigi-env instead: TIKTOK_ACCESS_TOKEN=your-token -a careassist-unified
+# Set in ~/.gigi-env instead: TIKTOK_ADVERTISER_ID=your-id -a careassist-unified
 ```
 
 **Verify all variables are set**:
 
 ```bash
-mac-mini config -a careassist-unified
+# Check ~/.gigi-env -a careassist-unified
 ```
 
 ---
@@ -235,13 +235,13 @@ mac-mini config -a careassist-unified
 git remote add mac-mini https://git.mac-mini.com/careassist-unified.git
 
 # Deploy to Mac Mini
-git push mac-mini main
+git push origin main
 ```
 
 **Watch deployment logs**:
 
 ```bash
-mac-mini logs --tail -a careassist-unified
+tail -f ~/logs/gigi-unified.log -a careassist-unified
 ```
 
 **Expected output**:
@@ -252,7 +252,7 @@ remote: -----> Using buildpack: mac-mini/nodejs
 remote: -----> Using buildpack: mac-mini/python
 remote: -----> Launching...
 remote: -----> Build succeeded!
-remote:        https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/ deployed to Mac Mini
+remote:        https://portal.coloradocareassist.com/ deployed to Mac Mini
 ```
 
 **If build fails**, check:
@@ -381,7 +381,7 @@ Set up automatic deployments when you push to GitHub:
 mac-mini open -a careassist-unified
 
 # Check logs for errors
-mac-mini logs --tail -a careassist-unified
+tail -f ~/logs/gigi-unified.log -a careassist-unified
 
 # Check dyno status
 mac-mini ps -a careassist-unified
@@ -389,22 +389,22 @@ mac-mini ps -a careassist-unified
 
 ### Test Individual Endpoints
 
-**Portal Hub**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/
+**Portal Hub**: https://portal.coloradocareassist.com/
 - Should show login page or portal dashboard
 
-**Gigi AI**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/
+**Gigi AI**: https://portal.coloradocareassist.com/gigi/
 - Should show Gigi documentation page
 
-**Sales Dashboard**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/
+**Sales Dashboard**: https://portal.coloradocareassist.com/sales/
 - Should redirect to login or show sales CRM
 
-**Recruiting**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/recruiting/
+**Recruiting**: https://portal.coloradocareassist.com/recruiting/
 - Should show recruiting dashboard
 
-**Marketing**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/marketing/
+**Marketing**: https://portal.coloradocareassist.com/marketing/
 - Should show marketing analytics
 
-**Operations**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/operations/
+**Operations**: https://portal.coloradocareassist.com/operations/
 - Should show operations dashboard
 
 ### Test Business Card Scanner
@@ -437,19 +437,19 @@ mac-mini ps -a careassist-unified
 ### Runtime Errors
 
 **Error**: `Application error` (H10 error)
-- **Check logs**: `mac-mini logs --tail -a careassist-unified`
+- **Check logs**: `tail -f ~/logs/gigi-unified.log -a careassist-unified`
 - **Common causes**:
   - Missing environment variables
   - Database connection failure
   - Import errors (missing Python packages)
 
 **Error**: `Database connection refused`
-- **Fix**: Verify `DATABASE_URL` is set: `mac-mini config:get DATABASE_URL -a careassist-unified`
+- **Fix**: Verify `DATABASE_URL` is set: `# Check ~/.gigi-env:get DATABASE_URL -a careassist-unified`
 - **Fix**: Check PostgreSQL add-on is attached: `mac-mini addons -a careassist-unified`
 
 **Error**: `ImportError: No module named 'X'`
 - **Fix**: Ensure package is in `requirements.txt`
-- **Fix**: Redeploy: `git commit --allow-empty -m "Trigger rebuild" && git push mac-mini main`
+- **Fix**: Redeploy: `git commit --allow-empty -m "Trigger rebuild" && git push origin main`
 
 ### Performance Issues
 
@@ -480,7 +480,7 @@ mac-mini ps -a careassist-unified
 
 ```bash
 # View recent logs
-mac-mini logs --tail -a careassist-unified
+tail -f ~/logs/gigi-unified.log -a careassist-unified
 
 # View logs for specific dyno
 mac-mini logs --dyno web.1 -a careassist-unified
@@ -530,7 +530,7 @@ npm audit fix
 # Commit and deploy
 git add requirements.txt sales/frontend/package-lock.json
 git commit -m "Update dependencies"
-git push mac-mini main
+git push origin main
 ```
 
 ---
@@ -587,7 +587,7 @@ mac-mini rollback v123 -a careassist-unified
 
 ## Security Checklist
 
-- [x] All environment variables set via `mac-mini config:set` (not in code)
+- [x] All environment variables set via `# Set in ~/.gigi-env instead:` (not in code)
 - [x] `.env` file in `.gitignore` (never committed)
 - [x] `APP_SECRET_KEY` is random and secure (32+ character hex)
 - [x] Google OAuth credentials are for production domain
@@ -614,7 +614,7 @@ mac-mini rollback v123 -a careassist-unified
 
 If you've completed all steps, your application should now be live at:
 
-**Primary URL**: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com
+**Primary URL**: https://portal.coloradocareassist.com
 **Custom Domain** (if configured): https://portal.coloradocareassist.com
 
 **Next steps**:

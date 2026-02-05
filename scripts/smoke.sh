@@ -2,10 +2,10 @@
 
 set -euo pipefail
 
-PORTAL_URL=${PORTAL_URL:-"https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com"}
-SALES_URL=${SALES_DASHBOARD_URL:-"https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com"}
-ACTIVITY_URL=${ACTIVITY_TRACKER_URL:-"https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com"}
-RECRUITER_URL=${RECRUITER_DASHBOARD_URL:-"https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com"}
+PORTAL_URL=${PORTAL_URL:-"https://portal.coloradocareassist.com"}
+SALES_URL=${SALES_DASHBOARD_URL:-"https://portal.coloradocareassist.com/sales"}
+ACTIVITY_URL=${ACTIVITY_TRACKER_URL:-"https://portal.coloradocareassist.com/activity"}
+RECRUITER_URL=${RECRUITER_DASHBOARD_URL:-"https://portal.coloradocareassist.com/recruiting"}
 
 function resolve_sales_bundle() {
   if [[ -n "${SALES_BUNDLE_PATH:-}" ]]; then

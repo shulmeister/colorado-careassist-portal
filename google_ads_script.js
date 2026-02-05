@@ -12,7 +12,7 @@
  */
 
 // ⚠️ UPDATE THIS URL TO YOUR BACKEND ENDPOINT
-const WEBHOOK_URL = 'https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/google-ads/webhook';
+const WEBHOOK_URL = 'https://portal.coloradocareassist.com';
 
 // Secret key for authentication (optional but recommended)
 // Set this in both the script and your backend WEBHOOK_SECRET env var

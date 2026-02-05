@@ -3,7 +3,7 @@
 ## Current Configuration
 
 **Mac Mini Config:**
-- Redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
+- Redirect URI: `https://portal.coloradocareassist.com/auth/callback`
 - Client ID: `516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com`
 
 ## Common Issues
@@ -12,7 +12,7 @@
 
 The redirect URI in Google Cloud Console must match **exactly** (including https://):
 ```
-https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
+https://portal.coloradocareassist.com/auth/callback
 ```
 
 **Check:**
@@ -28,7 +28,7 @@ https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 4. Scroll to "Authorized redirect URIs"
 5. Verify you see:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
+   https://portal.coloradocareassist.com/auth/callback
    ```
 
 ### 3. Make Sure It's Saved
@@ -57,12 +57,12 @@ Common mistakes:
 
 The app should be using the URI from Mac Mini config. Check:
 ```bash
-mac-mini config:get GOOGLE_REDIRECT_URI --app portal-coloradocareassist
+# Check ~/.gigi-env:get GOOGLE_REDIRECT_URI --app portal-coloradocareassist
 ```
 
 Should show:
 ```
-https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
+https://portal.coloradocareassist.com/auth/callback
 ```
 
 ## Step-by-Step Fix
@@ -70,7 +70,7 @@ https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 1. **Verify in Google Cloud Console:**
    - Open your OAuth client
    - Check "Authorized redirect URIs"
-   - Make sure `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` is there
+   - Make sure `https://portal.coloradocareassist.com/auth/callback` is there
    - Save if needed
 
 2. **Wait 30-60 seconds** for Google to update
@@ -81,7 +81,7 @@ https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 
 5. **Check Mac Mini logs** if still failing:
    ```bash
-   mac-mini logs --tail --app portal-coloradocareassist
+   tail -f ~/logs/gigi-unified.log --app portal-coloradocareassist
    ```
 
 ## Alternative: Test with Different Browser

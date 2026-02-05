@@ -13,7 +13,7 @@ All repositories are synced and ready. You can access everything from any comput
 **Repository**: `colorado-careassist-portal`  
 **GitHub**: https://github.com/shulmeister/colorado-careassist-portal  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal`  
-**Mac Mini**: `portal-coloradocareassist` → `portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com`
+**Mac Mini**: `portal-coloradocareassist` → `portal-coloradocareassist-3e1a4bb34793.coloradocareassist.com`
 
 **Contains**:
 - Main portal application (FastAPI)
@@ -38,7 +38,7 @@ cd colorado-careassist-portal
 **Repository**: `sales-dashboard`  
 **GitHub**: https://github.com/shulmeister/sales-dashboard  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales/`  
-**Mac Mini**: `careassist-tracker` → `careassist-tracker-0fcf2cecdb22.mac-miniapp.com`
+**Mac Mini**: `careassist-tracker` → `careassist-tracker-0fcf2cecdb22.coloradocareassist.com`
 
 **Contains**:
 - Sales tracking application (Python FastAPI)
@@ -60,7 +60,7 @@ cd sales-dashboard
 **Repository**: `recruiter-dashboard`  
 **GitHub**: https://github.com/shulmeister/recruiter-dashboard  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment/`  
-**Mac Mini**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com`
+**Mac Mini**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.coloradocareassist.com`
 
 **Contains**:
 - Caregiver recruitment application (Flask)
@@ -106,7 +106,7 @@ cd marketing-dashboard
 **Repository**: `Colorado-CareAssist-Route-Tracker`  
 **GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker  
 **Local Path**: `/Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker/`  
-**Mac Mini**: `cca-activity-tracker` → `https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com`
+**Mac Mini**: `cca-activity-tracker` → `https://portal.coloradocareassist.com/activity`
 
 **Contains**:
 - Original Visits/Activity Tracker (FastAPI)
@@ -206,7 +206,7 @@ cd ../marketing && git remote -v
 1. Make changes locally
 2. Commit: `git add . && git commit -m "message"`
 3. Push to GitHub: `git push origin main`
-4. Push to Mac Mini: `git push mac-mini main`
+4. Push to Mac Mini: `git push origin main`
 
 **Or use the sync script**:
 ```bash

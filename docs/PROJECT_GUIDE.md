@@ -31,23 +31,23 @@ All work should happen from this canonical path:
 ### Hub (Portal + Gigi)
 - GitHub: https://github.com/shulmeister/colorado-careassist-portal
 - Mac Mini app: `careassist-unified`
-- Live URL: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com
-- Gigi URL: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/
+- Live URL: https://portal.coloradocareassist.com
+- Gigi URL: https://portal.coloradocareassist.com/gigi/
 
 ### Spoke: Sales Dashboard
 - Repo: https://github.com/shulmeister/sales-dashboard
 - Mac Mini app: `careassist-tracker`
-- Live URL: https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com
+- Live URL: https://portal.coloradocareassist.com/sales
 
 ### Spoke: Recruiter Dashboard
 - Repo: https://github.com/shulmeister/recruiter-dashboard
 - Mac Mini app: `caregiver-lead-tracker`
-- Live URL: https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com
+- Live URL: https://portal.coloradocareassist.com/recruiting
 
 ### Spoke: Activity Tracker
 - Repo: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
 - Mac Mini app: `cca-activity-tracker`
-- Live URL: https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com
+- Live URL: https://portal.coloradocareassist.com/activity
 
 ### Marketing Dashboard (Built into Portal)
 - Template: `templates/marketing.html`

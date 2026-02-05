@@ -774,13 +774,9 @@ async def get_shadow_dashboard():
 async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None):
     """Log event to the central portal activity stream"""
     try:
-        # Determine URL - unified_app runs on localhost:8000 or defined PORT
-        port = os.getenv("PORT", "8000")
-        portal_url = f"http://localhost:{port}"
-        
-        # If external URL is preferred or required (e.g. strict SSL), use it
-        if os.getenv("Mac Mini (Local)_APP_NAME"):
-            portal_url = f"https://{os.getenv('Mac Mini (Local)_APP_NAME')}.mac-miniapp.com"
+        # Determine URL - all services run on localhost (Mac Mini)
+        port = os.getenv("PORT", "8765")
+        portal_url = os.getenv("PORTAL_URL", f"http://localhost:{port}")
             
         async with httpx.AsyncClient() as client:
             await client.post(

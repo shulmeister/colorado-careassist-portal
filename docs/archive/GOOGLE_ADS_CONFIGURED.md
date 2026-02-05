@@ -46,7 +46,7 @@ You should **NOT** see: "Google Ads service not fully configured"
 
 ### 2. Test the API Endpoint
 ```bash
-curl https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/marketing/ads | jq '.data.google_ads'
+curl https://portal.coloradocareassist.com/api/marketing/ads | jq '.data.google_ads'
 ```
 
 Look for:

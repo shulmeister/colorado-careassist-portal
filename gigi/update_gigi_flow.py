@@ -114,7 +114,7 @@ new_caregiver_callout = {
                     },
                     "required": ["caregiver_name", "reason"]
                 },
-                "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/report_call_out"
+                "url": "https://portal.coloradocareassist.com/gigi/webhook/retell/function/report_call_out"
             }
         },
         {
@@ -129,7 +129,7 @@ new_caregiver_callout = {
                     },
                     "required": ["client_name"]
                 },
-                "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/start_shift_filling_campaign"
+                "url": "https://portal.coloradocareassist.com/gigi/webhook/retell/function/start_shift_filling_campaign"
             }
         }
     ],
@@ -197,7 +197,7 @@ new_caregiver_late = {
                     },
                     "required": ["caregiver_name", "delay_minutes"]
                 },
-                "url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function/report_late"
+                "url": "https://portal.coloradocareassist.com/gigi/webhook/retell/function/report_late"
             }
         }
     ],

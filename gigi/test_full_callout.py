@@ -22,7 +22,7 @@ test_callout = {
     "client_name": "Charles"
 }
 
-WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function"
+WEBHOOK_BASE = "https://portal.coloradocareassist.com/gigi/webhook/retell/function"
 
 # Step 1: Test report_call_out function
 print("\n1. TESTING report_call_out")

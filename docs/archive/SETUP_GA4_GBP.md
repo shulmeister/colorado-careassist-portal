@@ -74,10 +74,10 @@ Your service account (`voucher-sync@cca-website-c822e.iam.gserviceaccount.com`) 
 
 ## Testing
 
-1. Go to: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/marketing
+1. Go to: https://portal.coloradocareassist.com/marketing
 2. Click on the "Website & GBP" tab in the sidebar
 3. If you see real data (not the mock numbers), it's working!
-4. If you see mock data, check the Mac Mini logs: `mac-mini logs --tail -a portal-coloradocareassist`
+4. If you see mock data, check the Mac Mini logs: `tail -f ~/logs/gigi-unified.log -a portal-coloradocareassist`
 
 ## Troubleshooting
 

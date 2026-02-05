@@ -15,7 +15,7 @@
 | **Local Path** | `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment` |
 | **GitHub** | `https://github.com/shulmeister/recruiter-dashboard` |
 | **Mac Mini App** | `caregiver-lead-tracker` |
-| **Live URL** | `https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com` |
+| **Live URL** | `https://portal.coloradocareassist.com/recruiting` |
 | **Tech Stack** | Flask, SQLAlchemy, PostgreSQL |
 
 ---
@@ -24,7 +24,7 @@
 
 ```bash
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
-git add -A && git commit -m "Description" && git push origin main && git push mac-mini main
+git add -A && git commit -m "Description" && git push origin main && git push origin main
 ```
 
 ---

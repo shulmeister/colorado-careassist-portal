@@ -269,7 +269,7 @@ python memory_cli.py audit <memory_id>
 - **BeeTexting webhook** needs dashboard config (API doesn't support programmatic setup)
   1. Login: https://app.beetexting.com
   2. Settings → Integrations → Webhooks
-  3. URL: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/beetexting`
+  3. URL: `https://portal.coloradocareassist.com/gigi/webhook/beetexting`
   4. Events: "Inbound SMS"
 
 ### Architecture Notes:

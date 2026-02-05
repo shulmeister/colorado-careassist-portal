@@ -38,12 +38,9 @@ app.jinja_loader = my_loader
 def _log_portal_event(description, event_type="info", details=None, icon=None):
     """Log event to the central portal activity stream"""
     try:
-        # Determine URL
-        port = os.getenv("PORT", "8000")
-        portal_url = f"http://localhost:{port}"
-        
-        if os.getenv("Mac Mini (Local)_APP_NAME"):
-            portal_url = f"https://{os.getenv('Mac Mini (Local)_APP_NAME')}.mac-miniapp.com"
+        # Determine URL - all services run on localhost (Mac Mini)
+        port = os.getenv("PORT", "8765")
+        portal_url = os.getenv("PORTAL_URL", f"http://localhost:{port}")
             
         requests.post(
             f"{portal_url}/api/internal/event",

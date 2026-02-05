@@ -5,7 +5,7 @@
 
 ## 🎯 **CURRENT DEPLOYMENT:**
 - **Version:** v544
-- **URL:** https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/
+- **URL:** https://portal.coloradocareassist.com/sales/
 - **Status:** ✅ LIVE
 
 ---

@@ -29,7 +29,7 @@ WHAT WAS ACCOMPLISHED
 
 2. ✅ VERIFIED WELLSKY API CONNECTION
 
-   Problem: API URL was wrong in Mac Mini (Local) config
+   Problem: API URL was wrong in config
 
    Fixed:
    - Changed WELLSKY_API_URL from:
@@ -128,10 +128,10 @@ WHAT STILL NEEDS MANUAL SETUP
 1. BeeTexting Webhook (5 minutes):
    - Login: https://app.beetexting.com
    - Settings → Integrations → Webhooks
-   - Add URL: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/beetexting
+   - Add URL: https://portal.coloradocareassist.com
    - Events: "Inbound SMS"
 
-2. Mac Mini (Local) Scheduler (5 minutes):
+2. LaunchAgent Scheduler (5 minutes):
    - Add job: `python gigi/renew_team_webhook.py`
    - Frequency: Daily at 3:00 AM
    - Purpose: Auto-renew RingCentral Team Messaging webhook

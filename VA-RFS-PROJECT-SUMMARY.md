@@ -19,7 +19,7 @@ The **VA RFS Converter** is an AI-powered tool that converts referral documents 
 5. **Downloads print-ready PDF** with automatic filename generation
 
 ### Live URL
-**https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-rfs-converter**
+**https://portal.coloradocareassist.com/va-rfs-converter**
 
 ---
 
@@ -170,12 +170,12 @@ GOOGLE_API_KEY=<your-google-api-key>
 cd ~/colorado-careassist-portal
 git add .
 git commit -m "Update VA RFS Converter"
-git push mac-mini main
+git push origin main
 ```
 
 ### Verify Deployment
 ```bash
-mac-mini logs --tail --app careassist-unified
+tail -f ~/logs/gigi-unified.log --app careassist-unified
 ```
 
 ### Current Mac Mini Version
@@ -326,7 +326,7 @@ mac-mini logs --tail --app careassist-unified
 - **Wellsky Payroll Converter:** `/payroll`
   - Converts Wellsky payroll for Alaska
 
-- **Portal Dashboard:** https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/
+- **Portal Dashboard:** https://portal.coloradocareassist.com/
 
 ---
 

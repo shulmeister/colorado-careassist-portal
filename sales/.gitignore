@@ -1,4 +1,3 @@
-.heroku/
 .apt/
 node_modules/
 *.pyc

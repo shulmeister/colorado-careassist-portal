@@ -4,7 +4,7 @@
 
 **✅ DEPLOYED AND RUNNING**
 
-- **App URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
+- **App URL**: https://portal.coloradocareassist.com
 - **Mac Mini App**: `portal-coloradocareassist`
 - **Status**: Live and running
 
@@ -25,7 +25,7 @@ You need to add the portal's redirect URI to your Google OAuth settings:
 3. Edit your OAuth 2.0 Client ID
 4. Add to **Authorized redirect URIs**:
    ```
-   https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
+   https://portal.coloradocareassist.com/auth/callback
    ```
 
 ## Default Tools Added
@@ -38,7 +38,7 @@ The database has been initialized with:
 
 ## Test It
 
-Visit: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
+Visit: https://portal.coloradocareassist.com
 
 You should be able to:
 1. Login with your `coloradocareassist.com` Google account
@@ -56,7 +56,7 @@ You should be able to:
 
 ```bash
 # View logs
-mac-mini logs --tail --app portal-coloradocareassist
+tail -f ~/logs/gigi-unified.log --app portal-coloradocareassist
 
 # Restart app
 mac-mini restart --app portal-coloradocareassist

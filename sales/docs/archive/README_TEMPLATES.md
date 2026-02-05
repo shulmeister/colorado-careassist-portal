@@ -30,7 +30,7 @@ Since Brevo templates are managed through the UI (not API), follow these steps:
 You can preview templates using the API endpoint:
 
 ```
-https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/api/brevo/newsletter-template/newsletter_january_2025_clients.html
+https://portal.coloradocareassist.com/sales/api/brevo/newsletter-template/newsletter_january_2025_clients.html
 ```
 
 Replace the filename with any of the template files listed above.

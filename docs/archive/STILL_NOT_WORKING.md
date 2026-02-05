@@ -2,7 +2,7 @@
 
 ## Current Status
 
-You've added the correct URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
+You've added the correct URI: `https://portal.coloradocareassist.com/auth/callback`
 
 But still getting redirect_uri_mismatch error.
 
@@ -44,7 +44,7 @@ When you see the error page:
 
 In Google Cloud Console, you should have:
 1. `https://tracker.coloradocareassist.com/auth/callback` ✅
-2. `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback` ✅
+2. `https://portal.coloradocareassist.com/auth/callback` ✅
 
 Make sure BOTH are there and saved.
 

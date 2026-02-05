@@ -16,13 +16,13 @@ git commit -m "Your commit message here"
 git push origin main
 
 # 4. Push to Mac Mini (ALWAYS!)
-git push mac-mini main
+git push origin main
 ```
 
 **✅ These changes have already been deployed!**
 - Git: `66cf8d7` - "Rebuild marketing dashboard to match Databox design"
 - Mac Mini: Deployed as release v174
-- Live at: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/marketing
+- Live at: https://portal.coloradocareassist.com/marketing
 
 ---
 
@@ -169,9 +169,9 @@ The dashboard is ready for deployment to Mac Mini:
    ```bash
    git add .
    git commit -m "Add new marketing dashboard"
-   git push mac-mini main
+   git push origin main
    ```
-3. **Access at:** `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/marketing`
+3. **Access at:** `https://portal.coloradocareassist.com/marketing`
 
 ## Testing Locally
 

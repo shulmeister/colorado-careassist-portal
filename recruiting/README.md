@@ -271,28 +271,28 @@ The recruiting dashboard is part of the **unified portal** and deploys together.
 
 ```bash
 # Set recruiting database URL
-mac-mini config:set RECRUITING_DATABASE_URL=postgresql://... -a careassist-unified
+# Set in ~/.gigi-env instead: RECRUITING_DATABASE_URL=postgresql://... -a careassist-unified
 
 # Set Facebook credentials
-mac-mini config:set FACEBOOK_APP_ID=your-app-id -a careassist-unified
-mac-mini config:set FACEBOOK_APP_SECRET=your-app-secret -a careassist-unified
-mac-mini config:set FACEBOOK_ACCESS_TOKEN=your-long-lived-token -a careassist-unified
-mac-mini config:set FACEBOOK_AD_ACCOUNT_ID=your-account-id -a careassist-unified
-mac-mini config:set FACEBOOK_PAGE_ID=your-page-id -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_APP_ID=your-app-id -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_APP_SECRET=your-app-secret -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_ACCESS_TOKEN=your-long-lived-token -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_AD_ACCOUNT_ID=your-account-id -a careassist-unified
+# Set in ~/.gigi-env instead: FACEBOOK_PAGE_ID=your-page-id -a careassist-unified
 
 # Verify
-mac-mini config -a careassist-unified | grep FACEBOOK
+# Check ~/.gigi-env -a careassist-unified | grep FACEBOOK
 ```
 
 ### Deploy
 
 ```bash
 # From repository root
-git push mac-mini main
+git push origin main
 ```
 
 The recruiting dashboard will be available at:
-- https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/recruiting/
+- https://portal.coloradocareassist.com/recruiting/
 - https://portal.coloradocareassist.com/recruiting/ (if custom domain configured)
 
 ---
@@ -352,7 +352,7 @@ CREATE INDEX idx_leads_facebook_id ON leads(facebook_lead_id);
 1. Generate new long-lived token (see Facebook Setup)
 2. Update environment variable:
    ```bash
-   mac-mini config:set FACEBOOK_ACCESS_TOKEN=new-token -a careassist-unified
+   # Set in ~/.gigi-env instead: FACEBOOK_ACCESS_TOKEN=new-token -a careassist-unified
    ```
 
 ### No Leads Being Pulled
@@ -394,7 +394,7 @@ mac-mini run python -a careassist-unified
 **Fix**:
 ```bash
 # Verify database URL
-mac-mini config:get RECRUITING_DATABASE_URL -a careassist-unified
+# Check ~/.gigi-env:get RECRUITING_DATABASE_URL -a careassist-unified
 
 # Check database status
 mac-mini pg:info -a careassist-unified
@@ -506,7 +506,7 @@ Proprietary - Colorado CareAssist © 2025-2026
 
 **Technical Issues**:
 - Email: jason@coloradocareassist.com
-- Check Mac Mini logs: `mac-mini logs --tail -a careassist-unified | grep recruiting`
+- Check Mac Mini logs: `tail -f ~/logs/gigi-unified.log -a careassist-unified | grep recruiting`
 
 **Facebook API Issues**:
 - Meta Developer Support: https://developers.facebook.com/support/

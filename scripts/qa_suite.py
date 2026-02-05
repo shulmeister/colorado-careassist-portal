@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Config
-BASE_URL = os.getenv("PORTAL_URL", "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com").rstrip("/")
+BASE_URL = os.getenv("PORTAL_URL", "https://portal.coloradocareassist.com").rstrip("/")
 
 ENDPOINTS = [
     # Portal

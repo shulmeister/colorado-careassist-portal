@@ -50,10 +50,10 @@ The following environment variables control the dashboard URLs:
 
 ```bash
 # Sales Dashboard (Mac Mini default)
-SALES_DASHBOARD_URL=https://dashboard-coloradocareassist-3b35b12e9d9b.mac-miniapp.com
+SALES_DASHBOARD_URL=https://portal.coloradocareassist.com
 
 # Recruitment Dashboard (Mac Mini default)
-RECRUITMENT_DASHBOARD_URL=https://recruitment-coloradocareassist.mac-miniapp.com
+RECRUITMENT_DASHBOARD_URL=https://portal.coloradocareassist.com
 ```
 
 These are already configured in Mac Mini and don't require changes unless the dashboard URLs change.
@@ -93,19 +93,19 @@ These are already configured in Mac Mini and don't require changes unless the da
 ## Deployment
 
 ### Current Version: **v96**
-Deployed to: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/`
+Deployed to: `https://portal.coloradocareassist.com/`
 
 ### Deployment Steps (Already Complete)
 1. ✅ Added new routes to `portal_app.py`
 2. ✅ Created embedded dashboard templates
 3. ✅ Committed to git
-4. ✅ Deployed to Mac Mini: `git push mac-mini main`
+4. ✅ Deployed to Mac Mini: `git push origin main`
 5. ✅ Updated database tiles: `mac-mini run python update_dashboard_tiles.py`
 
 ## Testing
 
 ### Manual Test Checklist
-- [ ] Visit portal: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/
+- [ ] Visit portal: https://portal.coloradocareassist.com/
 - [ ] Click "Sales Dashboard" tile
 - [ ] Verify dashboard loads without popup
 - [ ] Verify no authentication required

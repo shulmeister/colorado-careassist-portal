@@ -15,7 +15,7 @@ if not RETELL_API_KEY:
     print("ERROR: RETELL_API_KEY environment variable is required")
     sys.exit(1)
 RETELL_API_BASE = "https://api.retellai.com"
-WEBHOOK_BASE = "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell/function"
+WEBHOOK_BASE = "https://portal.coloradocareassist.com/gigi/webhook/retell/function"
 CURRENT_AGENT_ID = "agent_d5c3f32bdf48fa4f7f24af7d36"  # Gigi v2 - Conversation Flow
 
 # Import the config
@@ -87,7 +87,7 @@ def main():
                 "type": "conversation-flow",
                 "conversation_flow_id": conversation_flow_id
             },
-            "webhook_url": "https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/webhook/retell",
+            "webhook_url": "https://portal.coloradocareassist.com/gigi/webhook/retell",
             "begin_message": "Hi, this is Gigi with Colorado Care Assist. How can I help you tonight?"
         },
         timeout=30

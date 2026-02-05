@@ -18,7 +18,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
 # OAuth 2.0 Configuration (fallback)
 GBP_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID")
 GBP_CLIENT_SECRET = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET")
-GBP_REDIRECT_URI = os.getenv("GBP_REDIRECT_URI", "https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/api/gbp/callback")
+GBP_REDIRECT_URI = os.getenv("GBP_REDIRECT_URI", "https://portal.coloradocareassist.com/api/gbp/callback")
 
 # Stored OAuth tokens (in production, store in database)
 GBP_ACCESS_TOKEN = os.getenv("GBP_ACCESS_TOKEN")
