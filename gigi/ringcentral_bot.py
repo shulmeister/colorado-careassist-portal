@@ -645,7 +645,7 @@ class GigiRingCentralBot:
             try:
                 # If we have a client, log to their record
                 if client_id:
-                    note_prefix = "🚨 CARE ALERT" if is_alert else "ℹ️ RC ACTIVITY"
+                    note_prefix = "CARE ALERT" if is_alert else "RC ACTIVITY"
                     full_note = f"{note_prefix} ({source_type.upper()}): {text}\n(From: {phone or msg.get('creatorId')})"
 
                     self.wellsky.add_note_to_client(
@@ -667,8 +667,8 @@ class GigiRingCentralBot:
                 # If NO client but we have caregiver, link to caregiver record
                 elif caregiver_id and (is_alert or is_task):
                     self.wellsky.create_admin_task(
-                        title=f"📋 {note_type.upper()} from {caregiver_name} ({source_type.upper()})",
-                        description=f"🚨 Care Alert from caregiver - client not specified\n\n"
+                        title=f"{note_type.upper()} from {caregiver_name} ({source_type.upper()})",
+                        description=f"Care Alert from caregiver - client not specified\n\n"
                                   f"Caregiver: {caregiver_name}\n"
                                   f"Source: {source_type.upper()}\n"
                                   f"From: {phone or msg.get('creatorId')}\n"
@@ -683,8 +683,8 @@ class GigiRingCentralBot:
                 # If NO client AND NO caregiver, create truly unassigned task
                 elif is_alert or is_task:
                     self.wellsky.create_admin_task(
-                        title=f"⚠️ UNASSIGNED {note_type.upper()} Alert ({source_type.upper()})",
-                        description=f"🚨 Care Alert - sender and client unknown\n\n"
+                        title=f"UNASSIGNED {note_type.upper()} Alert ({source_type.upper()})",
+                        description=f"Care Alert - sender and client unknown\n\n"
                                   f"Source: {source_type.upper()}\n"
                                   f"From: {phone or msg.get('creatorId')}\n"
                                   f"Message: {text}\n\n"

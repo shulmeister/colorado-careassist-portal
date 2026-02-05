@@ -1176,6 +1176,21 @@ class RingCentralMessagingService:
             if not text:
                 continue
 
+            # Dedup: skip if this message was already synced (check by RC message ID)
+            msg_id = msg.get("id", "")
+            if msg_id:
+                try:
+                    import sqlite3 as _sqlite3
+                    _conn = _sqlite3.connect('portal.db')
+                    _cur = _conn.cursor()
+                    _cur.execute("SELECT 1 FROM gigi_documentation_log WHERE note LIKE ?", (f"%({msg.get('creationTime', 'NONE')})%",))
+                    if _cur.fetchone():
+                        _conn.close()
+                        continue
+                    _conn.close()
+                except Exception:
+                    pass
+
             # 1. Identify Client (Simple heuristic for common formats)
             mentions = self.find_client_mentions(text, client_names)
             
