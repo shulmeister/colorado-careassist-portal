@@ -42,11 +42,11 @@ All services migrated from cloud to Mac Mini and fully operational.
 **Expected Time:** 5-10 minutes total
 
 **Changes Made:**
-- ✅ Updated webhook from Mac Mini (Local) to Mac Mini
+- ✅ Updated webhook from Mac Mini to Mac Mini
 - ✅ Synced all 17 tools to Retell
 - ✅ Webhook URL: https://portal.coloradocareassist.com/gigi/webhook/retell/function
 
-**Previous Results (Mac Mini (Local) webhook):**
+**Previous Results (Mac Mini webhook):**
 - Pass Rate: 21% (3/14 passing)
 - Many incomplete transcripts (webhook unreachable)
 
@@ -149,7 +149,7 @@ All functionality migrated to Mac Mini:
 
 **To destroy:**
 1. Log into Mac Mini
-2. Find local-server at 69.55.59.212
+2. Find Mac Mini at 69.55.59.212
 3. Click "Destroy"
 4. Never think about cloud hosting again
 
@@ -158,8 +158,8 @@ All functionality migrated to Mac Mini:
 ## 💰 COST SAVINGS
 
 **Monthly cloud costs eliminated:**
-- Mac Mini local-server: ~$12/month
-- Mac Mini (Local) dynos: ~$25/month
+- Mac Mini Mac Mini: ~$12/month
+- Mac Mini dynos: ~$25/month
 - **Total savings:** ~$37/month = **$444/year**
 
 **Plus benefits:**

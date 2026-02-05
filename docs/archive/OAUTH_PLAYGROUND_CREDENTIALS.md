@@ -35,7 +35,7 @@ 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
    - Click **Exchange authorization code for tokens**
    - Copy the **refresh_token** value
 
-5. **Set Refresh Token on Mac Mini (Local):**
+5. **Set Refresh Token on Mac Mini:**
    ```bash
    mac-mini config:set GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-coloradocareassist
    ```
@@ -46,7 +46,7 @@ This new OAuth client is just for getting the refresh token via OAuth Playground
 
 The Google Ads service will use:
 - The refresh token you set above
-- The existing `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from Mac Mini (Local) (or you can optionally update them to use this new client)
+- The existing `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` from Mac Mini (or you can optionally update them to use this new client)
 
 After setting the refresh token, the Google Ads API should start working!
 

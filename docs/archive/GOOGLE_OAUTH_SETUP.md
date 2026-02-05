@@ -36,7 +36,7 @@ After adding the redirect URI, the warning icon should disappear.
 
 ## Current Configuration
 
-Your Mac Mini (Local) app is configured with:
+Your Mac Mini app is configured with:
 - **Client ID**: `516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com`
 - **Redirect URI**: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 

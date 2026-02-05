@@ -27,8 +27,8 @@ This is the quickest way to get a refresh token:
 2. **Configure OAuth Playground:**
    - Click the gear icon (⚙️) in the top right
    - Check "Use your own OAuth credentials"
-   - Enter your OAuth Client ID: (check Mac Mini (Local) config for `GOOGLE_CLIENT_ID`)
-   - Enter your OAuth Client Secret: (check Mac Mini (Local) config for `GOOGLE_CLIENT_SECRET`)
+   - Enter your OAuth Client ID: (check Mac Mini config for `GOOGLE_CLIENT_ID`)
+   - Enter your OAuth Client Secret: (check Mac Mini config for `GOOGLE_CLIENT_SECRET`)
 
 3. **Select Scope:**
    - In the left panel, find and select:
@@ -46,7 +46,7 @@ This is the quickest way to get a refresh token:
 6. **Copy the Refresh Token:**
    - Copy the refresh token value (it's a long string)
 
-7. **Set on Mac Mini (Local):**
+7. **Set on Mac Mini:**
    ```bash
    mac-mini config:set GOOGLE_ADS_REFRESH_TOKEN="your_refresh_token_here" -a portal-coloradocareassist
    ```
@@ -121,8 +121,8 @@ Look for:
 **Your Configuration:**
 - Developer Token: `-fWctng9yGnr3fiv6I4gXQ` ✅
 - Customer ID: `6780818726053668` ✅
-- Client ID: ✅ (set in Mac Mini (Local))
-- Client Secret: ✅ (set in Mac Mini (Local))
+- Client ID: ✅ (set in Mac Mini)
+- Client Secret: ✅ (set in Mac Mini)
 - Refresh Token: ⚠️ **NEEDED**
 
 **Required Scope:**

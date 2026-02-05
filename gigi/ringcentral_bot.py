@@ -18,9 +18,15 @@ import os
 import sys
 import logging
 import asyncio
-from datetime import datetime, time, timedelta
+import json
+from datetime import datetime, date, time, timedelta
 import pytz
 import requests
+
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -54,6 +60,146 @@ TIMEZONE = pytz.timezone("America/Denver")
 BUSINESS_START = time(8, 0)
 BUSINESS_END = time(17, 0)
 
+# LOOP PREVENTION - Critical safeguards
+REPLY_COOLDOWN_MINUTES = 30  # Don't reply to same number within this window
+MAX_REPLIES_PER_DAY_PER_NUMBER = 3  # Max replies to any single number per day
+MAX_REPLIES_PER_HOUR_GLOBAL = 20  # Max total SMS per hour
+REPLY_HISTORY_FILE = "/Users/shulmeister/.gigi-reply-history.json"
+
+# Claude API Configuration
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+CLAUDE_MODEL = "claude-sonnet-4-20250514"
+CLAUDE_MAX_TOKENS = 1024
+CLAUDE_MAX_TOOL_ROUNDS = 3
+CONVERSATION_TIMEOUT_MINUTES = 30
+CONVERSATION_HISTORY_FILE = "/Users/shulmeister/.gigi-sms-conversations.json"
+MAX_CONVERSATION_MESSAGES = 10
+
+# Tools available to Claude for SMS replies
+SMS_TOOLS = [
+    {
+        "name": "identify_caller",
+        "description": "Look up who is texting based on their phone number. Checks caregiver and client records in WellSky. Always call this first to know who you're talking to.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "phone_number": {
+                    "type": "string",
+                    "description": "The caller's phone number"
+                }
+            },
+            "required": ["phone_number"]
+        }
+    },
+    {
+        "name": "get_wellsky_shifts",
+        "description": "Get shift schedule from WellSky. Look up shifts by caregiver_id or client_id.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "caregiver_id": {
+                    "type": "string",
+                    "description": "WellSky caregiver ID to get their schedule"
+                },
+                "client_id": {
+                    "type": "string",
+                    "description": "WellSky client ID to get their upcoming visits"
+                },
+                "days": {
+                    "type": "integer",
+                    "description": "Number of days to look ahead (default 7, max 14)",
+                    "default": 7
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "get_wellsky_clients",
+        "description": "Search for clients in WellSky by name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "search_name": {
+                    "type": "string",
+                    "description": "Client name to search for (first, last, or full)"
+                }
+            },
+            "required": ["search_name"]
+        }
+    },
+    {
+        "name": "get_wellsky_caregivers",
+        "description": "Search for caregivers in WellSky by name.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "search_name": {
+                    "type": "string",
+                    "description": "Caregiver name to search for (first, last, or full)"
+                }
+            },
+            "required": ["search_name"]
+        }
+    },
+    {
+        "name": "log_call_out",
+        "description": "Log a caregiver call-out in WellSky and create an urgent admin task for coverage.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "caregiver_id": {
+                    "type": "string",
+                    "description": "The caregiver's WellSky ID"
+                },
+                "caregiver_name": {
+                    "type": "string",
+                    "description": "The caregiver's name"
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Reason for the call-out (e.g., 'sick', 'emergency')"
+                },
+                "shift_date": {
+                    "type": "string",
+                    "description": "Date of the shift (YYYY-MM-DD, defaults to today)"
+                }
+            },
+            "required": ["caregiver_id", "caregiver_name", "reason"]
+        }
+    }
+]
+
+SMS_SYSTEM_PROMPT = """You are Gigi, the AI assistant for Colorado Care Assist, a home care agency in Colorado Springs. You are responding via SMS text message.
+
+CRITICAL RULES:
+- Keep responses under 300 characters when possible. This is SMS, not email.
+- If data requires more detail, you may go up to 500 characters but no more.
+- Never share sensitive medical info via SMS.
+- Never share other people's phone numbers or personal details.
+- Do NOT make up shift times or caregiver names. Always use tools to look up real data.
+- If unsure, say "I'll have the office follow up with you in the morning."
+
+FIRST MESSAGE PROTOCOL:
+On the FIRST message in a conversation, ALWAYS use identify_caller with the caller's phone number. This tells you if they are a caregiver, client, or unknown.
+
+COMMON SCENARIOS:
+- Caregiver calling out sick: Use identify_caller, then log_call_out. Reassure them.
+- Caregiver asking about schedule: Use identify_caller, then get_wellsky_shifts with their caregiver_id.
+- Client asking when caregiver is coming: Use identify_caller, then get_wellsky_shifts with their client_id.
+- Anyone asking about a person by name: Use get_wellsky_clients or get_wellsky_caregivers.
+- Unknown caller or general question: Respond helpfully, note the office will follow up.
+
+TONE:
+- Friendly, professional, concise
+- Plain language (many caregivers speak English as a second language)
+- OK to use abbreviations (Mon, Tue, etc.)
+
+Today is {current_date}.
+The caller's phone number is {caller_phone}.
+"""
+
+
 class GigiRingCentralBot:
     def __init__(self):
         self.rc_service = ringcentral_messaging_service
@@ -61,7 +207,97 @@ class GigiRingCentralBot:
         self.processed_message_ids = set()
         self.bot_extension_id = None
         self.startup_time = datetime.utcnow()
+        self.reply_history = self._load_reply_history()
+        # Claude API for intelligent SMS replies
+        if anthropic and ANTHROPIC_API_KEY:
+            self.claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            logger.info("Claude API initialized for intelligent SMS replies")
+        else:
+            self.claude = None
+            logger.warning("Claude API not available - using static SMS replies")
+        self.sms_conversations = self._load_sms_conversations()
         logger.info(f"Bot initialized. Startup time (UTC): {self.startup_time}")
+        logger.info(f"Reply history loaded: {len(self.reply_history.get('replies', []))} recent replies tracked")
+
+    def _load_reply_history(self) -> dict:
+        """Load reply history from persistent storage for loop prevention"""
+        try:
+            import json
+            from pathlib import Path
+            history_file = Path(REPLY_HISTORY_FILE)
+            if history_file.exists():
+                with open(history_file, 'r') as f:
+                    data = json.load(f)
+                    # Clean old entries (older than 24 hours)
+                    cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+                    data['replies'] = [r for r in data.get('replies', []) if r.get('timestamp', '') > cutoff]
+                    return data
+        except Exception as e:
+            logger.warning(f"Could not load reply history: {e}")
+        return {'replies': [], 'hourly_count': 0, 'hourly_reset': datetime.utcnow().isoformat()}
+
+    def _save_reply_history(self):
+        """Save reply history to persistent storage"""
+        try:
+            import json
+            with open(REPLY_HISTORY_FILE, 'w') as f:
+                json.dump(self.reply_history, f, indent=2)
+        except Exception as e:
+            logger.warning(f"Could not save reply history: {e}")
+
+    def _can_reply_to_number(self, phone: str) -> tuple[bool, str]:
+        """
+        Check if we can safely reply to this phone number.
+        Returns (can_reply, reason).
+        """
+        now = datetime.utcnow()
+
+        # Check global hourly rate limit
+        hourly_reset = datetime.fromisoformat(self.reply_history.get('hourly_reset', now.isoformat()))
+        if (now - hourly_reset).total_seconds() > 3600:
+            # Reset hourly counter
+            self.reply_history['hourly_count'] = 0
+            self.reply_history['hourly_reset'] = now.isoformat()
+
+        if self.reply_history.get('hourly_count', 0) >= MAX_REPLIES_PER_HOUR_GLOBAL:
+            return False, f"Global hourly limit reached ({MAX_REPLIES_PER_HOUR_GLOBAL}/hr)"
+
+        # Normalize phone number for comparison
+        clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+
+        # Check per-number limits
+        today = now.date().isoformat()
+        replies_to_number_today = 0
+        last_reply_to_number = None
+
+        for reply in self.reply_history.get('replies', []):
+            reply_phone = ''.join(filter(str.isdigit, reply.get('phone', '')))[-10:]
+            if reply_phone == clean_phone:
+                reply_time = datetime.fromisoformat(reply.get('timestamp', '2000-01-01'))
+
+                # Check cooldown
+                minutes_since = (now - reply_time).total_seconds() / 60
+                if minutes_since < REPLY_COOLDOWN_MINUTES:
+                    return False, f"Cooldown active ({int(REPLY_COOLDOWN_MINUTES - minutes_since)} min remaining)"
+
+                # Count today's replies
+                if reply.get('timestamp', '').startswith(today):
+                    replies_to_number_today += 1
+
+        if replies_to_number_today >= MAX_REPLIES_PER_DAY_PER_NUMBER:
+            return False, f"Daily limit reached for this number ({MAX_REPLIES_PER_DAY_PER_NUMBER}/day)"
+
+        return True, "OK"
+
+    def _record_reply(self, phone: str):
+        """Record that we sent a reply to this number"""
+        clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+        self.reply_history.setdefault('replies', []).append({
+            'phone': clean_phone,
+            'timestamp': datetime.utcnow().isoformat()
+        })
+        self.reply_history['hourly_count'] = self.reply_history.get('hourly_count', 0) + 1
+        self._save_reply_history()
 
     async def initialize(self):
         """Initialize connections"""
@@ -98,9 +334,12 @@ class GigiRingCentralBot:
     def _get_admin_access_token(self):
         """Exchange JWT for access token"""
         try:
-            # Get RC credentials from environment
-            client_id = os.getenv("RINGCENTRAL_CLIENT_ID", "VbxfL4RkN8ncFItIqSP5k7")
-            client_secret = os.getenv("RINGCENTRAL_CLIENT_SECRET", "W3NjGB4CFnJdhGrYsQsovD3dlIzliPo3Oejdw2pB0puW")
+            # Get RC credentials from environment - NO hardcoded fallbacks
+            client_id = os.getenv("RINGCENTRAL_CLIENT_ID")
+            client_secret = os.getenv("RINGCENTRAL_CLIENT_SECRET")
+            if not client_id or not client_secret:
+                logger.error("RINGCENTRAL_CLIENT_ID or RINGCENTRAL_CLIENT_SECRET not set")
+                return None
 
             response = requests.post(
                 f"{RINGCENTRAL_SERVER}/restapi/oauth/token",
@@ -453,38 +692,326 @@ class GigiRingCentralBot:
             except Exception as e:
                 logger.error(f"Failed to document to WellSky: {e}")
 
+    # =========================================================================
+    # Claude SMS Conversation History
+    # =========================================================================
+
+    def _load_sms_conversations(self) -> dict:
+        """Load SMS conversation history, pruning expired conversations"""
+        try:
+            from pathlib import Path
+            history_file = Path(CONVERSATION_HISTORY_FILE)
+            if history_file.exists():
+                with open(history_file, 'r') as f:
+                    data = json.load(f)
+                now = datetime.utcnow()
+                pruned = {}
+                for phone, convo in data.items():
+                    last_activity = datetime.fromisoformat(convo.get("last_activity", "2000-01-01"))
+                    if (now - last_activity).total_seconds() < CONVERSATION_TIMEOUT_MINUTES * 60:
+                        pruned[phone] = convo
+                return pruned
+        except Exception as e:
+            logger.warning(f"Could not load SMS conversations: {e}")
+        return {}
+
+    def _save_sms_conversations(self):
+        """Persist SMS conversation history"""
+        try:
+            with open(CONVERSATION_HISTORY_FILE, 'w') as f:
+                json.dump(self.sms_conversations, f, indent=2, default=str)
+        except Exception as e:
+            logger.warning(f"Could not save SMS conversations: {e}")
+
+    def _get_conversation_history(self, phone: str) -> list:
+        """Get conversation messages for a phone number, resetting if expired"""
+        clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+        convo = self.sms_conversations.get(clean_phone, {})
+
+        last_activity = convo.get("last_activity")
+        if last_activity:
+            try:
+                last_dt = datetime.fromisoformat(last_activity)
+                if (datetime.utcnow() - last_dt).total_seconds() > CONVERSATION_TIMEOUT_MINUTES * 60:
+                    logger.info(f"Conversation timeout for ...{clean_phone[-4:]}, resetting")
+                    self.sms_conversations.pop(clean_phone, None)
+                    return []
+            except (ValueError, TypeError):
+                pass
+
+        return list(convo.get("messages", []))
+
+    def _add_to_conversation(self, phone: str, role: str, content):
+        """Append a message to conversation history for a phone number"""
+        clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+
+        if clean_phone not in self.sms_conversations:
+            self.sms_conversations[clean_phone] = {"messages": [], "last_activity": datetime.utcnow().isoformat()}
+
+        convo = self.sms_conversations[clean_phone]
+        convo["messages"].append({"role": role, "content": content})
+        convo["last_activity"] = datetime.utcnow().isoformat()
+
+        if len(convo["messages"]) > MAX_CONVERSATION_MESSAGES:
+            convo["messages"] = convo["messages"][-MAX_CONVERSATION_MESSAGES:]
+
+        self._save_sms_conversations()
+
+    # =========================================================================
+    # Claude SMS Tool Execution
+    # =========================================================================
+
+    def _execute_sms_tool(self, tool_name: str, tool_input: dict, caller_phone: str = None) -> str:
+        """Execute a tool call and return the result as a JSON string"""
+        try:
+            if tool_name == "identify_caller":
+                phone = tool_input.get("phone_number", caller_phone or "")
+                # Try caregiver first (most common SMS senders)
+                try:
+                    cg = self.wellsky.get_caregiver_by_phone(phone)
+                    if cg:
+                        return json.dumps({
+                            "identified_as": "caregiver",
+                            "id": cg.id,
+                            "name": cg.full_name,
+                            "first_name": cg.first_name,
+                            "status": cg.status.value if hasattr(cg.status, 'value') else str(cg.status)
+                        })
+                except Exception:
+                    pass
+
+                # Try client
+                try:
+                    clients = self.wellsky.search_patients(phone=phone, active=True)
+                    if clients:
+                        c = clients[0]
+                        return json.dumps({
+                            "identified_as": "client",
+                            "id": c.id,
+                            "name": c.full_name,
+                            "first_name": c.first_name,
+                            "status": c.status.value if hasattr(c.status, 'value') else str(c.status)
+                        })
+                except Exception:
+                    pass
+
+                return json.dumps({"identified_as": "unknown", "message": "Phone number not found in records"})
+
+            elif tool_name == "get_wellsky_shifts":
+                days = min(tool_input.get("days", 7), 14)
+                client_id = tool_input.get("client_id")
+                caregiver_id = tool_input.get("caregiver_id")
+                date_from = date.today()
+                date_to = date.today() + timedelta(days=days)
+
+                shifts = self.wellsky.get_shifts(
+                    date_from=date_from, date_to=date_to,
+                    client_id=client_id, caregiver_id=caregiver_id,
+                    limit=20
+                )
+                shift_list = []
+                for s in shifts[:10]:
+                    shift_list.append({
+                        "date": s.date.isoformat() if hasattr(s, 'date') and s.date else "unknown",
+                        "day": s.date.strftime("%a") if hasattr(s, 'date') and s.date else "",
+                        "time": f"{s.start_time}-{s.end_time}" if hasattr(s, 'start_time') and s.start_time else "TBD",
+                        "client": s.client_name if hasattr(s, 'client_name') else "",
+                        "caregiver": s.caregiver_name if hasattr(s, 'caregiver_name') else "",
+                        "status": s.status.value if hasattr(s.status, 'value') else str(s.status) if hasattr(s, 'status') else ""
+                    })
+                return json.dumps({"count": len(shifts), "shifts": shift_list})
+
+            elif tool_name == "get_wellsky_clients":
+                from services.wellsky_service import ClientStatus
+                search_name = tool_input.get("search_name", "")
+                clients = self.wellsky.get_clients(status=ClientStatus.ACTIVE, limit=100)
+                if search_name:
+                    search_lower = search_name.lower()
+                    clients = [c for c in clients if
+                               search_lower in c.first_name.lower() or
+                               search_lower in c.last_name.lower() or
+                               search_lower in c.full_name.lower()]
+                client_list = [{"id": c.id, "name": c.full_name} for c in clients[:10]]
+                return json.dumps({"count": len(clients), "clients": client_list})
+
+            elif tool_name == "get_wellsky_caregivers":
+                from services.wellsky_service import CaregiverStatus
+                search_name = tool_input.get("search_name", "")
+                caregivers = self.wellsky.get_caregivers(status=CaregiverStatus.ACTIVE, limit=100)
+                if search_name:
+                    search_lower = search_name.lower()
+                    caregivers = [c for c in caregivers if
+                                  search_lower in c.first_name.lower() or
+                                  search_lower in c.last_name.lower() or
+                                  search_lower in c.full_name.lower()]
+                cg_list = [{"id": c.id, "name": c.full_name} for c in caregivers[:10]]
+                return json.dumps({"count": len(caregivers), "caregivers": cg_list})
+
+            elif tool_name == "log_call_out":
+                caregiver_id = tool_input.get("caregiver_id")
+                caregiver_name = tool_input.get("caregiver_name", "Unknown")
+                reason = tool_input.get("reason", "not specified")
+                shift_date = tool_input.get("shift_date", date.today().isoformat())
+
+                self.wellsky.create_admin_task(
+                    title=f"CALL-OUT: {caregiver_name} - {reason}",
+                    description=(
+                        f"Caregiver {caregiver_name} called out via SMS.\n"
+                        f"Reason: {reason}\n"
+                        f"Shift date: {shift_date}\n"
+                        f"ACTION: Find coverage immediately."
+                    ),
+                    priority="urgent",
+                    related_caregiver_id=caregiver_id
+                )
+                return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name}. Admin task created."})
+
+            else:
+                return json.dumps({"error": f"Unknown tool: {tool_name}"})
+
+        except Exception as e:
+            logger.error(f"SMS tool error ({tool_name}): {e}")
+            return json.dumps({"error": f"Tool {tool_name} failed: {str(e)}"})
+
+    # =========================================================================
+    # Claude SMS Reply Generation
+    # =========================================================================
+
+    async def _get_claude_sms_reply(self, text: str, phone: str) -> str:
+        """Get an intelligent reply from Claude with tool calling. Returns reply text or None."""
+        if not self.claude:
+            return None
+
+        try:
+            now = datetime.now(TIMEZONE)
+            system = SMS_SYSTEM_PROMPT.format(
+                current_date=now.strftime("%A, %B %d, %Y at %I:%M %p MT"),
+                caller_phone=phone
+            )
+
+            messages = self._get_conversation_history(phone)
+            messages.append({"role": "user", "content": text})
+            self._add_to_conversation(phone, "user", text)
+
+            response = self.claude.messages.create(
+                model=CLAUDE_MODEL,
+                max_tokens=CLAUDE_MAX_TOKENS,
+                system=system,
+                tools=SMS_TOOLS,
+                messages=messages
+            )
+
+            tool_round = 0
+            while response.stop_reason == "tool_use" and tool_round < CLAUDE_MAX_TOOL_ROUNDS:
+                tool_round += 1
+                logger.info(f"SMS Claude tool round {tool_round}")
+
+                tool_results = []
+                assistant_content = []
+
+                for block in response.content:
+                    if block.type == "tool_use":
+                        logger.info(f"  Tool: {block.name}({json.dumps(block.input)[:100]})")
+                        result = self._execute_sms_tool(block.name, block.input, caller_phone=phone)
+                        logger.info(f"  Result: {result[:200]}")
+
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": result
+                        })
+                        assistant_content.append({
+                            "type": "tool_use",
+                            "id": block.id,
+                            "name": block.name,
+                            "input": block.input
+                        })
+                    elif block.type == "text":
+                        assistant_content.append({
+                            "type": "text",
+                            "text": block.text
+                        })
+
+                self._add_to_conversation(phone, "assistant", assistant_content)
+                self._add_to_conversation(phone, "user", tool_results)
+
+                messages = self._get_conversation_history(phone)
+
+                response = self.claude.messages.create(
+                    model=CLAUDE_MODEL,
+                    max_tokens=CLAUDE_MAX_TOKENS,
+                    system=system,
+                    tools=SMS_TOOLS,
+                    messages=messages
+                )
+
+            # Extract final text
+            final_text = ""
+            for block in response.content:
+                if block.type == "text":
+                    final_text += block.text
+
+            if not final_text:
+                final_text = "Thanks for your message. I'll have the office follow up with you in the morning."
+
+            self._add_to_conversation(phone, "assistant", final_text)
+            logger.info(f"Claude SMS reply ({tool_round} tool rounds, {len(final_text)} chars)")
+            return final_text
+
+        except Exception as e:
+            logger.error(f"Claude SMS reply error: {e}", exc_info=True)
+            return None
+
+    # =========================================================================
+    # Process Reply (Claude-powered with static fallback)
+    # =========================================================================
+
     async def process_reply(self, msg: dict, text: str, reply_method: str = "chat", phone: str = None):
-        """Replier Logic: Respond to EVERY unanswered request after-hours."""
-        lower_text = text.lower()
-        
-        # Determine the best reply using smart defaults (retell integration can follow)
+        """Replier Logic: Respond to EVERY unanswered request after-hours.
+        Uses Claude + tool calling for dynamic replies, falls back to static templates."""
+
+        # LOOP PREVENTION CHECK - Critical safety gate
+        if reply_method == "sms" and phone:
+            can_reply, reason = self._can_reply_to_number(phone)
+            if not can_reply:
+                logger.warning(f"⛔ LOOP PREVENTION: Blocking reply to {phone}. Reason: {reason}")
+                return
+
+        # --- TRY CLAUDE FIRST ---
         reply = None
-        if "call out" in lower_text or "sick" in lower_text:
-            reply = "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better!"
-        elif "late" in lower_text:
-            reply = "Thanks for letting us know. I've noted that you're running late in the system. Drive safe!"
-        elif "cancel" in lower_text:
-            reply = "I've processed that cancellation and notified the team. Thanks for the heads up."
-        elif "help" in lower_text or "shift" in lower_text or "question" in lower_text:
-            reply = "Got it. I've notified the care team that you need assistance. Someone will get back to you shortly."
-        else:
-            # DEFAULT REPLY FOR EVERYTHING ELSE
-            reply = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
-            
+        if self.claude:
+            try:
+                reply = await self._get_claude_sms_reply(text, phone or "unknown")
+            except Exception as e:
+                logger.error(f"Claude reply failed, falling back to static: {e}")
+                reply = None
+
+        # --- FALLBACK: Static replies if Claude unavailable ---
+        if not reply:
+            lower_text = text.lower()
+            if "call out" in lower_text or "sick" in lower_text:
+                reply = "I hear you. I've logged your call-out and we're already reaching out for coverage. Feel better!"
+            elif "late" in lower_text:
+                reply = "Thanks for letting us know. I've noted that you're running late in the system. Drive safe!"
+            elif "cancel" in lower_text:
+                reply = "I've processed that cancellation and notified the team. Thanks for the heads up."
+            elif "help" in lower_text or "shift" in lower_text or "question" in lower_text:
+                reply = "Got it. I've notified the care team that you need assistance. Someone will get back to you shortly."
+            else:
+                reply = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
+
+        # --- SEND REPLY ---
         if reply:
             try:
                 if reply_method == "chat":
                     self.rc_service.send_message_to_chat(TARGET_CHAT, reply)
                 elif reply_method == "sms" and phone:
-                    # Use RC service to send generic SMS
-                    # Normalize phone for sender
                     clean_phone = ''.join(filter(str.isdigit, phone))
                     if len(clean_phone) == 10: clean_phone = f"+1{clean_phone}"
                     elif not clean_phone.startswith('+'): clean_phone = f"+{clean_phone}"
 
                     logger.info(f"Sending SMS reply to {clean_phone} via {RINGCENTRAL_FROM_NUMBER} (using Admin Token)")
-                    
-                    # USE ADMIN TOKEN to Send
+
                     access_token = self._get_admin_access_token()
                     if not access_token:
                         logger.error("Could not get access token for SMS reply")
@@ -501,10 +1028,11 @@ class GigiRingCentralBot:
                         "to": [{"phoneNumber": clean_phone}],
                         "text": reply
                     }
-                    
+
                     response = requests.post(url, headers=headers, json=data, timeout=20)
                     if response.status_code == 200:
                         logger.info(f"🌙 After-Hours SMS Reply Sent to {clean_phone}")
+                        self._record_reply(clean_phone)
                     else:
                         logger.error(f"Failed to send SMS reply: {response.status_code} - {response.text}")
 

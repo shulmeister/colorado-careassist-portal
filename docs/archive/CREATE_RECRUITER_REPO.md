@@ -30,5 +30,5 @@
 
 The repo will be available at: https://github.com/shulmeister/recruiter-dashboard
 
-Then all repos will follow the flow: **Desktop → GitHub → Mac Mini (Local)**
+Then all repos will follow the flow: **Desktop → GitHub → Mac Mini**
 

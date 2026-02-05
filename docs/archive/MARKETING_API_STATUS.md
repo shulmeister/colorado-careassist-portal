@@ -151,7 +151,7 @@ A test script has been created: `test_marketing_apis.py`
 python3 test_marketing_apis.py
 ```
 
-**Run on Mac Mini (Local) (tests actual production config):**
+**Run on Mac Mini (tests actual production config):**
 ```bash
 mac-mini run python3 test_marketing_apis.py -a portal-coloradocareassist
 ```
@@ -292,7 +292,7 @@ If you need help setting up the Google Ads API:
 1. Check the Google Ads API documentation
 2. Verify your Developer Token is active in Google Ads
 3. Ensure OAuth tokens have the correct scopes
-4. Check Mac Mini (Local) logs for detailed error messages
+4. Check Mac Mini logs for detailed error messages
 
 ---
 

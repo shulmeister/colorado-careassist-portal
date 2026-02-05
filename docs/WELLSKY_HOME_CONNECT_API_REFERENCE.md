@@ -1,6 +1,6 @@
 # WellSky Home Connect API - Complete Reference
 
-**Version:** January 2026
+**Version:** February 2026
 **Base URL:** `https://connect.clearcareonline.com/v1/`
 **Authentication:** OAuth 2.0 Bearer Token
 **Rate Limit:** 100 requests per second
@@ -17,8 +17,11 @@
 6. [Encounter API](#encounter-api)
 7. [ClockIn/ClockOut API](#clockin-clockout-api)
 8. [Task API](#task-api)
-9. [Subscription API](#subscription-api)
-10. [Additional Resources](#additional-resources)
+9. [DocumentReference API](#documentreference-api)
+10. [Subscription API](#subscription-api)
+11. [ProfileTags API](#profiletags-api)
+12. [RelatedPerson API](#relatedperson-api)
+13. [Additional Resources](#additional-resources)
 
 ---
 
@@ -187,6 +190,54 @@ GET /v1/appointment/?clientId=92169&monthNo=202601
   ]
 }
 ```
+
+### Create Appointment
+
+**Endpoint:** `POST /v1/appointment/`
+
+**Request:**
+```json
+{
+  "resourceType": "Appointment",
+  "client": {"id": "2870130"},
+  "caregiver": {"id": "3456789"},
+  "start": "2026-02-05T08:00:00",
+  "end": "2026-02-05T12:00:00",
+  "status": "SCHEDULED",
+  "scheduledItems": [
+    {"id": "123", "name": "Meal Preparation"}
+  ],
+  "position": {
+    "latitude": 39.7392,
+    "longitude": -104.9903
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "resourceType": "Appointment",
+  "id": "109131900"
+}
+```
+
+**Status Values:**
+- `SCHEDULED` - Upcoming shift
+- `COMPLETED` - Finished shift
+- `CANCELLED` - Cancelled shift
+
+### Update Appointment
+
+**Endpoint:** `PUT /v1/appointment/{id}/`
+
+**Request:** Same structure as Create (full resource replacement).
+
+### Delete Appointment
+
+**Endpoint:** `DELETE /v1/appointment/{id}/`
+
+Permanently removes the scheduled shift. Use with caution.
 
 **Notes:**
 - All dates returned in UTC timezone
@@ -521,6 +572,39 @@ POST /v1/patients/_search/
 }
 ```
 
+### Get Patient by ID
+
+**Endpoint:** `GET /v1/patients/{id}/`
+
+Returns full FHIR Patient resource including name, contact, address, and meta tags.
+
+### Update Patient
+
+**Endpoint:** `PUT /v1/patients/{id}/`
+
+**Request:** Same FHIR Patient structure as Create. All fields are optional -- only provided fields are updated.
+
+```json
+{
+  "resourceType": "Patient",
+  "name": [{"use": "official", "family": "Johnson", "given": ["Margaret"]}],
+  "telecom": [{"system": "phone", "value": "3035559999", "use": "mobile"}],
+  "address": [{"use": "home", "city": "Boulder", "state": "CO"}],
+  "meta": {
+    "tag": [
+      {"code": "agencyId", "display": "1669"},
+      {"code": "status", "display": "80"}
+    ]
+  }
+}
+```
+
+### Delete Patient
+
+**Endpoint:** `DELETE /v1/patients/{id}/`
+
+Permanently removes the patient record from WellSky. Use with caution.
+
 ### Client Status Codes
 
 | Status | ID | Description |
@@ -836,6 +920,78 @@ Encounters represent completed care visits (care logs).
 
 ---
 
+## DocumentReference API
+
+Manage documents attached to patient/client profiles (care plans, assessments, clinical notes, images, etc.).
+
+### Create DocumentReference
+
+**Endpoint:** `POST /v1/documentreference/`
+
+**Request:**
+```json
+{
+  "resourceType": "DocumentReference",
+  "subject": {"reference": "Patient/2870130"},
+  "type": {
+    "coding": [{"code": "clinical-note", "display": "clinical-note"}]
+  },
+  "description": "Weekly care assessment notes",
+  "date": "2026-02-04T12:00:00Z",
+  "content": [
+    {
+      "attachment": {
+        "contentType": "application/pdf",
+        "data": "<base64-encoded-content>"
+      }
+    }
+  ]
+}
+```
+
+**Response:**
+```json
+{
+  "resourceType": "DocumentReference",
+  "id": "98765"
+}
+```
+
+### Get DocumentReference by ID
+
+**Endpoint:** `GET /v1/documentreference/{id}/`
+
+Returns document metadata and base64-encoded content.
+
+### Search DocumentReferences
+
+**Endpoint:** `POST /v1/documentreference/_search/`
+
+**Request:**
+```json
+{
+  "subject": "Patient/2870130",
+  "type": "clinical-note",
+  "date": "ge2026-01-01"
+}
+```
+
+**Query Parameters:**
+- `_count` - Records per page (default: 30)
+- `_page` - Page number (default: 1)
+
+### Update DocumentReference
+
+**Endpoint:** `PUT /v1/documentreference/{id}/`
+
+**Request:** Same structure as Create (all fields optional)
+
+### Delete DocumentReference
+
+**Endpoint:** `DELETE /v1/documentreference/{id}/`
+
+---
+
 ## Subscription API
 
 Subscribe to real-time webhook notifications for events.
@@ -943,6 +1099,165 @@ Your webhook endpoint should:
 
 ---
 
+## ProfileTags API
+
+Manage skill/certification tags that can be assigned to practitioners. Tags are referenced by comma-separated IDs in the `profileTags` meta tag on Practitioner resources.
+
+### Create Profile Tag
+
+**Endpoint:** `POST /v1/profileTags/`
+
+**Request:**
+```json
+{
+  "name": "CNA",
+  "description": "Certified Nursing Assistant",
+  "type": "certification"
+}
+```
+
+**Response:**
+```json
+{
+  "id": "45",
+  "name": "CNA"
+}
+```
+
+**Tag Types:** `skill`, `certification`, `language`, or custom values.
+
+### Get Profile Tag by ID
+
+**Endpoint:** `GET /v1/profileTags/{id}/`
+
+### Search Profile Tags
+
+**Endpoint:** `GET /v1/profileTags/`
+
+**Query Parameters:**
+- `name` - Filter by tag name
+- `type` - Filter by tag type
+- `_count` - Records per page (default: 100)
+- `_page` - Page number (default: 1)
+
+**Examples:**
+```http
+# List all tags
+GET /v1/profileTags/
+
+# Find by name
+GET /v1/profileTags/?name=CNA
+
+# Find by type
+GET /v1/profileTags/?type=certification
+```
+
+### Update Profile Tag
+
+**Endpoint:** `PUT /v1/profileTags/{id}/`
+
+**Request:** All fields optional -- only provided fields are updated.
+```json
+{
+  "name": "CNA - Certified Nursing Assistant",
+  "description": "Updated description"
+}
+```
+
+### Delete Profile Tag
+
+**Endpoint:** `DELETE /v1/profileTags/{id}/`
+
+---
+
+## RelatedPerson API
+
+Family members, emergency contacts, and other related persons for patients.
+
+### Get Related Persons for Patient
+
+**Endpoint:** `GET /v1/relatedperson/{patient_id}/`
+
+Returns FHIR Bundle with all related persons for the patient.
+
+**Response:**
+```json
+{
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "RelatedPerson",
+        "id": "12345",
+        "name": [{"given": ["John"], "family": "Smith"}],
+        "relationship": {"coding": [{"code": "SON", "display": "Son"}]},
+        "telecom": [
+          {"system": "phone", "value": "7195551234", "use": "mobile"},
+          {"system": "email", "value": "john@example.com"}
+        ],
+        "address": [{"city": "Colorado Springs", "state": "CO"}],
+        "emergencyContact": true,
+        "primaryContact": true,
+        "payer": false,
+        "poa": false
+      }
+    }
+  ]
+}
+```
+
+### Create Related Person
+
+**Endpoint:** `POST /v1/relatedperson/`
+
+**Request:**
+```json
+{
+  "resourceType": "RelatedPerson",
+  "patient": {"reference": "Patient/2870130"},
+  "name": [{"given": ["John"], "family": "Smith"}],
+  "relationship": {"coding": [{"code": "SON"}]},
+  "telecom": [
+    {"system": "phone", "value": "7195551234", "use": "mobile"}
+  ],
+  "emergencyContact": true,
+  "primaryContact": true,
+  "payer": false,
+  "poa": false
+}
+```
+
+### Search Related Persons
+
+**Endpoint:** `POST /v1/relatedperson/_search/`
+
+Search across all patients. Supports `patient`, `name`, `phone` filters.
+
+### Update Related Person
+
+**Endpoint:** `PUT /v1/relatedperson/{contact_id}/`
+
+Same structure as Create (all fields optional).
+
+### Delete Related Person
+
+**Endpoint:** `DELETE /v1/relatedperson/{patient_id}/contacts/{contact_id}/`
+
+### Relationship Codes
+
+- `FTH` - Father
+- `MTH` - Mother
+- `SPS` - Spouse
+- `BRO` / `SIS` - Sibling
+- `SON` / `DAU` - Child
+- `DOCTOR` - Physician
+- `SOCIAL_WORKER` - Social Worker
+- `NURSE` - Nurse
+- `FRND` - Friend
+- `NBOR` - Neighbor
+- And more...
+
+---
+
 ## Additional Resources
 
 ### Location API
@@ -956,39 +1271,6 @@ Search office locations by name, address, phone, etc.
 **Endpoint:** `GET /v1/organizations/` or `POST /v1/organizations/_search/`
 
 Search agencies by name, subdomain, address, etc.
-
-### ProfileTags API
-
-**Endpoint:** `POST /v1/profileTags/`
-
-Create and manage skill/certification tags.
-
-**Get Tag:** `GET /v1/profileTags/{id}/`
-**Update Tag:** `PUT /v1/profileTags/{id}/`
-
-### RelatedPerson API
-
-**Endpoint:** `POST /v1/relatedperson/`
-
-Create patient emergency contacts and family members.
-
-**Search:** `GET /v1/relatedperson/` or `POST /v1/relatedperson/_search/`
-**Get by Patient:** `GET /v1/relatedperson/{patient_id}/`
-**Update:** `PUT /v1/relatedperson/{contact_id}/`
-**Remove:** `DELETE /v1/relatedperson/{patient_id}/contacts/{contact_id}/`
-
-**Relationship Codes:**
-- `FTH` - Father
-- `MTH` - Mother
-- `SPS` - Spouse
-- `BRO` / `SIS` - Sibling
-- `SON` / `DAU` - Child
-- `DOCTOR` - Physician
-- `SOCIAL_WORKER` - Social Worker
-- `NURSE` - Nurse
-- `FRND` - Friend
-- `NBOR` - Neighbor
-- And more...
 
 ### ReferralSource API
 
@@ -1168,6 +1450,10 @@ POST /v1/practitioners/_search/
 # Get caregiver's shifts today
 GET /v1/appointment/?caregiverId=123&startDate=20260129
 
+# Create a new shift
+POST /v1/appointment/
+{"client": {"id": "456"}, "caregiver": {"id": "123"}, "start": "...", "end": "..."}
+
 # Find available caregivers
 POST /v1/practitioners/_search/
 {"active": "true", "is_hired": "true", "city": "Denver"}
@@ -1176,6 +1462,10 @@ POST /v1/practitioners/_search/
 POST /v1/patients/_search/
 {"mobile_phone": "3035551234"}
 
+# Update client info
+PUT /v1/patients/{id}/
+{"resourceType": "Patient", "telecom": [...]}
+
 # Get shift history
 POST /v1/encounter/_search/
 {"clientId": "456", "startDate": "20260101", "endDate": "20260131"}
@@ -1183,6 +1473,13 @@ POST /v1/encounter/_search/
 # Subscribe to events
 POST /v1/subscriptions/
 {"criteria": "encounter.clockout.changed", ...}
+
+# Manage skill tags
+POST /v1/profileTags/
+{"name": "CNA", "type": "certification"}
+
+# Get client's emergency contacts
+GET /v1/relatedperson/{patient_id}/
 ```
 
 ---

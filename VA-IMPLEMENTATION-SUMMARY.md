@@ -95,7 +95,7 @@ Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral fo
 | **Frontend** | HTML/CSS/JavaScript | User interface |
 | **PDF Library** | html2pdf.js | Client-side PDF generation |
 | **Database** | PostgreSQL | Portal tiles |
-| **Hosting** | Mac Mini (Local) | Cloud platform |
+| **Hosting** | Mac Mini | Cloud platform |
 | **Auth** | Portal SSO | User authentication |
 
 ### Key Files Modified/Created
@@ -303,7 +303,7 @@ Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral fo
 ✅ Gemini API calls over encrypted connection
 
 ### API Key Security
-✅ Stored in Mac Mini (Local) environment variables only
+✅ Stored in Mac Mini environment variables only
 ✅ Never logged or exposed to client
 ✅ Not committed to git repository
 
@@ -316,7 +316,7 @@ Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral fo
 
 ## 🚀 Deployment Checklist
 
-- [x] Code deployed to Mac Mini (Local)
+- [x] Code deployed to Mac Mini
 - [x] Environment variables set (GEMINI_API_KEY)
 - [x] Database tile added
 - [x] Tile visible on portal dashboard
@@ -365,7 +365,7 @@ Built an AI-powered web tool that converts VA Form 10-7080 (Approved Referral fo
 - **Cost:** $0 (within free tier)
 
 ### Infrastructure
-- **Mac Mini (Local):** Existing app (no additional cost)
+- **Mac Mini:** Existing app (no additional cost)
 - **Database:** Existing PostgreSQL (1 table row)
 - **Storage:** None (no files stored)
 

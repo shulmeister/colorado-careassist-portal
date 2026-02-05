@@ -19,7 +19,7 @@ pip3 install fastapi uvicorn sqlalchemy psycopg2-binary retell-sdk python-multip
 
 ### 2. Set Up Local PostgreSQL Database
 
-**Option A: Use Existing Mac Mini (Local) Database (Read-Only)**
+**Option A: Use Existing Mac Mini Database (Read-Only)**
 ```bash
 # Get production database URL
 mac-mini config:get DATABASE_URL --app careassist-unified
@@ -376,7 +376,7 @@ pip3 install psycopg2-binary
    - Load test with 10+ simultaneous requests
 
 3. **Week 2:**
-   - Deploy to Mac Mini (Local) staging environment
+   - Deploy to Mac Mini staging environment
    - Test from multiple devices
    - Brief offshore scheduler on coordination
 

@@ -27,7 +27,7 @@ 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
 6780818726053668
 ```
 
-## Environment Variables Set on Mac Mini (Local)
+## Environment Variables Set on Mac Mini
 
 ✅ `GOOGLE_ADS_DEVELOPER_TOKEN`
 ✅ `GOOGLE_ADS_CUSTOMER_ID`

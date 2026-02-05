@@ -17,9 +17,12 @@ pending_sessions = {}
 
 def send_2fa_text(message: str):
     """Send a confirmation text to Jason via RingCentral or Telegram"""
-    # Using Telegram as the secondary 'secure' channel for 2FA as requested in architecture
-    TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8508806105:AAExZ25ZN19X3xjBQAZ3Q9fHgAQmWWklX8U")
+    # Using Telegram as the secondary 'secure' channel for 2FA
+    TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
     TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "8215335898")
+    if not TELEGRAM_BOT_TOKEN:
+        logger.error("TELEGRAM_BOT_TOKEN not set - cannot send 2FA")
+        return
     
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {

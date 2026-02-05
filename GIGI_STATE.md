@@ -1,92 +1,124 @@
-# GIGI State Documentation
+# GIGI STATE — Current Operational Status
 
-## Current Status: ✅ RUNNING ON MAC MINI
-
-**Date:** February 2, 2026
-**Location:** Mac Mini (jasons-mac-mini)
-**Service:** com.coloradocareassist.gigi-unified
-**Port:** 8765
-**URL:** https://portal.coloradocareassist.com
+**Last Updated:** February 4, 2026
+**Status:** ✅ ALL SYSTEMS OPERATIONAL
 
 ---
 
-## Infrastructure
+## QUICK STATUS
 
-- **No Mac Mini (Local)** - All Mac Mini (Local) apps deleted
-- **No Mac Mini** - Local Server decommissioned
-- **Database:** Local PostgreSQL 17 on Mac Mini
-- **Access:** Cloudflare Tunnel (secure, no open ports)
-- **Remote:** Tailscale at 100.124.88.105
-
----
-
-## Capabilities
-
-1. **SMS (307-459-8220):** Replies using Gemini AI. Recognizes Owner ("Hi Jason"). No duplicates.
-2. **Voice (307-459-8220 → 720-817-6600):** Recognizes callers via WellSky lookup ("Hi [Name]").
-3. **Telegram (@Shulmeisterbot):** Personal AI assistant running on Mac Mini.
-4. **Logging:** Logs ALL interactions to WellSky (Client Notes or Admin Tasks).
-5. **Portal:** Full web portal with 26 tiles for various tools
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Portal** (8765) | ✅ Running | portal.coloradocareassist.com |
+| **Telegram Bot** | ✅ Running | @Shulmeisterbot |
+| **RingCentral Bot** | ✅ Running | Embedded in unified_app |
+| **Voice (Retell)** | ✅ Active | 307-459-8220 |
+| **WellSky Sync** | ✅ Active | Auto-documentation enabled |
+| **PostgreSQL** | ✅ Running | localhost:5432 |
+| **Cloudflare Tunnel** | ✅ Running | All domains routed |
 
 ---
 
-## Service Management
+## GIGI CHANNELS
 
+| Channel | Number/Handle | Technology | Status |
+|---------|---------------|------------|--------|
+| **Phone (Voice)** | 307-459-8220 | Retell AI + WellSky | ✅ Live |
+| **Phone (SMS)** | 307-459-8220 | RingCentral + Gemini | ✅ Live |
+| **Telegram** | @Shulmeisterbot | Claude API + Tools | ✅ Live |
+| **Team Chat** | "New Scheduling" | RingCentral Glip | ✅ Monitored |
+| **Portal** | portal.coloradocareassist.com | Web UI | ✅ Live |
+
+---
+
+## RINGCENTRAL EXTENSION
+
+- **Extension:** #111 (Gigi AI)
+- **Credentials:** Consolidated in all plists
+- **Monitoring:** "New Scheduling" chat + SMS
+- **Bot Loop:** Every 60 seconds via unified_app.py
+
+---
+
+## WELLSKY INTEGRATION
+
+- **Mode:** Production (Connect API)
+- **Agency ID:** 4505
+- **Capabilities:**
+  - Client/caregiver lookup ✅
+  - Shift queries ✅
+  - Auto-documentation ✅
+  - Client notes ✅
+
+---
+
+## HEALTH MONITORING
+
+- **Script:** `scripts/health-monitor.sh`
+- **Frequency:** Every 5 minutes (LaunchAgent)
+- **Status File:** `~/logs/health-status.json`
+- **Alerts:** Telegram notifications for failures
+- **Auto-Restart:** Failed services automatically restarted
+
+**Check current status:**
 ```bash
-# Check status
-launchctl list | grep gigi-unified
-curl http://localhost:8765/health
-
-# View logs
-tail -f ~/logs/gigi-unified.log
-tail -f ~/logs/gigi-unified-error.log
-
-# Restart
-launchctl unload ~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist
-launchctl load ~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist
+cat ~/logs/health-status.json
 ```
 
 ---
 
-## RingCentral Bot Status
+## LAUNCHAGENTS
 
-- **Status:** ✅ ENABLED AND RUNNING
-- **Monitoring:** "New Scheduling" chat and Direct SMS
-- **Loop:** Every 60 seconds
-- **Bot Class:** `gigi/ringcentral_bot.py` → `GigiRingCentralBot`
-
-The bot is started automatically via `unified_app.py` startup event.
-
-To disable: Set `GIGI_RC_BOT_ENABLED=false` in LaunchAgent plist.
-
----
-
-## Code Location
-
-- **Main App:** `/Users/shulmeister/mac-mini-apps/careassist-unified/`
-- **Gigi Code:** `/Users/shulmeister/mac-mini-apps/careassist-unified/gigi/`
-- **LaunchAgent:** `~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist`
-- **Logs:** `~/logs/gigi-unified.log` and `~/logs/gigi-unified-error.log`
+| Service | Plist |
+|---------|-------|
+| Portal | com.coloradocareassist.gigi-unified |
+| Telegram Bot | com.coloradocareassist.telegram-bot |
+| Health Monitor | com.coloradocareassist.health-monitor |
+| Website | com.coloradocareassist.website |
+| Hesed | com.coloradocareassist.hesedhomecare |
+| Elite Trading | com.coloradocareassist.elite-trading |
+| PowderPulse | com.coloradocareassist.powderpulse |
 
 ---
 
-## Database
+## LOGS
 
-- **Host:** localhost:5432
-- **Database:** careassist
-- **User:** careassist
-- **Password:** careassist2026
-- **Connection:** `postgresql://careassist:careassist2026@localhost:5432/careassist`
-
----
-
-## Backups
-
-Daily at 3AM to Google Drive (`gdrive:MacMini-Backups`)
-Manual: `~/scripts/backup-to-gdrive.sh`
+| Log | Location |
+|-----|----------|
+| Portal | `~/logs/gigi-unified.log` |
+| Telegram | `~/logs/telegram-bot.log` |
+| Health Monitor | `~/logs/health-monitor.log` |
+| Alerts | `~/logs/health-alerts.log` |
 
 ---
 
-## Recent Fixes
+## TROUBLESHOOTING
 
-- **Feb 2, 2026:** Fixed services module import issue - sales dashboard failure was preventing services modules from being restored to Python's module cache, breaking RingCentral bot imports. Fixed with proper try/finally pattern.
+### Service Down?
+```bash
+# Check status
+launchctl list | grep coloradocareassist
+
+# Restart
+launchctl bootout gui/501/com.coloradocareassist.<service>
+launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.coloradocareassist.<service>.plist
+```
+
+### API Errors?
+1. Check `~/.gigi-env` for credentials
+2. Verify LaunchAgent plist has env vars
+3. Check logs for specific error messages
+
+### Telegram Conflict?
+Only ONE instance can poll. Kill duplicates:
+```bash
+pkill -f "telegram_bot.py"
+# Then restart via LaunchAgent
+```
+
+---
+
+## RECENT CHANGES
+
+- **Feb 4, 2026:** Consolidated all API credentials, created health monitoring system
+- **Feb 2, 2026:** Migrated to Mac Mini, fixed services module caching issue

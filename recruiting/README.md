@@ -37,7 +37,7 @@ A complete caregiver recruitment pipeline with Facebook Lead Ads integration, ap
 - **Database**: PostgreSQL (separate database from main portal)
 - **Deployment**: Mounted at `/recruiting` in unified portal via `unified_app.py`
 
-**Deployment**: Part of the unified portal app (`careassist-unified` on Mac Mini (Local))
+**Deployment**: Part of the unified portal app (`careassist-unified` on Mac Mini)
 
 ---
 
@@ -161,7 +161,7 @@ curl -G "https://graph.facebook.com/v18.0/YOUR_AD_ACCOUNT_ID/leadgen_forms" \
 
 ### Step 5: Configure Environment Variables
 
-Set the variables from steps above in your `.env` file or Mac Mini (Local) config.
+Set the variables from steps above in your `.env` file or Mac Mini config.
 
 ---
 
@@ -174,12 +174,12 @@ Set the variables from steps above in your `.env` file or Mac Mini (Local) confi
 3. Click **Pull Leads** button
 4. Status text shows: "Last pull: X minutes ago. Ingested Y leads."
 
-### Automated Sync (Mac Mini (Local) Scheduler)
+### Automated Sync (Mac Mini Scheduler)
 
 **Recommended**: Set up daily automated sync
 
 ```bash
-# Add Mac Mini (Local) Scheduler (if not already added)
+# Add Mac Mini Scheduler (if not already added)
 mac-mini addons:create scheduler:standard -a careassist-unified
 
 # Open scheduler dashboard
@@ -263,11 +263,11 @@ GET    /dashboard/pipeline         # Pipeline view
 
 ---
 
-## Deployment to Mac Mini (Local)
+## Deployment to Mac Mini
 
 The recruiting dashboard is part of the **unified portal** and deploys together.
 
-### Environment Variables (Mac Mini (Local))
+### Environment Variables (Mac Mini)
 
 ```bash
 # Set recruiting database URL
@@ -506,7 +506,7 @@ Proprietary - Colorado CareAssist © 2025-2026
 
 **Technical Issues**:
 - Email: jason@coloradocareassist.com
-- Check Mac Mini (Local) logs: `mac-mini logs --tail -a careassist-unified | grep recruiting`
+- Check Mac Mini logs: `mac-mini logs --tail -a careassist-unified | grep recruiting`
 
 **Facebook API Issues**:
 - Meta Developer Support: https://developers.facebook.com/support/
@@ -517,7 +517,7 @@ Proprietary - Colorado CareAssist © 2025-2026
 ## Recent Updates (Jan 2026)
 
 - ✅ Facebook Lead Ads integration live
-- ✅ Automated daily sync via Mac Mini (Local) Scheduler
+- ✅ Automated daily sync via Mac Mini Scheduler
 - ✅ Duplicate protection via native Lead IDs
 - ✅ Manual lead entry support
 - ✅ Mounted at `/recruiting` in unified portal

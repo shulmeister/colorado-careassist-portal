@@ -75,7 +75,7 @@ LIG → Dawn Light (Ed Witt)
 - Invoice date: Dec 1
 - Rule: First day of month AFTER service period ends
 
-### Environment Variables (Mac Mini (Local))
+### Environment Variables (Mac Mini)
 
 Required for sync to work:
 ```
@@ -126,7 +126,7 @@ GOOGLE_CLOUD_PROJECT_ID = cca-website-c822e
 #### OCR extracts no text
 - Ensure `tesseract-ocr` is installed (check Aptfile)
 - Verify PDF is text-based or scanned image (not corrupted)
-- Check Mac Mini (Local) logs for specific OCR errors
+- Check Mac Mini logs for specific OCR errors
 
 #### Wrong amounts
 - System looks for "Units of Service X@" or "X hours"

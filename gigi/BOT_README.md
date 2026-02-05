@@ -7,7 +7,7 @@
 
 Gigi is now embedded directly into the main website process to ensure reliability.
 
-### To Deploy (Mac Mini (Local)):
+### To Deploy (Mac Mini):
 Simply push to the `main` branch.
 ```bash
 git push origin main
@@ -27,7 +27,7 @@ Gigi will start automatically.
 ## 🧠 System Architecture
 
 ### 1. The "Trojan Horse" Strategy
-Previously, Gigi ran as a separate `worker` process on Mac Mini (Local). This was unreliable.
+Previously, Gigi ran as a separate `worker` process on Mac Mini. This was unreliable.
 **Now:** Gigi is an async task (`gigi/async_bot.py`) launched by `unified_app.py` on startup.
 - If the website is up, Gigi is up.
 - Zero extra configuration needed.

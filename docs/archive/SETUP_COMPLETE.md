@@ -6,17 +6,17 @@
 2. ✅ Copied all portal files (app, auth, database, models, templates)
 3. ✅ Initialized Git repository
 4. ✅ Made initial commit
-5. ✅ Created Mac Mini (Local) app: `portal-coloradocareassist`
-6. ✅ Added Mac Mini (Local) remote
+5. ✅ Created Mac Mini app: `portal-coloradocareassist`
+6. ✅ Added Mac Mini remote
 7. ✅ Added PostgreSQL database (essential-0 plan)
 8. ✅ Created README.md
 9. ✅ Created setup scripts
 
 ## 🎯 Your Portal App
 
-**Mac Mini (Local) URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
+**Mac Mini URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 
-**Mac Mini (Local) App Name**: `portal-coloradocareassist`
+**Mac Mini App Name**: `portal-coloradocareassist`
 
 ## 📋 Final Steps (You Need to Do)
 
@@ -48,7 +48,7 @@ mac-mini config:set ALLOWED_DOMAINS=coloradocareassist.com --app portal-colorado
    https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
    ```
 
-### 3. Deploy to Mac Mini (Local)
+### 3. Deploy to Mac Mini
 
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
@@ -78,7 +78,7 @@ Visit: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 │   └── portal.html        # Portal UI
 ├── static/
 │   └── favicon.ico        # Favicon
-├── Procfile               # Mac Mini (Local) process
+├── Procfile               # Mac Mini process
 ├── requirements.txt       # Dependencies
 ├── runtime.txt           # Python version
 ├── README.md             # Documentation
@@ -88,7 +88,7 @@ Visit: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 
 ## 🔗 Quick Links
 
-- **Mac Mini (Local) Dashboard**: https://dashboard.mac-mini.com/apps/portal-coloradocareassist
+- **Mac Mini Dashboard**: https://dashboard.mac-mini.com/apps/portal-coloradocareassist
 - **App URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
 - **View Logs**: `mac-mini logs --tail --app portal-coloradocareassist`
 

@@ -220,7 +220,7 @@ Always verify these critical fields:
 | **AI Engine** | Google Gemini 2.0 Flash |
 | **PDF Generation** | html2pdf.js (client-side) |
 | **Database** | PostgreSQL (portal tiles) |
-| **Hosting** | Mac Mini (Local) |
+| **Hosting** | Mac Mini |
 | **Authentication** | Portal SSO |
 
 ### API Endpoints
@@ -254,7 +254,7 @@ Response:
 
 ### Environment Variables
 
-Required on Mac Mini (Local):
+Required on Mac Mini:
 ```bash
 GEMINI_API_KEY=<your-gemini-api-key>
 # OR

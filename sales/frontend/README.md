@@ -143,7 +143,7 @@ Register a webhook subscription for each sales rep email (e.g. `jason@coloradoca
 
 ### RingCentral Embeddable Workspace
 
-The CRM now renders the same RingCentral widget used across the CareAssist portal so reps can call or text without leaving the dashboard. Add the following build-time variables (Mac Mini (Local) config vars or `.env.production.local`):
+The CRM now renders the same RingCentral widget used across the CareAssist portal so reps can call or text without leaving the dashboard. Add the following build-time variables (Mac Mini config vars or `.env.production.local`):
 
 ```
 VITE_RINGCENTRAL_CLIENT_ID=<browser-app-client-id>

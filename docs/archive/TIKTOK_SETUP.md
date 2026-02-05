@@ -23,7 +23,7 @@ curl -X POST https://open.tiktokapis.com/v2/oauth/token/ \
   -d "grant_type=client_credentials"
 ```
 
-**Note:** Replace `YOUR_CLIENT_SECRET` with your actual secret from Mac Mini (Local):
+**Note:** Replace `YOUR_CLIENT_SECRET` with your actual secret from Mac Mini:
 ```bash
 mac-mini config:get TIKTOK_CLIENT_SECRET --app portal-coloradocareassist
 ```
@@ -58,7 +58,7 @@ mac-mini config:set TIKTOK_ADVERTISER_ID=your_advertiser_id --app portal-colorad
 3. Navigate to your app
 4. Generate an access token from the dashboard
 5. Copy the token and advertiser ID
-6. Set both in Mac Mini (Local) (see Step 3 above)
+6. Set both in Mac Mini (see Step 3 above)
 
 ## Notes
 

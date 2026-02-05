@@ -43,7 +43,7 @@ I can create a helper script that makes this easier. For now, you can use the Qu
 
 ## Step 3: Set Environment Variables
 
-Once you have your credentials, set them on Mac Mini (Local):
+Once you have your credentials, set them on Mac Mini:
 
 ```bash
 mac-mini config:set QUICKBOOKS_CLIENT_ID=your_client_id -a careassist-tracker
@@ -84,13 +84,13 @@ POST /api/quickbooks/sync-to-brevo
 
 ## Scheduled Sync (Optional)
 
-You can set up a Mac Mini (Local) Scheduler to run this daily:
+You can set up a Mac Mini Scheduler to run this daily:
 
 ```bash
 mac-mini addons:create scheduler:standard -a careassist-tracker
 ```
 
-Then in Mac Mini (Local) dashboard, add a job:
+Then in Mac Mini dashboard, add a job:
 - **Command**: `python3 sync_quickbooks_to_brevo.py`
 - **Frequency**: Daily at 2 AM (or whenever you prefer)
 

@@ -74,7 +74,7 @@
   4. Get your Customer ID (format: XXX-XXX-XXXX)
   5. Create OAuth 2.0 credentials in Google Cloud Console
   6. Complete OAuth flow to get refresh token
-  7. Set environment variables in Mac Mini (Local)
+  7. Set environment variables in Mac Mini
 
 ### 2. **TikTok Marketing** ❌
 - **Status:** Partially Configured
@@ -88,7 +88,7 @@
   2. Create an app in TikTok Ads Manager
   3. Generate access token using OAuth flow
   4. Get your Advertiser ID from TikTok Ads Manager
-  5. Set environment variables in Mac Mini (Local)
+  5. Set environment variables in Mac Mini
 
 ---
 

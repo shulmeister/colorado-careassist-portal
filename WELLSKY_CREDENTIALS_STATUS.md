@@ -14,7 +14,7 @@ Agency ID:     4505
 Environment:   production
 ```
 
-Location: Mac Mini (Local) config `careassist-unified`
+Location: Mac Mini config `careassist-unified`
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Complete unified business portal** with CRM, recruiting, marketing analytics, AI voice assistant, and operations dashboards - all in one deployable application.
 
-**Host**: Mac Mini (Local) - Jasons-Mac-mini
+**Host**: Mac Mini - Jasons-Mac-mini
 **Live URL**: https://portal.coloradocareassist.com
 **GitHub (source of truth)**: https://github.com/shulmeister/colorado-careassist-portal
 **Status**: **Migration to Mac Mini Complete (Feb 3, 2026)**
@@ -56,7 +56,7 @@ colorado-careassist-portal/
 | WellSky Auto-Documentation | ✅ LIVE |
 
 **Technical**:
-- **Host**: Mac Mini (Local)
+- **Host**: Mac Mini
 - **APIs**: Retell AI, RingCentral, WellSky (Connect), Gmail, Calendar, 1Password CLI
 - **Documentation**: See [gigi/README.md](gigi/README.md) and [GIGI_ELITE_CHIEF_OF_STAFF.md](GIGI_ELITE_CHIEF_OF_STAFF.md)
 

@@ -6,7 +6,7 @@
 
 ## Environment Variables Required
 
-You need to set these environment variables in Mac Mini (Local) (or `.env` for local):
+You need to set these environment variables in Mac Mini (or `.env` for local):
 
 1. **GMAIL_SERVICE_ACCOUNT_EMAIL**: The service account email
    - Example: `github@marketing-dashboard-463608.iam.gserviceaccount.com`
@@ -56,7 +56,7 @@ If you have the service account email and key ID, you need to:
 
 ### 5. Set Environment Variables
 
-In Mac Mini (Local):
+In Mac Mini:
 ```bash
 mac-mini config:set GMAIL_SERVICE_ACCOUNT_EMAIL="github@marketing-dashboard-463608.iam.gserviceaccount.com"
 mac-mini config:set GMAIL_SERVICE_ACCOUNT_KEY='{"type":"service_account",...}'  # Full JSON string

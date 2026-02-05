@@ -21,7 +21,7 @@ I've built a complete OAuth 2.0 infrastructure for self-service authentication w
 
 ## 🔑 Required OAuth Credentials
 
-To enable each service, you need to set environment variables on Mac Mini (Local). Here's what's needed for each:
+To enable each service, you need to set environment variables on Mac Mini. Here's what's needed for each:
 
 ### 1. LinkedIn
 

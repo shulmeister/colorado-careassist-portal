@@ -34,7 +34,7 @@ If you want to keep them separate (optional):
 1. Create a new OAuth 2.0 Client ID in Google Cloud Console
 2. Name it "CCA Portal"
 3. Add redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
-4. Update Mac Mini (Local) config:
+4. Update Mac Mini config:
    ```bash
    mac-mini config:set GOOGLE_CLIENT_ID=new_client_id --app portal-coloradocareassist
    mac-mini config:set GOOGLE_CLIENT_SECRET=new_client_secret --app portal-coloradocareassist

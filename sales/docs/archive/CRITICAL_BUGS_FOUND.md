@@ -16,7 +16,7 @@
 - Timezone issues with visit_date filtering
 
 **Fix Needed:**
-- Check Mac Mini (Local) logs for errors
+- Check Mac Mini logs for errors
 - Add try/catch around activity logging to prevent rollback
 - Verify Visit records are being committed
 - Test visit retrieval query
@@ -80,7 +80,7 @@
 
 ## 📋 **NEXT STEPS:**
 
-1. Check Mac Mini (Local) logs for visit upload errors
+1. Check Mac Mini logs for visit upload errors
 2. Fix ActivityLogger exception handling
 3. Test visit upload again
 4. Fix remaining UI issues

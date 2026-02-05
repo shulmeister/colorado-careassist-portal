@@ -5,7 +5,7 @@
 **Status:** ✅ Production Ready - All Features Working
 **Completed:** January 27, 2026
 **Developer:** Jason Shulman with Claude Sonnet 4.5
-**Mac Mini (Local) Version:** v524
+**Mac Mini Version:** v524
 
 ---
 
@@ -313,7 +313,7 @@ Check all that apply based on the referral.
 | **PDF Library** | PyPDFForm 1.4.29 | Server-side official VA form filling |
 | **PDF Template** | VA Form 10-10172 (official) | Blank PDF form template |
 | **Database** | PostgreSQL | Portal tiles configuration |
-| **Hosting** | Mac Mini (Local) (careassist-unified) | Cloud platform (v524) |
+| **Hosting** | Mac Mini (careassist-unified) | Cloud platform (v524) |
 | **Auth** | Portal SSO | User authentication (get_current_user_optional) |
 
 ### API Endpoints
@@ -591,7 +591,7 @@ Knight.M.5584_VA-RFS-10-10172.01.27.2026.pdf
 
 ## 📝 Version History
 
-### Version 1.0 (January 27, 2026) - PRODUCTION - Mac Mini (Local) v524
+### Version 1.0 (January 27, 2026) - PRODUCTION - Mac Mini v524
 
 **Core Features:**
 - ✅ AI-powered extraction with Gemini 2.0 Flash (visual PDF analysis)
@@ -685,10 +685,10 @@ Knight.M.5584_VA-RFS-10-10172.01.27.2026.pdf
 ## 🚀 Deployment Guide (For Developers)
 
 ### Prerequisites
-- Mac Mini (Local) CLI installed
+- Mac Mini CLI installed
 - Git repository set up
-- Mac Mini (Local) remote configured: `git remote add mac-mini https://git.mac-mini.com/careassist-unified.git`
-- Environment variable: `GEMINI_API_KEY` or `GOOGLE_API_KEY` configured in Mac Mini (Local)
+- Mac Mini remote configured: `git remote add mac-mini https://git.mac-mini.com/careassist-unified.git`
+- Environment variable: `GEMINI_API_KEY` or `GOOGLE_API_KEY` configured in Mac Mini
 
 ### Required Files
 ```
@@ -710,7 +710,7 @@ git add portal/portal_app.py portal/portal_setup.py va_form_10_10172_blank.pdf
 git commit -m "Update VA RFS Converter"
 ```
 
-**2. Deploy to Mac Mini (Local):**
+**2. Deploy to Mac Mini:**
 ```bash
 git push mac-mini main
 ```
@@ -760,14 +760,14 @@ Portal tile is automatically added via `portal_setup.py`:
 
 **Issue: PyPDFForm not found**
 - Verify `requirements.txt` includes: `PyPDFForm==1.4.29`
-- Check Mac Mini (Local) build logs for pip install errors
+- Check Mac Mini build logs for pip install errors
 
 **Issue: Blank PDF template missing**
 - Ensure `va_form_10_10172_blank.pdf` is committed to git
 - Verify file path in code: `va_form_10_10172_blank.pdf` (root directory)
 
 **Issue: Gemini API errors**
-- Verify `GEMINI_API_KEY` is set in Mac Mini (Local) config vars
+- Verify `GEMINI_API_KEY` is set in Mac Mini config vars
 - Check API quota and billing in Google Cloud Console
 
 **Issue: Portal tile not showing**
@@ -776,7 +776,7 @@ Portal tile is automatically added via `portal_setup.py`:
 - Verify portal is rendering Operations category
 
 ### Version Control
-Current production version: **v524** (Mac Mini (Local))
+Current production version: **v524** (Mac Mini)
 
 Git commit history:
 - v523: Fixed PDF field names (blank PDF issue)

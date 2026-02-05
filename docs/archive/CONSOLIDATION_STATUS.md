@@ -8,7 +8,7 @@
 
 ## 🎉 Consolidation Complete
 
-Successfully consolidated 7 Mac Mini (Local) apps down to 3 apps, saving **$336/year**.
+Successfully consolidated 7 Mac Mini apps down to 3 apps, saving **$336/year**.
 
 ### Apps Before Consolidation (7 apps):
 1. portal-coloradocareassist ❌ (deleted)
@@ -31,7 +31,7 @@ Successfully consolidated 7 Mac Mini (Local) apps down to 3 apps, saving **$336/
 **Main App**: `careassist-unified` (v32)
 - **URL**: https://portal.coloradocareassist.com
 - **Domain**: portal.coloradocareassist.com (DNS updated)
-- **SSL**: TLS 1.3 via Mac Mini (Local) ACM
+- **SSL**: TLS 1.3 via Mac Mini ACM
 
 ### Mounted Applications:
 
@@ -82,7 +82,7 @@ All tools with proper logos optimized for dark background:
 16. **Facebook Ads Manager** - Facebook advertising
 17. **Adams Keegan** - HR & payroll services
 18. **HPanel** - Hostinger control panel
-19. **Mac Mini (Local)** - Cloud platform dashboard
+19. **Mac Mini** - Cloud platform dashboard
 20. **GitHub** - Source code (github.com/shulmeister)
 21. **Google Tag Manager** - Website tracking
 22. **Google Groups** - Email groups
@@ -117,7 +117,7 @@ All tools with proper logos optimized for dark background:
 - **Domain**: portal.coloradocareassist.com
 - **DNS Provider**: Hostinger
 - **DNS Target**: sinuous-aardwolf-hvneccfg36nequcxlnsdaaju.mac-minidns.com
-- **SSL Certificate**: Mac Mini (Local) ACM (Let's Encrypt)
+- **SSL Certificate**: Mac Mini ACM (Let's Encrypt)
 - **SSL Status**: ✅ Active (TLS 1.3)
 
 ---
@@ -187,13 +187,13 @@ careassist-unified-portal/
 │   └── ...
 ├── unified_app.py         # Main entry point
 ├── requirements.txt       # Python dependencies
-├── Procfile              # Mac Mini (Local) process config
+├── Procfile              # Mac Mini process config
 └── runtime.txt           # Python version
 ```
 
 ---
 
-## Environment Variables (Mac Mini (Local))
+## Environment Variables (Mac Mini)
 
 ### Required Variables:
 - `GOOGLE_CLIENT_ID` - Google OAuth client ID
@@ -202,7 +202,7 @@ careassist-unified-portal/
 - `SALES_GOOGLE_REDIRECT_URI` - Sales OAuth callback
 - `SALES_DATABASE_URL` - Sales PostgreSQL connection
 - `RECRUITING_DATABASE_URL` - Recruiting PostgreSQL connection
-- `DATABASE_URL` - Portal PostgreSQL connection (auto-set by Mac Mini (Local))
+- `DATABASE_URL` - Portal PostgreSQL connection (auto-set by Mac Mini)
 - `APP_SECRET_KEY` - Session encryption key
 
 ---
@@ -239,7 +239,7 @@ mac-mini logs --tail -a careassist-unified
 ### Monitoring:
 - PostgreSQL usage: `mac-mini pg:info -a careassist-unified`
 - App metrics: `mac-mini ps -a careassist-unified`
-- Dyno usage: Check Mac Mini (Local) dashboard
+- Dyno usage: Check Mac Mini dashboard
 
 ---
 

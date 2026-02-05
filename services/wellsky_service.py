@@ -1021,6 +1021,151 @@ class WellSkyService:
             logger.error(f"Error parsing created patient: {e}")
             return None
 
+    def update_patient(
+        self,
+        patient_id: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        home_phone: Optional[str] = None,
+        work_phone: Optional[str] = None,
+        email: Optional[str] = None,
+        address: Optional[str] = None,
+        city: Optional[str] = None,
+        state: Optional[str] = None,
+        zip_code: Optional[str] = None,
+        gender: Optional[str] = None,
+        birth_date: Optional[str] = None,
+        active: Optional[bool] = None,
+        status_id: Optional[int] = None,
+        is_client: Optional[bool] = None
+    ) -> Tuple[bool, Any]:
+        """
+        Update an existing patient (client) record.
+        PUT /v1/patients/{id}/
+
+        All fields optional - only provided fields are updated.
+        Uses same FHIR Patient structure as create.
+
+        Args:
+            patient_id: WellSky patient ID
+            first_name: Updated first name
+            last_name: Updated last name
+            phone: Mobile phone (10 digits)
+            home_phone: Home phone
+            work_phone: Work phone
+            email: Email address
+            address: Street address
+            city: City
+            state: State code (e.g. "CO")
+            zip_code: ZIP code
+            gender: "male", "female", "other", "unknown"
+            birth_date: Date of birth (YYYY-MM-DD)
+            active: Active status
+            status_id: Status ID (1=New Lead, 80=Care Started, etc.)
+            is_client: True for client, False for prospect
+        """
+        if self.is_mock_mode:
+            client = self._mock_clients.get(patient_id)
+            if client:
+                if first_name is not None:
+                    client.first_name = first_name
+                if last_name is not None:
+                    client.last_name = last_name
+                if phone is not None:
+                    client.phone = phone
+                if email is not None:
+                    client.email = email
+                if city is not None:
+                    client.city = city
+                if state is not None:
+                    client.state = state
+                logger.info(f"Mock: Updated patient {patient_id}")
+                return True, {"success": True}
+            return False, {"error": "Patient not found"}
+
+        fhir_patient = {
+            "resourceType": "Patient",
+            "meta": {"tag": [{"code": "agencyId", "display": self.agency_id}]}
+        }
+
+        if active is not None:
+            fhir_patient["active"] = active
+
+        if first_name is not None or last_name is not None:
+            name = {"use": "official"}
+            if first_name is not None:
+                name["given"] = [first_name]
+            if last_name is not None:
+                name["family"] = last_name
+            fhir_patient["name"] = [name]
+
+        # Build telecom array
+        telecom = []
+        if phone is not None:
+            import re
+            clean = re.sub(r'[^\d]', '', phone)[-10:]
+            telecom.append({"system": "phone", "value": clean, "use": "mobile"})
+        if home_phone is not None:
+            import re
+            clean = re.sub(r'[^\d]', '', home_phone)[-10:]
+            telecom.append({"system": "phone", "value": clean, "use": "home"})
+        if work_phone is not None:
+            import re
+            clean = re.sub(r'[^\d]', '', work_phone)[-10:]
+            telecom.append({"system": "phone", "value": clean, "use": "work"})
+        if email is not None:
+            telecom.append({"system": "email", "value": email})
+        if telecom:
+            fhir_patient["telecom"] = telecom
+
+        # Build address
+        if any(v is not None for v in [address, city, state, zip_code]):
+            addr = {"use": "home"}
+            if address is not None:
+                addr["line"] = [address]
+            if city is not None:
+                addr["city"] = city
+            if state is not None:
+                addr["state"] = state
+            if zip_code is not None:
+                addr["postalCode"] = zip_code
+            fhir_patient["address"] = [addr]
+
+        if gender is not None:
+            fhir_patient["gender"] = gender
+        if birth_date is not None:
+            fhir_patient["birthDate"] = birth_date
+
+        # Meta tags for status/isClient
+        if status_id is not None:
+            fhir_patient["meta"]["tag"].append({"code": "status", "display": str(status_id)})
+        if is_client is not None:
+            fhir_patient["meta"]["tag"].append({"code": "isClient", "display": "true" if is_client else "false"})
+
+        success, response = self._make_request("PUT", f"patients/{patient_id}/", data=fhir_patient)
+        if success:
+            logger.info(f"Updated patient {patient_id}")
+        return success, response
+
+    def delete_patient(self, patient_id: str) -> Tuple[bool, Any]:
+        """
+        Delete a patient record.
+        DELETE /v1/patients/{id}/
+
+        Use with caution - this permanently removes the patient from WellSky.
+        """
+        if self.is_mock_mode:
+            if patient_id in self._mock_clients:
+                del self._mock_clients[patient_id]
+                return True, {"success": True}
+            return False, {"error": "Patient not found"}
+
+        success, response = self._make_request("DELETE", f"patients/{patient_id}/")
+        if success:
+            logger.info(f"Deleted patient {patient_id}")
+        return success, response
+
     def _parse_fhir_patient(self, fhir_data: Dict) -> WellSkyClient:
         """
         Parse FHIR Patient resource into WellSkyClient object.
@@ -1101,13 +1246,13 @@ class WellSkyService:
             logger.info(f"DEBUG Client {client_id}: status_id={status_id}, is_client={is_client}, active={active}")
 
         # Determine status
-        # REALITY CHECK: WellSky returns status='None' (string literal) for active clients
-        # isClient=True is the actual indicator of active clients
-        if is_client:
-            # If marked as client, they're ACTIVE
+        # Use multiple signals: is_client meta tag OR active FHIR field
+        # WellSky may use either depending on the record type
+        if is_client or active:
+            # If marked as client OR active in FHIR → ACTIVE
             status = ClientStatus.ACTIVE
         else:
-            # Not marked as client = prospect
+            # Not marked as client and not active = prospect/discharged
             status = ClientStatus.PROSPECT
 
         # Debug: Show final status for first 5 clients
@@ -1374,6 +1519,291 @@ class WellSkyService:
         except Exception as e:
             logger.error(f"Error parsing practitioner {practitioner_id}: {e}")
             return None
+
+    def create_practitioner(
+        self,
+        first_name: str,
+        last_name: str,
+        phone: Optional[str] = None,
+        home_phone: Optional[str] = None,
+        work_phone: Optional[str] = None,
+        email: Optional[str] = None,
+        address: Optional[str] = None,
+        city: Optional[str] = None,
+        state: str = "CO",
+        zip_code: Optional[str] = None,
+        gender: Optional[str] = None,
+        birth_date: Optional[str] = None,
+        ssn: Optional[str] = None,
+        is_hired: bool = False,
+        status_id: int = 10,
+        profile_tags: Optional[List[str]] = None,
+        languages: Optional[List[str]] = None
+    ) -> Tuple[bool, Any]:
+        """
+        Create a new practitioner (caregiver/applicant) using FHIR API.
+        POST /v1/practitioners/
+
+        Args:
+            first_name: First name (required)
+            last_name: Last name (required)
+            phone: Mobile phone (10 digits)
+            home_phone: Home phone
+            work_phone: Work phone
+            email: Email address
+            address: Street address
+            city: City
+            state: State (default "CO")
+            zip_code: ZIP code
+            gender: "male", "female", "other", "unknown"
+            birth_date: Date of birth (YYYY-MM-DD)
+            ssn: Social Security Number (XXX-XX-XXXX)
+            is_hired: True for hired caregiver, False for applicant
+            status_id: Status ID (10=New Applicant, 100=Hired, etc.)
+            profile_tags: List of skill/certification tag IDs
+            languages: List of language codes (e.g. ["en-us", "es"])
+        """
+        if self.is_mock_mode:
+            cg_id = f"P{len(self._mock_caregivers) + 1:03d}"
+            caregiver = WellSkyCaregiver(
+                id=cg_id,
+                first_name=first_name,
+                last_name=last_name,
+                phone=phone or "",
+                email=email or "",
+                city=city or "",
+                state=state,
+                status=CaregiverStatus.ACTIVE if is_hired else CaregiverStatus.APPLICANT,
+                created_at=datetime.utcnow()
+            )
+            self._mock_caregivers[cg_id] = caregiver
+            logger.info(f"Mock: Created practitioner {cg_id}")
+            return True, {"resourceType": "Practitioner", "id": cg_id}
+
+        fhir_practitioner = {
+            "resourceType": "Practitioner",
+            "active": True,
+            "name": [
+                {
+                    "use": "official",
+                    "family": last_name,
+                    "given": [first_name]
+                }
+            ],
+            "telecom": [],
+            "address": [],
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": self.agency_id},
+                    {"code": "isHired", "display": "true" if is_hired else "false"},
+                    {"code": "status", "display": str(status_id)}
+                ]
+            }
+        }
+
+        # Telecom
+        if phone:
+            import re
+            clean = re.sub(r'[^\d]', '', phone)[-10:]
+            fhir_practitioner["telecom"].append({"system": "phone", "value": clean, "use": "mobile"})
+        if home_phone:
+            import re
+            clean = re.sub(r'[^\d]', '', home_phone)[-10:]
+            fhir_practitioner["telecom"].append({"system": "phone", "value": clean, "use": "home"})
+        if work_phone:
+            import re
+            clean = re.sub(r'[^\d]', '', work_phone)[-10:]
+            fhir_practitioner["telecom"].append({"system": "phone", "value": clean, "use": "work"})
+        if email:
+            fhir_practitioner["telecom"].append({"system": "email", "value": email})
+
+        # Address
+        if address or city or state or zip_code:
+            addr = {
+                "use": "home",
+                "line": [address] if address else [],
+                "city": city or "",
+                "state": state,
+                "postalCode": zip_code or ""
+            }
+            fhir_practitioner["address"].append(addr)
+
+        if gender:
+            fhir_practitioner["gender"] = gender
+        if birth_date:
+            fhir_practitioner["birthDate"] = birth_date
+        if ssn:
+            fhir_practitioner["ssn"] = ssn
+
+        # Profile tags (skills/certifications)
+        if profile_tags:
+            fhir_practitioner["meta"]["tag"].append({
+                "code": "profileTags",
+                "display": ",".join(str(t) for t in profile_tags)
+            })
+
+        # Languages
+        if languages:
+            fhir_practitioner["communication"] = [
+                {"coding": [{"code": lang, "display": lang}]}
+                for lang in languages
+            ]
+
+        success, response = self._make_request("POST", "practitioners/", data=fhir_practitioner)
+        if success:
+            prac_id = response.get("id", "unknown")
+            logger.info(f"Created practitioner {prac_id} ({first_name} {last_name})")
+        return success, response
+
+    def update_practitioner(
+        self,
+        practitioner_id: str,
+        first_name: Optional[str] = None,
+        last_name: Optional[str] = None,
+        phone: Optional[str] = None,
+        home_phone: Optional[str] = None,
+        work_phone: Optional[str] = None,
+        email: Optional[str] = None,
+        address: Optional[str] = None,
+        city: Optional[str] = None,
+        state: Optional[str] = None,
+        zip_code: Optional[str] = None,
+        gender: Optional[str] = None,
+        birth_date: Optional[str] = None,
+        active: Optional[bool] = None,
+        is_hired: Optional[bool] = None,
+        status_id: Optional[int] = None,
+        profile_tags: Optional[List[str]] = None,
+        deactivation_reason: Optional[str] = None
+    ) -> Tuple[bool, Any]:
+        """
+        Update an existing practitioner (caregiver/applicant).
+        PUT /v1/practitioners/{id}/
+
+        All fields optional - only provided fields are updated.
+
+        Args:
+            practitioner_id: WellSky practitioner ID
+            first_name: Updated first name
+            last_name: Updated last name
+            phone: Mobile phone (10 digits)
+            home_phone: Home phone
+            work_phone: Work phone
+            email: Email address
+            address: Street address
+            city: City
+            state: State code
+            zip_code: ZIP code
+            gender: "male", "female", "other", "unknown"
+            birth_date: Date of birth (YYYY-MM-DD)
+            active: Active status
+            is_hired: Hired status
+            status_id: Status ID (10=New Applicant, 100=Hired, etc.)
+            profile_tags: List of skill/certification tag IDs
+            deactivation_reason: Reason for deactivation (e.g. "Terminated - Quit")
+        """
+        if self.is_mock_mode:
+            caregiver = self._mock_caregivers.get(practitioner_id)
+            if caregiver:
+                if first_name is not None:
+                    caregiver.first_name = first_name
+                if last_name is not None:
+                    caregiver.last_name = last_name
+                if phone is not None:
+                    caregiver.phone = phone
+                if email is not None:
+                    caregiver.email = email
+                if city is not None:
+                    caregiver.city = city
+                logger.info(f"Mock: Updated practitioner {practitioner_id}")
+                return True, {"success": True}
+            return False, {"error": "Practitioner not found"}
+
+        fhir_practitioner = {
+            "resourceType": "Practitioner",
+            "meta": {"tag": [{"code": "agencyId", "display": self.agency_id}]}
+        }
+
+        if active is not None:
+            fhir_practitioner["active"] = active
+
+        if first_name is not None or last_name is not None:
+            name = {"use": "official"}
+            if first_name is not None:
+                name["given"] = [first_name]
+            if last_name is not None:
+                name["family"] = last_name
+            fhir_practitioner["name"] = [name]
+
+        # Telecom
+        telecom = []
+        if phone is not None:
+            import re
+            clean = re.sub(r'[^\d]', '', phone)[-10:]
+            telecom.append({"system": "phone", "value": clean, "use": "mobile"})
+        if home_phone is not None:
+            import re
+            clean = re.sub(r'[^\d]', '', home_phone)[-10:]
+            telecom.append({"system": "phone", "value": clean, "use": "home"})
+        if work_phone is not None:
+            import re
+            clean = re.sub(r'[^\d]', '', work_phone)[-10:]
+            telecom.append({"system": "phone", "value": clean, "use": "work"})
+        if email is not None:
+            telecom.append({"system": "email", "value": email})
+        if telecom:
+            fhir_practitioner["telecom"] = telecom
+
+        # Address
+        if any(v is not None for v in [address, city, state, zip_code]):
+            addr = {"use": "home"}
+            if address is not None:
+                addr["line"] = [address]
+            if city is not None:
+                addr["city"] = city
+            if state is not None:
+                addr["state"] = state
+            if zip_code is not None:
+                addr["postalCode"] = zip_code
+            fhir_practitioner["address"] = [addr]
+
+        if gender is not None:
+            fhir_practitioner["gender"] = gender
+        if birth_date is not None:
+            fhir_practitioner["birthDate"] = birth_date
+
+        # Meta tags
+        if is_hired is not None:
+            fhir_practitioner["meta"]["tag"].append({"code": "isHired", "display": "true" if is_hired else "false"})
+        if status_id is not None:
+            fhir_practitioner["meta"]["tag"].append({"code": "status", "display": str(status_id)})
+        if profile_tags is not None:
+            fhir_practitioner["meta"]["tag"].append({"code": "profileTags", "display": ",".join(str(t) for t in profile_tags)})
+        if deactivation_reason is not None:
+            fhir_practitioner["meta"]["tag"].append({"code": "deactivationReason", "display": deactivation_reason})
+
+        success, response = self._make_request("PUT", f"practitioners/{practitioner_id}/", data=fhir_practitioner)
+        if success:
+            logger.info(f"Updated practitioner {practitioner_id}")
+        return success, response
+
+    def delete_practitioner(self, practitioner_id: str) -> Tuple[bool, Any]:
+        """
+        Delete a practitioner record.
+        DELETE /v1/practitioners/{id}/
+
+        Use with caution - this permanently removes the practitioner from WellSky.
+        """
+        if self.is_mock_mode:
+            if practitioner_id in self._mock_caregivers:
+                del self._mock_caregivers[practitioner_id]
+                return True, {"success": True}
+            return False, {"error": "Practitioner not found"}
+
+        success, response = self._make_request("DELETE", f"practitioners/{practitioner_id}/")
+        if success:
+            logger.info(f"Deleted practitioner {practitioner_id}")
+        return success, response
 
     def _parse_fhir_practitioner(self, fhir_data: Dict) -> WellSkyCaregiver:
         """
@@ -1730,6 +2160,75 @@ class WellSkyService:
 
         logger.info(f"Found {len(shifts)} appointments matching search criteria")
         return shifts
+
+    def create_appointment(
+        self,
+        client_id: str,
+        caregiver_id: str,
+        start_datetime: str,
+        end_datetime: str,
+        status: str = "SCHEDULED",
+        scheduled_items: Optional[List[Dict[str, str]]] = None,
+        lat: float = None,
+        lon: float = None
+    ) -> Tuple[bool, Any]:
+        """
+        Create a new appointment (shift/visit).
+        POST /v1/appointment/
+
+        Args:
+            client_id: WellSky patient/client ID
+            caregiver_id: WellSky practitioner/caregiver ID
+            start_datetime: ISO format start (e.g. "2026-02-05T08:00:00")
+            end_datetime: ISO format end (e.g. "2026-02-05T12:00:00")
+            status: "SCHEDULED", "COMPLETED", "CANCELLED"
+            scheduled_items: List of service items [{"id": "123", "name": "Meal Prep"}]
+            lat: GPS latitude for position
+            lon: GPS longitude for position
+        """
+        if self.is_mock_mode:
+            mock_id = f"APT{len(self._mock_shifts) + 1:05d}"
+            logger.info(f"Mock: Created appointment {mock_id}")
+            return True, {"resourceType": "Appointment", "id": mock_id}
+
+        data = {
+            "resourceType": "Appointment",
+            "client": {"id": str(client_id)},
+            "caregiver": {"id": str(caregiver_id)},
+            "start": start_datetime,
+            "end": end_datetime,
+            "status": status
+        }
+
+        if scheduled_items:
+            data["scheduledItems"] = scheduled_items
+
+        if lat is not None and lon is not None:
+            data["position"] = {"latitude": lat, "longitude": lon}
+
+        success, response = self._make_request("POST", "appointment/", data=data)
+        if success:
+            apt_id = response.get("id", "unknown")
+            logger.info(f"Created appointment {apt_id} for client {client_id} with caregiver {caregiver_id}")
+        return success, response
+
+    def delete_appointment(self, appointment_id: str) -> Tuple[bool, Any]:
+        """
+        Delete an appointment (shift).
+        DELETE /v1/appointment/{id}/
+
+        Use with caution - this permanently removes the scheduled shift.
+        """
+        if self.is_mock_mode:
+            if appointment_id in self._mock_shifts:
+                del self._mock_shifts[appointment_id]
+                return True, {"success": True}
+            return False, {"error": "Appointment not found"}
+
+        success, response = self._make_request("DELETE", f"appointment/{appointment_id}/")
+        if success:
+            logger.info(f"Deleted appointment {appointment_id}")
+        return success, response
 
     def update_appointment(self, appointment_id: str, update_data: Dict[str, Any]) -> Tuple[bool, Any]:
         """
@@ -2106,6 +2605,967 @@ class WellSkyService:
             logger.info(f"Successfully created TaskLog for encounter {encounter_id}")
             return True, response
         return False, response
+
+    def get_task_logs(self, encounter_id: str) -> Tuple[bool, Any]:
+        """
+        Get task logs for a specific encounter.
+        GET /v1/encounter/{encounter_id}/tasklog/
+
+        Returns list of tasks/notes associated with the shift.
+        """
+        if self.is_mock_mode:
+            return True, {"entry": [], "total": 0}
+
+        endpoint = f"encounter/{encounter_id}/tasklog/"
+        success, response = self._make_request("GET", endpoint)
+        if success:
+            logger.info(f"Got {response.get('total', 0)} task logs for encounter {encounter_id}")
+        return success, response
+
+    def update_task(
+        self,
+        encounter_id: str,
+        task_id: str,
+        status: str = "COMPLETE",
+        comment: str = ""
+    ) -> Tuple[bool, Any]:
+        """
+        Update a shift task status.
+        PUT /v1/encounter/{encounter_id}/task/{task_id}/
+
+        Args:
+            encounter_id: The encounter/carelog ID
+            task_id: The task ID within the shift
+            status: "COMPLETE" or "NOT_COMPLETE"
+            comment: Required when status is NOT_COMPLETE
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"encounter/{encounter_id}/task/{task_id}/"
+        data = {
+            "resourceType": "Task",
+            "status": status,
+        }
+        if comment:
+            data["comment"] = comment
+
+        success, response = self._make_request("PUT", endpoint, data=data)
+        if success:
+            logger.info(f"Updated task {task_id} on encounter {encounter_id} to {status}")
+        return success, response
+
+    def update_task_log(
+        self,
+        encounter_id: str,
+        tasklog_id: str,
+        title: str = None,
+        description: str = None,
+        status: str = None,
+        comment: str = None,
+        show_in_family_room: bool = None
+    ) -> Tuple[bool, Any]:
+        """
+        Update an existing task log.
+        PUT /v1/encounter/{encounter_id}/tasklog/{tasklog_id}/
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"encounter/{encounter_id}/tasklog/{tasklog_id}/"
+        data = {"resourceType": "TaskLog"}
+        if title is not None:
+            data["title"] = title
+        if description is not None:
+            data["description"] = description
+        if status is not None:
+            data["status"] = status
+        if comment is not None:
+            data["comment"] = comment
+        if show_in_family_room is not None:
+            data["show_in_family_room"] = show_in_family_room
+
+        success, response = self._make_request("PUT", endpoint, data=data)
+        if success:
+            logger.info(f"Updated tasklog {tasklog_id} on encounter {encounter_id}")
+        return success, response
+
+    # =========================================================================
+    # Encounter CRUD API
+    # =========================================================================
+
+    def create_encounter(
+        self,
+        patient_id: str,
+        practitioner_id: str,
+        start_datetime: str,
+        end_datetime: str,
+        status: str = "COMPLETE",
+        bill_rate_method: str = "Hourly",
+        bill_rate_id: str = None,
+        pay_rate_method: str = "Hourly",
+        pay_rate_id: str = None
+    ) -> Tuple[bool, Any]:
+        """
+        Create a new encounter (care log) directly.
+        POST /v1/encounter/
+
+        Args:
+            patient_id: WellSky patient/client ID
+            practitioner_id: WellSky practitioner/caregiver ID
+            start_datetime: ISO format start time (e.g. "2026-01-29T14:00:00")
+            end_datetime: ISO format end time (e.g. "2026-01-29T18:00:00")
+            status: "COMPLETE", "IN_PROGRESS", etc.
+            bill_rate_method: "Hourly", "notBillable", "perVisit", "liveIn"
+            pay_rate_method: "Hourly", "notPayable", "perVisit", "liveIn"
+            bill_rate_id: Optional rate ID for billing
+            pay_rate_id: Optional rate ID for pay
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Created encounter for patient {patient_id}")
+            return True, {"resourceType": "Encounter", "id": "mock-encounter-123"}
+
+        endpoint = "encounter/"
+        data = {
+            "resourceType": "Encounter",
+            "agencyId": str(self.agency_id),
+            "status": status,
+            "patientId": patient_id,
+            "practitionerId": practitioner_id,
+            "startDateTime": start_datetime,
+            "endDateTime": end_datetime,
+            "billRateMethod": bill_rate_method,
+            "payRateMethod": pay_rate_method,
+        }
+        if bill_rate_id:
+            data["billRateId"] = bill_rate_id
+        if pay_rate_id:
+            data["payRateId"] = pay_rate_id
+
+        success, response = self._make_request("POST", endpoint, data=data)
+        if success:
+            enc_id = response.get("id", "unknown")
+            logger.info(f"Created encounter {enc_id} for patient {patient_id} with practitioner {practitioner_id}")
+        return success, response
+
+    def get_encounter(self, encounter_id: str) -> Tuple[bool, Any]:
+        """
+        Get a specific encounter (care log) by ID.
+        GET /v1/encounter/{id}/
+
+        Returns encounter details including patient, practitioner, period,
+        appointment reference, and rate information.
+        """
+        if self.is_mock_mode:
+            return True, {"resourceType": "Encounter", "id": encounter_id, "status": "COMPLETE"}
+
+        endpoint = f"encounter/{encounter_id}/"
+        success, response = self._make_request("GET", endpoint)
+        if success:
+            logger.info(f"Got encounter {encounter_id}")
+        return success, response
+
+    def search_encounters(
+        self,
+        client_id: str = None,
+        caregiver_id: str = None,
+        start_date: str = None,
+        end_date: str = None,
+        count: int = 30,
+        page: int = 1,
+        sort: str = "-startDate"
+    ) -> Tuple[bool, Any]:
+        """
+        Search encounters (care logs).
+        POST /v1/encounter/_search/
+
+        Args:
+            client_id: Filter by patient/client ID
+            caregiver_id: Filter by practitioner/caregiver ID
+            start_date: Start date filter (format: YYYYMMDD)
+            end_date: End date filter (format: YYYYMMDD)
+            count: Records per page (default: 30)
+            page: Page number (default: 1)
+            sort: Sort field, prefix with '-' for descending (default: -startDate)
+        """
+        if self.is_mock_mode:
+            return True, {"entry": [], "total": 0}
+
+        endpoint = "encounter/_search/"
+        params = {"_count": count, "_page": page, "_sort": sort}
+        data = {}
+        if client_id:
+            data["clientId"] = client_id
+        if caregiver_id:
+            data["caregiverId"] = caregiver_id
+        if start_date:
+            data["startDate"] = start_date
+        if end_date:
+            data["endDate"] = end_date
+
+        success, response = self._make_request("POST", endpoint, params=params, data=data)
+        if success:
+            total = response.get("total", len(response.get("entry", [])))
+            logger.info(f"Found {total} encounters")
+        return success, response
+
+    def update_encounter(
+        self,
+        encounter_id: str,
+        status: str = None,
+        start_datetime: str = None,
+        end_datetime: str = None,
+        practitioner_id: str = None,
+        bill_rate_method: str = None,
+        bill_rate_id: str = None,
+        pay_rate_method: str = None,
+        pay_rate_id: str = None
+    ) -> Tuple[bool, Any]:
+        """
+        Update an existing encounter (care log).
+        PUT /v1/encounter/{id}/
+
+        All fields optional - only provided fields are updated.
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"encounter/{encounter_id}/"
+        data = {"resourceType": "Encounter", "agencyId": str(self.agency_id)}
+        if status is not None:
+            data["status"] = status
+        if start_datetime is not None:
+            data["startDateTime"] = start_datetime
+        if end_datetime is not None:
+            data["endDateTime"] = end_datetime
+        if practitioner_id is not None:
+            data["practitionerId"] = practitioner_id
+        if bill_rate_method is not None:
+            data["billRateMethod"] = bill_rate_method
+        if bill_rate_id is not None:
+            data["billRateId"] = bill_rate_id
+        if pay_rate_method is not None:
+            data["payRateMethod"] = pay_rate_method
+        if pay_rate_id is not None:
+            data["payRateId"] = pay_rate_id
+
+        success, response = self._make_request("PUT", endpoint, data=data)
+        if success:
+            logger.info(f"Updated encounter {encounter_id}")
+        return success, response
+
+    def delete_encounter(self, encounter_id: str) -> Tuple[bool, Any]:
+        """
+        Delete an encounter (care log).
+        DELETE /v1/encounter/{id}/
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"encounter/{encounter_id}/"
+        success, response = self._make_request("DELETE", endpoint)
+        if success:
+            logger.info(f"Deleted encounter {encounter_id}")
+        return success, response
+
+    # =========================================================================
+    # DocumentReference API
+    # =========================================================================
+
+    def create_document_reference(
+        self,
+        patient_id: str,
+        document_type: str,
+        content_type: str,
+        data_base64: str,
+        description: str = "",
+        date: str = None
+    ) -> Tuple[bool, Any]:
+        """
+        Upload/create a document attached to a patient profile.
+        POST /v1/documentreference/
+
+        Args:
+            patient_id: WellSky patient/client ID
+            document_type: Type code (e.g. "clinical-note", "care-plan", "assessment")
+            content_type: MIME type (e.g. "application/pdf", "image/jpeg", "text/plain")
+            data_base64: Base64-encoded document content
+            description: Human-readable description
+            date: ISO date when document was created (default: now)
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Created document for patient {patient_id}")
+            return True, {"resourceType": "DocumentReference", "id": "mock-doc-123"}
+
+        if date is None:
+            date = datetime.utcnow().isoformat() + "Z"
+
+        endpoint = "documentreference/"
+        doc_data = {
+            "resourceType": "DocumentReference",
+            "subject": {"reference": f"Patient/{patient_id}"},
+            "type": {
+                "coding": [{"code": document_type, "display": document_type}]
+            },
+            "description": description,
+            "date": date,
+            "content": [
+                {
+                    "attachment": {
+                        "contentType": content_type,
+                        "data": data_base64
+                    }
+                }
+            ]
+        }
+
+        success, response = self._make_request("POST", endpoint, data=doc_data)
+        if success:
+            doc_id = response.get("id", "unknown")
+            logger.info(f"Created DocumentReference {doc_id} for patient {patient_id}")
+        return success, response
+
+    def get_document_reference(self, document_id: str) -> Tuple[bool, Any]:
+        """
+        Get a specific document reference by ID.
+        GET /v1/documentreference/{id}/
+
+        Returns document metadata and content (base64-encoded).
+        """
+        if self.is_mock_mode:
+            return True, {"resourceType": "DocumentReference", "id": document_id}
+
+        endpoint = f"documentreference/{document_id}/"
+        success, response = self._make_request("GET", endpoint)
+        if success:
+            logger.info(f"Got DocumentReference {document_id}")
+        return success, response
+
+    def search_document_references(
+        self,
+        patient_id: str = None,
+        document_type: str = None,
+        date_from: str = None,
+        date_to: str = None,
+        count: int = 30,
+        page: int = 1
+    ) -> Tuple[bool, Any]:
+        """
+        Search document references.
+        POST /v1/documentreference/_search/
+
+        Args:
+            patient_id: Filter by patient/client ID
+            document_type: Filter by document type code
+            date_from: Start date filter (ISO format)
+            date_to: End date filter (ISO format)
+            count: Records per page (default: 30)
+            page: Page number (default: 1)
+        """
+        if self.is_mock_mode:
+            return True, {"entry": [], "total": 0}
+
+        endpoint = "documentreference/_search/"
+        params = {"_count": count, "_page": page}
+        data = {}
+        if patient_id:
+            data["subject"] = f"Patient/{patient_id}"
+        if document_type:
+            data["type"] = document_type
+        if date_from:
+            data["date"] = f"ge{date_from}"
+        if date_to:
+            if "date" in data:
+                data["dateTo"] = f"le{date_to}"
+            else:
+                data["date"] = f"le{date_to}"
+
+        success, response = self._make_request("POST", endpoint, params=params, data=data)
+        if success:
+            total = response.get("total", len(response.get("entry", [])))
+            logger.info(f"Found {total} document references")
+        return success, response
+
+    def update_document_reference(
+        self,
+        document_id: str,
+        description: str = None,
+        document_type: str = None,
+        content_type: str = None,
+        data_base64: str = None
+    ) -> Tuple[bool, Any]:
+        """
+        Update an existing document reference.
+        PUT /v1/documentreference/{id}/
+
+        All fields optional - only provided fields are updated.
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"documentreference/{document_id}/"
+        data = {"resourceType": "DocumentReference"}
+        if description is not None:
+            data["description"] = description
+        if document_type is not None:
+            data["type"] = {
+                "coding": [{"code": document_type, "display": document_type}]
+            }
+        if content_type is not None or data_base64 is not None:
+            attachment = {}
+            if content_type is not None:
+                attachment["contentType"] = content_type
+            if data_base64 is not None:
+                attachment["data"] = data_base64
+            data["content"] = [{"attachment": attachment}]
+
+        success, response = self._make_request("PUT", endpoint, data=data)
+        if success:
+            logger.info(f"Updated DocumentReference {document_id}")
+        return success, response
+
+    def delete_document_reference(self, document_id: str) -> Tuple[bool, Any]:
+        """
+        Delete a document reference.
+        DELETE /v1/documentreference/{id}/
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"documentreference/{document_id}/"
+        success, response = self._make_request("DELETE", endpoint)
+        if success:
+            logger.info(f"Deleted DocumentReference {document_id}")
+        return success, response
+
+    # =========================================================================
+    # Subscription API (Webhooks)
+    # =========================================================================
+
+    def create_subscription(
+        self,
+        criteria: str,
+        endpoint_url: str,
+        reason: str = "Gigi AI real-time monitoring",
+        auth_header: str = None,
+        payload_type: str = "application/fhir+json"
+    ) -> Tuple[bool, Any]:
+        """
+        Create a webhook subscription for real-time event notifications.
+        POST /v1/subscriptions/
+
+        Args:
+            criteria: Event type to subscribe to. Available criteria:
+                - admintask.created / admintask.changed / admintask.status.changed / admintask.status.complete
+                - agency_admin.created / agency_admin.deactivated.changed
+                - encounter.clockout.changed
+                - patient.created / patient.name.changed / patient.address.changed
+                - patient.telecom.changed / patient.deactivated.changed / patient.dateofdeath.changed
+                - prospect.status.changed
+                - practitioner.created / practitioner.name.changed / practitioner.address.changed
+                - practitioner.telecom.changed / practitioner.deactivated.changed
+                - applicant.status.changed
+                - referralsources.created / referralsources.changed
+            endpoint_url: Your webhook URL that will receive POST notifications
+            reason: Human-readable reason for the subscription
+            auth_header: Authorization header value sent with webhook calls
+            payload_type: Content type for webhook payload (default: application/fhir+json)
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Created subscription for {criteria}")
+            return True, {"resourceType": "Subscription", "id": 999}
+
+        data = {
+            "resourceType": "Subscription",
+            "status": "active",
+            "criteria": criteria,
+            "reason": reason,
+            "channel": {
+                "type": "rest-hook",
+                "endpoint": endpoint_url,
+                "payload": payload_type
+            },
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": str(self.agency_id)}
+                ]
+            }
+        }
+
+        if auth_header:
+            data["channel"]["header"] = [f"Authorization: {auth_header}"]
+
+        success, response = self._make_request("POST", "subscriptions/", data=data)
+        if success:
+            sub_id = response.get("id", "unknown")
+            logger.info(f"Created subscription {sub_id} for {criteria} -> {endpoint_url}")
+        return success, response
+
+    def get_subscription(self, subscription_id: str) -> Tuple[bool, Any]:
+        """
+        Get a specific subscription by ID.
+        GET /v1/subscriptions/{id}/
+        """
+        if self.is_mock_mode:
+            return True, {"resourceType": "Subscription", "id": subscription_id, "status": "active"}
+
+        endpoint = f"subscriptions/{subscription_id}/"
+        success, response = self._make_request("GET", endpoint)
+        if success:
+            logger.info(f"Got subscription {subscription_id}")
+        return success, response
+
+    def search_subscriptions(
+        self,
+        status: str = None,
+        criteria: str = None,
+        contact_email: str = None
+    ) -> Tuple[bool, Any]:
+        """
+        List/search active subscriptions.
+        GET /v1/subscriptions/
+
+        Args:
+            status: Filter by status (e.g. "active")
+            criteria: Filter by event type (e.g. "encounter.clockout.changed")
+            contact_email: Filter by subscriber email
+        """
+        if self.is_mock_mode:
+            return True, {"entry": [], "total": 0}
+
+        params = {}
+        if status:
+            params["status"] = status
+        if criteria:
+            params["criteria"] = criteria
+        if contact_email:
+            params["contact_email"] = contact_email
+
+        success, response = self._make_request("GET", "subscriptions/", params=params)
+        if success:
+            total = len(response.get("entry", []))
+            logger.info(f"Found {total} subscriptions")
+        return success, response
+
+    def update_subscription(
+        self,
+        subscription_id: str,
+        status: str = None,
+        criteria: str = None,
+        endpoint_url: str = None,
+        reason: str = None,
+        auth_header: str = None
+    ) -> Tuple[bool, Any]:
+        """
+        Update an existing subscription.
+        PUT /v1/subscriptions/{id}/
+
+        All fields optional - only provided fields are updated.
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        data = {"resourceType": "Subscription"}
+        if status is not None:
+            data["status"] = status
+        if criteria is not None:
+            data["criteria"] = criteria
+        if reason is not None:
+            data["reason"] = reason
+        if endpoint_url is not None or auth_header is not None:
+            channel = {"type": "rest-hook"}
+            if endpoint_url is not None:
+                channel["endpoint"] = endpoint_url
+            if auth_header is not None:
+                channel["header"] = [f"Authorization: {auth_header}"]
+            data["channel"] = channel
+
+        endpoint = f"subscriptions/{subscription_id}/"
+        success, response = self._make_request("PUT", endpoint, data=data)
+        if success:
+            logger.info(f"Updated subscription {subscription_id}")
+        return success, response
+
+    def delete_subscription(self, subscription_id: str) -> Tuple[bool, Any]:
+        """
+        Delete a subscription (stop receiving webhook notifications).
+        DELETE /v1/subscriptions/{id}/
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"subscriptions/{subscription_id}/"
+        success, response = self._make_request("DELETE", endpoint)
+        if success:
+            logger.info(f"Deleted subscription {subscription_id}")
+        return success, response
+
+    # =========================================================================
+    # ProfileTags API (Skills / Certifications)
+    # =========================================================================
+
+    def create_profile_tag(
+        self,
+        name: str,
+        description: str = "",
+        tag_type: str = "skill"
+    ) -> Tuple[bool, Any]:
+        """
+        Create a new profile tag (skill/certification).
+        POST /v1/profileTags/
+
+        Tags are assigned to practitioners via the profileTags meta tag
+        (comma-separated IDs) when creating/updating practitioners.
+
+        Args:
+            name: Tag name (e.g. "CNA", "CPR Certified", "Alzheimer's Care")
+            description: Optional description of the skill/certification
+            tag_type: Tag category (e.g. "skill", "certification", "language")
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Created profile tag '{name}'")
+            return True, {"id": "mock-tag-123", "name": name}
+
+        data = {
+            "name": name,
+            "description": description,
+            "type": tag_type
+        }
+
+        success, response = self._make_request("POST", "profileTags/", data=data)
+        if success:
+            tag_id = response.get("id", "unknown")
+            logger.info(f"Created profile tag {tag_id}: {name}")
+        return success, response
+
+    def get_profile_tag(self, tag_id: str) -> Tuple[bool, Any]:
+        """
+        Get a specific profile tag by ID.
+        GET /v1/profileTags/{id}/
+        """
+        if self.is_mock_mode:
+            return True, {"id": tag_id, "name": "Mock Tag"}
+
+        endpoint = f"profileTags/{tag_id}/"
+        success, response = self._make_request("GET", endpoint)
+        if success:
+            logger.info(f"Got profile tag {tag_id}")
+        return success, response
+
+    def search_profile_tags(
+        self,
+        name: str = None,
+        tag_type: str = None,
+        count: int = 100,
+        page: int = 1
+    ) -> Tuple[bool, Any]:
+        """
+        List/search profile tags.
+        GET /v1/profileTags/
+
+        Args:
+            name: Filter by tag name
+            tag_type: Filter by tag type
+            count: Records per page (default: 100)
+            page: Page number (default: 1)
+        """
+        if self.is_mock_mode:
+            return True, {"entry": [], "total": 0}
+
+        params = {"_count": count, "_page": page}
+        if name:
+            params["name"] = name
+        if tag_type:
+            params["type"] = tag_type
+
+        success, response = self._make_request("GET", "profileTags/", params=params)
+        if success:
+            total = len(response.get("entry", [])) if isinstance(response, dict) else 0
+            logger.info(f"Found {total} profile tags")
+        return success, response
+
+    def update_profile_tag(
+        self,
+        tag_id: str,
+        name: str = None,
+        description: str = None,
+        tag_type: str = None
+    ) -> Tuple[bool, Any]:
+        """
+        Update an existing profile tag.
+        PUT /v1/profileTags/{id}/
+
+        All fields optional - only provided fields are updated.
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        data = {}
+        if name is not None:
+            data["name"] = name
+        if description is not None:
+            data["description"] = description
+        if tag_type is not None:
+            data["type"] = tag_type
+
+        endpoint = f"profileTags/{tag_id}/"
+        success, response = self._make_request("PUT", endpoint, data=data)
+        if success:
+            logger.info(f"Updated profile tag {tag_id}")
+        return success, response
+
+    def delete_profile_tag(self, tag_id: str) -> Tuple[bool, Any]:
+        """
+        Delete a profile tag.
+        DELETE /v1/profileTags/{id}/
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"profileTags/{tag_id}/"
+        success, response = self._make_request("DELETE", endpoint)
+        if success:
+            logger.info(f"Deleted profile tag {tag_id}")
+        return success, response
+
+    # =========================================================================
+    # RelatedPerson API (Family / Emergency Contacts)
+    # =========================================================================
+
+    def get_related_persons(self, patient_id: str) -> Tuple[bool, Any]:
+        """
+        Get all related persons (family/emergency contacts) for a patient.
+        GET /v1/relatedperson/{patient_id}/
+
+        Returns FHIR Bundle with entry[].resource containing:
+          - id, name, telecom, address, relationship, emergencyContact,
+            primaryContact, payer, poa
+        """
+        if self.is_mock_mode:
+            return True, {"entry": [], "total": 0}
+
+        endpoint = f"relatedperson/{patient_id}/"
+        success, response = self._make_request("GET", endpoint)
+        if success:
+            total = len(response.get("entry", []))
+            logger.info(f"Got {total} related persons for patient {patient_id}")
+        return success, response
+
+    def create_related_person(
+        self,
+        patient_id: str,
+        first_name: str,
+        last_name: str,
+        relationship_code: str,
+        phone: str = None,
+        home_phone: str = None,
+        work_phone: str = None,
+        email: str = None,
+        city: str = None,
+        state: str = None,
+        is_emergency_contact: bool = False,
+        is_primary_contact: bool = False,
+        is_payer: bool = False,
+        is_poa: bool = False
+    ) -> Tuple[bool, Any]:
+        """
+        Create a related person (family/emergency contact) for a patient.
+        POST /v1/relatedperson/
+
+        Args:
+            patient_id: WellSky patient/client ID
+            first_name: Contact's first name
+            last_name: Contact's last name
+            relationship_code: Relationship code (FTH, MTH, SPS, SON, DAU,
+                BRO, SIS, DOCTOR, SOCIAL_WORKER, NURSE, FRND, NBOR, etc.)
+            phone: Mobile phone (10 digits, no country code)
+            home_phone: Home phone
+            work_phone: Work phone
+            email: Email address
+            city: City
+            state: State
+            is_emergency_contact: Mark as emergency contact
+            is_primary_contact: Mark as primary contact
+            is_payer: Mark as payer
+            is_poa: Mark as power of attorney
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Created related person {first_name} {last_name} for patient {patient_id}")
+            return True, {"resourceType": "RelatedPerson", "id": "mock-rp-123"}
+
+        endpoint = "relatedperson/"
+        data = {
+            "resourceType": "RelatedPerson",
+            "patient": {"reference": f"Patient/{patient_id}"},
+            "name": [
+                {
+                    "given": [first_name],
+                    "family": last_name
+                }
+            ],
+            "relationship": {
+                "coding": [{"code": relationship_code}]
+            },
+            "emergencyContact": is_emergency_contact,
+            "primaryContact": is_primary_contact,
+            "payer": is_payer,
+            "poa": is_poa
+        }
+
+        # Build telecom array
+        telecom = []
+        if phone:
+            telecom.append({"system": "phone", "value": phone, "use": "mobile"})
+        if home_phone:
+            telecom.append({"system": "phone", "value": home_phone, "use": "home"})
+        if work_phone:
+            telecom.append({"system": "phone", "value": work_phone, "use": "work"})
+        if email:
+            telecom.append({"system": "email", "value": email})
+        if telecom:
+            data["telecom"] = telecom
+
+        # Build address
+        if city or state:
+            address = {}
+            if city:
+                address["city"] = city
+            if state:
+                address["state"] = state
+            data["address"] = [address]
+
+        success, response = self._make_request("POST", endpoint, data=data)
+        if success:
+            rp_id = response.get("id", "unknown")
+            logger.info(f"Created RelatedPerson {rp_id} ({first_name} {last_name}) for patient {patient_id}")
+        return success, response
+
+    def search_related_persons(
+        self,
+        patient_id: str = None,
+        name: str = None,
+        phone: str = None,
+        count: int = 30,
+        page: int = 1
+    ) -> Tuple[bool, Any]:
+        """
+        Search related persons across all patients.
+        POST /v1/relatedperson/_search/
+
+        Args:
+            patient_id: Filter by patient/client ID
+            name: Search by name
+            phone: Search by phone number
+            count: Records per page (default: 30)
+            page: Page number (default: 1)
+        """
+        if self.is_mock_mode:
+            return True, {"entry": [], "total": 0}
+
+        endpoint = "relatedperson/_search/"
+        params = {"_count": count, "_page": page}
+        data = {}
+        if patient_id:
+            data["patient"] = patient_id
+        if name:
+            data["name"] = name
+        if phone:
+            data["phone"] = phone
+
+        success, response = self._make_request("POST", endpoint, params=params, data=data)
+        if success:
+            total = response.get("total", len(response.get("entry", [])))
+            logger.info(f"Found {total} related persons")
+        return success, response
+
+    def update_related_person(
+        self,
+        contact_id: str,
+        first_name: str = None,
+        last_name: str = None,
+        relationship_code: str = None,
+        phone: str = None,
+        home_phone: str = None,
+        work_phone: str = None,
+        email: str = None,
+        city: str = None,
+        state: str = None,
+        is_emergency_contact: bool = None,
+        is_primary_contact: bool = None,
+        is_payer: bool = None,
+        is_poa: bool = None
+    ) -> Tuple[bool, Any]:
+        """
+        Update an existing related person.
+        PUT /v1/relatedperson/{contact_id}/
+
+        All fields optional - only provided fields are updated.
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"relatedperson/{contact_id}/"
+        data = {"resourceType": "RelatedPerson"}
+
+        if first_name is not None or last_name is not None:
+            name = {}
+            if first_name is not None:
+                name["given"] = [first_name]
+            if last_name is not None:
+                name["family"] = last_name
+            data["name"] = [name]
+
+        if relationship_code is not None:
+            data["relationship"] = {"coding": [{"code": relationship_code}]}
+
+        # Build telecom if any phone/email provided
+        telecom = []
+        if phone is not None:
+            telecom.append({"system": "phone", "value": phone, "use": "mobile"})
+        if home_phone is not None:
+            telecom.append({"system": "phone", "value": home_phone, "use": "home"})
+        if work_phone is not None:
+            telecom.append({"system": "phone", "value": work_phone, "use": "work"})
+        if email is not None:
+            telecom.append({"system": "email", "value": email})
+        if telecom:
+            data["telecom"] = telecom
+
+        if city is not None or state is not None:
+            address = {}
+            if city is not None:
+                address["city"] = city
+            if state is not None:
+                address["state"] = state
+            data["address"] = [address]
+
+        if is_emergency_contact is not None:
+            data["emergencyContact"] = is_emergency_contact
+        if is_primary_contact is not None:
+            data["primaryContact"] = is_primary_contact
+        if is_payer is not None:
+            data["payer"] = is_payer
+        if is_poa is not None:
+            data["poa"] = is_poa
+
+        success, response = self._make_request("PUT", endpoint, data=data)
+        if success:
+            logger.info(f"Updated RelatedPerson {contact_id}")
+        return success, response
+
+    def delete_related_person(self, patient_id: str, contact_id: str) -> Tuple[bool, Any]:
+        """
+        Remove a related person from a patient.
+        DELETE /v1/relatedperson/{patient_id}/contacts/{contact_id}/
+        """
+        if self.is_mock_mode:
+            return True, {"success": True}
+
+        endpoint = f"relatedperson/{patient_id}/contacts/{contact_id}/"
+        success, response = self._make_request("DELETE", endpoint)
+        if success:
+            logger.info(f"Deleted RelatedPerson {contact_id} from patient {patient_id}")
+        return success, response
 
     def document_shift_interaction(
         self,

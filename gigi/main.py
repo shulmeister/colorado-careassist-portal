@@ -292,6 +292,101 @@ OFFICE_HOURS_END = os.getenv("GIGI_OFFICE_HOURS_END", "17:00")
 # DEFAULT IS OFF - Must be explicitly enabled when WellSky is fully connected
 OPERATIONS_SMS_ENABLED = os.getenv("GIGI_OPERATIONS_SMS_ENABLED", "false").lower() == "true"
 
+# =============================================================================
+# SMS LOOP PREVENTION - Critical safeguards against duplicate/repeating messages
+# =============================================================================
+SMS_REPLY_COOLDOWN_MINUTES = 15  # Don't reply to same number within this window
+SMS_MAX_REPLIES_PER_HOUR = 30    # Global hourly limit
+SMS_MAX_REPLIES_PER_NUMBER_DAY = 5  # Max replies to single number per day
+
+# In-memory SMS tracking (backed by file for persistence)
+_sms_reply_history = {
+    'replies': [],
+    'hourly_count': 0,
+    'hourly_reset': datetime.utcnow().isoformat()
+}
+_SMS_HISTORY_FILE = "/Users/shulmeister/.gigi-sms-webhook-history.json"
+
+def _load_sms_history():
+    """Load SMS reply history from disk"""
+    global _sms_reply_history
+    try:
+        from pathlib import Path
+        if Path(_SMS_HISTORY_FILE).exists():
+            with open(_SMS_HISTORY_FILE, 'r') as f:
+                data = json.load(f)
+                # Clean old entries (older than 24 hours)
+                cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+                data['replies'] = [r for r in data.get('replies', []) if r.get('timestamp', '') > cutoff]
+                _sms_reply_history = data
+    except Exception as e:
+        logger.warning(f"Could not load SMS history: {e}")
+
+def _save_sms_history():
+    """Save SMS reply history to disk"""
+    try:
+        with open(_SMS_HISTORY_FILE, 'w') as f:
+            json.dump(_sms_reply_history, f)
+    except Exception as e:
+        logger.warning(f"Could not save SMS history: {e}")
+
+def _can_send_sms(to_phone: str) -> tuple:
+    """
+    Check if we can safely send SMS to this number.
+    Returns (can_send, reason).
+    """
+    global _sms_reply_history
+    now = datetime.utcnow()
+
+    # Check global hourly rate limit
+    try:
+        hourly_reset = datetime.fromisoformat(_sms_reply_history.get('hourly_reset', now.isoformat()))
+        if (now - hourly_reset).total_seconds() > 3600:
+            _sms_reply_history['hourly_count'] = 0
+            _sms_reply_history['hourly_reset'] = now.isoformat()
+    except:
+        _sms_reply_history['hourly_reset'] = now.isoformat()
+
+    if _sms_reply_history.get('hourly_count', 0) >= SMS_MAX_REPLIES_PER_HOUR:
+        return False, f"Global hourly limit reached ({SMS_MAX_REPLIES_PER_HOUR}/hr)"
+
+    # Normalize phone for comparison
+    clean_phone = ''.join(filter(str.isdigit, to_phone))[-10:]
+    today = now.date().isoformat()
+    replies_today = 0
+
+    for reply in _sms_reply_history.get('replies', []):
+        reply_phone = ''.join(filter(str.isdigit, reply.get('phone', '')))[-10:]
+        if reply_phone == clean_phone:
+            try:
+                reply_time = datetime.fromisoformat(reply.get('timestamp', '2000-01-01'))
+                minutes_since = (now - reply_time).total_seconds() / 60
+                if minutes_since < SMS_REPLY_COOLDOWN_MINUTES:
+                    return False, f"Cooldown active ({int(SMS_REPLY_COOLDOWN_MINUTES - minutes_since)} min remaining)"
+                if reply.get('timestamp', '').startswith(today):
+                    replies_today += 1
+            except:
+                pass
+
+    if replies_today >= SMS_MAX_REPLIES_PER_NUMBER_DAY:
+        return False, f"Daily limit for this number ({SMS_MAX_REPLIES_PER_NUMBER_DAY}/day)"
+
+    return True, "OK"
+
+def _record_sms_sent(to_phone: str):
+    """Record that we sent an SMS to this number"""
+    global _sms_reply_history
+    clean_phone = ''.join(filter(str.isdigit, to_phone))[-10:]
+    _sms_reply_history.setdefault('replies', []).append({
+        'phone': clean_phone,
+        'timestamp': datetime.utcnow().isoformat()
+    })
+    _sms_reply_history['hourly_count'] = _sms_reply_history.get('hourly_count', 0) + 1
+    _save_sms_history()
+
+# Load history on module import
+_load_sms_history()
+
 # RingCentral credentials (required for SMS - no hardcoded fallbacks)
 RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID")
 RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET")
@@ -1489,11 +1584,36 @@ async def _send_sms_ringcentral(to_phone: str, message: str) -> bool:
         return False
 
 
-async def _send_sms_primary(to_phone: str, message: str) -> bool:
-    """Send SMS via primary provider (RingCentral or BeeTexting)."""
+async def _send_sms_primary(to_phone: str, message: str, bypass_loop_check: bool = False) -> bool:
+    """
+    Send SMS via primary provider (RingCentral or BeeTexting).
+
+    Args:
+        to_phone: Destination phone number
+        message: Message text
+        bypass_loop_check: If True, skip loop prevention (use ONLY for critical alerts)
+
+    Returns:
+        True if sent successfully
+    """
+    # LOOP PREVENTION CHECK - Critical safety gate
+    if not bypass_loop_check:
+        can_send, reason = _can_send_sms(to_phone)
+        if not can_send:
+            logger.warning(f"⛔ SMS LOOP PREVENTION: Blocking SMS to {to_phone}. Reason: {reason}")
+            return False
+
+    # Send via configured provider
     if SMS_PROVIDER == "beetexting":
-        return await _send_sms_beetexting(to_phone, message)
-    return await _send_sms_ringcentral(to_phone, message)
+        success = await _send_sms_beetexting(to_phone, message)
+    else:
+        success = await _send_sms_ringcentral(to_phone, message)
+
+    # Record successful send for loop prevention tracking
+    if success:
+        _record_sms_sent(to_phone)
+
+    return success
 
 
 async def send_glip_message(chat_id: str, text: str) -> bool:

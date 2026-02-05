@@ -4,7 +4,7 @@ A comprehensive full-stack sales CRM and activity tracking application for Color
 
 **Live URLs**:
 - Portal: https://portal.coloradocareassist.com/sales/
-- Mac Mini (Local): https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/
+- Mac Mini: https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/sales/
 
 **GitHub**: https://github.com/shulmeister/colorado-careassist-portal (sales dashboard is in `/sales` directory)
 
@@ -18,7 +18,7 @@ This sales dashboard is part of the **Colorado CareAssist Unified Portal**. The 
 - `/recruiting` → Recruiter dashboard
 - `/marketing` → Marketing dashboard
 
-Everything deploys together to the `careassist-unified` Mac Mini (Local) app.
+Everything deploys together to the `careassist-unified` Mac Mini app.
 
 ## Features
 
@@ -140,8 +140,8 @@ python scripts/auto_scan_drive.py
 - **Vite** for building
 
 ### Infrastructure
-- **Mac Mini (Local)** for hosting (unified portal app)
-- **PostgreSQL** on Mac Mini (Local)
+- **Mac Mini** for hosting (unified portal app)
+- **PostgreSQL** on Mac Mini
 - **Google Cloud** for Drive/Gmail APIs
 - **Cron** for auto-scanning business card uploads
 
@@ -269,7 +269,7 @@ Automatically logs phone calls as activities. Configure in RingCentral dashboard
 - Python 3.11+
 - Node.js 18+
 - PostgreSQL
-- Mac Mini (Local) CLI (for deployment)
+- Mac Mini CLI (for deployment)
 - Google Cloud Project with Drive API enabled
 
 ### 1. Clone Repository
@@ -365,7 +365,7 @@ npm run dev
 
 Visit: http://localhost:8000
 
-### 7. Deploy to Mac Mini (Local)
+### 7. Deploy to Mac Mini
 
 The sales dashboard is part of the unified portal and deploys together:
 
@@ -400,7 +400,7 @@ colorado-careassist-portal/
     ├── google_drive_service.py # Google Drive integration
     ├── business_card_scanner.py # Business card AI parsing
     ├── requirements.txt       # Python dependencies
-    ├── Procfile              # Mac Mini (Local) process file
+    ├── Procfile              # Mac Mini process file
     ├── Aptfile               # System dependencies
     │
     ├── services/         # Business logic services

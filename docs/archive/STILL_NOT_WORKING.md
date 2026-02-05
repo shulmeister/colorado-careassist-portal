@@ -22,7 +22,7 @@ Make sure you're editing the **correct** OAuth client ID. You might have multipl
 
 **Check:**
 - The Client ID should start with: `516104802353-...`
-- Make sure you're editing the one that's configured in Mac Mini (Local)
+- Make sure you're editing the one that's configured in Mac Mini
 
 ### 3. Browser Cache
 
@@ -59,7 +59,7 @@ Make sure BOTH are there and saved.
 
 If it's still not working after waiting:
 - What does "see error details" show? (the exact redirect URI Google received)
-- Can you confirm the Client ID you're editing matches what's in Mac Mini (Local) config?
+- Can you confirm the Client ID you're editing matches what's in Mac Mini config?
 
 
 

@@ -19,7 +19,7 @@
    - Added `search` method fallback (in addition to `search_stream`)
 
 3. **Deployed:**
-   - All changes pushed to GitHub and Mac Mini (Local)
+   - All changes pushed to GitHub and Mac Mini
    - Code is live (v353)
 
 ---

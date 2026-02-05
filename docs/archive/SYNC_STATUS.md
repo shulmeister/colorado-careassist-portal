@@ -4,7 +4,7 @@
 
 ## Current Sync Status
 
-| Component | Desktop | GitHub | Mac Mini (Local) | Status |
+| Component | Desktop | GitHub | Mac Mini | Status |
 |-----------|---------|--------|--------|--------|
 | **Portal** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
 | **Sales Dashboard** | ✅ | ✅ | ✅ | ✅ **FULLY SYNCED** |
@@ -20,19 +20,19 @@
 - **Marketing Dashboard**: https://github.com/shulmeister/marketing-dashboard
 - **Activity Tracker**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
 
-## Standard Workflow (Desktop → GitHub → Mac Mini (Local))
+## Standard Workflow (Desktop → GitHub → Mac Mini)
 
 **Recommended: GitHub Integration (Auto-Deploy)**
-- Connect Mac Mini (Local) to GitHub in Mac Mini (Local) dashboard
+- Connect Mac Mini to GitHub in Mac Mini dashboard
 - Enable "Automatic deploys" from `main` branch
-- Push to GitHub → Mac Mini (Local) automatically deploys!
+- Push to GitHub → Mac Mini automatically deploys!
 
 **For Portal**:
 ```bash
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys) ✅
+git push origin main    # Desktop → GitHub → Mac Mini (auto-deploys) ✅
 ```
 
 **For Sales Dashboard**:
@@ -40,7 +40,7 @@ git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys)
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/sales
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys) ✅
+git push origin main    # Desktop → GitHub → Mac Mini (auto-deploys) ✅
 ```
 
 **For Marketing Dashboard** (deploys with Portal):
@@ -48,8 +48,8 @@ git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys)
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/marketing
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys with portal)
-# Note: Marketing Dashboard deploys as part of portal (no separate Mac Mini (Local) app)
+git push origin main    # Desktop → GitHub → Mac Mini (auto-deploys with portal)
+# Note: Marketing Dashboard deploys as part of portal (no separate Mac Mini app)
 ```
 
 **For Recruiter Dashboard**:
@@ -57,7 +57,7 @@ git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys 
 cd /Users/jasonshulman/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Your message"
-git push origin main    # Desktop → GitHub → Mac Mini (Local) (auto-deploys) ✅
+git push origin main    # Desktop → GitHub → Mac Mini (auto-deploys) ✅
 ```
 
 **For Activity Tracker**:
@@ -90,10 +90,10 @@ git fetch origin
 git log HEAD..origin/main --oneline  # Commits on GitHub not local
 git log origin/main..HEAD --oneline  # Commits local not on GitHub
 
-# Compare local vs Mac Mini (Local)
+# Compare local vs Mac Mini
 git fetch mac-mini
-git log HEAD..mac-mini/main --oneline  # Commits on Mac Mini (Local) not local
-git log mac-mini/main..HEAD --oneline  # Commits local not on Mac Mini (Local)
+git log HEAD..mac-mini/main --oneline  # Commits on Mac Mini not local
+git log mac-mini/main..HEAD --oneline  # Commits local not on Mac Mini
 ```
 
 ## Git Repository Locations

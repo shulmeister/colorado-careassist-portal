@@ -1,17 +1,17 @@
 # Colorado CareAssist Portal
 
-## 🗺️ Quick Map (Desktop → Repos → Mac Mini (Local))
+## 🗺️ Quick Map (Desktop → Repos → Mac Mini)
 
 On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** that matches the tile you click in the portal. Those folders are symbolic links that point into this repo so you can jump straight to the correct nested git repo:
 
-| Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Mac Mini (Local) App / URL + Deploy Status                                                                 |
+| Tile / Service      | Desktop Folder                           | Nested Path (inside this repo)                       | GitHub Repo                                            | Mac Mini App / URL + Deploy Status                                                                 |
 |---------------------|-------------------------------------------|------------------------------------------------------|--------------------------------------------------------|---------------------------------------------------------------------------------------------------|
 | Portal (hub)        | `colorado-careassist-portal`              | `.`                                                  | `shulmeister/colorado-careassist-portal`               | `careassist-unified` → https://careassist-unified-0a11ddb45ac0.mac-miniapp.com (auto deploy ✅) |
 | **Gigi AI Agent**   | (part of portal)                          | `gigi/`                                              | (same as portal)                                       | Ships with portal → https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/gigi/ |
 | Sales Dashboard     | `sales-dashboard`                         | `dashboards/sales`                                   | `shulmeister/sales-dashboard`                          | `careassist-tracker` / `cca-crm` (both auto deploy from GitHub `main` ✅)                          |
 | Activity Tracker    | `activity-tracker`                        | `dashboards/activity-tracker`                        | `shulmeister/Colorado-CareAssist-Route-Tracker`        | `cca-activity-tracker-6d9a1d8e3933` (auto deploy from GitHub `main` ✅)                             |
 | Recruiter Dashboard | `recruiter-dashboard`                     | `dashboards/recruitment`                             | `shulmeister/recruiter-dashboard`                      | `caregiver-lead-tracker-9d0e6a8c7c20` (auto deploy from GitHub `main` ✅)                           |
-| Marketing Dashboard | `marketing-dashboard`                     | `dashboards/marketing` (served via portal templates) | `shulmeister/marketing-dashboard`                      | Ships with portal auto deploy (no separate Mac Mini (Local) app)                                            |
+| Marketing Dashboard | `marketing-dashboard`                     | `dashboards/marketing` (served via portal templates) | `shulmeister/marketing-dashboard`                      | Ships with portal auto deploy (no separate Mac Mini app)                                            |
 
 > 🔁 Any time you “work on Sales”, just `cd ~/Documents/GitHub/sales-dashboard` and you’ll end up in `colorado-careassist-portal/dashboards/sales`, which is the real repo that deploys the Sales tile. Same pattern for every other spoke.
 
@@ -22,7 +22,7 @@ On Jason's Mac (`~/Documents/GitHub`) each tile has a **single folder name** tha
 ### THE HUB (Main Portal + Gigi)
 - **Repository**: `colorado-careassist-portal`
 - **GitHub**: https://github.com/shulmeister/colorado-careassist-portal
-- **Mac Mini (Local)**: `careassist-unified` → `careassist-unified-0a11ddb45ac0.mac-miniapp.com`
+- **Mac Mini**: `careassist-unified` → `careassist-unified-0a11ddb45ac0.mac-miniapp.com`
 - **Local Path**: `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal`
 - **Tech**: FastAPI, Jinja2, PostgreSQL
 - **Purpose**: Central launchpad with tiles that link to other apps
@@ -56,7 +56,7 @@ See `gigi/README.md` for full technical documentation.
 #### 1. Sales Dashboard
 - **Repository**: `sales-dashboard` (nested repo)
 - **GitHub**: https://github.com/shulmeister/sales-dashboard
-- **Mac Mini (Local)**: `careassist-tracker` → `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/`  
+- **Mac Mini**: `careassist-tracker` → `https://careassist-tracker-0fcf2cecdb22.mac-miniapp.com/`  
   (Portal env `SALES_DASHBOARD_URL` can override with `https://cca-crm-cd555628f933.mac-miniapp.com` when needed.)
 - **Local Path**: `~/Documents/GitHub/sales-dashboard` (symlink) → `dashboards/sales/`
 - **Tech**: Python FastAPI, Jinja2, PostgreSQL
@@ -67,7 +67,7 @@ See `gigi/README.md` for full technical documentation.
 #### 2. Recruiter Dashboard
 - **Repository**: `recruiter-dashboard` (nested repo)
 - **GitHub**: https://github.com/shulmeister/recruiter-dashboard
-- **Mac Mini (Local)**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com`
+- **Mac Mini**: `caregiver-lead-tracker` → `caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com`
 - **Local Path**: `~/Documents/GitHub/recruiter-dashboard` (symlink) → `dashboards/recruitment/`
 - **Tech**: Flask, SQLAlchemy, PostgreSQL
 - **Git Structure**: Nested git repo (has its own `.git` folder)
@@ -86,7 +86,7 @@ See `gigi/README.md` for full technical documentation.
 #### 4. Activity Tracker
 - **Repository**: `Colorado-CareAssist-Route-Tracker` (nested repo)
 - **GitHub**: https://github.com/shulmeister/Colorado-CareAssist-Route-Tracker
-- **Mac Mini (Local)**: `cca-activity-tracker-6d9a1d8e3933` → https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com/
+- **Mac Mini**: `cca-activity-tracker-6d9a1d8e3933` → https://cca-activity-tracker-6d9a1d8e3933.mac-miniapp.com/
 - **Local Path**: `~/Documents/GitHub/activity-tracker` (symlink) → `dashboards/activity-tracker/`
 - **Tech**: FastAPI, SQLAlchemy, PDF parser, Tesseract OCR
 - **Git Structure**: Nested git repo (has its own `.git` folder)
@@ -98,9 +98,9 @@ See `gigi/README.md` for full technical documentation.
 
 **Standard flow (now live for every tile):**
 
-`Desktop commit → git push origin main → Mac Mini (Local) auto deploys` ✅
+`Desktop commit → git push origin main → Mac Mini auto deploys` ✅
 
-All apps (portal + every spoke) are connected to their GitHub repo with automatic deploys from the `main` branch. The commands below are only needed if auto deploys are intentionally disabled and you want to push directly to Mac Mini (Local).
+All apps (portal + every spoke) are connected to their GitHub repo with automatic deploys from the `main` branch. The commands below are only needed if auto deploys are intentionally disabled and you want to push directly to Mac Mini.
 
 **Manual override (only if GitHub integration is disabled):**
 
@@ -110,7 +110,7 @@ cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal
 git add .
 git commit -m "Describe changes"
 git push origin main      # Push to GitHub
-git push mac-mini main      # Push to Mac Mini (Local) (only if NOT using GitHub integration)
+git push mac-mini main      # Push to Mac Mini (only if NOT using GitHub integration)
 ```
 
 #### Sales Dashboard (Spoke)
@@ -118,7 +118,7 @@ git push mac-mini main      # Push to Mac Mini (Local) (only if NOT using GitHub
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/sales
 git add .
 git commit -m "Describe changes"
-git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! ✅
+git push origin main      # Push to GitHub → Mac Mini auto-deploys! ✅
 ```
 
 #### Recruiter Dashboard (Spoke)
@@ -126,7 +126,7 @@ git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! �
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment
 git add .
 git commit -m "Describe changes"
-git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! ✅
+git push origin main      # Push to GitHub → Mac Mini auto-deploys! ✅
 ```
 
 #### Activity Tracker (Spoke)
@@ -134,7 +134,7 @@ git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! �
 cd /Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/activity-tracker
 git add .
 git commit -m "Describe changes"
-git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! ✅
+git push origin main      # Push to GitHub → Mac Mini auto-deploys! ✅
 # Only push directly if auto deploys are off:
 # git push mac-mini main
 ```
@@ -142,7 +142,7 @@ git push origin main      # Push to GitHub → Mac Mini (Local) auto-deploys! �
 ### 📁 Git Repository Structure
 
 ```
-colorado-careassist-portal/          # Main portal repo (GitHub + Mac Mini (Local))
+colorado-careassist-portal/          # Main portal repo (GitHub + Mac Mini)
 ├── .git/                            # Portal's git repo
 ├── gigi/                            # GIGI AI AGENT (after-hours assistant)
 │   ├── main.py                      # FastAPI app (voice + SMS)
@@ -175,7 +175,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Mac Mini (Loca
 
 ### 🔄 Syncing Status (Last Updated: January 21, 2026)
 
-| Component | GitHub Repo | Mac Mini (Local) App / URL | Status |
+| Component | GitHub Repo | Mac Mini App / URL | Status |
 |-----------|-------------|------------------|--------|
 | Portal + Gigi | `shulmeister/colorado-careassist-portal` | `careassist-unified` | ✅ Auto deploy on `main` |
 | Sales Dashboard | `shulmeister/sales-dashboard` | `careassist-tracker` / `cca-crm` | ✅ Auto deploys on `main` |
@@ -187,7 +187,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Mac Mini (Loca
 
 1. **Don't commit from portal root when working on dashboards** - Each dashboard has its own git repo
 2. **Don't assume all code is in one place** - Check which repo you're in with `git remote -v`
-3. **Always push to BOTH GitHub AND Mac Mini (Local)** - They're separate remotes
+3. **Always push to BOTH GitHub AND Mac Mini** - They're separate remotes
 4. **Marketing Dashboard is NOT a separate repo** - It's in `templates/marketing.html` in the portal repo
 
 ## Features
@@ -267,7 +267,7 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Mac Mini (Loca
 
 ## Deployment
 
-### ⚠️ ALWAYS DEPLOY TO BOTH GIT AND Mac Mini (Local)
+### ⚠️ ALWAYS DEPLOY TO BOTH GIT AND Mac Mini
 
 **After making ANY code changes, ALWAYS run these commands:**
 
@@ -275,12 +275,12 @@ colorado-careassist-portal/          # Main portal repo (GitHub + Mac Mini (Loca
 git add .
 git commit -m "Describe your changes"
 git push origin main      # Push to GitHub
-git push mac-mini main      # Push to Mac Mini (Local) (REQUIRED!)
+git push mac-mini main      # Push to Mac Mini (REQUIRED!)
 ```
 
-### Mac Mini (Local)
+### Mac Mini
 
-The app is configured for Mac Mini (Local) deployment:
+The app is configured for Mac Mini deployment:
 
 1. **Set Environment Variables**
    ```bash
@@ -355,7 +355,7 @@ Override the URLs via environment variables (`PORTAL_URL`, `SALES_DASHBOARD_URL`
 ├── templates/
 │   ├── portal.html        # Portal UI template
 │   └── marketing.html     # Marketing Dashboard
-├── Procfile               # Mac Mini (Local) process file
+├── Procfile               # Mac Mini process file
 ├── requirements.txt       # Python dependencies
 └── runtime.txt            # Python version
 ```

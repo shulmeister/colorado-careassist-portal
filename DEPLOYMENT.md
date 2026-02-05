@@ -1,6 +1,6 @@
-# Colorado CareAssist Portal - Mac Mini (Local) Deployment Guide
+# Colorado CareAssist Portal - Mac Mini Deployment Guide
 
-> **Complete step-by-step guide** to deploy the Colorado CareAssist Portal from GitHub to Mac Mini (Local) in production mode.
+> **Complete step-by-step guide** to deploy the Colorado CareAssist Portal from GitHub to Mac Mini in production mode.
 
 **Estimated time**: 1-2 hours (first-time setup)
 
@@ -10,8 +10,8 @@
 
 Before you begin, ensure you have:
 
-- [x] Mac Mini (Local) account (https://signup.mac-mini.com)
-- [x] Mac Mini (Local) CLI installed (https://devcenter.mac-mini.com/articles/mac-mini-cli)
+- [x] Mac Mini account (https://signup.mac-mini.com)
+- [x] Mac Mini CLI installed (https://devcenter.mac-mini.com/articles/mac-mini-cli)
 - [x] Git installed
 - [x] Access to all required API keys (see Environment Variables section)
 
@@ -26,13 +26,13 @@ cd colorado-careassist-portal
 
 ---
 
-## Step 2: Create Mac Mini (Local) App
+## Step 2: Create Mac Mini App
 
 ```bash
-# Login to Mac Mini (Local)
+# Login to Mac Mini
 mac-mini login
 
-# Create new app (use a unique name or let Mac Mini (Local) generate one)
+# Create new app (use a unique name or let Mac Mini generate one)
 mac-mini create careassist-unified
 
 # Or create with specific name:
@@ -42,7 +42,7 @@ mac-mini create careassist-unified
 mac-mini apps:info -a careassist-unified
 ```
 
-**Note**: If `careassist-unified` is already taken, Mac Mini (Local) will suggest an alternative name. Use that name for all subsequent commands.
+**Note**: If `careassist-unified` is already taken, Mac Mini will suggest an alternative name. Use that name for all subsequent commands.
 
 ---
 
@@ -231,10 +231,10 @@ mac-mini config -a careassist-unified
 ## Step 6: Deploy Application
 
 ```bash
-# Add Mac Mini (Local) remote (if not already added)
+# Add Mac Mini remote (if not already added)
 git remote add mac-mini https://git.mac-mini.com/careassist-unified.git
 
-# Deploy to Mac Mini (Local)
+# Deploy to Mac Mini
 git push mac-mini main
 ```
 
@@ -246,13 +246,13 @@ mac-mini logs --tail -a careassist-unified
 
 **Expected output**:
 ```
-remote: -----> Building on the Mac Mini (Local)-22 stack
+remote: -----> Building on the Mac Mini-22 stack
 remote: -----> Using buildpack: https://github.com/mac-mini/mac-mini-buildpack-apt
 remote: -----> Using buildpack: mac-mini/nodejs
 remote: -----> Using buildpack: mac-mini/python
 remote: -----> Launching...
 remote: -----> Build succeeded!
-remote:        https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/ deployed to Mac Mini (Local)
+remote:        https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/ deployed to Mac Mini
 ```
 
 **If build fails**, check:
@@ -279,19 +279,19 @@ mac-mini run python portal/portal_setup.py -a careassist-unified
 
 ---
 
-## Step 8: Set Up Mac Mini (Local) Scheduler Jobs
+## Step 8: Set Up Mac Mini Scheduler Jobs
 
 Some features require scheduled jobs to run automatically:
 
 ```bash
-# Add Mac Mini (Local) Scheduler add-on (free)
+# Add Mac Mini Scheduler add-on (free)
 mac-mini addons:create scheduler:standard -a careassist-unified
 
 # Open scheduler dashboard
 mac-mini addons:open scheduler -a careassist-unified
 ```
 
-**Add these scheduled jobs** in the Mac Mini (Local) Scheduler dashboard:
+**Add these scheduled jobs** in the Mac Mini Scheduler dashboard:
 
 | Job Command | Frequency | Purpose |
 |-------------|-----------|---------|
@@ -299,7 +299,7 @@ mac-mini addons:open scheduler -a careassist-unified
 | `cd recruiting && python sync_facebook_leads.py` | Daily at 9:00 AM | Facebook Lead Ads sync |
 | `cd sales && python scripts/sync_quickbooks.py` | Daily at 12:00 PM | QuickBooks customer sync |
 
-**Note**: Mac Mini (Local) Scheduler only supports 10-minute, hourly, or daily frequencies. For more precise scheduling (e.g., every 5 minutes), use a custom clock dyno or external cron service.
+**Note**: Mac Mini Scheduler only supports 10-minute, hourly, or daily frequencies. For more precise scheduling (e.g., every 5 minutes), use a custom clock dyno or external cron service.
 
 ---
 
@@ -314,7 +314,7 @@ mac-mini ps -a careassist-unified
 ```
 
 **Dyno tiers**:
-- **Free**: Not available anymore (deprecated by Mac Mini (Local))
+- **Free**: Not available anymore (deprecated by Mac Mini)
 - **Eco**: $5/month for all apps (sleeps after 30 min inactivity)
 - **Basic**: $7/month per dyno (never sleeps)
 - **Standard-1X**: $25/month per dyno (recommended for production)
@@ -361,14 +361,14 @@ mac-mini certs -a careassist-unified
 
 Set up automatic deployments when you push to GitHub:
 
-1. **Go to Mac Mini (Local) Dashboard**: https://dashboard.mac-mini.com
+1. **Go to Mac Mini Dashboard**: https://dashboard.mac-mini.com
 2. **Select your app**: `careassist-unified`
 3. **Go to Deploy tab**
 4. **Connect to GitHub**: Connect your `colorado-careassist-portal` repository
 5. **Enable Automatic Deploys**: Choose `main` branch
 6. **Enable CI wait** (optional): Wait for CI tests to pass before deploying
 
-**Now every push to `main` will automatically deploy to Mac Mini (Local)!**
+**Now every push to `main` will automatically deploy to Mac Mini!**
 
 ---
 
@@ -417,7 +417,7 @@ mac-mini ps -a careassist-unified
 
 1. Call 719-428-3999 (or your configured number)
 2. Speak with Gigi
-3. Check Mac Mini (Local) logs for call transcript
+3. Check Mac Mini logs for call transcript
 
 ---
 
@@ -476,7 +476,7 @@ mac-mini ps -a careassist-unified
 
 ## Monitoring & Maintenance
 
-### Mac Mini (Local) Logs
+### Mac Mini Logs
 
 ```bash
 # View recent logs
@@ -560,7 +560,7 @@ mac-mini rollback v123 -a careassist-unified
 |------|------|
 | Basic dyno (web) | $7/month |
 | PostgreSQL Essential-0 (x3 databases) | $15/month |
-| Mac Mini (Local) Scheduler | $0 (included) |
+| Mac Mini Scheduler | $0 (included) |
 | **Total** | **$22/month** |
 
 **Recommended production setup**:
@@ -569,7 +569,7 @@ mac-mini rollback v123 -a careassist-unified
 |------|------|
 | Standard-1X dyno (web) | $25/month |
 | PostgreSQL Essential-1 (x3 databases) | $150/month |
-| Mac Mini (Local) Scheduler | $0 |
+| Mac Mini Scheduler | $0 |
 | Papertrail logging (Choklad plan) | $7/month |
 | **Total** | **$182/month** |
 
@@ -591,7 +591,7 @@ mac-mini rollback v123 -a careassist-unified
 - [x] `.env` file in `.gitignore` (never committed)
 - [x] `APP_SECRET_KEY` is random and secure (32+ character hex)
 - [x] Google OAuth credentials are for production domain
-- [x] SSL/TLS enabled via Mac Mini (Local) ACM
+- [x] SSL/TLS enabled via Mac Mini ACM
 - [x] Database backups scheduled
 - [x] Only `coloradocareassist.com` emails can log in (`ALLOWED_DOMAINS`)
 - [x] API keys rotated regularly
@@ -602,10 +602,10 @@ mac-mini rollback v123 -a careassist-unified
 
 ## Additional Resources
 
-- **Mac Mini (Local) Dev Center**: https://devcenter.mac-mini.com
-- **Mac Mini (Local) CLI Reference**: https://devcenter.mac-mini.com/articles/mac-mini-cli-commands
-- **PostgreSQL on Mac Mini (Local)**: https://devcenter.mac-mini.com/articles/mac-mini-postgresql
-- **Mac Mini (Local) Scheduler**: https://devcenter.mac-mini.com/articles/scheduler
+- **Mac Mini Dev Center**: https://devcenter.mac-mini.com
+- **Mac Mini CLI Reference**: https://devcenter.mac-mini.com/articles/mac-mini-cli-commands
+- **PostgreSQL on Mac Mini**: https://devcenter.mac-mini.com/articles/mac-mini-postgresql
+- **Mac Mini Scheduler**: https://devcenter.mac-mini.com/articles/scheduler
 - **Buildpacks**: https://devcenter.mac-mini.com/articles/buildpacks
 
 ---

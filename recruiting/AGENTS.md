@@ -14,7 +14,7 @@
 |----------|-------|
 | **Local Path** | `/Users/shulmeister/Documents/GitHub/colorado-careassist-portal/dashboards/recruitment` |
 | **GitHub** | `https://github.com/shulmeister/recruiter-dashboard` |
-| **Mac Mini (Local) App** | `caregiver-lead-tracker` |
+| **Mac Mini App** | `caregiver-lead-tracker` |
 | **Live URL** | `https://caregiver-lead-tracker-9d0e6a8c7c20.mac-miniapp.com` |
 | **Tech Stack** | Flask, SQLAlchemy, PostgreSQL |
 
@@ -67,7 +67,7 @@ Click "Pull Leads" button in the Facebook Campaign Management card.
 ```bash
 python fetch_facebook_leads.py
 ```
-Add to Mac Mini (Local) Scheduler for automatic daily sync.
+Add to Mac Mini Scheduler for automatic daily sync.
 
 ---
 

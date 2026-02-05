@@ -1,7 +1,7 @@
 # VA RFS Converter - Project Summary
 
 **Status:** ✅ **PRODUCTION READY - ALL FEATURES WORKING**
-**Version:** 1.0 (Mac Mini (Local) v524)
+**Version:** 1.0 (Mac Mini v524)
 **Completed:** January 27, 2026
 **Developer:** Jason Shulman with Claude Sonnet 4.5
 
@@ -154,7 +154,7 @@ The **VA RFS Converter** is an AI-powered tool that converts referral documents 
 
 ## 🔑 Environment Variables
 
-Required in Mac Mini (Local):
+Required in Mac Mini:
 ```bash
 GEMINI_API_KEY=<your-gemini-api-key>
 # OR
@@ -178,7 +178,7 @@ git push mac-mini main
 mac-mini logs --tail --app careassist-unified
 ```
 
-### Current Mac Mini (Local) Version
+### Current Mac Mini Version
 **v524** (production)
 
 ---
@@ -342,7 +342,7 @@ All requested features implemented and working:
 - ✅ Automatic filename generation
 - ✅ Portal integration
 - ✅ Mobile responsive
-- ✅ Production deployed (Mac Mini (Local) v524)
+- ✅ Production deployed (Mac Mini v524)
 - ✅ Fully documented
 
 **🎉 Ready for production use!**
@@ -351,4 +351,4 @@ All requested features implemented and working:
 
 **Last Updated:** January 27, 2026
 **Git Commit:** 5bb7fb6
-**Mac Mini (Local) Version:** v524
+**Mac Mini Version:** v524

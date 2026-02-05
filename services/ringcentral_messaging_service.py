@@ -20,11 +20,14 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# RingCentral API Configuration
-RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID", "cqaJllTcFyndtgsussicsd")
+# RingCentral API Configuration - NO HARDCODED DEFAULTS
+RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID")
 RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET")
 RINGCENTRAL_JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN")
 RINGCENTRAL_SERVER = os.getenv("RINGCENTRAL_SERVER_URL", "https://platform.ringcentral.com")
+
+if not RINGCENTRAL_CLIENT_ID:
+    logger.warning("⚠️ RINGCENTRAL_CLIENT_ID not set - RC features will be disabled")
 
 # Target chat name to scan
 TARGET_CHAT_NAME = os.getenv("RINGCENTRAL_TARGET_CHAT", "New Scheduling")
@@ -123,6 +126,27 @@ class RingCentralMessagingService:
 
             if response.status_code in (200, 201):
                 return response.json()
+            elif response.status_code == 401:
+                # Token was revoked/expired — clear cache and retry once with fresh token
+                logger.warning("RingCentral 401 — clearing cached token and retrying")
+                self.access_token = None
+                self.token_expires_at = None
+                token = self._get_access_token()
+                if not token:
+                    return None
+                headers["Authorization"] = f"Bearer {token}"
+                if method.upper() == "GET":
+                    retry_resp = requests.get(url, headers=headers, params=params, timeout=30)
+                elif method.upper() == "POST":
+                    retry_resp = requests.post(url, headers=headers, params=params, json=data, timeout=30)
+                elif method.upper() == "PUT":
+                    retry_resp = requests.put(url, headers=headers, params=params, json=data, timeout=30)
+                else:
+                    return None
+                if retry_resp.status_code in (200, 201):
+                    return retry_resp.json()
+                logger.error(f"RingCentral API error after retry: {retry_resp.status_code} - {retry_resp.text[:500]}")
+                return None
             elif response.status_code == 429:
                 retry_after = response.headers.get("Retry-After", "unknown")
                 logger.error(f"RC API Rate Limit (429). Retry after: {retry_after}s")

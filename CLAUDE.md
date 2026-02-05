@@ -1,196 +1,208 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 2, 2026
-**Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (No Mac Mini (Local), No Mac Mini)
+**Last Updated:** February 4, 2026
+**Status:** ✅ FULLY SELF-HOSTED ON MAC MINI
 
 ---
 
-## CRITICAL: Current Infrastructure
+## PROJECT OVERVIEW
 
-**EVERYTHING runs on Jason's Mac Mini.** No cloud hosting. No Mac Mini (Local). No Mac Mini.
+This is the **unified platform** for Colorado Care Assist, containing:
+
+| Component | Description | Location |
+|-----------|-------------|----------|
+| **Portal** | Main web dashboard with 26+ tiles | `/portal/` |
+| **Gigi AI** | Chief of Staff AI (voice, SMS, Telegram, scheduling) | `/gigi/` |
+| **Sales Dashboard** | CRM for sales tracking | `/sales/` |
+| **Recruiting** | Caregiver recruiting dashboard | `/recruiting/` |
+| **PowderPulse** | Ski weather app (Vue.js) | `/powderpulse/` |
+
+### Related Repositories
+
+| Repo | Port | URL | Description |
+|------|------|-----|-------------|
+| `careassist-unified` | 8765 | portal.coloradocareassist.com | This repo - unified platform |
+| `coloradocareassist` | 3000 | coloradocareassist.com | Marketing website (Next.js) |
+| `hesedhomecare` | 3001 | hesedhomecare.org | Hesed website (Next.js) |
+| `clawd` | - | - | Gigi config, elite teams, knowledge base |
+
+---
+
+## GIGI - THE AI CHIEF OF STAFF
+
+**Gigi is ONE unified AI** operating across multiple channels:
+
+| Channel | Technology | Purpose |
+|---------|------------|---------|
+| **Telegram** (@Shulmeisterbot) | `telegram_bot.py` | Personal assistant for Jason |
+| **Voice** (307-459-8220) | Retell AI | Phone calls, caller ID, transfers |
+| **SMS** (307-459-8220) | RingCentral + Gemini | Text message replies |
+| **Team Chat** | RingCentral Glip | Monitors "New Scheduling" chat |
+| **Portal** | Web UI | Dashboard, tools, analytics |
+
+### Gigi's Core Capabilities
+- **WellSky Integration**: Full CRUD on Patients, Practitioners, Appointments, Encounters, DocumentReferences, Subscriptions, ProfileTags, and RelatedPersons. Clock in/out, task logs, shift search, and webhook event subscriptions. See `docs/WELLSKY_HOME_CONNECT_API_REFERENCE.md` for complete endpoint reference.
+- **RingCentral**: SMS, voice, team messaging
+- **Google Workspace**: Calendar, email (read/write)
+- **Auto-Documentation**: Syncs RC messages → WellSky client notes
+- **After-Hours Coverage**: Autonomous SMS/voice handling
+
+### Gigi's Constitution (Laws)
+See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
+
+---
+
+## INFRASTRUCTURE
 
 ### Services Running on Mac Mini
 
-| Service | Port | URL | LaunchAgent |
-|---------|------|-----|-------------|
-| Portal (gigi-unified) | 8765 | portal.coloradocareassist.com | com.coloradocareassist.gigi-unified |
-| Main Website | 3000 | coloradocareassist.com | com.coloradocareassist.website |
-| Hesed Home Care | 3001 | hesedhomecare.org | com.coloradocareassist.hesedhomecare |
-| Elite Trading | 3002 | elitetrading.coloradocareassist.com | com.coloradocareassist.elite-trading |
-| PowderPulse | 3003 | powderpulse.coloradocareassist.com | com.coloradocareassist.powderpulse |
-| Telegram Bot (@Shulmeisterbot) | - | - | com.coloradocareassist.telegram-bot |
-| Cloudflare Tunnel | - | - | com.cloudflare.cloudflared |
-| PostgreSQL 17 | 5432 | localhost | homebrew.mxcl.postgresql@17 |
+| Service | Port | LaunchAgent |
+|---------|------|-------------|
+| Portal (gigi-unified) | 8765 | com.coloradocareassist.gigi-unified |
+| Main Website | 3000 | com.coloradocareassist.website |
+| Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare |
+| Elite Trading | 3002 | com.coloradocareassist.elite-trading |
+| PowderPulse | 3003 | com.coloradocareassist.powderpulse |
+| Telegram Bot | - | com.coloradocareassist.telegram-bot |
+| Health Monitor | - | com.coloradocareassist.health-monitor |
+| Cloudflare Tunnel | - | com.cloudflare.cloudflared |
+| PostgreSQL 17 | 5432 | homebrew.mxcl.postgresql@17 |
 
 ### Database
-
-- **Local PostgreSQL 17** running on localhost:5432
-- **Database:** `careassist`
-- **User:** `careassist` / Password: `careassist2026`
 - **Connection:** `postgresql://careassist:careassist2026@localhost:5432/careassist`
-- **82 tables** migrated from Mac Mini (Local)
+- **82 tables** for portal, sales, recruiting, WellSky cache
 
 ### Remote Access
-
-- **Tailscale:** Mac Mini is `100.124.88.105` (jasons-mac-mini)
+- **Tailscale:** `100.124.88.105` (jasons-mac-mini)
 - **SSH:** `ssh shulmeister@100.124.88.105`
-- From anywhere, access services via Tailscale IP
 
-### Backups
-
-- **Daily at 3:00 AM** → Google Drive (jason@coloradocareassist.com)
-- **Location:** `gdrive:MacMini-Backups`
-- **Script:** `/Users/shulmeister/scripts/backup-to-gdrive.sh`
-- **LaunchAgent:** `com.coloradocareassist.backup`
-- **Includes:** PostgreSQL dump, configs, LaunchAgents
-
-### Cloudflare Tunnel
-
-- **Tunnel ID:** `484767a1-bb21-4798-a576-e3834a55ba66`
-- **Config:** `~/.cloudflared/config.yml`
-- All domains route through this tunnel to localhost ports
+### Health Monitoring
+- **Script:** `scripts/health-monitor.sh` (runs every 5 minutes)
+- **Status:** `~/logs/health-status.json`
+- **Alerts:** Telegram notifications for failures
+- **Auto-Restart:** Failed services are automatically restarted
 
 ---
 
-## File Locations
+## API CREDENTIALS
+
+All credentials are in `~/.gigi-env` and duplicated in LaunchAgent plists.
+
+| API | Env Vars | Purpose |
+|-----|----------|---------|
+| **Anthropic** | `ANTHROPIC_API_KEY` | Claude AI for Gigi |
+| **RingCentral** | `RINGCENTRAL_CLIENT_ID`, `_SECRET`, `_JWT_TOKEN` | SMS, voice, team chat |
+| **WellSky** | `WELLSKY_CLIENT_ID`, `_SECRET`, `_AGENCY_ID` | Client/caregiver data |
+| **Google (Portal)** | `GOOGLE_CLIENT_ID`, `_SECRET` | OAuth login |
+| **Google (Work)** | `GOOGLE_WORK_CLIENT_ID`, `_SECRET`, `_REFRESH_TOKEN` | Calendar/email |
+| **Retell** | `RETELL_API_KEY` | Voice AI |
+| **Gemini** | `GEMINI_API_KEY` | SMS responses |
+| **Brevo** | `BREVO_API_KEY` | Email marketing |
+
+**IMPORTANT:** Never hardcode credentials. Always use `os.getenv()`.
+
+---
+
+## FILE STRUCTURE
 
 ```
-~/mac-mini-apps/
-├── careassist-unified/     # Portal + Gigi (Python/FastAPI) → port 8765
-├── coloradocareassist/     # Main website (Next.js) → port 3000
-├── hesedhomecare/          # Hesed website (Next.js) → port 3001
-├── elite-trading-mcp/      # Elite Trading (Python/FastAPI) → port 3002
-├── clawd/                  # Clawd gateway (Node.js) → port 8080
-└── gigi-backend-cca/       # Legacy (not used)
-
-~/Library/LaunchAgents/     # All service plists
-~/logs/                     # Service logs
-~/.gigi-env                 # Environment variables
-~/.cloudflared/             # Cloudflare tunnel config
-~/backups/                  # Local backup files
-~/scripts/                  # Utility scripts
+careassist-unified/
+├── CLAUDE.md              # This file - main reference
+├── unified_app.py         # Entry point - mounts all sub-apps
+├── portal/                # Portal web app (FastAPI)
+│   └── portal_app.py      # Main portal routes
+├── gigi/                  # Gigi AI assistant
+│   ├── telegram_bot.py    # Telegram interface
+│   ├── ringcentral_bot.py # RC chat/SMS monitoring
+│   ├── main.py            # Retell voice webhooks
+│   └── CONSTITUTION.md    # Gigi's operating laws
+├── sales/                 # Sales CRM dashboard
+├── recruiting/            # Recruiting dashboard (Flask)
+├── services/              # Shared services
+│   ├── wellsky_service.py # WellSky API integration
+│   └── ringcentral_messaging_service.py
+├── scripts/
+│   ├── health-monitor.sh  # Service health monitoring
+│   └── security-audit.sh  # Security checks
+└── docs/                  # Additional documentation
 ```
 
 ---
 
-## Common Commands
+## COMMON COMMANDS
 
 ```bash
 # Check all services
 launchctl list | grep -E "coloradocareassist|cloudflare|postgres"
 
-# Check ports
-lsof -i :3000,3001,3002,3003,8080,8765 -P | grep LISTEN
+# Check health status
+cat ~/logs/health-status.json
 
 # Restart a service
-launchctl unload ~/Library/LaunchAgents/com.coloradocareassist.<service>.plist
-launchctl load ~/Library/LaunchAgents/com.coloradocareassist.<service>.plist
+launchctl bootout gui/501/com.coloradocareassist.<service>
+launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.coloradocareassist.<service>.plist
 
 # View logs
 tail -f ~/logs/gigi-unified.log
-tail -f ~/logs/gigi-unified-error.log
+tail -f ~/logs/telegram-bot.log
 
 # Database access
 /opt/homebrew/opt/postgresql@17/bin/psql -d careassist
 
-# Manual backup
-/Users/shulmeister/scripts/backup-to-gdrive.sh
-
-# Test sites
+# Test health endpoints
+curl -s http://localhost:8765/health
 curl -s https://portal.coloradocareassist.com/health
-curl -s https://coloradocareassist.com
-curl -s https://elitetrading.coloradocareassist.com/health
 ```
 
 ---
 
-## Environment Variables
+## ELITE AGENT TEAMS
 
-All env vars are in `~/.gigi-env` and duplicated in each LaunchAgent plist.
+Activate teams by saying "@team-name" or "team-name team":
 
-Key variables:
-- `DATABASE_URL` - Local PostgreSQL connection
-- `GOOGLE_CLIENT_ID/SECRET` - OAuth for portal login
-- `ANTHROPIC_API_KEY` - Claude API
-- `GEMINI_API_KEY` - Google AI
-- `RETELL_API_KEY` - Voice calls
-- `RINGCENTRAL_*` - Phone/SMS
-
----
-
-## Elite Agent Teams
-
-**Quick triggers:**
-- `@tech-team` — Engineering (TypeScript, Next.js, infra)
-- `@marketing-team` — SEO, ads, email, analytics
-- `@finance-team` — Billing, payroll, cash flow
-- `@ops-team` — Scheduling, compliance, HR, client success
+| Team | Focus | Trigger |
+|------|-------|---------|
+| **Tech** | TypeScript, Python, infrastructure | `@tech-team` |
+| **Marketing** | SEO, ads, email, analytics | `@marketing-team` |
+| **Finance** | Billing, payroll, cash flow | `@finance-team` |
+| **Ops** | Scheduling, compliance, HR | `@ops-team` |
 
 ---
 
-## If Something Breaks
+## IF SOMETHING BREAKS
 
-1. **Service not responding:** Check `launchctl list | grep coloradocareassist`
-2. **Database error:** Verify PostgreSQL: `/opt/homebrew/bin/brew services list | grep postgres`
-3. **Sites not loading:** Check Cloudflare tunnel: `launchctl list | grep cloudflare`
-4. **Need to restore:** Backups are in `gdrive:MacMini-Backups`
+1. **Check health status:** `cat ~/logs/health-status.json`
+2. **Check service status:** `launchctl list | grep coloradocareassist`
+3. **Check logs:** `tail -50 ~/logs/<service>-error.log`
+4. **Restart service:** Use launchctl bootout/bootstrap
+5. **Check alerts:** `tail ~/logs/health-alerts.log`
 
 ---
 
-## Working Remotely with Claude
+## DEVELOPMENT WORKFLOW
 
-### GitHub Repository
-
-- **Repo:** `shulmeister/colorado-careassist-portal` (private)
-- **Branch:** `main`
-- **Always pull before starting work:** `git pull origin main`
-
-### Before Starting Any Session
-
+### Before Making Changes
 ```bash
-# 1. Pull latest changes
 git pull origin main
-
-# 2. Check service status (if on Mac Mini via Tailscale)
-curl -s http://100.124.88.105:8765/health
+curl -s http://localhost:8765/health
 ```
 
 ### After Making Changes
-
 ```bash
-# 1. Stage specific files (never use git add -A)
 git add <specific-files>
-
-# 2. Commit with clear message
 git commit -m "fix(component): description"
-
-# 3. Push immediately to avoid conflicts
 git push origin main
 ```
 
-### Remote Access to Mac Mini
-
-From any device with Tailscale:
-- **SSH:** `ssh shulmeister@100.124.88.105`
-- **Portal:** `http://100.124.88.105:8765`
-- **Health:** `curl http://100.124.88.105:8765/health`
-
-### Key Points for Claude
-
-1. **This is a self-hosted setup** - Services run on Jason's Mac Mini, not cloud
-2. **Database is local** - PostgreSQL on the Mac Mini (not accessible remotely without SSH tunnel)
-3. **Git is the source of truth** - Always pull before changes, push after
-4. **Check GIGI_STATE.md** for current bot/service status
+### Restart Services After Code Changes
+```bash
+launchctl bootout gui/501/com.coloradocareassist.gigi-unified
+launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist
+```
 
 ---
 
-## History
+## HISTORY
 
-- **Feb 2, 2026:** Migrated everything from Mac Mini (Local) + Mac Mini to Mac Mini
-- All Mac Mini (Local) apps deleted
-- Mac Mini local-server (clawdbot) decommissioned
-- Local PostgreSQL 17 with all data migrated
-- Cloudflare tunnel for secure access
-- Tailscale for remote management
-- Daily backups to Google Drive
-- **Feb 2, 2026:** Fixed RingCentral bot import issue (services module cache restoration)
+- **Feb 4, 2026:** Consolidated API credentials, created health monitoring system, Claude Code integration for Gigi
+- **Feb 2, 2026:** Completed Mac Mini self-hosted setup with local PostgreSQL, Cloudflare tunnel, Tailscale

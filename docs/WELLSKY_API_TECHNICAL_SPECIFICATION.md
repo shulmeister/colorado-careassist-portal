@@ -65,7 +65,7 @@ Beyond AI scheduling, the WellSky API powers our unified operations portal acros
 **Backend Framework:** FastAPI (Python 3.11+)
 **Database:** PostgreSQL (separate databases for Sales and Recruiting)
 **Authentication:** OAuth 2.0 with WellSky API credentials
-**Deployment:** Mac Mini (Local) (production) with unified portal architecture
+**Deployment:** Mac Mini (production) with unified portal architecture
 
 ### 1.2 Application Structure
 
@@ -715,7 +715,7 @@ Analyze by Recruiting Source → Optimize sourcing strategy
 
 **Production Security:**
 ```bash
-# Environment variables set in Mac Mini (Local)
+# Environment variables set in Mac Mini
 mac-mini config:set WELLSKY_API_KEY="***" --app careassist-unified
 mac-mini config:set WELLSKY_API_SECRET="***" --app careassist-unified
 mac-mini config:set WELLSKY_AGENCY_ID="***" --app careassist-unified

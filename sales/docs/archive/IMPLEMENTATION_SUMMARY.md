@@ -241,7 +241,7 @@ DELETE /api/deal-tasks/{id}
 3. Test with a call
 
 ### Gmail Background Sync (Optional):
-Add to Mac Mini (Local) Scheduler or cron:
+Add to Mac Mini Scheduler or cron:
 ```bash
 python -c "from gmail_activity_sync import sync_gmail_activities_job; sync_gmail_activities_job()"
 ```

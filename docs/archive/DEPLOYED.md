@@ -5,14 +5,14 @@
 **✅ DEPLOYED AND RUNNING**
 
 - **App URL**: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com
-- **Mac Mini (Local) App**: `portal-coloradocareassist`
+- **Mac Mini App**: `portal-coloradocareassist`
 - **Status**: Live and running
 
 ## What Was Done
 
 1. ✅ Environment variables configured
 2. ✅ PostgreSQL database added
-3. ✅ App deployed to Mac Mini (Local)
+3. ✅ App deployed to Mac Mini
 4. ✅ Database initialized with default tools
 5. ✅ Favicon route fixed
 

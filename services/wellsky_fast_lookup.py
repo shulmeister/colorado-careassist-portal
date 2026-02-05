@@ -56,26 +56,13 @@ class WellSkyFastLookup:
         Returns:
             Dict or None
         """
-        # Hardcoded Admin/Manager Check
-        clean_phone = phone_number.replace("+", "").replace("-", "").replace(" ", "")[-10:]
-        if clean_phone == "6039971495":
-            return {
-                'type': 'admin',
-                'id': 'admin_jason',
-                'name': 'Jason',
-                'first_name': 'Jason',
-                'last_name': 'Shulman',
-                'role': 'Owner',
-                'source': 'Hardcoded'
-            }
-
         try:
             conn = self._get_db_connection()
             cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-            # Use the fast SQL function
+            # Use the fast SQL function (checks staff, practitioners, patients, family)
             cursor.execute(
-                "SELECT * FROM identify_caller(%s)",
+                "SELECT * FROM identify_caller(%s::text)",
                 (phone_number,)
             )
 
@@ -83,12 +70,24 @@ class WellSkyFastLookup:
             cursor.close()
 
             if result:
-                # Found in cache - get full details
                 caller_type = result['caller_type']
                 caller_id = result['caller_id']
+                caller_name = result['caller_name']
 
-                if caller_type == 'practitioner':
+                if caller_type == 'staff':
+                    return {
+                        'type': 'staff',
+                        'id': caller_id,
+                        'name': caller_name.split()[0] if caller_name else '',
+                        'first_name': caller_name.split()[0] if caller_name else '',
+                        'full_name': caller_name,
+                        'role': result.get('caller_status', ''),
+                        'source': 'database'
+                    }
+                elif caller_type == 'practitioner':
                     return self._get_cached_practitioner(caller_id)
+                elif caller_type == 'family':
+                    return self._get_cached_family_contact(caller_id)
                 else:
                     return self._get_cached_patient(caller_id)
 
@@ -149,6 +148,36 @@ class WellSkyFastLookup:
         cursor.close()
 
         return dict(result) if result else None
+
+    def _get_cached_family_contact(self, contact_id: str) -> Dict[str, Any]:
+        """Get full family/emergency contact details from cache"""
+        conn = self._get_db_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+
+        cursor.execute(
+            """
+            SELECT
+                'family' as type,
+                rp.id, rp.first_name, rp.last_name, rp.full_name,
+                rp.phone, rp.home_phone, rp.work_phone, rp.email,
+                rp.relationship, rp.is_emergency_contact,
+                rp.is_primary_contact, rp.patient_id,
+                p.full_name as client_name
+            FROM cached_related_persons rp
+            LEFT JOIN cached_patients p ON rp.patient_id = p.id
+            WHERE rp.id = %s
+            """,
+            (contact_id,)
+        )
+
+        result = cursor.fetchone()
+        cursor.close()
+
+        if result:
+            d = dict(result)
+            d['name'] = d.get('first_name', '')
+            return d
+        return None
 
     def _api_fallback_identify(self, phone_number: str) -> Optional[Dict[str, Any]]:
         """

@@ -43,8 +43,8 @@ def va_plan_of_care():
 
 Then access at: `http://localhost:5000/va-plan-of-care`
 
-### Option 3: Deploy to Mac Mini (Local)
-The file is already in the `static/` directory and will be deployed automatically with your Mac Mini (Local) app.
+### Option 3: Deploy to Mac Mini
+The file is already in the `static/` directory and will be deployed automatically with your Mac Mini app.
 
 Access at: `https://careassist-unified-0a11ddb45ac0.mac-miniapp.com/va-plan-of-care.html`
 

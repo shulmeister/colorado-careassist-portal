@@ -44,9 +44,9 @@ If GoFormz doesn't support webhooks, we can run a scheduled sync script that che
 mac-mini run "python3 sync_goformz_to_brevo.py" -a careassist-tracker
 ```
 
-**Scheduled Sync (Mac Mini (Local) Scheduler):**
-1. Go to Mac Mini (Local) Dashboard → careassist-tracker → **Resources**
-2. Add **Mac Mini (Local) Scheduler** addon
+**Scheduled Sync (Mac Mini Scheduler):**
+1. Go to Mac Mini Dashboard → careassist-tracker → **Resources**
+2. Add **Mac Mini Scheduler** addon
 3. Create a new job:
    - **Command**: `python3 sync_goformz_to_brevo.py`
    - **Frequency**: Every 10 minutes (or hourly)
@@ -102,7 +102,7 @@ If a field isn't found, the script will try common variations.
 ## Troubleshooting
 
 ### "GoFormz not configured"
-- Check that `GOFORMZ_CLIENT_ID` and `GOFORMZ_CLIENT_SECRET` are set on Mac Mini (Local):
+- Check that `GOFORMZ_CLIENT_ID` and `GOFORMZ_CLIENT_SECRET` are set on Mac Mini:
   ```bash
   mac-mini config -a careassist-tracker | grep GOFORMZ
   ```

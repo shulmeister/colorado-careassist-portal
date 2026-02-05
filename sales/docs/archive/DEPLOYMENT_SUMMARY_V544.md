@@ -81,12 +81,12 @@
 ### Email Integration ✅
 - **Google Workspace Admin SDK Reports API** (most accurate)
 - Matches Admin Console reporting
-- Syncs every hour via Mac Mini (Local) Scheduler
+- Syncs every hour via Mac Mini Scheduler
 - Tracks: Maryssa & Jacob sent emails
 
 ### Call Integration ✅
 - **RingCentral call log polling**
-- Syncs every hour via Mac Mini (Local) Scheduler
+- Syncs every hour via Mac Mini Scheduler
 - Logs calls as activities
 - Matches to contacts/deals when possible
 
@@ -123,7 +123,7 @@
 ### 1. MyWay Visits May Not Be Saving Properly
 **Symptom:** Nov 25 visits uploaded but don't appear in Visits tab
 **Status:** Error handling added, needs testing
-**Next Step:** Check Mac Mini (Local) logs for errors during upload
+**Next Step:** Check Mac Mini logs for errors during upload
 
 ### 2. Company Filters Not Working
 **Symptom:** Left sidebar filters on Companies page don't work
@@ -176,7 +176,7 @@
 - `RINGCENTRAL_JWT_TOKEN` ✅
 - `RINGCENTRAL_SERVER_URL` ✅
 
-### Mac Mini (Local) Scheduler Jobs:
+### Mac Mini Scheduler Jobs:
 - ✅ Gmail sync: Every hour
 - ✅ RingCentral sync: Every hour
 
@@ -205,7 +205,7 @@
 ## 📝 **NEXT STEPS:**
 
 1. **Test MyWay visit upload** - verify visits appear in Visits tab
-2. **Check Mac Mini (Local) logs** if visits still not saving
+2. **Check Mac Mini logs** if visits still not saving
 3. **Implement company filters** (if needed)
 4. **Add company logos** (nice-to-have)
 5. **Monitor email sync** (hourly job should update counts to match Admin Console)
@@ -225,15 +225,15 @@
 - Python 3.11
 - FastAPI
 - SQLAlchemy ORM
-- PostgreSQL (Mac Mini (Local) Postgres)
+- PostgreSQL (Mac Mini Postgres)
 - Pytesseract + RapidOCR + EasyOCR
 - OpenAI API (company name cleanup)
 - Google Workspace Admin SDK
 - RingCentral API
 
 ### Infrastructure:
-- Mac Mini (Local) (web dyno)
-- Mac Mini (Local) Scheduler (hourly jobs)
+- Mac Mini (web dyno)
+- Mac Mini Scheduler (hourly jobs)
 - GitHub (version control)
 
 ---

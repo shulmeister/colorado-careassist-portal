@@ -9,7 +9,7 @@
 
 ### Required Environment Variables
 
-On Mac Mini (Local) (careassist-unified app):
+On Mac Mini (careassist-unified app):
 
 ```bash
 # Gemini API Key (required for AI extraction)
@@ -48,7 +48,7 @@ uvicorn portal.portal_app:app --reload --port 8000
 # Test at: http://localhost:8000/va-plan-of-care
 ```
 
-### 2. Deploy to Mac Mini (Local)
+### 2. Deploy to Mac Mini
 
 ```bash
 cd ~/colorado-careassist-portal
@@ -116,7 +116,7 @@ INSERT INTO portal_tools (
 );
 ```
 
-**Option C: Mac Mini (Local) CLI**
+**Option C: Mac Mini CLI**
 
 ```bash
 mac-mini run python add_va_tile.py -a careassist-unified
@@ -210,7 +210,7 @@ git log --oneline -10
 git revert <commit-hash>
 git push mac-mini main
 
-# OR use Mac Mini (Local) rollback
+# OR use Mac Mini rollback
 mac-mini releases -a careassist-unified
 mac-mini rollback v<number> -a careassist-unified
 ```
@@ -301,7 +301,7 @@ The tool processes:
 ```bash
 # NEVER commit API keys to git
 # NEVER log API keys
-# Store only in Mac Mini (Local) config vars
+# Store only in Mac Mini config vars
 ```
 
 ---
@@ -395,7 +395,7 @@ Before marking deployment as successful:
 - Check if logged into portal
 
 ### Level 2: Technical Issues
-- Check Mac Mini (Local) logs
+- Check Mac Mini logs
 - Verify Gemini API status
 - Test locally to reproduce
 

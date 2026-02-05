@@ -24,7 +24,7 @@ Gigi has migrated from the cloud to Jason's **Mac Mini** for lower latency and e
 ┌─────────────────────────────────────────────────────────────────┐
 │                         INFRASTRUCTURE                           │
 ├─────────────────────────────────────────────────────────────────┤
-│  Hardware: Mac Mini (Local)                                      │
+│  Hardware: Mac Mini                                      │
 │  Service Manager: macOS launchd (LaunchAgents)                   │
 │  Database: Local PostgreSQL 17 + SQLite                          │
 │  Security: 1Password CLI (Service Account Mode)                  │

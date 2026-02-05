@@ -31,7 +31,7 @@ If the current client is causing issues, create a new one:
 5. Authorized redirect URIs: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 6. Save
 7. Copy the new Client ID and Client Secret
-8. Update Mac Mini (Local):
+8. Update Mac Mini:
    ```bash
    mac-mini config:set GOOGLE_CLIENT_ID=new_client_id --app portal-coloradocareassist
    mac-mini config:set GOOGLE_CLIENT_SECRET=new_client_secret --app portal-coloradocareassist

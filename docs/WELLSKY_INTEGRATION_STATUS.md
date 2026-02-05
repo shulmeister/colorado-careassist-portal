@@ -134,7 +134,7 @@ new_lead = ws.create_patient(
 
 ### Production Environment Variables
 
-Add to `.env` (or Mac Mini (Local) config):
+Add to `.env` (or Mac Mini config):
 
 ```bash
 # WellSky Home Connect API (OAuth 2.0)
@@ -421,10 +421,10 @@ Action Required: Call client back ASAP
 
 ### After Testing
 
-4. **Deploy to Mac Mini (Local) Test Environment**
-   - Add env vars to Mac Mini (Local)
+4. **Deploy to Mac Mini Test Environment**
+   - Add env vars to Mac Mini
    - Deploy current main branch
-   - Test from Mac Mini (Local) environment
+   - Test from Mac Mini environment
 
 5. **Integrate with Gigi Call Flow**
    - Add WellSky lookups to `gigi/main.py`

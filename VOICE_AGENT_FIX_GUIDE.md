@@ -182,7 +182,7 @@ cd ~/clawd/careassist-unified
 git add gigi/enhanced_webhook.py gigi/apple_contacts_lookup.py gigi/retell_tools_schema.json
 git commit -m "Fix voice agent: Add caller ID, transfer, weather, and message taking"
 
-# 2. Deploy to Mac Mini (Local)
+# 2. Deploy to Mac Mini
 git push mac-mini main
 
 # 3. Sync tools with Retell AI
@@ -243,7 +243,7 @@ The Apple Contacts lookup is currently a placeholder. To complete:
 
 ## Configuration
 
-### Environment Variables (Mac Mini (Local))
+### Environment Variables (Mac Mini)
 ```bash
 # Already configured:
 RETELL_API_KEY=key_5d0bc4168659a5df305b8ac2a7fd
@@ -313,7 +313,7 @@ cd gigi && python3 sync_retell.py && cd ..
 ## Next Steps
 
 1. Complete manual code integration in main.py
-2. Deploy to Mac Mini (Local)
+2. Deploy to Mac Mini
 3. Test all scenarios
 4. Connect Mac node for Apple Contacts
 5. Monitor initial calls for issues

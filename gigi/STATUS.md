@@ -17,7 +17,7 @@
 
 ### ✅ Working Infrastructure
 
-- Retell AI voice agent (deployed on Mac Mini (Local))
+- Retell AI voice agent (deployed on Mac Mini)
 - 18-node conversation flow
 - Financial data tools (stocks, crypto via Alpha Vantage)
 - **WellSky integration** (FULLY OPERATIONAL):
@@ -63,7 +63,7 @@
 
 ### Immediate Next Steps (This Week)
 
-1. **Set up Mac Mini (Local) Scheduler for Daily Decay**
+1. **Set up Mac Mini Scheduler for Daily Decay**
    - Schedule `python gigi/run_decay.py` to run daily at 3am
    - Ensures memory confidence decays appropriately
 
@@ -228,7 +228,7 @@ python memory_cli.py audit <memory_id>
 
 **Gigi Webhooks & Integration** ✅
 - Fixed Python syntax errors preventing app mounting (v584)
-- Added BeeTexting API credentials to Mac Mini (Local) (v586)
+- Added BeeTexting API credentials to Mac Mini (v586)
 - Configured RingCentral SMS webhook (ID: 23dd2eb7..., expires 2036)
 - Configured RingCentral Team Messaging webhook (ID: 0f1536f6..., expires Feb 6)
 - Verified Gigi extension 111 and login as "Gigi AI"
@@ -236,7 +236,7 @@ python memory_cli.py audit <memory_id>
 ### What's Working:
 - RingCentral SMS → Gigi (texts from 719-428-3999, 303-757-1777)
 - RingCentral Team Messaging → Gigi (Schedulers chat, DMs to Jason ext 101 / Cynthia ext 105)
-- All critical API credentials in Mac Mini (Local) (WellSky, RingCentral, BeeTexting, Retell, OpenAI)
+- All critical API credentials in Mac Mini (WellSky, RingCentral, BeeTexting, Retell, OpenAI)
 - Mode: `shadow` (logs only, no execution - safe testing)
 - Operations SMS: ENABLED (notifications to on-call manager)
 
@@ -246,7 +246,7 @@ python memory_cli.py audit <memory_id>
   - Now captures SMS to ALL company numbers: 719-428-3999, 303-757-1777, 307-459-8220
 - **Team Messaging webhook** - Auto-renewal script created (`gigi/renew_team_webhook.py`)
   - RingCentral limits Team Messaging webhooks to 7 days max
-  - Add to Mac Mini (Local) Scheduler: Daily 3am run `python gigi/renew_team_webhook.py`
+  - Add to Mac Mini Scheduler: Daily 3am run `python gigi/renew_team_webhook.py`
 
 ### WellSky Task Integration ✅ (NEW - Autonomous Mode)
 - **Call-out workflow** now creates WellSky admin task for finding replacement
@@ -327,7 +327,7 @@ Launch multiple specialized agents in parallel:
 
 ### Immediate Tasks:
 
-1. **Set up Mac Mini (Local) Scheduler**
+1. **Set up Mac Mini Scheduler**
    - Daily memory decay at 3am: `python gigi/run_decay.py`
 
 2. **Start using memory capture**

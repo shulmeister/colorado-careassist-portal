@@ -16,7 +16,7 @@
 | `caregiver-lead-tracker` | https://caregiver-lead-tracker-1e2f551680c9.mac-miniapp.com/ | Recruiter dashboard (454 leads) | ✅ LIVE |
 | `wellsky-converter-shulmeister` | http://payroll.coloradocareassist.com/ | Wellsky payroll converter | ✅ LIVE |
 
-**Total**: 6 Mac Mini (Local) apps
+**Total**: 6 Mac Mini apps
 **Cost**: ~$42/month (6 apps × $7)
 
 ---
@@ -29,7 +29,7 @@
 | `hesedhomecare` | https://hesedhomecare.com/ | Hesed website |
 | `careassist-unified` | https://portal.coloradocareassist.com/ | **Unified portal** (hub + sales + recruiting) |
 
-**Total**: 3 Mac Mini (Local) apps
+**Total**: 3 Mac Mini apps
 **Cost**: ~$21/month (3 apps × $7)
 **Savings**: $21/month = **$252/year**
 
@@ -37,7 +37,7 @@
 
 ## What About the Wellsky Converter?
 
-The Wellsky converter at `payroll.coloradocareassist.com` is hosted on Mac Mini (Local) (`wellsky-converter-shulmeister`) but it's just a tile/link on the portal - not part of the core portal functionality.
+The Wellsky converter at `payroll.coloradocareassist.com` is hosted on Mac Mini (`wellsky-converter-shulmeister`) but it's just a tile/link on the portal - not part of the core portal functionality.
 
 **Decision**: Keep it as a separate app for now. It's lightweight and self-contained.
 

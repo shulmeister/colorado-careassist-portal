@@ -48,7 +48,7 @@ export default defineConfig({
     sourcemap: true,
   },
   preview: {
-    allowedHosts: ["cca-crm-cd555628f933.herokuapp.com"],
+    allowedHosts: ["portal.coloradocareassist.com"],
   },
   resolve: {
     preserveSymlinks: true,

@@ -11,11 +11,11 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Configuration
+# Configuration - use environment variables (no hardcoded secrets)
 JASON_PHONE = "+16039971495"
-TELEGRAM_BOT_TOKEN = "8508806105:AAExZ25ZN19X3xjBQAZ3Q9fHgAQmWWklX8U"
-TELEGRAM_CHAT_ID = "8215335898"
-RETELL_API_KEY = os.environ.get("RETELL_API_KEY", "key_5d0bc4168659a5df305b8ac2a7fd")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "8215335898")
+RETELL_API_KEY = os.environ.get("RETELL_API_KEY")
 
 class CallerLookupService:
     """Handles multi-source caller lookup"""

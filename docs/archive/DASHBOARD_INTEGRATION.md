@@ -49,14 +49,14 @@ async def recruitment_dashboard_embedded(...)
 The following environment variables control the dashboard URLs:
 
 ```bash
-# Sales Dashboard (Mac Mini (Local) default)
+# Sales Dashboard (Mac Mini default)
 SALES_DASHBOARD_URL=https://dashboard-coloradocareassist-3b35b12e9d9b.mac-miniapp.com
 
-# Recruitment Dashboard (Mac Mini (Local) default)
+# Recruitment Dashboard (Mac Mini default)
 RECRUITMENT_DASHBOARD_URL=https://recruitment-coloradocareassist.mac-miniapp.com
 ```
 
-These are already configured in Mac Mini (Local) and don't require changes unless the dashboard URLs change.
+These are already configured in Mac Mini and don't require changes unless the dashboard URLs change.
 
 ## User Experience
 
@@ -99,7 +99,7 @@ Deployed to: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/`
 1. ✅ Added new routes to `portal_app.py`
 2. ✅ Created embedded dashboard templates
 3. ✅ Committed to git
-4. ✅ Deployed to Mac Mini (Local): `git push mac-mini main`
+4. ✅ Deployed to Mac Mini: `git push mac-mini main`
 5. ✅ Updated database tiles: `mac-mini run python update_dashboard_tiles.py`
 
 ## Testing
@@ -125,7 +125,7 @@ Deployed to: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/`
 
 ### If Recruitment Dashboard Doesn't Exist
 The recruitment route is ready but will show a loading state if the dashboard URL isn't available. To add it:
-1. Deploy recruitment dashboard to Mac Mini (Local)
+1. Deploy recruitment dashboard to Mac Mini
 2. Update `RECRUITMENT_DASHBOARD_URL` environment variable
 3. No code changes needed
 
@@ -133,7 +133,7 @@ The recruitment route is ready but will show a loading state if the dashboard UR
 
 ### Dashboard Not Loading
 - Check that dashboard URLs are accessible
-- Verify environment variables in Mac Mini (Local)
+- Verify environment variables in Mac Mini
 - Check browser console for CORS errors
 
 ### Authentication Issues

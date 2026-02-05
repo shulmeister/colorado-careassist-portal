@@ -91,11 +91,11 @@ The ID is between `/d/` and `/edit` → `1f0lk54-zyAnZd2Ok9KNezHgTjYeuH4zCwaLASG
 In Google Cloud Console, you'll see your project ID at the top (or in the project selector).
 It looks like: `your-project-123456`
 
-## Step 5: Set Mac Mini (Local) Environment Variables
+## Step 5: Set Mac Mini Environment Variables
 
-We need to add 4 environment variables to Mac Mini (Local):
+We need to add 4 environment variables to Mac Mini:
 
-### Option A: Via Mac Mini (Local) Dashboard
+### Option A: Via Mac Mini Dashboard
 1. Go to https://dashboard.mac-mini.com/apps/portal-coloradocareassist/settings
 2. Click "Reveal Config Vars"
 3. Add these variables:
@@ -107,7 +107,7 @@ We need to add 4 environment variables to Mac Mini (Local):
 | `GOOGLE_CLOUD_PROJECT_ID` | Your project ID from Step 4.3 |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | **Entire contents** of the JSON key file from Step 1.5 (copy and paste all of it) |
 
-### Option B: Via Mac Mini (Local) CLI
+### Option B: Via Mac Mini CLI
 ```bash
 # Set Drive folder ID
 mac-mini config:set GOOGLE_DRIVE_VOUCHER_FOLDER_ID="your-folder-id" --app portal-coloradocareassist
@@ -124,9 +124,9 @@ mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","proj
 
 ## Step 6: Set Up Automated Syncing
 
-We can use Mac Mini (Local) Scheduler to automatically sync vouchers every hour.
+We can use Mac Mini Scheduler to automatically sync vouchers every hour.
 
-### 6.1 Install Mac Mini (Local) Scheduler
+### 6.1 Install Mac Mini Scheduler
 ```bash
 mac-mini addons:create scheduler:standard --app portal-coloradocareassist
 ```
@@ -147,7 +147,7 @@ This will check for new vouchers every hour (looking back 2 hours to catch any m
 2. Click "🔄 Sync from Drive"
 3. It should find and process your two new vouchers
 
-### 7.2 Manual Test via Mac Mini (Local) CLI
+### 7.2 Manual Test via Mac Mini CLI
 ```bash
 mac-mini run python voucher_sync_service.py --app portal-coloradocareassist
 ```
@@ -198,12 +198,12 @@ For best OCR results, vouchers should:
 ### "Permission denied" errors
 - Verify service account has proper access
 - Check that APIs are enabled in Google Cloud
-- Confirm the JSON key is correctly set in Mac Mini (Local)
+- Confirm the JSON key is correctly set in Mac Mini
 
 ## Support
 
 If you encounter issues:
-1. Check Mac Mini (Local) logs: `mac-mini logs --tail --app portal-coloradocareassist`
+1. Check Mac Mini logs: `mac-mini logs --tail --app portal-coloradocareassist`
 2. Try a manual sync to see detailed error messages
 3. Verify all environment variables are set correctly
 
@@ -212,7 +212,7 @@ If you encounter issues:
 ⚠️ **Important**:
 - Keep the service account JSON key secure
 - Never commit it to git
-- Only store it in Mac Mini (Local) environment variables
+- Only store it in Mac Mini environment variables
 - The service account has limited permissions (read-only on Drive, editor on Sheets only)
 - Revoke the key immediately if it's compromised
 

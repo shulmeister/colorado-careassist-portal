@@ -81,7 +81,7 @@ If your portal has a Google Ads OAuth connection:
 
 ## Step 4: Configure Environment Variables
 
-Set these on Mac Mini (Local):
+Set these on Mac Mini:
 
 ```bash
 # Developer Token (from API Center)
@@ -164,7 +164,7 @@ If you cannot create or access a Manager Account:
 → Verify: `GOOGLE_ADS_CUSTOMER_ID=6780818726053668`
 
 ### Still seeing placeholder data
-→ Check Mac Mini (Local) logs for specific error messages
+→ Check Mac Mini logs for specific error messages
 → Verify all environment variables are set correctly
 → Ensure the Manager Account has access to the customer account
 

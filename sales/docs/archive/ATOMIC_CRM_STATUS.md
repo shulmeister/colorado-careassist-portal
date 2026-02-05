@@ -78,10 +78,10 @@
    - Both will be iframe embeds of existing functionality
 
 ### Deployment
-4. **📝 Deploy to Mac Mini (Local)**
+4. **📝 Deploy to Mac Mini**
    - Add frontend build to git
    - Update Procfile if needed
-   - Push to Mac Mini (Local)
+   - Push to Mac Mini
    - Test live
 
 ## 📊 Progress Summary
@@ -112,9 +112,9 @@ This is a **GORGEOUS, professional CRM** that:
    - Wire up Visits Tracker
    - Wire up Activity Logs
 
-3. **Deploy to Mac Mini (Local)** (15 min)
+3. **Deploy to Mac Mini** (15 min)
    - Commit frontend build
-   - Push to Mac Mini (Local)
+   - Push to Mac Mini
    - Test live
 
 **Total remaining: ~1 hour of work!**

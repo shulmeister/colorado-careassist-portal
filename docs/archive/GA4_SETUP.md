@@ -32,9 +32,9 @@
 6. Assign **Viewer** role
 7. Click **Add**
 
-## 4. Set Environment Variable on Mac Mini (Local)
+## 4. Set Environment Variable on Mac Mini
 
-### Option A: Via Mac Mini (Local) Dashboard (Easier)
+### Option A: Via Mac Mini Dashboard (Easier)
 1. Go to https://dashboard.mac-mini.com
 2. Open your app: `portal-coloradocareassist-3e1a4bb34793`
 3. Go to **Settings** tab
@@ -44,7 +44,7 @@
    - Value: Copy the ENTIRE contents of the downloaded JSON file (including the curly braces)
 6. Click **Add**
 
-### Option B: Via Mac Mini (Local) CLI
+### Option B: Via Mac Mini CLI
 ```bash
 # First, read the JSON file and escape it properly
 cat path/to/your-service-account-key.json | jq -c . > temp.json

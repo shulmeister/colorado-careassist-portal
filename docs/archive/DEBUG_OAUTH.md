@@ -2,7 +2,7 @@
 
 ## Current Configuration
 
-**Mac Mini (Local) Config:**
+**Mac Mini Config:**
 - Redirect URI: `https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback`
 - Client ID: `516104802353-sgilgrdn7ohmfapbfuucfuforgcu6air.apps.googleusercontent.com`
 
@@ -55,7 +55,7 @@ Common mistakes:
 
 ### 6. Verify App is Using Correct URI
 
-The app should be using the URI from Mac Mini (Local) config. Check:
+The app should be using the URI from Mac Mini config. Check:
 ```bash
 mac-mini config:get GOOGLE_REDIRECT_URI --app portal-coloradocareassist
 ```
@@ -79,7 +79,7 @@ https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/auth/callback
 
 4. **Try again** in incognito mode
 
-5. **Check Mac Mini (Local) logs** if still failing:
+5. **Check Mac Mini logs** if still failing:
    ```bash
    mac-mini logs --tail --app portal-coloradocareassist
    ```

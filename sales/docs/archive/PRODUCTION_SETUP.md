@@ -48,7 +48,7 @@ SHEET_ID=1rKBP_5eLgvIVprVEzOYRnyL9J3FMf9H-6SLjIvIYFgg
 
 ### **Step 3: Update Your Hosting Environment**
 
-**If using Mac Mini (Local):**
+**If using Mac Mini:**
 ```bash
 mac-mini config:set GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 mac-mini config:set GOOGLE_CLIENT_SECRET=your-client-secret

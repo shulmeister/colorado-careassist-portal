@@ -53,7 +53,7 @@ Currently configured for 2025. When 2026 starts, just update one environment var
 4. Permission: **Editor** (so it can add rows)
 5. Send
 
-### Step 3: Set Mac Mini (Local) Environment Variables
+### Step 3: Set Mac Mini Environment Variables
 
 ```bash
 # Set 2025 voucher folder (current)
@@ -69,7 +69,7 @@ mac-mini config:set GOOGLE_CLOUD_PROJECT_ID="your-project-id-here" --app portal-
 mac-mini config:set GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"your-project",...}' --app portal-coloradocareassist
 ```
 
-**Or via Mac Mini (Local) Dashboard**:
+**Or via Mac Mini Dashboard**:
 1. Go to: https://dashboard.mac-mini.com/apps/portal-coloradocareassist/settings
 2. Click "Reveal Config Vars"
 3. Add these 4 variables with values above
@@ -92,7 +92,7 @@ The system will:
 Set up automatic hourly checks:
 
 ```bash
-# Install Mac Mini (Local) Scheduler
+# Install Mac Mini Scheduler
 mac-mini addons:create scheduler:standard --app portal-coloradocareassist
 
 # Open scheduler dashboard

@@ -46,7 +46,7 @@ GOOGLE_CLIENT_SECRET=GOCSPX-your-actual-secret
 ```
 
 ### **6. Deploy/Restart Your App:**
-- If using Mac Mini (Local): `git add . && git commit -m "Add OAuth" && git push mac-mini main`
+- If using Mac Mini: `git add . && git commit -m "Add OAuth" && git push mac-mini main`
 - If using other hosting: Restart your application
 
 ## 🎉 **That's It!**

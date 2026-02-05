@@ -15,13 +15,13 @@ git commit -m "Your commit message here"
 # 3. Push to GitHub
 git push origin main
 
-# 4. Push to Mac Mini (Local) (ALWAYS!)
+# 4. Push to Mac Mini (ALWAYS!)
 git push mac-mini main
 ```
 
 **✅ These changes have already been deployed!**
 - Git: `66cf8d7` - "Rebuild marketing dashboard to match Databox design"
-- Mac Mini (Local): Deployed as release v174
+- Mac Mini: Deployed as release v174
 - Live at: https://portal-coloradocareassist-3e1a4bb34793.mac-miniapp.com/marketing
 
 ---
@@ -162,10 +162,10 @@ If API credentials are not configured or APIs fail, the dashboard automatically 
 
 ## Deployment
 
-The dashboard is ready for deployment to Mac Mini (Local):
+The dashboard is ready for deployment to Mac Mini:
 
 1. **Set environment variables** (see above)
-2. **Deploy to Mac Mini (Local):**
+2. **Deploy to Mac Mini:**
    ```bash
    git add .
    git commit -m "Add new marketing dashboard"

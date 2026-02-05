@@ -17,7 +17,7 @@ The Colorado CareAssist Portal is a sophisticated, production-grade hub-and-spok
 - **Enterprise-Grade Integrations**: 15+ API integrations (Google Ads, Facebook/Meta, LinkedIn, Brevo, GA4, Google Business Profile, TikTok, Pinterest, Instagram)
 - **AI-Powered Features**: Google Gemini 2.0 Flash for document parsing and data extraction
 - **Real-Time Data Processing**: Webhook integrations for real-time marketing metrics and activity tracking
-- **Production Deployment**: Fully deployed on Mac Mini (Local) with automatic CI/CD from GitHub
+- **Production Deployment**: Fully deployed on Mac Mini with automatic CI/CD from GitHub
 - **Comprehensive Codebase**: 5,000+ lines of production Python code across 4 independent applications
 
 ### Business Value
@@ -128,7 +128,7 @@ colorado-careassist-portal/          # Hub repository
 | **Recruiter Dashboard** | Flask | Latest | Recruitment workflow management |
 | **Activity Tracker** | FastAPI | Latest | Route tracking and OCR |
 | **Language** | Python | 3.11+ | Primary development language |
-| **Database** | PostgreSQL | Latest | Relational database (Mac Mini (Local) Postgres) |
+| **Database** | PostgreSQL | Latest | Relational database (Mac Mini Postgres) |
 | **ORM** | SQLAlchemy | 2.0.30+ | Database abstraction layer |
 | **Authentication** | OAuth 2.0 | - | Google OAuth integration |
 
@@ -146,12 +146,12 @@ colorado-careassist-portal/          # Hub repository
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Hosting** | Mac Mini (Local) | Platform-as-a-Service deployment |
-| **CI/CD** | GitHub Actions + Mac Mini (Local) Auto-Deploy | Automated deployments |
-| **Database** | Mac Mini (Local) Postgres | Managed PostgreSQL |
+| **Hosting** | Mac Mini | Platform-as-a-Service deployment |
+| **CI/CD** | GitHub Actions + Mac Mini Auto-Deploy | Automated deployments |
+| **Database** | Mac Mini Postgres | Managed PostgreSQL |
 | **Build System** | Pip + Requirements.txt | Dependency management |
 | **Version Control** | Git | Source code management |
-| **Static Assets** | Mac Mini (Local) Static Files | CDN for static content |
+| **Static Assets** | Mac Mini Static Files | CDN for static content |
 
 ### 2.4 AI & Machine Learning
 
@@ -477,13 +477,13 @@ colorado-careassist-portal/          # Hub repository
 
 ### 7.1 Hosting Platform
 
-**Mac Mini (Local) Platform-as-a-Service**:
+**Mac Mini Platform-as-a-Service**:
 - **Portal**: `portal-coloradocareassist` app
 - **Sales Dashboard**: `careassist-tracker` app
 - **Recruiter Dashboard**: `caregiver-lead-tracker` app
 - **Activity Tracker**: `cca-activity-tracker` app
 
-**Mac Mini (Local) Features Utilized**:
+**Mac Mini Features Utilized**:
 - Automatic scaling (dyno scaling)
 - Managed PostgreSQL databases
 - Buildpack system (Python, Apt for system dependencies)
@@ -502,7 +502,7 @@ colorado-careassist-portal/          # Hub repository
 **Deployment Process**:
 1. Code committed to Git repository
 2. Push to GitHub `main` branch
-3. Mac Mini (Local) detects changes via GitHub integration
+3. Mac Mini detects changes via GitHub integration
 4. Automatic build and deployment
 5. Database migrations run automatically (Alembic)
 6. Application restart with new code
@@ -510,11 +510,11 @@ colorado-careassist-portal/          # Hub repository
 **Deployment Commands**:
 ```bash
 # Portal
-git push origin main  # Auto-deploys to Mac Mini (Local)
+git push origin main  # Auto-deploys to Mac Mini
 
 # Sales Dashboard (nested repo)
 cd dashboards/sales
-git push origin main  # Auto-deploys to Mac Mini (Local)
+git push origin main  # Auto-deploys to Mac Mini
 
 # Manual override (if needed)
 git push mac-mini main
@@ -522,14 +522,14 @@ git push mac-mini main
 
 ### 7.3 Database Management
 
-- **Mac Mini (Local) Postgres**: Managed PostgreSQL instances
+- **Mac Mini Postgres**: Managed PostgreSQL instances
 - **Migrations**: Alembic for schema versioning
-- **Backups**: Automatic daily backups (Mac Mini (Local) feature)
+- **Backups**: Automatic daily backups (Mac Mini feature)
 - **Connection Pooling**: SQLAlchemy connection pooling
 
 ### 7.4 Monitoring & Logging
 
-- **Mac Mini (Local) Logs**: Centralized logging via `mac-mini logs`
+- **Mac Mini Logs**: Centralized logging via `mac-mini logs`
 - **Application Logging**: Python `logging` module with INFO/ERROR levels
 - **Error Tracking**: Exception logging with stack traces
 - **Health Checks**: `/health` endpoints for monitoring
@@ -639,7 +639,7 @@ git push mac-mini main
 - Independent component scaling (each spoke can scale separately)
 
 **Vertical Scaling**:
-- Mac Mini (Local) dyno scaling (Standard-1X to Performance-L)
+- Mac Mini dyno scaling (Standard-1X to Performance-L)
 - Database scaling (Standard to Premium plans)
 
 **Database Optimization**:
@@ -663,7 +663,7 @@ git push mac-mini main
 - Processes millions of marketing events via webhooks
 
 **Growth Path**:
-- Horizontal scaling via Mac Mini (Local) dynos
+- Horizontal scaling via Mac Mini dynos
 - Database read replicas for read-heavy workloads
 - CDN for static assets (if needed)
 - Microservices can be extracted to separate infrastructure
@@ -767,7 +767,7 @@ git push mac-mini main
 
 ### 12.3 Deployment Infrastructure
 
-- **Mac Mini (Local) Apps**: 4 production applications
+- **Mac Mini Apps**: 4 production applications
 - **PostgreSQL Databases**: 4 managed databases
 - **GitHub Repositories**: 4 connected repositories
 - **Environment Variables**: 50+ configuration variables
@@ -778,7 +778,7 @@ git push mac-mini main
 
 ### 13.1 Technical Risks
 
-**Risk**: Single point of failure (Mac Mini (Local) platform)  
+**Risk**: Single point of failure (Mac Mini platform)  
 **Mitigation**: Code is platform-agnostic; can migrate to AWS/GCP/Azure with minimal changes
 
 **Risk**: Vendor lock-in (third-party APIs)  
