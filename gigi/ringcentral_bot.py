@@ -475,7 +475,9 @@ class GigiRingCentralBot:
             logger.info(f"Glip: Processing new message {msg_id}: {text[:30]}...")
             await self.process_documentation(msg, text, source_type="chat")
 
-            if not self.is_business_hours():
+            # Only reply on team chat if someone directly addresses Gigi
+            if not self.is_business_hours() and "gigi" in text.lower():
+                logger.info(f"Gigi addressed in team chat — replying")
                 await self.process_reply(msg, text, reply_method="chat")
 
             self.processed_message_ids.add(msg_id)
