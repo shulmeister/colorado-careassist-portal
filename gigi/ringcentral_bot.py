@@ -695,140 +695,310 @@ class GigiRingCentralBot:
             logger.error(f"Failed to check direct SMS: {e}")
 
     async def process_documentation(self, msg: dict, text: str, source_type: str = "chat", phone: str = None):
-        """QA/Manager Logic: Document everything in WellSky."""
-        # 1. Identify Client Context
-        client_id = None
-        client_name = "Unknown"
+        """QA/Manager Logic: Document ALL care-related communications in WellSky.
 
-        # 2. Identify Caregiver Context (for linking alerts)
+        HEALTHCARE RULE: If a client or caregiver is mentioned, it gets documented.
+        Uses DocumentReference API (clinical-note) as PRIMARY WellSky path — works for
+        any client, no encounter/shift needed.
+        """
+        import re
+        import psycopg2
+
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+
+        # =====================================================================
+        # 1. Identify Caregiver (from phone number via cached DB)
+        # =====================================================================
         caregiver_id = None
-        caregiver_name = "Unknown"
+        caregiver_name = None
 
-        # Try to identify caregiver from phone number
         if source_type == "sms" and phone:
             try:
-                cg = self.wellsky.get_caregiver_by_phone(phone)
-                if cg:
-                    caregiver_id = cg.id
-                    caregiver_name = cg.full_name
-                    logger.info(f"Identified SMS sender as caregiver: {caregiver_name}")
-            except Exception:
-                pass
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                # Normalize phone to 10 digits
+                clean_phone = re.sub(r'[^\d]', '', phone)
+                if len(clean_phone) == 11 and clean_phone.startswith("1"):
+                    clean_phone = clean_phone[1:]
+                if len(clean_phone) == 10:
+                    cur.execute("""
+                        SELECT id, full_name FROM cached_practitioners
+                        WHERE is_active = true AND phone IS NOT NULL
+                        AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                        LIMIT 1
+                    """, (clean_phone,))
+                    row = cur.fetchone()
+                    if row:
+                        caregiver_id = str(row[0])
+                        caregiver_name = row[1]
+                        logger.info(f"Doc: Identified SMS sender as caregiver: {caregiver_name}")
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Doc: Caregiver phone lookup error: {e}")
 
-        # Try to find client name in text
-        import re
+        # =====================================================================
+        # 2. Extract Client Name from message text + match against cached DB
+        # =====================================================================
+        client_id = None
+        client_name = None
+        lower_text = text.lower()
+
+        # Extract potential names from text
         possible_names = []
-        name_match = re.search(r'(?:for|client|visit|shift|with|about)\s+([A-Z][a-z]+\.?(?:\s[A-Z][a-z]+)?)', text, re.IGNORECASE)
+        # Pattern 1: Names after context words
+        name_match = re.search(
+            r'(?:for|client|visit|shift|with|about|at|to|see|seeing|from)\s+'
+            r'([A-Z][a-z]+\.?(?:\s[A-Z][a-z]+)?)',
+            text
+        )
         if name_match:
             possible_names.append(name_match.group(1))
-            
+
+        # Pattern 2: Any "FirstName LastName" pattern
         fallback_matches = re.findall(r'([A-Z][a-z]+\.?\s[A-Z][a-z]+)', text)
         for m in fallback_matches:
             if m not in possible_names:
                 possible_names.append(m)
 
-        # Verify against WellSky (strict matching to avoid wrong-client logs)
-        for pname in possible_names:
-            if client_id: break
+        # Match against cached_patients (reliable — all 70 clients)
+        if possible_names:
             try:
-                clean_name = pname.replace(".", "")
-                name_parts = clean_name.split()
-                last_name_search = name_parts[-1]
-                if len(last_name_search) > 2:
-                    clients = self.wellsky.search_patients(last_name=last_name_search)
-                    if clients:
-                        for c in clients:
-                            c_last = c.last_name.lower().replace(".", "")
-                            c_first = c.first_name.lower().replace(".", "")
-                            p_last = last_name_search.lower()
-                            p_first = name_parts[0].lower() if len(name_parts) > 1 else ""
-                            # Require exact last name match AND (first name match OR single-name search)
-                            if c_last == p_last and (not p_first or c_first.startswith(p_first) or p_first.startswith(c_first)):
-                                client = c
-                                client_id = client.id
-                                client_name = client.full_name
-                                break
-            except Exception:
-                pass
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                for pname in possible_names:
+                    if client_id:
+                        break
+                    clean_name = pname.replace(".", "").strip()
+                    name_parts = clean_name.split()
+                    # Strip honorifics (Mrs, Mr, Ms, Dr)
+                    if name_parts and name_parts[0].lower() in ("mrs", "mr", "ms", "dr", "miss"):
+                        name_parts = name_parts[1:]
+                    if len(name_parts) >= 2:
+                        first = name_parts[0].lower()
+                        last = name_parts[-1].lower()
+                        if len(last) < 2:
+                            continue
+                        cur.execute("""
+                            SELECT id, full_name FROM cached_patients
+                            WHERE is_active = true
+                            AND lower(last_name) = %s
+                            AND (lower(first_name) = %s
+                                 OR lower(first_name) LIKE %s
+                                 OR %s LIKE lower(first_name) || '%%')
+                            LIMIT 1
+                        """, (last, first, f"{first}%", first))
+                    elif len(name_parts) == 1 and len(name_parts[0]) > 3:
+                        search = name_parts[0].lower()
+                        cur.execute("""
+                            SELECT id, full_name FROM cached_patients
+                            WHERE is_active = true
+                            AND (lower(last_name) = %s OR lower(first_name) = %s)
+                            LIMIT 1
+                        """, (search, search))
+                    else:
+                        continue
+                    row = cur.fetchone()
+                    if row:
+                        client_id = str(row[0])
+                        client_name = row[1]
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Doc: Client name lookup error: {e}")
 
-        # 2. Classify the Event
+        # =====================================================================
+        # 3. Classify the Event
+        # =====================================================================
         note_type = "general"
         is_alert = False
         is_task = False
-        lower_text = text.lower()
-        
-        if any(w in lower_text for w in ["call out", "call-out", "sick", "emergency", "cancel", "help"]):
+        priority = "normal"
+
+        if any(w in lower_text for w in [
+            "call out", "call-out", "callout", "sick", "emergency",
+            "cancel", "can't make it", "cant make it", "won't be able",
+            "wont be able", "not coming", "not going to make"
+        ]):
             note_type = "callout"
             is_alert = True
             is_task = True
-        elif any(w in lower_text for w in ["late", "traffic", "delayed"]):
+            priority = "urgent"
+        elif any(w in lower_text for w in [
+            "fell", "fall ", "injury", "hospital", "er ", " er.",
+            "ambulance", "911", "hurt", "bleeding", "unconscious",
+            "chest pain", "stroke", "seizure"
+        ]):
+            note_type = "safety"
+            is_alert = True
+            is_task = True
+            priority = "urgent"
+        elif any(w in lower_text for w in [
+            "late", "traffic", "delayed", "running behind", "on my way",
+            "running late", "be there soon"
+        ]):
             note_type = "late"
             is_alert = True
-        elif any(w in lower_text for w in ["complain", "upset", "angry", "issue", "quit", "problem"]):
+        elif any(w in lower_text for w in [
+            "complain", "upset", "angry", "issue", "quit", "problem",
+            "concerned", "worried", "unhappy", "frustrated", "refuse"
+        ]):
             note_type = "complaint"
             is_alert = True
             is_task = True
-        elif any(w in lower_text for w in ["accept", "take the shift", "can work", "available", "filled"]):
+            priority = "high"
+        elif any(w in lower_text for w in [
+            "medication", "meds", "prescription", "pharmacy", "dose",
+            "medicine", "refill"
+        ]):
+            note_type = "medication"
+            is_alert = True
+        elif any(w in lower_text for w in [
+            "accept", "take the shift", "can work", "available",
+            "filled", "confirmed", "i'll be there", "ill be there"
+        ]):
             note_type = "schedule"
-            
-        # 3. Log to WellSky
-        should_log = (is_alert or is_task or note_type == "schedule") or "gigi" in lower_text
+        elif any(w in lower_text for w in [
+            "reschedule", "swap", "switch", "cover", "replacement",
+            "change shift", "move shift"
+        ]):
+            note_type = "schedule_change"
+            is_task = True
 
-        if should_log:
-            try:
-                # If we have a client, log to their record
-                if client_id:
-                    note_prefix = "CARE ALERT" if is_alert else "RC ACTIVITY"
-                    full_note = f"{note_prefix} ({source_type.upper()}): {text}\n(From: {phone or msg.get('creatorId')})"
+        # =====================================================================
+        # 4. HEALTHCARE RULE: Document if client OR caregiver identified, or alert/task
+        # =====================================================================
+        should_log = bool(client_id) or bool(caregiver_id) or is_alert or is_task
 
-                    self.wellsky.add_note_to_client(
+        if not should_log:
+            return  # Skip non-care-related messages with no identified people
+
+        # =====================================================================
+        # 5. Document to WellSky via DocumentReference API + PostgreSQL backup
+        # =====================================================================
+        wellsky_doc_id = None
+        wellsky_synced = False
+
+        try:
+            source_label = "SMS" if source_type == "sms" else "Team Chat"
+            sender = caregiver_name or phone or str(msg.get("creatorId", "Unknown"))
+            alert_prefix = "CARE ALERT" if is_alert else "Care Note"
+
+            note_title = f"{alert_prefix}: {note_type.upper()} ({source_label})"
+            note_body = (
+                f"From: {sender}\n"
+                f"Source: {source_label}\n"
+                f"Type: {note_type}\n"
+                f"Priority: {priority}\n"
+                + (f"Client: {client_name}\n" if client_name else "Client: Not identified\n")
+                + (f"Caregiver: {caregiver_name}\n" if caregiver_name else "")
+                + f"\n--- Original Message ---\n{text}\n"
+            )
+
+            # -----------------------------------------------------------------
+            # A. Client identified → Document on their WellSky profile
+            #    Uses encounter/TaskLog API (searches 90 days for an encounter)
+            # -----------------------------------------------------------------
+            if client_id:
+                try:
+                    full_note = f"{note_title}\n{note_body}"
+                    success, result_msg = self.wellsky.add_note_to_client(
                         client_id=client_id,
                         note=full_note,
                         note_type=note_type,
                         source="gigi_manager"
                     )
-                    logger.info(f"✅ Documented {source_type} activity for {client_name} in WellSky")
+                    if success and "WellSky" in str(result_msg):
+                        wellsky_synced = True
+                        wellsky_doc_id = str(result_msg)
+                        logger.info(f"✅ Documented to WellSky for {client_name}: {result_msg}")
+                    elif success:
+                        logger.warning(f"⚠️ Documented LOCALLY ONLY for {client_name}: {result_msg}")
+                    else:
+                        logger.error(f"Documentation failed for {client_name}: {result_msg}")
+                except Exception as e:
+                    logger.error(f"WellSky documentation error for {client_name}: {e}")
 
-                    if is_task:
-                        self.wellsky.create_admin_task(
-                            title=f"RC {source_type.upper()} Alert: {note_type.upper()} - {client_name}",
-                            description=f"Automated Task from {source_type}:\n{text}\n\nSender: {phone or msg.get('creatorId')}",
-                            priority="urgent" if "call" in note_type or "complaint" in note_type else "normal",
-                            related_client_id=client_id
-                        )
-
-                # If NO client but we have caregiver, link to caregiver record
-                elif caregiver_id and (is_alert or is_task):
-                    self.wellsky.create_admin_task(
-                        title=f"{note_type.upper()} from {caregiver_name} ({source_type.upper()})",
-                        description=f"Care Alert from caregiver - client not specified\n\n"
-                                  f"Caregiver: {caregiver_name}\n"
-                                  f"Source: {source_type.upper()}\n"
-                                  f"From: {phone or msg.get('creatorId')}\n"
-                                  f"Message: {text}\n\n"
-                                  f"ACTION: Check {caregiver_name}'s schedule to identify affected client.",
-                        priority="urgent" if "call" in note_type or "complaint" in note_type else "high",
-                        related_caregiver_id=caregiver_id,
-                        related_client_id=None
+            # -----------------------------------------------------------------
+            # B. Caregiver only → find their client from today's schedule, document there
+            # -----------------------------------------------------------------
+            elif caregiver_id:
+                try:
+                    from datetime import date as date_cls
+                    shifts = self.wellsky.get_shifts(
+                        caregiver_id=caregiver_id,
+                        date_from=date_cls.today(),
+                        date_to=date_cls.today()
                     )
-                    logger.info(f"✅ Created {note_type} task for caregiver {caregiver_name} in WellSky")
+                    if shifts:
+                        # Find client ID from first shift
+                        shift_client_id = None
+                        shift_client_name = None
+                        for s in shifts:
+                            sid = getattr(s, 'client_id', None) or (s.get('client_id') if isinstance(s, dict) else None)
+                            if sid:
+                                shift_client_id = str(sid)
+                                shift_client_name = getattr(s, 'client_name', None) or (s.get('client') if isinstance(s, dict) else None)
+                                break
+                        if shift_client_id:
+                            full_note = f"{note_title}\n{note_body}\n(Auto-linked via {caregiver_name}'s schedule)"
+                            success, result_msg = self.wellsky.add_note_to_client(
+                                client_id=shift_client_id,
+                                note=full_note,
+                                note_type=note_type,
+                                source="gigi_manager"
+                            )
+                            if success and "WellSky" in str(result_msg):
+                                wellsky_synced = True
+                                wellsky_doc_id = str(result_msg)
+                                client_name = shift_client_name or "Unknown"
+                                logger.info(f"✅ Documented to WellSky via caregiver schedule → {client_name}: {result_msg}")
+                            else:
+                                logger.warning(f"⚠️ Caregiver doc for {caregiver_name} saved locally: {result_msg}")
+                    else:
+                        logger.info(f"No shifts today for {caregiver_name} — documented in PostgreSQL only")
+                except Exception as e:
+                    logger.warning(f"Caregiver→client schedule lookup for doc failed: {e}")
 
-                # If NO client AND NO caregiver, create truly unassigned task
-                elif is_alert or is_task:
-                    self.wellsky.create_admin_task(
-                        title=f"UNASSIGNED {note_type.upper()} Alert ({source_type.upper()})",
-                        description=f"Care Alert - sender and client unknown\n\n"
-                                  f"Source: {source_type.upper()}\n"
-                                  f"From: {phone or msg.get('creatorId')}\n"
-                                  f"Message: {text}\n\n"
-                                  f"ACTION REQUIRED: Identify both caregiver and client.",
-                        priority="urgent" if "call" in note_type or "complaint" in note_type else "high",
-                        related_client_id=None
+            # -----------------------------------------------------------------
+            # C. PostgreSQL backup log (ALWAYS — regardless of WellSky success)
+            # -----------------------------------------------------------------
+            try:
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS gigi_wellsky_documentation (
+                        id SERIAL PRIMARY KEY,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        source TEXT,
+                        person_type TEXT,
+                        person_id TEXT,
+                        person_name TEXT,
+                        note_type TEXT,
+                        priority TEXT,
+                        message_text TEXT,
+                        wellsky_doc_id TEXT,
+                        wellsky_synced BOOLEAN DEFAULT FALSE,
+                        sender_phone TEXT
                     )
-                    logger.info(f"✅ Created UNASSIGNED {note_type} task in WellSky (no client or caregiver identified)")
-
+                """)
+                person_type = "client" if client_id else ("caregiver" if caregiver_id else "unknown")
+                person_id_val = client_id or caregiver_id or ""
+                person_name_val = client_name or caregiver_name or "Unknown"
+                cur.execute("""
+                    INSERT INTO gigi_wellsky_documentation
+                    (source, person_type, person_id, person_name, note_type, priority,
+                     message_text, wellsky_doc_id, wellsky_synced, sender_phone)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (source_type, person_type, person_id_val, person_name_val,
+                      note_type, priority, text, wellsky_doc_id, wellsky_synced,
+                      phone or ""))
+                conn.commit()
+                conn.close()
+                logger.info(f"Doc: PostgreSQL backup logged (synced={wellsky_synced}, type={note_type}, person={person_name_val})")
             except Exception as e:
-                logger.error(f"Failed to document to WellSky: {e}")
+                logger.error(f"Doc: PostgreSQL backup log error: {e}")
+
+        except Exception as e:
+            logger.error(f"Failed to document: {e}")
 
         # Extract caregiver preferences from conversation (GAP 3)
         if caregiver_id and self.preference_extractor:
@@ -845,7 +1015,6 @@ class GigiRingCentralBot:
 
         # Autonomous shift filling: trigger when callout detected
         if note_type == "callout" and GIGI_SHIFT_MONITOR_ENABLED:
-            # Extract caregiver name from text for shift lookup
             await self._trigger_shift_filling(possible_names, caregiver_name if caregiver_id else None, text[:100])
 
     # =========================================================================

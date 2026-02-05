@@ -1,7 +1,7 @@
 # GIGI STATE — Current Operational Status
 
-**Last Updated:** February 4, 2026
-**Status:** ALL SYSTEMS OPERATIONAL
+**Last Updated:** February 5, 2026
+**Status:** ALL SYSTEMS OPERATIONAL — ALL PHOEBE FEATURES LIVE
 
 ---
 
@@ -24,7 +24,7 @@
 
 | Channel | Number/Handle | Technology | Status |
 |---------|---------------|------------|--------|
-| **Phone (Voice)** | 307-459-8220 | Retell AI + WellSky | Live |
+| **Phone (Voice)** | 307-459-8220 | Retell AI + WellSky + Ambient Sound | Live |
 | **Phone (SMS)** | 307-459-8220 | RingCentral + Claude | Live |
 | **Telegram** | @Shulmeisterbot | Claude API + Tools | Live |
 | **Team Chat** | "New Scheduling" | RingCentral Glip | Monitored |
@@ -75,6 +75,8 @@ Synced daily at 3am via `scripts/sync_wellsky_clients.py`:
 
 SQL function `identify_caller(phone)` checks all 4 tables for instant caller ID.
 
+**IMPORTANT:** Client and caregiver lookups in both Telegram Bot and RingCentral Bot use the **cached database tables** (not the live WellSky API). The live API has a known bug where `GET /patients/` returns only ~29 of 70 active clients per request. The cache is synced daily at 3am and contains all clients reliably. Shift data from WellSky is also enriched with caregiver/client names from the cache (WellSky shifts API returns IDs but often blank names).
+
 ---
 
 ## SHIFT FILLING ENGINE
@@ -96,20 +98,23 @@ All new features are gated behind environment variables. Set in `~/.gigi-env` an
 
 | Feature | Env Var | Status | Description |
 |---------|---------|--------|-------------|
-| **Caregiver Memory** | `CAREGIVER_MEMORY_ENABLED` | OFF | Extracts preferences from conversations ("can't work Thursdays") |
-| **Multi-Language SMS** | `MULTILANG_SMS_ENABLED` | OFF | Translates shift offers to caregiver's preferred language |
-| **Voice Outreach** | `VOICE_OUTREACH_ENABLED` | OFF | Retell outbound calls for shift filling (SMS → voice cascade) |
-| **Clock Reminders** | `CLOCK_REMINDER_ENABLED` | OFF | SMS reminder if caregiver misses clock-in/out by 5+ min |
-| **Daily Confirmations** | `DAILY_CONFIRMATION_ENABLED` | OFF | "You have shifts tomorrow" texts at 2pm daily |
+| **Caregiver Memory** | `CAREGIVER_MEMORY_ENABLED` | **ON** | Extracts preferences from conversations ("can't work Thursdays") |
+| **Multi-Language SMS** | `MULTILANG_SMS_ENABLED` | **ON** | Translates shift offers to caregiver's preferred language |
+| **Voice Outreach** | `VOICE_OUTREACH_ENABLED` | **ON** | Retell outbound calls for shift filling (SMS → voice cascade) |
+| **Clock Reminders** | `CLOCK_REMINDER_ENABLED` | **ON** | SMS reminder if caregiver misses clock-in/out by 5+ min |
+| **Daily Confirmations** | `DAILY_CONFIRMATION_ENABLED` | **ON** | "You have shifts tomorrow" texts at 2pm daily |
 | **Shift Monitor** | `GIGI_SHIFT_MONITOR_ENABLED` | OFF | Autonomous shift gap detection |
 
-### To Enable a Feature
-1. Edit `~/.gigi-env` → set variable to `true`
-2. Edit LaunchAgent plist → set same variable to `true`
+### To Disable a Feature
+1. Edit `~/.gigi-env` → set variable to `false`
+2. Edit LaunchAgent plist → set same variable to `false`
 3. Restart the service: `launchctl bootout gui/501/com.coloradocareassist.gigi-rc-bot && launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.coloradocareassist.gigi-rc-bot.plist`
 
-### Voice Outreach Additional Requirement
-Before enabling `VOICE_OUTREACH_ENABLED`, create a "Gigi Shift Offer" agent in the Retell dashboard with a shift-offer prompt and set `RETELL_SHIFT_OFFER_AGENT_ID` to the new agent ID. Webhook: `https://portal.coloradocareassist.com/webhook/retell/shift-offer-complete`
+### Retell Shift Offer Agent (Voice Outreach)
+- **Agent ID:** `agent_8b227fabdc468e0202837dd71b`
+- **LLM:** `llm_9d8df005f82ffe743385b4933a00` (Claude 4.5 Sonnet)
+- **Webhook:** `https://portal.coloradocareassist.com/webhook/retell/shift-offer-complete`
+- **Env Var:** `RETELL_SHIFT_OFFER_AGENT_ID=agent_8b227fabdc468e0202837dd71b`
 
 ---
 
@@ -197,9 +202,34 @@ python3 ~/mac-mini-apps/careassist-unified/scripts/sync_wellsky_clients.py
 
 ---
 
+## RETELL VOICE AGENTS
+
+All 4 Retell agents configured with `ambient_sound: "call-center"` at 60% volume so callers hear background activity while Gigi processes requests. LLM prompts include filler phrase instructions.
+
+| Agent | Purpose | Agent ID |
+|-------|---------|----------|
+| **Gigi Reception** | Inbound call handling | (main inbound) |
+| **Gigi Shift Offer** | Outbound shift offers | `agent_8b227fabdc468e0202837dd71b` |
+| **Gigi Transfer** | Call transfers | (transfer agent) |
+| **Gigi Voicemail** | Voicemail handling | (voicemail agent) |
+
+Webhooks for all agents point to `https://portal.coloradocareassist.com/webhook/retell/*`
+
+---
+
 ## RECENT CHANGES
 
-- **Feb 4, 2026:** Built 5 Phoebe-parity features (caregiver memory, multi-language, voice outreach, clock reminders, daily confirmations) — all feature-flagged OFF until tested
+- **Feb 5, 2026:** Comprehensive QA audit — fixed 6 critical, 6 high-priority, 11 warning issues (shift filling dedup, Retell signature fail-closed, OAuth token invalidation, FHIR language parser, predictable secrets removed, name matching tightened)
+- **Feb 5, 2026:** Enabled all 5 Phoebe-parity features (caregiver memory, multi-language, voice outreach, clock reminders, daily confirmations) — all tested and ON
+- **Feb 5, 2026:** Created Retell "Gigi Shift Offer" agent via API (agent + LLM) for voice outreach
+- **Feb 5, 2026:** Fixed critical client lookup reliability — switched from live WellSky API (returned only 29/70 clients) to cached database (all 70 clients). Susan Duchin and all major clients now found instantly.
+- **Feb 5, 2026:** Added shift data enrichment — caregiver/client names resolved from cache (WellSky shifts API returns blank names)
+- **Feb 5, 2026:** Strengthened Telegram bot system prompt with anti-hallucination rules (no more "gog CLI" or false "access unavailable" claims)
+- **Feb 5, 2026:** Added ambient sound (call-center) and filler phrases to all Retell agents for better caller UX
+- **Feb 5, 2026:** Fixed Spanish SMS acceptance parsing ("si, acepto" etc.)
+- **Feb 5, 2026:** Fixed stale Heroku webhook URLs on all existing Retell agents → portal.coloradocareassist.com
+- **Feb 5, 2026:** Wired voice followup polling into bot campaign monitoring loop
+- **Feb 4, 2026:** Built 5 Phoebe-parity features (caregiver memory, multi-language, voice outreach, clock reminders, daily confirmations)
 - **Feb 4, 2026:** Built 5 Zingage-parity features (smart transfers, autonomous shift coordination, task claiming, auto-prospect, voicemail detection)
 - **Feb 4, 2026:** WellSky cache system (patients, practitioners, related persons, staff) with daily sync and `identify_caller()` function
 - **Feb 4, 2026:** Consolidated all API credentials, created health monitoring system

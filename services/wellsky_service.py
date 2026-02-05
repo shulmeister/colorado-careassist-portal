@@ -2924,6 +2924,42 @@ class WellSkyService:
             logger.info(f"Created DocumentReference {doc_id} for patient {patient_id}")
         return success, response
 
+    def create_clinical_note(
+        self,
+        patient_id: str,
+        title: str,
+        note_text: str,
+        source: str = "gigi_ai"
+    ) -> Tuple[bool, Any]:
+        """
+        Create a clinical note on a client's WellSky profile via DocumentReference API.
+
+        This is the RELIABLE way to document in WellSky:
+        - Works for ANY client (no encounter/shift needed)
+        - Shows in WellSky under client's Documents tab
+        - Uses text/plain content type for readable notes
+        """
+        import base64
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        formatted = f"[{timestamp}] [{source.upper()}]\n{title}\n\n{note_text}"
+        data_b64 = base64.b64encode(formatted.encode('utf-8')).decode('utf-8')
+
+        success, response = self.create_document_reference(
+            patient_id=patient_id,
+            document_type="clinical-note",
+            content_type="text/plain",
+            data_base64=data_b64,
+            description=title[:200],
+        )
+
+        if success:
+            doc_id = response.get("id", "unknown") if isinstance(response, dict) else "unknown"
+            logger.info(f"Clinical note created for patient {patient_id}: {title[:60]} (DocRef {doc_id})")
+        else:
+            logger.warning(f"Clinical note FAILED for patient {patient_id}: {response}")
+
+        return success, response
+
     def get_document_reference(self, document_id: str) -> Tuple[bool, Any]:
         """
         Get a specific document reference by ID.
@@ -3683,33 +3719,36 @@ class WellSkyService:
             return True, "Note added (Mock)"
 
         # CLOUD SYNC: Connect API (FHIR)
-        # Strategy: Attach note to the most recent Shift Encounter (worked shift).
-        # This avoids the 403 Forbidden on direct client notes and 404 on Legacy API.
+        # Strategy: Find a recent encounter, create TaskLog on it.
+        # Uses progressively wider search windows and retries across encounters
+        # (some encounter IDs are invalid for TaskLog despite appearing in search).
         if self.api_mode == "connect":
-            try:
-                # 1. Search for recent encounters (last 14 days)
-                start_date = (date.today() - timedelta(days=14)).strftime("%Y%m%d")
-                end_date = (date.today() + timedelta(days=1)).strftime("%Y%m%d")
-                
-                search_payload = {
-                    "clientId": str(client_id),
-                    "startDate": start_date,
-                    "endDate": end_date
-                }
-                
-                # Sort by date descending to get latest
-                params = {"_count": 1, "_sort": "-date"} 
-                
-                success, data = self._make_request("POST", "encounter/_search/", params=params, data=search_payload)
-                
-                if success and data.get("entry"):
-                    encounter_entry = data["entry"][0]
-                    # FHIR entry might be wrapper or resource
-                    resource = encounter_entry.get("resource", encounter_entry)
-                    encounter_id = resource.get("id")
-                    
-                    if encounter_id:
-                        # 2. Create TaskLog on this encounter
+            for days_back in [7, 30, 90]:
+                try:
+                    start_date = (date.today() - timedelta(days=days_back)).strftime("%Y%m%d")
+                    end_date = (date.today() + timedelta(days=1)).strftime("%Y%m%d")
+
+                    search_payload = {
+                        "clientId": str(client_id),
+                        "startDate": start_date,
+                        "endDate": end_date
+                    }
+                    params = {"_count": 5, "_sort": "-date"}
+
+                    success, data = self._make_request(
+                        "POST", "encounter/_search/", params=params, data=search_payload
+                    )
+
+                    if not success or not data.get("entry"):
+                        continue  # Try wider window
+
+                    # Try each encounter until one accepts the TaskLog
+                    for encounter_entry in data["entry"]:
+                        resource = encounter_entry.get("resource", encounter_entry)
+                        encounter_id = resource.get("id")
+                        if not encounter_id:
+                            continue
+
                         tl_data = {
                             "resourceType": "TaskLog",
                             "status": "COMPLETE",
@@ -3718,11 +3757,12 @@ class WellSkyService:
                             "recorded": datetime.utcnow().isoformat() + "Z",
                             "show_in_family_room": False
                         }
-                        
-                        success_tl, resp_tl = self._make_request("POST", f"encounter/{encounter_id}/tasklog/", data=tl_data)
-                        
+
+                        success_tl, resp_tl = self._make_request(
+                            "POST", f"encounter/{encounter_id}/tasklog/", data=tl_data
+                        )
+
                         if success_tl:
-                            # Update local record to mark as synced
                             try:
                                 conn = sqlite3.connect('portal.db')
                                 cursor = conn.cursor()
@@ -3736,18 +3776,18 @@ class WellSkyService:
                                 conn.close()
                             except:
                                 pass
-                            
-                            logger.info(f"Synced client note to WellSky Encounter {encounter_id}")
+                            logger.info(f"Synced client note to WellSky Encounter {encounter_id} ({days_back}d window)")
                             return True, f"Note synced to WellSky (Encounter {encounter_id})"
                         else:
-                            logger.warning(f"Failed to create TaskLog on encounter {encounter_id}: {resp_tl}")
-            except Exception as e:
-                logger.error(f"Error syncing note to WellSky encounter: {e}")
+                            logger.debug(f"Encounter {encounter_id} rejected TaskLog, trying next...")
 
-        # Fallback: Local logging only
-        # We return success because the data is safely captured in our database
-        logger.info(f"Local: Client note for {client_id} saved to database. (Cloud sync skipped - no active encounter)")
-        return True, "Note documented locally"
+                except Exception as e:
+                    logger.error(f"Error syncing note ({days_back}d window): {e}")
+
+        # Fallback: No encounter found in 90-day window
+        # Note is safely captured in local database above
+        logger.warning(f"No WellSky encounter found for client {client_id} in 90-day window. Note saved locally only.")
+        return True, "Note documented locally (no encounter available)"
 
     def add_note_to_prospect(
         self,
