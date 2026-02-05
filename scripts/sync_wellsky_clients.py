@@ -55,8 +55,8 @@ if env_file.exists():
 # Config
 BASE_URL = "https://connect.clearcareonline.com/v1"
 TOKEN_URL = "https://connect.clearcareonline.com/oauth/accesstoken"
-CLIENT_ID = os.environ.get('WELLSKY_CLIENT_ID', 'bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS')
-CLIENT_SECRET = os.environ.get('WELLSKY_CLIENT_SECRET', 'Do06wgoZuV7ni4zO')
+CLIENT_ID = os.environ.get('WELLSKY_CLIENT_ID', '')
+CLIENT_SECRET = os.environ.get('WELLSKY_CLIENT_SECRET', '')
 DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://careassist:careassist2026@localhost:5432/careassist')
 
 

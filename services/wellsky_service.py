@@ -34,11 +34,10 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # OAuth 2.0 Credentials (from WellSky Connect API)
-# HARDCODED FOR RELIABILITY - 2026-02-01
-WELLSKY_CLIENT_ID = "bFgTVuBv21g2K2IXbm8LzfXOYLnR9UbS"
-WELLSKY_CLIENT_SECRET = "Do06wgoZuV7ni4zO"
-WELLSKY_AGENCY_ID = "4505"
-WELLSKY_ENVIRONMENT = "production"  # Force production mode
+WELLSKY_CLIENT_ID = os.getenv("WELLSKY_CLIENT_ID", "")
+WELLSKY_CLIENT_SECRET = os.getenv("WELLSKY_CLIENT_SECRET", "")
+WELLSKY_AGENCY_ID = os.getenv("WELLSKY_AGENCY_ID", "4505")
+WELLSKY_ENVIRONMENT = os.getenv("WELLSKY_ENVIRONMENT", "production")
 
 # API Base URLs (WellSky Home Connect API - https://connect.clearcareonline.com/fhir/)
 API_URLS = {

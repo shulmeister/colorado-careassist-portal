@@ -7051,7 +7051,24 @@ async def quickbooks_oauth_authorize(
         
         # Generate a random state parameter for CSRF protection
         state = secrets.token_urlsafe(32)
-        
+
+        # Store state in DB for validation on callback
+        try:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO gigi_dedup_state (key, value, created_at, expires_at)
+                VALUES (%s, 'valid', NOW(), NOW() + INTERVAL '10 minutes')
+                ON CONFLICT (key) DO UPDATE SET value = 'valid', created_at = NOW(), expires_at = NOW() + INTERVAL '10 minutes'
+            """, (f"qb_oauth_state:{state}",))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Could not store QB OAuth state: {e}")
+
         redirect_uri = "https://portal.coloradocareassist.com/sales/api/quickbooks/oauth/callback"
         scope = "com.intuit.quickbooks.accounting"
         
@@ -7089,7 +7106,38 @@ async def quickbooks_oauth_callback(
     try:
         import os
         import requests
-        
+
+        # Validate CSRF state parameter
+        if state:
+            state_valid = False
+            try:
+                import psycopg2
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                cur.execute(
+                    "DELETE FROM gigi_dedup_state WHERE key = %s AND expires_at > NOW() RETURNING key",
+                    (f"qb_oauth_state:{state}",)
+                )
+                state_valid = cur.fetchone() is not None
+                conn.commit()
+                cur.close()
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Could not validate QB OAuth state: {e}")
+                state_valid = True  # Allow through if DB fails
+
+            if not state_valid:
+                return HTMLResponse("""
+                    <html>
+                        <body style="font-family: Arial; padding: 40px; text-align: center;">
+                            <h1 style="color: #dc2626;">Authorization Failed</h1>
+                            <p>Invalid or expired state parameter (CSRF protection). Please try again.</p>
+                            <p><a href="/api/quickbooks/oauth/authorize">Try Again</a></p>
+                        </body>
+                    </html>
+                """)
+
         if error:
             return HTMLResponse(f"""
                 <html>

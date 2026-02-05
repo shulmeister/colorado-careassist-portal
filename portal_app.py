@@ -2569,10 +2569,37 @@ async def quickbooks_callback(
     QuickBooks OAuth2 callback - exchanges code for tokens.
     After authorizing, displays tokens for local CLI setup.
     """
+    # Validate state parameter if present (CSRF protection)
+    if state:
+        state_valid = False
+        try:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM gigi_dedup_state WHERE key = %s AND expires_at > NOW() RETURNING key",
+                (f"qb_oauth_state:{state}",)
+            )
+            state_valid = cur.fetchone() is not None
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception:
+            state_valid = True  # Allow through if DB fails
+
+        if not state_valid:
+            return HTMLResponse("""
+            <html><body style="font-family: sans-serif; padding: 40px;">
+            <h1>Invalid State</h1>
+            <p>CSRF state parameter is invalid or expired. Please restart the OAuth flow.</p>
+            </body></html>
+            """)
+
     if error:
         return HTMLResponse(f"""
         <html><body style="font-family: sans-serif; padding: 40px;">
-        <h1>❌ QuickBooks Authorization Failed</h1>
+        <h1>QuickBooks Authorization Failed</h1>
         <p>Error: {error}</p>
         </body></html>
         """)

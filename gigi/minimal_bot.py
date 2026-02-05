@@ -15,7 +15,7 @@ logging.basicConfig(
 logger = logging.getLogger("minimal_bot")
 
 # ADMIN TOKEN (Jason x101)
-ADMIN_JWT_TOKEN = "eyJraWQiOiI4NzYyZjU5OGQwNTk0NGRiODZiZjVjYTk3ODA0NzYwOCIsInR5cCI6IkpXVCIsImFsZyI6IlJTMjU2In0.eyJhdWQiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbS9yZXN0YXBpL29hdXRoL3Rva2VuIiwic3ViIjoiMjYyNzQwMDA5IiwiaXNzIjoiaHR0cHM6Ly9wbGF0Zm9ybS5yaW5nY2VudHJhbC5jb20iLCJleHAiOjM5MTAyNDA5NjUsImlhdCI6MTc2Mjc1NzMxOCwianRpIjoiZ3Jsd0pPWGFTM2EwalpibThvTmtZdyJ9.WA9DUSlb_4SlCo9UHNjscHKrVDoJTF4iW3D7Rre9E2qg5UQ_hWfCgysiZJMXlL8-vUuJ2XDNivvpfbxriESKIEPAEEY85MolJZS9KG3g90ga-3pJtHq7SC87mcacXtDWqzmbBS_iDOjmNMHiynWFR9Wgi30DMbz9rQ1U__Bl88qVRTvZfY17ovu3dZDhh-FmLUWRnKOc4LQUvRChQCO-21LdSquZPvEAe7qHEsh-blS8Cvh98wvX-9vaiurDR-kC9Tp007x4lTI74MwQ5rJif7tL7Hslqaoag0WoNEIP9VPrp4x-Q7AzKIzBNbrGr9kIPthIebmeOBDMIIrw6pg_lg"
+ADMIN_JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN", "")
 
 RINGCENTRAL_SERVER = "https://platform.ringcentral.com"
 # Hardcoded FROM number (Company Line)
@@ -29,10 +29,8 @@ def get_access_token():
         "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
         "assertion": ADMIN_JWT_TOKEN
     }
-    # We need client ID/Secret for OAuth even with JWT
-    # Using the ones from your file
-    CLIENT_ID = "8HQNG4wPwl3cejTAdz1ZBX"
-    CLIENT_SECRET = "5xwSbWIOKZvc0ADlafSZdWZ0SpwfRSgZ1cVA5AmUr5mW"
+    CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID", "")
+    CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET", "")
     
     try:
         response = requests.post(url, auth=(CLIENT_ID, CLIENT_SECRET), data=data, timeout=30)

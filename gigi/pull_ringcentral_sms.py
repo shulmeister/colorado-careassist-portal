@@ -10,10 +10,10 @@ import requests
 from datetime import datetime, timedelta
 from collections import Counter
 
-# RingCentral credentials from Mac Mini (Local)
-RINGCENTRAL_CLIENT_ID = "VbxfL4RkN8ncFItIqSP5k7"
-RINGCENTRAL_CLIENT_SECRET = "W3NjGB4CFnJdhGrYsQsovD3dlIzliPo3Oejdw2pB0puW"
-RINGCENTRAL_JWT_TOKEN = "[REDACTED_JWT]"
+# RingCentral credentials from env vars
+RINGCENTRAL_CLIENT_ID = os.getenv("RINGCENTRAL_CLIENT_ID", "")
+RINGCENTRAL_CLIENT_SECRET = os.getenv("RINGCENTRAL_CLIENT_SECRET", "")
+RINGCENTRAL_JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN", "")
 RINGCENTRAL_SERVER = "https://platform.ringcentral.com"
 
 

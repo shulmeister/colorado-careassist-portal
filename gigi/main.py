@@ -5975,7 +5975,7 @@ def _log_unmatched_sms_to_wellsky(
 
 
 @app.post("/webhook/inbound-sms", response_model=SMSResponse)
-async def handle_inbound_sms(sms: InboundSMS):
+async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
     """
     Handle inbound SMS messages with WellSky-aware intelligence.
 
@@ -5985,6 +5985,14 @@ async def handle_inbound_sms(sms: InboundSMS):
     3. Take action if possible (clock them out, report call-out)
     4. Generate a response that confirms the action
     """
+    # Verify webhook secret if configured and called externally
+    if request:
+        sms_secret = os.getenv("INBOUND_SMS_WEBHOOK_SECRET")
+        if sms_secret:
+            received_secret = request.headers.get("X-Webhook-Secret", "")
+            if received_secret != sms_secret:
+                logger.warning("Inbound SMS webhook: Invalid or missing webhook secret")
+                return SMSResponse(reply_text="", reply_sent=False, error="Unauthorized")
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
 
     # FORCE REPLY for now to ensure reliability, ignoring office hours gates
@@ -6315,6 +6323,14 @@ async def beetexting_webhook(request: Request):
     Receives the webhook payload, extracts the message,
     and triggers the auto-reply system.
     """
+    # Verify webhook secret if configured
+    bt_secret = os.getenv("BEETEXTING_WEBHOOK_SECRET")
+    if bt_secret:
+        received_secret = request.headers.get("X-Webhook-Secret", "")
+        if received_secret != bt_secret:
+            logger.warning("Beetexting webhook: Invalid or missing webhook secret")
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
     try:
         body = await request.json()
         logger.info(f"Beetexting webhook received: {json.dumps(body)[:500]}")
