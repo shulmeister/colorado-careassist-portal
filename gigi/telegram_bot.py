@@ -367,6 +367,33 @@ class GigiTelegramBot:
                         limit=50
                     )
                 shift_list = [s.to_dict() if hasattr(s, 'to_dict') else str(s) for s in shifts[:30]]
+                # Enrich shifts with client/caregiver names from cached database
+                try:
+                    import psycopg2
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    for shift in shift_list:
+                        if isinstance(shift, dict):
+                            cg_id = shift.get("caregiver_id")
+                            cl_id = shift.get("client_id")
+                            if cg_id and not shift.get("caregiver_first_name"):
+                                cur.execute("SELECT first_name, last_name, full_name FROM cached_practitioners WHERE id = %s", (cg_id,))
+                                row = cur.fetchone()
+                                if row:
+                                    shift["caregiver_first_name"] = row[0]
+                                    shift["caregiver_last_name"] = row[1]
+                                    shift["caregiver_name"] = row[2]
+                            if cl_id and not shift.get("client_first_name"):
+                                cur.execute("SELECT first_name, last_name, full_name FROM cached_patients WHERE id = %s", (cl_id,))
+                                row = cur.fetchone()
+                                if row:
+                                    shift["client_first_name"] = row[0]
+                                    shift["client_last_name"] = row[1]
+                                    shift["client_name"] = row[2]
+                    conn.close()
+                except Exception as e:
+                    logger.warning(f"Shift name enrichment failed (non-fatal): {e}")
                 return json.dumps({"count": len(shifts), "shifts": shift_list})
 
             else:

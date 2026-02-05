@@ -1160,8 +1160,30 @@ class GigiRingCentralBot:
                         "time": f"{s.start_time}-{s.end_time}" if hasattr(s, 'start_time') and s.start_time else "TBD",
                         "client": s.client_name if hasattr(s, 'client_name') else "",
                         "caregiver": s.caregiver_name if hasattr(s, 'caregiver_name') else "",
+                        "caregiver_id": s.caregiver_id if hasattr(s, 'caregiver_id') else "",
+                        "client_id": s.client_id if hasattr(s, 'client_id') else "",
                         "status": s.status.value if hasattr(s.status, 'value') else str(s.status) if hasattr(s, 'status') else ""
                     })
+                # Enrich with names from cached database when WellSky API returns blanks
+                try:
+                    import psycopg2
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    for shift in shift_list:
+                        if shift.get("caregiver_id") and not shift.get("caregiver"):
+                            cur.execute("SELECT full_name FROM cached_practitioners WHERE id = %s", (shift["caregiver_id"],))
+                            row = cur.fetchone()
+                            if row:
+                                shift["caregiver"] = row[0]
+                        if shift.get("client_id") and not shift.get("client"):
+                            cur.execute("SELECT full_name FROM cached_patients WHERE id = %s", (shift["client_id"],))
+                            row = cur.fetchone()
+                            if row:
+                                shift["client"] = row[0]
+                    conn.close()
+                except Exception as e:
+                    logger.warning(f"Shift name enrichment failed (non-fatal): {e}")
                 return json.dumps({"count": len(shifts), "shifts": shift_list})
 
             elif tool_name == "get_wellsky_clients":
