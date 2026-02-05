@@ -42,6 +42,39 @@ WEBHOOK_BASE = "https://portal.coloradocareassist.com/gigi/webhook/retell/functi
 CURRENT_AGENT_ID = "agent_d5c3f32bdf48fa4f7f24af7d36"  # Gigi v2 - Conversation Flow
 
 
+def transform_tools_for_api(nodes):
+    """
+    Transform tool definitions from old format to new Retell API format.
+    Old: {"type": "function", "function": {"name": ..., "description": ..., "url": ..., "parameters": ...}}
+    New: {"type": "custom", "name": ..., "description": ..., "url": ..., "parameters": ..., "tool_id": ...}
+    """
+    transformed_nodes = []
+    for node in nodes:
+        new_node = dict(node)
+        if "tools" in new_node and new_node["tools"]:
+            new_tools = []
+            for tool in new_node["tools"]:
+                if tool.get("type") == "function" and "function" in tool:
+                    func = tool["function"]
+                    new_tool = {
+                        "type": "custom",
+                        "name": func.get("name", ""),
+                        "tool_id": func.get("name", ""),  # Use name as tool_id
+                        "description": func.get("description", ""),
+                        "url": func.get("url", ""),
+                        "method": "POST",
+                        "parameters": func.get("parameters", {}),
+                        "timeout_ms": 120000
+                    }
+                    new_tools.append(new_tool)
+                else:
+                    # Already in new format or different type
+                    new_tools.append(tool)
+            new_node["tools"] = new_tools
+        transformed_nodes.append(new_node)
+    return transformed_nodes
+
+
 def get_conversation_flow_config():
     """
     Build the complete conversation flow configuration for Gigi.
@@ -95,8 +128,16 @@ If caller is confused, has dementia, or repeats:
             "name": "Greeting",
             "instruction": {
                 "type": "prompt",
-                "text": """## OPENING
-Say: "Hi, this is Gigi with Colorado Care Assist. How can I help you?"
+                "text": """## STEP 1: IDENTIFY CALLER (REQUIRED)
+FIRST, call the lookup_caller tool with the caller's phone number (from {{from_number}}).
+Wait for the result before greeting.
+
+## STEP 2: GREET BY NAME
+If lookup_caller returns a name, greet them personally:
+  Say: "Hi [their first name], this is Gigi with Colorado Care Assist. How can I help you?"
+If no name found (unknown caller):
+  Say: "Hi, this is Gigi with Colorado Care Assist. How can I help you?"
+
 Then LISTEN and route based on their response.
 NOTE: Do NOT say "tonight" or "today" - just say "How can I help you?"
 
@@ -117,7 +158,23 @@ If ANY of these triggers detected:
 
 CRITICAL: The very FIRST thing you say must include "you're not in our system" or "not in the system". Do not greet or ask questions before confirming this."""
             },
-            "tools": [],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "lookup_caller",
+                        "description": "Look up caller information by phone number. Returns their name and type (caregiver, client, family, staff, or unknown).",
+                        "url": f"{WEBHOOK_BASE}/lookup_caller",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "phone_number": {"type": "string", "description": "The caller's phone number"}
+                            },
+                            "required": ["phone_number"]
+                        }
+                    }
+                }
+            ],
             "edges": [
                 {
                     "id": "to_caregiver",
@@ -225,6 +282,14 @@ Do NOT repeat their issue back. Just route."""
                     "transition_condition": {
                         "type": "prompt",
                         "prompt": "Caregiver is running late to their shift"
+                    }
+                },
+                {
+                    "id": "to_caregiver_schedule",
+                    "destination_node_id": "schedule_lookup",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Caregiver asks about their schedule, shifts, what time they work, where they're going, who their client is, or when their next shift is"
                     }
                 },
                 {
@@ -534,6 +599,74 @@ After you've said Cynthia will call about payroll:
         },
 
         # =====================================================================
+        # SCHEDULE LOOKUP - Look up shifts/schedule for caller
+        # =====================================================================
+        {
+            "id": "schedule_lookup",
+            "type": "conversation",
+            "name": "Schedule Lookup",
+            "instruction": {
+                "type": "prompt",
+                "text": """## TASK: Look up the caller's schedule
+
+## STEP 1: Get their name
+If you already know the caller's name (from {{caller_name}} or from earlier in the conversation), use it.
+Otherwise ask: "What's your name so I can look up your schedule?"
+
+## STEP 2: Look up their schedule
+Call get_schedule with their name and person_type "caregiver" (or "client" if they're a client).
+
+## STEP 3: Read back the results
+If shifts found, read them clearly:
+- "You have [X] shifts coming up."
+- For each shift: "[Day], [date] from [start time] to [end time] with [client name]."
+- Keep it concise. If more than 3 shifts, just read the next 3 and say "and [X] more after that."
+
+If no shifts: "I don't see any shifts scheduled for you in the next week. The office can help with that when they open."
+
+## STEP 4: Close
+"Anything else?" If no → "Take care!" → GO TO end_call"""
+            },
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_schedule",
+                        "description": "Look up upcoming shifts/schedule for a caregiver or client by name",
+                        "url": f"{WEBHOOK_BASE}/get_schedule",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "person_name": {"type": "string", "description": "Name of the person to look up"},
+                                "person_type": {"type": "string", "description": "Type: 'caregiver' or 'client'", "enum": ["caregiver", "client"]},
+                                "days": {"type": "integer", "description": "Number of days to look ahead (default 7)"}
+                            },
+                            "required": ["person_name"]
+                        }
+                    }
+                }
+            ],
+            "edges": [
+                {
+                    "id": "caregiver_schedule_to_end",
+                    "destination_node_id": "end_call",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Schedule has been read to the caller and they're satisfied or have no more questions"
+                    }
+                },
+                {
+                    "id": "caregiver_schedule_to_router",
+                    "destination_node_id": "caregiver_router",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Caller has a different issue besides their schedule"
+                    }
+                }
+            ]
+        },
+
+        # =====================================================================
         # CLIENT ROUTER - Route client requests (includes medical advice boundary)
         # =====================================================================
         {
@@ -579,7 +712,7 @@ TRIGGER: Client repeats same question, seems confused, doesn't remember
                     }
                 },
                 {
-                    "id": "to_schedule",
+                    "id": "to_client_schedule",
                     "destination_node_id": "client_schedule",
                     "transition_condition": {
                         "type": "prompt",
@@ -770,7 +903,7 @@ If they say "bye" → you say "bye" """
             ],
             "edges": [
                 {
-                    "id": "schedule_to_end",
+                    "id": "client_schedule_to_end",
                     "destination_node_id": "end_call",
                     "transition_condition": {
                         "type": "prompt",
@@ -1413,6 +1546,9 @@ def update_existing_agent():
     """
     config = get_conversation_flow_config()
 
+    # Transform tools to new Retell API format
+    transformed_nodes = transform_tools_for_api(config["nodes"])
+
     # First, create the conversation flow
     print("Creating conversation flow...")
     flow_response = requests.post(
@@ -1425,7 +1561,7 @@ def update_existing_agent():
             "name": config["name"],
             "model_choice": config["model_choice"],
             "general_prompt": config["general_prompt"],
-            "nodes": config["nodes"],
+            "nodes": transformed_nodes,
             "start_node_id": config["start_node_id"],
             "start_speaker": config["start_speaker"]
         }
@@ -1455,7 +1591,8 @@ def update_existing_agent():
                 "conversation_flow_id": conversation_flow_id
             },
             "webhook_url": config["webhook_url"],
-            "begin_message": config["begin_message"]
+            "begin_message": config["begin_message"],
+            "inbound_dynamic_variables_webhook_url": "https://portal.coloradocareassist.com/gigi/webhook/retell/inbound-variables"
         }
     )
 

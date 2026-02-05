@@ -4517,6 +4517,97 @@ async def get_events(
 # Retell Webhook Endpoints
 # =============================================================================
 
+@app.post("/webhook/retell/inbound-variables")
+async def retell_inbound_variables(request: Request):
+    """
+    Retell inbound dynamic variables webhook.
+    Called BEFORE the conversation starts — returns caller's name and type
+    so the agent can greet them by first name immediately.
+    """
+    body = await request.json()
+    from_number = body.get("from_number", "")
+    logger.info(f"Inbound variables requested for: {from_number}")
+
+    caller_name = ""
+    caller_type = "unknown"
+    caller_full_name = ""
+
+    if from_number:
+        clean_phone = ''.join(filter(str.isdigit, from_number))[-10:]
+
+        # Check cached database for caller ID (fast, reliable)
+        try:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+
+            # Check staff first (Jason, Israt, Jacob, Cynthia)
+            cur.execute("""
+                SELECT first_name, full_name, role FROM cached_staff
+                WHERE phone IS NOT NULL
+                AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                LIMIT 1
+            """, (clean_phone,))
+            row = cur.fetchone()
+            if row:
+                caller_name = row[0]
+                caller_full_name = row[1]
+                caller_type = "staff"
+            else:
+                # Check caregivers
+                cur.execute("""
+                    SELECT first_name, full_name FROM cached_practitioners
+                    WHERE is_active = true AND phone IS NOT NULL
+                    AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                    LIMIT 1
+                """, (clean_phone,))
+                row = cur.fetchone()
+                if row:
+                    caller_name = row[0]
+                    caller_full_name = row[1]
+                    caller_type = "caregiver"
+                else:
+                    # Check clients
+                    cur.execute("""
+                        SELECT first_name, full_name FROM cached_patients
+                        WHERE is_active = true AND phone IS NOT NULL
+                        AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                        LIMIT 1
+                    """, (clean_phone,))
+                    row = cur.fetchone()
+                    if row:
+                        caller_name = row[0]
+                        caller_full_name = row[1]
+                        caller_type = "client"
+                    else:
+                        # Check family/emergency contacts
+                        cur.execute("""
+                            SELECT first_name, full_name FROM cached_related_persons
+                            WHERE phone IS NOT NULL
+                            AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                            LIMIT 1
+                        """, (clean_phone,))
+                        row = cur.fetchone()
+                        if row:
+                            caller_name = row[0]
+                            caller_full_name = row[1]
+                            caller_type = "family"
+
+            conn.close()
+        except Exception as e:
+            logger.error(f"Inbound variables DB lookup error: {e}")
+
+    logger.info(f"Inbound variables: caller_name={caller_name}, caller_type={caller_type}")
+
+    return JSONResponse({
+        "caller_name": caller_name or "",
+        "caller_type": caller_type,
+        "caller_full_name": caller_full_name or "",
+        "from_number": from_number
+    })
+
+
 @app.post("/webhook/retell")
 async def retell_webhook(request: Request):
     """
@@ -4956,6 +5047,207 @@ async def retell_function_call(function_name: str, request: Request):
         elif function_name == "get_active_shifts":
             result = await get_active_shifts(**args)
             return JSONResponse({"shifts": result, "count": len(result)})
+
+        elif function_name == "get_schedule":
+            # Lookup schedule for a caregiver or client by name
+            person_name = args.get("person_name", "")
+            person_type = args.get("person_type", "caregiver")
+            days = int(args.get("days", 7))
+
+            logger.info(f"get_schedule called: name={person_name}, type={person_type}, days={days}")
+
+            try:
+                import psycopg2
+                from datetime import date as date_cls, timedelta
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+
+                # Find person ID from cached DB
+                person_id = None
+                if person_type == "caregiver":
+                    search = f"%{person_name.lower()}%"
+                    cur.execute("""
+                        SELECT id, full_name FROM cached_practitioners
+                        WHERE is_active = true AND lower(full_name) LIKE %s
+                        LIMIT 1
+                    """, (search,))
+                else:
+                    search = f"%{person_name.lower()}%"
+                    cur.execute("""
+                        SELECT id, full_name FROM cached_patients
+                        WHERE is_active = true AND lower(full_name) LIKE %s
+                        LIMIT 1
+                    """, (search,))
+
+                row = cur.fetchone()
+                conn.close()
+
+                if not row:
+                    return JSONResponse({
+                        "found": False,
+                        "message": f"No {person_type} found with name '{person_name}'",
+                        "shifts": []
+                    })
+
+                person_id = str(row[0])
+                full_name = row[1]
+
+                # Get shifts from WellSky
+                if WELLSKY_AVAILABLE and wellsky:
+                    if person_type == "caregiver":
+                        shifts = wellsky.get_shifts(
+                            caregiver_id=person_id,
+                            date_from=date_cls.today(),
+                            date_to=date_cls.today() + timedelta(days=days)
+                        )
+                    else:
+                        shifts = wellsky.get_shifts(
+                            client_id=person_id,
+                            date_from=date_cls.today(),
+                            date_to=date_cls.today() + timedelta(days=days)
+                        )
+
+                    # Format shifts for speech
+                    shift_list = []
+                    for s in (shifts or []):
+                        shift_info = {}
+                        if isinstance(s, dict):
+                            shift_info = s
+                        else:
+                            shift_info = {
+                                "date": getattr(s, "date", ""),
+                                "start_time": getattr(s, "start_time", ""),
+                                "end_time": getattr(s, "end_time", ""),
+                                "client": getattr(s, "client_name", "") or getattr(s, "client", ""),
+                                "caregiver": getattr(s, "caregiver_name", "") or getattr(s, "caregiver", ""),
+                                "status": getattr(s, "status", ""),
+                            }
+
+                        # Enrich names from cache
+                        try:
+                            conn2 = psycopg2.connect(db_url)
+                            cur2 = conn2.cursor()
+                            if shift_info.get("caregiver_id") and not shift_info.get("caregiver"):
+                                cur2.execute("SELECT full_name FROM cached_practitioners WHERE id = %s", (shift_info["caregiver_id"],))
+                                r = cur2.fetchone()
+                                if r:
+                                    shift_info["caregiver"] = r[0]
+                            if shift_info.get("client_id") and not shift_info.get("client"):
+                                cur2.execute("SELECT full_name FROM cached_patients WHERE id = %s", (shift_info["client_id"],))
+                                r = cur2.fetchone()
+                                if r:
+                                    shift_info["client"] = r[0]
+                            conn2.close()
+                        except:
+                            pass
+
+                        shift_list.append(shift_info)
+
+                    return JSONResponse({
+                        "found": True,
+                        "person_name": full_name,
+                        "person_type": person_type,
+                        "shift_count": len(shift_list),
+                        "shifts": shift_list[:10]
+                    })
+                else:
+                    return JSONResponse({
+                        "found": True,
+                        "person_name": full_name,
+                        "message": "Schedule system temporarily unavailable",
+                        "shifts": []
+                    })
+            except Exception as e:
+                logger.error(f"get_schedule error: {e}")
+                return JSONResponse({
+                    "found": False,
+                    "message": f"Error looking up schedule: {str(e)}",
+                    "shifts": []
+                })
+
+        elif function_name == "lookup_caller":
+            # Look up caller by phone number from cached database
+            phone_number = args.get("phone_number", "")
+            logger.info(f"lookup_caller called for: {phone_number}")
+
+            caller_name = ""
+            caller_type = "unknown"
+            caller_full_name = ""
+
+            if phone_number:
+                clean_phone = ''.join(filter(str.isdigit, phone_number))[-10:]
+
+                try:
+                    import psycopg2
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+
+                    # Check staff first (Jason, Israt, Jacob, Cynthia)
+                    cur.execute("""
+                        SELECT first_name, full_name, role FROM cached_staff
+                        WHERE phone IS NOT NULL
+                        AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                        LIMIT 1
+                    """, (clean_phone,))
+                    row = cur.fetchone()
+                    if row:
+                        caller_name = row[0]
+                        caller_full_name = row[1]
+                        caller_type = "staff"
+                    else:
+                        # Check caregivers
+                        cur.execute("""
+                            SELECT first_name, full_name FROM cached_practitioners
+                            WHERE is_active = true AND phone IS NOT NULL
+                            AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                            LIMIT 1
+                        """, (clean_phone,))
+                        row = cur.fetchone()
+                        if row:
+                            caller_name = row[0]
+                            caller_full_name = row[1]
+                            caller_type = "caregiver"
+                        else:
+                            # Check clients
+                            cur.execute("""
+                                SELECT first_name, full_name FROM cached_patients
+                                WHERE is_active = true AND phone IS NOT NULL
+                                AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                                LIMIT 1
+                            """, (clean_phone,))
+                            row = cur.fetchone()
+                            if row:
+                                caller_name = row[0]
+                                caller_full_name = row[1]
+                                caller_type = "client"
+                            else:
+                                # Check family/emergency contacts
+                                cur.execute("""
+                                    SELECT first_name, full_name FROM cached_related_persons
+                                    WHERE phone IS NOT NULL
+                                    AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
+                                    LIMIT 1
+                                """, (clean_phone,))
+                                row = cur.fetchone()
+                                if row:
+                                    caller_name = row[0]
+                                    caller_full_name = row[1]
+                                    caller_type = "family"
+
+                    conn.close()
+                except Exception as e:
+                    logger.error(f"lookup_caller DB error: {e}")
+
+            logger.info(f"lookup_caller result: name={caller_name}, type={caller_type}")
+            return JSONResponse({
+                "found": bool(caller_name),
+                "caller_name": caller_name or "",
+                "caller_type": caller_type,
+                "caller_full_name": caller_full_name or "",
+                "phone_number": phone_number
+            })
 
         elif function_name == "execute_caregiver_call_out":
             result = await execute_caregiver_call_out(**args)
