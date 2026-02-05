@@ -6,7 +6,7 @@ import os
 from fastapi import Request, HTTPException, status
 from typing import Dict, Any
 
-PORTAL_SECRET = os.getenv("PORTAL_SECRET", "change-me-in-production")
+PORTAL_SECRET = os.getenv("PORTAL_SECRET", "")
 
 async def verify_portal_request(request: Request) -> Dict[str, Any]:
     """

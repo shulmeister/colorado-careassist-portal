@@ -79,6 +79,14 @@
             "type": "prompt",
             "prompt": "The caller asks about concerts, events, shows, sports, theater, comedy shows, things to do, what's happening this weekend, setlists, what songs an artist played, or any entertainment events or concert setlists"
           }
+        },
+        {
+          "id": "start_fallback_to_jason",
+          "destination_node_id": "transfer_to_jason",
+          "transition_condition": {
+            "type": "prompt",
+            "prompt": "After 3 or more exchanges, the caller's request still cannot be routed to any specific handler, or the caller is frustrated and wants to speak to someone"
+          }
         }
       ]
     },
@@ -137,6 +145,14 @@
           "transition_condition": {
             "type": "prompt",
             "prompt": "Caregiver asks to speak to Jason, the owner, a human, a real person, or asks to be transferred to a manager"
+          }
+        },
+        {
+          "id": "caregiver_fallback_to_other",
+          "destination_node_id": "caregiver_other",
+          "transition_condition": {
+            "type": "prompt",
+            "prompt": "After 3 exchanges the caregiver's issue still cannot be classified, or their request doesn't fit any specific category"
           }
         }
       ]
@@ -402,6 +418,14 @@
           "transition_condition": {
             "type": "prompt",
             "prompt": "Client asks to speak to Jason, the owner, a human, a real person, or asks to be transferred to a manager"
+          }
+        },
+        {
+          "id": "client_fallback_to_end",
+          "destination_node_id": "end_call",
+          "transition_condition": {
+            "type": "prompt",
+            "prompt": "After 3 exchanges the client's issue cannot be classified, or the client just wants to chat without a specific request"
           }
         }
       ]

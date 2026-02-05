@@ -5636,19 +5636,19 @@ async def retell_shift_offer_complete(request: Request):
     Captures the caregiver's verbal response and feeds it into the shift filling engine.
     Idempotent: duplicate webhook deliveries (retries) are safely ignored via call_id tracking.
     """
-    # Verify Retell signature if API key is configured
+    # Verify Retell signature — fail closed if API key not configured
     retell_key = os.getenv("RETELL_API_KEY")
-    if retell_key:
-        import hmac, hashlib, json as _json
-        body_bytes = await request.body()
-        signature = request.headers.get("x-retell-signature", "")
-        expected = hmac.new(retell_key.encode(), body_bytes, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            logger.warning("Retell shift-offer webhook: Invalid signature")
-            return JSONResponse({"error": "Unauthorized"}, status_code=401)
-        body = _json.loads(body_bytes)
-    else:
-        body = await request.json()
+    if not retell_key:
+        logger.error("RETELL_API_KEY not set — rejecting shift-offer webhook")
+        return JSONResponse({"error": "Server misconfiguration"}, status_code=503)
+    import hmac, hashlib, json as _json
+    body_bytes = await request.body()
+    signature = request.headers.get("x-retell-signature", "")
+    expected = hmac.new(retell_key.encode(), body_bytes, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        logger.warning("Retell shift-offer webhook: Invalid signature")
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    body = _json.loads(body_bytes)
 
     try:
         event = body.get("event", "")

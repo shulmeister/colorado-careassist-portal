@@ -57,7 +57,11 @@ ACTIVITY_TRACKER_URL = os.getenv(
     "https://portal.coloradocareassist.com/activity/",
 )
 
-PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
+import secrets as _secrets
+PORTAL_SECRET = os.getenv("PORTAL_SECRET")
+if not PORTAL_SECRET:
+    PORTAL_SECRET = _secrets.token_urlsafe(32)
+    logging.getLogger(__name__).warning("PORTAL_SECRET not set — using random value (sessions won't persist across restarts)")
 PORTAL_SSO_SERIALIZER = URLSafeTimedSerializer(PORTAL_SECRET)
 PORTAL_SSO_TOKEN_TTL = int(os.getenv("PORTAL_SSO_TOKEN_TTL", "300"))
 

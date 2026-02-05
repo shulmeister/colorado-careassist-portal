@@ -470,7 +470,11 @@ def ensure_financial_entry_schema():
 ensure_financial_entry_schema()
 
 # Portal SSO configuration (shared secret with main portal)
-PORTAL_SECRET = os.getenv("PORTAL_SECRET", "colorado-careassist-portal-2025")
+import secrets as _secrets_mod
+PORTAL_SECRET = os.getenv("PORTAL_SECRET")
+if not PORTAL_SECRET:
+    PORTAL_SECRET = _secrets_mod.token_urlsafe(32)
+    logger.warning("PORTAL_SECRET not set — using random value (SSO tokens won't validate across restarts)")
 PORTAL_SSO_SERIALIZER = URLSafeTimedSerializer(PORTAL_SECRET)
 PORTAL_SSO_TOKEN_TTL = int(os.getenv("PORTAL_SSO_TOKEN_TTL", "300"))
 SALES_ENABLE_TEST_ENDPOINTS = os.getenv("SALES_ENABLE_TEST_ENDPOINTS", "true").lower() == "true"

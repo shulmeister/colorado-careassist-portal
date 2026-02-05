@@ -40,9 +40,7 @@ RINGCENTRAL_FROM_NUMBER = "+17194283999"
 # ADMIN TOKEN (Jason x101) - Required for visibility into Company Lines (719/303)
 # Standard x111 token is blind to these numbers.
 # Use JWT from environment variable (refreshed regularly)
-ADMIN_JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN",
-    "eyJraWQiOiI4NzYyZjU5OGQwNTk0NGRiODZiZjVjYTk3ODA0NzYwOCIsInR5cCI6IkpXVCIsImFsZyI6IlJTMjU2In0.eyJhdWQiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbS9yZXN0YXBpL29hdXRoL3Rva2VuIiwic3ViIjoiNjM1NzA0NTYwMDgiLCJpc3MiOiJodHRwczovL3BsYXRmb3JtLnJpbmdjZW50cmFsLmNvbSIsImV4cCI6MzkxNjYyNDk3NywiaWF0IjoxNzY5MTQxMzMwLCJqdGkiOiIyWHZDR2haSlFFLVl1bXRJa2I3eGZ3In0.P29KNaMXc0cDfWU23Yh5pOV8xg2MgVPt5VhWeMi_6YE4_Tz_KLaMnyvM7YZ-ov3RUbMUwsSGZFtziJnz1Ru0Vq_GQ-L5yMABnMH3e3DEvHdydL4Yuo-hekiK0nC32OMXwPsNQu-sthrQp7T6YT1-1jhofDBY9_dLcB8G95B0amplloQDjP_LF9UhBwC4tFu--E2tdmURkbEHFntLDI39s9F6eeW4JiEXqac70-z57bXsOX7P1bOpt79ONYTg8fjqnE7CDGF_HdOXkFwip_FfBXgf6a-AaVRh9QdN9pN2pMxBhu24aXluN0FCDSXYD-SJx0FSfooMNKQ6ffZ_qz9jjA"
-)
+ADMIN_JWT_TOKEN = os.getenv("RINGCENTRAL_JWT_TOKEN", "")
 
 # Configure logging
 logging.basicConfig(
@@ -525,7 +523,8 @@ class GigiRingCentralBot:
                     await self._check_campaign_status()
 
             # 4. Clock in/out reminders (every 5 min during business hours)
-            if self.clock_reminder and self.is_business_hours():
+            # Respects REPLIES_ENABLED as global SMS kill switch
+            if self.clock_reminder and REPLIES_ENABLED and self.is_business_hours():
                 now = datetime.utcnow()
                 if (now - self._last_clock_check).total_seconds() >= 300:
                     self._last_clock_check = now
@@ -537,7 +536,8 @@ class GigiRingCentralBot:
                         logger.error(f"Clock reminder error: {e}")
 
             # 5. Daily shift confirmations (service handles its own 2pm timing)
-            if self.daily_confirmation:
+            # Respects REPLIES_ENABLED as global SMS kill switch
+            if self.daily_confirmation and REPLIES_ENABLED:
                 try:
                     notified = self.daily_confirmation.check_and_send()
                     if notified:
@@ -726,20 +726,23 @@ class GigiRingCentralBot:
             if m not in possible_names:
                 possible_names.append(m)
 
-        # Verify against WellSky
+        # Verify against WellSky (strict matching to avoid wrong-client logs)
         for pname in possible_names:
             if client_id: break
             try:
                 clean_name = pname.replace(".", "")
-                last_name_search = clean_name.split()[-1]
+                name_parts = clean_name.split()
+                last_name_search = name_parts[-1]
                 if len(last_name_search) > 2:
                     clients = self.wellsky.search_patients(last_name=last_name_search)
                     if clients:
                         for c in clients:
-                            c_full = c.full_name.lower().replace(".", "")
                             c_last = c.last_name.lower().replace(".", "")
-                            p_clean = clean_name.lower()
-                            if p_clean in c_full or c_last in p_clean:
+                            c_first = c.first_name.lower().replace(".", "")
+                            p_last = last_name_search.lower()
+                            p_first = name_parts[0].lower() if len(name_parts) > 1 else ""
+                            # Require exact last name match AND (first name match OR single-name search)
+                            if c_last == p_last and (not p_first or c_first.startswith(p_first) or p_first.startswith(c_first)):
                                 client = c
                                 client_id = client.id
                                 client_name = client.full_name

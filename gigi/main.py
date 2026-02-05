@@ -5025,8 +5025,8 @@ async def retell_function_call(function_name: str, request: Request):
             if not caregiver:
                 logger.warning(f"Could not find caregiver: {caregiver_name}")
                 return JSONResponse({
-                    "success": True,  # Still "success" - we logged it
-                    "message": f"I've logged the call-out for {caregiver_name}. The care team has been notified.",
+                    "success": False,
+                    "message": f"I couldn't find {caregiver_name} in our records. I've flagged this for the care team to follow up on manually.",
                     "manual_follow_up": True
                 })
 

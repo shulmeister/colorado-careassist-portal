@@ -188,11 +188,16 @@ def sync_practitioners(token, db):
         addr, city, state, zipcode = parse_address(res.get("address"))
 
         # Extract language from FHIR communication[] array
+        # WellSky format: communication[].coding[].display (not nested under .language)
         languages = []
         preferred_language = "English"
         for comm in res.get("communication", []):
-            lang = comm.get("language", {})
-            coding = lang.get("coding", [{}])
+            # Try WellSky format first: coding at top level of comm entry
+            coding = comm.get("coding", [])
+            if not coding:
+                # Fallback: standard FHIR format with nested language.coding
+                lang = comm.get("language", {})
+                coding = lang.get("coding", [])
             display = coding[0].get("display", "") if coding else ""
             if display:
                 languages.append(display)

@@ -38,7 +38,10 @@ class GoogleOAuthManager:
         # Session management
         self.secret_key = os.getenv("APP_SECRET_KEY", secrets.token_urlsafe(32))
         self.serializer = URLSafeTimedSerializer(self.secret_key)
-        
+
+        # Invalidated session tokens (survives in-memory, bounded to max 1000)
+        self._invalidated_tokens: set = set()
+
         # Allowed domains (your Google Workspace domain)
         self.allowed_domains = os.getenv("ALLOWED_DOMAINS", "coloradocareassist.com").split(",")
         
@@ -188,17 +191,23 @@ class GoogleOAuthManager:
     def verify_session(self, session_token: str) -> Optional[Dict[str, Any]]:
         """Verify session token and return user data"""
         try:
+            # Check if token has been invalidated by logout
+            if session_token in self._invalidated_tokens:
+                return None
             session_data = self.serializer.loads(session_token, max_age=3600 * 24)  # 24 hours
             return session_data
         except Exception as e:
             logger.warning(f"Invalid session token: {str(e)}")
             return None
-    
+
     def logout(self, session_token: str) -> bool:
-        """Logout user (invalidate session)"""
+        """Logout user — invalidate session token immediately"""
         try:
-            # In a production app, you'd store invalidated tokens
-            # For now, we rely on token expiration
+            self._invalidated_tokens.add(session_token)
+            # Bound the set size to prevent memory leak
+            if len(self._invalidated_tokens) > 1000:
+                self._invalidated_tokens = set(list(self._invalidated_tokens)[-500:])
+            logger.info("Session token invalidated on logout")
             return True
         except Exception as e:
             logger.error(f"Logout error: {str(e)}")
