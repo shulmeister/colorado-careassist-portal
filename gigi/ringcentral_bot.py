@@ -60,6 +60,9 @@ TIMEZONE = pytz.timezone("America/Denver")
 BUSINESS_START = time(8, 0)
 BUSINESS_END = time(17, 0)
 
+# REPLY MODE - Set to True when Jason says go live with replies
+REPLIES_ENABLED = False
+
 # LOOP PREVENTION - Critical safeguards
 REPLY_COOLDOWN_MINUTES = 30  # Don't reply to same number within this window
 MAX_REPLIES_PER_DAY_PER_NUMBER = 3  # Max replies to any single number per day
@@ -475,8 +478,8 @@ class GigiRingCentralBot:
             logger.info(f"Glip: Processing new message {msg_id}: {text[:30]}...")
             await self.process_documentation(msg, text, source_type="chat")
 
-            # Only reply on team chat if someone directly addresses Gigi
-            if not self.is_business_hours() and "gigi" in text.lower():
+            # Only reply on team chat if someone directly addresses Gigi AND replies are enabled
+            if REPLIES_ENABLED and not self.is_business_hours() and "gigi" in text.lower():
                 logger.info(f"Gigi addressed in team chat — replying")
                 await self.process_reply(msg, text, reply_method="chat")
 
@@ -543,8 +546,8 @@ class GigiRingCentralBot:
                 # Role 1: Documenter
                 await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
 
-                # Role 2: Replier
-                if not self.is_business_hours():
+                # Role 2: Replier (only when REPLIES_ENABLED)
+                if REPLIES_ENABLED and not self.is_business_hours():
                     # IMPORTANT: Don't reply if it's from US (to prevent loops)
                     if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777", "+16039971495"]:
                         await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
