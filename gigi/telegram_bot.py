@@ -192,6 +192,48 @@ TOOLS = [
             },
             "required": []
         }
+    },
+    {
+        "name": "web_search",
+        "description": "Search the internet for current information. Use this for news, weather, sports scores, general knowledge questions, or anything not specific to CCA business systems.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "get_stock_price",
+        "description": "Get current stock price for a ticker symbol (AAPL, TSLA, GOOG, NVDA, etc.)",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Stock ticker symbol (e.g., AAPL, TSLA, GOOG)"
+                }
+            },
+            "required": ["symbol"]
+        }
+    },
+    {
+        "name": "get_crypto_price",
+        "description": "Get current cryptocurrency price. Use this when Jason asks about Bitcoin, Ethereum, crypto prices, etc.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "symbol": {
+                    "type": "string",
+                    "description": "Crypto symbol (BTC, ETH, DOGE, SOL, etc.)"
+                }
+            },
+            "required": ["symbol"]
+        }
     }
 ]
 
@@ -217,13 +259,19 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal
 - get_wellsky_clients: Search CCA's 70 active clients by name from local database cache
 - get_wellsky_caregivers: Search CCA's 55 active caregivers by name from local database cache
 - get_wellsky_shifts: Get shift schedules from WellSky (filter by client_id or caregiver_id)
+- web_search: Search the internet for news, weather, sports, general knowledge
+- get_stock_price: Get real-time stock prices (AAPL, TSLA, NVDA, etc.)
+- get_crypto_price: Get real-time crypto prices (BTC, ETH, DOGE, SOL, etc.)
 
 # CRITICAL RULES — READ CAREFULLY
 - NEVER say you don't have access to email, calendar, WellSky, or client data. You DO. Use the tools.
+- NEVER say you can't search the internet or get stock/crypto prices. You CAN. Use web_search, get_stock_price, get_crypto_price.
 - NEVER mention "CLI", "gog", "command line", or "configuration needed" for email. Just call search_emails.
 - NEVER say a client or caregiver doesn't exist without calling the tool first. The database has ALL clients.
 - NEVER make up data — call the tool and report exactly what it returns.
 - If a tool returns an error, report the ACTUAL error message so we can fix it.
+- For Bitcoin/crypto questions: use get_crypto_price with symbol "BTC", "ETH", etc.
+- For stock questions: use get_stock_price with the ticker symbol.
 - When Jason asks about a client (shifts, coverage, who is assigned):
   1. FIRST call get_wellsky_clients with search_name to find the client's ID
   2. THEN call get_wellsky_shifts with that client_id to get their schedule
@@ -254,7 +302,7 @@ class GigiTelegramBot:
         logger.info(f"   WellSky: {'✓ Ready' if self.wellsky else '✗ Not available'}")
         logger.info(f"   Google: {'✓ Ready' if self.google else '✗ Not available'}")
 
-    def execute_tool(self, tool_name: str, tool_input: dict) -> str:
+    async def execute_tool(self, tool_name: str, tool_input: dict) -> str:
         """Execute a tool and return the result as a string"""
         try:
             if tool_name == "get_calendar_events":
@@ -396,6 +444,138 @@ class GigiTelegramBot:
                     logger.warning(f"Shift name enrichment failed (non-fatal): {e}")
                 return json.dumps({"count": len(shifts), "shifts": shift_list})
 
+            elif tool_name == "web_search":
+                query = tool_input.get("query", "")
+                if not query:
+                    return json.dumps({"error": "No search query provided"})
+                try:
+                    import httpx
+                    # Use Brave Search API
+                    brave_api_key = os.getenv("BRAVE_API_KEY")
+                    if brave_api_key:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.get(
+                                "https://api.search.brave.com/res/v1/web/search",
+                                headers={"X-Subscription-Token": brave_api_key},
+                                params={"q": query, "count": 5}
+                            )
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                results = []
+                                for r in data.get("web", {}).get("results", [])[:5]:
+                                    results.append({
+                                        "title": r.get("title"),
+                                        "description": r.get("description"),
+                                        "url": r.get("url")
+                                    })
+                                return json.dumps({"query": query, "results": results})
+                    # Fallback: use DuckDuckGo instant answers
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(
+                            f"https://api.duckduckgo.com/?q={query}&format=json&no_html=1"
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            answer = data.get("AbstractText") or data.get("Answer") or ""
+                            if answer:
+                                return json.dumps({"query": query, "answer": answer, "source": data.get("AbstractSource", "DuckDuckGo")})
+                            # Return related topics if no direct answer
+                            topics = [{"text": t.get("Text"), "url": t.get("FirstURL")}
+                                     for t in data.get("RelatedTopics", [])[:5] if t.get("Text")]
+                            if topics:
+                                return json.dumps({"query": query, "related_topics": topics})
+                    return json.dumps({"query": query, "message": "No results found. Try a more specific query."})
+                except Exception as e:
+                    logger.error(f"Web search error: {e}")
+                    return json.dumps({"error": f"Search failed: {str(e)}"})
+
+            elif tool_name == "get_stock_price":
+                symbol = tool_input.get("symbol", "").upper()
+                if not symbol:
+                    return json.dumps({"error": "No stock symbol provided"})
+                try:
+                    import httpx
+                    # Use Alpha Vantage or Yahoo Finance
+                    alpha_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+                    if alpha_key:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.get(
+                                f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={alpha_key}"
+                            )
+                            if resp.status_code == 200:
+                                data = resp.json().get("Global Quote", {})
+                                if data:
+                                    return json.dumps({
+                                        "symbol": symbol,
+                                        "price": data.get("05. price"),
+                                        "change": data.get("09. change"),
+                                        "change_percent": data.get("10. change percent"),
+                                        "high": data.get("03. high"),
+                                        "low": data.get("04. low"),
+                                        "volume": data.get("06. volume")
+                                    })
+                    # Fallback: Use Yahoo Finance via yfinance scraping endpoint
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(
+                            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            result = data.get("chart", {}).get("result", [{}])[0]
+                            meta = result.get("meta", {})
+                            if meta.get("regularMarketPrice"):
+                                return json.dumps({
+                                    "symbol": symbol,
+                                    "price": f"${meta.get('regularMarketPrice', 0):.2f}",
+                                    "previous_close": f"${meta.get('previousClose', 0):.2f}",
+                                    "currency": meta.get("currency", "USD")
+                                })
+                    return json.dumps({"error": f"Could not find stock price for {symbol}"})
+                except Exception as e:
+                    logger.error(f"Stock price error: {e}")
+                    return json.dumps({"error": f"Stock lookup failed: {str(e)}"})
+
+            elif tool_name == "get_crypto_price":
+                symbol = tool_input.get("symbol", "").upper()
+                if not symbol:
+                    return json.dumps({"error": "No crypto symbol provided"})
+                # Map common names to CoinGecko IDs
+                crypto_map = {
+                    "BTC": "bitcoin", "BITCOIN": "bitcoin",
+                    "ETH": "ethereum", "ETHEREUM": "ethereum",
+                    "DOGE": "dogecoin", "DOGECOIN": "dogecoin",
+                    "SOL": "solana", "SOLANA": "solana",
+                    "XRP": "ripple", "RIPPLE": "ripple",
+                    "ADA": "cardano", "CARDANO": "cardano",
+                    "MATIC": "matic-network", "POLYGON": "matic-network",
+                    "DOT": "polkadot", "POLKADOT": "polkadot",
+                    "AVAX": "avalanche-2", "AVALANCHE": "avalanche-2",
+                    "LINK": "chainlink", "CHAINLINK": "chainlink"
+                }
+                coin_id = crypto_map.get(symbol, symbol.lower())
+                try:
+                    import httpx
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(
+                            f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true"
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            if coin_id in data:
+                                info = data[coin_id]
+                                return json.dumps({
+                                    "symbol": symbol,
+                                    "name": coin_id.replace("-", " ").title(),
+                                    "price": f"${info.get('usd', 0):,.2f}",
+                                    "change_24h": f"{info.get('usd_24h_change', 0):.2f}%",
+                                    "market_cap": f"${info.get('usd_market_cap', 0):,.0f}"
+                                })
+                    return json.dumps({"error": f"Could not find price for {symbol}. Try BTC, ETH, DOGE, SOL, etc."})
+                except Exception as e:
+                    logger.error(f"Crypto price error: {e}")
+                    return json.dumps({"error": f"Crypto lookup failed: {str(e)}"})
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -495,7 +675,7 @@ class GigiTelegramBot:
                             logger.info(f"   Executing tool: {tool_name} with input: {tool_input}")
 
                             # Execute the tool
-                            result = self.execute_tool(tool_name, tool_input)
+                            result = await self.execute_tool(tool_name, tool_input)
                             logger.info(f"   Tool result: {result[:200]}...")
 
                             tool_results.append({
