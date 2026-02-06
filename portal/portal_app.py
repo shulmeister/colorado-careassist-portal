@@ -140,30 +140,47 @@ async def autonomous_documentation_sync():
     while True:
         try:
             logger.info("Starting autonomous RingCentral -> WellSky sync...")
-            # Use db_manager to get a fresh session outside of request context
             with db_manager.get_session() as db:
                 from services.ringcentral_messaging_service import ringcentral_messaging_service
-                
-                channels = ["New Schedulers", "Biz Dev"]
+
+                channels = ["New Scheduling", "Biz Dev"]
                 for channel in channels:
-                    # Sync every 30 mins (checking last 1 hour for safety margin)
-                    ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=1)
-                    # Note: auto_create_complaints needs push_to_wellsky=True
-                    # We'll just trigger the main logic we added to the endpoint
-                    ringcentral_messaging_service.sync_tasks_to_wellsky(db, chat_name=channel, hours_back=1)
-                    
+                    # 1. Scan for client issues/complaints
+                    scan_res = ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=1)
+
+                    # 2. Auto-create complaints and push to WellSky
+                    # Collect message IDs already handled so sync_tasks doesn't duplicate
+                    complaint_msg_ids = set()
+                    if scan_res.get("potential_complaints"):
+                        for c in scan_res["potential_complaints"]:
+                            if c.get("message_id"):
+                                complaint_msg_ids.add(c["message_id"])
+                        ringcentral_messaging_service.auto_create_complaints(
+                            db, scan_res, auto_create=True, push_to_wellsky=True
+                        )
+
+                    # 3. Sync all care-relevant messages as WellSky notes
+                    # Skip messages already handled by complaint path above
+                    ringcentral_messaging_service.sync_tasks_to_wellsky(
+                        db, chat_name=channel, hours_back=1,
+                        skip_message_ids=complaint_msg_ids
+                    )
+
             logger.info("Autonomous documentation sync completed.")
         except Exception as e:
             logger.error(f"Error in autonomous documentation loop: {e}")
-        
+
         # Run every 30 minutes
         await asyncio.sleep(1800)
 
 @app.on_event("startup")
 async def startup_event():
-    # Start the documentation loop
-    asyncio.create_task(autonomous_documentation_sync())
-    logger.info("Gigi Autonomous Documentation Engine started.")
+    # Only run autonomous sync in production (staging has STAGING=true env var)
+    if os.getenv("STAGING", "").lower() != "true":
+        asyncio.create_task(autonomous_documentation_sync())
+        logger.info("Gigi Autonomous Documentation Engine started.")
+    else:
+        logger.info("Staging environment detected — skipping autonomous documentation sync.")
     
     # Ensure Gigi Brain tile exists
     try:
@@ -5414,13 +5431,13 @@ async def api_sync_rc_to_wellsky(
     from services.ringcentral_messaging_service import ringcentral_messaging_service
     
     results = {}
-    channels = ["New Schedulers", "Biz Dev"]
-    
+    channels = ["New Scheduling", "Biz Dev"]
+
     for channel in channels:
         # 1. Sync Complaints/Issues
         scan_res = ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=hours)
         complaint_res = ringcentral_messaging_service.auto_create_complaints(db, scan_res, auto_create=True, push_to_wellsky=True)
-        
+
         # 2. Sync General Tasks
         task_res = ringcentral_messaging_service.sync_tasks_to_wellsky(db, chat_name=channel, hours_back=hours)
         

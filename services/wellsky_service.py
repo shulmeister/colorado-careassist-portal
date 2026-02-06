@@ -3784,10 +3784,44 @@ class WellSkyService:
                 except Exception as e:
                     logger.error(f"Error syncing note ({days_back}d window): {e}")
 
-        # Fallback: No encounter found in 90-day window
-        # Note is safely captured in local database above
-        logger.warning(f"No WellSky encounter found for client {client_id} in 90-day window. Note saved locally only.")
-        return True, "Note documented locally (no encounter available)"
+        # Fallback: No encounter found — create AdminTask in WellSky
+        # AdminTasks show up in WellSky dashboard and relate to the client
+        logger.info(f"No encounter for client {client_id} in 90-day window. Creating AdminTask.")
+        try:
+            timestamp = datetime.now().strftime("%m/%d %H:%M")
+            task_title = f"GIGI CARE NOTE: {note_type}"
+            task_desc = f"[{timestamp}] [{source.upper()}]\n{note}"
+
+            success_task, resp_task = self.create_admin_task(
+                title=task_title,
+                description=task_desc,
+                related_client_id=str(client_id),
+            )
+            if success_task:
+                task_id = resp_task.get("id", "unknown") if isinstance(resp_task, dict) else "unknown"
+                try:
+                    import sqlite3
+                    conn = sqlite3.connect('portal.db')
+                    cursor = conn.cursor()
+                    cursor.execute('''
+                        UPDATE gigi_documentation_log
+                        SET wellsky_synced = 1
+                        WHERE person_type = 'client' AND person_id = ?
+                        ORDER BY created_at DESC LIMIT 1
+                    ''', (client_id,))
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
+                logger.info(f"Created WellSky AdminTask {task_id} for client {client_id}")
+                return True, f"Note synced to WellSky AdminTask {task_id}"
+            else:
+                logger.warning(f"AdminTask creation also failed for client {client_id}: {resp_task}")
+        except Exception as e:
+            logger.error(f"Error creating AdminTask fallback for {client_id}: {e}")
+
+        logger.warning(f"All WellSky sync methods failed for client {client_id}. Note saved locally only.")
+        return True, "Note documented locally (all WellSky sync methods failed)"
 
     def add_note_to_prospect(
         self,
@@ -5386,17 +5420,18 @@ class WellSkyService:
         related_client_id: Optional[str] = None,
         related_caregiver_id: Optional[str] = None,
         priority: str = "normal"
-    ) -> bool:
+    ) -> Tuple[bool, Any]:
         """
-        Create an administrative task. Falls back to local database if WellSky API fails.
+        Create an administrative task in WellSky via POST /v1/adminTasks/.
+
+        AdminTasks show up in the WellSky dashboard and can relate to
+        patients (clients) or practitioners (caregivers).
         """
         # Always log to local database first (Documentation Trail)
         try:
             import sqlite3
             conn = sqlite3.connect('portal.db')
             cursor = conn.cursor()
-            
-            # Ensure table exists
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS wellsky_documentation (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -5404,34 +5439,77 @@ class WellSkyService:
                     title TEXT,
                     description TEXT,
                     related_id TEXT,
+                    wellsky_task_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            
             related_id = related_client_id or related_caregiver_id or "N/A"
             cursor.execute('''
                 INSERT INTO wellsky_documentation (type, title, description, related_id)
                 VALUES (?, ?, ?, ?)
             ''', ('TASK', title, description, related_id))
-            
             conn.commit()
             conn.close()
-            logger.info(f"Logged task locally: {title}")
+            logger.info(f"Logged admin task locally: {title}")
         except Exception as e:
             logger.error(f"Failed to log task locally: {e}")
 
         if self.is_mock_mode:
-            return True
+            return True, {"id": "mock-task-1", "resourceType": "Task"}
 
-        # WellSky Connect API does not support creating Admin Tasks.
-        # Legacy API is decommissioned (404).
-        # We rely on the local database log created above.
-        logger.info(f"Local: Admin Task '{title}' saved to database. (Cloud sync skipped - not supported by Connect API)")
-        return True
+        # Build requester list from related client/caregiver
+        requester = []
+        if related_client_id:
+            requester.append({"resourceType": "Patient", "id": int(related_client_id)})
+        if related_caregiver_id:
+            requester.append({"resourceType": "Practitioner", "id": int(related_caregiver_id)})
+        if not requester:
+            # Must have at least one requester — use agency-level
+            requester.append(int(self.agency_id))
 
-        # DEPRECATED: Legacy API call removed
-        # task_data = { ... }
-        # success, response, status_code = self._make_legacy_request("POST", "adminTasks/", data=task_data)
+        exec_date = date.today().isoformat()
+        due = due_date.isoformat() + "T23:59:59" if due_date else (date.today() + timedelta(days=1)).isoformat() + "T23:59:59"
+
+        task_data = {
+            "status": "received",  # "received" = Not Complete (open task)
+            "description": f"{title}\n\n{description}"[:5000],
+            "executionDate": exec_date,
+            "dueDate": due,
+            "requester": requester,
+            "owner": [],  # Unassigned — will appear in admin task queue
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": self.agency_id}
+                ]
+            }
+        }
+
+        if assigned_to:
+            task_data["owner"] = [int(assigned_to)]
+
+        success, response = self._make_request("POST", "adminTasks/", data=task_data)
+
+        if success:
+            task_id = response.get("id", "unknown") if isinstance(response, dict) else "unknown"
+            logger.info(f"Created WellSky AdminTask {task_id}: {title[:60]}")
+            # Update local record with WellSky task ID
+            try:
+                import sqlite3
+                conn = sqlite3.connect('portal.db')
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE wellsky_documentation SET wellsky_task_id = ?
+                    WHERE type = 'TASK' AND related_id = ?
+                    ORDER BY created_at DESC LIMIT 1
+                ''', (str(task_id), related_id))
+                conn.commit()
+                conn.close()
+            except Exception:
+                pass
+            return True, response
+        else:
+            logger.warning(f"AdminTask creation failed: {response}")
+            return False, response
 
     def add_note_to_caregiver(
         self,
