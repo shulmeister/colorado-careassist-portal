@@ -52,6 +52,15 @@ except Exception as e:
     GOOGLE_AVAILABLE = False
     logger.warning(f"Google service not available: {e}")
 
+# Simulation support
+SIMULATION_MODE = False
+try:
+    from gigi.simulation_service import capture_simulation_tool_call
+    SIMULATION_MODE = True
+    logger.info("Simulation mode available")
+except ImportError:
+    logger.warning("Simulation service not available")
+
 # Claude client
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
@@ -600,6 +609,10 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None) -> t
     if not claude:
         return "I'm having trouble connecting right now. Please try again.", None
 
+    # Extract call_id for simulation tracking
+    call_id = call_info.get("call_id") if call_info else None
+    is_simulation = call_id and call_id.startswith("sim_")
+
     # Convert Retell transcript format to Claude messages
     messages = []
     for turn in transcript:
@@ -644,6 +657,10 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None) -> t
 
                     logger.info(f"Executing tool: {tool_name}")
                     result = await execute_tool(tool_name, tool_input)
+
+                    # CAPTURE for simulations
+                    if is_simulation and SIMULATION_MODE:
+                        capture_simulation_tool_call(call_id, tool_name, tool_input, result)
 
                     # Check for transfer
                     if tool_name == "transfer_call":
@@ -731,7 +748,8 @@ class VoiceBrainHandler:
 
         elif interaction_type == "call_details":
             self.call_info = message.get("call", {})
-            logger.info(f"Call details: from={self.call_info.get('from_number')}")
+            self.call_info["call_id"] = self.call_id  # Add call_id for simulation tracking
+            logger.info(f"Call details: from={self.call_info.get('from_number')}, call_id={self.call_id}")
 
             # Generate and send initial greeting
             greeting, _ = await generate_response([], self.call_info)

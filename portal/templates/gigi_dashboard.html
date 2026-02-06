@@ -758,19 +758,21 @@
                         <table class="table">
                             <thead>
                                 <tr>
+                                    <th>ID</th>
                                     <th>Scenario</th>
                                     <th>Status</th>
-                                    <th>Duration</th>
+                                    <th class="text-center">Turns</th>
+                                    <th class="text-center">Score</th>
+                                    <th class="text-center">Duration</th>
                                     <th>Time</th>
-                                    <th>Launched By</th>
                                     <th></th>
                                 </tr>
                             </thead>
                             <tbody id="history-table-body">
                                 <tr>
-                                    <td colspan="6" class="text-center py-5">
+                                    <td colspan="8" class="text-center py-5">
                                         <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
-                                        <span class="ms-2 text-secondary">Loading test history...</span>
+                                        <span class="ms-2 text-secondary">Loading simulations...</span>
                                     </td>
                                 </tr>
                             </tbody>
@@ -1550,7 +1552,7 @@
                     scenariosData = data.scenarios;
                     grid.innerHTML = data.scenarios.map(s => `
                         <div class="col-md-6 col-lg-4">
-                            <div class="stat-card h-100">
+                            <div class="stat-card h-100" data-scenario="${s.id}">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <span class="fw-bold">${s.name}</span>
                                     ${['rambling_family_loop', 'dementia_repeat_loop', 'angry_neglect_accusation', 'medical_advice_boundary'].includes(s.id) ? '<span class="badge bg-danger">Critical</span>' : ''}
@@ -1585,6 +1587,9 @@
                             </div>
                         </div>
                     `).join('');
+
+                    // Auto-refresh history every 10 seconds
+                    setInterval(loadSimulationHistory, 10000);
                 }
             } catch (err) {
                 grid.innerHTML = '<div class="text-danger">Failed to load scenarios</div>';
@@ -1649,74 +1654,167 @@
         }
 
         async function runSimulation(scenario) {
-            if (!confirm(`Launch Retell simulation for "${scenario}"?\n\nThis will create a web call that you can interact with via the Retell dashboard.`)) return;
+            const scenarioName = scenariosData.find(s => s.id === scenario)?.name || scenario;
+            if (!confirm(`Launch Voice Brain simulation for "${scenarioName}"?\n\nThis will test the smart Gigi AI agent automatically.`)) return;
+
+            const card = document.querySelector(`[data-scenario="${scenario}"]`);
+            const btn = card ? card.querySelector('.btn-primary') : null;
+            const originalText = btn ? btn.innerHTML : '';
 
             try {
+                if (btn) {
+                    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Launching...';
+                    btn.disabled = true;
+                }
+
                 const resp = await fetch('/api/gigi/simulations/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ scenario: scenario })
                 });
                 const data = await resp.json();
+
                 if (data.success) {
-                    alert(`Test started!\n\nCall ID: ${data.call_id}\n\nTo interact with the test:\n1. Go to app.retellai.com\n2. Open the agent and click "Test"\n3. Or check Test History tab for results`);
+                    if (btn) {
+                        btn.innerHTML = '<i class="bi bi-check-circle"></i> Running...';
+                    }
+
+                    // Show toast notification
+                    showToast('Simulation launched! Check history for results.', 'success');
+
+                    // Start polling for completion
+                    if (data.simulation_id && card) {
+                        pollSimulationStatus(data.simulation_id, card, btn, originalText);
+                    }
+
+                    // Refresh history after delay
+                    setTimeout(loadSimulationHistory, 2000);
                 } else {
-                    alert(`Error: ${data.error}`);
+                    throw new Error(data.error || 'Failed to launch simulation');
                 }
             } catch (err) {
-                alert('Failed to launch simulation.');
+                console.error('Simulation error:', err);
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
+                showToast(`Error: ${err.message}`, 'danger');
             }
+        }
+
+        async function pollSimulationStatus(simulationId, card, btn, originalText) {
+            const maxPolls = 60; // 2 minutes
+            let polls = 0;
+
+            const interval = setInterval(async () => {
+                polls++;
+
+                try {
+                    const resp = await fetch(`/api/gigi/simulations/${simulationId}/details`);
+                    const data = await resp.json();
+
+                    if (data.success && data.simulation.status === 'completed') {
+                        clearInterval(interval);
+
+                        const score = data.simulation.overall_score;
+                        const status = score >= 70 ? 'PASS' : 'FAIL';
+                        const emoji = score >= 70 ? '✅' : '❌';
+
+                        if (btn) {
+                            btn.innerHTML = `${emoji} ${status} (${score})`;
+                            btn.disabled = false;
+                        }
+
+                        loadSimulationHistory();
+                        showToast(`Simulation completed: ${status} ${score}/100`, score >= 70 ? 'success' : 'warning');
+                    } else if (data.success && data.simulation.status === 'failed') {
+                        clearInterval(interval);
+                        if (btn) {
+                            btn.innerHTML = '<i class="bi bi-x-circle"></i> Failed';
+                            btn.disabled = false;
+                        }
+                        showToast('Simulation failed', 'danger');
+                    } else if (polls >= maxPolls) {
+                        clearInterval(interval);
+                        if (btn) {
+                            btn.innerHTML = '<i class="bi bi-clock"></i> Timeout';
+                            btn.disabled = false;
+                        }
+                    }
+                } catch (err) {
+                    console.error('Poll error:', err);
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `alert alert-${type} position-fixed top-0 end-0 m-3`;
+            toast.style.zIndex = '9999';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => toast.remove(), 5000);
         }
 
         async function loadSimulationHistory() {
             const tbody = document.getElementById('history-table-body');
             try {
-                const resp = await fetch('/api/gigi/simulations/history?limit=30');
+                const resp = await fetch('/api/gigi/simulations/history?limit=50');
                 const data = await resp.json();
 
-                if (data.success && data.calls.length > 0) {
-                    tbody.innerHTML = data.calls.map(c => {
-                        const statusClass = c.status === 'ended' ? 'bg-success' :
-                                            c.status === 'error' ? 'bg-danger' : 'bg-warning';
-                        const isTest = c.is_test ? '<span class="badge bg-info bg-opacity-10 text-info ms-1">TEST</span>' : '';
-                        const scenarioName = scenariosData.find(s => s.id === c.scenario)?.name || c.scenario;
-                        const time = c.start_time ? new Date(c.start_time).toLocaleString() : 'N/A';
+                if (data.success && data.simulations.length > 0) {
+                    tbody.innerHTML = data.simulations.map(sim => {
+                        const statusBadge = getStatusBadge(sim.status, sim.overall_score);
+                        const duration = sim.duration ? `${sim.duration}s` : '-';
+                        const time = sim.created_at ? new Date(sim.created_at).toLocaleString() : 'N/A';
+                        const score = sim.overall_score !== null ? `${sim.overall_score}/100` : '-';
 
                         return `
                             <tr>
-                                <td>
-                                    <span class="fw-bold">${scenarioName}</span>${isTest}
-                                </td>
-                                <td><span class="status-badge ${statusClass} bg-opacity-10">${c.status}</span></td>
-                                <td>${c.duration ? c.duration.toFixed(1) + 's' : '-'}</td>
+                                <td><span class="small text-secondary">#${sim.id}</span></td>
+                                <td><span class="fw-bold small">${sim.scenario_name}</span></td>
+                                <td>${statusBadge}</td>
+                                <td class="text-center">${sim.turns || '-'}</td>
+                                <td class="text-center">${score}</td>
+                                <td class="text-center">${duration}</td>
                                 <td class="small text-secondary">${time}</td>
-                                <td class="small">${c.launched_by || '-'}</td>
                                 <td class="text-end">
-                                    <button class="btn btn-link btn-sm p-0 text-info" onclick="viewCallDetails('${c.call_id}')">
-                                        <i class="bi bi-eye"></i> View
+                                    <button class="btn btn-link btn-sm p-0 text-info" onclick="viewSimulationDetails(${sim.id})">
+                                        <i class="bi bi-eye"></i>
                                     </button>
                                 </td>
                             </tr>
                         `;
                     }).join('');
                 } else {
-                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-secondary">No test history found. Run a simulation to see results here.</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-secondary">No simulations yet. Run a test to see results here.</td></tr>';
                 }
             } catch (err) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-danger">Failed to load history</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-danger">Failed to load history</td></tr>';
                 console.error(err);
             }
         }
 
-        async function viewCallDetails(callId) {
-            const infoPanel = document.getElementById('callInfoPanel');
-            const toolsPanel = document.getElementById('toolCallsPanel');
-            const transcriptPanel = document.getElementById('transcriptPanel');
-            const recordingLink = document.getElementById('recordingLink');
+        function getStatusBadge(status, score) {
+            if (status === 'completed') {
+                if (score >= 70) {
+                    return '<span class="badge bg-success">✅ PASS</span>';
+                } else {
+                    return '<span class="badge bg-warning">⚠️ FAIL</span>';
+                }
+            } else if (status === 'running') {
+                return '<span class="badge bg-info">▶️ Running</span>';
+            } else if (status === 'failed') {
+                return '<span class="badge bg-danger">❌ Error</span>';
+            } else {
+                return '<span class="badge bg-secondary">⏳ Pending</span>';
+            }
+        }
 
-            infoPanel.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>';
-            toolsPanel.innerHTML = '';
-            transcriptPanel.innerHTML = '<div class="text-center text-secondary">Loading...</div>';
+        async function viewSimulationDetails(simulationId) {
+            const modalBody = document.getElementById('simulationDetailBody');
+            modalBody.innerHTML = '<div class="text-center"><div class="spinner-border"></div><p class="mt-2">Loading simulation details...</p></div>';
 
             if (!callDetailModal) {
                 callDetailModal = new bootstrap.Modal(document.getElementById('callDetailModal'));
@@ -1724,65 +1822,108 @@
             callDetailModal.show();
 
             try {
-                const resp = await fetch(`/api/gigi/simulations/call/${callId}`);
+                const resp = await fetch(`/api/gigi/simulations/${simulationId}/details`);
                 const data = await resp.json();
 
-                if (data.success) {
-                    const c = data.call;
-
-                    // Call Info
-                    infoPanel.innerHTML = `
-                        <div class="mb-2"><strong>Call ID:</strong> <code class="small">${c.call_id.substring(0, 20)}...</code></div>
-                        <div class="mb-2"><strong>Status:</strong> <span class="status-badge ${c.status === 'ended' ? 'bg-success' : 'bg-warning'} bg-opacity-10">${c.status}</span></div>
-                        <div class="mb-2"><strong>Duration:</strong> ${c.duration ? c.duration.toFixed(1) + 's' : 'N/A'}</div>
-                        <div class="mb-2"><strong>Disconnect:</strong> ${c.disconnect_reason || 'N/A'}</div>
-                        ${c.from_number ? `<div class="mb-2"><strong>From:</strong> ${c.from_number}</div>` : ''}
-                    `;
-
-                    // Tool Calls
-                    if (c.tool_calls && c.tool_calls.length > 0) {
-                        toolsPanel.innerHTML = c.tool_calls.map((t, i) => `
-                            <div class="mb-2 p-2 border border-secondary border-opacity-25 rounded">
-                                <div class="small fw-bold">${i + 1}. ${t.name || t.function_name || 'Unknown'}</div>
-                                ${t.arguments ? `<code class="small">${JSON.stringify(t.arguments).substring(0, 100)}...</code>` : ''}
-                            </div>
-                        `).join('');
-                    } else {
-                        toolsPanel.innerHTML = '<div class="text-secondary small">No tool calls recorded</div>';
-                    }
-
-                    // Transcript
-                    if (c.transcript_object && c.transcript_object.length > 0) {
-                        transcriptPanel.innerHTML = c.transcript_object.map(t => `
-                            <div class="mb-3">
-                                <div class="small fw-bold ${t.role === 'agent' ? 'text-info' : 'text-warning'} mb-1">
-                                    ${t.role === 'agent' ? 'Gigi' : 'Caller'}
-                                </div>
-                                <div class="small">${t.content}</div>
-                            </div>
-                        `).join('');
-                    } else if (c.transcript) {
-                        transcriptPanel.innerHTML = `<pre class="small text-wrap">${c.transcript}</pre>`;
-                    } else {
-                        transcriptPanel.innerHTML = '<div class="text-secondary">No transcript available</div>';
-                    }
-
-                    // Recording
-                    if (c.recording_url) {
-                        recordingLink.href = c.recording_url;
-                        recordingLink.classList.remove('d-none');
-                    } else {
-                        recordingLink.classList.add('d-none');
-                    }
-
-                    document.getElementById('callDetailTitle').textContent = `Call Details - ${c.metadata?.scenario || 'Unknown'}`;
-                } else {
-                    infoPanel.innerHTML = `<div class="text-danger">${data.error}</div>`;
+                if (!data.success) {
+                    modalBody.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                    return;
                 }
+
+                const sim = data.simulation;
+                const eval = sim.evaluation || {};
+
+                // Build detailed modal content
+                modalBody.innerHTML = `
+                    <div class="mb-3">
+                        <h5>${sim.scenario_name}</h5>
+                        <p class="text-muted">${sim.status} • ${new Date(sim.created_at).toLocaleString()}</p>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-4">
+                            <div class="card bg-primary bg-opacity-10">
+                                <div class="card-body text-center">
+                                    <h3>${sim.overall_score || '-'}/100</h3>
+                                    <small>Overall Score</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card bg-info bg-opacity-10">
+                                <div class="card-body text-center">
+                                    <h3>${sim.tool_score || '-'}/100</h3>
+                                    <small>Tool Usage</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-4">
+                            <div class="card bg-success bg-opacity-10">
+                                <div class="card-body text-center">
+                                    <h3>${sim.behavior_score || '-'}/100</h3>
+                                    <small>Behavior</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h6>Tools Used</h6>
+                    <p>${(sim.tools_used || []).join(', ') || 'None'}</p>
+
+                    ${eval.tools_missing && eval.tools_missing.length > 0 ? `
+                        <div class="alert alert-warning">
+                            <strong>Missing Tools:</strong> ${eval.tools_missing.join(', ')}
+                        </div>
+                    ` : ''}
+
+                    <h6>Behavior Analysis</h6>
+                    <p>${eval.behavior_analysis || 'Not available'}</p>
+
+                    ${eval.strengths && eval.strengths.length > 0 ? `
+                        <h6>Strengths</h6>
+                        <ul>
+                            ${eval.strengths.map(s => `<li>${s}</li>`).join('')}
+                        </ul>
+                    ` : ''}
+
+                    ${eval.weaknesses && eval.weaknesses.length > 0 ? `
+                        <h6>Weaknesses</h6>
+                        <ul>
+                            ${eval.weaknesses.map(w => `<li>${w}</li>`).join('')}
+                        </ul>
+                    ` : ''}
+
+                    <h6>Full Transcript</h6>
+                    <div class="card bg-dark">
+                        <div class="card-body" style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
+                            ${formatTranscript(sim.transcript_json || [])}
+                        </div>
+                    </div>
+
+                    <div class="mt-3 text-end">
+                        <a href="/api/gigi/simulations/${simulationId}/report" target="_blank" class="btn btn-outline-primary">
+                            <i class="bi bi-file-earmark-text"></i> View Full Report
+                        </a>
+                    </div>
+                `;
+
+                document.getElementById('callDetailTitle').textContent = `Simulation #${sim.id} - ${sim.scenario_name}`;
             } catch (err) {
-                infoPanel.innerHTML = '<div class="text-danger">Failed to load call details</div>';
-                console.error(err);
+                console.error('Failed to load details:', err);
+                modalBody.innerHTML = '<div class="alert alert-danger">Error loading simulation details</div>';
             }
+        }
+
+        function formatTranscript(transcriptJson) {
+            if (!transcriptJson || transcriptJson.length === 0) {
+                return '<p class="text-muted">Transcript not available</p>';
+            }
+
+            return transcriptJson.map(turn => {
+                const role = turn.role === 'assistant' ? 'Agent' : 'Caller';
+                const className = turn.role === 'assistant' ? 'text-info' : 'text-warning';
+                return `<p><strong class="${className}">${role}:</strong> ${turn.content}</p>`;
+            }).join('');
         }
 
         async function saveSettings() {
