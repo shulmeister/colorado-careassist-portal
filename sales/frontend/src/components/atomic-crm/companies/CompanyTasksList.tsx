@@ -60,7 +60,7 @@ export const CompanyTasksList = ({ companyId }: { companyId: Identifier }) => {
   const fetchTasks = async () => {
     try {
       const response = await fetch(
-        `/sales/admin/tasks?contact_id=${companyId}&sort=created_at&order=DESC`
+        `/sales/admin/tasks?company_id=${companyId}&sort=created_at&order=DESC`
       );
       if (response.ok) {
         const data = await response.json();

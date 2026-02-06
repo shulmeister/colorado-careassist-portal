@@ -2421,6 +2421,7 @@ async def get_all_tasks(
     request: Request,
     assigned_to: Optional[str] = Query(default=None),
     sales_id: Optional[int] = Query(default=None),
+    company_id: Optional[int] = Query(default=None),
     done_date: Optional[str] = Query(default=None, alias="done_date@is"),
     due_date_lt: Optional[str] = Query(default=None, alias="due_date@lt"),
     due_date_lte: Optional[str] = Query(default=None, alias="due_date@lte"),
@@ -2433,12 +2434,14 @@ async def get_all_tasks(
 ):
     """Get all tasks (contact tasks, company tasks, deal tasks) with unified filtering.
 
-    This endpoint is used by the dashboard's Upcoming Tasks widget.
+    This endpoint is used by the dashboard's Upcoming Tasks widget and company detail pages.
+    When company_id is provided, returns both company tasks AND tasks for contacts at that company.
     """
-    from models import ContactTask, CompanyTask, DealTask
+    from models import ContactTask, CompanyTask, DealTask, Contact
     from sqlalchemy import union_all, select, literal
 
     # Build queries for each task type
+    # For contact tasks, join with Contact to get company_id
     contact_tasks = select(
         ContactTask.id.label('id'),
         ContactTask.title.label('title'),
@@ -2448,11 +2451,11 @@ async def get_all_tasks(
         ContactTask.status.label('status'),
         ContactTask.assigned_to.label('assigned_to'),
         ContactTask.contact_id.label('contact_id'),
-        literal(None).label('company_id'),
+        Contact.company_id.label('company_id'),
         literal(None).label('deal_id'),
         literal('contact').label('task_type'),
         ContactTask.created_at.label('created_at'),
-    ).select_from(ContactTask)
+    ).select_from(ContactTask).join(Contact, ContactTask.contact_id == Contact.id)
 
     company_tasks = select(
         CompanyTask.id,
@@ -2500,6 +2503,10 @@ async def get_all_tasks(
         }
         if sales_id in sales_id_to_email:
             query = query.filter(combined_query.c.assigned_to == sales_id_to_email[sales_id])
+
+    # Filter by company_id - returns both company tasks AND tasks for contacts at that company
+    if company_id:
+        query = query.filter(combined_query.c.company_id == company_id)
 
     # Handle done_date filter (for pending tasks widget)
     if done_date is not None and done_date.lower() == 'null':
@@ -9317,7 +9324,14 @@ async def get_activity_logs(
 
         # Apply filters if provided
         if company_id:
-            query = query.filter(ActivityLog.company_id == company_id)
+            # Get activities directly linked to company OR activities for contacts at that company
+            from sqlalchemy import or_
+            query = query.outerjoin(Contact, ActivityLog.contact_id == Contact.id).filter(
+                or_(
+                    ActivityLog.company_id == company_id,
+                    Contact.company_id == company_id
+                )
+            )
         if contact_id:
             query = query.filter(ActivityLog.contact_id == contact_id)
         if deal_id:
