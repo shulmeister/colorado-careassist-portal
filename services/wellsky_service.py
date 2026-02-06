@@ -4849,32 +4849,52 @@ class WellSkyService:
 
         for period_name, (start_date, end_date) in periods.items():
             try:
-                # Get completed encounters (care logs) for this period
-                # Encounters have actual billing and payroll rate data
-                start_str = start_date.strftime("%Y%m%d")
-                end_str = end_date.strftime("%Y%m%d")
+                # STRATEGY: Get all active clients, then aggregate their ChargeItems
+                logger.info(f"Getting hours breakdown for {period_name}...")
 
-                success, response = self.search_encounters(
-                    start_date=start_str,
-                    end_date=end_str,
-                    count=1000  # Get up to 1000 encounters
-                )
+                # STEP 1: Get all active clients
+                clients = self.get_clients(status=ClientStatus.ACTIVE, limit=500)
+                logger.info(f"Found {len(clients)} active clients")
 
-                if not success or not response:
-                    logger.warning(f"Failed to get encounters for {period_name}")
+                if not clients:
+                    logger.warning(f"No active clients found for {period_name}")
                     completed_encounters = []
                 else:
-                    entries = response.get("entry", [])
-                    completed_encounters = []
-                    for entry in entries:
-                        resource = entry.get("resource", entry)
-                        if resource.get("status") in ("COMPLETE", "complete"):
-                            completed_encounters.append(resource)
+                    # STEP 2: For each client, get their Encounters
+                    start_str = start_date.strftime("%Y%m%d")
+                    end_str = end_date.strftime("%Y%m%d")
+
+                    all_encounters = []
+                    for i, client in enumerate(clients):
+                        if i % 20 == 0:
+                            logger.info(f"Processing client {i+1}/{len(clients)}...")
+
+                        try:
+                            success, response = self.search_encounters(
+                                client_id=client.id,
+                                start_date=start_str,
+                                end_date=end_str,
+                                count=100
+                            )
+
+                            if success and response:
+                                entries = response.get("entry", [])
+                                for entry in entries:
+                                    resource = entry.get("resource", entry)
+                                    # Only completed encounters
+                                    if resource.get("status") in ("COMPLETE", "complete"):
+                                        all_encounters.append(resource)
+                        except Exception as e:
+                            logger.debug(f"Error getting encounters for client {client.id}: {e}")
+                            continue
+
+                    completed_encounters = all_encounters
+                    logger.info(f"Found {len(completed_encounters)} encounters for {period_name}")
 
                 if len(completed_encounters) > 0:
                     has_real_data = True
 
-                # Calculate total hours from encounter periods
+                # Calculate total hours from ChargeItem data
                 total_hours = 0.0
                 billing_total = 0.0
                 payroll_total = 0.0
@@ -4886,55 +4906,72 @@ class WellSkyService:
                 # Group by caregiver to calculate regular/overtime
                 caregiver_hours = defaultdict(float)
 
-                for encounter in completed_encounters:
-                    # Parse period start/end to calculate duration
-                    period = encounter.get("period", {})
-                    start_str = period.get("start")
-                    end_str = period.get("end")
+                for item in completed_encounters:
+                    try:
+                        # ChargeItem uses "occurrencePeriod", Encounter uses "period"
+                        period = item.get("occurrencePeriod") or item.get("period", {})
+                        start_str = period.get("start")
+                        end_str = period.get("end")
 
-                    if start_str and end_str:
-                        try:
+                        # ChargeItem has "quantity" field with hours
+                        quantity = item.get("quantity", {})
+                        hours_from_quantity = quantity.get("value", 0) if isinstance(quantity, dict) else 0
+
+                        if start_str and end_str:
                             # Parse ISO timestamps
                             start_dt = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
                             end_dt = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
                             duration_hours = (end_dt - start_dt).total_seconds() / 3600.0
-                            total_hours += duration_hours
+                        elif hours_from_quantity > 0:
+                            # Use quantity if no period
+                            duration_hours = float(hours_from_quantity)
+                        else:
+                            continue
 
-                            # Track caregiver hours for overtime calc
-                            participant = encounter.get("participant", {})
-                            if participant:
-                                # Extract caregiver ID from participant
-                                individual = participant.get("Individual", [{}])[0] if isinstance(participant.get("Individual"), list) else {}
-                                caregiver_ref = individual.get("reference", "")
-                                if caregiver_ref:
+                        total_hours += duration_hours
+
+                        # Track caregiver hours for overtime calc
+                        # ChargeItem uses "performer", Encounter uses "participant"
+                        performers = item.get("performer", [])
+                        if performers:
+                            for performer in performers:
+                                caregiver_ref = performer.get("reference", "")
+                                if caregiver_ref and "Practitioner" in caregiver_ref:
                                     caregiver_id = caregiver_ref.split("/")[-1]
                                     caregiver_hours[caregiver_id] += duration_hours
                                     unique_caregivers.add(caregiver_id)
 
-                            # Track client
-                            subject = encounter.get("subject", {})
-                            client_ref = subject.get("reference", "")
-                            if client_ref:
-                                client_id = client_ref.split("/")[-1]
-                                unique_clients.add(client_id)
+                        # Also check participant (for Encounters)
+                        participant = item.get("participant", {})
+                        if participant:
+                            individual = participant.get("Individual", [{}])[0] if isinstance(participant.get("Individual"), list) else {}
+                            caregiver_ref = individual.get("reference", "")
+                            if caregiver_ref:
+                                caregiver_id = caregiver_ref.split("/")[-1]
+                                caregiver_hours[caregiver_id] += duration_hours
+                                unique_caregivers.add(caregiver_id)
 
-                            # Get billing and payroll hours from encounter rates
-                            # WellSky returns actual billed/paid hours in the rates
-                            rates = encounter.get("rates", {})
-                            bill_rates = rates.get("billRate", [])
-                            pay_rates = rates.get("payRate", [])
+                        # Track client
+                        subject = item.get("subject", {})
+                        client_ref = subject.get("reference", "")
+                        if client_ref:
+                            client_id = client_ref.split("/")[-1]
+                            unique_clients.add(client_id)
 
-                            if bill_rates and isinstance(bill_rates, list):
-                                # Sum billing hours (usually same as duration for hourly)
-                                billing_total += duration_hours
+                        # Get billing and payroll hours from rates
+                        rates = item.get("rates", {})
+                        bill_rates = rates.get("billRate", [])
+                        pay_rates = rates.get("payRate", [])
 
-                            if pay_rates and isinstance(pay_rates, list):
-                                # Sum payroll hours (usually same as duration for hourly)
-                                payroll_total += duration_hours
+                        if bill_rates and isinstance(bill_rates, list):
+                            billing_total += duration_hours
 
-                        except Exception as e:
-                            logger.warning(f"Error parsing encounter period: {e}")
-                            continue
+                        if pay_rates and isinstance(pay_rates, list):
+                            payroll_total += duration_hours
+
+                    except Exception as e:
+                        logger.debug(f"Error parsing chargeitem: {e}")
+                        continue
 
                 # Calculate regular vs overtime (assuming 40 hrs/week threshold)
                 weeks_in_period = (end_date - start_date).days / 7.0
