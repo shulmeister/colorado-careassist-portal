@@ -161,7 +161,7 @@ function HomePage() {
 
 function App() {
   return (
-    <Router basename="/powderpulse">
+    <Router>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/resort/:resortId" element={<ResortDetail />} />
