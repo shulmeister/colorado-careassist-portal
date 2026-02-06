@@ -2106,6 +2106,7 @@ async def admin_get_contacts(
     last_activity_gte: Optional[str] = Query(default=None, alias="last_activity_gte"),
     last_activity_lte: Optional[str] = Query(default=None, alias="last_activity_lte"),
     sales_id: Optional[int] = Query(default=None),
+    account_manager: Optional[str] = Query(default=None),
     filter: Optional[str] = Query(default=None),
 ):
     # Reuse existing contact listing logic
@@ -2123,6 +2124,7 @@ async def admin_get_contacts(
         last_activity_gte=last_activity_gte,
         last_activity_lte=last_activity_lte,
         sales_id=sales_id,
+        account_manager=account_manager,
         filter=filter,
     )
 
