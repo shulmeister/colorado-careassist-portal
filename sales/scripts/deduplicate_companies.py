@@ -2,8 +2,9 @@
 """
 Deduplicate Companies
 
-Merges duplicate companies (same name, case-insensitive), keeping the oldest one
-and updating all references (contacts, deals, activities).
+Merges duplicate companies (same name AND location, case-insensitive), keeping the oldest one
+and updating all references (contacts, deals, activities, tasks).
+Companies with the same name but different locations are kept separate.
 """
 
 import sys
@@ -18,7 +19,7 @@ from models import ReferralSource, Contact, Deal, ActivityLog, CompanyTask
 
 
 def deduplicate_companies(dry_run=False):
-    """Deduplicate companies by name (case-insensitive)."""
+    """Deduplicate companies by name AND location (case-insensitive)."""
 
     print("=" * 70)
     print("DEDUPLICATE COMPANIES")
@@ -27,12 +28,14 @@ def deduplicate_companies(dry_run=False):
     print(f"Mode: {'DRY RUN' if dry_run else 'LIVE'}\n")
 
     with db_manager.SessionLocal() as db:
-        # Find all duplicate company names
+        # Find all duplicate company names + locations
         duplicates_query = db.query(
             func.lower(func.trim(ReferralSource.name)).label('normalized_name'),
+            func.lower(func.coalesce(func.trim(ReferralSource.location), '')).label('normalized_location'),
             func.count().label('count')
         ).group_by(
-            func.lower(func.trim(ReferralSource.name))
+            func.lower(func.trim(ReferralSource.name)),
+            func.lower(func.coalesce(func.trim(ReferralSource.location), ''))
         ).having(
             func.count() > 1
         ).order_by(
@@ -41,7 +44,7 @@ def deduplicate_companies(dry_run=False):
 
         duplicates = duplicates_query.all()
 
-        print(f"Found {len(duplicates)} company names with duplicates\n")
+        print(f"Found {len(duplicates)} company name+location combinations with duplicates\n")
 
         if not duplicates:
             print("✅ No duplicates found!")
@@ -52,11 +55,13 @@ def deduplicate_companies(dry_run=False):
 
         for dup in duplicates:
             normalized_name = dup.normalized_name
+            normalized_location = dup.normalized_location
             count = dup.count
 
-            # Get all companies with this name
+            # Get all companies with this name AND location
             companies = db.query(ReferralSource).filter(
-                func.lower(func.trim(ReferralSource.name)) == normalized_name
+                func.lower(func.trim(ReferralSource.name)) == normalized_name,
+                func.lower(func.coalesce(func.trim(ReferralSource.location), '')) == normalized_location
             ).order_by(
                 ReferralSource.created_at.asc()  # Keep oldest
             ).all()
@@ -68,7 +73,8 @@ def deduplicate_companies(dry_run=False):
             keeper = companies[0]
             duplicates_to_delete = companies[1:]
 
-            print(f"\n📋 {keeper.name} ({count} duplicates)")
+            location_str = f" ({keeper.location})" if keeper.location else " (no location)"
+            print(f"\n📋 {keeper.name}{location_str} ({count} duplicates)")
             print(f"   Keeping: ID {keeper.id} (created {keeper.created_at})")
 
             # Merge references from duplicates to keeper
@@ -122,10 +128,10 @@ def deduplicate_companies(dry_run=False):
         print("\n" + "=" * 70)
         print("SUMMARY")
         print("=" * 70)
-        print(f"Company names with duplicates: {len(duplicates)}")
+        print(f"Company name+location combinations with duplicates: {len(duplicates)}")
         print(f"Companies merged: {total_merged}")
         print(f"Duplicate records deleted: {total_deleted}")
-        print(f"Expected final count: {963 - total_deleted}")
+        print(f"Note: Companies with same name but different locations are kept separate")
         print("=" * 70)
 
 
