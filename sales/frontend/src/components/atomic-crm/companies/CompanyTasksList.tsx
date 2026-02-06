@@ -60,7 +60,7 @@ export const CompanyTasksList = ({ companyId }: { companyId: Identifier }) => {
   const fetchTasks = async () => {
     try {
       const response = await fetch(
-        `/admin/tasks?contact_id=${companyId}&sort=created_at&order=DESC`
+        `/sales/admin/tasks?contact_id=${companyId}&sort=created_at&order=DESC`
       );
       if (response.ok) {
         const data = await response.json();
@@ -80,7 +80,7 @@ export const CompanyTasksList = ({ companyId }: { companyId: Identifier }) => {
 
   const handleAddTask = async () => {
     try {
-      const response = await fetch("/admin/tasks", {
+      const response = await fetch("/sales/admin/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -113,7 +113,7 @@ export const CompanyTasksList = ({ companyId }: { companyId: Identifier }) => {
   const handleToggleComplete = async (task: CompanyTask) => {
     try {
       const newStatus = task.status === "completed" ? "pending" : "completed";
-      const response = await fetch(`/admin/tasks/${task.id}`, {
+      const response = await fetch(`/sales/admin/tasks/${task.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
