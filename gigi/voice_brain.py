@@ -383,30 +383,57 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             return json.dumps({"caregivers": caregivers, "count": len(caregivers)})
 
         elif tool_name == "get_wellsky_shifts":
-            if not WELLSKY_AVAILABLE or not wellsky:
-                return json.dumps({"error": "WellSky not available"})
-
+            # Query cached appointments for fast response
             from datetime import timedelta
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+
             days = min(tool_input.get("days", 7), 7)
             client_id = tool_input.get("client_id")
             caregiver_id = tool_input.get("caregiver_id")
 
-            shifts = wellsky.get_shifts(
-                date_from=date.today(),
-                date_to=date.today() + timedelta(days=days),
-                client_id=client_id,
-                caregiver_id=caregiver_id,
-                limit=30
-            )
+            end_date = date.today() + timedelta(days=days)
+
+            # Build SQL query
+            conditions = ["scheduled_start >= CURRENT_DATE", "scheduled_start <= %s"]
+            params = [end_date]
+
+            if client_id:
+                conditions.append("patient_id = %s")
+                params.append(client_id)
+
+            if caregiver_id:
+                conditions.append("practitioner_id = %s")
+                params.append(caregiver_id)
+
+            sql = f"""
+                SELECT id, patient_id, practitioner_id,
+                       scheduled_start, scheduled_end, status,
+                       service_type, location_address
+                FROM cached_appointments
+                WHERE {' AND '.join(conditions)}
+                ORDER BY scheduled_start
+                LIMIT 30
+            """
+
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            conn.close()
 
             shift_list = []
-            for s in shifts[:20]:
-                if hasattr(s, 'to_dict'):
-                    shift_list.append(s.to_dict())
-                else:
-                    shift_list.append(str(s))
+            for r in rows[:20]:
+                shift_list.append({
+                    "id": str(r[0]),
+                    "client_id": r[1],
+                    "caregiver_id": r[2],
+                    "start": r[3].isoformat() if r[3] else None,
+                    "end": r[4].isoformat() if r[4] else None,
+                    "status": r[5] or "",
+                    "service_type": r[6] or "",
+                    "location": r[7] or ""
+                })
 
-            return json.dumps({"shifts": shift_list, "count": len(shifts)})
+            return json.dumps({"shifts": shift_list, "count": len(shift_list)})
 
         elif tool_name == "send_sms":
             phone = tool_input.get("phone_number", "")
@@ -439,28 +466,36 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             if not query:
                 return json.dumps({"error": "Missing query"})
 
+            # Try Brave Search first (fast, <1 second)
+            brave_api_key = os.getenv("BRAVE_API_KEY")
+            if brave_api_key:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(
+                            "https://api.search.brave.com/res/v1/web/search",
+                            params={"q": query, "count": 5},
+                            headers={"X-Subscription-Token": brave_api_key},
+                            timeout=3.0
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            results = data.get("web", {}).get("results", [])
+                            if results:
+                                formatted = [{"title": r.get("title", ""), "snippet": r.get("description", ""), "url": r.get("url", "")} for r in results[:5]]
+                                return json.dumps({"results": formatted, "query": query})
+                except Exception as e:
+                    logger.warning(f"Brave search failed: {e}")
+
+            # Fallback to DuckDuckGo (slower, 5-10 seconds)
             try:
                 from ddgs import DDGS
-                # Try web search first
                 results = DDGS().text(query, max_results=5)
                 if results:
                     formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in results]
                     return json.dumps({"results": formatted, "query": query})
-                # Fall back to news search
-                results = DDGS().news(query, max_results=5)
-                if results:
-                    formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "date": r.get("date", "")} for r in results]
-                    return json.dumps({"results": formatted, "query": query, "type": "news"})
             except Exception as e:
                 logger.warning(f"DDG search failed: {e}")
-                # Fallback to instant answers API
-                async with httpx.AsyncClient() as client:
-                    resp = await client.get(f"https://api.duckduckgo.com/?q={query}&format=json&no_html=1")
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        answer = data.get("AbstractText") or data.get("Answer")
-                        if answer:
-                            return json.dumps({"answer": answer})
+
             return json.dumps({"message": "No results found"})
 
         elif tool_name == "get_stock_price":
