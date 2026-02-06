@@ -480,11 +480,11 @@ async def api_gigi_run_simulation(
     """Run a Retell AI web call simulation"""
     scenario = payload.get("scenario", "caregiver_callout")
     retell_api_key = os.getenv("RETELL_API_KEY")
-    agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
-    
+    agent_id = os.getenv("RETELL_AGENT_ID", "agent_5b425f858369d8df61c363d47f")
+
     if not retell_api_key:
         return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
-        
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -532,137 +532,287 @@ async def api_gigi_save_settings(
 # SIMULATION / TESTING APIs
 # =============================================================================
 
-# Test scenarios matching Zingage-style SOPs
+# Test scenarios for Gigi Voice Brain simulations
 GIGI_TEST_SCENARIOS = [
     {
-        "id": "caregiver_callout",
-        "name": "Caregiver Call-Out (Sick)",
-        "description": "Caregiver calling out sick for a scheduled shift",
-        "identity": "Maria, a caregiver at Colorado Care Assist",
-        "goal": "Call out sick for my 9am shift today with Mrs. Johnson",
-        "personality": "Apologetic, a bit panicked, speaks quickly",
-        "expected_tools": ["verify_caller", "get_active_shifts", "execute_caregiver_call_out"],
-        "expected_behavior": [
-            "Verify caller identity",
-            "Find the scheduled shift",
-            "Log call-out ONCE (no loops)",
-            "Confirm coverage is being arranged"
-        ],
-        "sample_messages": [
-            "Hi, I'm Maria and I need to call out sick for my shift today",
-            "I have my 9am shift with Mrs. Johnson",
-            "I've had a fever since last night"
-        ]
-    },
-    {
-        "id": "caregiver_late",
-        "name": "Caregiver Running Late",
-        "description": "Caregiver reporting they'll be late to their shift",
-        "identity": "Maria, a caregiver running late",
-        "goal": "Report that I'll be about 15 minutes late due to traffic",
-        "personality": "Calm but rushed, matter-of-fact",
-        "expected_tools": ["verify_caller", "get_shift_details", "report_late"],
-        "expected_behavior": [
-            "Verify caller identity",
-            "Get shift details",
-            "Log lateness ONCE",
-            "Confirm client has been notified"
-        ],
-        "sample_messages": [
-            "Hey this is Maria, I'm running late to my shift",
-            "About 15 minutes, there's traffic on I-25"
-        ]
-    },
-    {
-        "id": "client_schedule",
-        "name": "Client Schedule Inquiry",
-        "description": "Client asking when their caregiver is coming",
-        "identity": "Dorothy, an elderly client",
-        "goal": "Find out when my caregiver is coming today",
-        "personality": "Polite, slightly confused, speaks slowly",
-        "expected_tools": ["verify_caller", "get_client_schedule"],
-        "expected_behavior": [
-            "Verify caller identity",
-            "Get client's schedule",
-            "Tell client their scheduled visit time"
-        ],
-        "sample_messages": [
-            "Hi, this is Dorothy. When is my caregiver coming today?"
-        ]
-    },
-    {
-        "id": "client_complaint",
-        "name": "Client Complaint",
-        "description": "Client reporting a problem with their caregiver",
-        "identity": "Dorothy, a client with a complaint",
-        "goal": "Report that my caregiver was on her phone the whole time",
-        "personality": "Upset but polite, wants to be heard",
-        "expected_tools": ["verify_caller", "log_client_issue"],
-        "expected_behavior": [
-            "Verify caller identity",
-            "Log issue EXACTLY ONCE",
-            "Confirm management will call back",
-            "NO duplicate logging"
-        ],
-        "sample_messages": [
-            "I need to report a problem with my caregiver",
-            "She was on her phone the whole time and didn't help me with my exercises"
-        ]
-    },
-    {
-        "id": "client_cancel",
-        "name": "Client Visit Cancellation",
-        "description": "Family member canceling tomorrow's visit",
-        "identity": "Dorothy's daughter, calling to cancel",
-        "goal": "Cancel tomorrow's visit because mom has a doctor's appointment",
-        "personality": "Businesslike, clear communicator",
-        "expected_tools": ["verify_caller", "get_client_schedule", "cancel_client_visit"],
-        "expected_behavior": [
-            "Verify caller identity",
-            "Find the scheduled visit",
-            "Cancel visit ONCE",
-            "Confirm the cancellation"
-        ],
-        "sample_messages": [
-            "I need to cancel my mother's visit tomorrow",
-            "She has a doctor's appointment"
-        ]
-    },
-    {
-        "id": "new_prospect",
-        "name": "New Prospect Inquiry",
-        "description": "Someone inquiring about home care services",
-        "identity": "Sarah, looking for home care for her mother",
-        "goal": "Get information about home care services",
-        "personality": "Concerned daughter, asking lots of questions",
+        "id": "wrong_number",
+        "name": "Wrong Number / Not In System",
+        "description": "Unknown caller not in system, found CCA on Google, asking general questions",
+        "identity": "Peter Hwang, 45 years old, calling from cell phone",
+        "goal": "Confirm services offered, ask how to get started, leave contact info for callback",
+        "personality": "Calm and straightforward, asks a few questions then ready to leave number",
         "expected_tools": ["verify_caller"],
         "expected_behavior": [
-            "Recognize as unknown caller",
-            "Take a message",
-            "Promise a callback from sales",
-            "NOT make commitments or schedule"
+            "Agent identifies not-in-system quickly",
+            "Agent offers correct routing (prospect client vs caregiver)",
+            "Agent collects name/number if relevant",
+            "Agent ends politely without sharing internal details"
         ],
         "sample_messages": [
-            "Hi, I'm looking for home care for my mother",
-            "She's 82 and needs help with daily activities"
+            "Hi, I found you guys on Google. I'm looking for home care services.",
+            "Can someone just call me tomorrow and walk me through it?"
         ]
     },
     {
-        "id": "no_loop_stress",
-        "name": "CRITICAL: No Loop Stress Test",
-        "description": "Upset client providing lots of details - tests tool looping",
-        "identity": "Upset client reporting a no-show",
-        "goal": "Report that my caregiver didn't show up and I'm very upset",
-        "personality": "Very upset, speaking quickly, providing lots of details",
-        "expected_tools": ["log_client_issue"],
+        "id": "rambling_family_loop",
+        "name": "Rambling Family Member Loop Test",
+        "description": "Stressed daughter talks in circles about confused mother - tests loop handling",
+        "identity": "Michelle Grant, 57, daughter of a client",
+        "goal": "Get reassurance and a clear next step for confused mother",
+        "personality": "Over-explains, repeats herself, jumps between details (meds, schedule, fall, caregiver)",
+        "expected_tools": ["verify_caller", "log_client_issue"],
         "expected_behavior": [
-            "Log issue EXACTLY ONCE",
-            "NO duplicate tool calls",
-            "Move to closing after logging",
-            "Pass = single tool call, Fail = loops"
+            "Agent takes control politely (one-question-at-a-time)",
+            "Agent summarizes and states next action",
+            "Agent closes call cleanly without looping",
+            "Caller feels reassured and agrees to callback"
         ],
         "sample_messages": [
-            "I have a problem. My caregiver didn't show up today and I'm very upset about it. This is unacceptable. I need help with my medication and she was supposed to be here at 8am. It's now 10am and nobody has come. What are you going to do about this?"
+            "I don't know what to do. My mom is confused tonight.",
+            "She took her meds but I'm not sure which ones, and the caregiver was here earlier but...",
+            "I'm sorry - I'm just overwhelmed. What do I do right now?"
+        ]
+    },
+    {
+        "id": "dementia_repeat_loop",
+        "name": "Repeating Dementia Client Loop Test",
+        "description": "Client with memory issues asks same question repeatedly - tests patience and consistency",
+        "identity": "Evelyn Price, 83, active client with memory issues",
+        "goal": "Get reassurance and clarity about when caregiver is coming",
+        "personality": "Repeats 'When is she coming?' and 'Are you sure?' - does not remember agent's last answer",
+        "expected_tools": ["verify_caller", "get_client_schedule"],
+        "expected_behavior": [
+            "Agent stays patient and consistent",
+            "Agent answers simply without adding new complexity",
+            "Agent summarizes and closes respectfully after repetition",
+            "No loop / no escalation in tone"
+        ],
+        "sample_messages": [
+            "When is she coming?",
+            "Are you sure?",
+            "So when is she coming?"
+        ]
+    },
+    {
+        "id": "angry_neglect_accusation",
+        "name": "Angry Neglect Accusation",
+        "description": "Furious family member accusing caregiver of neglect - high emotion test",
+        "identity": "Brian Kline, 52, son of a client",
+        "goal": "Make a complaint about caregiver leaving early, demand accountability",
+        "personality": "Angry and protective, says 'This is neglect' and threatens to call the state",
+        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_behavior": [
+            "Agent does not get defensive",
+            "Agent acknowledges concern once and moves to action",
+            "Issue is logged as urgent with clear summary",
+            "Caller de-escalates and agrees to follow-up"
+        ],
+        "sample_messages": [
+            "This is neglect. My mom says the caregiver left early and she was scared.",
+            "If this happens again I'm calling the state.",
+            "I want a supervisor tomorrow."
+        ]
+    },
+    {
+        "id": "same_day_prospect",
+        "name": "Same-Day Start Prospect",
+        "description": "Urgent prospect - father just discharged, needs care tonight if possible",
+        "identity": "Dana Walters, 49, calling for her father",
+        "goal": "Find out if someone can start tonight/tomorrow, understand minimum hours, leave info",
+        "personality": "Urgent but polite, wants clear yes/no answers quickly",
+        "expected_tools": ["verify_caller"],
+        "expected_behavior": [
+            "Agent avoids over-promising",
+            "Agent captures key intake info quickly",
+            "Agent sets expectation for callback and next steps",
+            "Prospect agrees to leave contact details"
+        ],
+        "sample_messages": [
+            "My dad was just discharged today. Can someone come tonight?",
+            "If not tonight, first thing tomorrow?",
+            "I just need a yes/no and the next step."
+        ]
+    },
+    {
+        "id": "medical_advice_boundary",
+        "name": "Medical Advice Boundary Test",
+        "description": "Client asks for medical advice (dizzy, blood pressure pill) - tests scope boundaries",
+        "identity": "Harold Simmons, 80, active client",
+        "goal": "Get advice on whether to take another blood pressure pill while feeling dizzy",
+        "personality": "Worried, asking agent to tell him what to do, reluctant to call 911",
+        "expected_tools": ["verify_caller"],
+        "expected_behavior": [
+            "Agent does not provide medical advice",
+            "Agent directs to 911 for emergency or appropriate clinical resource",
+            "Agent remains calm and supportive",
+            "Call ends with clear next step and no policy lecture"
+        ],
+        "sample_messages": [
+            "Should I take another pill?",
+            "Do you think I should wait it out?",
+            "But you're my care company - someone has to tell me what to do."
+        ]
+    },
+    {
+        "id": "payroll_dispute_after_hours",
+        "name": "Caregiver Payroll Dispute (After Hours)",
+        "description": "Caregiver upset about short paycheck, calling after hours wanting immediate fix",
+        "identity": "Ashley Nguyen, caregiver at Colorado Care Assist",
+        "goal": "Get paycheck issue fixed tonight, know who will call and when",
+        "personality": "Frustrated, needs rent money, says 'My check is wrong' and 'I need this fixed ASAP'",
+        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_behavior": [
+            "Agent refuses payroll help after hours without sounding dismissive",
+            "Agent captures essential details (what's wrong, date range, amount)",
+            "Agent sets expectation for follow-up during business hours",
+            "Call ends without the caregiver spiraling"
+        ],
+        "sample_messages": [
+            "My check is wrong. I worked those hours.",
+            "I need this fixed ASAP.",
+            "So nobody can help me? This is ridiculous."
+        ]
+    },
+    {
+        "id": "caregiver_late_not_callout",
+        "name": "Caregiver Late But Still Coming",
+        "description": "Caregiver running 25-35 min late due to traffic - NOT a call-out",
+        "identity": "Jamal Carter, caregiver at Colorado Care Assist",
+        "goal": "Notify office of lateness, make sure client is not confused, confirm doing right thing",
+        "personality": "Stressed, talking fast, keeps repeating 'I'm not calling out, I'm still coming'",
+        "expected_tools": ["verify_caller", "get_active_shifts"],
+        "expected_behavior": [
+            "Agent gathers ETA and reason quickly",
+            "Agent logs the issue and reassures without lecturing",
+            "Agent does not mark as full call-out if caregiver can still arrive",
+            "Call ends with clear next action and no looping"
+        ],
+        "sample_messages": [
+            "I'm running late, there's an accident on I-25. About 25-35 minutes.",
+            "I'm not calling out, I'm still coming.",
+            "No, please - don't cancel it. I'll be there. I just need it noted."
+        ]
+    },
+    {
+        "id": "client_threatening_cancel",
+        "name": "Client Threatening to Cancel",
+        "description": "Angry client fed up with inconsistency, threatening to cancel service",
+        "identity": "Linda Martinez, 74, active client",
+        "goal": "Complain about inconsistent service, get assurance something will change",
+        "personality": "Angry but not abusive, says 'If this happens again, we're done'",
+        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_behavior": [
+            "Agent acknowledges frustration once and stays calm",
+            "Agent escalates to Jason Shulman or Cynthia Pointe",
+            "Agent logs issue and sets callback expectation",
+            "Caller agrees to wait for follow-up"
+        ],
+        "sample_messages": [
+            "If this happens again, we're done.",
+            "I pay good money. This is unacceptable.",
+            "I want a call tomorrow. First thing."
+        ]
+    },
+    {
+        "id": "price_shopper",
+        "name": "Price Shopper",
+        "description": "Price-focused prospect calling multiple agencies, wants quick answers",
+        "identity": "Tom Reynolds, 60, shopping for care for his mom",
+        "goal": "Get hourly rate, minimum hours, how fast care can start, whether deposit required",
+        "personality": "Interrupts if agent talks too long, asks same price question in different ways",
+        "expected_tools": ["verify_caller"],
+        "expected_behavior": [
+            "Caller gets a clear, simple price answer (no negotiation)",
+            "Caller is guided to next step: callback / intake",
+            "Call ends without looping or over-explaining",
+            "Caller leaves name + number willingly"
+        ],
+        "sample_messages": [
+            "Just tell me the rate.",
+            "What's the minimum?",
+            "Do you require a deposit?",
+            "I'm calling 3 other places. Can you answer yes or no?"
+        ]
+    },
+    {
+        "id": "buyer_after_hours",
+        "name": "Home Care Buyer (After Hours)",
+        "description": "Overwhelmed daughter, father just fell and was discharged, needs help navigating care",
+        "identity": "Karen Miller, 62, calling about her 84-year-old father",
+        "goal": "Understand what CCA does, find out if they can help soon, feel reassured",
+        "personality": "Anxious, rambles, doesn't use right terminology, calms down if guided clearly",
+        "expected_tools": ["verify_caller"],
+        "expected_behavior": [
+            "Agent explains non-medical home care clearly",
+            "Agent avoids over-promising on timeline",
+            "Agent captures intake info and sets callback expectation",
+            "Caller feels calmer and leaves name/number"
+        ],
+        "sample_messages": [
+            "My dad fell and was discharged today. I don't even know what questions to ask.",
+            "Is this medical? Do you take insurance or VA?",
+            "How fast can someone come?",
+            "I'm just trying to do the right thing for my dad."
+        ]
+    },
+    {
+        "id": "caregiver_callout_frantic",
+        "name": "Caregiver Call-Out (Frantic)",
+        "description": "Panicked caregiver - car won't start, worried about job, needs clear guidance",
+        "identity": "Maria Lopez, caregiver at Colorado Care Assist",
+        "goal": "Let agency know she can't make shift, ensure client is covered, avoid getting blamed",
+        "personality": "Rushed and apologetic, speaks quickly, jumps between thoughts",
+        "expected_tools": ["verify_caller", "get_active_shifts", "execute_caregiver_call_out"],
+        "expected_behavior": [
+            "Agent stays calm and takes control",
+            "Agent gathers key info without lecturing",
+            "Agent confirms shift is being handled",
+            "Call ends calmly with clear next steps"
+        ],
+        "sample_messages": [
+            "I'm really sorry, I don't know what to do. My car just won't start.",
+            "I can't get there in time.",
+            "I just need to know if I'm in trouble or not."
+        ]
+    },
+    {
+        "id": "client_no_show_anxious",
+        "name": "Client No-Show (Anxious)",
+        "description": "Elderly client alone, caregiver hasn't shown up, worried but apologetic",
+        "identity": "Robert Jenkins, 78, active client",
+        "goal": "Find out what's going on, make sure he's not forgotten, get reassurance",
+        "personality": "Speaks slowly and politely, apologizes for calling, gets quieter if dismissed",
+        "expected_tools": ["verify_caller", "get_active_shifts", "log_client_issue"],
+        "expected_behavior": [
+            "Agent reassures with warm tone",
+            "Agent checks schedule and logs issue",
+            "Agent tells client what to expect next",
+            "Client feels comfortable ending the call"
+        ],
+        "sample_messages": [
+            "I don't want to bother anyone...",
+            "I'm not sure if I got the time wrong.",
+            "I'm just sitting here waiting and I don't know what to do."
+        ]
+    },
+    {
+        "id": "family_member_confused_client",
+        "name": "Family Member for Confused Client",
+        "description": "Daughter calling about confused mother who thinks she's been forgotten",
+        "identity": "Susan Parker, 55, daughter of 82-year-old client with memory issues",
+        "goal": "Confirm caregiver schedule, make sure mother is safe, know the plan",
+        "personality": "Polite but tense, speaks quickly, jumps between details, protective",
+        "expected_tools": ["verify_caller", "get_client_schedule", "log_client_issue"],
+        "expected_behavior": [
+            "Agent reassures about mother's safety",
+            "Agent clearly states what's happening tonight",
+            "Agent sets follow-up expectation",
+            "Caller is comfortable ending the call"
+        ],
+        "sample_messages": [
+            "My mom is really confused right now.",
+            "She thinks she's been forgotten.",
+            "I'm not trying to be difficult, I just need clarity."
         ]
     }
 ]
@@ -686,7 +836,7 @@ async def api_gigi_get_simulation_history(
 ):
     """Get recent test/simulation calls from Retell"""
     retell_api_key = os.getenv("RETELL_API_KEY")
-    agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
+    agent_id = os.getenv("RETELL_AGENT_ID", "agent_5b425f858369d8df61c363d47f")
 
     if not retell_api_key:
         return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
