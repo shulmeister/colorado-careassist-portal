@@ -56,7 +56,7 @@ export const ContactTasksList = ({ contactId }: { contactId: Identifier }) => {
   const fetchTasks = async () => {
     try {
       const response = await fetch(
-        `/admin/tasks?contact_id=${contactId}&sort=created_at&order=DESC`
+        `/admin/contact-tasks?contact_id=${contactId}&sort=created_at&order=DESC`
       );
       if (response.ok) {
         const data = await response.json();
@@ -83,7 +83,7 @@ export const ContactTasksList = ({ contactId }: { contactId: Identifier }) => {
 
   const handleAddTask = async () => {
     try {
-      const response = await fetch("admin/tasks", {
+      const response = await fetch("/admin/contact-tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -116,7 +116,7 @@ export const ContactTasksList = ({ contactId }: { contactId: Identifier }) => {
   const handleToggleComplete = async (task: ContactTask) => {
     try {
       const newStatus = task.status === "done" ? "pending" : "done";
-      const response = await fetch(`/admin/tasks/${task.id}`, {
+      const response = await fetch(`/admin/contact-tasks/${task.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
