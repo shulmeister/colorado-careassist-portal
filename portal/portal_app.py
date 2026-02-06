@@ -438,7 +438,7 @@ async def gigi_dashboard_settings(request: Request, current_user: Dict[str, Any]
 
 @app.get("/api/gigi/settings")
 async def api_gigi_get_settings(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Get current Gigi system configuration"""
+    """Get current Gigi system configuration (unified endpoint)"""
     return JSONResponse({
         "success": True,
         "settings": {
@@ -447,7 +447,11 @@ async def api_gigi_get_settings(current_user: Dict[str, Any] = Depends(get_curre
             "hours_end": os.getenv("GIGI_OFFICE_HOURS_END", "17:00"),
             "transfer_phone": os.getenv("JASON_PHONE", "+16039971495"),
             "wellsky_sync": os.getenv("GIGI_WELLSKY_SYNC_ENABLED", "true").lower() == "true",
-            "auto_sms": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true"
+            "auto_sms": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true",
+            # Additional runtime settings
+            "sms_autoreply": _gigi_settings.get("sms_autoreply", True),
+            "operations_sms": _gigi_settings.get("operations_sms", True),
+            "wellsky_connected": wellsky_service is not None and wellsky_service.is_configured,
         }
     })
 
@@ -1428,10 +1432,12 @@ async def get_weather(
     try:
         api_key = os.getenv("OPENWEATHER_API_KEY")
         if not api_key:
+            # Return graceful response instead of 500
             return JSONResponse({
                 "success": False,
-                "error": "Weather API key not configured"
-            }, status_code=500)
+                "error": "Weather service not configured",
+                "weather": None
+            }, status_code=200)
         
         # Build API URL
         if lat and lon:
@@ -2431,16 +2437,8 @@ def log_gigi_activity(activity_type: str, description: str, status: str = "succe
         _gigi_activity_log = _gigi_activity_log[:MAX_ACTIVITY_LOG_SIZE]
 
 
-@app.get("/api/gigi/settings")
-async def api_gigi_settings(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """Get current Gigi settings"""
-    return JSONResponse({
-        "sms_autoreply": _gigi_settings["sms_autoreply"],
-        "operations_sms": _gigi_settings["operations_sms"],
-        "wellsky_connected": wellsky_service is not None and wellsky_service.is_configured,
-    })
+# NOTE: Duplicate /api/gigi/settings route removed - see api_gigi_get_settings at line ~439
+# The primary settings endpoint returns all settings in one response
 
 
 @app.put("/api/gigi/settings")

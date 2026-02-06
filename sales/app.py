@@ -5671,24 +5671,29 @@ def _apply_contact_filters(
     last_activity_gte: Optional[Any] = None,
     last_activity_lte: Optional[Any] = None,
     sales_id: Optional[int] = None,
+    account_manager: Optional[str] = None,
 ):
     """Apply simple filters to the contact query."""
     if status:
         query = query.filter(Contact.status == status)
     if contact_type:
         query = query.filter(Contact.contact_type == contact_type)
-    if sales_id:
-        # Assuming contacts have a sales_id or owner_id column. 
-        # Checking Contact model...
-        # Contact model doesn't seem to have sales_id in ensure_contact_schema!
-        # But Deals do. 
-        # Let's check if there's an 'account_manager' or similar.
-        # ensure_contact_schema added 'account_manager'.
-        # If sales_id maps to account_manager (string) or a user ID?
-        # The frontend sends sales_id (int).
-        # If Contact has no sales_id column, we can't filter by it directly unless we join or use account_manager.
-        # Let's assume for now we skip it if column missing, or check model.
-        pass 
+    # Filter by account_manager (direct email string)
+    if account_manager:
+        query = query.filter(Contact.account_manager == account_manager)
+    elif sales_id:
+        # Map sales_id (integer) to account_manager email
+        # Known mappings for CCA staff
+        sales_id_to_email = {
+            1: "jacob@coloradocareassist.com",
+            2: "jen@coloradocareassist.com",
+            3: "jason@coloradocareassist.com",
+        }
+        if sales_id in sales_id_to_email:
+            query = query.filter(Contact.account_manager == sales_id_to_email[sales_id])
+        else:
+            # Try filtering by the ID as a string (in case account_manager stores ID)
+            query = query.filter(Contact.account_manager == str(sales_id)) 
     if tags:
         for tag in tags:
             tag_value = tag.strip()
@@ -5796,12 +5801,13 @@ async def get_contacts(
     last_activity_gte: Optional[str] = Query(default=None, alias="last_activity_gte"),
     last_activity_lte: Optional[str] = Query(default=None, alias="last_activity_lte"),
     sales_id: Optional[int] = Query(default=None),
+    account_manager: Optional[str] = Query(default=None),
     filter: Optional[str] = Query(default=None),
 ):
     """List contacts with optional filters and sorting."""
     try:
         from sqlalchemy import or_
-        
+
         # Parse filter JSON if provided (React Admin sends filters this way)
         search_q = q
         if filter:
@@ -5816,8 +5822,14 @@ async def get_contacts(
                     last_activity_gte = last_activity_gte or parsed.get("last_activity_gte") or parsed.get("last_activity@gte")
                     last_activity_lte = last_activity_lte or parsed.get("last_activity_lte") or parsed.get("last_activity@lte")
                     sales_id = sales_id or parsed.get("sales_id")
+                    account_manager = account_manager or parsed.get("account_manager")
             except Exception:
                 pass
+
+        # If account_manager is provided directly, use it to set sales_id mapping
+        if account_manager and not sales_id:
+            # Direct email filter - handled in _apply_contact_filters via account_manager column
+            pass
         
         # Also support Range header if provided
         range_header = request.headers.get("Range")
@@ -5848,6 +5860,7 @@ async def get_contacts(
             last_activity_gte,
             last_activity_lte,
             sales_id,
+            account_manager,
         )
         total = query.count()
 
