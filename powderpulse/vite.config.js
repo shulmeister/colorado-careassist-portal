@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: '/powderpulse/',
+  base: '/',
   build: {
     outDir: 'dist',
     sourcemap: false

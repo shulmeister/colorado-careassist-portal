@@ -341,6 +341,20 @@ async def start_gigi_bot_from_unified():
 
 logger.info("✅ Portal app configured with sales, recruiting, payroll, powderpulse, and gigi")
 
+# ==================== GIGI VOICE BRAIN (WebSocket for Retell Custom LLM) ====================
+try:
+    from fastapi import WebSocket
+    from gigi.voice_brain import voice_brain_websocket
+
+    @app.websocket("/llm-websocket/{call_id}")
+    async def llm_websocket_endpoint(websocket: WebSocket, call_id: str):
+        """WebSocket endpoint for Retell Custom LLM - unified Gigi brain"""
+        await voice_brain_websocket(websocket, call_id)
+
+    logger.info("✅ Gigi Voice Brain WebSocket mounted at /llm-websocket/{call_id}")
+except Exception as e:
+    logger.error(f"❌ Failed to mount Gigi Voice Brain: {e}")
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
