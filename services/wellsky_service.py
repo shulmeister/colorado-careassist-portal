@@ -4792,12 +4792,16 @@ class WellSkyService:
         }
 
         result = {}
+        has_real_data = False
 
         for period_name, (start_date, end_date) in periods.items():
             try:
                 # Get all shifts in this period
                 shifts = self.get_shifts(date_from=start_date, date_to=end_date, limit=10000)
                 completed_shifts = [s for s in shifts if s.status == ShiftStatus.COMPLETED]
+
+                if len(completed_shifts) > 0:
+                    has_real_data = True
 
                 # Calculate total hours
                 total_hours = sum(s.duration_hours for s in completed_shifts)
@@ -4870,6 +4874,11 @@ class WellSkyService:
                     "unique_caregivers": 0,
                     "shift_count": 0,
                 }
+
+        # If WellSky is connected but has no shift data, add a note
+        if not self.is_mock_mode and not has_real_data:
+            result["data_note"] = "WellSky connected but no shift data found in FHIR appointments. Hours data may be available through WellSky Analytics/Reporting API."
+            logger.warning("WellSky connected but no shift data available")
 
         result["generated_at"] = datetime.utcnow().isoformat()
         result["data_source"] = "mock" if self.is_mock_mode else "wellsky_api"
