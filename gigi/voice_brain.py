@@ -221,6 +221,31 @@ TOOLS = [
             },
             "required": ["destination"]
         }
+    },
+    {
+        "name": "create_claude_task",
+        "description": "Create a task for Claude Code to work on. Use this when Jason asks you to tell Claude Code to do something technical — fix a bug, check a service, update code, etc.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short title for the task (e.g., 'Fix elite trading build error')"},
+                "description": {"type": "string", "description": "Detailed description of what Claude Code should do"},
+                "priority": {"type": "string", "description": "Priority level", "enum": ["low", "normal", "high", "urgent"]},
+                "working_directory": {"type": "string", "description": "Directory to work in (optional, defaults to careassist-unified)"}
+            },
+            "required": ["title", "description"]
+        }
+    },
+    {
+        "name": "check_claude_task",
+        "description": "Check the status of a Claude Code task. Can check the latest task or a specific task by ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "integer", "description": "Specific task ID to check (optional, defaults to most recent)"}
+            },
+            "required": []
+        }
     }
 ]
 
@@ -405,15 +430,28 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             if not query:
                 return json.dumps({"error": "Missing query"})
 
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(f"https://api.duckduckgo.com/?q={query}&format=json&no_html=1")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    answer = data.get("AbstractText") or data.get("Answer")
-                    if answer:
-                        return json.dumps({"answer": answer})
-                    topics = [t.get("Text") for t in data.get("RelatedTopics", [])[:3] if t.get("Text")]
-                    return json.dumps({"related": topics})
+            try:
+                from ddgs import DDGS
+                # Try web search first
+                results = DDGS().text(query, max_results=5)
+                if results:
+                    formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in results]
+                    return json.dumps({"results": formatted, "query": query})
+                # Fall back to news search
+                results = DDGS().news(query, max_results=5)
+                if results:
+                    formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "date": r.get("date", "")} for r in results]
+                    return json.dumps({"results": formatted, "query": query, "type": "news"})
+            except Exception as e:
+                logger.warning(f"DDG search failed: {e}")
+                # Fallback to instant answers API
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(f"https://api.duckduckgo.com/?q={query}&format=json&no_html=1")
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        answer = data.get("AbstractText") or data.get("Answer")
+                        if answer:
+                            return json.dumps({"answer": answer})
             return json.dumps({"message": "No results found"})
 
         elif tool_name == "get_stock_price":
@@ -493,6 +531,58 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"transfer_number": "+13037571777"})
             else:
                 return json.dumps({"transfer_number": dest})
+
+        elif tool_name == "create_claude_task":
+            title = tool_input.get("title", "")
+            description = tool_input.get("description", "")
+            priority = tool_input.get("priority", "normal")
+            working_dir = tool_input.get("working_directory", "/Users/shulmeister/mac-mini-apps/careassist-unified")
+
+            if not title or not description:
+                return json.dumps({"error": "Missing title or description"})
+
+            try:
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
+                    VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
+                    RETURNING id
+                """, (title, description, priority, "voice", working_dir))
+                task_id = cur.fetchone()[0]
+                conn.commit()
+                cur.close()
+                conn.close()
+                return json.dumps({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
+            except Exception as e:
+                return json.dumps({"error": f"Failed to create task: {str(e)}"})
+
+        elif tool_name == "check_claude_task":
+            task_id = tool_input.get("task_id")
+
+            try:
+                conn = psycopg2.connect(db_url)
+                cur = conn.cursor()
+                if task_id:
+                    cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (task_id,))
+                else:
+                    cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
+                row = cur.fetchone()
+                cur.close()
+                conn.close()
+
+                if not row:
+                    return json.dumps({"message": "No tasks found"})
+
+                result_preview = row[3][:300] if row[3] else None
+                return json.dumps({
+                    "task_id": row[0], "title": row[1], "status": row[2],
+                    "result_preview": result_preview, "error": row[4],
+                    "created_at": row[5].isoformat() if row[5] else None,
+                    "completed_at": row[6].isoformat() if row[6] else None
+                })
+            except Exception as e:
+                return json.dumps({"error": f"Failed to check task: {str(e)}"})
 
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})

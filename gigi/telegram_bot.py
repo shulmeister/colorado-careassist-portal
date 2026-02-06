@@ -234,6 +234,42 @@ TOOLS = [
             },
             "required": ["symbol"]
         }
+    },
+    {
+        "name": "web_search",
+        "description": "Search the internet for current information. Use for news, events, weather, general knowledge questions, or anything you don't know.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "create_claude_task",
+        "description": "Create a task for Claude Code on the Mac Mini. Use when Jason asks you to tell Claude Code to do something technical — fix code, check services, update configs, etc.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {"type": "string", "description": "Short title for the task"},
+                "description": {"type": "string", "description": "Detailed description of what Claude Code should do"},
+                "priority": {"type": "string", "description": "Priority level", "enum": ["low", "normal", "high", "urgent"]},
+                "working_directory": {"type": "string", "description": "Directory to work in (optional)"}
+            },
+            "required": ["title", "description"]
+        }
+    },
+    {
+        "name": "check_claude_task",
+        "description": "Check the status of a Claude Code task. Can check the latest task or a specific task by ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_id": {"type": "integer", "description": "Specific task ID to check (optional, defaults to most recent)"}
+            },
+            "required": []
+        }
     }
 ]
 
@@ -259,13 +295,16 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal
 - get_wellsky_clients: Search CCA's 70 active clients by name from local database cache
 - get_wellsky_caregivers: Search CCA's 55 active caregivers by name from local database cache
 - get_wellsky_shifts: Get shift schedules from WellSky (filter by client_id or caregiver_id)
-- web_search: Search the internet for news, weather, sports, general knowledge
+- web_search: Search the internet for news, weather, sports, general knowledge, concerts, events
 - get_stock_price: Get real-time stock prices (AAPL, TSLA, NVDA, etc.)
 - get_crypto_price: Get real-time crypto prices (BTC, ETH, DOGE, SOL, etc.)
+- create_claude_task: Create a task for Claude Code on the Mac Mini (code fixes, service checks, deployments)
+- check_claude_task: Check the status of a Claude Code task
 
 # CRITICAL RULES — READ CAREFULLY
 - NEVER say you don't have access to email, calendar, WellSky, or client data. You DO. Use the tools.
 - NEVER say you can't search the internet or get stock/crypto prices. You CAN. Use web_search, get_stock_price, get_crypto_price.
+- When Jason says "tell Claude Code to..." or "@claude-code ...", use create_claude_task to queue the request. Claude Code runs on the Mac Mini and can fix code, check services, update configs, etc.
 - NEVER mention "CLI", "gog", "command line", or "configuration needed" for email. Just call search_emails.
 - NEVER say a client or caregiver doesn't exist without calling the tool first. The database has ALL clients.
 - NEVER make up data — call the tool and report exactly what it returns.
@@ -575,6 +614,78 @@ class GigiTelegramBot:
                 except Exception as e:
                     logger.error(f"Crypto price error: {e}")
                     return json.dumps({"error": f"Crypto lookup failed: {str(e)}"})
+
+            elif tool_name == "web_search":
+                query = tool_input.get("query", "")
+                if not query:
+                    return json.dumps({"error": "Missing query"})
+                try:
+                    from ddgs import DDGS
+                    results = DDGS().text(query, max_results=5)
+                    if results:
+                        formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in results]
+                        return json.dumps({"results": formatted, "query": query})
+                    results = DDGS().news(query, max_results=5)
+                    if results:
+                        formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "date": r.get("date", "")} for r in results]
+                        return json.dumps({"results": formatted, "query": query, "type": "news"})
+                except Exception as e:
+                    logger.warning(f"DDG search failed: {e}")
+                return json.dumps({"message": "No results found"})
+
+            elif tool_name == "create_claude_task":
+                title = tool_input.get("title", "")
+                description = tool_input.get("description", "")
+                priority = tool_input.get("priority", "normal")
+                working_dir = tool_input.get("working_directory", "/Users/shulmeister/mac-mini-apps/careassist-unified")
+
+                if not title or not description:
+                    return json.dumps({"error": "Missing title or description"})
+
+                try:
+                    import psycopg2
+                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist"))
+                    cur = conn.cursor()
+                    cur.execute("""
+                        INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
+                        VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
+                        RETURNING id
+                    """, (title, description, priority, "telegram", working_dir))
+                    task_id = cur.fetchone()[0]
+                    conn.commit()
+                    cur.close()
+                    conn.close()
+                    return json.dumps({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
+                except Exception as e:
+                    return json.dumps({"error": f"Failed to create task: {str(e)}"})
+
+            elif tool_name == "check_claude_task":
+                task_id = tool_input.get("task_id")
+
+                try:
+                    import psycopg2
+                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist"))
+                    cur = conn.cursor()
+                    if task_id:
+                        cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (int(task_id),))
+                    else:
+                        cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
+                    row = cur.fetchone()
+                    cur.close()
+                    conn.close()
+
+                    if not row:
+                        return json.dumps({"message": "No tasks found"})
+
+                    result_preview = row[3][:500] if row[3] else None
+                    return json.dumps({
+                        "task_id": row[0], "title": row[1], "status": row[2],
+                        "result_preview": result_preview, "error": row[4],
+                        "created_at": row[5].isoformat() if row[5] else None,
+                        "completed_at": row[6].isoformat() if row[6] else None
+                    })
+                except Exception as e:
+                    return json.dumps({"error": f"Failed to check task: {str(e)}"})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})

@@ -604,7 +604,7 @@ class ActivityFeedItem(Base):
             return ""
         diff = datetime.utcnow() - self.created_at
         seconds = diff.total_seconds()
-        
+
         if seconds < 60:
             return "just now"
         elif seconds < 3600:
@@ -613,4 +613,37 @@ class ActivityFeedItem(Base):
             return f"{int(seconds // 3600)}h ago"
         else:
             return f"{int(seconds // 86400)}d ago"
+
+
+class ClaudeCodeTask(Base):
+    """Tasks queued for Claude Code to execute on the Mac Mini."""
+    __tablename__ = "claude_code_tasks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    priority = Column(String(20), default="normal")
+    status = Column(String(20), default="pending", index=True)
+    requested_by = Column(String(100))
+    result = Column(Text)
+    error = Column(Text)
+    working_directory = Column(String(500), default="/Users/shulmeister/mac-mini-apps/careassist-unified")
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime)
+    completed_at = Column(DateTime)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "description": self.description,
+            "priority": self.priority,
+            "status": self.status,
+            "requested_by": self.requested_by,
+            "result": self.result[:500] if self.result else None,
+            "error": self.error,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+        }
 
