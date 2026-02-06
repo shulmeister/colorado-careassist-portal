@@ -165,24 +165,31 @@ async def startup_event():
     asyncio.create_task(autonomous_documentation_sync())
     logger.info("Gigi Autonomous Documentation Engine started.")
     
-    # Ensure Gigi Manager tile exists
+    # Ensure Gigi Scheduler tile exists
     try:
         with db_manager.get_session() as db:
             from portal_models import PortalTool
-            existing = db.query(PortalTool).filter(PortalTool.name == "Gigi Manager").first()
-            if not existing:
+            existing = db.query(PortalTool).filter(PortalTool.name == "Gigi Scheduler").first()
+            # Also check for old name and update it
+            old_tile = db.query(PortalTool).filter(PortalTool.name == "Gigi Manager").first()
+            if old_tile:
+                old_tile.name = "Gigi Scheduler"
+                old_tile.description = "AI Scheduling & Issue Management (Issues, Schedule, Escalations)"
+                db.commit()
+                logger.info("✅ Renamed Gigi Manager to Gigi Scheduler.")
+            elif not existing:
                 tool = PortalTool(
-                    name="Gigi Manager",
+                    name="Gigi Scheduler",
                     url="/gigi/dashboard",
-                    icon="🧠",
-                    description="Management Portal for Gigi AI (Issues, Schedule, Escalations)",
+                    icon="📅",
+                    description="AI Scheduling & Issue Management (Issues, Schedule, Escalations)",
                     category="AI Operations",
                     display_order=-1,
                     is_active=True
                 )
                 db.add(tool)
                 db.commit()
-                logger.info("✅ Created Gigi Manager tool tile.")
+                logger.info("✅ Created Gigi Scheduler tool tile.")
             else:
                 existing.url = "/gigi/dashboard"
                 existing.icon = "🧠"
@@ -217,7 +224,7 @@ app.add_middleware(
 # Add trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "portal.coloradocareassist.com"]
+    allowed_hosts=["localhost", "127.0.0.1", "portal.coloradocareassist.com", "staging.coloradocareassist.com"]
 )
 
 # Rate limiting configuration
@@ -497,46 +504,268 @@ async def api_gigi_save_settings(
 ):
     """Update Gigi system configuration (Mock update for now as it needs env var persistency)"""
     logger.info(f"Settings update request from {current_user.get('email')}: {payload}")
-    # In a real app, we'd save these to a database or Mac Mini (Local) config
     return JSONResponse({"success": True, "message": "Settings updated"})
-    """Run a Retell AI web call simulation"""
-    scenario = payload.get("scenario", "caregiver_callout")
+
+
+# =============================================================================
+# SIMULATION / TESTING APIs
+# =============================================================================
+
+# Test scenarios matching Zingage-style SOPs
+GIGI_TEST_SCENARIOS = [
+    {
+        "id": "caregiver_callout",
+        "name": "Caregiver Call-Out (Sick)",
+        "description": "Caregiver calling out sick for a scheduled shift",
+        "identity": "Maria, a caregiver at Colorado Care Assist",
+        "goal": "Call out sick for my 9am shift today with Mrs. Johnson",
+        "personality": "Apologetic, a bit panicked, speaks quickly",
+        "expected_tools": ["verify_caller", "get_active_shifts", "execute_caregiver_call_out"],
+        "expected_behavior": [
+            "Verify caller identity",
+            "Find the scheduled shift",
+            "Log call-out ONCE (no loops)",
+            "Confirm coverage is being arranged"
+        ],
+        "sample_messages": [
+            "Hi, I'm Maria and I need to call out sick for my shift today",
+            "I have my 9am shift with Mrs. Johnson",
+            "I've had a fever since last night"
+        ]
+    },
+    {
+        "id": "caregiver_late",
+        "name": "Caregiver Running Late",
+        "description": "Caregiver reporting they'll be late to their shift",
+        "identity": "Maria, a caregiver running late",
+        "goal": "Report that I'll be about 15 minutes late due to traffic",
+        "personality": "Calm but rushed, matter-of-fact",
+        "expected_tools": ["verify_caller", "get_shift_details", "report_late"],
+        "expected_behavior": [
+            "Verify caller identity",
+            "Get shift details",
+            "Log lateness ONCE",
+            "Confirm client has been notified"
+        ],
+        "sample_messages": [
+            "Hey this is Maria, I'm running late to my shift",
+            "About 15 minutes, there's traffic on I-25"
+        ]
+    },
+    {
+        "id": "client_schedule",
+        "name": "Client Schedule Inquiry",
+        "description": "Client asking when their caregiver is coming",
+        "identity": "Dorothy, an elderly client",
+        "goal": "Find out when my caregiver is coming today",
+        "personality": "Polite, slightly confused, speaks slowly",
+        "expected_tools": ["verify_caller", "get_client_schedule"],
+        "expected_behavior": [
+            "Verify caller identity",
+            "Get client's schedule",
+            "Tell client their scheduled visit time"
+        ],
+        "sample_messages": [
+            "Hi, this is Dorothy. When is my caregiver coming today?"
+        ]
+    },
+    {
+        "id": "client_complaint",
+        "name": "Client Complaint",
+        "description": "Client reporting a problem with their caregiver",
+        "identity": "Dorothy, a client with a complaint",
+        "goal": "Report that my caregiver was on her phone the whole time",
+        "personality": "Upset but polite, wants to be heard",
+        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_behavior": [
+            "Verify caller identity",
+            "Log issue EXACTLY ONCE",
+            "Confirm management will call back",
+            "NO duplicate logging"
+        ],
+        "sample_messages": [
+            "I need to report a problem with my caregiver",
+            "She was on her phone the whole time and didn't help me with my exercises"
+        ]
+    },
+    {
+        "id": "client_cancel",
+        "name": "Client Visit Cancellation",
+        "description": "Family member canceling tomorrow's visit",
+        "identity": "Dorothy's daughter, calling to cancel",
+        "goal": "Cancel tomorrow's visit because mom has a doctor's appointment",
+        "personality": "Businesslike, clear communicator",
+        "expected_tools": ["verify_caller", "get_client_schedule", "cancel_client_visit"],
+        "expected_behavior": [
+            "Verify caller identity",
+            "Find the scheduled visit",
+            "Cancel visit ONCE",
+            "Confirm the cancellation"
+        ],
+        "sample_messages": [
+            "I need to cancel my mother's visit tomorrow",
+            "She has a doctor's appointment"
+        ]
+    },
+    {
+        "id": "new_prospect",
+        "name": "New Prospect Inquiry",
+        "description": "Someone inquiring about home care services",
+        "identity": "Sarah, looking for home care for her mother",
+        "goal": "Get information about home care services",
+        "personality": "Concerned daughter, asking lots of questions",
+        "expected_tools": ["verify_caller"],
+        "expected_behavior": [
+            "Recognize as unknown caller",
+            "Take a message",
+            "Promise a callback from sales",
+            "NOT make commitments or schedule"
+        ],
+        "sample_messages": [
+            "Hi, I'm looking for home care for my mother",
+            "She's 82 and needs help with daily activities"
+        ]
+    },
+    {
+        "id": "no_loop_stress",
+        "name": "CRITICAL: No Loop Stress Test",
+        "description": "Upset client providing lots of details - tests tool looping",
+        "identity": "Upset client reporting a no-show",
+        "goal": "Report that my caregiver didn't show up and I'm very upset",
+        "personality": "Very upset, speaking quickly, providing lots of details",
+        "expected_tools": ["log_client_issue"],
+        "expected_behavior": [
+            "Log issue EXACTLY ONCE",
+            "NO duplicate tool calls",
+            "Move to closing after logging",
+            "Pass = single tool call, Fail = loops"
+        ],
+        "sample_messages": [
+            "I have a problem. My caregiver didn't show up today and I'm very upset about it. This is unacceptable. I need help with my medication and she was supposed to be here at 8am. It's now 10am and nobody has come. What are you going to do about this?"
+        ]
+    }
+]
+
+
+@app.get("/api/gigi/simulations/scenarios")
+async def api_gigi_get_scenarios(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get all available test scenarios"""
+    return JSONResponse({
+        "success": True,
+        "scenarios": GIGI_TEST_SCENARIOS
+    })
+
+
+@app.get("/api/gigi/simulations/history")
+async def api_gigi_get_simulation_history(
+    limit: int = Query(20, ge=1, le=100),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get recent test/simulation calls from Retell"""
     retell_api_key = os.getenv("RETELL_API_KEY")
     agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
-    
+
     if not retell_api_key:
         return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
-        
+
     try:
-        response = requests.post(
-            'https://api.retellai.com/v2/create-web-call',
-            headers={
-                'Authorization': f'Bearer {retell_api_key}',
-                'Content-Type': 'application/json'
-            },
-            json={
-                'agent_id': agent_id,
-                'metadata': {
-                    'test': True,
-                    'scenario': scenario,
-                    'launched_by': current_user.get("email")
-                }
-            },
-            timeout=10
-        )
-        
-        if response.status_code in (200, 201):
-            data = response.json()
-            return JSONResponse({
-                "success": True, 
-                "call_id": data.get("call_id"),
-                "access_token": data.get("access_token")
-            })
-        else:
-            return JSONResponse({"success": False, "error": response.text})
-            
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                'https://api.retellai.com/v2/list-calls',
+                headers={'Authorization': f'Bearer {retell_api_key}'},
+                params={'agent_id': agent_id, 'limit': limit},
+                timeout=15
+            )
+
+            if response.status_code == 200:
+                calls = response.json()
+                # Filter for test calls and format nicely
+                test_calls = []
+                for call in calls:
+                    metadata = call.get('metadata', {})
+                    # Include all calls, flag test ones
+                    test_calls.append({
+                        "call_id": call.get("call_id"),
+                        "start_time": call.get("start_timestamp"),
+                        "end_time": call.get("end_timestamp"),
+                        "duration": call.get("call_duration_ms", 0) / 1000,
+                        "status": call.get("call_status"),
+                        "is_test": metadata.get("test", False),
+                        "scenario": metadata.get("scenario", "live_call"),
+                        "launched_by": metadata.get("launched_by"),
+                        "disconnect_reason": call.get("disconnection_reason"),
+                        "has_transcript": call.get("transcript") is not None
+                    })
+
+                return JSONResponse({
+                    "success": True,
+                    "calls": test_calls,
+                    "count": len(test_calls)
+                })
+            else:
+                return JSONResponse({"success": False, "error": f"Retell API error: {response.status_code}"})
+
     except Exception as e:
-        logger.error(f"Simulation launch failed: {e}")
+        logger.error(f"Failed to fetch simulation history: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.get("/api/gigi/simulations/call/{call_id}")
+async def api_gigi_get_call_details(
+    call_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get detailed call info including transcript and tool calls"""
+    retell_api_key = os.getenv("RETELL_API_KEY")
+
+    if not retell_api_key:
+        return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f'https://api.retellai.com/v2/get-call/{call_id}',
+                headers={'Authorization': f'Bearer {retell_api_key}'},
+                timeout=15
+            )
+
+            if response.status_code == 200:
+                call = response.json()
+
+                # Parse transcript for tool calls
+                transcript = call.get("transcript", "")
+                tool_calls = []
+                if call.get("call_analysis"):
+                    # Extract tool calls from analysis if available
+                    analysis = call.get("call_analysis", {})
+                    tool_calls = analysis.get("function_calls", [])
+
+                return JSONResponse({
+                    "success": True,
+                    "call": {
+                        "call_id": call.get("call_id"),
+                        "start_time": call.get("start_timestamp"),
+                        "end_time": call.get("end_timestamp"),
+                        "duration": call.get("call_duration_ms", 0) / 1000,
+                        "status": call.get("call_status"),
+                        "disconnect_reason": call.get("disconnection_reason"),
+                        "metadata": call.get("metadata", {}),
+                        "transcript": transcript,
+                        "transcript_object": call.get("transcript_object", []),
+                        "call_analysis": call.get("call_analysis", {}),
+                        "tool_calls": tool_calls,
+                        "recording_url": call.get("recording_url"),
+                        "from_number": call.get("from_number"),
+                        "to_number": call.get("to_number")
+                    }
+                })
+            else:
+                return JSONResponse({"success": False, "error": f"Call not found: {response.status_code}"})
+
+    except Exception as e:
+        logger.error(f"Failed to fetch call details: {e}")
         return JSONResponse({"success": False, "error": str(e)})
 
 @app.get("/api/gigi/issues")

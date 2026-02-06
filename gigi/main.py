@@ -25,6 +25,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request, HTTPException, Depends, Header
 from fastapi.responses import JSONResponse, Response, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 import httpx
 import sys
@@ -37,6 +38,11 @@ logger = logging.getLogger(__name__)
 
 # FastAPI app for Gigi routes
 app = FastAPI(title="Gigi AI Agent", version="1.0.0")
+
+# Templates for dashboard
+_gigi_dir = os.path.dirname(os.path.abspath(__file__))
+_portal_templates = os.path.join(os.path.dirname(_gigi_dir), "portal", "templates")
+templates = Jinja2Templates(directory=_portal_templates)
 
 @app.on_event("startup")
 async def startup_event():
@@ -5851,6 +5857,24 @@ async def retell_function_call(function_name: str, request: Request):
     except Exception as e:
         logger.exception(f"Error in function {function_name}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Gigi Brain Dashboard (Control Panel)
+# =============================================================================
+
+@app.get("/dashboard", response_class=HTMLResponse)
+@app.get("/dashboard/{tab}", response_class=HTMLResponse)
+async def gigi_dashboard(request: Request, tab: str = "issues"):
+    """Gigi Brain Dashboard - control panel for the AI."""
+    valid_tabs = ["issues", "schedule", "knowledge", "escalations", "users", "reports", "calls", "simulations", "settings"]
+    if tab not in valid_tabs:
+        tab = "issues"
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "active_tab": tab,
+        "user": {"email": "admin@coloradocareassist.com", "name": "Admin"}  # TODO: Get from auth
+    })
 
 
 # =============================================================================

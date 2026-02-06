@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gigi Manager | Issues</title>
+    <title>Gigi Scheduler | Issues</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
@@ -370,7 +370,7 @@
         <div class="sidebar">
             <div class="sidebar-header">
                 <a href="/" class="sidebar-brand">
-                    <span>🧠 Gigi Manager</span>
+                    <span>📅 Gigi Scheduler</span>
                 </a>
             </div>
             <nav class="nav-menu">
@@ -729,74 +729,89 @@
                     </div>
                 </div>
                 {% elif active_tab == 'simulations' %}
-                <div class="row g-4">
-                    <div class="col-md-8">
-                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Active Test Scenarios</h5>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <div class="stat-card">
-                                    <div class="fw-bold mb-2">Caregiver Call-out</div>
-                                    <p class="text-secondary small">Simulates a caregiver calling out of a shift. Tests Gigi's ability to find replacements and log the issue.</p>
-                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="runSimulation('caregiver_callout')">Launch Test</button>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="stat-card">
-                                    <div class="fw-bold mb-2">Patient Intake (New Lead)</div>
-                                    <p class="text-secondary small">Simulates a new prospect call. Tests data extraction and WellSky prospect creation.</p>
-                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="runSimulation('patient_intake')">Launch Test</button>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="stat-card">
-                                    <div class="fw-bold mb-2">Medication Reminder Issue</div>
-                                    <p class="text-secondary small">Tests Gigi's ability to handle urgent clinical escalations and caregiver reported issues.</p>
-                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="runSimulation('med_issue')">Launch Test</button>
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="stat-card">
-                                    <div class="fw-bold mb-2">After-Hours Routing</div>
-                                    <p class="text-secondary small">Tests phone tree routing based on current day/time and caller type recognition.</p>
-                                    <button class="btn btn-outline-primary btn-sm w-100" onclick="runSimulation('routing')">Launch Test</button>
-                                </div>
-                            </div>
+                <!-- Sub-nav for Scenarios vs History -->
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="sub-nav mb-0 border-0 pb-0">
+                        <div class="sub-nav-item active" id="subnav-scenarios" onclick="switchSimulations('scenarios')">Test Scenarios</div>
+                        <div class="sub-nav-item" id="subnav-history" onclick="switchSimulations('history')">Test History</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <a href="https://app.retellai.com" target="_blank" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-box-arrow-up-right"></i> Retell Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Scenarios View -->
+                <div id="view-scenarios">
+                    <div class="row g-3" id="scenarios-grid">
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                            <span class="ms-2 text-secondary">Loading test scenarios...</span>
                         </div>
                     </div>
-                    <div class="col-md-4">
-                        <h5 class="mb-3 text-secondary small fw-bold uppercase">Recent Benchmark Results</h5>
-                        <div class="table-container">
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>Test</th>
-                                        <th>Score</th>
-                                        <th>Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td class="small">Callout Sync</td>
-                                        <td><span class="text-success fw-bold">98%</span></td>
-                                        <td><i class="bi bi-check-circle-fill text-success"></i></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="small">Lead Parsing</td>
-                                        <td><span class="text-warning fw-bold">82%</span></td>
-                                        <td><i class="bi bi-exclamation-triangle-fill text-warning"></i></td>
-                                    </tr>
-                                    <tr>
-                                        <td class="small">Sentiment Detection</td>
-                                        <td><span class="text-success fw-bold">94%</span></td>
-                                        <td><i class="bi bi-check-circle-fill text-success"></i></td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                        <div class="mt-4">
-                            <button class="btn btn-outline-info btn-sm w-100" onclick="runFullBenchmark()">
-                                <i class="bi bi-speedometer2"></i> Run Full Benchmark
-                            </button>
+                </div>
+
+                <!-- History View -->
+                <div id="view-history" class="d-none">
+                    <div class="table-container">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Scenario</th>
+                                    <th>Status</th>
+                                    <th>Duration</th>
+                                    <th>Time</th>
+                                    <th>Launched By</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body">
+                                <tr>
+                                    <td colspan="6" class="text-center py-5">
+                                        <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                                        <span class="ms-2 text-secondary">Loading test history...</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Call Detail Modal -->
+                <div class="modal fade" id="callDetailModal" tabindex="-1">
+                    <div class="modal-dialog modal-dialog-centered modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title fw-bold" id="callDetailTitle">Call Details</h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <h6 class="text-secondary small fw-bold mb-3">CALL INFO</h6>
+                                        <div id="callInfoPanel">
+                                            <!-- Populated by JS -->
+                                        </div>
+                                        <h6 class="text-secondary small fw-bold mb-3 mt-4">TOOL CALLS</h6>
+                                        <div id="toolCallsPanel">
+                                            <!-- Populated by JS -->
+                                        </div>
+                                    </div>
+                                    <div class="col-md-8">
+                                        <h6 class="text-secondary small fw-bold mb-3">TRANSCRIPT</h6>
+                                        <div id="transcriptPanel" class="sop-container" style="max-height: 500px; overflow-y: auto; padding: 20px;">
+                                            <!-- Populated by JS -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="#" id="recordingLink" target="_blank" class="btn btn-outline-info d-none">
+                                    <i class="bi bi-play-fill"></i> Listen to Recording
+                                </a>
+                                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -955,7 +970,7 @@
         
         document.addEventListener('DOMContentLoaded', () => {
             createModal = new bootstrap.Modal(document.getElementById('createIssueModal'));
-            
+
             if (activeTab === 'issues') {
                 loadIssues();
                 setupAutocompletes();
@@ -969,6 +984,8 @@
                 loadCalls();
             } else if (activeTab === 'users') {
                 loadUsers();
+            } else if (activeTab === 'simulations') {
+                loadScenarios();
             }
         });
 
@@ -1508,9 +1525,132 @@
             }
         }
 
+        // =============================================================================
+        // SIMULATIONS TAB
+        // =============================================================================
+        let callDetailModal;
+        let scenariosData = [];
+
+        function switchSimulations(view) {
+            document.getElementById('subnav-scenarios').classList.toggle('active', view === 'scenarios');
+            document.getElementById('subnav-history').classList.toggle('active', view === 'history');
+            document.getElementById('view-scenarios').classList.toggle('d-none', view !== 'scenarios');
+            document.getElementById('view-history').classList.toggle('d-none', view !== 'history');
+
+            if (view === 'history') loadSimulationHistory();
+        }
+
+        async function loadScenarios() {
+            const grid = document.getElementById('scenarios-grid');
+            try {
+                const resp = await fetch('/api/gigi/simulations/scenarios');
+                const data = await resp.json();
+
+                if (data.success) {
+                    scenariosData = data.scenarios;
+                    grid.innerHTML = data.scenarios.map(s => `
+                        <div class="col-md-6 col-lg-4">
+                            <div class="stat-card h-100">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <span class="fw-bold">${s.name}</span>
+                                    ${s.id === 'no_loop_stress' ? '<span class="badge bg-danger">Critical</span>' : ''}
+                                </div>
+                                <p class="text-secondary small mb-3">${s.description}</p>
+
+                                <div class="mb-3">
+                                    <div class="text-secondary small mb-1" style="font-size: 10px;">EXPECTED BEHAVIOR:</div>
+                                    <ul class="list-unstyled small mb-0">
+                                        ${s.expected_behavior.slice(0, 3).map(b => `
+                                            <li class="text-secondary mb-1"><i class="bi bi-check2-circle text-success me-1"></i>${b}</li>
+                                        `).join('')}
+                                        ${s.expected_behavior.length > 3 ? `<li class="text-muted small">+${s.expected_behavior.length - 3} more...</li>` : ''}
+                                    </ul>
+                                </div>
+
+                                <div class="mb-3">
+                                    <div class="text-secondary small mb-1" style="font-size: 10px;">EXPECTED TOOLS:</div>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        ${s.expected_tools.map(t => `<span class="badge bg-info bg-opacity-10 text-info" style="font-size: 10px;">${t}</span>`).join('')}
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2 mt-auto">
+                                    <button class="btn btn-primary btn-sm flex-grow-1" onclick="runSimulation('${s.id}')">
+                                        <i class="bi bi-play-fill"></i> Run Test
+                                    </button>
+                                    <button class="btn btn-outline-secondary btn-sm" onclick="showScenarioDetail('${s.id}')" title="View Details">
+                                        <i class="bi bi-info-circle"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                grid.innerHTML = '<div class="text-danger">Failed to load scenarios</div>';
+                console.error(err);
+            }
+        }
+
+        function showScenarioDetail(scenarioId) {
+            const s = scenariosData.find(x => x.id === scenarioId);
+            if (!s) return;
+
+            const content = `
+                <h5>${s.name}</h5>
+                <p class="text-secondary">${s.description}</p>
+                <hr class="border-secondary">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-secondary small">SIMULATED CALLER</h6>
+                        <p><strong>Identity:</strong> ${s.identity}</p>
+                        <p><strong>Goal:</strong> ${s.goal}</p>
+                        <p><strong>Personality:</strong> ${s.personality}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-secondary small">SAMPLE MESSAGES</h6>
+                        <ul>
+                            ${s.sample_messages.map(m => `<li class="small">"${m}"</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+                <hr class="border-secondary">
+                <h6 class="text-secondary small">EXPECTED BEHAVIOR (Checklist)</h6>
+                <ul class="list-unstyled">
+                    ${s.expected_behavior.map(b => `<li class="mb-1"><i class="bi bi-square text-secondary me-2"></i>${b}</li>`).join('')}
+                </ul>
+            `;
+
+            // Use a simple alert for now, could be a modal
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.id = 'scenarioDetailModal';
+            modal.innerHTML = `
+                <div class="modal-dialog modal-dialog-centered modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Test Scenario Details</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">${content}</div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" onclick="runSimulation('${s.id}'); bootstrap.Modal.getInstance(document.getElementById('scenarioDetailModal')).hide();">
+                                <i class="bi bi-play-fill"></i> Run This Test
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            modal.addEventListener('hidden.bs.modal', () => modal.remove());
+        }
+
         async function runSimulation(scenario) {
-            if (!confirm(`Launch simulation for '${scenario}'?`)) return;
-            
+            if (!confirm(`Launch Retell simulation for "${scenario}"?\n\nThis will create a web call that you can interact with via the Retell dashboard.`)) return;
+
             try {
                 const resp = await fetch('/api/gigi/simulations/run', {
                     method: 'POST',
@@ -1519,7 +1659,7 @@
                 });
                 const data = await resp.json();
                 if (data.success) {
-                    alert(`Simulation started! Call ID: ${data.call_id}\n\nYou can view the interaction in Call Logs once finished.`);
+                    alert(`Test started!\n\nCall ID: ${data.call_id}\n\nTo interact with the test:\n1. Go to app.retellai.com\n2. Open the agent and click "Test"\n3. Or check Test History tab for results`);
                 } else {
                     alert(`Error: ${data.error}`);
                 }
@@ -1528,8 +1668,121 @@
             }
         }
 
-        async function runFullBenchmark() {
-            alert('Starting full autonomous benchmark suite. This will run 10 test scenarios and calculate performance scores. This takes ~5 minutes.');
+        async function loadSimulationHistory() {
+            const tbody = document.getElementById('history-table-body');
+            try {
+                const resp = await fetch('/api/gigi/simulations/history?limit=30');
+                const data = await resp.json();
+
+                if (data.success && data.calls.length > 0) {
+                    tbody.innerHTML = data.calls.map(c => {
+                        const statusClass = c.status === 'ended' ? 'bg-success' :
+                                            c.status === 'error' ? 'bg-danger' : 'bg-warning';
+                        const isTest = c.is_test ? '<span class="badge bg-info bg-opacity-10 text-info ms-1">TEST</span>' : '';
+                        const scenarioName = scenariosData.find(s => s.id === c.scenario)?.name || c.scenario;
+                        const time = c.start_time ? new Date(c.start_time).toLocaleString() : 'N/A';
+
+                        return `
+                            <tr>
+                                <td>
+                                    <span class="fw-bold">${scenarioName}</span>${isTest}
+                                </td>
+                                <td><span class="status-badge ${statusClass} bg-opacity-10">${c.status}</span></td>
+                                <td>${c.duration ? c.duration.toFixed(1) + 's' : '-'}</td>
+                                <td class="small text-secondary">${time}</td>
+                                <td class="small">${c.launched_by || '-'}</td>
+                                <td class="text-end">
+                                    <button class="btn btn-link btn-sm p-0 text-info" onclick="viewCallDetails('${c.call_id}')">
+                                        <i class="bi bi-eye"></i> View
+                                    </button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-secondary">No test history found. Run a simulation to see results here.</td></tr>';
+                }
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-danger">Failed to load history</td></tr>';
+                console.error(err);
+            }
+        }
+
+        async function viewCallDetails(callId) {
+            const infoPanel = document.getElementById('callInfoPanel');
+            const toolsPanel = document.getElementById('toolCallsPanel');
+            const transcriptPanel = document.getElementById('transcriptPanel');
+            const recordingLink = document.getElementById('recordingLink');
+
+            infoPanel.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div></div>';
+            toolsPanel.innerHTML = '';
+            transcriptPanel.innerHTML = '<div class="text-center text-secondary">Loading...</div>';
+
+            if (!callDetailModal) {
+                callDetailModal = new bootstrap.Modal(document.getElementById('callDetailModal'));
+            }
+            callDetailModal.show();
+
+            try {
+                const resp = await fetch(`/api/gigi/simulations/call/${callId}`);
+                const data = await resp.json();
+
+                if (data.success) {
+                    const c = data.call;
+
+                    // Call Info
+                    infoPanel.innerHTML = `
+                        <div class="mb-2"><strong>Call ID:</strong> <code class="small">${c.call_id.substring(0, 20)}...</code></div>
+                        <div class="mb-2"><strong>Status:</strong> <span class="status-badge ${c.status === 'ended' ? 'bg-success' : 'bg-warning'} bg-opacity-10">${c.status}</span></div>
+                        <div class="mb-2"><strong>Duration:</strong> ${c.duration ? c.duration.toFixed(1) + 's' : 'N/A'}</div>
+                        <div class="mb-2"><strong>Disconnect:</strong> ${c.disconnect_reason || 'N/A'}</div>
+                        ${c.from_number ? `<div class="mb-2"><strong>From:</strong> ${c.from_number}</div>` : ''}
+                    `;
+
+                    // Tool Calls
+                    if (c.tool_calls && c.tool_calls.length > 0) {
+                        toolsPanel.innerHTML = c.tool_calls.map((t, i) => `
+                            <div class="mb-2 p-2 border border-secondary border-opacity-25 rounded">
+                                <div class="small fw-bold">${i + 1}. ${t.name || t.function_name || 'Unknown'}</div>
+                                ${t.arguments ? `<code class="small">${JSON.stringify(t.arguments).substring(0, 100)}...</code>` : ''}
+                            </div>
+                        `).join('');
+                    } else {
+                        toolsPanel.innerHTML = '<div class="text-secondary small">No tool calls recorded</div>';
+                    }
+
+                    // Transcript
+                    if (c.transcript_object && c.transcript_object.length > 0) {
+                        transcriptPanel.innerHTML = c.transcript_object.map(t => `
+                            <div class="mb-3">
+                                <div class="small fw-bold ${t.role === 'agent' ? 'text-info' : 'text-warning'} mb-1">
+                                    ${t.role === 'agent' ? 'Gigi' : 'Caller'}
+                                </div>
+                                <div class="small">${t.content}</div>
+                            </div>
+                        `).join('');
+                    } else if (c.transcript) {
+                        transcriptPanel.innerHTML = `<pre class="small text-wrap">${c.transcript}</pre>`;
+                    } else {
+                        transcriptPanel.innerHTML = '<div class="text-secondary">No transcript available</div>';
+                    }
+
+                    // Recording
+                    if (c.recording_url) {
+                        recordingLink.href = c.recording_url;
+                        recordingLink.classList.remove('d-none');
+                    } else {
+                        recordingLink.classList.add('d-none');
+                    }
+
+                    document.getElementById('callDetailTitle').textContent = `Call Details - ${c.metadata?.scenario || 'Unknown'}`;
+                } else {
+                    infoPanel.innerHTML = `<div class="text-danger">${data.error}</div>`;
+                }
+            } catch (err) {
+                infoPanel.innerHTML = '<div class="text-danger">Failed to load call details</div>';
+                console.error(err);
+            }
         }
 
         async function saveSettings() {
