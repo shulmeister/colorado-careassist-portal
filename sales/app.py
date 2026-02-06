@@ -2416,6 +2416,153 @@ async def delete_contact_task(
     return {"success": True, "message": "Task deleted"}
 
 
+@app.get("/admin/tasks")
+async def get_all_tasks(
+    request: Request,
+    assigned_to: Optional[str] = Query(default=None),
+    sales_id: Optional[int] = Query(default=None),
+    done_date: Optional[str] = Query(default=None, alias="done_date@is"),
+    due_date_lt: Optional[str] = Query(default=None, alias="due_date@lt"),
+    due_date_lte: Optional[str] = Query(default=None, alias="due_date@lte"),
+    due_date_gt: Optional[str] = Query(default=None, alias="due_date@gt"),
+    due_date_gte: Optional[str] = Query(default=None, alias="due_date@gte"),
+    sort: Optional[str] = Query(default="due_date"),
+    order: Optional[str] = Query(default="ASC"),
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Get all tasks (contact tasks, company tasks, deal tasks) with unified filtering.
+
+    This endpoint is used by the dashboard's Upcoming Tasks widget.
+    """
+    from models import ContactTask, CompanyTask, DealTask
+    from sqlalchemy import union_all, select, literal
+
+    # Build queries for each task type
+    contact_tasks = select(
+        ContactTask.id.label('id'),
+        ContactTask.title.label('title'),
+        ContactTask.description.label('description'),
+        ContactTask.due_date.label('due_date'),
+        ContactTask.done_date.label('done_date'),
+        ContactTask.status.label('status'),
+        ContactTask.assigned_to.label('assigned_to'),
+        ContactTask.contact_id.label('contact_id'),
+        literal(None).label('company_id'),
+        literal(None).label('deal_id'),
+        literal('contact').label('task_type'),
+        ContactTask.created_at.label('created_at'),
+    ).select_from(ContactTask)
+
+    company_tasks = select(
+        CompanyTask.id,
+        CompanyTask.title,
+        CompanyTask.description,
+        CompanyTask.due_date,
+        CompanyTask.done_date,
+        CompanyTask.status,
+        CompanyTask.assigned_to,
+        literal(None).label('contact_id'),
+        CompanyTask.company_id,
+        literal(None).label('deal_id'),
+        literal('company').label('task_type'),
+        CompanyTask.created_at,
+    ).select_from(CompanyTask)
+
+    deal_tasks = select(
+        DealTask.id,
+        DealTask.title,
+        DealTask.description,
+        DealTask.due_date,
+        DealTask.done_date,
+        DealTask.status,
+        DealTask.assigned_to,
+        literal(None).label('contact_id'),
+        literal(None).label('company_id'),
+        DealTask.deal_id,
+        literal('deal').label('task_type'),
+        DealTask.created_at,
+    ).select_from(DealTask)
+
+    # Combine all task types
+    combined_query = union_all(contact_tasks, company_tasks, deal_tasks).alias('all_tasks')
+    query = db.query(combined_query)
+
+    # Apply filters
+    if assigned_to:
+        query = query.filter(combined_query.c.assigned_to == assigned_to)
+    if sales_id:
+        # Map sales_id to email
+        sales_id_to_email = {
+            1: "jacob@coloradocareassist.com",
+            2: "jen@coloradocareassist.com",
+            3: "jason@coloradocareassist.com",
+        }
+        if sales_id in sales_id_to_email:
+            query = query.filter(combined_query.c.assigned_to == sales_id_to_email[sales_id])
+
+    # Handle done_date filter (for pending tasks widget)
+    if done_date is not None and done_date.lower() == 'null':
+        query = query.filter(combined_query.c.done_date.is_(None))
+
+    # Handle due_date filters
+    if due_date_lt:
+        query = query.filter(combined_query.c.due_date < _coerce_datetime(due_date_lt))
+    if due_date_lte:
+        query = query.filter(combined_query.c.due_date <= _coerce_datetime(due_date_lte))
+    if due_date_gt:
+        query = query.filter(combined_query.c.due_date > _coerce_datetime(due_date_gt))
+    if due_date_gte:
+        query = query.filter(combined_query.c.due_date >= _coerce_datetime(due_date_gte))
+
+    # Apply sorting
+    sort_field = getattr(combined_query.c, sort, combined_query.c.due_date)
+    if order.upper() == "DESC":
+        query = query.order_by(sort_field.desc().nulls_last())
+    else:
+        query = query.order_by(sort_field.asc().nulls_last())
+
+    # Get total count
+    total = query.count()
+
+    # Apply pagination from Range header
+    range_header = request.headers.get("Range")
+    range_param = range_header.split("=")[1] if range_header else None
+    start, end = _parse_range(range_param)
+
+    tasks = query.offset(start).limit(end - start + 1).all()
+
+    # Convert to dict format
+    tasks_data = []
+    for task in tasks:
+        tasks_data.append({
+            'id': f"{task.task_type}_{task.id}",  # Unique ID across all task types
+            'real_id': task.id,  # Actual database ID
+            'task_type': task.task_type,
+            'title': task.title,
+            'text': task.title,  # Alias for backwards compatibility
+            'description': task.description,
+            'due_date': task.due_date.isoformat() if task.due_date else None,
+            'done_date': task.done_date.isoformat() if task.done_date else None,
+            'status': task.status,
+            'assigned_to': task.assigned_to,
+            'contact_id': task.contact_id,
+            'company_id': task.company_id,
+            'deal_id': task.deal_id,
+            'created_at': task.created_at.isoformat() if task.created_at else None,
+        })
+
+    headers = {
+        "Access-Control-Expose-Headers": "Content-Range, X-Total-Count",
+        "X-Total-Count": str(total),
+    }
+
+    return JSONResponse(
+        {"data": tasks_data, "total": total},
+        headers=headers,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Contacts Summary (React Admin view emulation)
 # ---------------------------------------------------------------------------
@@ -5650,11 +5797,14 @@ async def get_sales_bonuses(db: Session = Depends(get_db), current_user: Dict[st
         raise HTTPException(status_code=500, detail=str(e))
 
 def _parse_range(range_param: Optional[str], default_per_page: int = 50) -> tuple[int, int]:
-    """Parse pagination range query parameter into start/end indexes."""
+    """Parse pagination range query parameter into start/end indexes.
+    Supports both '0,24' and '0-24' formats."""
     if not range_param:
         return 0, default_per_page - 1
     try:
-        start_str, end_str = range_param.split(",")
+        # Handle both '0,24' and '0-24' formats
+        separator = "-" if "-" in range_param else ","
+        start_str, end_str = range_param.split(separator, 1)
         start = int(start_str)
         end = int(end_str)
         if start < 0 or end < start:
