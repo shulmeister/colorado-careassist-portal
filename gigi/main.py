@@ -5334,7 +5334,7 @@ async def retell_function_call(function_name: str, request: Request):
 
             try:
                 import httpx
-                # Try Brave Search API first
+                # Try Brave Search API first (premium)
                 brave_api_key = os.getenv("BRAVE_API_KEY")
                 if brave_api_key:
                     async with httpx.AsyncClient() as client:
@@ -5354,7 +5354,22 @@ async def retell_function_call(function_name: str, request: Request):
                                 })
                             return JSONResponse({"success": True, "query": query, "results": results})
 
-                # Fallback to DuckDuckGo instant answers
+                # Full DuckDuckGo web search via ddgs library
+                try:
+                    from ddgs import DDGS
+                    results = DDGS().text(query, max_results=5)
+                    if results:
+                        formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "url": r.get("href", "")} for r in results]
+                        return JSONResponse({"success": True, "query": query, "results": formatted})
+                    # Try news search as fallback
+                    results = DDGS().news(query, max_results=5)
+                    if results:
+                        formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "date": r.get("date", "")} for r in results]
+                        return JSONResponse({"success": True, "query": query, "results": formatted, "type": "news"})
+                except Exception as ddg_err:
+                    logger.warning(f"DDG search library failed: {ddg_err}")
+
+                # Final fallback: DuckDuckGo instant answers API
                 async with httpx.AsyncClient() as client:
                     resp = await client.get(
                         f"https://api.duckduckgo.com/?q={query}&format=json&no_html=1"
@@ -5364,10 +5379,6 @@ async def retell_function_call(function_name: str, request: Request):
                         answer = data.get("AbstractText") or data.get("Answer") or ""
                         if answer:
                             return JSONResponse({"success": True, "query": query, "answer": answer, "source": data.get("AbstractSource", "DuckDuckGo")})
-                        topics = [{"text": t.get("Text"), "url": t.get("FirstURL")}
-                                 for t in data.get("RelatedTopics", [])[:5] if t.get("Text")]
-                        if topics:
-                            return JSONResponse({"success": True, "query": query, "related_topics": topics})
 
                 return JSONResponse({"success": False, "query": query, "message": "No results found"})
             except Exception as e:
@@ -5850,6 +5861,64 @@ async def retell_function_call(function_name: str, request: Request):
                 "message": result.message,
                 "error": result.error
             })
+
+        elif function_name == "create_claude_task":
+            title = args.get("title", "")
+            description = args.get("description", "")
+            priority = args.get("priority", "normal")
+            working_dir = args.get("working_directory", "/Users/shulmeister/mac-mini-apps/careassist-unified")
+
+            if not title or not description:
+                return JSONResponse({"success": False, "error": "Missing title or description"})
+
+            try:
+                import psycopg2
+                conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist"))
+                cur = conn.cursor()
+                cur.execute("""
+                    INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
+                    VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
+                    RETURNING id
+                """, (title, description, priority, f"voice:{call_id}", working_dir))
+                task_id = cur.fetchone()[0]
+                conn.commit()
+                cur.close()
+                conn.close()
+                record_tool_call(call_id, function_name)
+                return JSONResponse({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
+            except Exception as e:
+                logger.error(f"create_claude_task error: {e}")
+                return JSONResponse({"success": False, "error": str(e)})
+
+        elif function_name == "check_claude_task":
+            task_id = args.get("task_id")
+
+            try:
+                import psycopg2
+                conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist"))
+                cur = conn.cursor()
+                if task_id:
+                    cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (int(task_id),))
+                else:
+                    cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
+                row = cur.fetchone()
+                cur.close()
+                conn.close()
+
+                if not row:
+                    return JSONResponse({"success": True, "message": "No tasks found"})
+
+                result_preview = row[3][:300] if row[3] else None
+                return JSONResponse({
+                    "success": True,
+                    "task_id": row[0], "title": row[1], "status": row[2],
+                    "result_preview": result_preview, "error": row[4],
+                    "created_at": row[5].isoformat() if row[5] else None,
+                    "completed_at": row[6].isoformat() if row[6] else None
+                })
+            except Exception as e:
+                logger.error(f"check_claude_task error: {e}")
+                return JSONResponse({"success": False, "error": str(e)})
 
         else:
             raise HTTPException(status_code=404, detail=f"Unknown function: {function_name}")
