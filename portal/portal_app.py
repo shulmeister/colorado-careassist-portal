@@ -140,46 +140,63 @@ async def autonomous_documentation_sync():
     while True:
         try:
             logger.info("Starting autonomous RingCentral -> WellSky sync...")
-            # Use db_manager to get a fresh session outside of request context
             with db_manager.get_session() as db:
                 from services.ringcentral_messaging_service import ringcentral_messaging_service
-                
-                channels = ["New Schedulers", "Biz Dev"]
+
+                channels = ["New Scheduling", "Biz Dev"]
                 for channel in channels:
-                    # Sync every 30 mins (checking last 1 hour for safety margin)
-                    ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=1)
-                    # Note: auto_create_complaints needs push_to_wellsky=True
-                    # We'll just trigger the main logic we added to the endpoint
-                    ringcentral_messaging_service.sync_tasks_to_wellsky(db, chat_name=channel, hours_back=1)
-                    
+                    # 1. Scan for client issues/complaints
+                    scan_res = ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=1)
+
+                    # 2. Auto-create complaints and push to WellSky
+                    # Collect message IDs already handled so sync_tasks doesn't duplicate
+                    complaint_msg_ids = set()
+                    if scan_res.get("potential_complaints"):
+                        for c in scan_res["potential_complaints"]:
+                            if c.get("message_id"):
+                                complaint_msg_ids.add(c["message_id"])
+                        ringcentral_messaging_service.auto_create_complaints(
+                            db, scan_res, auto_create=True, push_to_wellsky=True
+                        )
+
+                    # 3. Sync all care-relevant messages as WellSky notes
+                    # Skip messages already handled by complaint path above
+                    ringcentral_messaging_service.sync_tasks_to_wellsky(
+                        db, chat_name=channel, hours_back=1,
+                        skip_message_ids=complaint_msg_ids
+                    )
+
             logger.info("Autonomous documentation sync completed.")
         except Exception as e:
             logger.error(f"Error in autonomous documentation loop: {e}")
-        
+
         # Run every 30 minutes
         await asyncio.sleep(1800)
 
 @app.on_event("startup")
 async def startup_event():
-    # Start the documentation loop
-    asyncio.create_task(autonomous_documentation_sync())
-    logger.info("Gigi Autonomous Documentation Engine started.")
+    # Only run autonomous sync in production (staging has STAGING=true env var)
+    if os.getenv("STAGING", "").lower() != "true":
+        asyncio.create_task(autonomous_documentation_sync())
+        logger.info("Gigi Autonomous Documentation Engine started.")
+    else:
+        logger.info("Staging environment detected — skipping autonomous documentation sync.")
     
-    # Ensure Gigi Scheduler tile exists
+    # Ensure Gigi Brain tile exists
     try:
         with db_manager.get_session() as db:
             from portal_models import PortalTool
-            existing = db.query(PortalTool).filter(PortalTool.name == "Gigi Scheduler").first()
+            existing = db.query(PortalTool).filter(PortalTool.name == "Gigi Brain").first()
             # Also check for old name and update it
-            old_tile = db.query(PortalTool).filter(PortalTool.name == "Gigi Manager").first()
+            old_tile = db.query(PortalTool).filter(PortalTool.name == "Gigi Brain").first()
             if old_tile:
-                old_tile.name = "Gigi Scheduler"
+                old_tile.name = "Gigi Brain"
                 old_tile.description = "AI Scheduling & Issue Management (Issues, Schedule, Escalations)"
                 db.commit()
-                logger.info("✅ Renamed Gigi Manager to Gigi Scheduler.")
+                logger.info("✅ Renamed Gigi Brain to Gigi Brain.")
             elif not existing:
                 tool = PortalTool(
-                    name="Gigi Scheduler",
+                    name="Gigi Brain",
                     url="/gigi/dashboard",
                     icon="📅",
                     description="AI Scheduling & Issue Management (Issues, Schedule, Escalations)",
@@ -189,13 +206,13 @@ async def startup_event():
                 )
                 db.add(tool)
                 db.commit()
-                logger.info("✅ Created Gigi Scheduler tool tile.")
+                logger.info("✅ Created Gigi Brain tool tile.")
             else:
                 existing.url = "/gigi/dashboard"
                 existing.icon = "🧠"
                 db.commit()
     except Exception as e:
-        logger.error(f"Error ensuring Gigi Manager tile: {e}")
+        logger.error(f"Error ensuring Gigi Brain tile: {e}")
 
 # Add session middleware for OAuth state management
 from starlette.middleware.sessions import SessionMiddleware
@@ -438,7 +455,7 @@ async def gigi_dashboard_settings(request: Request, current_user: Dict[str, Any]
 
 @app.get("/api/gigi/settings")
 async def api_gigi_get_settings(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Get current Gigi system configuration"""
+    """Get current Gigi system configuration (unified endpoint)"""
     return JSONResponse({
         "success": True,
         "settings": {
@@ -447,7 +464,11 @@ async def api_gigi_get_settings(current_user: Dict[str, Any] = Depends(get_curre
             "hours_end": os.getenv("GIGI_OFFICE_HOURS_END", "17:00"),
             "transfer_phone": os.getenv("JASON_PHONE", "+16039971495"),
             "wellsky_sync": os.getenv("GIGI_WELLSKY_SYNC_ENABLED", "true").lower() == "true",
-            "auto_sms": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true"
+            "auto_sms": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true",
+            # Additional runtime settings
+            "sms_autoreply": _gigi_settings.get("sms_autoreply", True),
+            "operations_sms": _gigi_settings.get("operations_sms", True),
+            "wellsky_connected": wellsky_service is not None and wellsky_service.is_configured,
         }
     })
 
@@ -674,7 +695,7 @@ async def api_gigi_get_simulation_history(
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 'https://api.retellai.com/v2/list-calls',
-                headers={'Authorization': f'Bearer {retell_api_key}'},
+                headers={'Authorization': f'Bearer {retell_api_key}', 'Content-Type': 'application/json'},
                 json={'agent_id': agent_id, 'limit': limit},
                 timeout=15
             )
@@ -725,7 +746,7 @@ async def api_gigi_get_call_details(
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.post(
+            response = await client.get(
                 f'https://api.retellai.com/v2/get-call/{call_id}',
                 headers={'Authorization': f'Bearer {retell_api_key}'},
                 timeout=15
@@ -1008,11 +1029,11 @@ async def api_gigi_get_calls(
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 'https://api.retellai.com/v2/list-calls',
-                headers={'Authorization': f'Bearer {retell_api_key}'},
+                headers={'Authorization': f'Bearer {retell_api_key}', 'Content-Type': 'application/json'},
                 json={'agent_id': agent_id, 'limit': limit},
                 timeout=10
             )
-            
+
             if response.status_code == 200:
                 calls = response.json()
                 return JSONResponse({
@@ -1428,10 +1449,12 @@ async def get_weather(
     try:
         api_key = os.getenv("OPENWEATHER_API_KEY")
         if not api_key:
+            # Return graceful response instead of 500
             return JSONResponse({
                 "success": False,
-                "error": "Weather API key not configured"
-            }, status_code=500)
+                "error": "Weather service not configured",
+                "weather": None
+            }, status_code=200)
         
         # Build API URL
         if lat and lon:
@@ -1445,7 +1468,7 @@ async def get_weather(
             }, status_code=400)
         
         async with httpx.AsyncClient() as client:
-            response = await client.post(url, timeout=10.0)
+            response = await client.get(url, timeout=10.0)
             
             if response.status_code == 200:
                 weather_data = response.json()
@@ -2431,16 +2454,8 @@ def log_gigi_activity(activity_type: str, description: str, status: str = "succe
         _gigi_activity_log = _gigi_activity_log[:MAX_ACTIVITY_LOG_SIZE]
 
 
-@app.get("/api/gigi/settings")
-async def api_gigi_settings(
-    current_user: Dict[str, Any] = Depends(get_current_user)
-):
-    """Get current Gigi settings"""
-    return JSONResponse({
-        "sms_autoreply": _gigi_settings["sms_autoreply"],
-        "operations_sms": _gigi_settings["operations_sms"],
-        "wellsky_connected": wellsky_service is not None and wellsky_service.is_configured,
-    })
+# NOTE: Duplicate /api/gigi/settings route removed - see api_gigi_get_settings at line ~439
+# The primary settings endpoint returns all settings in one response
 
 
 @app.put("/api/gigi/settings")
@@ -5296,7 +5311,7 @@ async def get_sms_log(
         messages_response = requests.get(
             f"{server}/restapi/v1.0/account/~/extension/~/message-store",
             headers={"Authorization": f"Bearer {access_token}"},
-            json={
+            params={
                 "dateFrom": date_from,
                 "messageType": "SMS",
                 "perPage": 100
@@ -5416,13 +5431,13 @@ async def api_sync_rc_to_wellsky(
     from services.ringcentral_messaging_service import ringcentral_messaging_service
     
     results = {}
-    channels = ["New Schedulers", "Biz Dev"]
-    
+    channels = ["New Scheduling", "Biz Dev"]
+
     for channel in channels:
         # 1. Sync Complaints/Issues
         scan_res = ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=hours)
         complaint_res = ringcentral_messaging_service.auto_create_complaints(db, scan_res, auto_create=True, push_to_wellsky=True)
-        
+
         # 2. Sync General Tasks
         task_res = ringcentral_messaging_service.sync_tasks_to_wellsky(db, chat_name=channel, hours_back=hours)
         

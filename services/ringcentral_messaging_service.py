@@ -1142,11 +1142,13 @@ class RingCentralMessagingService:
         self,
         db_session,
         chat_name: str,
-        hours_back: int = 24
+        hours_back: int = 24,
+        skip_message_ids: set = None
     ) -> Dict[str, Any]:
         """
-        Scan a team chat for task completions (Laundry, Cleaning, etc.) 
+        Scan a team chat for task completions (Laundry, Cleaning, etc.)
         and log them as notes directly into the WellSky client file.
+        skip_message_ids: RC message IDs already handled by another path (e.g. complaints)
         """
         from services.wellsky_service import wellsky_service
         
@@ -1167,8 +1169,18 @@ class RingCentralMessagingService:
         
         synced_count = 0
         task_keywords = [
-            "laundry", "cleaned", "bath", "shower", "meal", "fed", "meds", "medication", 
-            "shopped", "errand", "cover", "cancel", "assessment", "clock", "visit", "appointment"
+            # Care tasks
+            "laundry", "cleaned", "bath", "shower", "meal", "fed", "meds", "medication",
+            "shopped", "errand", "assessment", "clock", "visit", "appointment",
+            # Scheduling changes
+            "cover", "cancel", "cancelled", "postponed", "reschedule", "rescheduled",
+            "moving", "moved", "shift", "schedule", "extra", "swap", "swapped",
+            "confirmed", "requested", "starting", "available", "unavailable",
+            "call out", "called out", "callout", "calloff", "call off",
+            "no show", "no-show", "late", "covering", "picked up",
+            # Status updates
+            "admitted", "discharged", "hospitalized", "procedure", "surgery",
+            "agreed", "accepted", "declined",
         ]
 
         for msg in messages:
@@ -1176,8 +1188,12 @@ class RingCentralMessagingService:
             if not text:
                 continue
 
-            # Dedup: skip if this message was already synced (check by RC message ID)
+            # Dedup: skip messages already handled by complaints path
             msg_id = msg.get("id", "")
+            if skip_message_ids and msg_id in skip_message_ids:
+                continue
+
+            # Dedup: skip if this message was already synced (check by RC timestamp)
             if msg_id:
                 try:
                     import sqlite3 as _sqlite3
