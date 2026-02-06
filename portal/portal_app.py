@@ -165,21 +165,21 @@ async def startup_event():
     asyncio.create_task(autonomous_documentation_sync())
     logger.info("Gigi Autonomous Documentation Engine started.")
     
-    # Ensure Gigi Scheduler tile exists
+    # Ensure Gigi Brain tile exists
     try:
         with db_manager.get_session() as db:
             from portal_models import PortalTool
-            existing = db.query(PortalTool).filter(PortalTool.name == "Gigi Scheduler").first()
+            existing = db.query(PortalTool).filter(PortalTool.name == "Gigi Brain").first()
             # Also check for old name and update it
-            old_tile = db.query(PortalTool).filter(PortalTool.name == "Gigi Manager").first()
+            old_tile = db.query(PortalTool).filter(PortalTool.name == "Gigi Brain").first()
             if old_tile:
-                old_tile.name = "Gigi Scheduler"
+                old_tile.name = "Gigi Brain"
                 old_tile.description = "AI Scheduling & Issue Management (Issues, Schedule, Escalations)"
                 db.commit()
-                logger.info("✅ Renamed Gigi Manager to Gigi Scheduler.")
+                logger.info("✅ Renamed Gigi Brain to Gigi Brain.")
             elif not existing:
                 tool = PortalTool(
-                    name="Gigi Scheduler",
+                    name="Gigi Brain",
                     url="/gigi/dashboard",
                     icon="📅",
                     description="AI Scheduling & Issue Management (Issues, Schedule, Escalations)",
@@ -189,13 +189,13 @@ async def startup_event():
                 )
                 db.add(tool)
                 db.commit()
-                logger.info("✅ Created Gigi Scheduler tool tile.")
+                logger.info("✅ Created Gigi Brain tool tile.")
             else:
                 existing.url = "/gigi/dashboard"
                 existing.icon = "🧠"
                 db.commit()
     except Exception as e:
-        logger.error(f"Error ensuring Gigi Manager tile: {e}")
+        logger.error(f"Error ensuring Gigi Brain tile: {e}")
 
 # Add session middleware for OAuth state management
 from starlette.middleware.sessions import SessionMiddleware
