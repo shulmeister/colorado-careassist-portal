@@ -223,6 +223,7 @@ def process_business_card(db, content: bytes, filename: str, file_id: str, user_
             existing_contact.phone = phone
         if address:
             existing_contact.address = address
+        existing_contact.contact_type = 'referral_source'
         existing_contact.updated_at = datetime.utcnow()
         existing_contact.last_seen = datetime.utcnow()
         existing_contact.last_activity = datetime.utcnow()  # SET THIS for dashboard filters
@@ -243,6 +244,7 @@ def process_business_card(db, content: bytes, filename: str, file_id: str, user_
             website=website,
             notes=notes,
             status="cold",
+            contact_type="referral_source",
             account_manager=user_email,
             source="Auto-Scan Business Card",
             scanned_date=datetime.utcnow(),
