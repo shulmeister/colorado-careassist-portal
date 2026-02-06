@@ -2571,8 +2571,9 @@ def fetch_facebook_leads():
         
         for campaign in campaigns:
             print(f"Campaign: {campaign['name']} ({campaign['id']}) - Status: {campaign['status']}")
-            if campaign['status'] == 'ACTIVE':
-                print(f"Processing active campaign: {campaign['name']}")
+            # Process all campaigns (including PAUSED/ARCHIVED) to import historical leads
+            if campaign['status'] in ('ACTIVE', 'PAUSED', 'ARCHIVED'):
+                print(f"Processing campaign: {campaign['name']} (status: {campaign['status']})")
                 
                 # Get ad sets for this campaign
                 ad_sets = Campaign(campaign['id']).get_ad_sets(fields=['id', 'name'])
@@ -2618,9 +2619,10 @@ def fetch_facebook_leads_enhanced():
         for campaign in campaigns:
             print(f"Campaign: {campaign['name']} ({campaign['id']}) - Status: {campaign['status']} - Objective: {campaign.get('objective', 'Unknown')}")
             
-            # Only process active campaigns with lead generation objectives
-            if campaign['status'] == 'ACTIVE' and campaign.get('objective') in ['LEAD_GENERATION', 'MESSAGES']:
-                print(f"Processing active lead generation campaign: {campaign['name']}")
+            # Process all campaigns with lead generation objectives (including PAUSED/ARCHIVED)
+            # so historical leads from inactive campaigns are also imported
+            if campaign.get('objective') in ['LEAD_GENERATION', 'MESSAGES']:
+                print(f"Processing lead generation campaign: {campaign['name']} (status: {campaign['status']})")
                 
                 # Get ad sets for this campaign
                 ad_sets = Campaign(campaign['id']).get_ad_sets(fields=['id', 'name'])

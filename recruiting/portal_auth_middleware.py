@@ -37,8 +37,7 @@ def verify_portal_token():
         return None
     
     try:
-        # Try to use the same secret key as portal
-        # Portal uses APP_SECRET_KEY from environment
+        # Use APP_SECRET_KEY - same key portal_auth.py uses to sign session tokens
         serializer = URLSafeTimedSerializer(APP_SECRET_KEY)
         session_data = serializer.loads(portal_token, max_age=3600 * 24)  # 24 hours
         
