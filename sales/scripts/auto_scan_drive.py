@@ -127,17 +127,23 @@ def mark_file_processed(db, drive_file_id: str, filename: str, folder_type: str,
                         result_type: str, result_id: int = None, error_message: str = None):
     """Mark a file as processed"""
     from models import ProcessedDriveFile
+    from sqlalchemy.exc import IntegrityError
 
-    record = ProcessedDriveFile(
-        drive_file_id=drive_file_id,
-        filename=filename,
-        folder_type=folder_type,
-        result_type=result_type,
-        result_id=result_id,
-        error_message=error_message
-    )
-    db.add(record)
-    db.commit()
+    try:
+        record = ProcessedDriveFile(
+            drive_file_id=drive_file_id,
+            filename=filename,
+            folder_type=folder_type,
+            result_type=result_type,
+            result_id=result_id,
+            error_message=error_message
+        )
+        db.add(record)
+        db.commit()
+    except IntegrityError:
+        # File already marked as processed (duplicate key)
+        db.rollback()
+        logger.debug(f"File {drive_file_id} already marked as processed")
 
 
 def process_business_card(db, content: bytes, filename: str, file_id: str, user_email: str = None) -> Dict[str, Any]:
