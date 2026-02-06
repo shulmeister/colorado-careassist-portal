@@ -1,7 +1,7 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 4, 2026
-**Status:** ✅ FULLY SELF-HOSTED ON MAC MINI
+**Last Updated:** February 5, 2026
+**Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
 
@@ -56,17 +56,26 @@ See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
 
 ### Services Running on Mac Mini
 
-| Service | Port | LaunchAgent |
-|---------|------|-------------|
-| Portal (gigi-unified) | 8765 | com.coloradocareassist.gigi-unified |
-| Main Website | 3000 | com.coloradocareassist.website |
-| Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare |
-| Elite Trading | 3002 | com.coloradocareassist.elite-trading |
-| PowderPulse | 3003 | com.coloradocareassist.powderpulse |
-| Telegram Bot | - | com.coloradocareassist.telegram-bot |
-| Health Monitor | - | com.coloradocareassist.health-monitor |
-| Cloudflare Tunnel | - | com.cloudflare.cloudflared |
-| PostgreSQL 17 | 5432 | homebrew.mxcl.postgresql@17 |
+| Service | Port | LaunchAgent | URL |
+|---------|------|-------------|-----|
+| **Production Portal** | 8765 | com.coloradocareassist.gigi-unified | portal.coloradocareassist.com |
+| **Staging Portal** | 8766 | com.coloradocareassist.staging | staging.coloradocareassist.com |
+| Main Website | 3000 | com.coloradocareassist.website | coloradocareassist.com |
+| Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare | hesedhomecare.org |
+| Elite Trading | 3002 | com.coloradocareassist.elite-trading | elitetrading.coloradocareassist.com |
+| PowderPulse | 3003 | com.coloradocareassist.powderpulse | powderpulse.coloradocareassist.com |
+| Telegram Bot | - | com.coloradocareassist.telegram-bot | - |
+| Cloudflare Tunnel | - | com.cloudflare.cloudflared | - |
+| PostgreSQL 17 | 5432 | homebrew.mxcl.postgresql@17 | - |
+
+### Staging vs Production
+
+| Environment | Directory | Port | URL | Branch |
+|-------------|-----------|------|-----|--------|
+| **Production** | `~/mac-mini-apps/careassist-unified/` | 8765 | portal.coloradocareassist.com | `main` |
+| **Staging** | `~/mac-mini-apps/careassist-staging/` | 8766 | staging.coloradocareassist.com | `staging` |
+
+**CRITICAL: NEVER edit production directly. All development happens on staging first.**
 
 ### Database
 - **Connection:** `postgresql://careassist:careassist2026@localhost:5432/careassist`
@@ -98,6 +107,8 @@ All credentials are in `~/.gigi-env` and duplicated in LaunchAgent plists.
 | **Retell** | `RETELL_API_KEY` | Voice AI |
 | **Gemini** | `GEMINI_API_KEY` | SMS responses |
 | **Brevo** | `BREVO_API_KEY` | Email marketing |
+| **Cloudflare** | `CF_API_TOKEN`, `CF_ZONE_ID` | DNS management |
+| **Telegram** | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Alerts & Gigi bot |
 
 **IMPORTANT:** Never hardcode credentials. Always use `os.getenv()`.
 
@@ -181,28 +192,60 @@ Activate teams by saying "@team-name" or "team-name team":
 
 ## DEVELOPMENT WORKFLOW
 
-### Before Making Changes
+### The Golden Rule
+**NEVER edit production directly.** All changes go through staging first.
+
+### Step 1: Make Changes on Staging
 ```bash
-git pull origin main
-curl -s http://localhost:8765/health
+cd ~/mac-mini-apps/careassist-staging
+# Edit your code here...
 ```
 
-### After Making Changes
+### Step 2: Test on Staging
 ```bash
+~/scripts/restart-staging.sh
+# Then test at https://staging.coloradocareassist.com
+```
+
+### Step 3: Commit Changes
+```bash
+cd ~/mac-mini-apps/careassist-staging
 git add <specific-files>
 git commit -m "fix(component): description"
-git push origin main
 ```
 
-### Restart Services After Code Changes
+### Step 4: Promote to Production (only when ready!)
 ```bash
-launchctl bootout gui/501/com.coloradocareassist.gigi-unified
-launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist
+~/scripts/promote-to-production.sh
+```
+
+This script will:
+1. Verify staging is healthy
+2. Merge staging → main
+3. Rebuild production
+4. Restart production
+5. Verify production is healthy
+
+### Key Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `~/scripts/restart-staging.sh` | Rebuild and restart staging after code changes |
+| `~/scripts/promote-to-production.sh` | Deploy tested staging code to production |
+| `~/scripts/deep-health-check.sh` | Functional health checks (runs every 5 min via cron) |
+| `~/scripts/watchdog.sh` | Backup monitor (runs every 2 min via cron) |
+
+### Cron Jobs (Automatic)
+```bash
+*/5 * * * * /Users/shulmeister/scripts/deep-health-check.sh
+*/2 * * * * /Users/shulmeister/scripts/watchdog.sh
 ```
 
 ---
 
 ## HISTORY
 
+- **Feb 5, 2026:** Added staging environment (staging.coloradocareassist.com), deep health checks, promote-to-production workflow. NEVER edit production directly anymore.
+- **Feb 5, 2026:** Unified Gigi voice brain (Claude-powered via Retell custom-llm WebSocket)
 - **Feb 4, 2026:** Consolidated API credentials, created health monitoring system, Claude Code integration for Gigi
 - **Feb 2, 2026:** Completed Mac Mini self-hosted setup with local PostgreSQL, Cloudflare tunnel, Tailscale
