@@ -672,10 +672,10 @@ async def api_gigi_get_simulation_history(
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await client.post(
                 'https://api.retellai.com/v2/list-calls',
                 headers={'Authorization': f'Bearer {retell_api_key}'},
-                params={'agent_id': agent_id, 'limit': limit},
+                json={'agent_id': agent_id, 'limit': limit},
                 timeout=15
             )
 
@@ -725,7 +725,7 @@ async def api_gigi_get_call_details(
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await client.post(
                 f'https://api.retellai.com/v2/get-call/{call_id}',
                 headers={'Authorization': f'Bearer {retell_api_key}'},
                 timeout=15
@@ -1006,10 +1006,10 @@ async def api_gigi_get_calls(
         
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await client.post(
                 'https://api.retellai.com/v2/list-calls',
                 headers={'Authorization': f'Bearer {retell_api_key}'},
-                params={'agent_id': agent_id, 'limit': limit},
+                json={'agent_id': agent_id, 'limit': limit},
                 timeout=10
             )
             
@@ -1445,7 +1445,7 @@ async def get_weather(
             }, status_code=400)
         
         async with httpx.AsyncClient() as client:
-            response = await client.get(url, timeout=10.0)
+            response = await client.post(url, timeout=10.0)
             
             if response.status_code == 200:
                 weather_data = response.json()
@@ -5296,7 +5296,7 @@ async def get_sms_log(
         messages_response = requests.get(
             f"{server}/restapi/v1.0/account/~/extension/~/message-store",
             headers={"Authorization": f"Bearer {access_token}"},
-            params={
+            json={
                 "dateFrom": date_from,
                 "messageType": "SMS",
                 "perPage": 100
