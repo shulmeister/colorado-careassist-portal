@@ -850,6 +850,96 @@
                     </div>
                 </div>
 
+                <!-- Hours Breakdown Section -->
+                <div class="data-section" style="margin-bottom: 20px;">
+                    <div class="section-header">
+                        <span class="section-title">📊 Hours Tracking - Billing & Payroll</span>
+                        <button class="btn btn-secondary" onclick="loadHoursBreakdown()">↻ Refresh</button>
+                    </div>
+                    <div style="padding: 20px;">
+                        <!-- Weekly Hours -->
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+                                📅 Last 7 Days
+                            </h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-value" id="weekly-total-hours">--</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Billing Hours</div>
+                                    <div class="kpi-value" id="weekly-billing-total">--</div>
+                                    <div class="kpi-change" id="weekly-billing-split">Regular: -- | OT: --</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Payroll Hours</div>
+                                    <div class="kpi-value" id="weekly-payroll-total">--</div>
+                                    <div class="kpi-change" id="weekly-payroll-split">Regular: -- | OT: --</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Avg Per Client</div>
+                                    <div class="kpi-value" id="weekly-avg-client">--</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Monthly Hours -->
+                        <div style="margin-bottom: 24px;">
+                            <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+                                📆 Last 30 Days
+                            </h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-value" id="monthly-total-hours">--</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Billing Hours</div>
+                                    <div class="kpi-value" id="monthly-billing-total">--</div>
+                                    <div class="kpi-change" id="monthly-billing-split">Regular: -- | OT: --</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Payroll Hours</div>
+                                    <div class="kpi-value" id="monthly-payroll-total">--</div>
+                                    <div class="kpi-change" id="monthly-payroll-split">Regular: -- | OT: --</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Avg Per Client</div>
+                                    <div class="kpi-value" id="monthly-avg-client">--</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quarterly Hours -->
+                        <div>
+                            <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
+                                📈 Last 90 Days (Quarterly)
+                            </h4>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-value" id="quarterly-total-hours">--</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Billing Hours</div>
+                                    <div class="kpi-value" id="quarterly-billing-total">--</div>
+                                    <div class="kpi-change" id="quarterly-billing-split">Regular: -- | OT: --</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Payroll Hours</div>
+                                    <div class="kpi-value" id="quarterly-payroll-total">--</div>
+                                    <div class="kpi-change" id="quarterly-payroll-split">Regular: -- | OT: --</div>
+                                </div>
+                                <div class="kpi-card">
+                                    <div class="kpi-label">Avg Per Client</div>
+                                    <div class="kpi-value" id="quarterly-avg-client">--</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="chart-grid">
                     <div class="chart-card">
                         <div class="chart-title">Shifts This Week</div>

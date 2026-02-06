@@ -6,12 +6,14 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize navigation
     initNavigation();
-    
+
     // Initial data fetch
     refreshData();
-    
+    loadHoursBreakdown();
+
     // Set up auto-refresh (every 5 minutes)
     setInterval(refreshData, 300000);
+    setInterval(loadHoursBreakdown, 300000);
 });
 
 function initNavigation() {
@@ -268,4 +270,55 @@ function refreshCallOuts() {
 function showNotification(message, type = 'info') {
     // Simple notification logic
     console.log(`[${type.toUpperCase()}] ${message}`);
+}
+
+async function loadHoursBreakdown() {
+    try {
+        const response = await fetch('/api/operations/hours-breakdown');
+        const data = await response.json();
+
+        if (!data) {
+            console.error('No hours breakdown data received');
+            return;
+        }
+
+        // Update Weekly Hours
+        if (data.weekly) {
+            document.getElementById('weekly-total-hours').textContent = data.weekly.total_hours.toFixed(1);
+            document.getElementById('weekly-billing-total').textContent = data.weekly.billing.total.toFixed(1);
+            document.getElementById('weekly-billing-split').textContent =
+                `Regular: ${data.weekly.billing.regular.toFixed(1)} | OT: ${data.weekly.billing.overtime.toFixed(1)}`;
+            document.getElementById('weekly-payroll-total').textContent = data.weekly.payroll.total.toFixed(1);
+            document.getElementById('weekly-payroll-split').textContent =
+                `Regular: ${data.weekly.payroll.regular.toFixed(1)} | OT: ${data.weekly.payroll.overtime.toFixed(1)}`;
+            document.getElementById('weekly-avg-client').textContent = data.weekly.averages.per_client.toFixed(1);
+        }
+
+        // Update Monthly Hours
+        if (data.monthly) {
+            document.getElementById('monthly-total-hours').textContent = data.monthly.total_hours.toFixed(1);
+            document.getElementById('monthly-billing-total').textContent = data.monthly.billing.total.toFixed(1);
+            document.getElementById('monthly-billing-split').textContent =
+                `Regular: ${data.monthly.billing.regular.toFixed(1)} | OT: ${data.monthly.billing.overtime.toFixed(1)}`;
+            document.getElementById('monthly-payroll-total').textContent = data.monthly.payroll.total.toFixed(1);
+            document.getElementById('monthly-payroll-split').textContent =
+                `Regular: ${data.monthly.payroll.regular.toFixed(1)} | OT: ${data.monthly.payroll.overtime.toFixed(1)}`;
+            document.getElementById('monthly-avg-client').textContent = data.monthly.averages.per_client.toFixed(1);
+        }
+
+        // Update Quarterly Hours
+        if (data.quarterly) {
+            document.getElementById('quarterly-total-hours').textContent = data.quarterly.total_hours.toFixed(1);
+            document.getElementById('quarterly-billing-total').textContent = data.quarterly.billing.total.toFixed(1);
+            document.getElementById('quarterly-billing-split').textContent =
+                `Regular: ${data.quarterly.billing.regular.toFixed(1)} | OT: ${data.quarterly.billing.overtime.toFixed(1)}`;
+            document.getElementById('quarterly-payroll-total').textContent = data.quarterly.payroll.total.toFixed(1);
+            document.getElementById('quarterly-payroll-split').textContent =
+                `Regular: ${data.quarterly.payroll.regular.toFixed(1)} | OT: ${data.quarterly.payroll.overtime.toFixed(1)}`;
+            document.getElementById('quarterly-avg-client').textContent = data.quarterly.averages.per_client.toFixed(1);
+        }
+
+    } catch (error) {
+        console.error('Error loading hours breakdown:', error);
+    }
 }

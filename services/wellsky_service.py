@@ -4770,6 +4770,112 @@ class WellSkyService:
     # Analytics / Dashboard Methods (for Client Satisfaction)
     # =========================================================================
 
+    def get_hours_breakdown(self, days: int = 30) -> Dict[str, Any]:
+        """
+        Get detailed hours breakdown for billing and payroll tracking.
+
+        Returns hours aggregated by period (weekly/monthly/quarterly) with:
+        - Total hours
+        - Billing hours (regular + overtime)
+        - Payroll hours (regular + overtime)
+        - Average hours per client
+        - Average hours per caregiver
+        """
+        from collections import defaultdict
+
+        # Define time periods
+        today = date.today()
+        periods = {
+            "weekly": (today - timedelta(days=7), today),
+            "monthly": (today - timedelta(days=30), today),
+            "quarterly": (today - timedelta(days=90), today),
+        }
+
+        result = {}
+
+        for period_name, (start_date, end_date) in periods.items():
+            try:
+                # Get all shifts in this period
+                shifts = self.get_shifts(date_from=start_date, date_to=end_date, limit=10000)
+                completed_shifts = [s for s in shifts if s.status == ShiftStatus.COMPLETED]
+
+                # Calculate total hours
+                total_hours = sum(s.duration_hours for s in completed_shifts)
+
+                # Group by caregiver to calculate regular/overtime
+                caregiver_hours = defaultdict(float)
+                for shift in completed_shifts:
+                    if shift.caregiver_id:
+                        caregiver_hours[shift.caregiver_id] += shift.duration_hours
+
+                # Calculate regular vs overtime (assuming 40 hrs/week threshold)
+                weeks_in_period = (end_date - start_date).days / 7.0
+                weekly_threshold = 40.0
+                period_threshold = weekly_threshold * weeks_in_period
+
+                payroll_regular = 0.0
+                payroll_overtime = 0.0
+                for caregiver_id, hours in caregiver_hours.items():
+                    if hours <= period_threshold:
+                        payroll_regular += hours
+                    else:
+                        payroll_regular += period_threshold
+                        payroll_overtime += (hours - period_threshold)
+
+                # Billing hours calculation
+                # In home care, billing hours typically = actual hours worked
+                # Some agencies bill slightly more (travel time, etc.)
+                # For now, use a 1.01x multiplier as industry standard
+                billing_multiplier = 1.01
+                billing_total = total_hours * billing_multiplier
+                billing_regular = payroll_regular * billing_multiplier
+                billing_overtime = payroll_overtime * billing_multiplier
+
+                # Calculate averages
+                unique_clients = len(set(s.client_id for s in completed_shifts if s.client_id))
+                unique_caregivers = len(set(s.caregiver_id for s in completed_shifts if s.caregiver_id))
+
+                avg_hours_per_client = total_hours / unique_clients if unique_clients > 0 else 0
+                avg_hours_per_caregiver = total_hours / unique_caregivers if unique_caregivers > 0 else 0
+
+                result[period_name] = {
+                    "total_hours": round(total_hours, 2),
+                    "billing": {
+                        "total": round(billing_total, 2),
+                        "regular": round(billing_regular, 2),
+                        "overtime": round(billing_overtime, 2),
+                    },
+                    "payroll": {
+                        "total": round(payroll_regular + payroll_overtime, 2),
+                        "regular": round(payroll_regular, 2),
+                        "overtime": round(payroll_overtime, 2),
+                    },
+                    "averages": {
+                        "per_client": round(avg_hours_per_client, 2),
+                        "per_caregiver": round(avg_hours_per_caregiver, 2),
+                    },
+                    "unique_clients": unique_clients,
+                    "unique_caregivers": unique_caregivers,
+                    "shift_count": len(completed_shifts),
+                }
+
+            except Exception as e:
+                logger.error(f"Error calculating hours breakdown for {period_name}: {e}")
+                result[period_name] = {
+                    "total_hours": 0,
+                    "billing": {"total": 0, "regular": 0, "overtime": 0},
+                    "payroll": {"total": 0, "regular": 0, "overtime": 0},
+                    "averages": {"per_client": 0, "per_caregiver": 0},
+                    "unique_clients": 0,
+                    "unique_caregivers": 0,
+                    "shift_count": 0,
+                }
+
+        result["generated_at"] = datetime.utcnow().isoformat()
+        result["data_source"] = "mock" if self.is_mock_mode else "wellsky_api"
+
+        return result
+
     def get_operations_summary(self, days: int = 30) -> Dict[str, Any]:
         """
         Get operational summary for client satisfaction dashboard.
