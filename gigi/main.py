@@ -5249,6 +5249,125 @@ async def retell_function_call(function_name: str, request: Request):
                 "phone_number": phone_number
             })
 
+        elif function_name == "send_email":
+            # Send email via Gmail
+            to = args.get("to", "")
+            subject = args.get("subject", "")
+            body = args.get("body", "")
+            logger.info(f"send_email: to={to}, subject={subject}")
+
+            if not to or not subject or not body:
+                return JSONResponse({"success": False, "error": "Missing required fields: to, subject, body"})
+
+            if GOOGLE_AVAILABLE and google_service:
+                try:
+                    result = google_service.send_email(to=to, subject=subject, body=body)
+                    if result:
+                        return JSONResponse({"success": True, "message": f"Email sent to {to}"})
+                    else:
+                        return JSONResponse({"success": False, "error": "Failed to send email"})
+                except Exception as e:
+                    logger.error(f"send_email error: {e}")
+                    return JSONResponse({"success": False, "error": str(e)})
+            else:
+                return JSONResponse({"success": False, "error": "Email service not available"})
+
+        elif function_name == "send_sms":
+            # Send SMS via RingCentral SMS Service
+            phone_number = args.get("phone_number", "")
+            message = args.get("message", "")
+            logger.info(f"send_sms: to={phone_number}, message_len={len(message)}")
+
+            if not phone_number or not message:
+                return JSONResponse({"success": False, "error": "Missing required fields: phone_number, message"})
+
+            try:
+                from sales.shift_filling.sms_service import SMSService
+                sms_service = SMSService()
+                success, result = sms_service.send_sms(to_phone=phone_number, message=message)
+                if success:
+                    return JSONResponse({"success": True, "message": f"SMS sent to {phone_number}", "message_id": result})
+                else:
+                    return JSONResponse({"success": False, "error": result or "Failed to send SMS"})
+            except Exception as e:
+                logger.error(f"send_sms error: {e}")
+                return JSONResponse({"success": False, "error": str(e)})
+
+        elif function_name == "send_team_message":
+            # Send message to RingCentral team chat (New Scheduling)
+            message = args.get("message", "")
+            logger.info(f"send_team_message: message_len={len(message)}")
+
+            if not message:
+                return JSONResponse({"success": False, "error": "Missing required field: message"})
+
+            try:
+                from services.ringcentral_messaging_service import ringcentral_messaging_service
+                if ringcentral_messaging_service:
+                    result = ringcentral_messaging_service.send_message_to_chat(
+                        chat_name="New Scheduling",
+                        message=message
+                    )
+                    if result.get("success"):
+                        return JSONResponse({"success": True, "message": "Message posted to team chat"})
+                    else:
+                        return JSONResponse({"success": False, "error": result.get("error", "Failed to post team message")})
+                else:
+                    return JSONResponse({"success": False, "error": "RingCentral service not available"})
+            except Exception as e:
+                logger.error(f"send_team_message error: {e}")
+                return JSONResponse({"success": False, "error": str(e)})
+
+        elif function_name == "web_search":
+            # Search the internet
+            query = args.get("query", "")
+            logger.info(f"web_search: query={query}")
+
+            if not query:
+                return JSONResponse({"success": False, "error": "Missing required field: query"})
+
+            try:
+                import httpx
+                # Try Brave Search API first
+                brave_api_key = os.getenv("BRAVE_API_KEY")
+                if brave_api_key:
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(
+                            "https://api.search.brave.com/res/v1/web/search",
+                            headers={"X-Subscription-Token": brave_api_key},
+                            params={"q": query, "count": 5}
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            results = []
+                            for r in data.get("web", {}).get("results", [])[:5]:
+                                results.append({
+                                    "title": r.get("title"),
+                                    "description": r.get("description"),
+                                    "url": r.get("url")
+                                })
+                            return JSONResponse({"success": True, "query": query, "results": results})
+
+                # Fallback to DuckDuckGo instant answers
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(
+                        f"https://api.duckduckgo.com/?q={query}&format=json&no_html=1"
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        answer = data.get("AbstractText") or data.get("Answer") or ""
+                        if answer:
+                            return JSONResponse({"success": True, "query": query, "answer": answer, "source": data.get("AbstractSource", "DuckDuckGo")})
+                        topics = [{"text": t.get("Text"), "url": t.get("FirstURL")}
+                                 for t in data.get("RelatedTopics", [])[:5] if t.get("Text")]
+                        if topics:
+                            return JSONResponse({"success": True, "query": query, "related_topics": topics})
+
+                return JSONResponse({"success": False, "query": query, "message": "No results found"})
+            except Exception as e:
+                logger.error(f"web_search error: {e}")
+                return JSONResponse({"success": False, "error": str(e)})
+
         elif function_name == "execute_caregiver_call_out":
             result = await execute_caregiver_call_out(**args)
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call

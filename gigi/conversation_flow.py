@@ -239,6 +239,14 @@ CRITICAL: The very FIRST thing you say must include "you're not in our system" o
                         "type": "prompt",
                         "prompt": "The caller asks about concerts, events, shows, sports, theater, comedy shows, things to do, what's happening this weekend, setlists, what songs an artist played, or any entertainment events or concert setlists"
                     }
+                },
+                {
+                    "id": "to_general_assistant",
+                    "destination_node_id": "general_assistant",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "The caller asks Gigi to: send an email, send a text/SMS, send a message, search the internet/Google/web, look something up online, or any general assistant task that isn't specific to home care operations"
+                    }
                 }
             ]
         },
@@ -1354,6 +1362,158 @@ GO TO end_call"""
                     "transition_condition": {
                         "type": "prompt",
                         "prompt": "Family member insists on speaking to Jason NOW, demands to be transferred immediately, or refuses to wait for a callback"
+                    }
+                }
+            ]
+        },
+
+        # =====================================================================
+        # GENERAL ASSISTANT - Handle utility requests (email, SMS, web search)
+        # =====================================================================
+        {
+            "id": "general_assistant",
+            "type": "conversation",
+            "name": "General Assistant",
+            "instruction": {
+                "type": "prompt",
+                "text": """## TASK: Handle general assistant requests
+
+You can help the caller with:
+- Sending emails
+- Sending text messages (SMS)
+- Sending RingCentral team messages
+- Searching the internet
+- Getting stock prices
+- Getting crypto prices
+
+## WORKFLOW
+1. Confirm what they want: "I can do that. Let me get the details."
+2. Gather required info:
+   - For email: recipient email, subject, message content
+   - For SMS: phone number, message content
+   - For team message: message content (goes to New Scheduling chat)
+   - For web search: what to search for
+   - For stock/crypto: the symbol (AAPL, BTC, etc.)
+3. Execute the appropriate tool
+4. Confirm completion: "Done! [brief confirmation of what was sent/found]"
+5. Ask: "Anything else?"
+6. If no → GO TO end_call
+
+## IMPORTANT
+- Always confirm before sending messages
+- Read back important info (email addresses, phone numbers) to verify
+- For searches, summarize the top results conversationally"""
+            },
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "send_email",
+                        "description": "Send an email on behalf of the caller",
+                        "url": f"{WEBHOOK_BASE}/send_email",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "to": {"type": "string", "description": "Recipient email address"},
+                                "subject": {"type": "string", "description": "Email subject line"},
+                                "body": {"type": "string", "description": "Email body content"}
+                            },
+                            "required": ["to", "subject", "body"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "send_sms",
+                        "description": "Send a text message (SMS) to a phone number",
+                        "url": f"{WEBHOOK_BASE}/send_sms",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "phone_number": {"type": "string", "description": "Recipient phone number"},
+                                "message": {"type": "string", "description": "Text message content"}
+                            },
+                            "required": ["phone_number", "message"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "send_team_message",
+                        "description": "Send a message to the RingCentral team chat (New Scheduling)",
+                        "url": f"{WEBHOOK_BASE}/send_team_message",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "message": {"type": "string", "description": "Message content to post to team chat"}
+                            },
+                            "required": ["message"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "web_search",
+                        "description": "Search the internet for information",
+                        "url": f"{WEBHOOK_BASE}/web_search",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "query": {"type": "string", "description": "Search query"}
+                            },
+                            "required": ["query"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_stock_price",
+                        "description": "Get current stock price for a ticker symbol",
+                        "url": f"{WEBHOOK_BASE}/get_stock_price",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "symbol": {"type": "string", "description": "Stock ticker symbol (e.g., AAPL, TSLA)"}
+                            },
+                            "required": ["symbol"]
+                        }
+                    }
+                },
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_crypto_price",
+                        "description": "Get current cryptocurrency price",
+                        "url": f"{WEBHOOK_BASE}/get_crypto_price",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "symbol": {"type": "string", "description": "Crypto symbol (BTC, ETH, etc.)"}
+                            },
+                            "required": ["symbol"]
+                        }
+                    }
+                }
+            ],
+            "edges": [
+                {
+                    "id": "general_to_end",
+                    "destination_node_id": "end_call",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Task is complete and caller has no more requests"
+                    }
+                },
+                {
+                    "id": "general_to_start",
+                    "destination_node_id": "start_greeting",
+                    "transition_condition": {
+                        "type": "prompt",
+                        "prompt": "Caller wants help with something unrelated to general assistant tasks (home care, scheduling, etc.)"
                     }
                 }
             ]

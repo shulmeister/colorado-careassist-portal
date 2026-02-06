@@ -139,5 +139,31 @@ class GoogleService:
             logger.error(f"Calendar error: {e}")
             return []
 
+    def send_email(self, to: str, subject: str, body: str) -> bool:
+        """Send an email via Gmail"""
+        try:
+            service = self._get_service('gmail', 'v1')
+            if not service:
+                logger.error("Gmail service not available")
+                return False
+
+            import base64
+            from email.mime.text import MIMEText
+
+            message = MIMEText(body)
+            message['to'] = to
+            message['subject'] = subject
+            # From will be set by Gmail to the authenticated user
+
+            raw = base64.urlsafe_b64encode(message.as_bytes()).decode('utf-8')
+            body = {'raw': raw}
+
+            result = service.users().messages().send(userId='me', body=body).execute()
+            logger.info(f"Email sent to {to}, message ID: {result.get('id')}")
+            return True
+        except Exception as e:
+            logger.error(f"Send email error: {e}")
+            return False
+
 # Singleton instance
 google_service = GoogleService()
