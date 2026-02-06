@@ -2808,6 +2808,56 @@ class WellSkyService:
             logger.info(f"Found {total} encounters")
         return success, response
 
+    def search_chargeitems(
+        self,
+        client_id: str = None,
+        caregiver_id: str = None,
+        start_date: str = None,
+        end_date: str = None,
+        count: int = 100,
+        page: int = 1,
+        sort: str = "-startDate"
+    ) -> Tuple[bool, Any]:
+        """
+        Search charge items (billing records) for hours tracking.
+        POST /v1/chargeitem/_search/
+
+        ChargeItem is specifically designed for billing and has actual:
+        - Bill rates and amounts
+        - Pay rates and amounts
+        - Hours (quantity)
+        - Price totals
+
+        Args:
+            client_id: Filter by patient/client ID (optional)
+            caregiver_id: Filter by practitioner/caregiver ID (optional)
+            start_date: Start date filter (format: YYYYMMDD or integer)
+            end_date: End date filter (format: YYYYMMDD or integer)
+            count: Records per page (default: 100)
+            page: Page number (default: 1)
+            sort: Sort field (default: -startDate)
+        """
+        if self.is_mock_mode:
+            return True, {"entry": [], "totalRecords": 0}
+
+        endpoint = "chargeitem/_search/"
+        params = {"_count": count, "_page": page, "_sort": sort}
+        data = {}
+        if start_date:
+            # ChargeItem expects integer date format
+            data["startDate"] = int(start_date) if isinstance(start_date, str) else start_date
+        if end_date:
+            data["endDate"] = int(end_date) if isinstance(end_date, str) else end_date
+        if client_id:
+            data["clientId"] = int(client_id) if isinstance(client_id, str) else client_id
+        if caregiver_id:
+            data["caregiverId"] = int(caregiver_id) if isinstance(caregiver_id, str) else caregiver_id
+
+        success, response = self._make_request("POST", endpoint, params=params, data=data)
+        if success:
+            logger.info(f"ChargeItem search: {response.get('totalRecords', 0)} results")
+        return success, response
+
     def update_encounter(
         self,
         encounter_id: str,
@@ -4774,6 +4824,9 @@ class WellSkyService:
         """
         Get detailed hours breakdown for billing and payroll tracking.
 
+        Uses WellSky Encounter API (completed care logs) to get actual billing
+        and payroll hours with rate information.
+
         Returns hours aggregated by period (weekly/monthly/quarterly) with:
         - Total hours
         - Billing hours (regular + overtime)
@@ -4796,21 +4849,92 @@ class WellSkyService:
 
         for period_name, (start_date, end_date) in periods.items():
             try:
-                # Get all shifts in this period
-                shifts = self.get_shifts(date_from=start_date, date_to=end_date, limit=10000)
-                completed_shifts = [s for s in shifts if s.status == ShiftStatus.COMPLETED]
+                # Get completed encounters (care logs) for this period
+                # Encounters have actual billing and payroll rate data
+                start_str = start_date.strftime("%Y%m%d")
+                end_str = end_date.strftime("%Y%m%d")
 
-                if len(completed_shifts) > 0:
+                success, response = self.search_encounters(
+                    start_date=start_str,
+                    end_date=end_str,
+                    count=1000  # Get up to 1000 encounters
+                )
+
+                if not success or not response:
+                    logger.warning(f"Failed to get encounters for {period_name}")
+                    completed_encounters = []
+                else:
+                    entries = response.get("entry", [])
+                    completed_encounters = []
+                    for entry in entries:
+                        resource = entry.get("resource", entry)
+                        if resource.get("status") in ("COMPLETE", "complete"):
+                            completed_encounters.append(resource)
+
+                if len(completed_encounters) > 0:
                     has_real_data = True
 
-                # Calculate total hours
-                total_hours = sum(s.duration_hours for s in completed_shifts)
+                # Calculate total hours from encounter periods
+                total_hours = 0.0
+                billing_total = 0.0
+                payroll_total = 0.0
+
+                # Track unique clients and caregivers
+                unique_clients = set()
+                unique_caregivers = set()
 
                 # Group by caregiver to calculate regular/overtime
                 caregiver_hours = defaultdict(float)
-                for shift in completed_shifts:
-                    if shift.caregiver_id:
-                        caregiver_hours[shift.caregiver_id] += shift.duration_hours
+
+                for encounter in completed_encounters:
+                    # Parse period start/end to calculate duration
+                    period = encounter.get("period", {})
+                    start_str = period.get("start")
+                    end_str = period.get("end")
+
+                    if start_str and end_str:
+                        try:
+                            # Parse ISO timestamps
+                            start_dt = datetime.fromisoformat(start_str.replace('Z', '+00:00'))
+                            end_dt = datetime.fromisoformat(end_str.replace('Z', '+00:00'))
+                            duration_hours = (end_dt - start_dt).total_seconds() / 3600.0
+                            total_hours += duration_hours
+
+                            # Track caregiver hours for overtime calc
+                            participant = encounter.get("participant", {})
+                            if participant:
+                                # Extract caregiver ID from participant
+                                individual = participant.get("Individual", [{}])[0] if isinstance(participant.get("Individual"), list) else {}
+                                caregiver_ref = individual.get("reference", "")
+                                if caregiver_ref:
+                                    caregiver_id = caregiver_ref.split("/")[-1]
+                                    caregiver_hours[caregiver_id] += duration_hours
+                                    unique_caregivers.add(caregiver_id)
+
+                            # Track client
+                            subject = encounter.get("subject", {})
+                            client_ref = subject.get("reference", "")
+                            if client_ref:
+                                client_id = client_ref.split("/")[-1]
+                                unique_clients.add(client_id)
+
+                            # Get billing and payroll hours from encounter rates
+                            # WellSky returns actual billed/paid hours in the rates
+                            rates = encounter.get("rates", {})
+                            bill_rates = rates.get("billRate", [])
+                            pay_rates = rates.get("payRate", [])
+
+                            if bill_rates and isinstance(bill_rates, list):
+                                # Sum billing hours (usually same as duration for hourly)
+                                billing_total += duration_hours
+
+                            if pay_rates and isinstance(pay_rates, list):
+                                # Sum payroll hours (usually same as duration for hourly)
+                                payroll_total += duration_hours
+
+                        except Exception as e:
+                            logger.warning(f"Error parsing encounter period: {e}")
+                            continue
 
                 # Calculate regular vs overtime (assuming 40 hrs/week threshold)
                 weeks_in_period = (end_date - start_date).days / 7.0
@@ -4826,21 +4950,19 @@ class WellSkyService:
                         payroll_regular += period_threshold
                         payroll_overtime += (hours - period_threshold)
 
-                # Billing hours calculation
-                # In home care, billing hours typically = actual hours worked
-                # Some agencies bill slightly more (travel time, etc.)
-                # For now, use a 1.01x multiplier as industry standard
-                billing_multiplier = 1.01
-                billing_total = total_hours * billing_multiplier
-                billing_regular = payroll_regular * billing_multiplier
-                billing_overtime = payroll_overtime * billing_multiplier
+                # For billing, apply same regular/OT split
+                billing_regular = payroll_regular
+                billing_overtime = payroll_overtime
+
+                # If we didn't get billing/payroll from rates, use calculated totals
+                if billing_total == 0:
+                    billing_total = total_hours
+                if payroll_total == 0:
+                    payroll_total = total_hours
 
                 # Calculate averages
-                unique_clients = len(set(s.client_id for s in completed_shifts if s.client_id))
-                unique_caregivers = len(set(s.caregiver_id for s in completed_shifts if s.caregiver_id))
-
-                avg_hours_per_client = total_hours / unique_clients if unique_clients > 0 else 0
-                avg_hours_per_caregiver = total_hours / unique_caregivers if unique_caregivers > 0 else 0
+                avg_hours_per_client = total_hours / len(unique_clients) if unique_clients else 0
+                avg_hours_per_caregiver = total_hours / len(unique_caregivers) if unique_caregivers else 0
 
                 result[period_name] = {
                     "total_hours": round(total_hours, 2),
@@ -4850,7 +4972,7 @@ class WellSkyService:
                         "overtime": round(billing_overtime, 2),
                     },
                     "payroll": {
-                        "total": round(payroll_regular + payroll_overtime, 2),
+                        "total": round(payroll_total, 2),
                         "regular": round(payroll_regular, 2),
                         "overtime": round(payroll_overtime, 2),
                     },
@@ -4858,9 +4980,9 @@ class WellSkyService:
                         "per_client": round(avg_hours_per_client, 2),
                         "per_caregiver": round(avg_hours_per_caregiver, 2),
                     },
-                    "unique_clients": unique_clients,
-                    "unique_caregivers": unique_caregivers,
-                    "shift_count": len(completed_shifts),
+                    "unique_clients": len(unique_clients),
+                    "unique_caregivers": len(unique_caregivers),
+                    "shift_count": len(completed_encounters),
                 }
 
             except Exception as e:
