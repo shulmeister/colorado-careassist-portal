@@ -287,6 +287,81 @@ def sync_related_persons(token, db, patient_ids):
     logger.info(f"Synced {total} family contacts")
 
 
+def sync_appointments(token, db):
+    """Sync appointments using WellSky API (requires use of WellSkyService)."""
+    logger.info("--- Syncing appointments/shifts ---")
+
+    # Import WellSky service for proper API access
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from services.wellsky_service import WellSkyService
+    from datetime import datetime, timedelta
+
+    wellsky = WellSkyService()
+    all_appointments = []
+
+    # Fetch appointments for current and next month
+    today = datetime.now().date()
+    current_month = today.strftime("%Y%m")
+    next_month = (today + timedelta(days=32)).strftime("%Y%m")
+
+    for month_no in [current_month, next_month]:
+        logger.info(f"Fetching appointments for month {month_no}...")
+
+        # Get all active clients
+        cur = db.cursor()
+        cur.execute("SELECT id FROM cached_patients WHERE is_active = true LIMIT 100")
+        client_ids = [row[0] for row in cur.fetchall()]
+
+        # Fetch appointments for each client
+        for client_id in client_ids:
+            try:
+                shifts = wellsky.search_appointments(
+                    client_id=client_id,
+                    month_no=month_no,
+                    limit=100
+                )
+                all_appointments.extend(shifts)
+            except Exception as e:
+                logger.debug(f"No appointments for client {client_id}: {e}")
+                continue
+
+    logger.info(f"Found {len(all_appointments)} total appointments")
+
+    # Write to database
+    cur = db.cursor()
+    cur.execute("DELETE FROM cached_appointments")  # Clear old data
+
+    for shift in all_appointments:
+        appt_id = shift.id
+        patient_id = shift.client_id
+        practitioner_id = shift.caregiver_id
+        sched_start = f"{shift.date} {shift.start_time}" if shift.date and shift.start_time else None
+        sched_end = f"{shift.date} {shift.end_time}" if shift.date and shift.end_time else None
+        status = shift.status.value if hasattr(shift.status, 'value') else str(shift.status)
+
+        cur.execute("""
+            INSERT INTO cached_appointments
+                (id, patient_id, practitioner_id, scheduled_start, scheduled_end,
+                 status, service_type, wellsky_data, synced_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            ON CONFLICT (id) DO UPDATE SET
+                patient_id = EXCLUDED.patient_id,
+                practitioner_id = EXCLUDED.practitioner_id,
+                scheduled_start = EXCLUDED.scheduled_start,
+                scheduled_end = EXCLUDED.scheduled_end,
+                status = EXCLUDED.status,
+                service_type = EXCLUDED.service_type,
+                wellsky_data = EXCLUDED.wellsky_data,
+                synced_at = NOW(),
+                updated_at = NOW()
+        """, (appt_id, patient_id, practitioner_id, sched_start, sched_end,
+              status, "", Json(shift.to_dict() if hasattr(shift, 'to_dict') else {})))
+
+    db.commit()
+    logger.info(f"Synced {len(all_appointments)} appointments")
+    return len(all_appointments)
+
+
 def log_sync(db, sync_type, count, status):
     """Log sync operation."""
     try:
@@ -328,6 +403,10 @@ def main():
         sync_related_persons(token, db, patient_ids)
         log_sync(db, "related_persons", 0, "completed")
 
+        # 4. Sync appointments/shifts (last 7 days + next 14 days)
+        appt_count = sync_appointments(token, db)
+        log_sync(db, "appointments", appt_count, "completed")
+
         # Summary
         cur = db.cursor()
         cur.execute("SELECT COUNT(*) FROM cached_patients WHERE is_active=true")
@@ -336,9 +415,11 @@ def main():
         caregivers = cur.fetchone()[0]
         cur.execute("SELECT COUNT(*) FROM cached_related_persons WHERE is_active=true")
         contacts = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM cached_appointments")
+        appointments = cur.fetchone()[0]
 
         logger.info("=" * 60)
-        logger.info(f"Sync complete: {clients} clients, {caregivers} caregivers, {contacts} family contacts")
+        logger.info(f"Sync complete: {clients} clients, {caregivers} caregivers, {contacts} family contacts, {appointments} appointments")
         logger.info("=" * 60)
 
     except Exception as e:
