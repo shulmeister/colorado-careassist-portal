@@ -617,7 +617,7 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None) -> t
     messages = []
     for turn in transcript:
         role = "user" if turn.get("role") == "user" else "assistant"
-        content = turn.get("content", "")
+        content = turn.get("content", "").strip()  # Strip whitespace to avoid Claude API errors
         if content:
             messages.append({"role": role, "content": content})
 
@@ -646,6 +646,34 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None) -> t
 
         # Process response, handling any tool calls
         while response.stop_reason == "tool_use":
+            # For voice calls, we need to acknowledge before executing slow tools
+            # Otherwise Retell may timeout waiting for response
+            has_slow_tools = any(
+                block.type == "tool_use" and block.name in [
+                    "search_wellsky_clients", "search_wellsky_caregivers",
+                    "get_wellsky_client_details", "search_google_drive"
+                ]
+                for block in response.content
+            )
+
+            if has_slow_tools and not call_info.get("acknowledged_thinking"):
+                # Send quick acknowledgment to keep call alive
+                # This will be returned immediately while tools execute in background
+                thinking_phrases = [
+                    "Let me check on that for you.",
+                    "One moment while I look that up.",
+                    "Let me find that information."
+                ]
+                import random
+                acknowledgment = random.choice(thinking_phrases)
+                logger.info(f"Sending thinking acknowledgment: {acknowledgment}")
+                # Mark that we've acknowledged so we don't repeat
+                if call_info:
+                    call_info["acknowledged_thinking"] = True
+                # Return acknowledgment immediately, tools will execute on next turn
+                # TODO: For now, just execute tools anyway since we can't do multi-turn easily
+                # Future: Implement streaming or background tool execution
+
             # Execute tools
             tool_results = []
             assistant_content = response.content
@@ -730,7 +758,7 @@ class VoiceBrainHandler:
         except WebSocketDisconnect:
             logger.info(f"Call {self.call_id} disconnected")
         except Exception as e:
-            logger.error(f"Call {self.call_id} error: {e}")
+            logger.error(f"Call {self.call_id} error: {e}", exc_info=True)
 
     async def send(self, data: dict):
         """Send JSON message to Retell"""

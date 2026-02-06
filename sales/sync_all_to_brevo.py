@@ -4,6 +4,22 @@ Sync ALL dashboard contacts to Brevo, organized into Referral Source and Client 
 """
 
 import sys
+import os
+from pathlib import Path
+
+# Load environment variables from ~/.gigi-env
+env_file = Path.home() / '.gigi-env'
+if env_file.exists():
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                if line.startswith('export '):
+                    line = line[7:]
+                key, value = line.split('=', 1)
+                value = value.strip('"').strip("'")
+                os.environ[key] = value
+
 from database import db_manager
 from models import Contact
 from brevo_service import BrevoService
