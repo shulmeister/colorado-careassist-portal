@@ -477,45 +477,30 @@ async def api_gigi_run_simulation(
     payload: Dict[str, str],
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Run a Retell AI web call simulation"""
-    scenario = payload.get("scenario", "caregiver_callout")
-    retell_api_key = os.getenv("RETELL_API_KEY")
-    agent_id = os.getenv("RETELL_AGENT_ID", "agent_5b425f858369d8df61c363d47f")
+    """Launch a Voice Brain simulation test"""
+    scenario_id = payload.get("scenario", "caregiver_callout")
 
-    if not retell_api_key:
-        return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
+    # Find scenario
+    scenario = next((s for s in GIGI_TEST_SCENARIOS if s["id"] == scenario_id), None)
+    if not scenario:
+        return JSONResponse({"success": False, "error": "Scenario not found"})
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                'https://api.retellai.com/v2/create-web-call',
-                headers={
-                    'Authorization': f'Bearer {retell_api_key}',
-                    'Content-Type': 'application/json'
-                },
-                json={
-                    'agent_id': agent_id,
-                    'metadata': {
-                        'test': True,
-                        'scenario': scenario,
-                        'launched_by': current_user.get("email")
-                    }
-                },
-                timeout=10
-            )
-            
-            if response.status_code in (200, 201):
-                data = response.json()
-                return JSONResponse({
-                    "success": True, 
-                    "call_id": data.get("call_id"),
-                    "access_token": data.get("access_token")
-                })
-            else:
-                return JSONResponse({"success": False, "error": response.text})
-            
+        from gigi.simulation_service import launch_simulation
+
+        simulation_id = await launch_simulation(
+            scenario=scenario,
+            launched_by=current_user.get("email")
+        )
+
+        return JSONResponse({
+            "success": True,
+            "simulation_id": simulation_id,
+            "message": "Simulation launched (running in background)"
+        })
+
     except Exception as e:
-        logger.error(f"Simulation launch failed: {e}")
+        logger.error(f"Failed to launch simulation: {e}", exc_info=True)
         return JSONResponse({"success": False, "error": str(e)})
 
 @app.post("/api/gigi/settings")
@@ -831,113 +816,137 @@ async def api_gigi_get_scenarios(
 
 @app.get("/api/gigi/simulations/history")
 async def api_gigi_get_simulation_history(
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(50, ge=1, le=200),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get recent test/simulation calls from Retell"""
-    retell_api_key = os.getenv("RETELL_API_KEY")
-    agent_id = os.getenv("RETELL_AGENT_ID", "agent_5b425f858369d8df61c363d47f")
+    """Get simulation test history"""
+    import psycopg2
 
-    if not retell_api_key:
-        return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
+    db_url = os.getenv("DATABASE_URL")
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                'https://api.retellai.com/v2/list-calls',
-                headers={'Authorization': f'Bearer {retell_api_key}', 'Content-Type': 'application/json'},
-                json={'agent_id': agent_id, 'limit': limit},
-                timeout=15
-            )
+        cur.execute("""
+            SELECT id, scenario_id, scenario_name, status,
+                   started_at, completed_at, duration_seconds,
+                   turn_count, tool_score, behavior_score, overall_score,
+                   launched_by, created_at
+            FROM gigi_simulations
+            ORDER BY created_at DESC
+            LIMIT %s
+        """, (limit,))
 
-            if response.status_code == 200:
-                calls = response.json()
-                # Filter for test calls and format nicely
-                test_calls = []
-                for call in calls:
-                    metadata = call.get('metadata', {})
-                    # Include all calls, flag test ones
-                    test_calls.append({
-                        "call_id": call.get("call_id"),
-                        "start_time": call.get("start_timestamp"),
-                        "end_time": call.get("end_timestamp"),
-                        "duration": call.get("call_duration_ms", 0) / 1000,
-                        "status": call.get("call_status"),
-                        "is_test": metadata.get("test", False),
-                        "scenario": metadata.get("scenario", "live_call"),
-                        "launched_by": metadata.get("launched_by"),
-                        "disconnect_reason": call.get("disconnection_reason"),
-                        "has_transcript": call.get("transcript") is not None
-                    })
+        simulations = []
+        for row in cur.fetchall():
+            simulations.append({
+                "id": row[0],
+                "scenario_id": row[1],
+                "scenario_name": row[2],
+                "status": row[3],
+                "started_at": row[4].isoformat() if row[4] else None,
+                "completed_at": row[5].isoformat() if row[5] else None,
+                "duration": row[6],
+                "turns": row[7],
+                "tool_score": row[8],
+                "behavior_score": row[9],
+                "overall_score": row[10],
+                "launched_by": row[11],
+                "created_at": row[12].isoformat() if row[12] else None
+            })
 
-                return JSONResponse({
-                    "success": True,
-                    "calls": test_calls,
-                    "count": len(test_calls)
-                })
-            else:
-                return JSONResponse({"success": False, "error": f"Retell API error: {response.status_code}"})
+        return JSONResponse({
+            "success": True,
+            "simulations": simulations,
+            "count": len(simulations)
+        })
 
     except Exception as e:
-        logger.error(f"Failed to fetch simulation history: {e}")
+        logger.error(f"Failed to fetch simulation history: {e}", exc_info=True)
         return JSONResponse({"success": False, "error": str(e)})
+    finally:
+        cur.close()
+        conn.close()
 
 
-@app.get("/api/gigi/simulations/call/{call_id}")
-async def api_gigi_get_call_details(
-    call_id: str,
+@app.get("/api/gigi/simulations/{simulation_id}/details")
+async def api_gigi_get_simulation_details(
+    simulation_id: int,
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get detailed call info including transcript and tool calls"""
-    retell_api_key = os.getenv("RETELL_API_KEY")
+    """Get detailed simulation results"""
+    import psycopg2
 
-    if not retell_api_key:
-        return JSONResponse({"success": False, "error": "RETELL_API_KEY not configured"})
+    db_url = os.getenv("DATABASE_URL")
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
 
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f'https://api.retellai.com/v2/get-call/{call_id}',
-                headers={'Authorization': f'Bearer {retell_api_key}'},
-                timeout=15
-            )
+        cur.execute("""
+            SELECT id, scenario_id, scenario_name, call_id, status,
+                   started_at, completed_at, duration_seconds,
+                   transcript, transcript_json, turn_count,
+                   tool_calls_json, expected_tools, tools_used,
+                   tool_score, behavior_score, overall_score,
+                   evaluation_details, error_message, launched_by, created_at
+            FROM gigi_simulations
+            WHERE id = %s
+        """, (simulation_id,))
 
-            if response.status_code == 200:
-                call = response.json()
+        row = cur.fetchone()
 
-                # Parse transcript for tool calls
-                transcript = call.get("transcript", "")
-                tool_calls = []
-                if call.get("call_analysis"):
-                    # Extract tool calls from analysis if available
-                    analysis = call.get("call_analysis", {})
-                    tool_calls = analysis.get("function_calls", [])
+        if not row:
+            return JSONResponse({"success": False, "error": "Simulation not found"})
 
-                return JSONResponse({
-                    "success": True,
-                    "call": {
-                        "call_id": call.get("call_id"),
-                        "start_time": call.get("start_timestamp"),
-                        "end_time": call.get("end_timestamp"),
-                        "duration": call.get("call_duration_ms", 0) / 1000,
-                        "status": call.get("call_status"),
-                        "disconnect_reason": call.get("disconnection_reason"),
-                        "metadata": call.get("metadata", {}),
-                        "transcript": transcript,
-                        "transcript_object": call.get("transcript_object", []),
-                        "call_analysis": call.get("call_analysis", {}),
-                        "tool_calls": tool_calls,
-                        "recording_url": call.get("recording_url"),
-                        "from_number": call.get("from_number"),
-                        "to_number": call.get("to_number")
-                    }
-                })
-            else:
-                return JSONResponse({"success": False, "error": f"Call not found: {response.status_code}"})
+        return JSONResponse({
+            "success": True,
+            "simulation": {
+                "id": row[0],
+                "scenario_id": row[1],
+                "scenario_name": row[2],
+                "call_id": row[3],
+                "status": row[4],
+                "started_at": row[5].isoformat() if row[5] else None,
+                "completed_at": row[6].isoformat() if row[6] else None,
+                "duration": row[7],
+                "transcript": row[8],
+                "transcript_json": json.loads(row[9]) if row[9] else [],
+                "turn_count": row[10],
+                "tool_calls": json.loads(row[11]) if row[11] else [],
+                "expected_tools": json.loads(row[12]) if row[12] else [],
+                "tools_used": json.loads(row[13]) if row[13] else [],
+                "tool_score": row[14],
+                "behavior_score": row[15],
+                "overall_score": row[16],
+                "evaluation": json.loads(row[17]) if row[17] else {},
+                "error": row[18],
+                "launched_by": row[19],
+                "created_at": row[20].isoformat() if row[20] else None
+            }
+        })
 
     except Exception as e:
-        logger.error(f"Failed to fetch call details: {e}")
+        logger.error(f"Failed to fetch simulation details: {e}", exc_info=True)
         return JSONResponse({"success": False, "error": str(e)})
+    finally:
+        cur.close()
+        conn.close()
+
+
+@app.get("/api/gigi/simulations/{simulation_id}/report")
+async def api_gigi_get_simulation_report(
+    simulation_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get formatted simulation report"""
+    from gigi.simulation_evaluator import generate_simulation_report
+
+    try:
+        report = await generate_simulation_report(simulation_id)
+        return Response(content=report, media_type="text/markdown")
+    except Exception as e:
+        logger.error(f"Failed to generate report: {e}", exc_info=True)
+        return Response(content=f"Error generating report: {str(e)}", media_type="text/plain", status_code=500)
 
 @app.get("/api/gigi/issues")
 async def api_gigi_get_issues(

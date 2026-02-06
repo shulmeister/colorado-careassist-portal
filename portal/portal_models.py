@@ -647,3 +647,67 @@ class ClaudeCodeTask(Base):
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
 
+
+class GigiSimulation(Base):
+    """Voice Brain simulation test results with automated evaluation"""
+    __tablename__ = "gigi_simulations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scenario_id = Column(String(100), nullable=False, index=True)
+    scenario_name = Column(String(255), nullable=False)
+    call_id = Column(String(255), unique=True, nullable=False)
+    status = Column(String(50), default='pending', index=True)
+
+    # Execution timing
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+
+    # Conversation data
+    transcript = Column(Text, nullable=True)
+    transcript_json = Column(JSON, nullable=True)
+    turn_count = Column(Integer, default=0)
+
+    # Tool tracking
+    tool_calls_json = Column(JSON, nullable=True)
+    expected_tools = Column(JSON, nullable=True)
+    tools_used = Column(JSON, nullable=True)
+
+    # Evaluation scores
+    tool_score = Column(Integer, nullable=True)
+    behavior_score = Column(Integer, nullable=True)
+    overall_score = Column(Integer, nullable=True)
+    evaluation_details = Column(JSON, nullable=True)
+
+    # Metadata
+    launched_by = Column(String(255), nullable=True)
+    user_simulator_model = Column(String(100), default='gemini-2.0-flash-exp')
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "scenario_id": self.scenario_id,
+            "scenario_name": self.scenario_name,
+            "call_id": self.call_id,
+            "status": self.status,
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "duration_seconds": self.duration_seconds,
+            "transcript": self.transcript,
+            "transcript_json": self.transcript_json,
+            "turn_count": self.turn_count,
+            "tool_calls_json": self.tool_calls_json,
+            "expected_tools": self.expected_tools,
+            "tools_used": self.tools_used,
+            "tool_score": self.tool_score,
+            "behavior_score": self.behavior_score,
+            "overall_score": self.overall_score,
+            "evaluation_details": self.evaluation_details,
+            "launched_by": self.launched_by,
+            "user_simulator_model": self.user_simulator_model,
+            "error_message": self.error_message,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+
