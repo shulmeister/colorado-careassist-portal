@@ -672,10 +672,10 @@ async def api_gigi_get_simulation_history(
 
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await client.post(
                 'https://api.retellai.com/v2/list-calls',
-                headers={'Authorization': f'Bearer {retell_api_key}'},
-                params={'agent_id': agent_id, 'limit': limit},
+                headers={'Authorization': f'Bearer {retell_api_key}', 'Content-Type': 'application/json'},
+                json={'agent_id': agent_id, 'limit': limit},
                 timeout=15
             )
 
@@ -1006,13 +1006,13 @@ async def api_gigi_get_calls(
         
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get(
+            response = await client.post(
                 'https://api.retellai.com/v2/list-calls',
-                headers={'Authorization': f'Bearer {retell_api_key}'},
-                params={'agent_id': agent_id, 'limit': limit},
+                headers={'Authorization': f'Bearer {retell_api_key}', 'Content-Type': 'application/json'},
+                json={'agent_id': agent_id, 'limit': limit},
                 timeout=10
             )
-            
+
             if response.status_code == 200:
                 calls = response.json()
                 return JSONResponse({
