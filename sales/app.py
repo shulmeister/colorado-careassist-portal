@@ -617,7 +617,7 @@ app.add_middleware(
 # Add trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware,
-    allowed_hosts=["localhost", "127.0.0.1", "tracker.coloradocareassist.com", "portal.coloradocareassist.com"]
+    allowed_hosts=["localhost", "127.0.0.1", "tracker.coloradocareassist.com", "portal.coloradocareassist.com", "staging.coloradocareassist.com"]
 )
 
 # Mount static files and templates
