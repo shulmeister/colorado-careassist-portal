@@ -26,6 +26,22 @@ import time
 import logging
 from datetime import datetime
 from typing import List, Dict, Any, Optional
+from pathlib import Path
+
+# Load environment variables from ~/.gigi-env FIRST
+env_file = Path.home() / '.gigi-env'
+if env_file.exists():
+    with open(env_file) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                # Remove 'export ' prefix if present
+                if line.startswith('export '):
+                    line = line[7:]
+                key, value = line.split('=', 1)
+                # Remove quotes if present
+                value = value.strip('"').strip("'")
+                os.environ[key] = value
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
