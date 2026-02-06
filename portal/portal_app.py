@@ -2378,6 +2378,23 @@ async def operations_dashboard(
     )
 
 
+@app.get("/api/operations/hours-breakdown")
+async def api_operations_hours_breakdown(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get detailed hours breakdown for billing and payroll tracking"""
+    if wellsky_service is None:
+        raise HTTPException(status_code=503, detail="WellSky service not available")
+
+    try:
+        breakdown = wellsky_service.get_hours_breakdown(days=90)  # Get up to quarterly
+        breakdown["wellsky_connected"] = not wellsky_service.is_mock_mode
+        return JSONResponse(breakdown)
+    except Exception as e:
+        logger.error(f"Error getting hours breakdown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/api/operations/summary")
 async def api_operations_summary(
     days: int = Query(30, ge=1, le=365),
