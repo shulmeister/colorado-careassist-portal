@@ -1553,7 +1553,7 @@
                             <div class="stat-card h-100">
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <span class="fw-bold">${s.name}</span>
-                                    ${s.id === 'no_loop_stress' ? '<span class="badge bg-danger">Critical</span>' : ''}
+                                    ${['rambling_family_loop', 'dementia_repeat_loop', 'angry_neglect_accusation', 'medical_advice_boundary'].includes(s.id) ? '<span class="badge bg-danger">Critical</span>' : ''}
                                 </div>
                                 <p class="text-secondary small mb-3">${s.description}</p>
 
