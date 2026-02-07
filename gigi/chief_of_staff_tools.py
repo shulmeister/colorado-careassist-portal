@@ -40,19 +40,42 @@ class ChiefOfStaffTools:
         pass
 
     async def search_concerts(self, query: str = ""):
-        """Search upcoming concerts for Jason's favorite artists"""
+        """Search upcoming concerts using real web search"""
+        if not query:
+            query = "upcoming concerts Denver Colorado"
+
+        search_query = f"{query} concerts tickets 2026"
+
+        # Try Brave Search first
         try:
-            # For now, we'll interface with the monitor logic
-            # This is a stub that will return some 'live' data soon
-            return {
-                "success": True,
-                "matches": [
-                    {"artist": "Dogs In A Pile", "venue": "Ogden Theatre", "date": "2026-02-13", "status": "Tickets Available"},
-                    {"artist": "Goose", "venue": "Red Rocks", "date": "2026-06-15", "status": "Presale Starts Wednesday"}
-                ]
-            }
+            import httpx
+            brave_api_key = os.environ.get("BRAVE_API_KEY")
+            if brave_api_key:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(
+                        "https://api.search.brave.com/res/v1/web/search",
+                        headers={"X-Subscription-Token": brave_api_key},
+                        params={"q": search_query, "count": 5},
+                    )
+                    if resp.status_code == 200:
+                        results = resp.json().get("web", {}).get("results", [])
+                        if results:
+                            matches = [{"title": r.get("title", ""), "snippet": r.get("description", ""), "url": r.get("url", "")} for r in results[:5]]
+                            return {"success": True, "query": query, "matches": matches}
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            logger.warning(f"Brave concert search failed: {e}")
+
+        # Fallback: DuckDuckGo
+        try:
+            from ddgs import DDGS
+            results = DDGS().text(search_query, max_results=5)
+            if results:
+                matches = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in results]
+                return {"success": True, "query": query, "matches": matches}
+        except Exception as e:
+            logger.warning(f"DDG concert search failed: {e}")
+
+        return {"success": False, "error": "Concert search temporarily unavailable"}
 
     async def buy_tickets_request(self, artist: str, venue: str, quantity: int = 2):
         """Initiate ticket purchase and send 2FA confirmation"""
