@@ -63,10 +63,109 @@ except ImportError:
 
 # Claude client
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+claude = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+
+async def run_sync(func, *args, **kwargs):
+    """Run a synchronous function in a separate thread to avoid blocking the event loop."""
+    loop = asyncio.get_running_loop()
+    from functools import partial
+    return await loop.run_in_executor(None, partial(func, *args, **kwargs))
+
+def _sync_db_query(sql, params=None):
+    """Synchronous database query helper — always closes connection"""
+    import psycopg2
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, params or [])
+        rows = cur.fetchall()
+        return rows
+    finally:
+        conn.close()
+
+def _sync_db_execute(sql, params=None):
+    """Synchronous database execution helper (insert/update) — always closes connection"""
+    import psycopg2
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+    conn = psycopg2.connect(db_url)
+    try:
+        cur = conn.cursor()
+        cur.execute(sql, params or [])
+        if cur.description:
+            result = cur.fetchone()
+        else:
+            result = None
+        conn.commit()
+        return result
+    finally:
+        conn.close()
 
 # Same tools as Telegram Gigi
 TOOLS = [
+    {
+        "name": "get_weather",
+        "description": "Get current weather and forecast for a city.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "City and State (e.g. Denver, CO)"}
+            },
+            "required": ["location"]
+        }
+    },
+    {
+        "name": "search_concerts",
+        "description": "Find upcoming concerts in Denver or other cities for specific artists or venues.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query (artist, venue, or city)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "buy_tickets_request",
+        "description": "Initiate a ticket purchase request for a concert or event. Requires 2FA confirmation.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "artist": {"type": "string", "description": "Artist/Band name"},
+                "venue": {"type": "string", "description": "Venue name"},
+                "quantity": {"type": "integer", "description": "Number of tickets", "default": 2}
+            },
+            "required": ["artist", "venue"]
+        }
+    },
+    {
+        "name": "book_table_request",
+        "description": "Request a restaurant reservation. Requires 2FA confirmation.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "restaurant": {"type": "string", "description": "Restaurant name"},
+                "party_size": {"type": "integer", "description": "Number of people"},
+                "date": {"type": "string", "description": "Date (YYYY-MM-DD)"},
+                "time": {"type": "string", "description": "Time (e.g. 7:00 PM)"}
+            },
+            "required": ["restaurant", "party_size", "date", "time"]
+        }
+    },
+    {
+        "name": "get_client_current_status",
+        "description": "Check who is with a client right now. Returns current caregiver, shift times, and status.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "client_name": {
+                    "type": "string",
+                    "description": "Name of the client"
+                }
+            },
+            "required": ["client_name"]
+        }
+    },
     {
         "name": "get_calendar_events",
         "description": "Get upcoming calendar events from Jason's Google Calendar.",
@@ -129,7 +228,7 @@ TOOLS = [
     },
     {
         "name": "get_wellsky_shifts",
-        "description": "Get shifts from WellSky, optionally filtered by client or caregiver.",
+        "description": "Get shifts from WellSky. REQUIRES a client_id or caregiver_id. Use get_wellsky_clients or get_wellsky_caregivers first to find the ID.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -267,6 +366,11 @@ SYSTEM_PROMPT = f"""You are Gigi, the AI assistant for Colorado Care Assist, a h
 - One thought at a time - don't overwhelm with information
 - If you need to list things, say "first... second..." not numbered lists
 - Pause points: use periods to create natural breaks
+- CRITICAL: This is SPOKEN audio. Avoid abbreviations that sound wrong when read aloud:
+  - Say "client number" NOT "ID" (sounds like "Idaho")
+  - Say "phone number is" NOT "phone:"
+  - Spell out numbers naturally ("six-six-six-six-two-one-six" not "6666216")
+- Use gender-neutral language ("they/them") unless you know someone's gender. Do NOT assume.
 
 # Who You're Talking To
 - Caregivers: scheduling, call-outs, shift questions
@@ -276,9 +380,12 @@ SYSTEM_PROMPT = f"""You are Gigi, the AI assistant for Colorado Care Assist, a h
 
 # Your Capabilities (use tools when needed)
 - Look up clients, caregivers, and shifts in WellSky
+- Check who is with a client RIGHT NOW (get_client_current_status)
 - Check Jason's calendar and email
 - Send texts, emails, and team messages
-- Search the internet
+- Search the internet (web_search) for flight prices and travel info
+- Get weather and forecasts (get_weather)
+- Find concerts (search_concerts) and buy tickets (buy_tickets_request)
 - Get stock and crypto prices
 - Transfer calls to Jason or the office
 
@@ -290,6 +397,9 @@ SYSTEM_PROMPT = f"""You are Gigi, the AI assistant for Colorado Care Assist, a h
 # Rules
 - NEVER say you can't do something without trying the tool first
 - If a tool fails, say what happened simply
+- For concerts: ALWAYS use `search_concerts`. Do NOT just list venues.
+- For weather: ALWAYS use `get_weather`.
+- For flights: Use `web_search` to find real-time prices.
 - For call-outs: get the caregiver's name and which shift, then report it
 - Always be warm but efficient - people are busy
 
@@ -306,11 +416,171 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
 
     try:
-        if tool_name == "get_calendar_events":
+        if tool_name == "get_weather":
+            location = tool_input.get("location", "")
+            if not location:
+                return json.dumps({"error": "No location provided"})
+
+            # Primary: wttr.in — free, no API key, returns structured JSON
+            try:
+                async with httpx.AsyncClient(timeout=5.0) as client:
+                    resp = await client.get(f"https://wttr.in/{location}?format=j1")
+                    if resp.status_code == 200:
+                        w = resp.json()
+                        current = w.get("current_condition", [{}])[0]
+                        area = w.get("nearest_area", [{}])[0]
+                        area_name = area.get("areaName", [{}])[0].get("value", location)
+                        forecast_today = w.get("weather", [{}])[0]
+                        return json.dumps({
+                            "location": area_name,
+                            "temp_f": current.get("temp_F"),
+                            "feels_like_f": current.get("FeelsLikeF"),
+                            "description": current.get("weatherDesc", [{}])[0].get("value"),
+                            "humidity": current.get("humidity"),
+                            "wind_mph": current.get("windspeedMiles"),
+                            "high_f": forecast_today.get("maxtempF"),
+                            "low_f": forecast_today.get("mintempF"),
+                        })
+            except Exception as e:
+                logger.warning(f"wttr.in failed: {e}")
+
+            # Fallback: Brave Search
+            try:
+                brave_api_key = os.getenv("BRAVE_API_KEY")
+                if brave_api_key:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.get(
+                            "https://api.search.brave.com/res/v1/web/search",
+                            headers={"X-Subscription-Token": brave_api_key},
+                            params={"q": f"current weather {location}", "count": 1},
+                        )
+                        if resp.status_code == 200:
+                            results = resp.json().get("web", {}).get("results", [])
+                            if results:
+                                return json.dumps({"location": location, "weather": results[0].get("description")})
+            except Exception as e:
+                logger.warning(f"Brave weather failed: {e}")
+
+            return json.dumps({"error": "Weather service temporarily unavailable"})
+
+        elif tool_name == "search_concerts":
+            from gigi.chief_of_staff_tools import cos_tools
+            query = tool_input.get("query", "")
+            result = await cos_tools.search_concerts(query=query)
+            return json.dumps(result)
+
+        elif tool_name == "buy_tickets_request":
+            from gigi.chief_of_staff_tools import cos_tools
+            artist = tool_input.get("artist")
+            venue = tool_input.get("venue")
+            quantity = tool_input.get("quantity", 2)
+            result = await cos_tools.buy_tickets_request(artist=artist, venue=venue, quantity=quantity)
+            return json.dumps(result)
+
+        elif tool_name == "book_table_request":
+            from gigi.chief_of_staff_tools import cos_tools
+            restaurant = tool_input.get("restaurant")
+            party_size = tool_input.get("party_size")
+            date_val = tool_input.get("date")
+            time_val = tool_input.get("time")
+            result = await cos_tools.book_table_request(restaurant=restaurant, party_size=party_size, date=date_val, time=time_val)
+            return json.dumps(result)
+
+        elif tool_name == "get_client_current_status":
+            # Uses cached_appointments (instant SQL) — same as Telegram bot
+            client_name = tool_input.get("client_name", "")
+            if not client_name:
+                return json.dumps({"error": "No client name provided"})
+
+            def _cached_status_check(name_val):
+                import psycopg2
+                from datetime import datetime
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+
+                    # 1. Find Client
+                    search_lower = f"%{name_val.lower()}%"
+                    cur.execute("""
+                        SELECT id, full_name, address, city
+                        FROM cached_patients
+                        WHERE is_active = true
+                        AND (lower(full_name) LIKE %s OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
+                        LIMIT 1
+                    """, (search_lower, search_lower, search_lower))
+                    client_row = cur.fetchone()
+                    if not client_row:
+                        conn.close()
+                        return {"status": "not_found", "message": f"Could not find active client matching '{name_val}'"}
+
+                    client_id, client_full_name, addr, city = client_row
+
+                    # 2. Get Today's Shifts from cached_appointments (instant)
+                    cur.execute("""
+                        SELECT
+                            a.scheduled_start,
+                            a.scheduled_end,
+                            p.full_name as caregiver_name,
+                            p.phone as caregiver_phone,
+                            a.status
+                        FROM cached_appointments a
+                        LEFT JOIN cached_practitioners p ON a.practitioner_id = p.id
+                        WHERE a.patient_id = %s
+                        AND a.scheduled_start >= CURRENT_DATE - INTERVAL '1 day'
+                        AND a.scheduled_start < CURRENT_DATE + INTERVAL '2 days'
+                        ORDER BY a.scheduled_start ASC
+                    """, (client_id,))
+
+                    shifts = cur.fetchall()
+                    conn.close()
+
+                    if not shifts:
+                        return {"client": client_full_name, "status": "no_shifts",
+                                "message": f"No shifts scheduled for {client_full_name} today."}
+
+                    # 3. Analyze Status
+                    now = datetime.now()
+                    current_shift = None
+                    next_shift = None
+                    last_shift = None
+
+                    for s in shifts:
+                        start, end, cg_name, cg_phone, status = s
+                        if start <= now <= end:
+                            current_shift = s
+                            break
+                        elif start > now:
+                            if not next_shift:
+                                next_shift = s
+                        elif end < now:
+                            last_shift = s
+
+                    if current_shift:
+                        start, end, cg_name, _, _ = current_shift
+                        return {"client": client_full_name, "status": "active",
+                                "message": f"{cg_name} is with {client_full_name} right now. Shift: {start.strftime('%I:%M %p')} to {end.strftime('%I:%M %p')}."}
+                    elif next_shift:
+                        start, end, cg_name, _, _ = next_shift
+                        return {"client": client_full_name, "status": "upcoming",
+                                "message": f"No one is there right now. Next shift is {cg_name} at {start.strftime('%I:%M %p')}."}
+                    else:
+                        start, end, cg_name, _, _ = last_shift if last_shift else (None, None, "None", None, None)
+                        msg = f"{cg_name} finished at {end.strftime('%I:%M %p')}." if last_shift else f"No active shifts right now for {client_full_name}."
+                        return {"client": client_full_name, "status": "completed", "message": msg}
+
+                except Exception as e:
+                    logger.error(f"Status check failed: {e}")
+                    return {"error": str(e)}
+
+            result = await run_sync(_cached_status_check, client_name)
+            return json.dumps(result)
+
+        elif tool_name == "get_calendar_events":
             if not GOOGLE_AVAILABLE or not google_service:
                 return json.dumps({"error": "Google service not available"})
             days = tool_input.get("days", 1)
-            events = google_service.get_calendar_events(days=min(days, 7))
+            events = await run_sync(google_service.get_calendar_events, days=min(days, 7))
             return json.dumps({"events": events or []})
 
         elif tool_name == "search_emails":
@@ -318,7 +588,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"error": "Google service not available"})
             query = tool_input.get("query", "is:unread")
             max_results = tool_input.get("max_results", 5)
-            emails = google_service.search_emails(query=query, max_results=max_results)
+            emails = await run_sync(google_service.search_emails, query=query, max_results=max_results)
             return json.dumps({"emails": emails or []})
 
         elif tool_name == "send_email":
@@ -329,110 +599,113 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             body = tool_input.get("body", "")
             if not all([to, subject, body]):
                 return json.dumps({"error": "Missing to, subject, or body"})
-            success = google_service.send_email(to=to, subject=subject, body=body)
+            success = await run_sync(google_service.send_email, to=to, subject=subject, body=body)
             return json.dumps({"success": success})
 
         elif tool_name == "get_wellsky_clients":
-            conn = psycopg2.connect(db_url)
-            cur = conn.cursor()
             search_name = tool_input.get("search_name", "")
             active_only = tool_input.get("active_only", True)
 
-            if search_name:
-                search = f"%{search_name.lower()}%"
-                sql = "SELECT id, first_name, last_name, full_name, phone FROM cached_patients WHERE lower(full_name) LIKE %s"
-                params = [search]
-            else:
-                sql = "SELECT id, first_name, last_name, full_name, phone FROM cached_patients WHERE 1=1"
-                params = []
+            def _query_clients():
+                if search_name:
+                    search = f"%{search_name.lower()}%"
+                    sql = "SELECT id, first_name, last_name, full_name, phone FROM cached_patients WHERE lower(full_name) LIKE %s"
+                    params = [search]
+                else:
+                    sql = "SELECT id, first_name, last_name, full_name, phone FROM cached_patients WHERE 1=1"
+                    params = []
+                if active_only:
+                    sql += " AND is_active = true"
+                sql += " ORDER BY full_name LIMIT 20"
+                return _sync_db_query(sql, params)
 
-            if active_only:
-                sql += " AND is_active = true"
-            sql += " ORDER BY full_name LIMIT 20"
-
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-            conn.close()
-
+            rows = await run_sync(_query_clients)
             clients = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2], "name": r[3], "phone": r[4] or ""} for r in rows]
             return json.dumps({"clients": clients, "count": len(clients)})
 
         elif tool_name == "get_wellsky_caregivers":
-            conn = psycopg2.connect(db_url)
-            cur = conn.cursor()
             search_name = tool_input.get("search_name", "")
             active_only = tool_input.get("active_only", True)
 
-            if search_name:
-                search = f"%{search_name.lower()}%"
-                sql = "SELECT id, first_name, last_name, full_name, phone FROM cached_practitioners WHERE lower(full_name) LIKE %s"
-                params = [search]
-            else:
-                sql = "SELECT id, first_name, last_name, full_name, phone FROM cached_practitioners WHERE 1=1"
-                params = []
+            def _query_caregivers():
+                if search_name:
+                    search = f"%{search_name.lower()}%"
+                    sql = "SELECT id, first_name, last_name, full_name, phone FROM cached_practitioners WHERE lower(full_name) LIKE %s"
+                    params = [search]
+                else:
+                    sql = "SELECT id, first_name, last_name, full_name, phone FROM cached_practitioners WHERE 1=1"
+                    params = []
+                if active_only:
+                    sql += " AND is_active = true"
+                sql += " ORDER BY full_name LIMIT 20"
+                return _sync_db_query(sql, params)
 
-            if active_only:
-                sql += " AND is_active = true"
-            sql += " ORDER BY full_name LIMIT 20"
-
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-            conn.close()
-
+            rows = await run_sync(_query_caregivers)
             caregivers = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2], "name": r[3], "phone": r[4] or ""} for r in rows]
             return json.dumps({"caregivers": caregivers, "count": len(caregivers)})
 
         elif tool_name == "get_wellsky_shifts":
-            # Query cached appointments for fast response
+            # Uses cached_appointments (instant SQL) — no live API calls during voice
             from datetime import timedelta
-            conn = psycopg2.connect(db_url)
-            cur = conn.cursor()
-
             days = min(tool_input.get("days", 7), 7)
             client_id = tool_input.get("client_id")
             caregiver_id = tool_input.get("caregiver_id")
 
-            end_date = date.today() + timedelta(days=days)
+            if not client_id and not caregiver_id:
+                return json.dumps({"error": "Please provide either a client_id or caregiver_id to search shifts. Use get_wellsky_clients or get_wellsky_caregivers to find the ID first if needed."})
 
-            # Build SQL query
-            conditions = ["scheduled_start >= CURRENT_DATE", "scheduled_start <= %s"]
-            params = [end_date]
+            def _get_cached_shifts():
+                import psycopg2
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                conn = psycopg2.connect(db_url)
+                try:
+                    cur = conn.cursor()
 
-            if client_id:
-                conditions.append("patient_id = %s")
-                params.append(client_id)
+                    sql = """
+                        SELECT a.id, a.patient_id, pat.full_name as client_name,
+                               a.practitioner_id, p.full_name as caregiver_name,
+                               a.scheduled_start, a.scheduled_end, a.status
+                        FROM cached_appointments a
+                        LEFT JOIN cached_practitioners p ON a.practitioner_id = p.id
+                        LEFT JOIN cached_patients pat ON a.patient_id = pat.id
+                        WHERE a.scheduled_start >= CURRENT_DATE
+                        AND a.scheduled_start < CURRENT_DATE + make_interval(days => %s)
+                    """
+                    params = [days]
 
-            if caregiver_id:
-                conditions.append("practitioner_id = %s")
-                params.append(caregiver_id)
+                    if client_id:
+                        sql += " AND a.patient_id = %s"
+                        params.append(str(client_id))
+                    if caregiver_id:
+                        sql += " AND a.practitioner_id = %s"
+                        params.append(str(caregiver_id))
 
-            sql = f"""
-                SELECT id, patient_id, practitioner_id,
-                       scheduled_start, scheduled_end, status,
-                       service_type, location_address
-                FROM cached_appointments
-                WHERE {' AND '.join(conditions)}
-                ORDER BY scheduled_start
-                LIMIT 30
-            """
+                    sql += " ORDER BY a.scheduled_start ASC LIMIT 30"
+                    cur.execute(sql, params)
+                    rows = cur.fetchall()
 
-            cur.execute(sql, params)
-            rows = cur.fetchall()
-            conn.close()
+                    shift_list = []
+                    for r in rows:
+                        shift_list.append({
+                            "id": str(r[0]),
+                            "client_id": str(r[1]),
+                            "client_name": r[2] or "",
+                            "caregiver_id": str(r[3]) if r[3] else "",
+                            "caregiver_name": r[4] or "Unassigned",
+                            "start": r[5].strftime('%Y-%m-%d %I:%M %p') if r[5] else "",
+                            "end": r[6].strftime('%I:%M %p') if r[6] else "",
+                            "date": r[5].strftime('%Y-%m-%d') if r[5] else "",
+                            "status": r[7] or "scheduled"
+                        })
+                    return shift_list
+                except Exception as e:
+                    logger.error(f"Cached shifts error: {e}")
+                    return []
+                finally:
+                    conn.close()
 
-            shift_list = []
-            for r in rows[:20]:
-                shift_list.append({
-                    "id": str(r[0]),
-                    "client_id": r[1],
-                    "caregiver_id": r[2],
-                    "start": r[3].isoformat() if r[3] else None,
-                    "end": r[4].isoformat() if r[4] else None,
-                    "status": r[5] or "",
-                    "service_type": r[6] or "",
-                    "location": r[7] or ""
-                })
-
+            shift_list = await run_sync(_get_cached_shifts)
+            logger.info(f"Found {len(shift_list)} cached shifts")
             return json.dumps({"shifts": shift_list, "count": len(shift_list)})
 
         elif tool_name == "send_sms":
@@ -442,9 +715,11 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"error": "Missing phone_number or message"})
 
             try:
-                from sales.shift_filling.sms_service import SMSService
-                sms = SMSService()
-                success, result = sms.send_sms(to_phone=phone, message=message)
+                def _send():
+                    from sales.shift_filling.sms_service import SMSService
+                    sms = SMSService()
+                    return sms.send_sms(to_phone=phone, message=message)
+                success, result = await run_sync(_send)
                 return json.dumps({"success": success, "result": result})
             except Exception as e:
                 return json.dumps({"error": str(e)})
@@ -455,8 +730,10 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"error": "Missing message"})
 
             try:
-                from services.ringcentral_messaging_service import ringcentral_messaging_service
-                result = ringcentral_messaging_service.send_message_to_chat("New Scheduling", message)
+                def _send_team():
+                    from services.ringcentral_messaging_service import ringcentral_messaging_service
+                    return ringcentral_messaging_service.send_message_to_chat("New Scheduling", message)
+                result = await run_sync(_send_team)
                 return json.dumps(result)
             except Exception as e:
                 return json.dumps({"error": str(e)})
@@ -466,45 +743,48 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             if not query:
                 return json.dumps({"error": "Missing query"})
 
-            # Try Brave Search first (fast, <1 second)
-            brave_api_key = os.getenv("BRAVE_API_KEY")
-            if brave_api_key:
-                try:
-                    async with httpx.AsyncClient() as client:
+            # Primary: Brave Search (fast, reliable)
+            try:
+                brave_api_key = os.getenv("BRAVE_API_KEY")
+                if brave_api_key:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
                         resp = await client.get(
                             "https://api.search.brave.com/res/v1/web/search",
                             params={"q": query, "count": 5},
                             headers={"X-Subscription-Token": brave_api_key},
-                            timeout=3.0
                         )
                         if resp.status_code == 200:
-                            data = resp.json()
-                            results = data.get("web", {}).get("results", [])
+                            results = resp.json().get("web", {}).get("results", [])
                             if results:
                                 formatted = [{"title": r.get("title", ""), "snippet": r.get("description", ""), "url": r.get("url", "")} for r in results[:5]]
                                 return json.dumps({"results": formatted, "query": query})
-                except Exception as e:
-                    logger.warning(f"Brave search failed: {e}")
+            except Exception as e:
+                logger.warning(f"Brave search failed: {e}")
 
-            # Fallback to DuckDuckGo (slower, 5-10 seconds)
+            # Fallback: DuckDuckGo (offloaded to thread)
             try:
-                from ddgs import DDGS
-                results = DDGS().text(query, max_results=5)
+                def _ddg_search():
+                    from duckduckgo_search import DDGS
+                    return DDGS().text(query, max_results=5)
+                results = await run_sync(_ddg_search)
                 if results:
                     formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in results]
                     return json.dumps({"results": formatted, "query": query})
             except Exception as e:
                 logger.warning(f"DDG search failed: {e}")
 
-            return json.dumps({"message": "No results found"})
+            return json.dumps({"error": "Search temporarily unavailable"})
 
         elif tool_name == "get_stock_price":
             symbol = tool_input.get("symbol", "").upper()
             if not symbol:
                 return json.dumps({"error": "Missing symbol"})
 
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d",
+                    headers={"User-Agent": "Mozilla/5.0 (CareAssist/1.0)"}
+                )
                 if resp.status_code == 200:
                     data = resp.json()
                     meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
@@ -518,7 +798,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             crypto_map = {"BTC": "bitcoin", "ETH": "ethereum", "DOGE": "dogecoin", "SOL": "solana"}
             coin_id = crypto_map.get(symbol, symbol.lower())
 
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd")
                 if resp.status_code == 200:
                     data = resp.json()
@@ -533,25 +813,30 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"found": False})
 
             clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
-            conn = psycopg2.connect(db_url)
-            cur = conn.cursor()
 
-            # Check staff, caregivers, clients, family
-            for table, type_name in [
-                ("cached_staff", "staff"),
-                ("cached_practitioners", "caregiver"),
-                ("cached_patients", "client"),
-                ("cached_related_persons", "family")
-            ]:
-                sql = f"SELECT first_name, full_name FROM {table} WHERE phone IS NOT NULL AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s LIMIT 1"
-                cur.execute(sql, (clean_phone,))
-                row = cur.fetchone()
-                if row:
+            def _lookup_phone():
+                import psycopg2
+                db = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                conn = psycopg2.connect(db)
+                try:
+                    cur = conn.cursor()
+                    for table, type_name in [
+                        ("cached_staff", "staff"),
+                        ("cached_practitioners", "caregiver"),
+                        ("cached_patients", "client"),
+                        ("cached_related_persons", "family")
+                    ]:
+                        sql = f"SELECT first_name, full_name FROM {table} WHERE phone IS NOT NULL AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s LIMIT 1"
+                        cur.execute(sql, (clean_phone,))
+                        row = cur.fetchone()
+                        if row:
+                            return {"found": True, "name": row[0], "full_name": row[1], "type": type_name}
+                    return {"found": False}
+                finally:
                     conn.close()
-                    return json.dumps({"found": True, "name": row[0], "full_name": row[1], "type": type_name})
 
-            conn.close()
-            return json.dumps({"found": False})
+            result = await run_sync(_lookup_phone)
+            return json.dumps(result)
 
         elif tool_name == "report_call_out":
             caregiver = tool_input.get("caregiver_name", "")
@@ -560,10 +845,13 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
 
             # Log to team chat
             try:
-                from services.ringcentral_messaging_service import ringcentral_messaging_service
-                msg = f"📞 CALL-OUT: {caregiver} called out for {shift_date}. Reason: {reason}"
-                ringcentral_messaging_service.send_message_to_chat("New Scheduling", msg)
-                return json.dumps({"success": True, "message": f"Call-out reported for {caregiver}"})
+                def _report():
+                    from services.ringcentral_messaging_service import ringcentral_messaging_service
+                    msg = f"CALL-OUT: {caregiver} called out for {shift_date}. Reason: {reason}"
+                    ringcentral_messaging_service.send_message_to_chat("New Scheduling", msg)
+                    return {"success": True, "message": f"Call-out reported for {caregiver}"}
+                result = await run_sync(_report)
+                return json.dumps(result)
             except Exception as e:
                 return json.dumps({"error": str(e)})
 
@@ -586,17 +874,12 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"error": "Missing title or description"})
 
             try:
-                conn = psycopg2.connect(db_url)
-                cur = conn.cursor()
-                cur.execute("""
-                    INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
-                    VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
-                    RETURNING id
-                """, (title, description, priority, "voice", working_dir))
-                task_id = cur.fetchone()[0]
-                conn.commit()
-                cur.close()
-                conn.close()
+                result = await run_sync(
+                    _sync_db_execute,
+                    "INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at) VALUES (%s, %s, %s, 'pending', %s, %s, NOW()) RETURNING id",
+                    (title, description, priority, "voice", working_dir)
+                )
+                task_id = result[0] if result else None
                 return json.dumps({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
             except Exception as e:
                 return json.dumps({"error": f"Failed to create task: {str(e)}"})
@@ -605,19 +888,15 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             task_id = tool_input.get("task_id")
 
             try:
-                conn = psycopg2.connect(db_url)
-                cur = conn.cursor()
                 if task_id:
-                    cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (task_id,))
+                    rows = await run_sync(_sync_db_query, "SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (task_id,))
                 else:
-                    cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
-                row = cur.fetchone()
-                cur.close()
-                conn.close()
+                    rows = await run_sync(_sync_db_query, "SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
 
-                if not row:
+                if not rows:
                     return json.dumps({"message": "No tasks found"})
 
+                row = rows[0]
                 result_preview = row[3][:300] if row[3] else None
                 return json.dumps({
                     "task_id": row[0], "title": row[1], "status": row[2],
@@ -636,7 +915,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
         return json.dumps({"error": str(e)})
 
 
-async def generate_response(transcript: List[Dict], call_info: Dict = None) -> tuple[str, Optional[str]]:
+async def generate_response(transcript: List[Dict], call_info: Dict = None, on_token=None) -> tuple[str, Optional[str]]:
     """
     Generate a response using Claude, with tool support.
     Returns (response_text, transfer_number or None)
@@ -654,7 +933,11 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None) -> t
         role = "user" if turn.get("role") == "user" else "assistant"
         content = turn.get("content", "").strip()  # Strip whitespace to avoid Claude API errors
         if content:
-            messages.append({"role": role, "content": content})
+            # Merge consecutive same-role messages (Claude API requires alternating roles)
+            if messages and messages[-1]["role"] == role:
+                messages[-1]["content"] += " " + content
+            else:
+                messages.append({"role": role, "content": content})
 
     # If no messages yet, generate greeting based on caller info
     if not messages or (len(messages) == 1 and messages[0]["role"] == "assistant"):
@@ -668,10 +951,11 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None) -> t
         return "Hi, this is Gigi with Colorado Care Assist. How can I help you?", None
 
     transfer_number = None
+    tool_results = []
 
     try:
         # Call Claude with tools
-        response = claude.messages.create(
+        response = await claude.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=300,  # Keep responses short for voice
             system=SYSTEM_PROMPT,
@@ -686,68 +970,87 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None) -> t
             has_slow_tools = any(
                 block.type == "tool_use" and block.name in [
                     "search_wellsky_clients", "search_wellsky_caregivers",
-                    "get_wellsky_client_details", "search_google_drive"
+                    "get_wellsky_client_details", "search_google_drive",
+                    "get_wellsky_shifts", "get_client_current_status",
+                    "web_search", "search_concerts", "search_emails",
+                    "get_wellsky_clients", "get_wellsky_caregivers"
                 ]
                 for block in response.content
             )
 
-            if has_slow_tools and not call_info.get("acknowledged_thinking"):
+            if has_slow_tools and on_token and not call_info.get("acknowledged_thinking"):
                 # Send quick acknowledgment to keep call alive
-                # This will be returned immediately while tools execute in background
                 thinking_phrases = [
                     "Let me check on that for you.",
                     "One moment while I look that up.",
-                    "Let me find that information."
+                    "Let me find that information.",
+                    "Checking the schedule for you now."
                 ]
                 import random
                 acknowledgment = random.choice(thinking_phrases)
-                logger.info(f"Sending thinking acknowledgment: {acknowledgment}")
-                # Mark that we've acknowledged so we don't repeat
+                await on_token(acknowledgment)
+                
+                # Mark that we've acknowledged so we don't repeat in the same response
                 if call_info:
                     call_info["acknowledged_thinking"] = True
-                # Return acknowledgment immediately, tools will execute on next turn
-                # TODO: For now, just execute tools anyway since we can't do multi-turn easily
-                # Future: Implement streaming or background tool execution
 
-            # Execute tools
-            tool_results = []
+            # Execute tools in parallel
+            tool_tasks = []
+            tool_blocks = []
             assistant_content = response.content
 
             for block in response.content:
                 if block.type == "tool_use":
                     tool_name = block.name
                     tool_input = block.input
+                    tool_blocks.append(block)
 
-                    logger.info(f"Executing tool: {tool_name}")
-                    result = await execute_tool(tool_name, tool_input)
+                    logger.info(f"Preparing tool: {tool_name}")
+                    tool_tasks.append(execute_tool(tool_name, tool_input))
 
-                    # CAPTURE for simulations
-                    if is_simulation and SIMULATION_MODE:
-                        capture_simulation_tool_call(call_id, tool_name, tool_input, result)
+            # Run all tools concurrently
+            results = await asyncio.gather(*tool_tasks)
 
-                    # Check for transfer
-                    if tool_name == "transfer_call":
+            for i, result in enumerate(results):
+                block = tool_blocks[i]
+                tool_name = block.name
+                tool_input = block.input
+
+                # CAPTURE for simulations
+                if is_simulation and SIMULATION_MODE:
+                    capture_simulation_tool_call(call_id, tool_name, tool_input, result)
+
+                # Check for transfer
+                if tool_name == "transfer_call":
+                    try:
                         result_data = json.loads(result)
                         if result_data.get("transfer_number"):
                             transfer_number = result_data["transfer_number"]
+                    except:
+                        pass
 
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result
-                    })
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": result
+                })
 
             # Continue conversation with tool results
             messages.append({"role": "assistant", "content": assistant_content})
             messages.append({"role": "user", "content": tool_results})
+            tool_results = [] # Clear for next iteration if needed
 
-            response = claude.messages.create(
+            response = await claude.messages.create(
                 model="claude-sonnet-4-20250514",
                 max_tokens=300,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
                 messages=messages
             )
+
+        # Clear acknowledgment flag for next user turn
+        if call_info:
+            call_info["acknowledged_thinking"] = False
 
         # Extract final text response
         for block in response.content:
@@ -828,10 +1131,24 @@ class VoiceBrainHandler:
             self.current_response_id = response_id
             transcript = message.get("transcript", [])
 
-            # Generate response
-            response_text, transfer_number = await generate_response(transcript, self.call_info)
+            # Callback for intermediate responses (thinking phrases)
+            async def on_token(token):
+                logger.info(f"Sending intermediate response for ID {response_id}: {token}")
+                await self.send({
+                    "response_type": "response",
+                    "response_id": response_id,
+                    "content": token,
+                    "content_complete": False # Retell appends; True would end the turn
+                })
 
-            # Send response
+            # Generate response
+            response_text, transfer_number = await generate_response(
+                transcript, 
+                self.call_info, 
+                on_token=on_token
+            )
+
+            # Send final response
             response_data = {
                 "response_type": "response",
                 "response_id": response_id,

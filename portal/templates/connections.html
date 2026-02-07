@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Connections - Colorado CareAssist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            line-height: 1.4;
+        }
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            min-height: 100vh;
+        }
+        .sidebar {
+            background: #1e293b;
+            border-right: 1px solid #334155;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar .logo {
+            padding: 0 20px 20px;
+            border-bottom: 1px solid #334155;
+            margin-bottom: 10px;
+        }
+        .sidebar .logo h2 { color: #60a5fa; font-size: 16px; }
+        .sidebar .logo p { color: #94a3b8; font-size: 12px; }
+        .sidebar nav a {
+            display: block; padding: 10px 20px; color: #94a3b8;
+            text-decoration: none; font-size: 14px; transition: all 0.2s;
+        }
+        .sidebar nav a:hover { background: #334155; color: #e5e7eb; }
+        .sidebar nav a.active { background: #334155; color: #60a5fa; border-left: 3px solid #60a5fa; }
+        .main-content { padding: 30px; overflow-y: auto; }
+        .page-header { margin-bottom: 30px; }
+        .page-header h1 { font-size: 24px; color: #f1f5f9; margin-bottom: 8px; }
+        .page-header p { color: #94a3b8; }
+        .connections-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .connection-card {
+            background: #1e293b; border-radius: 12px; border: 1px solid #334155;
+            padding: 24px;
+        }
+        .connection-card h3 { color: #f1f5f9; margin-bottom: 8px; font-size: 16px; }
+        .connection-card p { color: #94a3b8; font-size: 13px; margin-bottom: 16px; }
+        .connection-status {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500;
+        }
+        .status-connected { background: #065f46; color: #6ee7b7; }
+        .status-disconnected { background: #1e293b; color: #64748b; border: 1px solid #334155; }
+        .status-dot {
+            width: 6px; height: 6px; border-radius: 50%;
+        }
+        .status-connected .status-dot { background: #6ee7b7; }
+        .status-disconnected .status-dot { background: #64748b; }
+        .connect-btn {
+            display: inline-block; margin-top: 12px; padding: 8px 16px;
+            background: #3b82f6; color: white; border: none; border-radius: 6px;
+            font-size: 13px; cursor: pointer; text-decoration: none;
+        }
+        .connect-btn:hover { background: #2563eb; }
+        .connect-btn.connected { background: #334155; color: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="sidebar">
+            <div class="logo">
+                <h2>Colorado CareAssist</h2>
+                <p>{{ user.get('name', user.get('email', '')) }}</p>
+            </div>
+            <nav>
+                <a href="/">Dashboard</a>
+                <a href="/operations">Operations</a>
+                <a href="/vouchers">VA Vouchers</a>
+                <a href="/marketing">Marketing</a>
+                <a href="/connections" class="active">Connections</a>
+            </nav>
+        </div>
+        <div class="main-content">
+            <div class="page-header">
+                <h1>Data Connections</h1>
+                <p>Manage integrations with external services</p>
+            </div>
+            <div class="connections-grid">
+                {% set services = [
+                    {"key": "facebook", "name": "Facebook Ads", "desc": "Import ad campaign performance and lead data"},
+                    {"key": "google-ads", "name": "Google Ads", "desc": "Import Google Ads campaign metrics and conversions"},
+                    {"key": "mailchimp", "name": "Mailchimp", "desc": "Sync email marketing contacts and campaign stats"},
+                    {"key": "quickbooks", "name": "QuickBooks", "desc": "Sync invoices, payments, and financial data"}
+                ] %}
+                {% for svc in services %}
+                <div class="connection-card">
+                    <h3>{{ svc.name }}</h3>
+                    <p>{{ svc.desc }}</p>
+                    {% if connected_services.get(svc.key) %}
+                    <span class="connection-status status-connected">
+                        <span class="status-dot"></span> Connected
+                    </span>
+                    {% else %}
+                    <span class="connection-status status-disconnected">
+                        <span class="status-dot"></span> Not Connected
+                    </span>
+                    <br>
+                    <a href="/auth/{{ svc.key }}" class="connect-btn">Connect</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</body>
+</html>

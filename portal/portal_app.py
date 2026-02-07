@@ -264,6 +264,12 @@ app.mount("/static", StaticFiles(directory=os.path.join(_root_dir, "static")), n
 
 # 
 
+# Convenience redirects
+@app.get("/login")
+async def login_redirect():
+    """Redirect /login to /auth/login for user convenience"""
+    return RedirectResponse(url="/auth/login")
+
 # Authentication endpoints
 @app.get("/auth/login")
 @limiter.limit("10/minute")  # Stricter rate limit for auth
@@ -1343,6 +1349,8 @@ async def log_internal_event(
             metadata=data.get("metadata")
         )
         return JSONResponse({"success": True})
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error logging internal event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -1470,14 +1478,14 @@ async def favicon():
     from fastapi.responses import FileResponse, Response
     import os
     
-    favicon_path = "static/favicon.ico"
+    favicon_path = os.path.join(_root_dir, "static", "favicon.ico")
     if os.path.exists(favicon_path):
         response = FileResponse(favicon_path)
         response.headers["Cache-Control"] = "public, max-age=86400"
         return response
-    
+
     # Fallback to SVG if ICO doesn't exist
-    svg_path = "static/favicon.svg"
+    svg_path = os.path.join(_root_dir, "static", "favicon.svg")
     if os.path.exists(svg_path):
         with open(svg_path, 'rb') as f:
             content = f.read()
