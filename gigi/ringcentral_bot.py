@@ -281,6 +281,18 @@ class GigiRingCentralBot:
         except Exception as e:
             logger.warning(f"Daily confirmation service not available: {e}")
 
+        # --- Morning briefing via Telegram (7 AM MT) ---
+        self.morning_briefing = None
+        try:
+            from gigi.morning_briefing_service import MorningBriefingService, MORNING_BRIEFING_ENABLED
+            if MORNING_BRIEFING_ENABLED:
+                self.morning_briefing = MorningBriefingService()
+                logger.info("Morning briefing service ENABLED")
+            else:
+                logger.info("Morning briefing service disabled")
+        except Exception as e:
+            logger.warning(f"Morning briefing service not available: {e}")
+
         logger.info(f"Bot initialized. Startup time (UTC): {self.startup_time}")
         logger.info(f"Reply history loaded: {len(self.reply_history.get('replies', []))} recent replies tracked")
 
@@ -545,6 +557,15 @@ class GigiRingCentralBot:
                         logger.info(f"Daily confirmations sent to: {notified}")
                 except Exception as e:
                     logger.error(f"Daily confirmation error: {e}")
+
+            # 6. Morning briefing via Telegram (service handles its own 7am timing)
+            if self.morning_briefing:
+                try:
+                    sent = self.morning_briefing.check_and_send()
+                    if sent:
+                        logger.info("Morning briefing sent to Jason via Telegram")
+                except Exception as e:
+                    logger.error(f"Morning briefing error: {e}")
 
         except Exception as e:
             logger.error(f"Error in check_and_act: {e}")
