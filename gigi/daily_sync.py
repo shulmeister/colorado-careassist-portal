@@ -63,7 +63,7 @@ def fetch_caregivers() -> List[Dict]:
     logger.info("Fetching caregivers from WellSky...")
     try:
         response = requests.get(
-            f"{PORTAL_BASE_URL}/api/wellsky/caregivers",
+            f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers",
             timeout=60
         )
         if response.status_code == 200:
@@ -83,7 +83,7 @@ def fetch_clients() -> List[Dict]:
     logger.info("Fetching clients from WellSky...")
     try:
         response = requests.get(
-            f"{PORTAL_BASE_URL}/api/wellsky/clients",
+            f"{PORTAL_BASE_URL}/api/internal/wellsky/clients",
             timeout=60
         )
         if response.status_code == 200:
@@ -103,7 +103,7 @@ def fetch_shifts(days_ahead: int = 30) -> List[Dict]:
     logger.info(f"Fetching shifts for next {days_ahead} days...")
     try:
         response = requests.get(
-            f"{PORTAL_BASE_URL}/api/wellsky/shifts",
+            f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts",
             params={"days": days_ahead},
             timeout=60
         )

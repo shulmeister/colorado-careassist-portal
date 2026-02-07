@@ -203,16 +203,18 @@ async def generate_simulation_report(simulation_id: int) -> str:
 
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    try:
+        cur = conn.cursor()
 
-    cur.execute("""
-        SELECT scenario_name, call_id, turn_count, tool_score,
-               behavior_score, overall_score, evaluation_details, transcript
-        FROM gigi_simulations WHERE id = %s
-    """, (simulation_id,))
+        cur.execute("""
+            SELECT scenario_name, call_id, turn_count, tool_score,
+                   behavior_score, overall_score, evaluation_details, transcript
+            FROM gigi_simulations WHERE id = %s
+        """, (simulation_id,))
 
-    row = cur.fetchone()
-    conn.close()
+        row = cur.fetchone()
+    finally:
+        conn.close()
 
     if not row:
         return "Simulation not found"

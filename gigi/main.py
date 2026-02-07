@@ -267,10 +267,10 @@ logger = logging.getLogger(__name__)
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 
 # Ticketmaster API for events (concerts, sports, theater)
-TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY", "Sczxp0S6KI0GLLj1CZtYlHm57Za8Byi9")
+TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY")
 
 # Setlist.fm API for concert setlists and song history
-SETLIST_FM_API_KEY = os.getenv("SETLIST_FM_API_KEY", "E79vhiUAC8vhcI7NZTGci17xgXwtpqaYo4xp")
+SETLIST_FM_API_KEY = os.getenv("SETLIST_FM_API_KEY")
 
 # Retell AI credentials (required for voice agent)
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
@@ -464,14 +464,17 @@ async def record_shadow_feedback(request: Request):
             logger.info(f"Feedback recorded for {log_id}: {rating}")
             
             # If feedback is "bad", capture a correction memory
-            if rating == "bad" and MEMORY_SYSTEM_AVAILABLE:
-                capture_memory(
-                    content=f"Correction on action '{log['action']}': Human marked this as incorrect behavior.",
-                    memory_type="correction",
-                    category="behavior_correction",
-                    impact="high",
-                    metadata={"log_id": log_id, "original_details": log['details']}
-                )
+            if rating == "bad" and MEMORY_SYSTEM_AVAILABLE and memory_system:
+                try:
+                    memory_system.store_memory(
+                        content=f"Correction on action '{log['action']}': Human marked this as incorrect behavior.",
+                        memory_type=MemoryType.CORRECTION,
+                        category="behavior_correction",
+                        impact=ImpactLevel.HIGH,
+                        metadata={"log_id": log_id, "original_details": log['details']}
+                    )
+                except Exception as mem_err:
+                    logger.warning(f"Failed to store correction memory: {mem_err}")
             return {"success": True}
     
     return {"success": False, "error": "Log entry not found"}
@@ -793,23 +796,26 @@ async def get_shadow_dashboard():
     """
     return html
 
-async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None):
+async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None, metadata: dict = None):
     """Log event to the central portal activity stream"""
     try:
         # Determine URL - all services run on localhost (Mac Mini)
         port = os.getenv("PORT", "8765")
         portal_url = os.getenv("PORTAL_URL", f"http://localhost:{port}")
             
-        async with httpx.AsyncClient() as client:
-            await client.post(
-                f"{portal_url}/api/internal/event",
-                json={
+        payload = {
                     "source": "Gigi",
                     "description": description,
                     "event_type": event_type,
                     "details": details,
                     "icon": icon or "🤖"
-                },
+                }
+        if metadata:
+            payload["metadata"] = metadata
+        async with httpx.AsyncClient() as client:
+            await client.post(
+                f"{portal_url}/api/internal/event",
+                json=payload,
                 timeout=2.0
             )
     except Exception as e:
@@ -1289,7 +1295,7 @@ async def _query_wellsky_caregiver(phone: str) -> Optional[Dict[str, Any]]:
         # First try the portal's WellSky API
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/wellsky/caregivers",
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers",
                 timeout=10.0
             )
             if response.status_code == 200:
@@ -1314,7 +1320,7 @@ async def _lookup_caregiver_by_name(name: str) -> Optional[Dict[str, Any]]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/wellsky/caregivers",
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers",
                 timeout=10.0
             )
             if response.status_code == 200:
@@ -1350,7 +1356,7 @@ async def _lookup_shift_for_caregiver(caregiver_id: str, shift_date: str = None,
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/wellsky/caregivers/{caregiver_id}/shifts",
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers/{caregiver_id}/shifts",
                 params={"days": 7},
                 timeout=10.0
             )
@@ -1380,7 +1386,7 @@ async def _query_wellsky_client(phone: str) -> Optional[Dict[str, Any]]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/wellsky/clients",
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/clients",
                 timeout=10.0
             )
             if response.status_code == 200:
@@ -1408,7 +1414,7 @@ async def _get_caregiver_shifts(caregiver_id: str) -> List[Dict[str, Any]]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/wellsky/shifts",
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts",
                 params={"caregiver_id": caregiver_id, "upcoming": "true"},
                 timeout=10.0
             )
@@ -4558,6 +4564,7 @@ async def retell_inbound_variables(request: Request):
         clean_phone = ''.join(filter(str.isdigit, from_number))[-10:]
 
         # Check cached database for caller ID (fast, reliable)
+        conn = None
         try:
             import psycopg2
             db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
@@ -4616,9 +4623,11 @@ async def retell_inbound_variables(request: Request):
                             caller_full_name = row[1]
                             caller_type = "family"
 
-            conn.close()
         except Exception as e:
             logger.error(f"Inbound variables DB lookup error: {e}")
+        finally:
+            if conn:
+                conn.close()
 
     logger.info(f"Inbound variables: caller_name={caller_name}, caller_type={caller_type}")
 

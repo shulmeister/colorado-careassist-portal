@@ -1,5 +1,5 @@
 import { Plus, Check, Clock, User } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   useDataProvider,
   useGetIdentity,
@@ -73,10 +73,10 @@ export const CompanyTasksList = ({ companyId }: { companyId: Identifier }) => {
     }
   };
 
-  // Load tasks on mount
-  useState(() => {
+  // Load tasks on mount and when companyId changes
+  useEffect(() => {
     fetchTasks();
-  });
+  }, [companyId]);
 
   const handleAddTask = async () => {
     try {

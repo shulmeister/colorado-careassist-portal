@@ -11,6 +11,8 @@ import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta, date as date_cls
 import httpx
+import hmac
+import hashlib
 from urllib.parse import urlencode, quote_plus, urljoin
 
 # Rate limiting
@@ -65,6 +67,7 @@ except ImportError as e:
 from dotenv import load_dotenv
 from datetime import date
 from itsdangerous import URLSafeTimedSerializer
+import json
 
 # Load environment variables
 load_dotenv()
@@ -2252,7 +2255,7 @@ async def api_wellsky_status(
 # WellSky Data API (Used by Gigi Daily Sync and Internal Services)
 # ============================================================================
 
-@app.get("/api/wellsky/caregivers")
+@app.get("/api/internal/wellsky/caregivers")
 async def api_wellsky_caregivers(
     status: Optional[str] = None,
     limit: int = Query(200, ge=1, le=1000),
@@ -2282,7 +2285,7 @@ async def api_wellsky_caregivers(
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
-@app.get("/api/wellsky/clients")
+@app.get("/api/internal/wellsky/clients")
 async def api_wellsky_clients(
     status: Optional[str] = None,
     limit: int = Query(200, ge=1, le=1000),
@@ -2312,7 +2315,7 @@ async def api_wellsky_clients(
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
-@app.get("/api/wellsky/shifts")
+@app.get("/api/internal/wellsky/shifts")
 async def api_wellsky_shifts(
     days: int = Query(30, ge=1, le=120),
     limit: int = Query(500, ge=1, le=2000),

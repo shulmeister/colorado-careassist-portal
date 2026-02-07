@@ -1334,6 +1334,7 @@ class GigiRingCentralBot:
                         "status": s.status.value if hasattr(s.status, 'value') else str(s.status) if hasattr(s, 'status') else ""
                     })
                 # Enrich with names from cached database when WellSky API returns blanks
+                conn = None
                 try:
                     import psycopg2
                     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
@@ -1350,9 +1351,11 @@ class GigiRingCentralBot:
                             row = cur.fetchone()
                             if row:
                                 shift["client"] = row[0]
-                    conn.close()
                 except Exception as e:
                     logger.warning(f"Shift name enrichment failed (non-fatal): {e}")
+                finally:
+                    if conn:
+                        conn.close()
                 return json.dumps({"count": len(shifts), "shifts": shift_list})
 
             elif tool_name == "get_wellsky_clients":
@@ -1360,6 +1363,7 @@ class GigiRingCentralBot:
                 import psycopg2
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
+                conn = None
                 try:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
@@ -1374,17 +1378,20 @@ class GigiRingCentralBot:
                         cur.execute("SELECT id, full_name, phone FROM cached_patients WHERE is_active = true ORDER BY full_name LIMIT 100")
                     rows = cur.fetchall()
                     client_list = [{"id": str(r[0]), "name": r[1], "phone": r[2] or ""} for r in rows]
-                    conn.close()
                     return json.dumps({"count": len(client_list), "clients": client_list})
                 except Exception as e:
                     logger.error(f"Client cache lookup failed: {e}")
                     return json.dumps({"error": f"Client lookup failed: {str(e)}"})
+                finally:
+                    if conn:
+                        conn.close()
 
             elif tool_name == "get_wellsky_caregivers":
                 # Use cached database for reliable caregiver lookup (synced daily from WellSky)
                 import psycopg2
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
+                conn = None
                 try:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
@@ -1399,11 +1406,13 @@ class GigiRingCentralBot:
                         cur.execute("SELECT id, full_name, phone FROM cached_practitioners WHERE is_active = true ORDER BY full_name LIMIT 100")
                     rows = cur.fetchall()
                     cg_list = [{"id": str(r[0]), "name": r[1], "phone": r[2] or ""} for r in rows]
-                    conn.close()
                     return json.dumps({"count": len(cg_list), "caregivers": cg_list})
                 except Exception as e:
                     logger.error(f"Caregiver cache lookup failed: {e}")
                     return json.dumps({"error": f"Caregiver lookup failed: {str(e)}"})
+                finally:
+                    if conn:
+                        conn.close()
 
             elif tool_name == "log_call_out":
                 caregiver_id = tool_input.get("caregiver_id")

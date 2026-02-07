@@ -438,33 +438,33 @@ class GigiTelegramBot:
                 import psycopg2
                 from datetime import datetime
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
-                
+
+                conn = None
                 try:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
-                    
+
                     # 1. Find Client
                     search_lower = f"%{client_name.lower()}%"
                     cur.execute("""
-                        SELECT id, full_name, address, city 
-                        FROM cached_patients 
-                        WHERE is_active = true 
+                        SELECT id, full_name, address, city
+                        FROM cached_patients
+                        WHERE is_active = true
                         AND (lower(full_name) LIKE %s OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
                         LIMIT 1
                     """, (search_lower, search_lower, search_lower))
-                    
+
                     client_row = cur.fetchone()
                     if not client_row:
-                        conn.close()
                         return json.dumps({"status": "not_found", "message": f"Could not find active client matching '{client_name}'"})
-                    
+
                     client_id, client_full_name, addr, city = client_row
-                    
+
                     # 2. Get Today's Shifts
                     cur.execute("""
-                        SELECT 
-                            a.scheduled_start, 
-                            a.scheduled_end, 
+                        SELECT
+                            a.scheduled_start,
+                            a.scheduled_end,
                             p.full_name as caregiver_name,
                             p.phone as caregiver_phone,
                             a.status
@@ -475,29 +475,24 @@ class GigiTelegramBot:
                         AND a.scheduled_start < CURRENT_DATE + INTERVAL '1 day'
                         ORDER BY a.scheduled_start ASC
                     """, (client_id,))
-                    
+
                     shifts = cur.fetchall()
-                    conn.close()
-                    
+
                     if not shifts:
                         return json.dumps({
                             "client": client_full_name,
                             "status": "no_shifts",
                             "message": f"No shifts scheduled for {client_full_name} today."
                         })
-                        
+
                     # 3. Analyze Status
                     now = datetime.now()
                     current_shift = None
                     next_shift = None
                     last_shift = None
-                    
+
                     for s in shifts:
                         start, end, cg_name, cg_phone, status = s
-                        # Handle naive datetimes from DB by assuming local time if needed, 
-                        # but usually DB driver returns naive. 
-                        # Let's assume start/end are datetime objects.
-                        
                         if start <= now <= end:
                             current_shift = s
                             break
@@ -506,13 +501,13 @@ class GigiTelegramBot:
                                 next_shift = s
                         elif end < now:
                             last_shift = s
-                            
+
                     if current_shift:
                         start, end, cg_name, _, _ = current_shift
                         return json.dumps({
                             "client": client_full_name,
                             "status": "active",
-                            "message": f"✅ YES. {cg_name} is with {client_full_name} right now.\nShift: {start.strftime('%I:%M %p')} - {end.strftime('%I:%M %p')}\nLocation: {addr}, {city}"
+                            "message": f"YES. {cg_name} is with {client_full_name} right now.\nShift: {start.strftime('%I:%M %p')} - {end.strftime('%I:%M %p')}\nLocation: {addr}, {city}"
                         })
                     elif next_shift:
                         start, end, cg_name, _, _ = next_shift
@@ -533,6 +528,9 @@ class GigiTelegramBot:
                 except Exception as e:
                     logger.error(f"Status check failed: {e}")
                     return json.dumps({"error": str(e)})
+                finally:
+                    if conn:
+                        conn.close()
 
             elif tool_name == "get_calendar_events":
                 if not self.google:
@@ -592,6 +590,7 @@ class GigiTelegramBot:
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
                 active_only = tool_input.get("active_only", True)
+                conn = None
                 try:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
@@ -614,11 +613,13 @@ class GigiTelegramBot:
                     rows = cur.fetchall()
                     client_list = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2],
                                     "name": r[3], "phone": r[4] or r[5] or "", "email": r[6] or ""} for r in rows]
-                    conn.close()
                     return json.dumps({"count": len(client_list), "clients": client_list, "search": search_name or "all"})
                 except Exception as e:
                     logger.error(f"Client cache lookup failed: {e}")
                     return json.dumps({"error": f"Client lookup failed: {str(e)}"})
+                finally:
+                    if conn:
+                        conn.close()
 
             elif tool_name == "get_wellsky_caregivers":
                 # Use cached database for reliable caregiver lookup (synced daily from WellSky)
@@ -626,6 +627,7 @@ class GigiTelegramBot:
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
                 active_only = tool_input.get("active_only", True)
+                conn = None
                 try:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
@@ -652,11 +654,13 @@ class GigiTelegramBot:
                     cg_list = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2],
                                 "name": r[3], "phone": r[4] or r[5] or "", "email": r[6] or "",
                                 "preferred_language": r[7] or "English"} for r in rows]
-                    conn.close()
                     return json.dumps({"count": len(cg_list), "caregivers": cg_list, "search": search_name or "all"})
                 except Exception as e:
                     logger.error(f"Caregiver cache lookup failed: {e}")
                     return json.dumps({"error": f"Caregiver lookup failed: {str(e)}"})
+                finally:
+                    if conn:
+                        conn.close()
 
             elif tool_name == "get_wellsky_shifts":
                 from datetime import timedelta
@@ -676,6 +680,7 @@ class GigiTelegramBot:
                     date_to = date.today() + timedelta(days=days)
 
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+                conn = None
                 try:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
@@ -735,9 +740,6 @@ class GigiTelegramBot:
                             "actual_hours": actual_hours,
                         })
 
-                    cur.close()
-                    conn.close()
-
                     return json.dumps({
                         "count": len(shift_list),
                         "total_scheduled_hours": round(total_hours, 1),
@@ -747,6 +749,9 @@ class GigiTelegramBot:
                 except Exception as e:
                     logger.error(f"Error querying cached shifts: {e}")
                     return json.dumps({"error": f"Database error: {str(e)}"})
+                finally:
+                    if conn:
+                        conn.close()
 
             elif tool_name == "web_search":
                 query = tool_input.get("query", "")
@@ -880,23 +885,7 @@ class GigiTelegramBot:
                     logger.error(f"Crypto price error: {e}")
                     return json.dumps({"error": f"Crypto lookup failed: {str(e)}"})
 
-            elif tool_name == "web_search":
-                query = tool_input.get("query", "")
-                if not query:
-                    return json.dumps({"error": "Missing query"})
-                try:
-                    from ddgs import DDGS
-                    results = DDGS().text(query, max_results=5)
-                    if results:
-                        formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in results]
-                        return json.dumps({"results": formatted, "query": query})
-                    results = DDGS().news(query, max_results=5)
-                    if results:
-                        formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "date": r.get("date", "")} for r in results]
-                        return json.dumps({"results": formatted, "query": query, "type": "news"})
-                except Exception as e:
-                    logger.warning(f"DDG search failed: {e}")
-                return json.dumps({"message": "No results found"})
+            # NOTE: Duplicate web_search handler removed (dead code - first handler at line ~751 always matches)
 
             elif tool_name == "create_claude_task":
                 title = tool_input.get("title", "")
@@ -907,8 +896,9 @@ class GigiTelegramBot:
                 if not title or not description:
                     return json.dumps({"error": "Missing title or description"})
 
+                import psycopg2
+                conn = None
                 try:
-                    import psycopg2
                     conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
                     cur = conn.cursor()
                     cur.execute("""
@@ -918,17 +908,19 @@ class GigiTelegramBot:
                     """, (title, description, priority, "telegram", working_dir))
                     task_id = cur.fetchone()[0]
                     conn.commit()
-                    cur.close()
-                    conn.close()
                     return json.dumps({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
                 except Exception as e:
                     return json.dumps({"error": f"Failed to create task: {str(e)}"})
+                finally:
+                    if conn:
+                        conn.close()
 
             elif tool_name == "check_claude_task":
                 task_id = tool_input.get("task_id")
 
+                import psycopg2
+                conn = None
                 try:
-                    import psycopg2
                     conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
                     cur = conn.cursor()
                     if task_id:
@@ -936,8 +928,6 @@ class GigiTelegramBot:
                     else:
                         cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
                     row = cur.fetchone()
-                    cur.close()
-                    conn.close()
 
                     if not row:
                         return json.dumps({"message": "No tasks found"})
@@ -951,6 +941,9 @@ class GigiTelegramBot:
                     })
                 except Exception as e:
                     return json.dumps({"error": f"Failed to check task: {str(e)}"})
+                finally:
+                    if conn:
+                        conn.close()
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})

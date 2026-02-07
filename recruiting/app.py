@@ -213,25 +213,31 @@ def create_tables():
     
     # Add date_received column if it doesn't exist
     try:
-        db.engine.execute(text("ALTER TABLE lead ADD COLUMN date_received TIMESTAMP"))
-        print("Added date_received column to lead table")
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE lead ADD COLUMN IF NOT EXISTS date_received TIMESTAMP"))
+            conn.commit()
+        print("Ensured date_received column exists on lead table")
     except Exception as e:
-        print(f"Column date_received may already exist: {e}")
-    
+        print(f"Column date_received migration note: {e}")
+
     # Add source column if it doesn't exist
     try:
-        db.engine.execute(text("ALTER TABLE lead ADD COLUMN source VARCHAR(50) DEFAULT 'manual'"))
-        print("Added source column to lead table")
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE lead ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'manual'"))
+            conn.commit()
+        print("Ensured source column exists on lead table")
     except Exception as e:
-        print(f"Column source may already exist: {e}")
+        print(f"Column source migration note: {e}")
 
     # Add facebook_lead_id column if it doesn't exist
     try:
-        db.engine.execute(text("ALTER TABLE lead ADD COLUMN facebook_lead_id VARCHAR(64)"))
-        print("Added facebook_lead_id column to lead table")
-        db.engine.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS lead_facebook_lead_id_idx ON lead(facebook_lead_id)"))
+        with db.engine.connect() as conn:
+            conn.execute(text("ALTER TABLE lead ADD COLUMN IF NOT EXISTS facebook_lead_id VARCHAR(64)"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS lead_facebook_lead_id_idx ON lead(facebook_lead_id)"))
+            conn.commit()
+        print("Ensured facebook_lead_id column exists on lead table")
     except Exception as e:
-        print(f"Column facebook_lead_id may already exist: {e}")
+        print(f"Column facebook_lead_id migration note: {e}")
     
     # Add default users if they don't exist
     if User.query.count() == 0:
