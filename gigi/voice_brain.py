@@ -425,8 +425,10 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
 
             # Primary: wttr.in — free, no API key, returns structured JSON
             try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    resp = await client.get(f"https://wttr.in/{location}?format=j1")
+                from urllib.parse import quote
+                encoded_loc = quote(location.replace(",", " ").strip())
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    resp = await client.get(f"https://wttr.in/{encoded_loc}?format=j1")
                     if resp.status_code == 200:
                         w = resp.json()
                         current = w.get("current_condition", [{}])[0]
@@ -462,6 +464,17 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                                 return json.dumps({"location": location, "weather": results[0].get("description")})
             except Exception as e:
                 logger.warning(f"Brave weather failed: {e}")
+
+            # Fallback: DDG
+            try:
+                def _ddg_weather():
+                    from ddgs import DDGS
+                    return list(DDGS().text(f"current weather {location}", max_results=1))
+                results = await run_sync(_ddg_weather)
+                if results:
+                    return json.dumps({"location": location, "weather": results[0].get("body", "")})
+            except Exception as e:
+                logger.warning(f"DDG weather failed: {e}")
 
             return json.dumps({"error": "Weather service temporarily unavailable"})
 
@@ -780,8 +793,8 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             # Fallback: DuckDuckGo (offloaded to thread)
             try:
                 def _ddg_search():
-                    from duckduckgo_search import DDGS
-                    return DDGS().text(query, max_results=5)
+                    from ddgs import DDGS
+                    return list(DDGS().text(query, max_results=5))
                 results = await run_sync(_ddg_search)
                 if results:
                     formatted = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in results]

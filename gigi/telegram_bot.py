@@ -555,34 +555,41 @@ class GigiTelegramBot:
                 location = tool_input.get("location", "")
                 if not location:
                     return json.dumps({"error": "No location provided"})
-                
-                # Use web_search logic internally for weather
-                query = f"current weather and forecast in {location}"
+
+                # Primary: wttr.in — free, no API key, structured JSON
                 try:
                     import httpx
-                    brave_api_key = os.getenv("BRAVE_API_KEY")
-                    if brave_api_key:
-                        async with httpx.AsyncClient() as client:
-                            resp = await client.get(
-                                "https://api.search.brave.com/res/v1/web/search",
-                                headers={"X-Subscription-Token": brave_api_key},
-                                params={"q": query, "count": 1}
-                            )
-                            if resp.status_code == 200:
-                                data = resp.json()
-                                results = data.get("web", {}).get("results", [])
-                                if results:
-                                    return json.dumps({"location": location, "weather": results[0].get("description")})
-                    
-                    # Fallback to DDG
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.get(f"https://wttr.in/{location}?format=j1")
+                        if resp.status_code == 200:
+                            w = resp.json()
+                            current = w.get("current_condition", [{}])[0]
+                            area = w.get("nearest_area", [{}])[0]
+                            area_name = area.get("areaName", [{}])[0].get("value", location)
+                            forecast_today = w.get("weather", [{}])[0]
+                            return json.dumps({
+                                "location": area_name,
+                                "temp_f": current.get("temp_F"),
+                                "feels_like_f": current.get("FeelsLikeF"),
+                                "description": current.get("weatherDesc", [{}])[0].get("value"),
+                                "humidity": current.get("humidity"),
+                                "wind_mph": current.get("windspeedMiles"),
+                                "high_f": forecast_today.get("maxtempF"),
+                                "low_f": forecast_today.get("mintempF"),
+                            })
+                except Exception as e:
+                    logger.warning(f"wttr.in failed: {e}")
+
+                # Fallback: DDG search
+                try:
                     from ddgs import DDGS
-                    results = DDGS().text(query, max_results=1)
+                    results = DDGS().text(f"current weather {location}", max_results=1)
                     if results:
                         return json.dumps({"location": location, "weather": results[0].get("body")})
-                    
-                    return json.dumps({"error": "Could not find weather data."})
                 except Exception as e:
-                    return json.dumps({"error": str(e)})
+                    logger.warning(f"DDG weather fallback failed: {e}")
+
+                return json.dumps({"error": "Weather service temporarily unavailable"})
 
             elif tool_name == "get_wellsky_clients":
                 # Use cached database for reliable client lookup (synced daily from WellSky)
@@ -778,22 +785,15 @@ class GigiTelegramBot:
                                         "url": r.get("url")
                                     })
                                 return json.dumps({"query": query, "results": results})
-                    # Fallback: use DuckDuckGo instant answers
-                    import httpx
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.get(
-                            f"https://api.duckduckgo.com/?q={query}&format=json&no_html=1"
-                        )
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            answer = data.get("AbstractText") or data.get("Answer") or ""
-                            if answer:
-                                return json.dumps({"query": query, "answer": answer, "source": data.get("AbstractSource", "DuckDuckGo")})
-                            # Return related topics if no direct answer
-                            topics = [{"text": t.get("Text"), "url": t.get("FirstURL")}
-                                     for t in data.get("RelatedTopics", [])[:5] if t.get("Text")]
-                            if topics:
-                                return json.dumps({"query": query, "related_topics": topics})
+                    # Fallback: DuckDuckGo full search
+                    try:
+                        from ddgs import DDGS
+                        results = DDGS().text(query, max_results=5)
+                        if results:
+                            formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "url": r.get("href", "")} for r in results]
+                            return json.dumps({"query": query, "results": formatted})
+                    except Exception as ddg_err:
+                        logger.warning(f"DDG search fallback failed: {ddg_err}")
                     return json.dumps({"query": query, "message": "No results found. Try a more specific query."})
                 except Exception as e:
                     logger.error(f"Web search error: {e}")
@@ -805,41 +805,35 @@ class GigiTelegramBot:
                     return json.dumps({"error": "No stock symbol provided"})
                 try:
                     import httpx
-                    # Use Alpha Vantage or Yahoo Finance
-                    alpha_key = os.getenv("ALPHA_VANTAGE_API_KEY")
-                    if alpha_key:
-                        async with httpx.AsyncClient() as client:
-                            resp = await client.get(
-                                f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={symbol}&apikey={alpha_key}"
-                            )
-                            if resp.status_code == 200:
-                                data = resp.json().get("Global Quote", {})
-                                if data:
-                                    return json.dumps({
-                                        "symbol": symbol,
-                                        "price": data.get("05. price"),
-                                        "change": data.get("09. change"),
-                                        "change_percent": data.get("10. change percent"),
-                                        "high": data.get("03. high"),
-                                        "low": data.get("04. low"),
-                                        "volume": data.get("06. volume")
-                                    })
-                    # Fallback: Use Yahoo Finance via yfinance scraping endpoint
-                    async with httpx.AsyncClient() as client:
+                    # Yahoo Finance API
+                    async with httpx.AsyncClient(timeout=5.0) as client:
                         resp = await client.get(
-                            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d"
+                            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d",
+                            headers={"User-Agent": "Mozilla/5.0 (CareAssist/1.0)"}
                         )
                         if resp.status_code == 200:
                             data = resp.json()
-                            result = data.get("chart", {}).get("result", [{}])[0]
-                            meta = result.get("meta", {})
-                            if meta.get("regularMarketPrice"):
+                            meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
+                            price = meta.get("regularMarketPrice")
+                            if price:
+                                prev = meta.get("chartPreviousClose") or meta.get("previousClose", 0)
+                                change = price - prev if prev else 0
+                                pct = (change / prev * 100) if prev else 0
                                 return json.dumps({
                                     "symbol": symbol,
-                                    "price": f"${meta.get('regularMarketPrice', 0):.2f}",
-                                    "previous_close": f"${meta.get('previousClose', 0):.2f}",
+                                    "price": f"${price:.2f}",
+                                    "previous_close": f"${prev:.2f}",
+                                    "change": f"${change:+.2f}",
+                                    "change_percent": f"{pct:+.2f}%",
                                     "currency": meta.get("currency", "USD")
                                 })
+
+                    # Fallback: DDG search
+                    from ddgs import DDGS
+                    results = DDGS().text(f"{symbol} stock price today", max_results=1)
+                    if results:
+                        return json.dumps({"symbol": symbol, "info": results[0].get("body", "")})
+
                     return json.dumps({"error": f"Could not find stock price for {symbol}"})
                 except Exception as e:
                     logger.error(f"Stock price error: {e}")
@@ -1169,17 +1163,24 @@ async def main():
             app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, gigi.handle_message))
             app.add_error_handler(gigi.error_handler)
 
-            # Start bot
-            logger.info("✅ Gigi Telegram Bot is running!")
-            logger.info("   Send a message to @Shulmeisterbot to test")
-
-            # Run bot until stopped
+            # Initialize and clear any stale sessions
             await app.initialize()
+
+            # Delete any stale webhook/polling sessions to prevent 409 Conflict
+            await app.bot.delete_webhook(drop_pending_updates=True)
+            logger.info("Cleared stale Telegram sessions")
+
+            # Brief pause to let Telegram release any active getUpdates connections
+            await asyncio.sleep(2)
+
             await app.start()
             await app.updater.start_polling(
-                drop_pending_updates=True,  # Don't process old messages on restart
-                allowed_updates=["message"],  # Only listen for messages
+                drop_pending_updates=True,
+                allowed_updates=["message"],
             )
+
+            logger.info("✅ Gigi Telegram Bot is running!")
+            logger.info("   Send a message to @Shulmeisterbot to test")
 
             # Keep running
             while True:
