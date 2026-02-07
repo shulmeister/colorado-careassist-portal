@@ -74,7 +74,7 @@ async def run_sync(func, *args, **kwargs):
 def _sync_db_query(sql, params=None):
     """Synchronous database query helper — always closes connection"""
     import psycopg2
-    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
     try:
         cur = conn.cursor()
@@ -87,7 +87,7 @@ def _sync_db_query(sql, params=None):
 def _sync_db_execute(sql, params=None):
     """Synchronous database execution helper (insert/update) — always closes connection"""
     import psycopg2
-    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
     try:
         cur = conn.cursor()
@@ -413,7 +413,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
     import psycopg2
     import httpx
 
-    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
     try:
         if tool_name == "get_weather":
@@ -495,7 +495,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             def _cached_status_check(name_val):
                 import psycopg2
                 from datetime import datetime
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 try:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
@@ -656,7 +656,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
 
             def _get_cached_shifts():
                 import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = psycopg2.connect(db_url)
                 try:
                     cur = conn.cursor()
@@ -816,7 +816,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
 
             def _lookup_phone():
                 import psycopg2
-                db = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = psycopg2.connect(db)
                 try:
                     cur = conn.cursor()

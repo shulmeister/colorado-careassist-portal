@@ -15,7 +15,7 @@ import sys
 
 # CRITICAL: Force local PostgreSQL for ALL database connections
 # This must happen BEFORE any module imports that read DATABASE_URL
-_LOCAL_DB = 'postgresql://careassist:careassist2026@localhost:5432/careassist'
+_LOCAL_DB = os.getenv('DATABASE_URL', 'postgresql://careassist@localhost:5432/careassist')
 os.environ['DATABASE_URL'] = _LOCAL_DB
 os.environ['SALES_DATABASE_URL'] = _LOCAL_DB
 os.environ['RECRUITING_DATABASE_URL'] = _LOCAL_DB
@@ -54,9 +54,27 @@ except Exception as e:
     # Fallback to empty FastAPI app if portal fails
     app = FastAPI(title="Colorado CareAssist Portal", version="3.0.0")
 
+# ==================== SECURITY HEADERS MIDDLEWARE ====================
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+logger.info("✅ Security headers middleware added")
+
 # Now mount sales and recruiting into the portal app
 from fastapi.middleware.wsgi import WSGIMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
 
 # ==================== MOUNT SALES DASHBOARD ====================
 # Set DATABASE_URL for sales dashboard
@@ -358,4 +376,4 @@ except Exception as e:
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="127.0.0.1", port=port)

@@ -266,7 +266,7 @@ Generate your next response as the caller (JUST the response, no meta-commentary
         )
 
         # Update database
-        db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
 
@@ -331,7 +331,7 @@ Generate your next response as the caller (JUST the response, no meta-commentary
 
     async def _update_db_status(self, status: str, **kwargs):
         """Update simulation status in database"""
-        db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
 
@@ -362,7 +362,7 @@ async def launch_simulation(scenario: Dict, launched_by: str) -> int:
     call_id = f"sim_{uuid.uuid4().hex[:16]}"
 
     # Create database record
-    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
 

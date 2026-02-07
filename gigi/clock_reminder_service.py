@@ -19,7 +19,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
 CLOCK_REMINDER_ENABLED = os.getenv("CLOCK_REMINDER_ENABLED", "false").lower() == "true"
 REMINDER_THRESHOLD_MINUTES = 5   # Send reminder after this many minutes past shift start/end

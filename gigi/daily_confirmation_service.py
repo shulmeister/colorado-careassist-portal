@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 DAILY_CONFIRMATION_ENABLED = os.getenv("DAILY_CONFIRMATION_ENABLED", "false").lower() == "true"
 CONFIRMATION_HOUR = 14  # 2pm Mountain
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
 
 class DailyConfirmationService:

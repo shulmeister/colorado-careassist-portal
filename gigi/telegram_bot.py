@@ -432,7 +432,7 @@ class GigiTelegramBot:
 
                 import psycopg2
                 from datetime import datetime
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 
                 try:
                     conn = psycopg2.connect(db_url)
@@ -584,7 +584,7 @@ class GigiTelegramBot:
             elif tool_name == "get_wellsky_clients":
                 # Use cached database for reliable client lookup (synced daily from WellSky)
                 import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
                 active_only = tool_input.get("active_only", True)
                 try:
@@ -618,7 +618,7 @@ class GigiTelegramBot:
             elif tool_name == "get_wellsky_caregivers":
                 # Use cached database for reliable caregiver lookup (synced daily from WellSky)
                 import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
                 active_only = tool_input.get("active_only", True)
                 try:
@@ -675,7 +675,7 @@ class GigiTelegramBot:
                 # Enrich shifts with client/caregiver names from cached database
                 try:
                     import psycopg2
-                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
                     for shift in shift_list:
@@ -862,7 +862,7 @@ class GigiTelegramBot:
 
                 try:
                     import psycopg2
-                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist"))
+                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
                     cur = conn.cursor()
                     cur.execute("""
                         INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
@@ -882,7 +882,7 @@ class GigiTelegramBot:
 
                 try:
                     import psycopg2
-                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist"))
+                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
                     cur = conn.cursor()
                     if task_id:
                         cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (int(task_id),))

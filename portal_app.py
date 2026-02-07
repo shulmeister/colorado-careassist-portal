@@ -2578,7 +2578,7 @@ async def quickbooks_callback(
         state_valid = False
         try:
             import psycopg2
-            db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
             conn = psycopg2.connect(db_url)
             cur = conn.cursor()
             cur.execute(
@@ -2685,5 +2685,5 @@ Realm ID: {realmId}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
 
