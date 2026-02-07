@@ -279,6 +279,7 @@ This script will:
 
 ## HISTORY
 
+- **Feb 7, 2026 (overnight):** Autonomous 5-agent audit: fixed SQL injection in simulation_service, undefined capture_memory, 14 connection leaks (6 files), missing imports (json/hmac/hashlib), 3 duplicate routes → /api/internal/wellsky/*, SQLAlchemy 2.0 fix, Sales CRM task model aliases, CompanyTasksList useState→useEffect, voice_brain open_only parity. WellSky sync confirmed 1,074 appointments (24 of 71 clients have zero appointments — WellSky-side gap).
 - **Feb 7, 2026:** Fixed 11 CRM bugs (duplicate route, FK, contact/company ID collision, relative URLs, task types). Created 3 QA/security agents (security-auditor, performance-engineer, chaos-engineer). Pushed all 7 repos to GitHub. Fixed backup script to include .py files and Claude memory.
 - **Feb 6, 2026:** Created 6 custom Claude Code subagents. Fixed 27 voice brain bugs (11 tools wrapped in run_sync, connection leaks, SQL injection). Added Claude Code task bridge. Upgraded web search to DuckDuckGo. Fixed WellSky composite IDs. Fixed Retell signature bypass. Created 3 missing portal templates. Fixed concierge page text contrast. Fixed PowderPulse portal routing. Fixed BTC rainbow chart stretching.
 - **Feb 5, 2026:** Added staging environment (staging.coloradocareassist.com), deep health checks, promote-to-production workflow. NEVER edit production directly anymore.
