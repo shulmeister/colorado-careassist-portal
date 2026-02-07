@@ -6112,7 +6112,7 @@ async def retell_shift_offer_complete(request: Request):
             # Also check DB for persistence across restarts
             try:
                 import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = psycopg2.connect(db_url)
                 cur = conn.cursor()
                 cur.execute(
@@ -8710,4 +8710,4 @@ async def va_rfs_converter(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)

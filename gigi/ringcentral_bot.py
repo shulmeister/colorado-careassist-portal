@@ -704,7 +704,7 @@ class GigiRingCentralBot:
         import re
         import psycopg2
 
-        db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
         # =====================================================================
         # 1. Identify Caregiver (from phone number via cached DB)
@@ -1336,7 +1336,7 @@ class GigiRingCentralBot:
                 # Enrich with names from cached database when WellSky API returns blanks
                 try:
                     import psycopg2
-                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
                     for shift in shift_list:
@@ -1358,7 +1358,7 @@ class GigiRingCentralBot:
             elif tool_name == "get_wellsky_clients":
                 # Use cached database for reliable client lookup (synced daily from WellSky)
                 import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
                 try:
                     conn = psycopg2.connect(db_url)
@@ -1383,7 +1383,7 @@ class GigiRingCentralBot:
             elif tool_name == "get_wellsky_caregivers":
                 # Use cached database for reliable caregiver lookup (synced daily from WellSky)
                 import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
                 try:
                     conn = psycopg2.connect(db_url)

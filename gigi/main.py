@@ -4544,7 +4544,7 @@ async def retell_inbound_variables(request: Request):
         # Check cached database for caller ID (fast, reliable)
         try:
             import psycopg2
-            db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
             conn = psycopg2.connect(db_url)
             cur = conn.cursor()
 
@@ -5065,7 +5065,7 @@ async def retell_function_call(function_name: str, request: Request):
             try:
                 import psycopg2
                 from datetime import date as date_cls, timedelta
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = psycopg2.connect(db_url)
                 cur = conn.cursor()
 
@@ -5186,7 +5186,7 @@ async def retell_function_call(function_name: str, request: Request):
 
                 try:
                     import psycopg2
-                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
 
@@ -5873,7 +5873,7 @@ async def retell_function_call(function_name: str, request: Request):
 
             try:
                 import psycopg2
-                conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist"))
+                conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
                 cur = conn.cursor()
                 cur.execute("""
                     INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
@@ -5895,7 +5895,7 @@ async def retell_function_call(function_name: str, request: Request):
 
             try:
                 import psycopg2
-                conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist"))
+                conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
                 cur = conn.cursor()
                 if task_id:
                     cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (int(task_id),))
@@ -7030,4 +7030,4 @@ async def test_sms_reply(
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8001))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="127.0.0.1", port=port)

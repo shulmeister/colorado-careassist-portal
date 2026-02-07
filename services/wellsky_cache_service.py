@@ -18,7 +18,7 @@ from services.wellsky_service import WellSkyService, WellSkyClient
 logger = logging.getLogger(__name__)
 
 # Database connection
-DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://careassist:careassist2026@localhost:5432/careassist')
+DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://careassist@localhost:5432/careassist')
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 
