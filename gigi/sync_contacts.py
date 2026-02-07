@@ -50,7 +50,7 @@ def fetch_caregivers():
     print("Fetching caregivers from WellSky...")
     try:
         response = requests.get(
-            f"{PORTAL_BASE_URL}/api/wellsky/caregivers",
+            f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers",
             timeout=30
         )
         if response.status_code == 200:
@@ -70,7 +70,7 @@ def fetch_clients():
     print("Fetching clients from WellSky...")
     try:
         response = requests.get(
-            f"{PORTAL_BASE_URL}/api/wellsky/clients",
+            f"{PORTAL_BASE_URL}/api/internal/wellsky/clients",
             timeout=30
         )
         if response.status_code == 200:

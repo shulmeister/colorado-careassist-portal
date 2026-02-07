@@ -268,41 +268,43 @@ Generate your next response as the caller (JUST the response, no meta-commentary
         # Update database
         db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
 
-        cur.execute("""
-            UPDATE gigi_simulations
-            SET status = 'completed',
-                completed_at = %s,
-                duration_seconds = %s,
-                transcript = %s,
-                transcript_json = %s,
-                turn_count = %s,
-                tool_calls_json = %s,
-                tools_used = %s,
-                tool_score = %s,
-                behavior_score = %s,
-                overall_score = %s,
-                evaluation_details = %s
-            WHERE id = %s
-        """, (
-            datetime.now(),
-            duration,
-            self._format_transcript_text(),
-            json.dumps(self.transcript),
-            len(self.transcript) // 2,
-            json.dumps(tool_calls),
-            json.dumps(tools_used),
-            evaluation["tool_score"],
-            evaluation["behavior_score"],
-            evaluation["overall_score"],
-            json.dumps(evaluation["details"]),
-            self.simulation_id
-        ))
+            cur.execute("""
+                UPDATE gigi_simulations
+                SET status = 'completed',
+                    completed_at = %s,
+                    duration_seconds = %s,
+                    transcript = %s,
+                    transcript_json = %s,
+                    turn_count = %s,
+                    tool_calls_json = %s,
+                    tools_used = %s,
+                    tool_score = %s,
+                    behavior_score = %s,
+                    overall_score = %s,
+                    evaluation_details = %s
+                WHERE id = %s
+            """, (
+                datetime.now(),
+                duration,
+                self._format_transcript_text(),
+                json.dumps(self.transcript),
+                len(self.transcript) // 2,
+                json.dumps(tool_calls),
+                json.dumps(tools_used),
+                evaluation["tool_score"],
+                evaluation["behavior_score"],
+                evaluation["overall_score"],
+                json.dumps(evaluation["details"]),
+                self.simulation_id
+            ))
 
-        conn.commit()
-        cur.close()
-        conn.close()
+            conn.commit()
+            cur.close()
+        finally:
+            conn.close()
 
         logger.info(f"[Sim {self.call_id}] Completed - Score: {evaluation['overall_score']}/100")
 
@@ -330,27 +332,36 @@ Generate your next response as the caller (JUST the response, no meta-commentary
         return "\n".join(lines) if lines else "(No conversation yet)"
 
     async def _update_db_status(self, status: str, **kwargs):
-        """Update simulation status in database"""
+        """Update simulation status in database using parameterized queries"""
         db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
 
-        set_clauses = [f"status = '{status}'"]
-        for key, value in kwargs.items():
-            if isinstance(value, datetime):
-                set_clauses.append(f"{key} = '{value.isoformat()}'")
-            elif isinstance(value, str):
-                # Escape single quotes in strings
-                escaped_value = value.replace("'", "''")
-                set_clauses.append(f"{key} = '{escaped_value}'")
-            elif value is None:
-                set_clauses.append(f"{key} = NULL")
+            # Build parameterized SET clause
+            set_parts = ["status = %s"]
+            params = [status]
 
-        sql = f"UPDATE gigi_simulations SET {', '.join(set_clauses)} WHERE id = {self.simulation_id}"
-        cur.execute(sql)
-        conn.commit()
-        cur.close()
-        conn.close()
+            # Whitelist of allowed column names to prevent SQL injection via key names
+            allowed_columns = {"started_at", "completed_at", "error_message", "duration_seconds"}
+
+            for key, value in kwargs.items():
+                if key not in allowed_columns:
+                    logger.warning(f"Ignoring unknown column in _update_db_status: {key}")
+                    continue
+                set_parts.append(f"{key} = %s")
+                if isinstance(value, datetime):
+                    params.append(value.isoformat())
+                else:
+                    params.append(value)
+
+            params.append(self.simulation_id)
+            sql = f"UPDATE gigi_simulations SET {', '.join(set_parts)} WHERE id = %s"
+            cur.execute(sql, params)
+            conn.commit()
+            cur.close()
+        finally:
+            conn.close()
 
 
 async def launch_simulation(scenario: Dict, launched_by: str) -> int:
@@ -364,26 +375,28 @@ async def launch_simulation(scenario: Dict, launched_by: str) -> int:
     # Create database record
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    try:
+        cur = conn.cursor()
 
-    cur.execute("""
-        INSERT INTO gigi_simulations (
-            scenario_id, scenario_name, call_id, status,
-            expected_tools, launched_by, created_at
-        ) VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
-        RETURNING id
-    """, (
-        scenario["id"],
-        scenario["name"],
-        call_id,
-        json.dumps(scenario.get("expected_tools", [])),
-        launched_by
-    ))
+        cur.execute("""
+            INSERT INTO gigi_simulations (
+                scenario_id, scenario_name, call_id, status,
+                expected_tools, launched_by, created_at
+            ) VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
+            RETURNING id
+        """, (
+            scenario["id"],
+            scenario["name"],
+            call_id,
+            json.dumps(scenario.get("expected_tools", [])),
+            launched_by
+        ))
 
-    simulation_id = cur.fetchone()[0]
-    conn.commit()
-    cur.close()
-    conn.close()
+        simulation_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+    finally:
+        conn.close()
 
     # Launch async runner
     runner = SimulationRunner(simulation_id, scenario, call_id, launched_by)

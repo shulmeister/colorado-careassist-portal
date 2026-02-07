@@ -802,7 +802,7 @@ class CompanyTask(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     due_date = Column(DateTime, nullable=True)
-    status = Column(String(50), nullable=False, default="pending")  # pending, completed, cancelled
+    status = Column(String(50), nullable=False, default="pending")  # pending, done, cancelled
     completed_at = Column(DateTime, nullable=True)
     assigned_to = Column(String(255), nullable=True)  # Email of assigned user
     created_by = Column(String(255), nullable=True)  # Email of creator
@@ -814,8 +814,10 @@ class CompanyTask(Base):
             "id": self.id,
             "company_id": self.company_id,
             "title": self.title,
+            "text": self.title,  # Alias for frontend compatibility
             "description": self.description,
             "due_date": self.due_date.isoformat() if self.due_date else None,
+            "done_date": self.completed_at.isoformat() if self.completed_at else None,
             "status": self.status,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "assigned_to": self.assigned_to,
@@ -833,7 +835,7 @@ class ContactTask(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     due_date = Column(DateTime, nullable=True)
-    status = Column(String(50), nullable=False, default="pending")  # pending, completed, cancelled
+    status = Column(String(50), nullable=False, default="pending")  # pending, done, cancelled
     completed_at = Column(DateTime, nullable=True)
     assigned_to = Column(String(255), nullable=True)  # Email of assigned user
     created_by = Column(String(255), nullable=True)  # Email of creator
@@ -845,8 +847,10 @@ class ContactTask(Base):
             "id": self.id,
             "contact_id": self.contact_id,
             "title": self.title,
+            "text": self.title,  # Alias for frontend compatibility
             "description": self.description,
             "due_date": self.due_date.isoformat() if self.due_date else None,
+            "done_date": self.completed_at.isoformat() if self.completed_at else None,
             "status": self.status,
             "assigned_to": self.assigned_to,
             "created_by": self.created_by,
@@ -876,8 +880,10 @@ class DealTask(Base):
             "id": self.id,
             "deal_id": self.deal_id,
             "title": self.title,
+            "text": self.title,  # Alias for frontend compatibility
             "description": self.description,
             "due_date": self.due_date.isoformat() if self.due_date else None,
+            "done_date": self.completed_at.isoformat() if self.completed_at else None,
             "status": self.status,
             "assigned_to": self.assigned_to,
             "created_by": self.created_by,

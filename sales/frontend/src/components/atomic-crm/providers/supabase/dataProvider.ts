@@ -48,7 +48,15 @@ const buildQuery = (params: any) => {
   }
   if (params?.filter) {
     Object.entries(params.filter).forEach(([key, value]) => {
-      if (value === undefined || value === null || value === "") return;
+      if (value === undefined || value === "") return;
+      // Special case: "@is" suffix with null value means filter for SQL NULL
+      // e.g. "done_date@is": null -> send done_date@is=null
+      if (value === null) {
+        if (key.endsWith("@is")) {
+          search.append(key, "null");
+        }
+        return;
+      }
       search.append(key, String(value));
     });
   }

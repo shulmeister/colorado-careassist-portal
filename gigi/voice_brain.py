@@ -235,7 +235,8 @@ TOOLS = [
                 "client_id": {"type": "string", "description": "Filter by client ID"},
                 "caregiver_id": {"type": "string", "description": "Filter by caregiver ID"},
                 "days": {"type": "integer", "description": "Days to look ahead for upcoming shifts", "default": 7},
-                "past_days": {"type": "integer", "description": "Days to look BACK for past/completed shifts. Use when asked about shift history, hours worked, etc.", "default": 0}
+                "past_days": {"type": "integer", "description": "Days to look BACK for past/completed shifts. Use when asked about shift history, hours worked, etc.", "default": 0},
+                "open_only": {"type": "boolean", "description": "If true, only return open or unfilled shifts (no assigned caregiver)", "default": False}
             },
             "required": []
         }
@@ -497,6 +498,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 import psycopg2
                 from datetime import datetime
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+                conn = None
                 try:
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
@@ -512,7 +514,6 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                     """, (search_lower, search_lower, search_lower))
                     client_row = cur.fetchone()
                     if not client_row:
-                        conn.close()
                         return {"status": "not_found", "message": f"Could not find active client matching '{name_val}'"}
 
                     client_id, client_full_name, addr, city = client_row
@@ -534,7 +535,6 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                     """, (client_id,))
 
                     shifts = cur.fetchall()
-                    conn.close()
 
                     if not shifts:
                         return {"client": client_full_name, "status": "no_shifts",
@@ -573,6 +573,9 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 except Exception as e:
                     logger.error(f"Status check failed: {e}")
                     return {"error": str(e)}
+                finally:
+                    if conn:
+                        conn.close()
 
             result = await run_sync(_cached_status_check, client_name)
             return json.dumps(result)
@@ -650,6 +653,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             from datetime import timedelta
             days = min(tool_input.get("days", 7), 30)
             past_days = min(tool_input.get("past_days", 0), 90)
+            open_only = tool_input.get("open_only", False)
             client_id = tool_input.get("client_id")
             caregiver_id = tool_input.get("caregiver_id")
 
@@ -683,6 +687,8 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                     if caregiver_id:
                         sql += " AND a.practitioner_id = %s"
                         params.append(str(caregiver_id))
+                    if open_only:
+                        sql += " AND (a.practitioner_id IS NULL OR a.status IN ('open', 'pending', 'proposed'))"
 
                     sql += " ORDER BY a.scheduled_start ASC LIMIT 50"
                     cur.execute(sql, params)
