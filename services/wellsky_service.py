@@ -2146,7 +2146,7 @@ class WellSkyService:
             logger.error(f"Appointment search failed: {data}")
             return []
 
-        # Parse FHIR Bundle response
+        # Parse FHIR Bundle response with pagination
         shifts = []
         if data.get("resourceType") == "Bundle" and data.get("entry"):
             for entry in data["entry"]:
@@ -2157,7 +2157,36 @@ class WellSkyService:
                     logger.error(f"Error parsing appointment: {e}")
                     continue
 
-        logger.info(f"Found {len(shifts)} appointments matching search criteria")
+        # Auto-paginate: if we got a full page, fetch next pages
+        total = data.get("total", len(shifts)) if isinstance(data, dict) else len(shifts)
+        current_page = page
+        while len(shifts) < total and len(shifts) >= (current_page + 1) * min(limit, 100):
+            current_page += 1
+            if current_page > 20:  # Safety cap
+                break
+            next_params = {
+                "_count": min(limit, 100),
+                "_page": current_page
+            }
+            if use_post:
+                success2, data2 = self._make_request("POST", "appointment/_search/", params=next_params, data=search_payload)
+            else:
+                next_params.update({k: v for k, v in params.items() if k not in ("_count", "_page")})
+                success2, data2 = self._make_request("GET", "appointment/", params=next_params)
+            if not success2 or not isinstance(data2, dict):
+                break
+            entries = data2.get("entry", [])
+            if not entries:
+                break
+            for entry in entries:
+                try:
+                    shift = self._parse_fhir_appointment(entry)
+                    shifts.append(shift)
+                except Exception as e:
+                    logger.error(f"Error parsing appointment page {current_page}: {e}")
+                    continue
+
+        logger.info(f"Found {len(shifts)} appointments matching search criteria (pages: {current_page + 1})")
         return shifts
 
     def create_appointment(

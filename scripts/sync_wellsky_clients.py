@@ -299,18 +299,20 @@ def sync_appointments(token, db):
     wellsky = WellSkyService()
     all_appointments = []
 
-    # Fetch appointments for current and next month
+    # Fetch appointments for previous, current, and next month
     today = datetime.now().date()
+    prev_month = (today - timedelta(days=today.day)).strftime("%Y%m")
     current_month = today.strftime("%Y%m")
     next_month = (today + timedelta(days=32)).strftime("%Y%m")
 
-    for month_no in [current_month, next_month]:
-        logger.info(f"Fetching appointments for month {month_no}...")
+    # Get all active clients (no LIMIT)
+    cur = db.cursor()
+    cur.execute("SELECT id FROM cached_patients WHERE is_active = true")
+    client_ids = [row[0] for row in cur.fetchall()]
+    logger.info(f"Syncing appointments for {len(client_ids)} active clients")
 
-        # Get all active clients
-        cur = db.cursor()
-        cur.execute("SELECT id FROM cached_patients WHERE is_active = true LIMIT 100")
-        client_ids = [row[0] for row in cur.fetchall()]
+    for month_no in [prev_month, current_month, next_month]:
+        logger.info(f"Fetching appointments for month {month_no}...")
 
         # Fetch appointments for each client
         for client_id in client_ids:
@@ -322,7 +324,7 @@ def sync_appointments(token, db):
                 )
                 all_appointments.extend(shifts)
             except Exception as e:
-                logger.debug(f"No appointments for client {client_id}: {e}")
+                logger.debug(f"No appointments for client {client_id} in {month_no}: {e}")
                 continue
 
     logger.info(f"Found {len(all_appointments)} total appointments")
@@ -336,6 +338,8 @@ def sync_appointments(token, db):
     utc = ZoneInfo("UTC")
     mt = ZoneInfo("America/Denver")
 
+    inserted = 0
+    failed = 0
     for shift in all_appointments:
         patient_id = shift.client_id
         practitioner_id = shift.caregiver_id
@@ -369,27 +373,33 @@ def sync_appointments(token, db):
         date_str = str(shift.date) if shift.date else "nodate"
         appt_id = f"{shift.id}_{date_str}"
 
-        cur.execute("""
-            INSERT INTO cached_appointments
-                (id, patient_id, practitioner_id, scheduled_start, scheduled_end,
-                 status, service_type, wellsky_data, synced_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-            ON CONFLICT (id) DO UPDATE SET
-                patient_id = EXCLUDED.patient_id,
-                practitioner_id = EXCLUDED.practitioner_id,
-                scheduled_start = EXCLUDED.scheduled_start,
-                scheduled_end = EXCLUDED.scheduled_end,
-                status = EXCLUDED.status,
-                service_type = EXCLUDED.service_type,
-                wellsky_data = EXCLUDED.wellsky_data,
-                synced_at = NOW(),
-                updated_at = NOW()
-        """, (appt_id, patient_id, practitioner_id, sched_start, sched_end,
-              status, "", Json(shift.to_dict() if hasattr(shift, 'to_dict') else {})))
+        try:
+            cur.execute("""
+                INSERT INTO cached_appointments
+                    (id, patient_id, practitioner_id, scheduled_start, scheduled_end,
+                     status, service_type, wellsky_data, synced_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                ON CONFLICT (id) DO UPDATE SET
+                    patient_id = EXCLUDED.patient_id,
+                    practitioner_id = EXCLUDED.practitioner_id,
+                    scheduled_start = EXCLUDED.scheduled_start,
+                    scheduled_end = EXCLUDED.scheduled_end,
+                    status = EXCLUDED.status,
+                    service_type = EXCLUDED.service_type,
+                    wellsky_data = EXCLUDED.wellsky_data,
+                    synced_at = NOW(),
+                    updated_at = NOW()
+            """, (appt_id, patient_id, practitioner_id, sched_start, sched_end,
+                  status, "", Json(shift.to_dict() if hasattr(shift, 'to_dict') else {})))
+            inserted += 1
+        except Exception as e:
+            failed += 1
+            logger.error(f"Failed to insert appointment {appt_id} (client={patient_id}): {e}")
+            db.rollback()
 
     db.commit()
-    logger.info(f"Synced {len(all_appointments)} appointments")
-    return len(all_appointments)
+    logger.info(f"Synced {inserted} appointments ({failed} failed, {len(all_appointments)} fetched)")
+    return inserted
 
 
 def log_sync(db, sync_type, count, status):
