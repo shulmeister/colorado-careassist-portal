@@ -50,6 +50,10 @@ from google_drive_service import GoogleDriveService
 from activity_logger import ActivityLogger
 from dotenv import load_dotenv
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+try:
+    import httpx
+except ImportError:
+    httpx = None
 
 # Load environment variables
 load_dotenv()
@@ -65,10 +69,13 @@ _COMPANY_LOGO_TTL_SECONDS = 86400  # 1 day
 async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None):
     """Log event to the central portal activity stream"""
     try:
+        if httpx is None:
+            logger.debug("httpx not available, skipping portal event log")
+            return
         # Determine URL - all services run on localhost (Mac Mini)
         port = os.getenv("PORT", "8765")
         portal_url = os.getenv("PORTAL_URL", f"http://localhost:{port}")
-            
+
         async with httpx.AsyncClient() as client:
             await client.post(
                 f"{portal_url}/api/internal/event",
@@ -2085,6 +2092,118 @@ def _to_company_task_dict(task) -> Dict[str, Any]:
     }
 
 
+# ============ SALES (CRM TEAM MEMBERS) ============
+
+# Hardcoded team member list for the "sales" resource in the CRM frontend
+_CRM_TEAM_MEMBERS = [
+    {
+        "id": 1,
+        "first_name": "Jacob",
+        "last_name": "Shulmeister",
+        "email": "jacob@coloradocareassist.com",
+        "administrator": True,
+        "disabled": False,
+    },
+    {
+        "id": 2,
+        "first_name": "Jennifer",
+        "last_name": "Shulmeister",
+        "email": "jen@coloradocareassist.com",
+        "administrator": False,
+        "disabled": False,
+    },
+    {
+        "id": 3,
+        "first_name": "Jason",
+        "last_name": "Shulmeister",
+        "email": "jason@coloradocareassist.com",
+        "administrator": True,
+        "disabled": False,
+    },
+]
+
+
+@app.get("/admin/sales")
+async def admin_get_sales(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    q: Optional[str] = Query(default=None),
+):
+    """Return CRM team members (sales resource)."""
+    data = _CRM_TEAM_MEMBERS
+    if q:
+        q_lower = q.lower()
+        data = [m for m in data if q_lower in m["first_name"].lower() or q_lower in m["last_name"].lower() or q_lower in m["email"].lower()]
+    total = len(data)
+    return JSONResponse(
+        {"data": data, "total": total},
+        headers={
+            "Content-Range": f"sales 0-{total - 1 if total else 0}/{total}",
+            "Access-Control-Expose-Headers": "Content-Range, X-Total-Count",
+            "X-Total-Count": str(total),
+        },
+    )
+
+
+@app.get("/admin/sales/{sales_id}")
+async def admin_get_sales_member(
+    sales_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Return a single CRM team member."""
+    for member in _CRM_TEAM_MEMBERS:
+        if member["id"] == sales_id:
+            return JSONResponse({"data": member})
+    raise HTTPException(status_code=404, detail="Team member not found")
+
+
+# ============ TAGS RESOURCE ============
+
+@app.get("/admin/tags")
+async def admin_get_tags(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return distinct tags used across contacts."""
+    try:
+        contacts = db.query(Contact.tags).filter(Contact.tags.isnot(None)).all()
+        tag_set = set()
+        for (tags_str,) in contacts:
+            if tags_str:
+                try:
+                    tag_list = json.loads(tags_str)
+                    if isinstance(tag_list, list):
+                        tag_set.update(tag_list)
+                except json.JSONDecodeError:
+                    for t in tags_str.split(","):
+                        t = t.strip()
+                        if t:
+                            tag_set.add(t)
+        data = [{"id": tag, "name": tag, "color": "#6b7280"} for tag in sorted(tag_set)]
+        total = len(data)
+        return JSONResponse(
+            {"data": data, "total": total},
+            headers={
+                "Content-Range": f"tags 0-{total - 1 if total else 0}/{total}",
+                "Access-Control-Expose-Headers": "Content-Range, X-Total-Count",
+                "X-Total-Count": str(total),
+            },
+        )
+    except Exception as e:
+        logger.error("Error fetching tags: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/admin/tags/{tag_id}")
+async def admin_get_tag(
+    tag_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Return a single tag by name/id."""
+    return JSONResponse({"data": {"id": tag_id, "name": tag_id, "color": "#6b7280"}})
+
+
 # ============ STUB ENDPOINTS FOR NOTES ============
 # These are expected by the React Admin frontend but not fully implemented yet
 
@@ -2466,12 +2585,13 @@ async def get_all_tasks(
     from sqlalchemy import union_all, select, literal
 
     # Build queries for each task type
+    # NOTE: The actual DB column is completed_at, aliased to done_date for frontend compat
     contact_tasks = select(
         ContactTask.id.label('id'),
         ContactTask.title.label('title'),
         ContactTask.description.label('description'),
         ContactTask.due_date.label('due_date'),
-        ContactTask.done_date.label('done_date'),
+        ContactTask.completed_at.label('done_date'),
         ContactTask.status.label('status'),
         ContactTask.assigned_to.label('assigned_to'),
         ContactTask.contact_id.label('contact_id'),
@@ -2486,7 +2606,7 @@ async def get_all_tasks(
         CompanyTask.title,
         CompanyTask.description,
         CompanyTask.due_date,
-        CompanyTask.done_date,
+        CompanyTask.completed_at.label('done_date'),
         CompanyTask.status,
         CompanyTask.assigned_to,
         literal(None).label('contact_id'),
@@ -2501,7 +2621,7 @@ async def get_all_tasks(
         DealTask.title,
         DealTask.description,
         DealTask.due_date,
-        DealTask.done_date,
+        DealTask.completed_at.label('done_date'),
         DealTask.status,
         DealTask.assigned_to,
         literal(None).label('contact_id'),
@@ -2681,6 +2801,34 @@ async def admin_get_contacts_summary(
         )
     except Exception as e:
         logger.error("Error fetching contacts_summary: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/admin/contacts_summary/{contact_id}")
+async def admin_get_contact_summary(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Get a single contact in contacts_summary format (needed by ReferenceField)."""
+    try:
+        from models import Contact, ReferralSource
+
+        contact = db.query(Contact).filter(Contact.id == contact_id).first()
+        if not contact:
+            raise HTTPException(status_code=404, detail="Contact not found")
+
+        company_name = None
+        if contact.company_id:
+            company = db.query(ReferralSource).filter(ReferralSource.id == contact.company_id).first()
+            if company:
+                company_name = company.organization or company.name
+
+        return JSONResponse({"data": _to_contact_summary_dict(contact, company_name)})
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error fetching contact_summary %d: %s", contact_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3306,6 +3454,12 @@ async def admin_get_tasks(
     assigned_to: Optional[str] = Query(default=None),
     sales_id: Optional[str] = Query(default=None),
     filter: Optional[str] = Query(default=None),
+    # Dashboard TasksList uses Supabase-style @-filter keys for date filtering
+    done_date_is: Optional[str] = Query(default=None, alias="done_date@is"),
+    due_date_lt: Optional[str] = Query(default=None, alias="due_date@lt"),
+    due_date_lte: Optional[str] = Query(default=None, alias="due_date@lte"),
+    due_date_gt: Optional[str] = Query(default=None, alias="due_date@gt"),
+    due_date_gte: Optional[str] = Query(default=None, alias="due_date@gte"),
 ):
     try:
         from models import ContactTask, CompanyTask
@@ -3336,6 +3490,9 @@ async def admin_get_tasks(
             except Exception:
                 pass
 
+        # Check if dashboard-style date filters are present
+        has_date_filters = any([done_date_is, due_date_lt, due_date_lte, due_date_gt, due_date_gte])
+
         # Backward compat: frontend historically sends sales_id=identity.id
         # Treat that as an assignee filter.
         effective_assignee = assigned_to or sales_id
@@ -3343,6 +3500,21 @@ async def admin_get_tasks(
         range_header = request.headers.get("Range")
         range_param = range or (range_header.split("=")[1] if range_header else None)
         start, end = _parse_range(range_param)
+
+        def _apply_date_filters_list(tasks_list):
+            """Apply Supabase-style date filters to a list of task dicts."""
+            result = tasks_list
+            if done_date_is is not None and str(done_date_is).lower() == 'null':
+                result = [t for t in result if t.get("done_date") is None]
+            if due_date_lt:
+                result = [t for t in result if t.get("due_date") and t["due_date"] < due_date_lt]
+            if due_date_lte:
+                result = [t for t in result if t.get("due_date") and t["due_date"] <= due_date_lte]
+            if due_date_gt:
+                result = [t for t in result if t.get("due_date") and t["due_date"] > due_date_gt]
+            if due_date_gte:
+                result = [t for t in result if t.get("due_date") and t["due_date"] >= due_date_gte]
+            return result
 
         # Filter by company_id -> CompanyTask
         if company_id is not None:
@@ -3362,12 +3534,16 @@ async def admin_get_tasks(
                     order_clause = col.desc() if (order or "").upper() == "DESC" else col.asc()
 
             tasks = query.order_by(order_clause).offset(start).limit(end - start + 1).all()
-            content_range = f"tasks {start}-{start + len(tasks) - 1 if tasks else start}/{total}"
+            data = [_to_company_task_dict(t) for t in tasks]
+            if has_date_filters:
+                data = _apply_date_filters_list(data)
+                total = len(data)
+            content_range = f"tasks {start}-{start + len(data) - 1 if data else start}/{total}"
             return JSONResponse(
-                {"data": [_to_company_task_dict(t) for t in tasks], "total": total},
+                {"data": data, "total": total},
                 headers={
                     "Content-Range": content_range,
-                    "Access-Control-Expose-Headers": "Content-Range",
+                    "Access-Control-Expose-Headers": "Content-Range, X-Total-Count",
                     "X-Total-Count": str(total),
                 },
             )
@@ -3390,17 +3566,21 @@ async def admin_get_tasks(
                     order_clause = col.desc() if (order or "").upper() == "DESC" else col.asc()
 
             tasks = query.order_by(order_clause).offset(start).limit(end - start + 1).all()
-            content_range = f"tasks {start}-{start + len(tasks) - 1 if tasks else start}/{total}"
+            data = [_to_contact_task_dict(t) for t in tasks]
+            if has_date_filters:
+                data = _apply_date_filters_list(data)
+                total = len(data)
+            content_range = f"tasks {start}-{start + len(data) - 1 if tasks else start}/{total}"
             return JSONResponse(
-                {"data": [_to_contact_task_dict(t) for t in tasks], "total": total},
+                {"data": data, "total": total},
                 headers={
                     "Content-Range": content_range,
-                    "Access-Control-Expose-Headers": "Content-Range",
+                    "Access-Control-Expose-Headers": "Content-Range, X-Total-Count",
                     "X-Total-Count": str(total),
                 },
             )
 
-        # No filter: return all contact tasks + company tasks combined
+        # No entity filter: return all contact tasks + company tasks combined
         all_tasks = []
         for ct in db.query(ContactTask).all():
             all_tasks.append(("contact", ct))
@@ -3414,21 +3594,31 @@ async def admin_get_tasks(
         if effective_assignee:
             all_tasks = [(t, obj) for t, obj in all_tasks if obj.assigned_to == effective_assignee or obj.assigned_to is None]
 
-        total = len(all_tasks)
-        page = all_tasks[start:end + 1]
+        # Convert to dicts first, then apply date filters
         data = []
-        for task_type, obj in page:
+        for task_type, obj in all_tasks:
             if task_type == "contact":
                 data.append(_to_contact_task_dict(obj))
             else:
                 data.append(_to_company_task_dict(obj))
 
-        content_range = f"tasks {start}-{start + len(data) - 1 if data else start}/{total}"
+        if has_date_filters:
+            data = _apply_date_filters_list(data)
+
+        # Apply sorting on the converted dicts
+        if sort and sort in ("due_date", "created_at", "updated_at"):
+            reverse = (order or "").upper() == "DESC"
+            data.sort(key=lambda x: x.get(sort) or "", reverse=reverse)
+
+        total = len(data)
+        page = data[start:end + 1]
+
+        content_range = f"tasks {start}-{start + len(page) - 1 if page else start}/{total}"
         return JSONResponse(
-            {"data": data, "total": total},
+            {"data": page, "total": total},
             headers={
                 "Content-Range": content_range,
-                "Access-Control-Expose-Headers": "Content-Range",
+                "Access-Control-Expose-Headers": "Content-Range, X-Total-Count",
                 "X-Total-Count": str(total),
             },
         )
@@ -3443,11 +3633,11 @@ async def admin_get_task(
     db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """Get a single task by ID"""
+    """Get a single task by ID. Searches ContactTask, CompanyTask, then LeadTask."""
     try:
         from models import LeadTask, ContactTask, CompanyTask
 
-        # Try ContactTask first
+        # Try ContactTask first (most common)
         task = db.query(ContactTask).filter(ContactTask.id == task_id).first()
         if task:
             return JSONResponse({"data": _to_contact_task_dict(task)})
@@ -3575,27 +3765,52 @@ async def admin_update_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        from models import LeadTask, LeadActivity, CompanyTask
+        from models import LeadTask, LeadActivity, CompanyTask, ContactTask
 
         data = await request.json()
 
-        # Try company task first
+        # Helper: handle done_date from frontend (maps to completed_at + status)
+        def _apply_done_date(task_obj, data):
+            """The Task.tsx component sends done_date to toggle completion."""
+            if "done_date" in data:
+                if data["done_date"]:
+                    task_obj.completed_at = _coerce_datetime(data["done_date"])
+                    task_obj.status = "done"
+                else:
+                    task_obj.completed_at = None
+                    task_obj.status = "pending"
+
+        def _apply_common_fields(task_obj, data):
+            """Apply common editable fields."""
+            if "text" in data:
+                task_obj.title = data["text"]
+            if "description" in data:
+                task_obj.description = data["description"]
+            if "due_date" in data:
+                task_obj.due_date = _coerce_datetime(data["due_date"])
+            if "status" in data:
+                task_obj.status = data["status"]
+                if data["status"] in ("completed", "done"):
+                    task_obj.completed_at = datetime.utcnow()
+                    task_obj.status = "done"
+                else:
+                    task_obj.completed_at = None
+            if "assigned_to" in data:
+                task_obj.assigned_to = data["assigned_to"]
+            _apply_done_date(task_obj, data)
+
+        # Try ContactTask first (most common from dashboard)
+        contact_task = db.query(ContactTask).filter(ContactTask.id == task_id).first()
+        if contact_task:
+            _apply_common_fields(contact_task, data)
+            db.commit()
+            db.refresh(contact_task)
+            return JSONResponse(_to_contact_task_dict(contact_task))
+
+        # Try CompanyTask
         company_task = db.query(CompanyTask).filter(CompanyTask.id == task_id).first()
         if company_task:
-            if "text" in data:
-                company_task.title = data["text"]
-            if "description" in data:
-                company_task.description = data["description"]
-            if "due_date" in data:
-                company_task.due_date = _coerce_datetime(data["due_date"])
-            if "status" in data:
-                company_task.status = data["status"]
-                if data["status"] == "completed":
-                    company_task.completed_at = datetime.utcnow()
-                else:
-                    company_task.completed_at = None
-            if "assigned_to" in data:
-                company_task.assigned_to = data["assigned_to"]
+            _apply_common_fields(company_task, data)
             db.commit()
             db.refresh(company_task)
             return JSONResponse(_to_company_task_dict(company_task))
@@ -3614,7 +3829,7 @@ async def admin_update_task(
         if "status" in data:
             old_status = task.status
             task.status = data["status"]
-            if data["status"] == "completed" and old_status != "completed":
+            if data["status"] in ("completed", "done") and old_status not in ("completed", "done"):
                 task.completed_at = datetime.utcnow()
                 activity = LeadActivity(
                     lead_id=task.lead_id,
@@ -3623,10 +3838,11 @@ async def admin_update_task(
                     user_email=current_user.get("email"),
                 )
                 db.add(activity)
-            if data["status"] != "completed":
+            if data["status"] not in ("completed", "done"):
                 task.completed_at = None
         if "assigned_to" in data:
             task.assigned_to = data["assigned_to"]
+        _apply_done_date(task, data)
 
         db.commit()
         db.refresh(task)
@@ -3646,14 +3862,23 @@ async def admin_delete_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        from models import LeadTask, CompanyTask
+        from models import LeadTask, CompanyTask, ContactTask
 
+        # Try ContactTask first
+        task = db.query(ContactTask).filter(ContactTask.id == task_id).first()
+        if task:
+            db.delete(task)
+            db.commit()
+            return JSONResponse({"success": True})
+
+        # Try CompanyTask
         task = db.query(CompanyTask).filter(CompanyTask.id == task_id).first()
         if task:
             db.delete(task)
             db.commit()
             return JSONResponse({"success": True})
 
+        # Try LeadTask (legacy)
         task = db.query(LeadTask).filter(LeadTask.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
@@ -10855,10 +11080,7 @@ async def favicon():
     """Serve favicon"""
     return FileResponse("static/favicon.ico")
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "service": "Colorado CareAssist Sales Dashboard"}
+# NOTE: /health is already defined at app startup (line ~604). Duplicate removed.
 
 # Legacy dashboard route (old Jinja2 template)
 @app.get("/legacy", response_class=HTMLResponse)
