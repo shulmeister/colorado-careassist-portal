@@ -75,7 +75,7 @@ class SimulationRunner:
         self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
         # Voice Brain WebSocket URL
-        ws_host = os.getenv("VOICE_BRAIN_WS_HOST", "localhost:8766")
+        ws_host = os.getenv("VOICE_BRAIN_WS_HOST", "localhost:8765")
         self.ws_url = f"ws://{ws_host}/llm-websocket/{call_id}"
 
         logger.info(f"[Sim {call_id}] Initialized for scenario: {scenario['name']}")

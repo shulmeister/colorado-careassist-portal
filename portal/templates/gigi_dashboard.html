@@ -1533,6 +1533,11 @@
         let callDetailModal;
         let scenariosData = [];
 
+        function runNewSimulation() {
+            switchSimulations('scenarios');
+            document.getElementById('view-scenarios').scrollIntoView({ behavior: 'smooth' });
+        }
+
         function switchSimulations(view) {
             document.getElementById('subnav-scenarios').classList.toggle('active', view === 'scenarios');
             document.getElementById('subnav-history').classList.toggle('active', view === 'history');

@@ -100,6 +100,22 @@ except Exception as e:
     FAILURE_HANDLER_AVAILABLE = False
     logger.warning(f"Failure Handler not available: {e}")
 
+
+def handle_tool_error(tool_name: str, error: Exception, context: dict = None) -> Dict[str, Any]:
+    """Graceful error handler for tool failures. Returns a user-friendly error dict."""
+    logger.error(f"Tool '{tool_name}' failed: {error}", exc_info=True)
+    if failure_handler and FAILURE_HANDLER_AVAILABLE:
+        try:
+            return failure_handler.handle(tool_name, error, context or {})
+        except Exception:
+            pass
+    return {
+        "success": False,
+        "error": f"Tool '{tool_name}' encountered an error: {str(error)}",
+        "tool": tool_name,
+    }
+
+
 # Import Google Service for Email/Calendar
 try:
     from gigi.google_service import google_service
@@ -741,7 +757,7 @@ async def get_shadow_dashboard():
                 resultDiv.classList.remove('d-none');
                 resultDiv.innerHTML = 'Running simulation...';
                 try {
-                    const response = await fetch(`/simulate/${type}`, { method: 'POST' });
+                    const response = await fetch(`/gigi/simulate/${type}`, { method: 'POST' });
                     const data = await response.json();
                     resultDiv.innerHTML = '✅ Simulation Complete! Refreshing feed...';
                     setTimeout(() => window.location.reload(), 1500);
@@ -752,7 +768,7 @@ async def get_shadow_dashboard():
             
             async function rate(id, rating) {
                 try {
-                    const response = await fetch('/api/gigi/shadow/feedback', {
+                    const response = await fetch('/gigi/api/gigi/shadow/feedback', {
                         method: 'POST',
                         headers: {'Content-Type': 'application/json'},
                         body: JSON.stringify({id: id, rating: rating})

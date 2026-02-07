@@ -228,13 +228,14 @@ TOOLS = [
     },
     {
         "name": "get_wellsky_shifts",
-        "description": "Get shifts from WellSky. REQUIRES a client_id or caregiver_id. Use get_wellsky_clients or get_wellsky_caregivers first to find the ID.",
+        "description": "Get shifts from WellSky cached data. Can look forward (upcoming) or backward (past/completed). Use get_wellsky_clients or get_wellsky_caregivers first to find an ID if filtering by person.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "client_id": {"type": "string", "description": "Filter by client ID"},
                 "caregiver_id": {"type": "string", "description": "Filter by caregiver ID"},
-                "days": {"type": "integer", "description": "Days to look ahead", "default": 7}
+                "days": {"type": "integer", "description": "Days to look ahead for upcoming shifts", "default": 7},
+                "past_days": {"type": "integer", "description": "Days to look BACK for past/completed shifts. Use when asked about shift history, hours worked, etc.", "default": 0}
             },
             "required": []
         }
@@ -647,12 +648,10 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
         elif tool_name == "get_wellsky_shifts":
             # Uses cached_appointments (instant SQL) — no live API calls during voice
             from datetime import timedelta
-            days = min(tool_input.get("days", 7), 7)
+            days = min(tool_input.get("days", 7), 30)
+            past_days = min(tool_input.get("past_days", 0), 90)
             client_id = tool_input.get("client_id")
             caregiver_id = tool_input.get("caregiver_id")
-
-            if not client_id and not caregiver_id:
-                return json.dumps({"error": "Please provide either a client_id or caregiver_id to search shifts. Use get_wellsky_clients or get_wellsky_caregivers to find the ID first if needed."})
 
             def _get_cached_shifts():
                 import psycopg2
@@ -661,17 +660,22 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 try:
                     cur = conn.cursor()
 
-                    sql = """
+                    if past_days > 0:
+                        date_condition = "a.scheduled_start >= CURRENT_DATE - make_interval(days => %s) AND a.scheduled_start < CURRENT_DATE"
+                        params = [past_days]
+                    else:
+                        date_condition = "a.scheduled_start >= CURRENT_DATE AND a.scheduled_start < CURRENT_DATE + make_interval(days => %s)"
+                        params = [days]
+
+                    sql = f"""
                         SELECT a.id, a.patient_id, pat.full_name as client_name,
                                a.practitioner_id, p.full_name as caregiver_name,
                                a.scheduled_start, a.scheduled_end, a.status
                         FROM cached_appointments a
                         LEFT JOIN cached_practitioners p ON a.practitioner_id = p.id
                         LEFT JOIN cached_patients pat ON a.patient_id = pat.id
-                        WHERE a.scheduled_start >= CURRENT_DATE
-                        AND a.scheduled_start < CURRENT_DATE + make_interval(days => %s)
+                        WHERE {date_condition}
                     """
-                    params = [days]
 
                     if client_id:
                         sql += " AND a.patient_id = %s"
@@ -680,12 +684,17 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                         sql += " AND a.practitioner_id = %s"
                         params.append(str(caregiver_id))
 
-                    sql += " ORDER BY a.scheduled_start ASC LIMIT 30"
+                    sql += " ORDER BY a.scheduled_start ASC LIMIT 50"
                     cur.execute(sql, params)
                     rows = cur.fetchall()
 
                     shift_list = []
+                    total_hours = 0
                     for r in rows:
+                        hours = None
+                        if r[5] and r[6]:
+                            hours = round((r[6] - r[5]).total_seconds() / 3600, 1)
+                            total_hours += hours
                         shift_list.append({
                             "id": str(r[0]),
                             "client_id": str(r[1]),
@@ -695,18 +704,19 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                             "start": r[5].strftime('%Y-%m-%d %I:%M %p') if r[5] else "",
                             "end": r[6].strftime('%I:%M %p') if r[6] else "",
                             "date": r[5].strftime('%Y-%m-%d') if r[5] else "",
-                            "status": r[7] or "scheduled"
+                            "status": r[7] or "scheduled",
+                            "hours": hours
                         })
-                    return shift_list
+                    return shift_list, round(total_hours, 1)
                 except Exception as e:
                     logger.error(f"Cached shifts error: {e}")
-                    return []
+                    return [], 0
                 finally:
                     conn.close()
 
-            shift_list = await run_sync(_get_cached_shifts)
-            logger.info(f"Found {len(shift_list)} cached shifts")
-            return json.dumps({"shifts": shift_list, "count": len(shift_list)})
+            shift_list, total_hours = await run_sync(_get_cached_shifts)
+            logger.info(f"Found {len(shift_list)} cached shifts, {total_hours} total hours")
+            return json.dumps({"shifts": shift_list, "count": len(shift_list), "total_scheduled_hours": total_hours})
 
         elif tool_name == "send_sms":
             phone = tool_input.get("phone_number", "")
