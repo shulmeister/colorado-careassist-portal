@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 5, 2026
+**Last Updated:** February 7, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -167,9 +167,23 @@ curl -s https://portal.coloradocareassist.com/health
 
 ---
 
-## ELITE AGENT TEAMS
+## CLAUDE CODE SUBAGENTS
 
-Activate teams by saying "@team-name" or "team-name team":
+Custom subagents in `.claude/agents/`:
+
+| Agent | Focus |
+|-------|-------|
+| **debugger** | Error analysis, log investigation, stack traces |
+| **infra-ops** | Service health, LaunchAgents, ports, processes |
+| **db-admin** | PostgreSQL schema, queries, migrations, integrity |
+| **portal-dev** | FastAPI routes, templates, portal features |
+| **gigi-dev** | Voice brain, Telegram, webhooks, tool calls |
+| **reviewer** | Code review, staging/production diff |
+| **security-auditor** | Vulnerability scanning, credential audit, network security |
+| **performance-engineer** | Response times, DB queries, memory, CPU profiling |
+| **chaos-engineer** | Resilience testing, failure scenarios, recovery verification |
+
+### Elite Agent Teams (Legacy)
 
 | Team | Focus | Trigger |
 |------|-------|---------|
@@ -234,6 +248,9 @@ This script will:
 | `~/scripts/promote-to-production.sh` | Deploy tested staging code to production |
 | `~/scripts/deep-health-check.sh` | Functional health checks (runs every 5 min via cron) |
 | `~/scripts/watchdog.sh` | Backup monitor (runs every 2 min via cron) |
+| `~/scripts/backup-to-gdrive.sh` | Daily DB dump + configs → Google Drive (3 AM) |
+| `~/scripts/claude-task-worker.py` | Claude Code task bridge daemon |
+| `~/scripts/sync_wellsky_clients.py` | WellSky FHIR sync (every 2 hours) |
 
 ### Cron Jobs (Automatic)
 ```bash
@@ -243,8 +260,27 @@ This script will:
 
 ---
 
+## BACKUP & DISASTER RECOVERY
+
+- **Daily backup** at 3 AM via `~/scripts/backup-to-gdrive.sh` (LaunchAgent)
+- **What's backed up:** PostgreSQL dump, `~/.gigi-env`, `~/.cloudflared/`, all LaunchAgent plists, all scripts (sh + py), Claude memory files
+- **Destination:** Google Drive via rclone (`gdrive:MacMini-Backups`)
+- **Retention:** 7 days local, unlimited on Google Drive
+- **GitHub repos:** All 7 apps pushed to private repos on github.com/shulmeister
+
+### Restore Procedure
+1. Clone all repos from GitHub
+2. Install PostgreSQL 17, restore: `pg_restore -d careassist ~/backups/careassist-YYYY-MM-DD.dump`
+3. Extract configs: `tar -xzf configs-YYYY-MM-DD.tar.gz -C /`
+4. Install Cloudflare Tunnel, Tailscale
+5. Bootstrap LaunchAgents: `launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.coloradocareassist.*.plist`
+
+---
+
 ## HISTORY
 
+- **Feb 7, 2026:** Fixed 11 CRM bugs (duplicate route, FK, contact/company ID collision, relative URLs, task types). Created 3 QA/security agents (security-auditor, performance-engineer, chaos-engineer). Pushed all 7 repos to GitHub. Fixed backup script to include .py files and Claude memory.
+- **Feb 6, 2026:** Created 6 custom Claude Code subagents. Fixed 27 voice brain bugs (11 tools wrapped in run_sync, connection leaks, SQL injection). Added Claude Code task bridge. Upgraded web search to DuckDuckGo. Fixed WellSky composite IDs. Fixed Retell signature bypass. Created 3 missing portal templates. Fixed concierge page text contrast. Fixed PowderPulse portal routing. Fixed BTC rainbow chart stretching.
 - **Feb 5, 2026:** Added staging environment (staging.coloradocareassist.com), deep health checks, promote-to-production workflow. NEVER edit production directly anymore.
 - **Feb 5, 2026:** Unified Gigi voice brain (Claude-powered via Retell custom-llm WebSocket)
 - **Feb 4, 2026:** Consolidated API credentials, created health monitoring system, Claude Code integration for Gigi
