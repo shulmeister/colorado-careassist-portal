@@ -167,15 +167,13 @@ try:
         # Serve static assets (js, css, etc)
         app.mount("/powderpulse/assets", StaticFiles(directory=os.path.join(powderpulse_dist, "assets")), name="powderpulse-assets")
 
-        # Serve index.html for the main route and any SPA routes
+        # Redirect to standalone PowderPulse subdomain (assets have base: '/' so can't serve under /powderpulse/)
+        from fastapi.responses import RedirectResponse
+
         @app.get("/powderpulse")
         @app.get("/powderpulse/{path:path}")
         async def serve_powderpulse(path: str = ""):
-            index_file = os.path.join(powderpulse_dist, "index.html")
-            if os.path.exists(index_file):
-                return FileResponse(index_file)
-            from fastapi import HTTPException
-            raise HTTPException(status_code=404, detail="PowderPulse not built. Run: cd powderpulse && npm run build")
+            return RedirectResponse(url="https://powderpulse.coloradocareassist.com", status_code=302)
 
         logger.info("✅ Mounted PowderPulse at /powderpulse")
     else:
