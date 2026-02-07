@@ -860,7 +860,7 @@ class DealTask(Base):
     __tablename__ = "deal_tasks"
 
     id = Column(Integer, primary_key=True, index=True)
-    deal_id = Column(Integer, ForeignKey("leads.id"), nullable=False)
+    deal_id = Column(Integer, ForeignKey("deals.id"), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     due_date = Column(DateTime, nullable=True)

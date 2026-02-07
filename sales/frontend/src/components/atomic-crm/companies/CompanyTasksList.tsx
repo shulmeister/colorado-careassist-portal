@@ -84,7 +84,7 @@ export const CompanyTasksList = ({ companyId }: { companyId: Identifier }) => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contact_id: companyId, // API uses contact_id for company tasks
+          company_id: companyId,
           text: newTask.title,
           type: "Follow-up",
           due_date: newTask.due_date,

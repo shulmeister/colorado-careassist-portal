@@ -2027,9 +2027,32 @@ def _to_task_dict(task) -> Dict[str, Any]:
     return {
         "id": task.id,
         "contact_id": task.lead_id,  # Frontend uses contact_id; we map to lead_id.
+        "company_id": None,
+        "deal_id": None,
         "text": task.title or task.description,
         "description": task.description,
-        "type": "None",
+        "type": getattr(task, "task_type", None) or "follow-up",
+        "status": task.status,
+        "due_date": task.due_date.isoformat() if task.due_date else None,
+        "done_date": task.completed_at.isoformat() if task.completed_at else None,
+        "assigned_to": getattr(task, "assigned_to", None),
+        "created_by": getattr(task, "created_by", None),
+        "created_at": task.created_at.isoformat() if task.created_at else None,
+        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+        "sales_id": None,
+    }
+
+
+def _to_contact_task_dict(task) -> Dict[str, Any]:
+    """Map ContactTask to the admin task shape."""
+    return {
+        "id": task.id,
+        "contact_id": task.contact_id,
+        "company_id": None,
+        "deal_id": None,
+        "text": task.title or task.description,
+        "description": task.description,
+        "type": getattr(task, "task_type", None) or "follow-up",
         "status": task.status,
         "due_date": task.due_date.isoformat() if task.due_date else None,
         "done_date": task.completed_at.isoformat() if task.completed_at else None,
@@ -2045,10 +2068,12 @@ def _to_company_task_dict(task) -> Dict[str, Any]:
     """Map CompanyTask to the admin task shape."""
     return {
         "id": task.id,
-        "contact_id": task.company_id,
+        "contact_id": None,
+        "company_id": task.company_id,
+        "deal_id": None,
         "text": task.title or task.description,
         "description": task.description,
-        "type": "None",
+        "type": getattr(task, "task_type", None) or "follow-up",
         "status": task.status,
         "due_date": task.due_date.isoformat() if task.due_date else None,
         "done_date": task.completed_at.isoformat() if task.completed_at else None,
@@ -2416,7 +2441,7 @@ async def delete_contact_task(
     return {"success": True, "message": "Task deleted"}
 
 
-@app.get("/admin/tasks")
+@app.get("/admin/unified-tasks")
 async def get_all_tasks(
     request: Request,
     assigned_to: Optional[str] = Query(default=None),
@@ -2434,6 +2459,8 @@ async def get_all_tasks(
     """Get all tasks (contact tasks, company tasks, deal tasks) with unified filtering.
 
     This endpoint is used by the dashboard's Upcoming Tasks widget.
+    Moved from /admin/tasks to /admin/unified-tasks to avoid collision with
+    the React Admin data provider GET /admin/tasks handler.
     """
     from models import ContactTask, CompanyTask, DealTask
     from sqlalchemy import union_all, select, literal
@@ -3281,10 +3308,11 @@ async def admin_get_tasks(
     filter: Optional[str] = Query(default=None),
 ):
     try:
-        from models import LeadTask, CompanyTask
+        from models import ContactTask, CompanyTask
         from sqlalchemy import or_
 
         # React Admin data provider sometimes sends JSON in `filter=...`
+        company_id = None
         if filter:
             try:
                 parsed = json.loads(filter)
@@ -3292,6 +3320,11 @@ async def admin_get_tasks(
                     if contact_id is None and parsed.get("contact_id") is not None:
                         try:
                             contact_id = int(parsed.get("contact_id"))
+                        except Exception:
+                            pass
+                    if company_id is None and parsed.get("company_id") is not None:
+                        try:
+                            company_id = int(parsed.get("company_id"))
                         except Exception:
                             pass
                     if not status_filter and parsed.get("status"):
@@ -3311,14 +3344,12 @@ async def admin_get_tasks(
         range_param = range or (range_header.split("=")[1] if range_header else None)
         start, end = _parse_range(range_param)
 
-        # If a contact_id is provided, interpret it as a referral source (company) task
-        # to align with the admin UI which passes contact_id.
-        if contact_id is not None:
-            query = db.query(CompanyTask).filter(CompanyTask.company_id == contact_id)
+        # Filter by company_id -> CompanyTask
+        if company_id is not None:
+            query = db.query(CompanyTask).filter(CompanyTask.company_id == company_id)
             if status_filter:
                 query = query.filter(CompanyTask.status == status_filter)
             if effective_assignee:
-                # Backward compat: older tasks may have NULL assigned_to; show them so they can be assigned.
                 query = query.filter(
                     or_(CompanyTask.assigned_to == effective_assignee, CompanyTask.assigned_to.is_(None))
                 )
@@ -3341,26 +3372,60 @@ async def admin_get_tasks(
                 },
             )
 
-        # Fallback: legacy lead tasks
-        query = db.query(LeadTask)
+        # Filter by contact_id -> ContactTask
+        if contact_id is not None:
+            query = db.query(ContactTask).filter(ContactTask.contact_id == contact_id)
+            if status_filter:
+                query = query.filter(ContactTask.status == status_filter)
+            if effective_assignee:
+                query = query.filter(
+                    or_(ContactTask.assigned_to == effective_assignee, ContactTask.assigned_to.is_(None))
+                )
+
+            total = query.count()
+            order_clause = ContactTask.created_at.desc()
+            if sort:
+                col = getattr(ContactTask, sort, None)
+                if col is not None:
+                    order_clause = col.desc() if (order or "").upper() == "DESC" else col.asc()
+
+            tasks = query.order_by(order_clause).offset(start).limit(end - start + 1).all()
+            content_range = f"tasks {start}-{start + len(tasks) - 1 if tasks else start}/{total}"
+            return JSONResponse(
+                {"data": [_to_contact_task_dict(t) for t in tasks], "total": total},
+                headers={
+                    "Content-Range": content_range,
+                    "Access-Control-Expose-Headers": "Content-Range",
+                    "X-Total-Count": str(total),
+                },
+            )
+
+        # No filter: return all contact tasks + company tasks combined
+        all_tasks = []
+        for ct in db.query(ContactTask).all():
+            all_tasks.append(("contact", ct))
+        for ct in db.query(CompanyTask).all():
+            all_tasks.append(("company", ct))
+        # Sort by created_at desc
+        all_tasks.sort(key=lambda x: x[1].created_at or datetime.min, reverse=True)
+
         if status_filter:
-            query = query.filter(LeadTask.status == status_filter)
+            all_tasks = [(t, obj) for t, obj in all_tasks if obj.status == status_filter]
         if effective_assignee:
-            # Backward compat: older tasks may have NULL assigned_to; show them so they can be assigned.
-            query = query.filter(or_(LeadTask.assigned_to == effective_assignee, LeadTask.assigned_to.is_(None)))
+            all_tasks = [(t, obj) for t, obj in all_tasks if obj.assigned_to == effective_assignee or obj.assigned_to is None]
 
-        total = query.count()
-        order_clause = LeadTask.created_at.desc()
-        if sort:
-            col = getattr(LeadTask, sort, None)
-            if col is not None:
-                order_clause = col.desc() if (order or "").upper() == "DESC" else col.asc()
+        total = len(all_tasks)
+        page = all_tasks[start:end + 1]
+        data = []
+        for task_type, obj in page:
+            if task_type == "contact":
+                data.append(_to_contact_task_dict(obj))
+            else:
+                data.append(_to_company_task_dict(obj))
 
-        tasks = query.order_by(order_clause).offset(start).limit(end - start + 1).all()
-        content_range = f"tasks {start}-{start + len(tasks) - 1 if tasks else start}/{total}"
-
+        content_range = f"tasks {start}-{start + len(data) - 1 if data else start}/{total}"
         return JSONResponse(
-            {"data": [_to_task_dict(t) for t in tasks], "total": total},
+            {"data": data, "total": total},
             headers={
                 "Content-Range": content_range,
                 "Access-Control-Expose-Headers": "Content-Range",
@@ -3380,18 +3445,23 @@ async def admin_get_task(
 ):
     """Get a single task by ID"""
     try:
-        from models import LeadTask, CompanyTask
-        
-        # Try CompanyTask first
+        from models import LeadTask, ContactTask, CompanyTask
+
+        # Try ContactTask first
+        task = db.query(ContactTask).filter(ContactTask.id == task_id).first()
+        if task:
+            return JSONResponse({"data": _to_contact_task_dict(task)})
+
+        # Try CompanyTask
         task = db.query(CompanyTask).filter(CompanyTask.id == task_id).first()
         if task:
             return JSONResponse({"data": _to_company_task_dict(task)})
-        
-        # Try LeadTask
+
+        # Try LeadTask (legacy)
         task = db.query(LeadTask).filter(LeadTask.id == task_id).first()
         if task:
             return JSONResponse({"data": _to_task_dict(task)})
-        
+
         raise HTTPException(status_code=404, detail="Task not found")
     except HTTPException:
         raise
@@ -3407,17 +3477,18 @@ async def admin_create_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        from models import LeadTask, LeadActivity, Lead, CompanyTask, ReferralSource
+        from models import LeadTask, LeadActivity, Lead, ContactTask, CompanyTask, ReferralSource, Contact
 
         data = await request.json()
-        company_id = data.get("contact_id")
+        contact_id = data.get("contact_id")
+        company_id = data.get("company_id")
         due_date = _coerce_datetime(data.get("due_date"))
         creator_email = current_user.get("email")
         requested_assignee = data.get("assigned_to") or data.get("sales_id")
         assignee_email = requested_assignee or creator_email
 
         if company_id:
-            # Treat contact_id as referral source id for company tasks
+            # Create a company task
             source = db.query(ReferralSource).filter(ReferralSource.id == company_id).first()
             if not source:
                 raise HTTPException(status_code=404, detail="Company not found")
@@ -3436,10 +3507,30 @@ async def admin_create_task(
             db.refresh(task)
             return JSONResponse(_to_company_task_dict(task), status_code=status.HTTP_201_CREATED)
 
+        if contact_id:
+            # Create a contact task
+            contact = db.query(Contact).filter(Contact.id == contact_id).first()
+            if not contact:
+                raise HTTPException(status_code=404, detail="Contact not found")
+
+            task = ContactTask(
+                contact_id=contact_id,
+                title=data.get("text"),
+                description=data.get("description"),
+                due_date=due_date,
+                status="pending",
+                assigned_to=assignee_email,
+                created_by=creator_email,
+            )
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+            return JSONResponse(_to_contact_task_dict(task), status_code=status.HTTP_201_CREATED)
+
         # Legacy: lead tasks
         lead_id = data.get("lead_id")
         if not lead_id:
-            raise HTTPException(status_code=400, detail="contact_id or lead_id is required")
+            raise HTTPException(status_code=400, detail="contact_id, company_id, or lead_id is required")
 
         lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
