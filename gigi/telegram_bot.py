@@ -78,6 +78,13 @@ except Exception as e:
     print(f"⚠️  Google service not available: {e}")
     GoogleService = None
 
+# Import Chief of Staff Tools
+try:
+    from gigi.chief_of_staff_tools import cos_tools
+except Exception as e:
+    print(f"⚠️  Chief of Staff tools not available: {e}")
+    cos_tools = None
+
 # Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8508806105:AAExZ25ZN19X3xjBQAZ3Q9fHgAQmWWklX8U")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
@@ -92,6 +99,58 @@ logger = logging.getLogger("gigi_telegram")
 
 # Tool definitions for Claude
 TOOLS = [
+    {
+        "name": "search_concerts",
+        "description": "Find upcoming concerts in Denver or other cities for specific artists or venues.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query (artist, venue, or city)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "buy_tickets_request",
+        "description": "Initiate a ticket purchase request for a concert or event. Requires 2FA confirmation.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "artist": {"type": "string", "description": "Artist/Band name"},
+                "venue": {"type": "string", "description": "Venue name"},
+                "quantity": {"type": "integer", "description": "Number of tickets", "default": 2}
+            },
+            "required": ["artist", "venue"]
+        }
+    },
+    {
+        "name": "book_table_request",
+        "description": "Request a restaurant reservation. Requires 2FA confirmation.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "restaurant": {"type": "string", "description": "Restaurant name"},
+                "party_size": {"type": "integer", "description": "Number of people"},
+                "date": {"type": "string", "description": "Date (YYYY-MM-DD)"},
+                "time": {"type": "string", "description": "Time (e.g. 7:00 PM)"}
+            },
+            "required": ["restaurant", "party_size", "date", "time"]
+        }
+    },
+    {
+        "name": "get_client_current_status",
+        "description": "Check who is with a client right now. Returns current caregiver, shift times, and status.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "client_name": {
+                    "type": "string",
+                    "description": "Name of the client"
+                }
+            },
+            "required": ["client_name"]
+        }
+    },
     {
         "name": "get_calendar_events",
         "description": "Get upcoming calendar events from Jason's Google Calendar. Use this when Jason asks about his schedule, meetings, or what's coming up.",
@@ -125,6 +184,17 @@ TOOLS = [
                 }
             },
             "required": []
+        }
+    },
+    {
+        "name": "get_weather",
+        "description": "Get current weather and forecast for a city.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "location": {"type": "string", "description": "City and State (e.g. Denver, CO)"}
+            },
+            "required": ["location"]
         }
     },
     {
@@ -236,17 +306,6 @@ TOOLS = [
         }
     },
     {
-        "name": "web_search",
-        "description": "Search the internet for current information. Use for news, events, weather, general knowledge questions, or anything you don't know.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"}
-            },
-            "required": ["query"]
-        }
-    },
-    {
         "name": "create_claude_task",
         "description": "Create a task for Claude Code on the Mac Mini. Use when Jason asks you to tell Claude Code to do something technical — fix code, check services, update configs, etc.",
         "input_schema": {
@@ -273,65 +332,53 @@ TOOLS = [
     }
 ]
 
-SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's AI Chief of Staff and personal assistant.
+SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
 
 # Core Identity
 - Named after Jason's youngest daughter
 - Direct, warm, proactive personality
 - You have REAL access to Jason's systems via tools - USE THEM
-- **YOU ARE ONE UNIFIED AI** across multiple channels:
-  - Telegram (this chat - @Shulmeisterbot)
-  - Voice calls via Retell AI (phone number: +1-720-817-6600)
-  - SMS monitoring via RingCentral (307-459-8220 forwards to your voice line)
-- **NEVER say you "don't have a phone number" or "can't receive calls"**
-- You DO answer calls on 720-817-6600 and handle 307 calls via forwarding
-- You are the SAME Gigi everywhere - not separate instances
+- **YOU ARE ONE UNIFIED AI** across multiple channels (Telegram, Voice, SMS)
+- **NEVER say you "don't have a phone number"**
+
+# Your Elite Capabilities (Chief of Staff)
+- **Concerts & Events:** You can find concerts (search_concerts) and BUY tickets (buy_tickets_request).
+- **Dining:** You can make restaurant reservations (book_table_request).
+- **Weather:** Use `get_weather` for real-time weather and forecasts.
+- **Flights:** Use `web_search` to find flight prices and options.
+- **Secure Purchasing:** For any purchase or booking, you initiate a secure 2FA handshake.
+- **Unified Intelligence:** You check Jason's email and calendar across all accounts.
 
 # Jason's Profile
-- Owner of Colorado Care Assist (home care agency)
+- Owner of Colorado Care Assist
 - Lives in Denver/Arvada, CO
 - Phone: 603-997-1495
 - Email: jason@coloradocareassist.com
 - Huge Phish fan (his favorite band)
-- Three daughters: Brooke, Avery, Gigi
-- Runs multiple businesses from Mac Mini (no cloud hosting)
 
-# Your REAL Capabilities (you have tools for these - ALWAYS USE THEM)
-- get_calendar_events: Check Jason's Google Calendar
-- search_emails: Search Jason's Gmail (it works - CALL IT, do not say it's unavailable)
-- get_wellsky_clients: Search CCA's 70 active clients by name from local database cache
-- get_wellsky_caregivers: Search CCA's 55 active caregivers by name from local database cache
-- get_wellsky_shifts: Get shift schedules from WellSky (filter by client_id or caregiver_id)
-- web_search: Search the internet for news, weather, sports, general knowledge, concerts, events
-- get_stock_price: Get real-time stock prices (AAPL, TSLA, NVDA, etc.)
-- get_crypto_price: Get real-time crypto prices (BTC, ETH, DOGE, SOL, etc.)
-- create_claude_task: Create a task for Claude Code on the Mac Mini (code fixes, service checks, deployments)
-- check_claude_task: Check the status of a Claude Code task
+# Your REAL Capabilities (USE THESE TOOLS)
+- search_concerts: Find shows for Phish, Goose, Billy Strings, etc.
+- buy_tickets_request: Buy tickets (triggers 2FA text).
+- book_table_request: Make reservations (triggers 2FA text).
+- get_weather: Check weather for any location.
+- get_client_current_status: Check who is with a client RIGHT NOW.
+- get_calendar_events: Check Jason's Google Calendar.
+- search_emails: Search Jason's Gmail.
+- get_wellsky_clients/caregivers: Access business data.
+- web_search: General knowledge, flight prices, travel info.
 
-# CRITICAL RULES — READ CAREFULLY
-- NEVER say you don't have access to email, calendar, WellSky, or client data. You DO. Use the tools.
-- NEVER say you can't search the internet or get stock/crypto prices. You CAN. Use web_search, get_stock_price, get_crypto_price.
-- **NEVER say you "don't have a phone number" or "can't receive calls" or are "text-only"**. You ARE voice Gigi. Your phone number is 720-817-6600. The 307 number forwards to you. You are ONE Gigi everywhere.
-- When Jason says "tell Claude Code to..." or "@claude-code ...", use create_claude_task to queue the request. Claude Code runs on the Mac Mini and can fix code, check services, update configs, etc.
-- NEVER mention "CLI", "gog", "command line", or "configuration needed" for email. Just call search_emails.
-- NEVER say a client or caregiver doesn't exist without calling the tool first. The database has ALL clients.
-- NEVER make up data — call the tool and report exactly what it returns.
-- If a tool returns an error, report the ACTUAL error message so we can fix it.
-- For Bitcoin/crypto questions: use get_crypto_price with symbol "BTC", "ETH", etc.
-- For stock questions: use get_stock_price with the ticker symbol.
-- When Jason asks about a client (shifts, coverage, who is assigned):
-  1. FIRST call get_wellsky_clients with search_name to find the client's ID
-  2. THEN call get_wellsky_shifts with that client_id to get their schedule
-- When Jason asks about a caregiver's schedule:
-  1. FIRST call get_wellsky_caregivers with search_name to find their ID
-  2. THEN call get_wellsky_shifts with that caregiver_id
-- For daily briefings or email summaries: call search_emails with query "is:unread" — it WILL work.
+# CRITICAL RULES
+- **Operations:** If asked "who is with [Client] right now?", ALWAYS use `get_client_current_status`.
+- **Concerts:** If Jason asks about concerts, use `search_concerts`. Do NOT just list websites.
+- **Weather:** Use `get_weather` for all weather queries.
+- **Flights:** Use `web_search` for flight prices (e.g. "flights from denver to sapporo next week").
+- **Buying:** If Jason says "buy tickets" or "book table", use the request tools immediately.
+- **Data:** Never make up data. Use the tools.
+- **Identity:** You are Gigi. You make things happen.
 
 # Response Style
-- Be concise but thorough
-- Use emojis sparingly
-- Be proactive - anticipate needs
-- If a tool fails, say what failed and why
+- Concise, confident, executive summary style.
+- Proactive: "I found 3 shows. Want me to grab tickets for the Friday one?"
 
 # Current Date
 Today is {datetime.now().strftime("%A, %B %d, %Y")}
@@ -352,7 +399,137 @@ class GigiTelegramBot:
     async def execute_tool(self, tool_name: str, tool_input: dict) -> str:
         """Execute a tool and return the result as a string"""
         try:
-            if tool_name == "get_calendar_events":
+            if tool_name == "search_concerts":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                query = tool_input.get("query", "")
+                result = await cos_tools.search_concerts(query=query)
+                return json.dumps(result)
+
+            elif tool_name == "buy_tickets_request":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                artist = tool_input.get("artist")
+                venue = tool_input.get("venue")
+                quantity = tool_input.get("quantity", 2)
+                result = await cos_tools.buy_tickets_request(artist=artist, venue=venue, quantity=quantity)
+                return json.dumps(result)
+
+            elif tool_name == "book_table_request":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                restaurant = tool_input.get("restaurant")
+                party_size = tool_input.get("party_size")
+                date_val = tool_input.get("date")
+                time_val = tool_input.get("time")
+                result = await cos_tools.book_table_request(restaurant=restaurant, party_size=party_size, date=date_val, time=time_val)
+                return json.dumps(result)
+
+            elif tool_name == "get_client_current_status":
+                client_name = tool_input.get("client_name", "")
+                if not client_name:
+                    return json.dumps({"error": "No client name provided"})
+
+                import psycopg2
+                from datetime import datetime
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+                
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    
+                    # 1. Find Client
+                    search_lower = f"%{client_name.lower()}%"
+                    cur.execute("""
+                        SELECT id, full_name, address, city 
+                        FROM cached_patients 
+                        WHERE is_active = true 
+                        AND (lower(full_name) LIKE %s OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
+                        LIMIT 1
+                    """, (search_lower, search_lower, search_lower))
+                    
+                    client_row = cur.fetchone()
+                    if not client_row:
+                        conn.close()
+                        return json.dumps({"status": "not_found", "message": f"Could not find active client matching '{client_name}'"})
+                    
+                    client_id, client_full_name, addr, city = client_row
+                    
+                    # 2. Get Today's Shifts
+                    cur.execute("""
+                        SELECT 
+                            a.scheduled_start, 
+                            a.scheduled_end, 
+                            p.full_name as caregiver_name,
+                            p.phone as caregiver_phone,
+                            a.status
+                        FROM cached_appointments a
+                        LEFT JOIN cached_practitioners p ON a.practitioner_id = p.id
+                        WHERE a.patient_id = %s
+                        AND a.scheduled_start >= CURRENT_DATE
+                        AND a.scheduled_start < CURRENT_DATE + INTERVAL '1 day'
+                        ORDER BY a.scheduled_start ASC
+                    """, (client_id,))
+                    
+                    shifts = cur.fetchall()
+                    conn.close()
+                    
+                    if not shifts:
+                        return json.dumps({
+                            "client": client_full_name,
+                            "status": "no_shifts",
+                            "message": f"No shifts scheduled for {client_full_name} today."
+                        })
+                        
+                    # 3. Analyze Status
+                    now = datetime.now()
+                    current_shift = None
+                    next_shift = None
+                    last_shift = None
+                    
+                    for s in shifts:
+                        start, end, cg_name, cg_phone, status = s
+                        # Handle naive datetimes from DB by assuming local time if needed, 
+                        # but usually DB driver returns naive. 
+                        # Let's assume start/end are datetime objects.
+                        
+                        if start <= now <= end:
+                            current_shift = s
+                            break
+                        elif start > now:
+                            if not next_shift:
+                                next_shift = s
+                        elif end < now:
+                            last_shift = s
+                            
+                    if current_shift:
+                        start, end, cg_name, _, _ = current_shift
+                        return json.dumps({
+                            "client": client_full_name,
+                            "status": "active",
+                            "message": f"✅ YES. {cg_name} is with {client_full_name} right now.\nShift: {start.strftime('%I:%M %p')} - {end.strftime('%I:%M %p')}\nLocation: {addr}, {city}"
+                        })
+                    elif next_shift:
+                        start, end, cg_name, _, _ = next_shift
+                        return json.dumps({
+                            "client": client_full_name,
+                            "status": "upcoming",
+                            "message": f"No one is there right now. Next shift is {cg_name} at {start.strftime('%I:%M %p')}."
+                        })
+                    else:
+                        start, end, cg_name, _, _ = last_shift if last_shift else (None, None, "None", None, None)
+                        msg = f"No one is there right now. {cg_name} finished at {end.strftime('%I:%M %p')}." if last_shift else f"No active shifts right now for {client_full_name}."
+                        return json.dumps({
+                            "client": client_full_name,
+                            "status": "completed",
+                            "message": msg
+                        })
+
+                except Exception as e:
+                    logger.error(f"Status check failed: {e}")
+                    return json.dumps({"error": str(e)})
+
+            elif tool_name == "get_calendar_events":
                 if not self.google:
                     return json.dumps({"error": "Google service not configured. Missing GOOGLE_WORK_* environment variables."})
                 days = tool_input.get("days", 1)
@@ -370,6 +547,39 @@ class GigiTelegramBot:
                 if not emails:
                     return json.dumps({"message": f"No emails found for query: {query}", "emails": []})
                 return json.dumps({"emails": emails})
+
+            elif tool_name == "get_weather":
+                location = tool_input.get("location", "")
+                if not location:
+                    return json.dumps({"error": "No location provided"})
+                
+                # Use web_search logic internally for weather
+                query = f"current weather and forecast in {location}"
+                try:
+                    import httpx
+                    brave_api_key = os.getenv("BRAVE_API_KEY")
+                    if brave_api_key:
+                        async with httpx.AsyncClient() as client:
+                            resp = await client.get(
+                                "https://api.search.brave.com/res/v1/web/search",
+                                headers={"X-Subscription-Token": brave_api_key},
+                                params={"q": query, "count": 1}
+                            )
+                            if resp.status_code == 200:
+                                data = resp.json()
+                                results = data.get("web", {}).get("results", [])
+                                if results:
+                                    return json.dumps({"location": location, "weather": results[0].get("description")})
+                    
+                    # Fallback to DDG
+                    from ddgs import DDGS
+                    results = DDGS().text(query, max_results=1)
+                    if results:
+                        return json.dumps({"location": location, "weather": results[0].get("body")})
+                    
+                    return json.dumps({"error": "Could not find weather data."})
+                except Exception as e:
+                    return json.dumps({"error": str(e)})
 
             elif tool_name == "get_wellsky_clients":
                 # Use cached database for reliable client lookup (synced daily from WellSky)

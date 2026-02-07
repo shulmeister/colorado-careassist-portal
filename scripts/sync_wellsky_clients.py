@@ -331,13 +331,43 @@ def sync_appointments(token, db):
     cur = db.cursor()
     cur.execute("DELETE FROM cached_appointments")  # Clear old data
 
+    from datetime import datetime as _dt
+    from zoneinfo import ZoneInfo
+    utc = ZoneInfo("UTC")
+    mt = ZoneInfo("America/Denver")
+
     for shift in all_appointments:
-        appt_id = shift.id
         patient_id = shift.client_id
         practitioner_id = shift.caregiver_id
-        sched_start = f"{shift.date} {shift.start_time}" if shift.date and shift.start_time else None
-        sched_end = f"{shift.date} {shift.end_time}" if shift.date and shift.end_time else None
         status = shift.status.value if hasattr(shift.status, 'value') else str(shift.status)
+
+        # Compute proper start/end datetimes, handling overnight shifts and UTC→Mountain conversion
+        sched_start = None
+        sched_end = None
+        if shift.date and shift.start_time:
+            start_time = _dt.strptime(shift.start_time, "%H:%M").time()
+            sched_start_utc = _dt.combine(shift.date, start_time)
+            try:
+                sched_start = sched_start_utc.replace(tzinfo=utc).astimezone(mt).replace(tzinfo=None)
+            except:
+                sched_start = sched_start_utc - timedelta(hours=7)
+
+        if shift.date and shift.end_time:
+            end_time = _dt.strptime(shift.end_time, "%H:%M").time()
+            end_date = shift.date
+            if shift.start_time and end_time <= start_time:
+                end_date = shift.date + timedelta(days=1)
+            sched_end_utc = _dt.combine(end_date, end_time)
+            try:
+                sched_end = sched_end_utc.replace(tzinfo=utc).astimezone(mt).replace(tzinfo=None)
+            except:
+                sched_end = sched_end_utc - timedelta(hours=7)
+
+        # Use composite ID: {wellsky_id}_{date} — recurring shifts share the same
+        # WellSky appointment ID across months, so we need the date to keep each
+        # occurrence unique (otherwise March overwrites February via ON CONFLICT)
+        date_str = str(shift.date) if shift.date else "nodate"
+        appt_id = f"{shift.id}_{date_str}"
 
         cur.execute("""
             INSERT INTO cached_appointments

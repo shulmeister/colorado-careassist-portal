@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recruitment - Colorado CareAssist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            overflow: hidden;
+        }
+        .frame-container {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .frame-header {
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .frame-header h2 { color: #60a5fa; font-size: 16px; }
+        .frame-header a {
+            color: #94a3b8; text-decoration: none; font-size: 13px;
+        }
+        .frame-header a:hover { color: #e5e7eb; }
+        iframe {
+            flex: 1;
+            width: 100%;
+            border: none;
+            background: #0f172a;
+        }
+    </style>
+</head>
+<body>
+    <div class="frame-container">
+        <div class="frame-header">
+            <h2>Recruitment Dashboard</h2>
+            <a href="/">Back to Portal</a>
+        </div>
+        <iframe src="{{ recruitment_url }}" title="Recruitment Dashboard"></iframe>
+    </div>
+</body>
+</html>
