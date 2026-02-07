@@ -67,14 +67,17 @@ if response.status_code == 200:
 # Create new webhook subscription
 print(f"\n📝 Creating new SMS webhook subscription...")
 
+rc_verification_token = os.getenv("RINGCENTRAL_WEBHOOK_VERIFICATION_TOKEN", "")
+
 subscription_data = {
     "eventFilters": [
-        # Use wildcard (+) for ALL extensions including group/auto-receptionist numbers
-        "/restapi/v1.0/account/~/extension/+/message-store/instant?type=SMS"
+        # Gigi's extension for inbound SMS notifications
+        "/restapi/v1.0/account/~/extension/~/message-store/instant?type=SMS"
     ],
     "deliveryMode": {
         "transportType": "WebHook",
-        "address": WEBHOOK_URL
+        "address": WEBHOOK_URL,
+        **({"verificationToken": rc_verification_token} if rc_verification_token else {})
     },
     "expiresIn": 630720000  # 20 years in seconds (max allowed)
 }
