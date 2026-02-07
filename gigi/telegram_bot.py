@@ -237,7 +237,7 @@ TOOLS = [
     },
     {
         "name": "get_wellsky_shifts",
-        "description": "Get shifts from WellSky. Can filter by client or caregiver. IMPORTANT: When asking about a specific person's shifts, first use get_wellsky_clients or get_wellsky_caregivers to find their ID, then pass it here.",
+        "description": "Get shifts from WellSky cached data. Can look forward (upcoming) or backward (past/completed). Can filter by client or caregiver. IMPORTANT: When asking about a specific person's shifts, first use get_wellsky_clients or get_wellsky_caregivers to find their ID, then pass it here.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -251,8 +251,13 @@ TOOLS = [
                 },
                 "days": {
                     "type": "integer",
-                    "description": "Number of days to look ahead (default 7, max 7)",
+                    "description": "Number of days to look ahead for upcoming shifts (default 7, max 30)",
                     "default": 7
+                },
+                "past_days": {
+                    "type": "integer",
+                    "description": "Number of days to look BACK for past/completed shifts. Use this when asked about historical data, hours worked, shift history, etc. (default 0, max 90)",
+                    "default": 0
                 },
                 "open_only": {
                     "type": "boolean",
@@ -654,52 +659,94 @@ class GigiTelegramBot:
                     return json.dumps({"error": f"Caregiver lookup failed: {str(e)}"})
 
             elif tool_name == "get_wellsky_shifts":
-                if not self.wellsky:
-                    return json.dumps({"error": "WellSky service not available."})
                 from datetime import timedelta
-                days = min(tool_input.get("days", 7), 7)
+                import psycopg2
+                days = min(tool_input.get("days", 7), 30)
+                past_days = min(tool_input.get("past_days", 0), 90)
                 open_only = tool_input.get("open_only", False)
                 client_id = tool_input.get("client_id")
                 caregiver_id = tool_input.get("caregiver_id")
-                date_from = date.today()
-                date_to = date.today() + timedelta(days=days)
-                if open_only:
-                    shifts = self.wellsky.get_open_shifts(date_from=date_from, date_to=date_to)
+
+                # Determine date range
+                if past_days > 0:
+                    date_from = date.today() - timedelta(days=past_days)
+                    date_to = date.today()
                 else:
-                    shifts = self.wellsky.get_shifts(
-                        date_from=date_from, date_to=date_to,
-                        client_id=client_id, caregiver_id=caregiver_id,
-                        limit=50
-                    )
-                shift_list = [s.to_dict() if hasattr(s, 'to_dict') else str(s) for s in shifts[:30]]
-                # Enrich shifts with client/caregiver names from cached database
+                    date_from = date.today()
+                    date_to = date.today() + timedelta(days=days)
+
+                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 try:
-                    import psycopg2
-                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
-                    for shift in shift_list:
-                        if isinstance(shift, dict):
-                            cg_id = shift.get("caregiver_id")
-                            cl_id = shift.get("client_id")
-                            if cg_id and not shift.get("caregiver_first_name"):
-                                cur.execute("SELECT first_name, last_name, full_name FROM cached_practitioners WHERE id = %s", (cg_id,))
-                                row = cur.fetchone()
-                                if row:
-                                    shift["caregiver_first_name"] = row[0]
-                                    shift["caregiver_last_name"] = row[1]
-                                    shift["caregiver_name"] = row[2]
-                            if cl_id and not shift.get("client_first_name"):
-                                cur.execute("SELECT first_name, last_name, full_name FROM cached_patients WHERE id = %s", (cl_id,))
-                                row = cur.fetchone()
-                                if row:
-                                    shift["client_first_name"] = row[0]
-                                    shift["client_last_name"] = row[1]
-                                    shift["client_name"] = row[2]
+
+                    # Build query from cached_appointments with JOINs for names
+                    conditions = ["a.scheduled_start >= %s", "a.scheduled_start < %s"]
+                    params = [date_from, date_to]
+
+                    if client_id:
+                        conditions.append("a.patient_id = %s")
+                        params.append(client_id)
+                    if caregiver_id:
+                        conditions.append("a.practitioner_id = %s")
+                        params.append(caregiver_id)
+                    if open_only:
+                        conditions.append("(a.practitioner_id IS NULL OR a.status IN ('open', 'pending', 'proposed'))")
+
+                    where = " AND ".join(conditions)
+                    cur.execute(f"""
+                        SELECT a.id, a.scheduled_start, a.scheduled_end,
+                               a.actual_start, a.actual_end, a.status,
+                               a.patient_id, a.practitioner_id, a.service_type,
+                               p.full_name as client_name,
+                               pr.full_name as caregiver_name
+                        FROM cached_appointments a
+                        LEFT JOIN cached_patients p ON a.patient_id = p.id
+                        LEFT JOIN cached_practitioners pr ON a.practitioner_id = pr.id
+                        WHERE {where}
+                        ORDER BY a.scheduled_start
+                        LIMIT 50
+                    """, params)
+
+                    shift_list = []
+                    total_hours = 0
+                    for row in cur.fetchall():
+                        scheduled_hours = None
+                        if row[1] and row[2]:
+                            scheduled_hours = round((row[2] - row[1]).total_seconds() / 3600, 1)
+                            total_hours += scheduled_hours
+                        actual_hours = None
+                        if row[3] and row[4]:
+                            actual_hours = round((row[4] - row[3]).total_seconds() / 3600, 1)
+
+                        shift_list.append({
+                            "id": row[0],
+                            "scheduled_start": row[1].isoformat() if row[1] else None,
+                            "scheduled_end": row[2].isoformat() if row[2] else None,
+                            "actual_start": row[3].isoformat() if row[3] else None,
+                            "actual_end": row[4].isoformat() if row[4] else None,
+                            "status": row[5],
+                            "client_id": row[6],
+                            "caregiver_id": row[7],
+                            "service_type": row[8],
+                            "client_name": row[9] or "Unknown",
+                            "caregiver_name": row[10] or "Unassigned",
+                            "scheduled_hours": scheduled_hours,
+                            "actual_hours": actual_hours,
+                        })
+
+                    cur.close()
                     conn.close()
+
+                    return json.dumps({
+                        "count": len(shift_list),
+                        "total_scheduled_hours": round(total_hours, 1),
+                        "date_range": f"{date_from.isoformat()} to {date_to.isoformat()}",
+                        "shifts": shift_list
+                    })
                 except Exception as e:
-                    logger.warning(f"Shift name enrichment failed (non-fatal): {e}")
-                return json.dumps({"count": len(shifts), "shifts": shift_list})
+                    logger.error(f"Error querying cached shifts: {e}")
+                    return json.dumps({"error": f"Database error: {str(e)}"})
 
             elif tool_name == "web_search":
                 query = tool_input.get("query", "")

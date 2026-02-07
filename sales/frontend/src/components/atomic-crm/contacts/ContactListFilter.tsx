@@ -20,40 +20,40 @@ export const ContactListFilter = () => {
           className="w-full justify-between"
           label="Today"
           value={{
-            "last_activity@gte": endOfYesterday().toISOString(),
-            "last_activity@lte": undefined,
+            "last_activity_gte": endOfYesterday().toISOString(),
+            "last_activity_lte": undefined,
           }}
         />
         <ToggleFilterButton
           className="w-full justify-between"
           label="This week"
           value={{
-            "last_activity@gte": startOfWeek(new Date()).toISOString(),
-            "last_activity@lte": undefined,
+            "last_activity_gte": startOfWeek(new Date()).toISOString(),
+            "last_activity_lte": undefined,
           }}
         />
         <ToggleFilterButton
           className="w-full justify-between"
           label="Before this week"
           value={{
-            "last_activity@gte": undefined,
-            "last_activity@lte": startOfWeek(new Date()).toISOString(),
+            "last_activity_gte": undefined,
+            "last_activity_lte": startOfWeek(new Date()).toISOString(),
           }}
         />
         <ToggleFilterButton
           className="w-full justify-between"
           label="Before this month"
           value={{
-            "last_activity@gte": undefined,
-            "last_activity@lte": startOfMonth(new Date()).toISOString(),
+            "last_activity_gte": undefined,
+            "last_activity_lte": startOfMonth(new Date()).toISOString(),
           }}
         />
         <ToggleFilterButton
           className="w-full justify-between"
           label="Before last month"
           value={{
-            "last_activity@gte": undefined,
-            "last_activity@lte": subMonths(
+            "last_activity_gte": undefined,
+            "last_activity_lte": subMonths(
               startOfMonth(new Date()),
               1,
             ).toISOString(),
