@@ -55,14 +55,25 @@ except ImportError:
         ContextTypes,
     )
 
-# Import Claude API for responses
+# Import LLM SDKs (both available, selected by env var)
 try:
     import anthropic
+    ANTHROPIC_AVAILABLE = True
 except ImportError:
-    print("❌ anthropic not installed. Installing...")
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "anthropic"])
-    import anthropic
+    ANTHROPIC_AVAILABLE = False
+
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
 
 # Import services for WellSky integration
 try:
@@ -85,10 +96,56 @@ except Exception as e:
     print(f"⚠️  Chief of Staff tools not available: {e}")
     cos_tools = None
 
+# Memory system, mode detector, failure handler
+try:
+    from gigi.memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel
+    _memory_system = MemorySystem()
+    MEMORY_AVAILABLE = True
+    print("✓ Memory system initialized for Telegram bot")
+except Exception as e:
+    _memory_system = None
+    MEMORY_AVAILABLE = False
+    print(f"⚠️  Memory system not available: {e}")
+
+try:
+    from gigi.mode_detector import ModeDetector
+    _mode_detector = ModeDetector()
+    MODE_AVAILABLE = True
+    print("✓ Mode detector initialized for Telegram bot")
+except Exception as e:
+    _mode_detector = None
+    MODE_AVAILABLE = False
+    print(f"⚠️  Mode detector not available: {e}")
+
+try:
+    from gigi.failure_handler import FailureHandler
+    _failure_handler = FailureHandler()
+    FAILURE_HANDLER_AVAILABLE = True
+    print("✓ Failure handler initialized for Telegram bot")
+except Exception as e:
+    _failure_handler = None
+    FAILURE_HANDLER_AVAILABLE = False
+    print(f"⚠️  Failure handler not available: {e}")
+
 # Configuration
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "8508806105:AAExZ25ZN19X3xjBQAZ3Q9fHgAQmWWklX8U")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 JASON_TELEGRAM_ID = int(os.getenv("TELEGRAM_CHAT_ID", "8215335898"))  # Jason's chat ID
+
+# API Keys
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# LLM Provider Configuration — switch via env var
+# GIGI_LLM_PROVIDER: "gemini", "anthropic", or "openai"
+# GIGI_LLM_MODEL: model name override (auto-detected from provider if not set)
+LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "gemini").lower()
+_DEFAULT_MODELS = {
+    "gemini": "gemini-2.5-flash",  # override with GIGI_LLM_MODEL env var
+    "anthropic": "claude-sonnet-4-5-20250929",
+    "openai": "gpt-5.1",
+}
+LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-2.5-flash"))
 
 # Configure logging
 logging.basicConfig(
@@ -97,247 +154,130 @@ logging.basicConfig(
 )
 logger = logging.getLogger("gigi_telegram")
 
-# Tool definitions for Claude
-TOOLS = [
-    {
-        "name": "search_concerts",
-        "description": "Find upcoming concerts in Denver or other cities for specific artists or venues.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query (artist, venue, or city)"}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "buy_tickets_request",
-        "description": "Initiate a ticket purchase request for a concert or event. Requires 2FA confirmation.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "artist": {"type": "string", "description": "Artist/Band name"},
-                "venue": {"type": "string", "description": "Venue name"},
-                "quantity": {"type": "integer", "description": "Number of tickets", "default": 2}
-            },
-            "required": ["artist", "venue"]
-        }
-    },
-    {
-        "name": "book_table_request",
-        "description": "Request a restaurant reservation. Requires 2FA confirmation.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "restaurant": {"type": "string", "description": "Restaurant name"},
-                "party_size": {"type": "integer", "description": "Number of people"},
-                "date": {"type": "string", "description": "Date (YYYY-MM-DD)"},
-                "time": {"type": "string", "description": "Time (e.g. 7:00 PM)"}
-            },
-            "required": ["restaurant", "party_size", "date", "time"]
-        }
-    },
-    {
-        "name": "get_client_current_status",
-        "description": "Check who is with a client right now. Returns current caregiver, shift times, and status.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "client_name": {
-                    "type": "string",
-                    "description": "Name of the client"
-                }
-            },
-            "required": ["client_name"]
-        }
-    },
-    {
-        "name": "get_calendar_events",
-        "description": "Get upcoming calendar events from Jason's Google Calendar. Use this when Jason asks about his schedule, meetings, or what's coming up.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "days": {
-                    "type": "integer",
-                    "description": "Number of days to look ahead (default 1, max 7)",
-                    "default": 1
-                }
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "search_emails",
-        "description": "Search Jason's Gmail for emails. Use this when Jason asks about emails, messages, or wants to find something in his inbox.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "Gmail search query (e.g., 'is:unread', 'from:someone@example.com', 'subject:invoice')",
-                    "default": "is:unread"
-                },
-                "max_results": {
-                    "type": "integer",
-                    "description": "Maximum number of emails to return (default 5)",
-                    "default": 5
-                }
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "get_weather",
-        "description": "Get current weather and forecast for a city.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "location": {"type": "string", "description": "City and State (e.g. Denver, CO)"}
-            },
-            "required": ["location"]
-        }
-    },
-    {
-        "name": "get_wellsky_clients",
-        "description": "Search for clients in WellSky by name, or get all clients. Use when Jason asks about a specific client or wants to see the client list.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "search_name": {
-                    "type": "string",
-                    "description": "Search for a client by name (first, last, or full name). Leave empty to get all clients."
-                },
-                "active_only": {
-                    "type": "boolean",
-                    "description": "Only return active clients (default true)",
-                    "default": True
-                }
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "get_wellsky_caregivers",
-        "description": "Search for caregivers in WellSky by name, or get all caregivers. Use when Jason asks about a specific caregiver or the staff list.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "search_name": {
-                    "type": "string",
-                    "description": "Search for a caregiver by name (first, last, or full name). Leave empty to get all caregivers."
-                },
-                "active_only": {
-                    "type": "boolean",
-                    "description": "Only return active caregivers (default true)",
-                    "default": True
-                }
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "get_wellsky_shifts",
-        "description": "Get shifts from WellSky cached data. Can look forward (upcoming) or backward (past/completed). Can filter by client or caregiver. IMPORTANT: When asking about a specific person's shifts, first use get_wellsky_clients or get_wellsky_caregivers to find their ID, then pass it here.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "client_id": {
-                    "type": "string",
-                    "description": "WellSky client ID to get shifts for a specific client"
-                },
-                "caregiver_id": {
-                    "type": "string",
-                    "description": "WellSky caregiver ID to get shifts for a specific caregiver"
-                },
-                "days": {
-                    "type": "integer",
-                    "description": "Number of days to look ahead for upcoming shifts (default 7, max 30)",
-                    "default": 7
-                },
-                "past_days": {
-                    "type": "integer",
-                    "description": "Number of days to look BACK for past/completed shifts. Use this when asked about historical data, hours worked, shift history, etc. (default 0, max 90)",
-                    "default": 0
-                },
-                "open_only": {
-                    "type": "boolean",
-                    "description": "Only return open/unfilled shifts (default false)",
-                    "default": False
-                }
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "web_search",
-        "description": "Search the internet for current information. Use this for news, weather, sports scores, general knowledge questions, or anything not specific to CCA business systems.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query"
-                }
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "get_stock_price",
-        "description": "Get current stock price for a ticker symbol (AAPL, TSLA, GOOG, NVDA, etc.)",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Stock ticker symbol (e.g., AAPL, TSLA, GOOG)"
-                }
-            },
-            "required": ["symbol"]
-        }
-    },
-    {
-        "name": "get_crypto_price",
-        "description": "Get current cryptocurrency price. Use this when Jason asks about Bitcoin, Ethereum, crypto prices, etc.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "symbol": {
-                    "type": "string",
-                    "description": "Crypto symbol (BTC, ETH, DOGE, SOL, etc.)"
-                }
-            },
-            "required": ["symbol"]
-        }
-    },
-    {
-        "name": "create_claude_task",
-        "description": "Create a task for Claude Code on the Mac Mini. Use when Jason asks you to tell Claude Code to do something technical — fix code, check services, update configs, etc.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "title": {"type": "string", "description": "Short title for the task"},
-                "description": {"type": "string", "description": "Detailed description of what Claude Code should do"},
-                "priority": {"type": "string", "description": "Priority level", "enum": ["low", "normal", "high", "urgent"]},
-                "working_directory": {"type": "string", "description": "Directory to work in (optional)"}
-            },
-            "required": ["title", "description"]
-        }
-    },
-    {
-        "name": "check_claude_task",
-        "description": "Check the status of a Claude Code task. Can check the latest task or a specific task by ID.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "task_id": {"type": "integer", "description": "Specific task ID to check (optional, defaults to most recent)"}
-            },
-            "required": []
-        }
-    }
+# ═══════════════════════════════════════════════════════════
+# TOOL DEFINITIONS — both formats maintained for model switching
+# ═══════════════════════════════════════════════════════════
+
+# Internal tool list (provider-agnostic) used by execute_tool
+TOOL_NAMES = [
+    "search_concerts", "buy_tickets_request", "book_table_request",
+    "get_client_current_status", "get_calendar_events", "search_emails",
+    "get_weather", "get_wellsky_clients", "get_wellsky_caregivers",
+    "get_wellsky_shifts", "web_search", "get_stock_price", "get_crypto_price",
+    "create_claude_task", "check_claude_task",
+    "save_memory", "recall_memories", "forget_memory",
 ]
 
-SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
+# Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
+ANTHROPIC_TOOLS = [
+    {"name": "search_concerts", "description": "Find upcoming concerts.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search query"}}, "required": ["query"]}},
+    {"name": "buy_tickets_request", "description": "Buy concert tickets (requires 2FA).", "input_schema": {"type": "object", "properties": {"artist": {"type": "string"}, "venue": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["artist", "venue"]}},
+    {"name": "book_table_request", "description": "Book a restaurant reservation (requires 2FA).", "input_schema": {"type": "object", "properties": {"restaurant": {"type": "string"}, "party_size": {"type": "integer"}, "date": {"type": "string"}, "time": {"type": "string"}}, "required": ["restaurant", "party_size", "date", "time"]}},
+    {"name": "get_client_current_status", "description": "Check who is with a client right now.", "input_schema": {"type": "object", "properties": {"client_name": {"type": "string", "description": "Name of the client"}}, "required": ["client_name"]}},
+    {"name": "get_calendar_events", "description": "Get upcoming calendar events.", "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "description": "Days to look ahead (1-7)"}}, "required": []}},
+    {"name": "search_emails", "description": "Search Jason's Gmail.", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "max_results": {"type": "integer"}}, "required": []}},
+    {"name": "get_weather", "description": "Get current weather and forecast.", "input_schema": {"type": "object", "properties": {"location": {"type": "string", "description": "City and State"}}, "required": ["location"]}},
+    {"name": "get_wellsky_clients", "description": "Search clients in WellSky.", "input_schema": {"type": "object", "properties": {"search_name": {"type": "string"}, "active_only": {"type": "boolean"}}, "required": []}},
+    {"name": "get_wellsky_caregivers", "description": "Search caregivers in WellSky.", "input_schema": {"type": "object", "properties": {"search_name": {"type": "string"}, "active_only": {"type": "boolean"}}, "required": []}},
+    {"name": "get_wellsky_shifts", "description": "Get shifts. Use get_wellsky_clients/caregivers first to find IDs.", "input_schema": {"type": "object", "properties": {"client_id": {"type": "string"}, "caregiver_id": {"type": "string"}, "days": {"type": "integer"}, "past_days": {"type": "integer"}, "open_only": {"type": "boolean"}}, "required": []}},
+    {"name": "web_search", "description": "Search the internet for current information.", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "get_stock_price", "description": "Get stock price for a ticker.", "input_schema": {"type": "object", "properties": {"symbol": {"type": "string"}}, "required": ["symbol"]}},
+    {"name": "get_crypto_price", "description": "Get cryptocurrency price.", "input_schema": {"type": "object", "properties": {"symbol": {"type": "string"}}, "required": ["symbol"]}},
+    {"name": "create_claude_task", "description": "Create a task for Claude Code.", "input_schema": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "priority": {"type": "string"}, "working_directory": {"type": "string"}}, "required": ["title", "description"]}},
+    {"name": "check_claude_task", "description": "Check Claude Code task status.", "input_schema": {"type": "object", "properties": {"task_id": {"type": "integer"}}, "required": []}},
+    {"name": "save_memory", "description": "Save an important preference, fact, or instruction to long-term memory.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "What to remember"}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
+    {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
+    {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
+]
+
+# Gemini-format tools (used when LLM_PROVIDER == "gemini")
+GEMINI_TOOLS = None
+if GEMINI_AVAILABLE:
+    def _s(type_str, desc, **kwargs):
+        type_map = {"string": "STRING", "integer": "INTEGER", "boolean": "BOOLEAN"}
+        return genai_types.Schema(type=type_map.get(type_str, type_str.upper()), description=desc, **kwargs)
+
+    GEMINI_TOOLS = [genai_types.Tool(function_declarations=[
+        genai_types.FunctionDeclaration(name="search_concerts", description="Find upcoming concerts in Denver or other cities for specific artists or venues.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _s("string", "Search query (artist, venue, or city)")}, required=["query"])),
+        genai_types.FunctionDeclaration(name="buy_tickets_request", description="Initiate a ticket purchase request for a concert or event. Requires 2FA confirmation.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"artist": _s("string", "Artist/Band name"), "venue": _s("string", "Venue name"), "quantity": _s("integer", "Number of tickets (default 2)")}, required=["artist", "venue"])),
+        genai_types.FunctionDeclaration(name="book_table_request", description="Request a restaurant reservation. Requires 2FA confirmation.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"restaurant": _s("string", "Restaurant name"), "party_size": _s("integer", "Number of people"), "date": _s("string", "Date (YYYY-MM-DD)"), "time": _s("string", "Time (e.g. 7:00 PM)")}, required=["restaurant", "party_size", "date", "time"])),
+        genai_types.FunctionDeclaration(name="get_client_current_status", description="Check who is with a client right now. Returns current caregiver, shift times, and status.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"client_name": _s("string", "Name of the client")}, required=["client_name"])),
+        genai_types.FunctionDeclaration(name="get_calendar_events", description="Get upcoming calendar events from Jason's Google Calendar.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"days": _s("integer", "Number of days to look ahead (default 1, max 7)")})),
+        genai_types.FunctionDeclaration(name="search_emails", description="Search Jason's Gmail for emails.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _s("string", "Gmail search query (e.g., 'is:unread', 'from:someone@example.com')"), "max_results": _s("integer", "Max emails to return (default 5)")})),
+        genai_types.FunctionDeclaration(name="get_weather", description="Get current weather and forecast for a city.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"location": _s("string", "City and State (e.g. Denver, CO)")}, required=["location"])),
+        genai_types.FunctionDeclaration(name="get_wellsky_clients", description="Search for clients in WellSky by name, or get all clients.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _s("string", "Client name to search (leave empty for all)"), "active_only": _s("boolean", "Only active clients (default true)")})),
+        genai_types.FunctionDeclaration(name="get_wellsky_caregivers", description="Search for caregivers in WellSky by name, or get all caregivers.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _s("string", "Caregiver name to search (leave empty for all)"), "active_only": _s("boolean", "Only active caregivers (default true)")})),
+        genai_types.FunctionDeclaration(name="get_wellsky_shifts", description="Get shifts from WellSky. Can look forward or backward. Use get_wellsky_clients/caregivers first to find an ID if filtering by person.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"client_id": _s("string", "WellSky client ID"), "caregiver_id": _s("string", "WellSky caregiver ID"), "days": _s("integer", "Days to look ahead (default 7)"), "past_days": _s("integer", "Days to look BACK for history/hours worked (default 0)"), "open_only": _s("boolean", "Only open/unfilled shifts (default false)")})),
+        genai_types.FunctionDeclaration(name="web_search", description="Search the internet for current information — news, sports, flights, general knowledge.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _s("string", "The search query")}, required=["query"])),
+        genai_types.FunctionDeclaration(name="get_stock_price", description="Get current stock price for a ticker symbol (AAPL, TSLA, GOOG, NVDA, etc.)",
+            parameters=genai_types.Schema(type="OBJECT", properties={"symbol": _s("string", "Stock ticker symbol")}, required=["symbol"])),
+        genai_types.FunctionDeclaration(name="get_crypto_price", description="Get current cryptocurrency price (BTC, ETH, DOGE, SOL, etc.)",
+            parameters=genai_types.Schema(type="OBJECT", properties={"symbol": _s("string", "Crypto symbol")}, required=["symbol"])),
+        genai_types.FunctionDeclaration(name="create_claude_task", description="Create a task for Claude Code on the Mac Mini — fix code, check services, update configs.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"title": _s("string", "Short title"), "description": _s("string", "What Claude Code should do"), "priority": _s("string", "Priority: low/normal/high/urgent"), "working_directory": _s("string", "Directory to work in (optional)")}, required=["title", "description"])),
+        genai_types.FunctionDeclaration(name="check_claude_task", description="Check the status of a Claude Code task.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"task_id": _s("integer", "Task ID (optional, defaults to most recent)")})),
+        genai_types.FunctionDeclaration(name="save_memory", description="Save an important preference, fact, or instruction to long-term memory.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"content": _s("string", "What to remember"), "category": _s("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _s("string", "high/medium/low")}, required=["content", "category"])),
+        genai_types.FunctionDeclaration(name="recall_memories", description="Search long-term memory for saved preferences, facts, or instructions.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"category": _s("string", "Filter by category"), "search_text": _s("string", "Keywords to search for")})),
+        genai_types.FunctionDeclaration(name="forget_memory", description="Archive a memory that is no longer relevant.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _s("string", "ID of the memory to archive")}, required=["memory_id"])),
+    ])]
+
+# OpenAI-format tools (used when LLM_PROVIDER == "openai")
+def _oai_tool(name, desc, props, required=None):
+    """Build an OpenAI function tool definition."""
+    schema = {"type": "object", "properties": props}
+    if required:
+        schema["required"] = required
+    return {"type": "function", "function": {"name": name, "description": desc, "parameters": schema}}
+
+OPENAI_TOOLS = [
+    _oai_tool("search_concerts", "Find upcoming concerts.", {"query": {"type": "string", "description": "Search query"}}, ["query"]),
+    _oai_tool("buy_tickets_request", "Buy concert tickets (requires 2FA).", {"artist": {"type": "string"}, "venue": {"type": "string"}, "quantity": {"type": "integer"}}, ["artist", "venue"]),
+    _oai_tool("book_table_request", "Book a restaurant reservation (requires 2FA).", {"restaurant": {"type": "string"}, "party_size": {"type": "integer"}, "date": {"type": "string"}, "time": {"type": "string"}}, ["restaurant", "party_size", "date", "time"]),
+    _oai_tool("get_client_current_status", "Check who is with a client right now.", {"client_name": {"type": "string", "description": "Name of the client"}}, ["client_name"]),
+    _oai_tool("get_calendar_events", "Get upcoming calendar events.", {"days": {"type": "integer", "description": "Days to look ahead (1-7)"}}),
+    _oai_tool("search_emails", "Search Jason's Gmail.", {"query": {"type": "string"}, "max_results": {"type": "integer"}}),
+    _oai_tool("get_weather", "Get current weather and forecast.", {"location": {"type": "string", "description": "City and State"}}, ["location"]),
+    _oai_tool("get_wellsky_clients", "Search clients in WellSky.", {"search_name": {"type": "string"}, "active_only": {"type": "boolean"}}),
+    _oai_tool("get_wellsky_caregivers", "Search caregivers in WellSky.", {"search_name": {"type": "string"}, "active_only": {"type": "boolean"}}),
+    _oai_tool("get_wellsky_shifts", "Get shifts. Use get_wellsky_clients/caregivers first to find IDs.", {"client_id": {"type": "string"}, "caregiver_id": {"type": "string"}, "days": {"type": "integer"}, "past_days": {"type": "integer"}, "open_only": {"type": "boolean"}}),
+    _oai_tool("web_search", "Search the internet for current information.", {"query": {"type": "string"}}, ["query"]),
+    _oai_tool("get_stock_price", "Get stock price for a ticker.", {"symbol": {"type": "string"}}, ["symbol"]),
+    _oai_tool("get_crypto_price", "Get cryptocurrency price.", {"symbol": {"type": "string"}}, ["symbol"]),
+    _oai_tool("create_claude_task", "Create a task for Claude Code.", {"title": {"type": "string"}, "description": {"type": "string"}, "priority": {"type": "string"}, "working_directory": {"type": "string"}}, ["title", "description"]),
+    _oai_tool("check_claude_task", "Check Claude Code task status.", {"task_id": {"type": "integer"}}),
+    _oai_tool("save_memory", "Save an important preference, fact, or instruction to long-term memory.", {"content": {"type": "string", "description": "What to remember"}, "category": {"type": "string", "description": "Category"}, "importance": {"type": "string", "description": "high/medium/low"}}, ["content", "category"]),
+    _oai_tool("recall_memories", "Search long-term memory.", {"category": {"type": "string"}, "search_text": {"type": "string"}}),
+    _oai_tool("forget_memory", "Archive a memory.", {"memory_id": {"type": "string"}}, ["memory_id"]),
+]
+
+_TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
+
+## Operating Laws (non-negotiable)
+1. SIGNAL FILTERING: Never forward noise. Only surface items requiring judgment or action.
+2. PREFERENCE LOCK: If you've seen a preference twice, it's policy. Never re-ask. Use recall_memories before asking a question.
+3. CONDITIONAL AUTONOMY: Act first on low-risk items. Only ask for money/reputation/legal/irreversible.
+4. STATE AWARENESS: Adjust your verbosity and urgency threshold to the current situation.
+5. OPINIONATED DECISIONS: Always lead with your recommendation + why + risk + one fallback. Never dump options without an opinion.
+6. MEMORY: Save important preferences and facts using save_memory. Search your memory before asking questions already answered.
+7. PATTERN DETECTION: If you notice a repeating problem, flag it proactively.
+8. VOICE FIDELITY: Sound like a real person. No AI fluff, no hedging, no "I'd be happy to help."
+9. SELF-MONITORING: If you're getting verbose or drifting from your role, correct yourself.
+10. PUSH BACK: If you disagree, say why respectfully. Don't just comply.
 
 # Core Identity
 - Named after Jason's youngest daughter
@@ -353,6 +293,7 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's Elite Chief of Staff and perso
 - **Flights:** Use `web_search` to find flight prices and options.
 - **Secure Purchasing:** For any purchase or booking, you initiate a secure 2FA handshake.
 - **Unified Intelligence:** You check Jason's email and calendar across all accounts.
+- **Memory:** Save and recall memories (save_memory, recall_memories, forget_memory).
 
 # Jason's Profile
 - Owner of Colorado Care Assist
@@ -371,6 +312,7 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's Elite Chief of Staff and perso
 - search_emails: Search Jason's Gmail.
 - get_wellsky_clients/caregivers: Access business data.
 - web_search: General knowledge, flight prices, travel info.
+- save_memory / recall_memories / forget_memory: Long-term memory management.
 
 # CRITICAL RULES
 - **Operations:** If asked "who is with [Client] right now?", ALWAYS use `get_client_current_status`.
@@ -384,20 +326,66 @@ SYSTEM_PROMPT = f"""You are Gigi, Jason Shulman's Elite Chief of Staff and perso
 # Response Style
 - Concise, confident, executive summary style.
 - Proactive: "I found 3 shows. Want me to grab tickets for the Friday one?"
-
-# Current Date
-Today is {datetime.now().strftime("%A, %B %d, %Y")}
 """
+
+
+def _build_telegram_system_prompt():
+    """Build the system prompt with dynamic context: date, memories, mode."""
+    parts = [_TELEGRAM_SYSTEM_PROMPT_BASE]
+
+    # Current date/time
+    parts.append(f"\n# Current Date\nToday is {datetime.now().strftime('%A, %B %d, %Y')}")
+
+    # Inject mode context
+    if MODE_AVAILABLE and _mode_detector:
+        try:
+            mode_info = _mode_detector.get_current_mode()
+            parts.append(f"\n# Current Operating Mode\nMode: {mode_info.mode.value.upper()} (source: {mode_info.source.value})")
+        except Exception as e:
+            logger.warning(f"Mode detection failed: {e}")
+
+    # Inject relevant memories
+    if MEMORY_AVAILABLE and _memory_system:
+        try:
+            memories = _memory_system.query_memories(min_confidence=0.5, limit=10)
+            if memories:
+                memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
+                parts.append("\n# Your Saved Memories\n" + "\n".join(memory_lines))
+        except Exception as e:
+            logger.warning(f"Memory injection failed: {e}")
+
+    return "\n".join(parts)
+
+
+# Legacy reference
+SYSTEM_PROMPT = _build_telegram_system_prompt()
 
 class GigiTelegramBot:
     def __init__(self):
-        self.claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+        # Initialize the right LLM client based on GIGI_LLM_PROVIDER
+        self.llm = None
+        if LLM_PROVIDER == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
+            self.llm = genai.Client(api_key=GEMINI_API_KEY)
+        elif LLM_PROVIDER == "openai" and OPENAI_AVAILABLE and OPENAI_API_KEY:
+            self.llm = openai.OpenAI(api_key=OPENAI_API_KEY)
+        elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+            self.llm = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        else:
+            # Fallback: try any available provider
+            if ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+                self.llm = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                logger.warning(f"Provider '{LLM_PROVIDER}' not available, falling back to anthropic")
+            elif GEMINI_AVAILABLE and GEMINI_API_KEY:
+                self.llm = genai.Client(api_key=GEMINI_API_KEY)
+                logger.warning(f"Provider '{LLM_PROVIDER}' not available, falling back to gemini")
+
         self.wellsky = WellSkyService() if WellSkyService else None
         self.google = GoogleService() if GoogleService else None
-        self.conversation_history = {}
+        self.conversation_history = {}  # {user_id: [{role, content}]} — text-only, provider-agnostic
 
         # Log service status on startup
-        logger.info(f"   Claude API: {'✓ Ready' if self.claude else '✗ Missing ANTHROPIC_API_KEY'}")
+        logger.info(f"   LLM Provider: {LLM_PROVIDER} | Model: {LLM_MODEL}")
+        logger.info(f"   LLM Client: {'✓ Ready' if self.llm else '✗ NOT CONFIGURED'}")
         logger.info(f"   WellSky: {'✓ Ready' if self.wellsky else '✗ Not available'}")
         logger.info(f"   Google: {'✓ Ready' if self.google else '✗ Not available'}")
 
@@ -939,11 +927,61 @@ class GigiTelegramBot:
                     if conn:
                         conn.close()
 
+            elif tool_name == "save_memory":
+                if not MEMORY_AVAILABLE or not _memory_system:
+                    return json.dumps({"error": "Memory system not available"})
+                content = tool_input.get("content", "")
+                category = tool_input.get("category", "general")
+                importance = tool_input.get("importance", "medium")
+                impact_map = {"high": ImpactLevel.HIGH, "medium": ImpactLevel.MEDIUM, "low": ImpactLevel.LOW}
+                memory_id = _memory_system.create_memory(
+                    content=content,
+                    memory_type=MemoryType.EXPLICIT_INSTRUCTION,
+                    source=MemorySource.EXPLICIT,
+                    confidence=1.0,
+                    category=category,
+                    impact_level=impact_map.get(importance, ImpactLevel.MEDIUM)
+                )
+                return json.dumps({"saved": True, "memory_id": memory_id, "content": content})
+
+            elif tool_name == "recall_memories":
+                if not MEMORY_AVAILABLE or not _memory_system:
+                    return json.dumps({"memories": [], "message": "Memory system not available"})
+                category = tool_input.get("category")
+                search_text = tool_input.get("search_text")
+                memories = _memory_system.query_memories(category=category, min_confidence=0.3, limit=10)
+                if search_text:
+                    search_lower = search_text.lower()
+                    memories = [m for m in memories if search_lower in m.content.lower()]
+                results = [{"id": m.id, "content": m.content, "category": m.category,
+                           "confidence": float(m.confidence), "type": m.type.value} for m in memories]
+                return json.dumps({"memories": results, "count": len(results)})
+
+            elif tool_name == "forget_memory":
+                if not MEMORY_AVAILABLE or not _memory_system:
+                    return json.dumps({"error": "Memory system not available"})
+                memory_id = tool_input.get("memory_id", "")
+                memory = _memory_system.get_memory(memory_id)
+                if not memory:
+                    return json.dumps({"error": f"Memory {memory_id} not found"})
+                with _memory_system._get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("UPDATE gigi_memories SET status = 'archived' WHERE id = %s", (memory_id,))
+                        _memory_system._log_event(cur, memory_id, "archived", memory.confidence, memory.confidence, "User requested forget")
+                    conn.commit()
+                return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
         except Exception as e:
             logger.error(f"Tool execution error ({tool_name}): {e}")
+            # Log to failure handler if available
+            if FAILURE_HANDLER_AVAILABLE and _failure_handler:
+                try:
+                    _failure_handler.handle_tool_failure(tool_name, e, {"tool_input": str(tool_input)[:200]})
+                except Exception:
+                    pass
             return json.dumps({"error": f"Tool {tool_name} failed: {str(e)}"})
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -977,7 +1015,7 @@ class GigiTelegramBot:
         )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle incoming messages with tool calling support"""
+        """Handle incoming messages — dispatches to the configured LLM provider"""
         user_id = update.effective_user.id
         message_text = update.message.text
 
@@ -986,147 +1024,239 @@ class GigiTelegramBot:
             logger.warning(f"Ignored message from unauthorized user: {user_id}")
             return
 
-        logger.info(f"📱 Message from Jason: {message_text}")
+        logger.info(f"Message from Jason: {message_text}")
 
         # Initialize conversation history for this user
         if user_id not in self.conversation_history:
             self.conversation_history[user_id] = []
 
-        # Add user message to history
+        # Add user message to history (text-only, provider-agnostic)
         self.conversation_history[user_id].append({
             "role": "user",
             "content": message_text
         })
 
-        # Keep only last 20 messages (10 exchanges) - need more for tool calling
+        # Keep only last 20 messages
         if len(self.conversation_history[user_id]) > 20:
             self.conversation_history[user_id] = self.conversation_history[user_id][-20:]
 
         # Send typing indicator
         await update.message.chat.send_action("typing")
 
-        # Get response from Claude WITH TOOLS
-        if self.claude:
-            try:
-                # Call Claude with tools
-                response = self.claude.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=4096,
-                    system=SYSTEM_PROMPT,
-                    tools=TOOLS,
-                    messages=self.conversation_history[user_id]
+        if not self.llm:
+            await update.message.reply_text(
+                f"LLM not configured. Provider={LLM_PROVIDER}, check API key env vars."
+            )
+            return
+
+        try:
+            # Dispatch to the right provider
+            if LLM_PROVIDER == "gemini":
+                final_text = await self._call_gemini(user_id, update)
+            elif LLM_PROVIDER == "openai":
+                final_text = await self._call_openai(user_id, update)
+            else:
+                final_text = await self._call_anthropic(user_id, update)
+
+            if not final_text:
+                final_text = "I processed your request but have no text response. Please try again."
+
+            # Add final assistant response to history (text-only)
+            self.conversation_history[user_id].append({
+                "role": "assistant",
+                "content": final_text
+            })
+
+            # Send response (split if too long for Telegram)
+            if len(final_text) > 4000:
+                for i in range(0, len(final_text), 4000):
+                    await update.message.reply_text(final_text[i:i+4000])
+            else:
+                await update.message.reply_text(final_text)
+
+        except Exception as e:
+            logger.error(f"LLM API error ({LLM_PROVIDER}): {e}", exc_info=True)
+            await update.message.reply_text(
+                f"Error ({LLM_PROVIDER}/{LLM_MODEL}): {str(e)}"
+            )
+
+    # ═══════════════════════════════════════════════════════════
+    # ANTHROPIC PROVIDER
+    # ═══════════════════════════════════════════════════════════
+    async def _call_anthropic(self, user_id: int, update: Update) -> str:
+        """Call Anthropic Claude with tool support."""
+        # Build Anthropic-format messages from text-only history
+        messages = [{"role": m["role"], "content": m["content"]}
+                    for m in self.conversation_history[user_id]]
+
+        response = self.llm.messages.create(
+            model=LLM_MODEL, max_tokens=4096,
+            system=_build_telegram_system_prompt(), tools=ANTHROPIC_TOOLS,
+            messages=messages
+        )
+
+        # Tool calling loop
+        max_rounds = 5
+        for tool_round in range(max_rounds):
+            if response.stop_reason != "tool_use":
+                break
+            logger.info(f"Tool call round {tool_round + 1} (anthropic)")
+
+            tool_results = []
+            assistant_content = []
+
+            for block in response.content:
+                if block.type == "tool_use":
+                    logger.info(f"  Tool: {block.name} input: {block.input}")
+                    result = await self.execute_tool(block.name, block.input)
+                    logger.info(f"  Result: {result[:200]}...")
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result
+                    })
+                    assistant_content.append({
+                        "type": "tool_use", "id": block.id,
+                        "name": block.name, "input": block.input
+                    })
+                elif block.type == "text":
+                    assistant_content.append({"type": "text", "text": block.text})
+
+            messages.append({"role": "assistant", "content": assistant_content})
+            messages.append({"role": "user", "content": tool_results})
+
+            await update.message.chat.send_action("typing")
+            response = self.llm.messages.create(
+                model=LLM_MODEL, max_tokens=4096,
+                system=_build_telegram_system_prompt(), tools=ANTHROPIC_TOOLS,
+                messages=messages
+            )
+
+        # Extract final text
+        return "".join(b.text for b in response.content if b.type == "text")
+
+    # ═══════════════════════════════════════════════════════════
+    # GEMINI PROVIDER
+    # ═══════════════════════════════════════════════════════════
+    async def _call_gemini(self, user_id: int, update: Update) -> str:
+        """Call Google Gemini with tool support."""
+        # Build Gemini-format contents from text-only history
+        contents = []
+        for m in self.conversation_history[user_id]:
+            role = "user" if m["role"] == "user" else "model"
+            contents.append(genai_types.Content(
+                role=role,
+                parts=[genai_types.Part(text=m["content"])]
+            ))
+
+        config = genai_types.GenerateContentConfig(
+            system_instruction=_build_telegram_system_prompt(),
+            tools=GEMINI_TOOLS,
+        )
+
+        response = self.llm.models.generate_content(
+            model=LLM_MODEL, contents=contents, config=config
+        )
+
+        # Tool calling loop
+        max_rounds = 5
+        for tool_round in range(max_rounds):
+            # Check if response has function calls
+            function_calls = []
+            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'function_call') and part.function_call:
+                        function_calls.append(part)
+
+            if not function_calls:
+                break
+
+            logger.info(f"Tool call round {tool_round + 1} (gemini)")
+
+            # Add the model's response (with function_call parts) to contents
+            contents.append(response.candidates[0].content)
+
+            # Execute each tool and build function response parts
+            fn_response_parts = []
+            for part in function_calls:
+                fc = part.function_call
+                tool_input = dict(fc.args) if fc.args else {}
+                logger.info(f"  Tool: {fc.name} input: {tool_input}")
+                result_str = await self.execute_tool(fc.name, tool_input)
+                logger.info(f"  Result: {result_str[:200]}...")
+
+                # Parse JSON result for structured response
+                try:
+                    result_data = json.loads(result_str)
+                except (json.JSONDecodeError, TypeError):
+                    result_data = {"result": result_str}
+
+                fn_response_parts.append(
+                    genai_types.Part.from_function_response(
+                        name=fc.name, response=result_data
+                    )
                 )
 
-                # Process response - may need multiple rounds for tool calls
-                max_tool_rounds = 5  # Prevent infinite loops
-                tool_round = 0
+            contents.append(genai_types.Content(role="user", parts=fn_response_parts))
 
-                while response.stop_reason == "tool_use" and tool_round < max_tool_rounds:
-                    tool_round += 1
-                    logger.info(f"🔧 Tool call round {tool_round}")
+            await update.message.chat.send_action("typing")
+            response = self.llm.models.generate_content(
+                model=LLM_MODEL, contents=contents, config=config
+            )
 
-                    # Extract tool uses from response
-                    tool_results = []
-                    assistant_content = []
+        # Extract final text
+        text_parts = []
+        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'text') and part.text:
+                    text_parts.append(part.text)
+        return "".join(text_parts)
 
-                    for block in response.content:
-                        if block.type == "tool_use":
-                            tool_name = block.name
-                            tool_input = block.input
-                            tool_use_id = block.id
+    # ═══════════════════════════════════════════════════════════
+    # OPENAI PROVIDER
+    # ═══════════════════════════════════════════════════════════
+    async def _call_openai(self, user_id: int, update: Update) -> str:
+        """Call OpenAI with tool support."""
+        # Build OpenAI-format messages
+        messages = [{"role": "system", "content": _build_telegram_system_prompt()}]
+        for m in self.conversation_history[user_id]:
+            messages.append({"role": m["role"], "content": m["content"]})
 
-                            logger.info(f"   Executing tool: {tool_name} with input: {tool_input}")
+        response = self.llm.chat.completions.create(
+            model=LLM_MODEL, messages=messages, tools=OPENAI_TOOLS
+        )
 
-                            # Execute the tool
-                            result = await self.execute_tool(tool_name, tool_input)
-                            logger.info(f"   Tool result: {result[:200]}...")
+        # Tool calling loop
+        max_rounds = 5
+        for tool_round in range(max_rounds):
+            choice = response.choices[0]
+            if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+                break
 
-                            tool_results.append({
-                                "type": "tool_result",
-                                "tool_use_id": tool_use_id,
-                                "content": result
-                            })
-                            assistant_content.append(block)
-                        elif block.type == "text":
-                            assistant_content.append(block)
+            logger.info(f"Tool call round {tool_round + 1} (openai)")
 
-                    # Add assistant message with tool use to history
-                    # Tool use blocks: type, id, name, input (NO text field)
-                    # Text blocks: type, text
-                    formatted_content = []
-                    for b in assistant_content:
-                        if b.type == "tool_use":
-                            formatted_content.append({
-                                "type": "tool_use",
-                                "id": b.id,
-                                "name": b.name,
-                                "input": b.input
-                            })
-                        elif b.type == "text":
-                            formatted_content.append({
-                                "type": "text",
-                                "text": b.text
-                            })
+            # Add assistant message with tool calls
+            messages.append(choice.message)
 
-                    self.conversation_history[user_id].append({
-                        "role": "assistant",
-                        "content": formatted_content
-                    })
+            # Execute each tool call
+            for tc in choice.message.tool_calls:
+                tool_input = json.loads(tc.function.arguments)
+                logger.info(f"  Tool: {tc.function.name} input: {tool_input}")
+                result_str = await self.execute_tool(tc.function.name, tool_input)
+                logger.info(f"  Result: {result_str[:200]}...")
 
-                    # Add tool results to history
-                    self.conversation_history[user_id].append({
-                        "role": "user",
-                        "content": tool_results
-                    })
-
-                    # Keep typing indicator going
-                    await update.message.chat.send_action("typing")
-
-                    # Get next response from Claude
-                    response = self.claude.messages.create(
-                        model="claude-sonnet-4-20250514",
-                        max_tokens=4096,
-                        system=SYSTEM_PROMPT,
-                        tools=TOOLS,
-                        messages=self.conversation_history[user_id]
-                    )
-
-                # Extract final text response
-                final_text = ""
-                for block in response.content:
-                    if block.type == "text":
-                        final_text += block.text
-
-                if not final_text:
-                    final_text = "I processed your request but have no text response. Please try again."
-
-                # Add final assistant response to history
-                self.conversation_history[user_id].append({
-                    "role": "assistant",
-                    "content": final_text
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result_str
                 })
 
-                # Send response (split if too long for Telegram)
-                if len(final_text) > 4000:
-                    # Split into chunks
-                    for i in range(0, len(final_text), 4000):
-                        await update.message.reply_text(final_text[i:i+4000])
-                else:
-                    await update.message.reply_text(final_text)
-
-                logger.info(f"✅ Sent response to Jason (tool rounds: {tool_round})")
-
-            except Exception as e:
-                logger.error(f"Claude API error: {e}", exc_info=True)
-                await update.message.reply_text(
-                    f"Error: {str(e)}\n\nI encountered an issue processing your request. "
-                    "Check the logs for details."
-                )
-        else:
-            await update.message.reply_text(
-                "I'm running, but my AI capabilities aren't configured yet. "
-                "Please check the ANTHROPIC_API_KEY environment variable."
+            await update.message.chat.send_action("typing")
+            response = self.llm.chat.completions.create(
+                model=LLM_MODEL, messages=messages, tools=OPENAI_TOOLS
             )
+
+        return response.choices[0].message.content or ""
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle errors"""
@@ -1170,13 +1300,17 @@ async def main():
             await app.bot.delete_webhook(drop_pending_updates=True)
             logger.info("Cleared stale Telegram sessions")
 
-            # Brief pause to let Telegram release any active getUpdates connections
-            await asyncio.sleep(2)
+            # Wait for Telegram to fully release any active getUpdates long-poll connections
+            # Telegram's long-poll timeout is typically 25-30 seconds
+            wait_secs = 5 if attempt == 0 else min(30, 5 * (attempt + 1))
+            logger.info(f"Waiting {wait_secs}s for Telegram to release stale connections...")
+            await asyncio.sleep(wait_secs)
 
             await app.start()
             await app.updater.start_polling(
                 drop_pending_updates=True,
                 allowed_updates=["message"],
+                poll_interval=1.0,
             )
 
             logger.info("✅ Gigi Telegram Bot is running!")
@@ -1189,12 +1323,20 @@ async def main():
                 logger.debug("Heartbeat: Bot is running")
 
         except KeyboardInterrupt:
-            logger.info("🛑 Shutting down Gigi Telegram Bot (user requested)...")
+            logger.info("Shutting down Gigi Telegram Bot (user requested)...")
             break
         except Exception as e:
-            logger.error(f"❌ Bot crashed with error: {e}", exc_info=True)
+            error_str = str(e)
+            is_conflict = "Conflict" in error_str or "409" in error_str
+
+            if is_conflict:
+                logger.warning(f"409 Conflict on attempt {attempt + 1} — another polling session still active, waiting...")
+                wait_time = 30  # Always wait 30s for 409 to let Telegram release the connection
+            else:
+                logger.error(f"Bot crashed with error: {e}", exc_info=True)
+                wait_time = retry_delay * (2 ** attempt)
+
             if attempt < max_retries - 1:
-                wait_time = retry_delay * (2 ** attempt)  # Exponential backoff
                 logger.info(f"   Retrying in {wait_time} seconds...")
                 await asyncio.sleep(wait_time)
             else:

@@ -1,7 +1,7 @@
 """
 Caregiver Preference Extractor
 
-Uses Claude to mine caregiver preferences from SMS/chat messages
+Uses LLM (Gemini or Claude) to mine caregiver preferences from SMS/chat messages
 and stores them in gigi_memories for use by the shift filling matcher.
 
 Preference types:
@@ -17,7 +17,20 @@ import logging
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-import anthropic
+# Multi-LLM support — use whatever provider is configured
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    anthropic = None
+    ANTHROPIC_AVAILABLE = False
+
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -54,11 +67,19 @@ Rules:
 class CaregiverPreferenceExtractor:
     """Extracts and stores caregiver preferences from free-text messages."""
 
-    def __init__(self, memory_system, anthropic_api_key: str = None):
+    def __init__(self, memory_system, llm_provider: str = None, api_key: str = None):
         self.memory = memory_system
-        self.client = anthropic.Anthropic(
-            api_key=anthropic_api_key or os.getenv("ANTHROPIC_API_KEY")
-        )
+        self.llm_provider = llm_provider or os.getenv("GIGI_LLM_PROVIDER", "gemini")
+        if self.llm_provider == "gemini" and GEMINI_AVAILABLE:
+            self.gemini_client = genai.Client(api_key=api_key or os.getenv("GEMINI_API_KEY"))
+            self.anthropic_client = None
+        elif self.llm_provider == "anthropic" and ANTHROPIC_AVAILABLE:
+            self.anthropic_client = anthropic.Anthropic(
+                api_key=api_key or os.getenv("ANTHROPIC_API_KEY")
+            )
+            self.gemini_client = None
+        else:
+            raise RuntimeError(f"LLM provider '{self.llm_provider}' not available")
 
     async def extract_and_store(
         self,
@@ -100,7 +121,7 @@ class CaregiverPreferenceExtractor:
         caregiver_name: str,
         message_text: str
     ) -> List[Dict[str, Any]]:
-        """Use Claude to extract structured preferences from text."""
+        """Use configured LLM provider to extract structured preferences from text."""
         try:
             prompt = EXTRACTION_PROMPT.format(
                 name=caregiver_name,
@@ -108,13 +129,24 @@ class CaregiverPreferenceExtractor:
                 message=message_text
             )
 
-            response = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=500,
-                messages=[{"role": "user", "content": prompt}]
-            )
-
-            result_text = response.content[0].text.strip()
+            if self.llm_provider == "gemini" and self.gemini_client:
+                model = os.getenv("GIGI_LLM_MODEL", "gemini-2.5-flash")
+                response = self.gemini_client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        max_output_tokens=500,
+                        temperature=0.1,
+                    ),
+                )
+                result_text = response.text.strip()
+            else:
+                response = self.anthropic_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=500,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                result_text = response.content[0].text.strip()
 
             # Parse JSON - handle potential markdown wrapping
             if result_text.startswith("```"):
@@ -130,7 +162,7 @@ class CaregiverPreferenceExtractor:
             logger.warning(f"Failed to parse preference extraction result: {e}")
             return []
         except Exception as e:
-            logger.warning(f"Claude preference extraction error: {e}")
+            logger.warning(f"Preference extraction error ({self.llm_provider}): {e}")
             return []
 
     def _store_preference(

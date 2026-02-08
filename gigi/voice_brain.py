@@ -26,7 +26,26 @@ from typing import Optional, Dict, Any, List
 # Add parent to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import anthropic
+# LLM SDKs — selected by GIGI_LLM_PROVIDER env var
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
+try:
+    import openai
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
 from fastapi import WebSocket, WebSocketDisconnect
 
 # Configure logging
@@ -52,6 +71,37 @@ except Exception as e:
     GOOGLE_AVAILABLE = False
     logger.warning(f"Google service not available: {e}")
 
+# Memory system, mode detector, failure handler
+try:
+    from gigi.memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel
+    memory_system = MemorySystem()
+    MEMORY_AVAILABLE = True
+    logger.info("Memory system initialized for voice brain")
+except Exception as e:
+    memory_system = None
+    MEMORY_AVAILABLE = False
+    logger.warning(f"Memory system not available: {e}")
+
+try:
+    from gigi.mode_detector import ModeDetector
+    mode_detector = ModeDetector()
+    MODE_AVAILABLE = True
+    logger.info("Mode detector initialized for voice brain")
+except Exception as e:
+    mode_detector = None
+    MODE_AVAILABLE = False
+    logger.warning(f"Mode detector not available: {e}")
+
+try:
+    from gigi.failure_handler import FailureHandler
+    failure_handler = FailureHandler()
+    FAILURE_HANDLER_AVAILABLE = True
+    logger.info("Failure handler initialized for voice brain")
+except Exception as e:
+    failure_handler = None
+    FAILURE_HANDLER_AVAILABLE = False
+    logger.warning(f"Failure handler not available: {e}")
+
 # Simulation support
 SIMULATION_MODE = False
 try:
@@ -61,9 +111,35 @@ try:
 except ImportError:
     logger.warning("Simulation service not available")
 
-# Claude client
+# LLM Provider Configuration — same env vars as telegram_bot.py
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-claude = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY) if ANTHROPIC_API_KEY else None
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "gemini").lower()
+_DEFAULT_MODELS = {
+    "gemini": "gemini-2.5-flash",  # override with GIGI_LLM_MODEL env var
+    "anthropic": "claude-sonnet-4-5-20250929",
+    "openai": "gpt-5.1",
+}
+LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-2.5-flash"))
+
+# Initialize LLM client
+llm_client = None
+if LLM_PROVIDER == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
+    llm_client = genai.Client(api_key=GEMINI_API_KEY)
+elif LLM_PROVIDER == "openai" and OPENAI_AVAILABLE and OPENAI_API_KEY:
+    llm_client = openai.OpenAI(api_key=OPENAI_API_KEY)
+elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+    llm_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+else:
+    # Fallback
+    if ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+        llm_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    elif GEMINI_AVAILABLE and GEMINI_API_KEY:
+        llm_client = genai.Client(api_key=GEMINI_API_KEY)
+
+logger.info(f"Voice Brain LLM: {LLM_PROVIDER} / {LLM_MODEL} ({'ready' if llm_client else 'NOT CONFIGURED'})")
 
 async def run_sync(func, *args, **kwargs):
     """Run a synchronous function in a separate thread to avoid blocking the event loop."""
@@ -101,8 +177,8 @@ def _sync_db_execute(sql, params=None):
     finally:
         conn.close()
 
-# Same tools as Telegram Gigi
-TOOLS = [
+# Anthropic-format tools
+ANTHROPIC_TOOLS = [
     {
         "name": "get_weather",
         "description": "Get current weather and forecast for a city.",
@@ -356,11 +432,81 @@ TOOLS = [
             },
             "required": []
         }
+    },
+    {
+        "name": "save_memory",
+        "description": "Save an important preference, fact, or instruction to long-term memory. Use when someone tells you something you should remember for the future.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "What to remember (e.g., 'Jason prefers direct flights')"},
+                "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"},
+                "importance": {"type": "string", "description": "How important: high (money/legal/reputation), medium (scheduling/communication), low (preferences)", "enum": ["high", "medium", "low"]}
+            },
+            "required": ["content", "category"]
+        }
+    },
+    {
+        "name": "recall_memories",
+        "description": "Search your long-term memory for saved preferences, facts, or instructions. Use before asking a question that may have already been answered.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "description": "Filter by category (optional)"},
+                "search_text": {"type": "string", "description": "Keywords to search for (optional)"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "forget_memory",
+        "description": "Archive a memory that is no longer relevant. Use when told to forget something or when a preference has changed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "memory_id": {"type": "string", "description": "ID of the memory to archive"}
+            },
+            "required": ["memory_id"]
+        }
     }
 ]
 
-# System prompt - same personality as Telegram, but adapted for voice
-SYSTEM_PROMPT = f"""You are Gigi, the AI assistant for Colorado Care Assist, a home care agency.
+# Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
+GEMINI_TOOLS = None
+if GEMINI_AVAILABLE:
+    def _gs(type_str, desc):
+        return genai_types.Schema(type={"string":"STRING","integer":"INTEGER","boolean":"BOOLEAN"}.get(type_str, "STRING"), description=desc)
+
+    _gem_decls = []
+    for t in ANTHROPIC_TOOLS:
+        props = {k: _gs(v.get("type", "string"), v.get("description", k))
+                 for k, v in t["input_schema"]["properties"].items()}
+        req = t["input_schema"].get("required", [])
+        _gem_decls.append(genai_types.FunctionDeclaration(
+            name=t["name"], description=t["description"],
+            parameters=genai_types.Schema(type="OBJECT", properties=props, required=req if req else None)))
+    GEMINI_TOOLS = [genai_types.Tool(function_declarations=_gem_decls)]
+
+# OpenAI-format tools — auto-generated from ANTHROPIC_TOOLS
+OPENAI_TOOLS = [
+    {"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}}
+    for t in ANTHROPIC_TOOLS
+]
+
+# Base system prompt - same personality as Telegram, but adapted for voice
+_VOICE_SYSTEM_PROMPT_BASE = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency.
+
+## Operating Laws (non-negotiable)
+1. SIGNAL FILTERING: Never forward noise. Only surface items requiring judgment or action.
+2. PREFERENCE LOCK: If you've seen a preference twice, it's policy. Never re-ask. Use recall_memories before asking a question.
+3. CONDITIONAL AUTONOMY: Act first on low-risk items. Only ask for money/reputation/legal/irreversible.
+4. STATE AWARENESS: Adjust your verbosity and urgency threshold to the current situation.
+5. OPINIONATED DECISIONS: Always lead with your recommendation + why + risk + one fallback. Never dump options without an opinion.
+6. MEMORY: Save important preferences and facts using save_memory. Search your memory before asking questions already answered.
+7. PATTERN DETECTION: If you notice a repeating problem, flag it proactively.
+8. VOICE FIDELITY: Sound like a real person. No AI fluff, no hedging, no "I'd be happy to help."
+9. SELF-MONITORING: If you're getting verbose or drifting from your role, correct yourself.
+10. PUSH BACK: If you disagree, say why respectfully. Don't just comply.
 
 # Voice Conversation Style
 - Keep responses SHORT and conversational - this is a phone call, not text
@@ -390,6 +536,7 @@ SYSTEM_PROMPT = f"""You are Gigi, the AI assistant for Colorado Care Assist, a h
 - Find concerts (search_concerts) and buy tickets (buy_tickets_request)
 - Get stock and crypto prices
 - Transfer calls to Jason or the office
+- Save and recall memories (save_memory, recall_memories)
 
 # Key People
 - Jason Shulman: Owner (transfer to him for escalations)
@@ -404,10 +551,39 @@ SYSTEM_PROMPT = f"""You are Gigi, the AI assistant for Colorado Care Assist, a h
 - For flights: Use `web_search` to find real-time prices.
 - For call-outs: get the caregiver's name and which shift, then report it
 - Always be warm but efficient - people are busy
-
-# Current Date/Time
-Today is {datetime.now().strftime("%A, %B %d, %Y")}
 """
+
+
+def _build_voice_system_prompt():
+    """Build the system prompt with dynamic context: date, memories, mode."""
+    parts = [_VOICE_SYSTEM_PROMPT_BASE]
+
+    # Current date/time
+    parts.append(f"\n# Current Date/Time\nToday is {datetime.now().strftime('%A, %B %d, %Y')}")
+
+    # Inject mode context
+    if MODE_AVAILABLE and mode_detector:
+        try:
+            mode_info = mode_detector.get_current_mode()
+            parts.append(f"\n# Current Operating Mode\nMode: {mode_info.mode.value.upper()} (source: {mode_info.source.value})")
+        except Exception as e:
+            logger.warning(f"Mode detection failed: {e}")
+
+    # Inject relevant memories
+    if MEMORY_AVAILABLE and memory_system:
+        try:
+            memories = memory_system.query_memories(min_confidence=0.5, limit=10)
+            if memories:
+                memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
+                parts.append("\n# Your Saved Memories\n" + "\n".join(memory_lines))
+        except Exception as e:
+            logger.warning(f"Memory injection failed: {e}")
+
+    return "\n".join(parts)
+
+
+# Legacy reference for places that use SYSTEM_PROMPT directly
+SYSTEM_PROMPT = _build_voice_system_prompt()
 
 
 async def execute_tool(tool_name: str, tool_input: dict) -> str:
@@ -936,161 +1112,390 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             except Exception as e:
                 return json.dumps({"error": f"Failed to check task: {str(e)}"})
 
+        elif tool_name == "save_memory":
+            if not MEMORY_AVAILABLE or not memory_system:
+                return json.dumps({"error": "Memory system not available"})
+            content = tool_input.get("content", "")
+            category = tool_input.get("category", "general")
+            importance = tool_input.get("importance", "medium")
+            impact_map = {"high": ImpactLevel.HIGH, "medium": ImpactLevel.MEDIUM, "low": ImpactLevel.LOW}
+            try:
+                memory_id = memory_system.create_memory(
+                    content=content,
+                    memory_type=MemoryType.EXPLICIT_INSTRUCTION,
+                    source=MemorySource.EXPLICIT,
+                    confidence=1.0,
+                    category=category,
+                    impact_level=impact_map.get(importance, ImpactLevel.MEDIUM)
+                )
+                return json.dumps({"saved": True, "memory_id": memory_id, "content": content})
+            except Exception as e:
+                return json.dumps({"error": f"Failed to save memory: {str(e)}"})
+
+        elif tool_name == "recall_memories":
+            if not MEMORY_AVAILABLE or not memory_system:
+                return json.dumps({"memories": [], "message": "Memory system not available"})
+            category = tool_input.get("category")
+            search_text = tool_input.get("search_text")
+            try:
+                memories = memory_system.query_memories(
+                    category=category,
+                    min_confidence=0.3,
+                    limit=10
+                )
+                # Filter by search text if provided
+                if search_text:
+                    search_lower = search_text.lower()
+                    memories = [m for m in memories if search_lower in m.content.lower()]
+                results = [{"id": m.id, "content": m.content, "category": m.category,
+                           "confidence": float(m.confidence), "type": m.type.value}
+                          for m in memories]
+                return json.dumps({"memories": results, "count": len(results)})
+            except Exception as e:
+                return json.dumps({"memories": [], "error": str(e)})
+
+        elif tool_name == "forget_memory":
+            if not MEMORY_AVAILABLE or not memory_system:
+                return json.dumps({"error": "Memory system not available"})
+            memory_id = tool_input.get("memory_id", "")
+            try:
+                memory = memory_system.get_memory(memory_id)
+                if not memory:
+                    return json.dumps({"error": f"Memory {memory_id} not found"})
+                # Archive instead of delete
+                with memory_system._get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("UPDATE gigi_memories SET status = 'archived' WHERE id = %s", (memory_id,))
+                        memory_system._log_event(cur, memory_id, "archived", memory.confidence, memory.confidence, "User requested forget")
+                    conn.commit()
+                return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
+            except Exception as e:
+                return json.dumps({"error": f"Failed to archive memory: {str(e)}"})
+
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
     except Exception as e:
         logger.error(f"Tool {tool_name} error: {e}")
+        # Log to failure handler if available
+        if FAILURE_HANDLER_AVAILABLE and failure_handler:
+            try:
+                failure_handler.handle_tool_failure(tool_name, e, {"tool_input": str(tool_input)[:200]})
+            except Exception:
+                pass
         return json.dumps({"error": str(e)})
 
 
-async def generate_response(transcript: List[Dict], call_info: Dict = None, on_token=None) -> tuple[str, Optional[str]]:
+SLOW_TOOLS = {
+    "search_wellsky_clients", "search_wellsky_caregivers",
+    "get_wellsky_client_details", "search_google_drive",
+    "get_wellsky_shifts", "get_client_current_status",
+    "web_search", "search_concerts", "search_emails",
+    "get_wellsky_clients", "get_wellsky_caregivers"
+}
+
+async def _maybe_acknowledge(call_info, on_token):
+    """Send a thinking phrase to keep the voice call alive during slow tools."""
+    if on_token and call_info and not call_info.get("acknowledged_thinking"):
+        import random
+        phrases = [
+            "Let me check on that for you.",
+            "One moment while I look that up.",
+            "Let me find that information.",
+            "Checking the schedule for you now."
+        ]
+        await on_token(random.choice(phrases))
+        call_info["acknowledged_thinking"] = True
+
+
+SIDE_EFFECT_TOOLS = {"send_sms", "send_team_message", "send_email", "transfer_call", "report_call_out"}
+
+# Dedup: track recent team messages to prevent duplicates
+_recent_team_messages = {}  # message_hash -> timestamp
+
+async def _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulation, on_tool_event=None):
+    """Execute tools in parallel, check for transfers, return results and transfer_number."""
+    transfer_number = None
+
+    # Report tool invocations to Retell
+    if on_tool_event:
+        for name, inp, extra in tool_calls_info:
+            try:
+                await on_tool_event("invocation", tool_call_id=str(extra), name=name,
+                                    arguments=json.dumps(inp) if isinstance(inp, dict) else str(inp))
+            except Exception:
+                pass
+
+    # Block side-effect tools during test/simulation calls
+    async def _safe_execute(name, inp):
+        if is_simulation and name in SIDE_EFFECT_TOOLS:
+            logger.info(f"[test] Blocked side-effect tool '{name}' during test call {call_id}")
+            return json.dumps({"success": True, "simulated": True, "message": f"{name} blocked during test"})
+
+        # Dedup: prevent duplicate team messages within 60 seconds
+        if name == "send_team_message":
+            import hashlib, time as _t
+            msg_hash = hashlib.md5(json.dumps(inp, sort_keys=True).encode()).hexdigest()
+            now = _t.time()
+            if msg_hash in _recent_team_messages and now - _recent_team_messages[msg_hash] < 60:
+                logger.warning(f"[dedup] Blocked duplicate send_team_message within 60s")
+                return json.dumps({"success": True, "deduplicated": True, "message": "Message already sent"})
+            _recent_team_messages[msg_hash] = now
+            # Clean old entries
+            for k in list(_recent_team_messages):
+                if now - _recent_team_messages[k] > 120:
+                    del _recent_team_messages[k]
+
+        return await execute_tool(name, inp)
+
+    tasks = [_safe_execute(name, inp) for name, inp, _ in tool_calls_info]
+    results = await asyncio.gather(*tasks)
+
+    processed = []
+    for i, result in enumerate(results):
+        name, inp, extra = tool_calls_info[i]
+
+        if is_simulation and SIMULATION_MODE:
+            capture_simulation_tool_call(call_id, name, inp, result)
+
+        if name == "transfer_call":
+            try:
+                rd = json.loads(result)
+                if rd.get("transfer_number"):
+                    transfer_number = rd["transfer_number"]
+            except:
+                pass
+
+        # Report tool result to Retell
+        if on_tool_event:
+            try:
+                await on_tool_event("result", tool_call_id=str(extra), content=result[:500] if result else "")
+            except Exception:
+                pass
+
+        processed.append((name, inp, extra, result))
+
+    return processed, transfer_number
+
+
+async def generate_response(transcript: List[Dict], call_info: Dict = None, on_token=None, on_tool_event=None) -> tuple[str, Optional[str]]:
     """
-    Generate a response using Claude, with tool support.
+    Generate a response using the configured LLM provider, with tool support.
     Returns (response_text, transfer_number or None)
     """
-    if not claude:
+    if not llm_client:
         return "I'm having trouble connecting right now. Please try again.", None
 
-    # Extract call_id for simulation tracking
     call_id = call_info.get("call_id") if call_info else None
-    is_simulation = call_id and call_id.startswith("sim_")
+    is_simulation = call_id and (call_id.startswith("sim_") or call_id.startswith("test_"))
 
-    # Convert Retell transcript format to Claude messages
+    # Convert Retell transcript to simple text messages
     messages = []
     for turn in transcript:
         role = "user" if turn.get("role") == "user" else "assistant"
-        content = turn.get("content", "").strip()  # Strip whitespace to avoid Claude API errors
+        content = turn.get("content", "").strip()
         if content:
-            # Merge consecutive same-role messages (Claude API requires alternating roles)
             if messages and messages[-1]["role"] == role:
                 messages[-1]["content"] += " " + content
             else:
                 messages.append({"role": role, "content": content})
 
-    # If no messages yet, generate greeting based on caller info
+    # Generate greeting if no user messages yet
     if not messages or (len(messages) == 1 and messages[0]["role"] == "assistant"):
-        # Look up caller if we have their number
         if call_info and call_info.get("from_number"):
             caller_result = await execute_tool("lookup_caller", {"phone_number": call_info["from_number"]})
             caller_data = json.loads(caller_result)
             if caller_data.get("found"):
-                name = caller_data.get("name", "")
-                return f"Hi {name}, this is Gigi with Colorado Care Assist. How can I help you?", None
+                return f"Hi {caller_data.get('name', '')}, this is Gigi with Colorado Care Assist. How can I help you?", None
         return "Hi, this is Gigi with Colorado Care Assist. How can I help you?", None
 
-    transfer_number = None
-    tool_results = []
-
     try:
-        # Call Claude with tools
-        response = await claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=300,  # Keep responses short for voice
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
+        import time as _time
+        _t0 = _time.time()
+        logger.info(f"[voice] generate_response called, provider={LLM_PROVIDER}, messages={len(messages)}, last_user={messages[-1]['content'][:80] if messages else 'none'}")
+
+        if LLM_PROVIDER == "gemini":
+            text, transfer = await _generate_gemini(messages, call_info, on_token, call_id, is_simulation, on_tool_event)
+        elif LLM_PROVIDER == "openai":
+            text, transfer = await _generate_openai(messages, call_info, on_token, call_id, is_simulation, on_tool_event)
+        else:
+            text, transfer = await _generate_anthropic(messages, call_info, on_token, call_id, is_simulation, on_tool_event)
+
+        _elapsed = round(_time.time() - _t0, 2)
+        logger.info(f"[voice] response generated in {_elapsed}s: {(text or '')[:100]}")
+
+        if call_info:
+            call_info["acknowledged_thinking"] = False
+        return text or "I'm here. How can I help?", transfer
+
+    except Exception as e:
+        logger.error(f"LLM error ({LLM_PROVIDER}): {e}", exc_info=True)
+        return "I'm having a moment. Could you repeat that?", None
+
+
+# ═══════════════════════════════════════════════════════════
+# ANTHROPIC PROVIDER
+# ═══════════════════════════════════════════════════════════
+async def _generate_anthropic(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None):
+    transfer_number = None
+    response = await llm_client.messages.create(
+        model=LLM_MODEL, max_tokens=300,
+        system=_build_voice_system_prompt(), tools=ANTHROPIC_TOOLS,
+        messages=messages
+    )
+
+    for _ in range(5):
+        if response.stop_reason != "tool_use":
+            break
+
+        has_slow = any(b.type == "tool_use" and b.name in SLOW_TOOLS for b in response.content)
+        if has_slow:
+            await _maybe_acknowledge(call_info, on_token)
+
+        tool_calls_info = [(b.name, b.input, b.id) for b in response.content if b.type == "tool_use"]
+        processed, xfer = await _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulation, on_tool_event)
+        if xfer:
+            transfer_number = xfer
+
+        tool_results = [{"type": "tool_result", "tool_use_id": extra, "content": result}
+                        for _, _, extra, result in processed]
+
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({"role": "user", "content": tool_results})
+
+        response = await llm_client.messages.create(
+            model=LLM_MODEL, max_tokens=300,
+            system=_build_voice_system_prompt(), tools=ANTHROPIC_TOOLS,
             messages=messages
         )
 
-        # Process response, handling any tool calls
-        while response.stop_reason == "tool_use":
-            # For voice calls, we need to acknowledge before executing slow tools
-            # Otherwise Retell may timeout waiting for response
-            has_slow_tools = any(
-                block.type == "tool_use" and block.name in [
-                    "search_wellsky_clients", "search_wellsky_caregivers",
-                    "get_wellsky_client_details", "search_google_drive",
-                    "get_wellsky_shifts", "get_client_current_status",
-                    "web_search", "search_concerts", "search_emails",
-                    "get_wellsky_clients", "get_wellsky_caregivers"
-                ]
-                for block in response.content
-            )
+    for block in response.content:
+        if hasattr(block, "text"):
+            return block.text, transfer_number
+    return None, transfer_number
 
-            if has_slow_tools and on_token and not call_info.get("acknowledged_thinking"):
-                # Send quick acknowledgment to keep call alive
-                thinking_phrases = [
-                    "Let me check on that for you.",
-                    "One moment while I look that up.",
-                    "Let me find that information.",
-                    "Checking the schedule for you now."
-                ]
-                import random
-                acknowledgment = random.choice(thinking_phrases)
-                await on_token(acknowledgment)
-                
-                # Mark that we've acknowledged so we don't repeat in the same response
-                if call_info:
-                    call_info["acknowledged_thinking"] = True
 
-            # Execute tools in parallel
-            tool_tasks = []
-            tool_blocks = []
-            assistant_content = response.content
+# ═══════════════════════════════════════════════════════════
+# GEMINI PROVIDER
+# ═══════════════════════════════════════════════════════════
+async def _generate_gemini(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None):
+    import time as _time
+    transfer_number = None
 
-            for block in response.content:
-                if block.type == "tool_use":
-                    tool_name = block.name
-                    tool_input = block.input
-                    tool_blocks.append(block)
+    # Build Gemini contents
+    contents = []
+    for m in messages:
+        role = "user" if m["role"] == "user" else "model"
+        contents.append(genai_types.Content(role=role, parts=[genai_types.Part(text=m["content"])]))
 
-                    logger.info(f"Preparing tool: {tool_name}")
-                    tool_tasks.append(execute_tool(tool_name, tool_input))
+    config = genai_types.GenerateContentConfig(
+        system_instruction=_build_voice_system_prompt(),
+        tools=GEMINI_TOOLS,
+    )
 
-            # Run all tools concurrently
-            results = await asyncio.gather(*tool_tasks)
+    # Gemini's generate_content is sync — run in thread to avoid blocking
+    _t0 = _time.time()
+    response = await asyncio.to_thread(
+        llm_client.models.generate_content,
+        model=LLM_MODEL, contents=contents, config=config
+    )
+    logger.info(f"[gemini] initial LLM call took {round(_time.time()-_t0, 2)}s")
 
-            for i, result in enumerate(results):
-                block = tool_blocks[i]
-                tool_name = block.name
-                tool_input = block.input
+    for round_num in range(5):
+        function_calls = []
+        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'function_call') and part.function_call:
+                    function_calls.append(part)
 
-                # CAPTURE for simulations
-                if is_simulation and SIMULATION_MODE:
-                    capture_simulation_tool_call(call_id, tool_name, tool_input, result)
+        if not function_calls:
+            logger.info(f"[gemini] no tool calls in round {round_num}, returning text response")
+            break
 
-                # Check for transfer
-                if tool_name == "transfer_call":
-                    try:
-                        result_data = json.loads(result)
-                        if result_data.get("transfer_number"):
-                            transfer_number = result_data["transfer_number"]
-                    except:
-                        pass
+        tool_names = [p.function_call.name for p in function_calls]
+        logger.info(f"[gemini] round {round_num}: tool calls = {tool_names}")
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result
-                })
+        has_slow = any(p.function_call.name in SLOW_TOOLS for p in function_calls)
+        if has_slow:
+            await _maybe_acknowledge(call_info, on_token)
 
-            # Continue conversation with tool results
-            messages.append({"role": "assistant", "content": assistant_content})
-            messages.append({"role": "user", "content": tool_results})
-            tool_results = [] # Clear for next iteration if needed
+        contents.append(response.candidates[0].content)
 
-            response = await claude.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=300,
-                system=SYSTEM_PROMPT,
-                tools=TOOLS,
-                messages=messages
-            )
+        tool_calls_info = [(p.function_call.name, dict(p.function_call.args) if p.function_call.args else {}, p.function_call.name)
+                          for p in function_calls]
+        _t1 = _time.time()
+        processed, xfer = await _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulation, on_tool_event)
+        logger.info(f"[gemini] tool execution took {round(_time.time()-_t1, 2)}s")
+        if xfer:
+            transfer_number = xfer
 
-        # Clear acknowledgment flag for next user turn
-        if call_info:
-            call_info["acknowledged_thinking"] = False
+        fn_parts = []
+        for name, _, _, result in processed:
+            logger.info(f"[gemini] tool result for {name}: {result[:200] if result else 'None'}")
+            try:
+                result_data = json.loads(result)
+            except (json.JSONDecodeError, TypeError):
+                result_data = {"result": result}
+            fn_parts.append(genai_types.Part.from_function_response(name=name, response=result_data))
 
-        # Extract final text response
-        for block in response.content:
-            if hasattr(block, "text"):
-                return block.text, transfer_number
+        contents.append(genai_types.Content(role="user", parts=fn_parts))
 
-        return "I'm here. How can I help?", transfer_number
+        _t2 = _time.time()
+        response = await asyncio.to_thread(
+            llm_client.models.generate_content,
+            model=LLM_MODEL, contents=contents, config=config
+        )
+        logger.info(f"[gemini] follow-up LLM call took {round(_time.time()-_t2, 2)}s")
 
-    except Exception as e:
-        logger.error(f"Claude error: {e}")
-        return "I'm having a moment. Could you repeat that?", None
+    # Extract text
+    if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+        texts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+        if texts:
+            return "".join(texts), transfer_number
+    return None, transfer_number
+
+
+# ═══════════════════════════════════════════════════════════
+# OPENAI PROVIDER
+# ═══════════════════════════════════════════════════════════
+async def _generate_openai(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None):
+    transfer_number = None
+
+    oai_messages = [{"role": "system", "content": _build_voice_system_prompt()}]
+    for m in messages:
+        oai_messages.append({"role": m["role"], "content": m["content"]})
+
+    response = await asyncio.to_thread(
+        llm_client.chat.completions.create,
+        model=LLM_MODEL, messages=oai_messages, tools=OPENAI_TOOLS
+    )
+
+    for _ in range(5):
+        choice = response.choices[0]
+        if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+            break
+
+        has_slow = any(tc.function.name in SLOW_TOOLS for tc in choice.message.tool_calls)
+        if has_slow:
+            await _maybe_acknowledge(call_info, on_token)
+
+        oai_messages.append(choice.message)
+
+        tool_calls_info = [(tc.function.name, json.loads(tc.function.arguments), tc.id)
+                          for tc in choice.message.tool_calls]
+        processed, xfer = await _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulation, on_tool_event)
+        if xfer:
+            transfer_number = xfer
+
+        for _, _, tc_id, result in processed:
+            oai_messages.append({"role": "tool", "tool_call_id": tc_id, "content": result})
+
+        response = await asyncio.to_thread(
+            llm_client.chat.completions.create,
+            model=LLM_MODEL, messages=oai_messages, tools=OPENAI_TOOLS
+        )
+
+    return response.choices[0].message.content or "", transfer_number
 
 
 class VoiceBrainHandler:
@@ -1101,9 +1506,11 @@ class VoiceBrainHandler:
         self.call_id = call_id
         self.call_info = {}
         self.current_response_id = 0
+        self._response_task = None  # Track in-flight response generation
+        self._send_lock = asyncio.Lock()  # Prevent concurrent WebSocket sends
 
     async def handle(self):
-        """Main handler loop"""
+        """Main handler loop — ping/pong inline, everything else via tasks"""
         await self.websocket.accept()
         logger.info(f"Call {self.call_id} connected")
 
@@ -1112,7 +1519,8 @@ class VoiceBrainHandler:
             "response_type": "config",
             "config": {
                 "auto_reconnect": True,
-                "call_details": True
+                "call_details": True,
+                "transcript_with_tool_calls": True
             }
         })
 
@@ -1120,7 +1528,22 @@ class VoiceBrainHandler:
             while True:
                 data = await self.websocket.receive_text()
                 message = json.loads(data)
-                await self.handle_message(message)
+                interaction_type = message.get("interaction_type")
+
+                if interaction_type == "ping_pong":
+                    # Respond immediately — never block ping/pong
+                    await self.send({
+                        "response_type": "ping_pong",
+                        "timestamp": message.get("timestamp")
+                    })
+                elif interaction_type == "response_required":
+                    # Cancel any in-flight response before starting a new one
+                    if self._response_task and not self._response_task.done():
+                        self._response_task.cancel()
+                        logger.info(f"Cancelled stale response (old_id={self.current_response_id}, new_id={message.get('response_id')})")
+                    self._response_task = asyncio.create_task(self.handle_message(message))
+                else:
+                    asyncio.create_task(self.handle_message(message))
 
         except WebSocketDisconnect:
             logger.info(f"Call {self.call_id} disconnected")
@@ -1128,22 +1551,20 @@ class VoiceBrainHandler:
             logger.error(f"Call {self.call_id} error: {e}", exc_info=True)
 
     async def send(self, data: dict):
-        """Send JSON message to Retell"""
-        await self.websocket.send_text(json.dumps(data))
+        """Send JSON message to Retell (serialized to prevent concurrent sends)"""
+        async with self._send_lock:
+            try:
+                await self.websocket.send_text(json.dumps(data))
+            except Exception as e:
+                logger.warning(f"Send failed for call {self.call_id}: {e}")
 
     async def handle_message(self, message: dict):
         """Handle incoming message from Retell"""
         interaction_type = message.get("interaction_type")
 
-        if interaction_type == "ping_pong":
-            await self.send({
-                "response_type": "ping_pong",
-                "timestamp": message.get("timestamp")
-            })
-
-        elif interaction_type == "call_details":
+        if interaction_type == "call_details":
             self.call_info = message.get("call", {})
-            self.call_info["call_id"] = self.call_id  # Add call_id for simulation tracking
+            self.call_info["call_id"] = self.call_id
             logger.info(f"Call details: from={self.call_info.get('from_number')}, call_id={self.call_id}")
 
             # Generate and send initial greeting
@@ -1160,35 +1581,72 @@ class VoiceBrainHandler:
             self.current_response_id = response_id
             transcript = message.get("transcript", [])
 
-            # Callback for intermediate responses (thinking phrases)
-            async def on_token(token):
-                logger.info(f"Sending intermediate response for ID {response_id}: {token}")
-                await self.send({
+            try:
+                # Callback for intermediate responses (thinking phrases)
+                async def on_token(token):
+                    if response_id != self.current_response_id:
+                        return  # Stale — don't send
+                    logger.info(f"Sending intermediate response for ID {response_id}: {token}")
+                    await self.send({
+                        "response_type": "response",
+                        "response_id": response_id,
+                        "content": token,
+                        "content_complete": False
+                    })
+
+                # Callback for tool call events (visible in Retell transcript)
+                async def on_tool_event(event_type, **kwargs):
+                    if event_type == "invocation":
+                        await self.send({
+                            "response_type": "tool_call_invocation",
+                            "tool_call_id": kwargs.get("tool_call_id", ""),
+                            "name": kwargs.get("name", ""),
+                            "arguments": kwargs.get("arguments", "{}")
+                        })
+                    elif event_type == "result":
+                        await self.send({
+                            "response_type": "tool_call_result",
+                            "tool_call_id": kwargs.get("tool_call_id", ""),
+                            "content": kwargs.get("content", "")
+                        })
+
+                # Generate response
+                response_text, transfer_number = await generate_response(
+                    transcript,
+                    self.call_info,
+                    on_token=on_token,
+                    on_tool_event=on_tool_event
+                )
+
+                # Check staleness before sending final response
+                if response_id != self.current_response_id:
+                    logger.info(f"Discarding stale response for id={response_id} (current={self.current_response_id})")
+                    return
+
+                # Send final response
+                response_data = {
                     "response_type": "response",
                     "response_id": response_id,
-                    "content": token,
-                    "content_complete": False # Retell appends; True would end the turn
-                })
+                    "content": response_text,
+                    "content_complete": True
+                }
 
-            # Generate response
-            response_text, transfer_number = await generate_response(
-                transcript, 
-                self.call_info, 
-                on_token=on_token
-            )
+                if transfer_number:
+                    response_data["transfer_number"] = transfer_number
 
-            # Send final response
-            response_data = {
-                "response_type": "response",
-                "response_id": response_id,
-                "content": response_text,
-                "content_complete": True
-            }
+                await self.send(response_data)
 
-            if transfer_number:
-                response_data["transfer_number"] = transfer_number
-
-            await self.send(response_data)
+            except asyncio.CancelledError:
+                logger.info(f"Response generation cancelled for id={response_id}")
+            except Exception as e:
+                logger.error(f"Response generation error for id={response_id}: {e}", exc_info=True)
+                if response_id == self.current_response_id:
+                    await self.send({
+                        "response_type": "response",
+                        "response_id": response_id,
+                        "content": "I'm having a moment. Could you repeat that?",
+                        "content_complete": True
+                    })
 
         elif interaction_type == "reminder_required":
             response_id = message.get("response_id", 0)
@@ -1200,7 +1658,6 @@ class VoiceBrainHandler:
             })
 
         elif interaction_type == "update_only":
-            # Just a transcript update, no response needed
             pass
 
 
