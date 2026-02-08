@@ -7131,7 +7131,17 @@ async def imessage_webhook(request: Request):
 
     Filters for new-message events, ignores isFromMe, calls ask_gigi(),
     and replies through BlueBubbles REST API.
+
+    Auth: BlueBubbles sends a server password in query params or we validate
+    the request comes from localhost only (since BB runs locally).
     """
+    # Validate request comes from BlueBubbles (localhost)
+    client_host = request.client.host if request.client else ""
+    bb_password = request.query_params.get("password", "")
+    if client_host not in ("127.0.0.1", "::1", "localhost") and bb_password != BLUEBUBBLES_PASSWORD:
+        logger.warning(f"iMessage webhook rejected from {client_host}")
+        return JSONResponse(status_code=401, content={"status": "error", "message": "unauthorized"})
+
     try:
         body = await request.json()
     except Exception:

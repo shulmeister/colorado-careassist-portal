@@ -338,19 +338,19 @@ class MemorySystem:
         """
         decay_rates = {
             MemoryType.EXPLICIT_INSTRUCTION: 0.0,      # Never decays
-            MemoryType.CORRECTION: 0.05 / 30,          # 5% per month
-            MemoryType.CONFIRMED_PATTERN: 0.10 / 30,   # 10% per month
-            MemoryType.INFERRED_PATTERN: 0.20 / 30,    # 20% per month
-            MemoryType.SINGLE_INFERENCE: 0.50 / 7,     # 50% per week
+            MemoryType.CORRECTION: 0.05 / 30,          # 5% per month (~0.0017/day)
+            MemoryType.CONFIRMED_PATTERN: 0.10 / 30,   # 10% per month (~0.0033/day)
+            MemoryType.INFERRED_PATTERN: 0.20 / 30,    # 20% per month (~0.0067/day)
+            MemoryType.SINGLE_INFERENCE: 0.30 / 30,    # 30% per month (~0.01/day) — was 50%/week (too aggressive)
             MemoryType.TEMPORARY: 0.50,                 # 50% per day
         }
 
         inactive_thresholds = {
             MemoryType.EXPLICIT_INSTRUCTION: 0.0,  # Never inactive
-            MemoryType.CORRECTION: 0.5,
-            MemoryType.CONFIRMED_PATTERN: 0.5,
-            MemoryType.INFERRED_PATTERN: 0.4,
-            MemoryType.SINGLE_INFERENCE: 0.3,
+            MemoryType.CORRECTION: 0.3,
+            MemoryType.CONFIRMED_PATTERN: 0.3,
+            MemoryType.INFERRED_PATTERN: 0.2,
+            MemoryType.SINGLE_INFERENCE: 0.15,     # Was 0.3 — too aggressive (killed memories in 3 days)
             MemoryType.TEMPORARY: 0.0,  # Archives after 48hrs
         }
 
