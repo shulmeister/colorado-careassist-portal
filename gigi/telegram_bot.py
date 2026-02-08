@@ -165,7 +165,7 @@ TOOL_NAMES = [
     "get_weather", "get_wellsky_clients", "get_wellsky_caregivers",
     "get_wellsky_shifts", "web_search", "get_stock_price", "get_crypto_price",
     "create_claude_task", "check_claude_task",
-    "save_memory", "recall_memories", "forget_memory",
+    "save_memory", "recall_memories", "forget_memory", "search_memory_logs",
 ]
 
 # Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
@@ -185,9 +185,10 @@ ANTHROPIC_TOOLS = [
     {"name": "get_crypto_price", "description": "Get cryptocurrency price.", "input_schema": {"type": "object", "properties": {"symbol": {"type": "string"}}, "required": ["symbol"]}},
     {"name": "create_claude_task", "description": "Create a task for Claude Code.", "input_schema": {"type": "object", "properties": {"title": {"type": "string"}, "description": {"type": "string"}, "priority": {"type": "string"}, "working_directory": {"type": "string"}}, "required": ["title", "description"]}},
     {"name": "check_claude_task", "description": "Check Claude Code task status.", "input_schema": {"type": "object", "properties": {"task_id": {"type": "integer"}}, "required": []}},
-    {"name": "save_memory", "description": "Save an important preference, fact, or instruction to long-term memory.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "What to remember"}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
+    {"name": "save_memory", "description": "Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred, assumed, or fabricated information.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "The EXACT fact or preference stated by the user. Quote their words, don't embellish."}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
     {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
     {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
+    {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity, tool usage, failures. Use when asked 'what happened on...'", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back to search (default 30)"}}, "required": ["query"]}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -228,12 +229,14 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"title": _s("string", "Short title"), "description": _s("string", "What Claude Code should do"), "priority": _s("string", "Priority: low/normal/high/urgent"), "working_directory": _s("string", "Directory to work in (optional)")}, required=["title", "description"])),
         genai_types.FunctionDeclaration(name="check_claude_task", description="Check the status of a Claude Code task.",
             parameters=genai_types.Schema(type="OBJECT", properties={"task_id": _s("integer", "Task ID (optional, defaults to most recent)")})),
-        genai_types.FunctionDeclaration(name="save_memory", description="Save an important preference, fact, or instruction to long-term memory.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"content": _s("string", "What to remember"), "category": _s("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _s("string", "high/medium/low")}, required=["content", "category"])),
+        genai_types.FunctionDeclaration(name="save_memory", description="Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred or fabricated information.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"content": _s("string", "The EXACT fact or preference stated by the user"), "category": _s("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _s("string", "high/medium/low")}, required=["content", "category"])),
         genai_types.FunctionDeclaration(name="recall_memories", description="Search long-term memory for saved preferences, facts, or instructions.",
             parameters=genai_types.Schema(type="OBJECT", properties={"category": _s("string", "Filter by category"), "search_text": _s("string", "Keywords to search for")})),
         genai_types.FunctionDeclaration(name="forget_memory", description="Archive a memory that is no longer relevant.",
             parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _s("string", "ID of the memory to archive")}, required=["memory_id"])),
+        genai_types.FunctionDeclaration(name="search_memory_logs", description="Search Gigi's daily operation logs for past activity.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _s("string", "Keywords to search"), "days_back": _s("integer", "Days back (default 30)")}, required=["query"])),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -260,9 +263,10 @@ OPENAI_TOOLS = [
     _oai_tool("get_crypto_price", "Get cryptocurrency price.", {"symbol": {"type": "string"}}, ["symbol"]),
     _oai_tool("create_claude_task", "Create a task for Claude Code.", {"title": {"type": "string"}, "description": {"type": "string"}, "priority": {"type": "string"}, "working_directory": {"type": "string"}}, ["title", "description"]),
     _oai_tool("check_claude_task", "Check Claude Code task status.", {"task_id": {"type": "integer"}}),
-    _oai_tool("save_memory", "Save an important preference, fact, or instruction to long-term memory.", {"content": {"type": "string", "description": "What to remember"}, "category": {"type": "string", "description": "Category"}, "importance": {"type": "string", "description": "high/medium/low"}}, ["content", "category"]),
+    _oai_tool("save_memory", "Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something. NEVER save inferred or fabricated information.", {"content": {"type": "string", "description": "The EXACT fact stated by the user"}, "category": {"type": "string", "description": "Category"}, "importance": {"type": "string", "description": "high/medium/low"}}, ["content", "category"]),
     _oai_tool("recall_memories", "Search long-term memory.", {"category": {"type": "string"}, "search_text": {"type": "string"}}),
     _oai_tool("forget_memory", "Archive a memory.", {"memory_id": {"type": "string"}}, ["memory_id"]),
+    _oai_tool("search_memory_logs", "Search Gigi's daily operation logs.", {"query": {"type": "string"}, "days_back": {"type": "integer"}}, ["query"]),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -273,7 +277,7 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 3. CONDITIONAL AUTONOMY: Act first on low-risk items. Only ask for money/reputation/legal/irreversible.
 4. STATE AWARENESS: Adjust your verbosity and urgency threshold to the current situation.
 5. OPINIONATED DECISIONS: Always lead with your recommendation + why + risk + one fallback. Never dump options without an opinion.
-6. MEMORY: Save important preferences and facts using save_memory. Search your memory before asking questions already answered.
+6. MEMORY: ONLY save facts the user EXPLICITLY states. NEVER infer, assume, or fabricate memories. Search your memory before asking questions already answered.
 7. PATTERN DETECTION: If you notice a repeating problem, flag it proactively.
 8. VOICE FIDELITY: Sound like a real person. No AI fluff, no hedging, no "I'd be happy to help."
 9. SELF-MONITORING: If you're getting verbose or drifting from your role, correct yourself.
@@ -970,6 +974,14 @@ class GigiTelegramBot:
                         _memory_system._log_event(cur, memory_id, "archived", memory.confidence, memory.confidence, "User requested forget")
                     conn.commit()
                 return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
+
+            elif tool_name == "search_memory_logs":
+                from gigi.memory_logger import MemoryLogger
+                ml = MemoryLogger()
+                query = tool_input.get("query", "")
+                days_back = tool_input.get("days_back", 30)
+                results = ml.search_logs(query, days_back=days_back)
+                return json.dumps({"query": query, "results": results[:10], "total": len(results)})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})

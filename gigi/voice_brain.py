@@ -435,11 +435,11 @@ ANTHROPIC_TOOLS = [
     },
     {
         "name": "save_memory",
-        "description": "Save an important preference, fact, or instruction to long-term memory. Use when someone tells you something you should remember for the future.",
+        "description": "Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred, assumed, or fabricated information. If unsure, ask before saving.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "content": {"type": "string", "description": "What to remember (e.g., 'Jason prefers direct flights')"},
+                "content": {"type": "string", "description": "The EXACT fact or preference stated by the user. Quote their words, don't paraphrase or embellish."},
                 "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"},
                 "importance": {"type": "string", "description": "How important: high (money/legal/reputation), medium (scheduling/communication), low (preferences)", "enum": ["high", "medium", "low"]}
             },
@@ -467,6 +467,18 @@ ANTHROPIC_TOOLS = [
                 "memory_id": {"type": "string", "description": "ID of the memory to archive"}
             },
             "required": ["memory_id"]
+        }
+    },
+    {
+        "name": "search_memory_logs",
+        "description": "Search Gigi's daily operation logs for past conversations, tool usage, failures, and patterns. Use when asked about past activity or 'what happened on...'",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Keywords to search for in past logs"},
+                "days_back": {"type": "integer", "description": "How many days back to search (default 30)"}
+            },
+            "required": ["query"]
         }
     }
 ]
@@ -502,7 +514,7 @@ _VOICE_SYSTEM_PROMPT_BASE = """You are Gigi, the AI Chief of Staff for Colorado 
 3. CONDITIONAL AUTONOMY: Act first on low-risk items. Only ask for money/reputation/legal/irreversible.
 4. STATE AWARENESS: Adjust your verbosity and urgency threshold to the current situation.
 5. OPINIONATED DECISIONS: Always lead with your recommendation + why + risk + one fallback. Never dump options without an opinion.
-6. MEMORY: Save important preferences and facts using save_memory. Search your memory before asking questions already answered.
+6. MEMORY: ONLY save facts the user EXPLICITLY states. NEVER infer, assume, or fabricate memories. Search your memory before asking questions already answered.
 7. PATTERN DETECTION: If you notice a repeating problem, flag it proactively.
 8. VOICE FIDELITY: Sound like a real person. No AI fluff, no hedging, no "I'd be happy to help."
 9. SELF-MONITORING: If you're getting verbose or drifting from your role, correct yourself.
@@ -1171,6 +1183,17 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
             except Exception as e:
                 return json.dumps({"error": f"Failed to archive memory: {str(e)}"})
+
+        elif tool_name == "search_memory_logs":
+            try:
+                from gigi.memory_logger import MemoryLogger
+                ml = MemoryLogger()
+                query = tool_input.get("query", "")
+                days_back = tool_input.get("days_back", 30)
+                results = ml.search_logs(query, days_back=days_back)
+                return json.dumps({"query": query, "results": results[:10], "total": len(results)})
+            except Exception as e:
+                return json.dumps({"error": f"Log search failed: {str(e)}"})
 
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
