@@ -10,7 +10,7 @@ Memory types and decay rates:
 - CORRECTION: 5% per month
 - CONFIRMED_PATTERN: 10% per month
 - INFERRED_PATTERN: 20% per month
-- SINGLE_INFERENCE: 50% per week
+- SINGLE_INFERENCE: 30% per month
 - TEMPORARY: 50% per day (archives after 48hrs)
 """
 

@@ -41,34 +41,36 @@ This is the **unified platform** for Colorado Care Assist, containing:
 
 | Channel | Technology | Handler | Tools | Status |
 |---------|------------|---------|-------|--------|
-| **Voice** | Retell AI Custom LLM | `voice_brain.py` | 21 tools | Working |
-| **SMS** | RC message-store polling | `ringcentral_bot.py` | 15 tools | In Progress |
-| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 15 tools | In Progress |
-| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | 15 tools | In Progress |
+| **Voice** | Retell AI Custom LLM | `voice_brain.py` | 25 tools | Working |
+| **SMS** | RC message-store polling | `ringcentral_bot.py` | 18 tools | Working |
+| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 21 tools | Working |
+| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | 21 tools | Working |
 
 **Other Channels**
 
 | Channel | Technology | Handler | Tools | Status |
 |---------|------------|---------|-------|--------|
-| **Telegram** | Telegram Bot API | `telegram_bot.py` | 21 tools | Working |
-| **Ask-Gigi API** | REST `/api/ask-gigi` | `ask_gigi.py` | 19 tools | Working |
-| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py` | 19 tools | Working |
-| **iMessage** | BlueBubbles webhook | `main.py` → `ask_gigi.py` | 19 tools | Code Done (needs BB GUI setup) |
-| **Menu Bar** | SwiftUI → ask-gigi API | `ask_gigi.py` | 19 tools | Working |
+| **Telegram** | Telegram Bot API | `telegram_bot.py` | 22 tools | Working |
+| **Ask-Gigi API** | REST `/api/ask-gigi` | `ask_gigi.py` | 22 tools | Working |
+| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py` | 22 tools | Working |
+| **iMessage** | BlueBubbles webhook | `main.py` → `ask_gigi.py` | 22 tools | Code Done (needs BB GUI setup) |
+| **Menu Bar** | SwiftUI → ask-gigi API | `ask_gigi.py` | 22 tools | Working |
 
 ### Ask-Gigi API (Feb 8 — Foundation for Apple integrations)
 - **Endpoint:** `POST /api/ask-gigi` (mounted at `/gigi/api/ask-gigi` via unified_app)
 - **Auth:** Bearer token via `GIGI_API_TOKEN` env var
 - **Module:** `gigi/ask_gigi.py` — reuses GigiTelegramBot.execute_tool (no duplication)
-- **All channels that use ask_gigi.py** get the same 19 tools (all Telegram tools)
+- **All channels that use ask_gigi.py** get the same 22 tools (all Telegram tools)
 - **Cross-channel context:** API messages visible from Telegram/SMS and vice versa
 
 ### Tool Sets
-**Shared tools (15):** `get_client_current_status`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `log_call_out`, `identify_caller`, `get_weather`, `web_search`, `get_stock_price`, `get_crypto_price`, `search_concerts`, `get_calendar_events`, `search_emails`, `check_recent_sms`, `send_sms`
+**Telegram tools (22):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_morning_briefing`
 
-**Telegram/API extras (+6):** `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`
+**Voice extras (25 total):** All Telegram tools minus browser tools, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
 
-**Voice-only extras (+6):** `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
+**RC SMS tools (18):** WellSky tools + memory tools + general tools + `search_concerts`, `check_recent_sms`, `send_sms`, `get_morning_briefing`
+
+**RC DM tools (21):** Full Telegram-like set including browser tools + RC-specific tools
 
 ### Gigi's Core Capabilities
 - **WellSky Integration**: Full CRUD on Patients, Practitioners, Appointments, Encounters, DocumentReferences, Subscriptions, ProfileTags, and RelatedPersons. Clock in/out, task logs, shift search, and webhook event subscriptions. See `docs/WELLSKY_HOME_CONNECT_API_REFERENCE.md` for complete endpoint reference.
@@ -80,9 +82,9 @@ This is the **unified platform** for Colorado Care Assist, containing:
 
 ### Gigi Multi-LLM Provider (Feb 7)
 All 3 handlers (`telegram_bot.py`, `voice_brain.py`, `ringcentral_bot.py`) + `ask_gigi.py` support 3 providers.
-- **Config:** `GIGI_LLM_PROVIDER=gemini` + `GIGI_LLM_MODEL=gemini-2.5-flash`
-- **Current production:** Gemini 2.5 Flash — best tool calling + speed + NO API FEES
-- **Default models:** Gemini=`gemini-2.5-flash`, Anthropic=`claude-sonnet-4-20250514`, OpenAI=`gpt-5.1`
+- **Config:** `GIGI_LLM_PROVIDER=gemini` + `GIGI_LLM_MODEL=gemini-3-flash-preview`
+- **Current production:** Gemini 3 Flash Preview — best tool calling + speed + NO API FEES
+- **Default models:** Gemini=`gemini-3-flash-preview`, Anthropic=`claude-sonnet-4-20250514`, OpenAI=`gpt-5.1`
 - Gemini API: use `Part(text=...)` NOT `Part.from_text(...)` (API changed)
 
 ### Gigi Subsystems (Feb 8 — All Active)
@@ -132,9 +134,16 @@ See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
 | Elite Trading | 3002 | com.coloradocareassist.elite-trading | elitetrading.coloradocareassist.com |
 | PowderPulse | 3003 | com.coloradocareassist.powderpulse | powderpulse.coloradocareassist.com |
 | Telegram Bot | - | com.coloradocareassist.telegram-bot | - |
+| RingCentral Bot | - | com.coloradocareassist.gigi-rc-bot | - |
 | Gigi Menu Bar | - | com.coloradocareassist.gigi-menubar | - |
+| BlueBubbles | 1234 | com.bluebubbles.server | - (localhost only) |
+| Clawd Gateway | 8080 | - | clawd.coloradocareassist.com |
 | Memory Decay Cron | - | com.coloradocareassist.gigi-memory-decay | - (3:15 AM daily) |
 | Memory Logger | - | com.coloradocareassist.gigi-memory-logger | - (11:59 PM daily) |
+| Daily Backup | - | com.coloradocareassist.backup | - (3:00 AM daily) |
+| Health Monitor | - | com.coloradocareassist.health-monitor | - (every 5 min) |
+| WellSky Sync | - | com.coloradocareassist.wellsky-sync | - (every 2 hours) |
+| Claude Task Worker | - | com.coloradocareassist.claude-task-worker | - |
 | Cloudflare Tunnel | - | com.cloudflare.cloudflared | - |
 | PostgreSQL 17 | 5432 | homebrew.mxcl.postgresql@17 | - |
 
@@ -148,8 +157,8 @@ See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
 **CRITICAL: NEVER edit production directly. All development happens on staging first.**
 
 ### Database
-- **Connection:** `postgresql://careassist:careassist2026@localhost:5432/careassist`
-- **82 tables** for portal, sales, recruiting, WellSky cache
+- **Connection:** via `DATABASE_URL` env var (PostgreSQL 17, localhost:5432/careassist)
+- **102 tables** for portal, sales, recruiting, WellSky cache, Gigi subsystems
 
 ### Remote Access
 - **Tailscale:** `100.124.88.105` (jasons-mac-mini)
