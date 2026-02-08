@@ -7103,6 +7103,7 @@ JASON_PHONE = "6039971495"
 
 async def _send_imessage_reply(chat_guid: str, text: str):
     """Send a reply via BlueBubbles REST API."""
+    import uuid
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
@@ -7110,8 +7111,9 @@ async def _send_imessage_reply(chat_guid: str, text: str):
                 params={"password": BLUEBUBBLES_PASSWORD},
                 json={
                     "chatGuid": chat_guid,
-                    "text": text,
-                    "method": "private-api",
+                    "message": text,
+                    "method": "apple-script",
+                    "tempGuid": f"temp-{uuid.uuid4()}",
                 },
             )
             if resp.status_code == 200:
