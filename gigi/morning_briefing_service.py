@@ -53,6 +53,14 @@ class MorningBriefingService:
         except Exception as e:
             logger.warning(f"Morning briefing: Google API not available: {e}")
 
+    def generate_briefing(self) -> str:
+        """
+        Generate the morning briefing text on-demand (for tool calls).
+        Returns the full briefing string.
+        """
+        now = self._get_mountain_time()
+        return self._build_briefing(now)
+
     def check_and_send(self) -> bool:
         """
         Called from RC bot's check_and_act() loop every cycle.
@@ -172,21 +180,73 @@ class MorningBriefingService:
         return None
 
     def _get_weather(self) -> Optional[str]:
-        """Get Denver weather from wttr.in."""
+        """Get Denver weather — Open-Meteo (primary) with wttr.in fallback."""
         if not httpx:
             return None
+
+        # Primary: Open-Meteo (free, no API key, very reliable)
         try:
-            with httpx.Client(timeout=10) as client:
+            with httpx.Client(timeout=15) as client:
                 resp = client.get(
-                    "https://wttr.in/Denver,CO",
+                    "https://api.open-meteo.com/v1/forecast",
+                    params={
+                        "latitude": 39.74,
+                        "longitude": -104.98,
+                        "current": "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m",
+                        "daily": "sunrise,sunset",
+                        "temperature_unit": "fahrenheit",
+                        "wind_speed_unit": "mph",
+                        "timezone": "America/Denver",
+                        "forecast_days": 1,
+                    }
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    current = data.get("current", {})
+                    daily = data.get("daily", {})
+                    temp = current.get("temperature_2m", "?")
+                    feels = current.get("apparent_temperature", "?")
+                    humidity = current.get("relative_humidity_2m", "?")
+                    wind = current.get("wind_speed_10m", "?")
+                    code = current.get("weather_code", 0)
+                    condition = self._weather_code_to_text(code)
+                    sunrise = daily.get("sunrise", [""])[0].split("T")[-1] if daily.get("sunrise") else "?"
+                    sunset = daily.get("sunset", [""])[0].split("T")[-1] if daily.get("sunset") else "?"
+                    return (
+                        f"  {condition} {temp}°F (feels like {feels}°F)\n"
+                        f"  Wind: {wind} mph | Humidity: {humidity}%\n"
+                        f"  Sunrise: {sunrise} | Sunset: {sunset}"
+                    )
+        except Exception as e:
+            logger.warning(f"Open-Meteo weather failed: {e}")
+
+        # Fallback: wttr.in
+        try:
+            with httpx.Client(timeout=15) as client:
+                resp = client.get(
+                    "https://wttr.in/Denver%2CCO",
                     params={"format": "%C %t (feels like %f)\nWind: %w | Humidity: %h\nSunrise: %S | Sunset: %s"},
                     headers={"User-Agent": "curl/7.0"}
                 )
                 if resp.status_code == 200:
                     return resp.text.strip()
         except Exception as e:
-            logger.warning(f"Weather fetch failed: {e}")
+            logger.warning(f"wttr.in weather fallback failed: {e}")
         return None
+
+    @staticmethod
+    def _weather_code_to_text(code: int) -> str:
+        """Convert WMO weather code to readable text."""
+        codes = {
+            0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+            45: "Foggy", 48: "Rime fog", 51: "Light drizzle", 53: "Drizzle",
+            55: "Heavy drizzle", 61: "Light rain", 63: "Rain", 65: "Heavy rain",
+            71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains",
+            80: "Light showers", 81: "Showers", 82: "Heavy showers",
+            85: "Light snow showers", 86: "Heavy snow showers",
+            95: "Thunderstorm", 96: "Thunderstorm w/ hail", 99: "Severe thunderstorm",
+        }
+        return codes.get(code, "Unknown")
 
     def _get_calendar(self) -> Optional[str]:
         """Get today's calendar events via Google API."""
@@ -329,23 +389,51 @@ class MorningBriefingService:
         return None
 
     def _get_ski_conditions(self) -> Optional[str]:
-        """Get ski conditions for nearby resorts."""
+        """Get ski conditions for Eldora and Vail via Open-Meteo mountain weather."""
         if not httpx:
             return None
+
+        resorts = [
+            {"name": "Eldora", "lat": 39.94, "lon": -105.58, "elev": 3200},
+            {"name": "Vail", "lat": 39.64, "lon": -106.37, "elev": 3430},
+        ]
+        lines = []
+
         try:
-            with httpx.Client(timeout=10) as client:
-                # wttr.in supports mountain locations
-                resp = client.get(
-                    "https://wttr.in/Eldora+Mountain+CO",
-                    params={"format": "%C %t | Wind: %w | Snow: %p"},
-                    headers={"User-Agent": "curl/7.0"}
-                )
-                if resp.status_code == 200:
-                    eldora = resp.text.strip()
-                    return f"  Eldora: {eldora}"
+            with httpx.Client(timeout=15) as client:
+                for resort in resorts:
+                    try:
+                        resp = client.get(
+                            "https://api.open-meteo.com/v1/forecast",
+                            params={
+                                "latitude": resort["lat"],
+                                "longitude": resort["lon"],
+                                "elevation": resort["elev"],
+                                "current": "temperature_2m,weather_code,wind_speed_10m,snowfall",
+                                "daily": "snowfall_sum",
+                                "temperature_unit": "fahrenheit",
+                                "wind_speed_unit": "mph",
+                                "timezone": "America/Denver",
+                                "forecast_days": 1,
+                            }
+                        )
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            current = data.get("current", {})
+                            daily = data.get("daily", {})
+                            temp = current.get("temperature_2m", "?")
+                            wind = current.get("wind_speed_10m", "?")
+                            code = current.get("weather_code", 0)
+                            condition = self._weather_code_to_text(code)
+                            snow_today = daily.get("snowfall_sum", [0])[0] if daily.get("snowfall_sum") else 0
+                            snow_str = f" | New snow: {snow_today}cm" if snow_today > 0 else ""
+                            lines.append(f"  {resort['name']}: {condition} {temp}°F | Wind: {wind} mph{snow_str}")
+                    except Exception as e:
+                        logger.warning(f"Ski conditions for {resort['name']} failed: {e}")
         except Exception as e:
             logger.warning(f"Ski conditions fetch failed: {e}")
-        return None
+
+        return "\n".join(lines) if lines else None
 
     def _send_telegram(self, message: str):
         """Send message to Jason via Telegram Bot API."""
