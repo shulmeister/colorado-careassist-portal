@@ -502,6 +502,7 @@ class GigiRingCentralBot:
         from gigi.conversation_store import ConversationStore
         self.conversation_store = ConversationStore()
         logger.info("Conversation store initialized (PostgreSQL)")
+        self._reply_lock = asyncio.Lock()  # Prevent concurrent cooldown check + reply races
         # Track active team chat conversations (creator_id -> last_interaction_time)
         self._team_chat_active_conversations = {}
         # Autonomous shift coordination
@@ -2298,13 +2299,14 @@ class GigiRingCentralBot:
             except Exception:
                 pass
 
-        # Store user message and retrieve conversation history from PostgreSQL
+        # Retrieve conversation history from PostgreSQL (user message stored after LLM success)
         clean_phone = self._clean_phone(phone)
-        self.conversation_store.append(clean_phone, "sms", "user", text)
         conv_history = self.conversation_store.get_recent(
             clean_phone, "sms", limit=MAX_CONVERSATION_MESSAGES,
             timeout_minutes=CONVERSATION_TIMEOUT_MINUTES
         )
+        # Append user message to history for LLM context (not yet persisted)
+        conv_history.append({"role": "user", "content": text})
 
         # Inject cross-channel context if this is Jason
         if clean_phone in ("3074598220",):
@@ -2325,6 +2327,8 @@ class GigiRingCentralBot:
             if not final_text:
                 final_text = "Thanks for your message. I'll have the office follow up with you shortly."
 
+            # Persist both user message and assistant reply only after LLM success
+            self.conversation_store.append(clean_phone, "sms", "user", text)
             self.conversation_store.append(clean_phone, "sms", "assistant", final_text)
             return final_text
 
@@ -2364,13 +2368,14 @@ class GigiRingCentralBot:
             except Exception:
                 pass
 
-        # Store user message and retrieve DM conversation history from PostgreSQL
+        # Retrieve DM conversation history from PostgreSQL (user message stored after LLM success)
         dm_user_id = f"dm_{chat_id}"
-        self.conversation_store.append(dm_user_id, "dm", "user", text)
         conv_history = self.conversation_store.get_recent(
             dm_user_id, "dm", limit=MAX_CONVERSATION_MESSAGES,
             timeout_minutes=CONVERSATION_TIMEOUT_MINUTES
         )
+        # Append user message to history for LLM context (not yet persisted)
+        conv_history.append({"role": "user", "content": text})
 
         try:
             if self.llm_provider == "gemini":
@@ -2385,6 +2390,8 @@ class GigiRingCentralBot:
             if not final_text:
                 final_text = "I checked our records but couldn't find the specific information. Please text or call the office for assistance."
 
+            # Persist both user message and assistant reply only after LLM success
+            self.conversation_store.append(dm_user_id, "dm", "user", text)
             self.conversation_store.append(dm_user_id, "dm", "assistant", final_text)
             logger.info(f"LLM DM reply to {sender_name} ({self.llm_provider}, {len(final_text)} chars)")
             return final_text
@@ -2422,7 +2429,8 @@ class GigiRingCentralBot:
             tools=tools,
         )
 
-        response = self.llm.models.generate_content(
+        response = await asyncio.to_thread(
+            self.llm.models.generate_content,
             model=LLM_MODEL, contents=contents, config=config
         )
 
@@ -2470,7 +2478,8 @@ class GigiRingCentralBot:
 
             contents.append(genai_types.Content(role="user", parts=fn_response_parts))
 
-            response = self.llm.models.generate_content(
+            response = await asyncio.to_thread(
+                self.llm.models.generate_content,
                 model=LLM_MODEL, contents=contents, config=config
             )
 
@@ -2495,7 +2504,8 @@ class GigiRingCentralBot:
         messages = [{"role": m["role"], "content": m["content"]}
                     for m in conv_history if isinstance(m.get("content"), str)]
 
-        response = self.llm.messages.create(
+        response = await asyncio.to_thread(
+            self.llm.messages.create,
             model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
             system=system_prompt, tools=tools,
             messages=messages
@@ -2533,7 +2543,8 @@ class GigiRingCentralBot:
             messages.append({"role": "assistant", "content": assistant_content})
             messages.append({"role": "user", "content": tool_results})
 
-            response = self.llm.messages.create(
+            response = await asyncio.to_thread(
+                self.llm.messages.create,
                 model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
                 system=system_prompt, tools=tools,
                 messages=messages
@@ -2546,7 +2557,8 @@ class GigiRingCentralBot:
             logger.info(f"{channel} Anthropic exhausted {tool_round} tool rounds — forcing text summary")
             messages.append({"role": "assistant", "content": [{"type": "text", "text": "Based on the information I've gathered, let me summarize:"}]})
             messages.append({"role": "user", "content": "Please summarize what you found from the tools you just called. Give a direct, complete answer."})
-            summary_response = self.llm.messages.create(
+            summary_response = await asyncio.to_thread(
+                self.llm.messages.create,
                 model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
                 system=system_prompt, messages=messages
             )
@@ -3024,6 +3036,12 @@ class GigiRingCentralBot:
     async def process_reply(self, msg: dict, text: str, reply_method: str = "chat", phone: str = None):
         """Replier Logic: Respond to EVERY unanswered request after-hours.
         Uses Claude + tool calling for dynamic replies, falls back to static templates."""
+
+        async with self._reply_lock:
+            await self._process_reply_inner(msg, text, reply_method, phone)
+
+    async def _process_reply_inner(self, msg: dict, text: str, reply_method: str = "chat", phone: str = None):
+        """Inner implementation of process_reply, called under _reply_lock."""
 
         # LOOP PREVENTION CHECK - Critical safety gate
         if reply_method == "sms" and phone:

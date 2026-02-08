@@ -1532,6 +1532,7 @@ class VoiceBrainHandler:
         self._response_task = None  # Track in-flight response generation
         self._send_lock = asyncio.Lock()  # Prevent concurrent WebSocket sends
         self._greeting_sent = False  # Prevent double greeting
+        self._completed_side_effects = []  # Track side effects completed before cancellation
 
     async def handle(self):
         """Main handler loop — ping/pong inline, everything else via tasks"""
@@ -1633,6 +1634,7 @@ class VoiceBrainHandler:
                     })
 
                 # Callback for tool call events (visible in Retell transcript)
+                pending_side_effects = []  # Track side effects completed during this response
                 async def on_tool_event(event_type, **kwargs):
                     if response_id != self.current_response_id:
                         return  # Stale — don't send
@@ -1644,15 +1646,33 @@ class VoiceBrainHandler:
                             "arguments": kwargs.get("arguments", "{}")
                         })
                     elif event_type == "result":
+                        tool_name = kwargs.get("name", "")
+                        if tool_name in SIDE_EFFECT_TOOLS:
+                            pending_side_effects.append({
+                                "tool": tool_name,
+                                "result": kwargs.get("content", "")[:200]
+                            })
                         await self.send({
                             "response_type": "tool_call_result",
                             "tool_call_id": kwargs.get("tool_call_id", ""),
                             "content": kwargs.get("content", "")
                         })
 
+                # Inject context about previously completed side effects
+                effective_transcript = transcript
+                if self._completed_side_effects:
+                    effects_summary = "; ".join(
+                        f"{e['tool']}: {e['result']}" for e in self._completed_side_effects
+                    )
+                    effective_transcript = list(transcript) + [{
+                        "role": "user",
+                        "content": f"[System note: These actions were already completed during a previous interrupted response: {effects_summary}. Do not repeat them.]"
+                    }]
+                    self._completed_side_effects = []  # Clear after injection
+
                 # Generate response
                 response_text, transfer_number = await generate_response(
-                    transcript,
+                    effective_transcript,
                     self.call_info,
                     on_token=on_token,
                     on_tool_event=on_tool_event
@@ -1677,7 +1697,11 @@ class VoiceBrainHandler:
                 await self.send(response_data)
 
             except asyncio.CancelledError:
-                logger.info(f"Response generation cancelled for id={response_id}")
+                if pending_side_effects:
+                    self._completed_side_effects.extend(pending_side_effects)
+                    logger.info(f"Response cancelled for id={response_id}, preserved {len(pending_side_effects)} side effects")
+                else:
+                    logger.info(f"Response generation cancelled for id={response_id}")
             except Exception as e:
                 logger.error(f"Response generation error for id={response_id}: {e}", exc_info=True)
                 if response_id == self.current_response_id:
