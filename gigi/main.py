@@ -7092,6 +7092,110 @@ async def ask_gigi_endpoint(request: AskGigiRequest, authorization: str = Header
 
 
 # =============================================================================
+# iMessage via BlueBubbles — Webhook handler + reply
+# =============================================================================
+
+BLUEBUBBLES_URL = os.getenv("BLUEBUBBLES_URL", "http://localhost:1234")
+BLUEBUBBLES_PASSWORD = os.getenv("BLUEBUBBLES_PASSWORD", "")
+# Jason's phone number for user_id mapping (last 10 digits)
+JASON_PHONE = "6039971495"
+
+
+async def _send_imessage_reply(chat_guid: str, text: str):
+    """Send a reply via BlueBubbles REST API."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{BLUEBUBBLES_URL}/api/v1/message/text",
+                params={"password": BLUEBUBBLES_PASSWORD},
+                json={
+                    "chatGuid": chat_guid,
+                    "text": text,
+                    "method": "private-api",
+                },
+            )
+            if resp.status_code == 200:
+                logger.info(f"iMessage reply sent to {chat_guid}")
+            else:
+                logger.error(f"iMessage reply failed ({resp.status_code}): {resp.text}")
+    except Exception as e:
+        logger.error(f"iMessage reply error: {e}")
+
+
+@app.post("/webhook/imessage")
+async def imessage_webhook(request: Request):
+    """
+    BlueBubbles webhook — receives iMessage events and auto-replies via Gigi.
+
+    Filters for new-message events, ignores isFromMe, calls ask_gigi(),
+    and replies through BlueBubbles REST API.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return {"status": "ok", "message": "invalid json"}
+
+    event_type = body.get("type", "")
+
+    # Only handle new incoming messages
+    if event_type != "new-message":
+        return {"status": "ok", "message": f"ignored event: {event_type}"}
+
+    data = body.get("data", {})
+
+    # Ignore messages sent by us (prevent loops)
+    if data.get("isFromMe", True):
+        return {"status": "ok", "message": "ignored own message"}
+
+    # Ignore system messages and empty messages
+    text = (data.get("text") or "").strip()
+    if not text or data.get("isSystemMessage") or data.get("isServiceMessage"):
+        return {"status": "ok", "message": "ignored non-text"}
+
+    # Extract sender info
+    handle = data.get("handle", {})
+    sender_address = handle.get("address", "unknown")
+
+    # Extract chat GUID for reply
+    chats = data.get("chats", [])
+    if not chats:
+        logger.warning("iMessage webhook: no chat info, cannot reply")
+        return {"status": "ok", "message": "no chat guid"}
+    chat_guid = chats[0].get("guid", "")
+
+    # Map sender to user_id
+    # Clean phone to last 10 digits for matching
+    clean_sender = sender_address.lstrip("+").replace("-", "").replace(" ", "")
+    if len(clean_sender) > 10:
+        clean_sender = clean_sender[-10:]
+    user_id = "jason" if clean_sender == JASON_PHONE else f"imsg_{clean_sender}"
+
+    logger.info(f"iMessage from {sender_address} (user_id={user_id}): {text[:100]}")
+
+    if not BLUEBUBBLES_PASSWORD:
+        logger.error("BLUEBUBBLES_PASSWORD not configured, cannot reply")
+        return {"status": "error", "message": "BlueBubbles not configured"}
+
+    # Call Gigi asynchronously (don't block the webhook response)
+    async def _process_and_reply():
+        try:
+            from gigi.ask_gigi import ask_gigi
+            response_text = await ask_gigi(
+                text=text,
+                user_id=user_id,
+                channel="imessage",
+            )
+            await _send_imessage_reply(chat_guid, response_text)
+        except Exception as e:
+            logger.error(f"iMessage processing error: {e}", exc_info=True)
+            await _send_imessage_reply(chat_guid, f"Sorry, I hit an error: {str(e)[:100]}")
+
+    asyncio.ensure_future(_process_and_reply())
+
+    return {"status": "ok", "message": "processing"}
+
+
+# =============================================================================
 # Run with Uvicorn
 # =============================================================================
 
