@@ -254,6 +254,7 @@ SMS_TOOLS = [
     {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
     {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back (default 30)"}}, "required": ["query"]}},
+    {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # Full tool set for Glip DM replies — matches Telegram capabilities
@@ -277,6 +278,9 @@ DM_TOOLS = [
     {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
     {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back (default 30)"}}, "required": ["query"]}},
+    {"name": "browse_webpage", "description": "Browse a webpage and extract its text content. Use for research, reading articles, checking websites.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links (default false)"}}, "required": ["url"]}},
+    {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
+    {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # =========================================================================
@@ -311,6 +315,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _gs("string", "ID of the memory to archive")}, required=["memory_id"])),
         genai_types.FunctionDeclaration(name="search_memory_logs", description="Search Gigi's daily operation logs for past activity.",
             parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Keywords to search"), "days_back": _gs("integer", "Days back (default 30)")}, required=["query"])),
+        genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
     GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
@@ -352,6 +358,12 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _gs("string", "ID of the memory to archive")}, required=["memory_id"])),
         genai_types.FunctionDeclaration(name="search_memory_logs", description="Search Gigi's daily operation logs for past activity.",
             parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Keywords to search"), "days_back": _gs("integer", "Days back (default 30)")}, required=["query"])),
+        genai_types.FunctionDeclaration(name="browse_webpage", description="Browse a webpage and extract its text content. Use for research, reading articles, checking websites.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"url": _gs("string", "URL to browse"), "extract_links": _gs("boolean", "Also extract links (default false)")}, required=["url"])),
+        genai_types.FunctionDeclaration(name="take_screenshot", description="Take a screenshot of a webpage. Returns the file path of the saved image.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"url": _gs("string", "URL to screenshot"), "full_page": _gs("boolean", "Capture full scrollable page (default false)")}, required=["url"])),
+        genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
@@ -2226,6 +2238,11 @@ class GigiRingCentralBot:
                 results = ml.search_logs(query, days_back=days_back)
                 return json.dumps({"query": query, "results": results[:10], "total": len(results)})
 
+            elif tool_name == "get_morning_briefing":
+                from gigi.morning_briefing_service import MorningBriefingService
+                svc = MorningBriefingService()
+                return svc.generate_briefing()
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -2941,6 +2958,27 @@ class GigiRingCentralBot:
                 days_back = tool_input.get("days_back", 30)
                 results = ml.search_logs(query, days_back=days_back)
                 return json.dumps({"query": query, "results": results[:10], "total": len(results)})
+
+            elif tool_name == "browse_webpage":
+                from gigi.browser_automation import get_browser
+                browser = get_browser()
+                url = tool_input.get("url", "")
+                extract_links = tool_input.get("extract_links", False)
+                result = await browser.browse_webpage(url, extract_links=extract_links)
+                return json.dumps(result)
+
+            elif tool_name == "take_screenshot":
+                from gigi.browser_automation import get_browser
+                browser = get_browser()
+                url = tool_input.get("url", "")
+                full_page = tool_input.get("full_page", False)
+                result = await browser.take_screenshot(url, full_page=full_page)
+                return json.dumps(result)
+
+            elif tool_name == "get_morning_briefing":
+                from gigi.morning_briefing_service import MorningBriefingService
+                svc = MorningBriefingService()
+                return svc.generate_briefing()
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
