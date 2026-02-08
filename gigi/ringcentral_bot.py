@@ -141,7 +141,6 @@ LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemin
 LLM_MAX_TOKENS = 1024
 LLM_MAX_TOOL_ROUNDS = 5
 CONVERSATION_TIMEOUT_MINUTES = 30
-CONVERSATION_HISTORY_FILE = "/Users/shulmeister/.gigi-sms-conversations.json"
 MAX_CONVERSATION_MESSAGES = 10
 
 # Tools available to Claude for SMS replies
@@ -487,7 +486,9 @@ class GigiRingCentralBot:
                 logger.warning(f"Provider '{LLM_PROVIDER}' not available, falling back to anthropic")
             else:
                 logger.warning("No LLM provider available - using static replies")
-        self.sms_conversations = self._load_sms_conversations()
+        from gigi.conversation_store import ConversationStore
+        self.conversation_store = ConversationStore()
+        logger.info("Conversation store initialized (PostgreSQL)")
         # Track active team chat conversations (creator_id -> last_interaction_time)
         self._team_chat_active_conversations = {}
         # Autonomous shift coordination
@@ -1991,88 +1992,9 @@ class GigiRingCentralBot:
     # Claude SMS Conversation History
     # =========================================================================
 
-    def _load_sms_conversations(self) -> dict:
-        """Load SMS conversation history, pruning expired conversations"""
-        try:
-            from pathlib import Path
-            history_file = Path(CONVERSATION_HISTORY_FILE)
-            if history_file.exists():
-                with open(history_file, 'r') as f:
-                    data = json.load(f)
-                now = datetime.utcnow()
-                pruned = {}
-                for phone, convo in data.items():
-                    last_activity = datetime.fromisoformat(convo.get("last_activity", "2000-01-01"))
-                    if (now - last_activity).total_seconds() < CONVERSATION_TIMEOUT_MINUTES * 60:
-                        pruned[phone] = convo
-                return pruned
-        except Exception as e:
-            logger.warning(f"Could not load SMS conversations: {e}")
-        return {}
-
-    def _save_sms_conversations(self):
-        """Persist SMS conversation history"""
-        try:
-            with open(CONVERSATION_HISTORY_FILE, 'w') as f:
-                json.dump(self.sms_conversations, f, indent=2, default=str)
-        except Exception as e:
-            logger.warning(f"Could not save SMS conversations: {e}")
-
-    def _get_conversation_history(self, phone: str) -> list:
-        """Get conversation messages for a phone number, resetting if expired"""
-        clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
-        convo = self.sms_conversations.get(clean_phone, {})
-
-        last_activity = convo.get("last_activity")
-        if last_activity:
-            try:
-                last_dt = datetime.fromisoformat(last_activity)
-                if (datetime.utcnow() - last_dt).total_seconds() > CONVERSATION_TIMEOUT_MINUTES * 60:
-                    logger.info(f"Conversation timeout for ...{clean_phone[-4:]}, resetting")
-                    self.sms_conversations.pop(clean_phone, None)
-                    return []
-            except (ValueError, TypeError):
-                pass
-
-        msgs = list(convo.get("messages", []))
-        # Validate: strip ALL leading orphaned messages until we hit a plain user text.
-        # Orphaned = assistant messages OR user messages containing tool_result
-        # (both crash Claude if they appear without proper preceding context)
-        changed = True
-        while changed and msgs:
-            changed = False
-            # Strip leading assistant messages (orphaned tool_use or stale text)
-            if msgs[0].get("role") == "assistant":
-                msgs.pop(0)
-                changed = True
-                continue
-            # Strip leading user messages that contain tool_result (orphaned)
-            if msgs[0].get("role") == "user" and isinstance(msgs[0].get("content"), list):
-                has_tool_result = any(
-                    isinstance(c, dict) and c.get("type") == "tool_result"
-                    for c in msgs[0]["content"]
-                )
-                if has_tool_result:
-                    msgs.pop(0)
-                    changed = True
-                    continue
-        return msgs
-
-    def _add_to_conversation(self, phone: str, role: str, content):
-        """Append a message to conversation history for a phone number"""
-        clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
-
-        if clean_phone not in self.sms_conversations:
-            self.sms_conversations[clean_phone] = {"messages": [], "last_activity": datetime.utcnow().isoformat()}
-
-        convo = self.sms_conversations[clean_phone]
-        convo["messages"].append({"role": role, "content": content})
-        convo["last_activity"] = datetime.utcnow().isoformat()
-
-        if len(convo["messages"]) > MAX_CONVERSATION_MESSAGES:
-            convo["messages"] = convo["messages"][-MAX_CONVERSATION_MESSAGES:]
-
-        self._save_sms_conversations()
+    def _clean_phone(self, phone: str) -> str:
+        """Normalize phone to last 10 digits."""
+        return ''.join(filter(str.isdigit, phone))[-10:]
 
     # =========================================================================
     # SMS Tool Execution
@@ -2348,10 +2270,19 @@ class GigiRingCentralBot:
             except Exception:
                 pass
 
-        # Get text-only conversation history for context
-        conv_history = self._get_conversation_history(phone)
-        conv_history.append({"role": "user", "content": text})
-        self._add_to_conversation(phone, "user", text)
+        # Store user message and retrieve conversation history from PostgreSQL
+        clean_phone = self._clean_phone(phone)
+        self.conversation_store.append(clean_phone, "sms", "user", text)
+        conv_history = self.conversation_store.get_recent(
+            clean_phone, "sms", limit=MAX_CONVERSATION_MESSAGES,
+            timeout_minutes=CONVERSATION_TIMEOUT_MINUTES
+        )
+
+        # Inject cross-channel context if this is Jason
+        if clean_phone in ("3074598220",):
+            xc = self.conversation_store.get_cross_channel_summary("jason", "sms", limit=5, hours=4)
+            if xc:
+                system += xc
 
         try:
             if self.llm_provider == "gemini":
@@ -2366,7 +2297,7 @@ class GigiRingCentralBot:
             if not final_text:
                 final_text = "Thanks for your message. I'll have the office follow up with you shortly."
 
-            self._add_to_conversation(phone, "assistant", final_text)
+            self.conversation_store.append(clean_phone, "sms", "assistant", final_text)
             return final_text
 
         except Exception as e:
@@ -2405,10 +2336,13 @@ class GigiRingCentralBot:
             except Exception:
                 pass
 
-        conv_key = f"dm_{chat_id}"
-        conv_history = self._get_conversation_history(conv_key)
-        conv_history.append({"role": "user", "content": text})
-        self._add_to_conversation(conv_key, "user", text)
+        # Store user message and retrieve DM conversation history from PostgreSQL
+        dm_user_id = f"dm_{chat_id}"
+        self.conversation_store.append(dm_user_id, "dm", "user", text)
+        conv_history = self.conversation_store.get_recent(
+            dm_user_id, "dm", limit=MAX_CONVERSATION_MESSAGES,
+            timeout_minutes=CONVERSATION_TIMEOUT_MINUTES
+        )
 
         try:
             if self.llm_provider == "gemini":
@@ -2423,16 +2357,14 @@ class GigiRingCentralBot:
             if not final_text:
                 final_text = "I checked our records but couldn't find the specific information. Please text or call the office for assistance."
 
-            self._add_to_conversation(conv_key, "assistant", final_text)
+            self.conversation_store.append(dm_user_id, "dm", "assistant", final_text)
             logger.info(f"LLM DM reply to {sender_name} ({self.llm_provider}, {len(final_text)} chars)")
             return final_text
 
         except Exception as e:
             logger.error(f"LLM DM reply error ({self.llm_provider}): {e}", exc_info=True)
-            # If conversation history is corrupted, clear and return None
-            clean_key = ''.join(filter(str.isdigit, conv_key))[-10:]
-            self.sms_conversations.pop(clean_key, None)
-            self._save_sms_conversations()
+            # If conversation history is corrupted, clear and retry
+            self.conversation_store.clear_channel(dm_user_id, "dm")
             return None
 
     # =========================================================================

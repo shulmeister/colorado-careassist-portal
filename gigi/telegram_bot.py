@@ -333,8 +333,8 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 """
 
 
-def _build_telegram_system_prompt():
-    """Build the system prompt with dynamic context: date, memories, mode."""
+def _build_telegram_system_prompt(conversation_store=None):
+    """Build the system prompt with dynamic context: date, memories, mode, cross-channel."""
     parts = [_TELEGRAM_SYSTEM_PROMPT_BASE]
 
     # Current date/time
@@ -357,6 +357,15 @@ def _build_telegram_system_prompt():
                 parts.append("\n# Your Saved Memories\n" + "\n".join(memory_lines))
         except Exception as e:
             logger.warning(f"Memory injection failed: {e}")
+
+    # Inject cross-channel context
+    if conversation_store:
+        try:
+            xc = conversation_store.get_cross_channel_summary("jason", "telegram", limit=5, hours=4)
+            if xc:
+                parts.append(xc)
+        except Exception as e:
+            logger.warning(f"Cross-channel context failed: {e}")
 
     return "\n".join(parts)
 
@@ -385,7 +394,9 @@ class GigiTelegramBot:
 
         self.wellsky = WellSkyService() if WellSkyService else None
         self.google = GoogleService() if GoogleService else None
-        self.conversation_history = {}  # {user_id: [{role, content}]} — text-only, provider-agnostic
+        from gigi.conversation_store import ConversationStore
+        self.conversation_store = ConversationStore()
+        logger.info("Conversation store initialized (PostgreSQL)")
 
         # Log service status on startup
         logger.info(f"   LLM Provider: {LLM_PROVIDER} | Model: {LLM_MODEL}")
@@ -1038,19 +1049,8 @@ class GigiTelegramBot:
 
         logger.info(f"Message from Jason: {message_text}")
 
-        # Initialize conversation history for this user
-        if user_id not in self.conversation_history:
-            self.conversation_history[user_id] = []
-
-        # Add user message to history (text-only, provider-agnostic)
-        self.conversation_history[user_id].append({
-            "role": "user",
-            "content": message_text
-        })
-
-        # Keep only last 20 messages
-        if len(self.conversation_history[user_id]) > 20:
-            self.conversation_history[user_id] = self.conversation_history[user_id][-20:]
+        # Store user message in shared conversation store
+        self.conversation_store.append("jason", "telegram", "user", message_text)
 
         # Send typing indicator
         await update.message.chat.send_action("typing")
@@ -1073,11 +1073,8 @@ class GigiTelegramBot:
             if not final_text:
                 final_text = "I processed your request but have no text response. Please try again."
 
-            # Add final assistant response to history (text-only)
-            self.conversation_history[user_id].append({
-                "role": "assistant",
-                "content": final_text
-            })
+            # Store assistant response in shared conversation store
+            self.conversation_store.append("jason", "telegram", "assistant", final_text)
 
             # Send response (split if too long for Telegram)
             if len(final_text) > 4000:
@@ -1097,13 +1094,14 @@ class GigiTelegramBot:
     # ═══════════════════════════════════════════════════════════
     async def _call_anthropic(self, user_id: int, update: Update) -> str:
         """Call Anthropic Claude with tool support."""
-        # Build Anthropic-format messages from text-only history
-        messages = [{"role": m["role"], "content": m["content"]}
-                    for m in self.conversation_history[user_id]]
+        # Build Anthropic-format messages from shared conversation store
+        history = self.conversation_store.get_recent("jason", "telegram", limit=20)
+        messages = [{"role": m["role"], "content": m["content"]} for m in history]
 
+        sys_prompt = _build_telegram_system_prompt(self.conversation_store)
         response = self.llm.messages.create(
             model=LLM_MODEL, max_tokens=4096,
-            system=_build_telegram_system_prompt(), tools=ANTHROPIC_TOOLS,
+            system=sys_prompt, tools=ANTHROPIC_TOOLS,
             messages=messages
         )
 
@@ -1140,7 +1138,7 @@ class GigiTelegramBot:
             await update.message.chat.send_action("typing")
             response = self.llm.messages.create(
                 model=LLM_MODEL, max_tokens=4096,
-                system=_build_telegram_system_prompt(), tools=ANTHROPIC_TOOLS,
+                system=sys_prompt, tools=ANTHROPIC_TOOLS,
                 messages=messages
             )
 
@@ -1152,9 +1150,10 @@ class GigiTelegramBot:
     # ═══════════════════════════════════════════════════════════
     async def _call_gemini(self, user_id: int, update: Update) -> str:
         """Call Google Gemini with tool support."""
-        # Build Gemini-format contents from text-only history
+        # Build Gemini-format contents from shared conversation store
+        history = self.conversation_store.get_recent("jason", "telegram", limit=20)
         contents = []
-        for m in self.conversation_history[user_id]:
+        for m in history:
             role = "user" if m["role"] == "user" else "model"
             contents.append(genai_types.Content(
                 role=role,
@@ -1162,7 +1161,7 @@ class GigiTelegramBot:
             ))
 
         config = genai_types.GenerateContentConfig(
-            system_instruction=_build_telegram_system_prompt(),
+            system_instruction=_build_telegram_system_prompt(self.conversation_store),
             tools=GEMINI_TOOLS,
         )
 
@@ -1229,9 +1228,10 @@ class GigiTelegramBot:
     # ═══════════════════════════════════════════════════════════
     async def _call_openai(self, user_id: int, update: Update) -> str:
         """Call OpenAI with tool support."""
-        # Build OpenAI-format messages
-        messages = [{"role": "system", "content": _build_telegram_system_prompt()}]
-        for m in self.conversation_history[user_id]:
+        # Build OpenAI-format messages from shared conversation store
+        history = self.conversation_store.get_recent("jason", "telegram", limit=20)
+        messages = [{"role": "system", "content": _build_telegram_system_prompt(self.conversation_store)}]
+        for m in history:
             messages.append({"role": m["role"], "content": m["content"]})
 
         response = self.llm.chat.completions.create(

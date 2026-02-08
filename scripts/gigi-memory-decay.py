@@ -52,5 +52,14 @@ def main():
         logger.info(f"Archived {archived} memories below threshold")
     logger.info(f"Memory decay complete. {len(after)} active memories remain.")
 
+    # Prune old conversations (>72 hours)
+    try:
+        from gigi.conversation_store import ConversationStore
+        cs = ConversationStore()
+        pruned = cs.prune_old(max_age_hours=72)
+        logger.info(f"Conversation prune: removed {pruned} messages older than 72h")
+    except Exception as e:
+        logger.warning(f"Conversation prune failed: {e}")
+
 if __name__ == "__main__":
     main()
