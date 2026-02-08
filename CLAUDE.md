@@ -333,7 +333,7 @@ This script will:
 2. Merge staging → main
 3. Rebuild production
 4. Restart production
-5. Verify production is healthy (retries up to 30s for slow boots)
+5. Verify production is healthy (retries up to 60s for slow boots)
 
 ### Key Scripts
 
