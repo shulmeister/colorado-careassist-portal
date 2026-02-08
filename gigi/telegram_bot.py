@@ -413,6 +413,7 @@ class GigiTelegramBot:
         self.google = GoogleService() if GoogleService else None
         from gigi.conversation_store import ConversationStore
         self.conversation_store = ConversationStore()
+        self._message_lock = asyncio.Lock()  # Prevent concurrent message handling
         logger.info("Conversation store initialized (PostgreSQL)")
 
         # Log service status on startup
@@ -455,102 +456,70 @@ class GigiTelegramBot:
                 if not client_name:
                     return json.dumps({"error": "No client name provided"})
 
-                import psycopg2
-                from datetime import datetime
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+                def _sync_client_status(name_val):
+                    import psycopg2
+                    from datetime import datetime
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+                    conn = None
+                    try:
+                        conn = psycopg2.connect(db_url)
+                        cur = conn.cursor()
+                        search_lower = f"%{name_val.lower()}%"
+                        cur.execute("""
+                            SELECT id, full_name, address, city
+                            FROM cached_patients
+                            WHERE is_active = true
+                            AND (lower(full_name) LIKE %s OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
+                            LIMIT 1
+                        """, (search_lower, search_lower, search_lower))
+                        client_row = cur.fetchone()
+                        if not client_row:
+                            return {"status": "not_found", "message": f"Could not find active client matching '{name_val}'"}
+                        client_id, client_full_name, addr, city = client_row
+                        cur.execute("""
+                            SELECT a.scheduled_start, a.scheduled_end,
+                                   p.full_name as caregiver_name, p.phone as caregiver_phone, a.status
+                            FROM cached_appointments a
+                            LEFT JOIN cached_practitioners p ON a.practitioner_id = p.id
+                            WHERE a.patient_id = %s
+                            AND a.scheduled_start >= CURRENT_DATE
+                            AND a.scheduled_start < CURRENT_DATE + INTERVAL '1 day'
+                            ORDER BY a.scheduled_start ASC
+                        """, (client_id,))
+                        shifts = cur.fetchall()
+                        if not shifts:
+                            return {"client": client_full_name, "status": "no_shifts",
+                                    "message": f"No shifts scheduled for {client_full_name} today."}
+                        now = datetime.now()
+                        current_shift = next_shift = last_shift = None
+                        for s in shifts:
+                            start, end, cg_name, cg_phone, status = s
+                            if start <= now <= end:
+                                current_shift = s; break
+                            elif start > now:
+                                if not next_shift: next_shift = s
+                            elif end < now:
+                                last_shift = s
+                        if current_shift:
+                            start, end, cg_name, _, _ = current_shift
+                            return {"client": client_full_name, "status": "active",
+                                    "message": f"YES. {cg_name} is with {client_full_name} right now.\nShift: {start.strftime('%I:%M %p')} - {end.strftime('%I:%M %p')}\nLocation: {addr}, {city}"}
+                        elif next_shift:
+                            start, end, cg_name, _, _ = next_shift
+                            return {"client": client_full_name, "status": "upcoming",
+                                    "message": f"No one is there right now. Next shift is {cg_name} at {start.strftime('%I:%M %p')}."}
+                        else:
+                            start, end, cg_name, _, _ = last_shift if last_shift else (None, None, "None", None, None)
+                            msg = f"No one is there right now. {cg_name} finished at {end.strftime('%I:%M %p')}." if last_shift else f"No active shifts right now for {client_full_name}."
+                            return {"client": client_full_name, "status": "completed", "message": msg}
+                    except Exception as e:
+                        logger.error(f"Status check failed: {e}")
+                        return {"error": str(e)}
+                    finally:
+                        if conn: conn.close()
 
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-
-                    # 1. Find Client
-                    search_lower = f"%{client_name.lower()}%"
-                    cur.execute("""
-                        SELECT id, full_name, address, city
-                        FROM cached_patients
-                        WHERE is_active = true
-                        AND (lower(full_name) LIKE %s OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
-                        LIMIT 1
-                    """, (search_lower, search_lower, search_lower))
-
-                    client_row = cur.fetchone()
-                    if not client_row:
-                        return json.dumps({"status": "not_found", "message": f"Could not find active client matching '{client_name}'"})
-
-                    client_id, client_full_name, addr, city = client_row
-
-                    # 2. Get Today's Shifts
-                    cur.execute("""
-                        SELECT
-                            a.scheduled_start,
-                            a.scheduled_end,
-                            p.full_name as caregiver_name,
-                            p.phone as caregiver_phone,
-                            a.status
-                        FROM cached_appointments a
-                        LEFT JOIN cached_practitioners p ON a.practitioner_id = p.id
-                        WHERE a.patient_id = %s
-                        AND a.scheduled_start >= CURRENT_DATE
-                        AND a.scheduled_start < CURRENT_DATE + INTERVAL '1 day'
-                        ORDER BY a.scheduled_start ASC
-                    """, (client_id,))
-
-                    shifts = cur.fetchall()
-
-                    if not shifts:
-                        return json.dumps({
-                            "client": client_full_name,
-                            "status": "no_shifts",
-                            "message": f"No shifts scheduled for {client_full_name} today."
-                        })
-
-                    # 3. Analyze Status
-                    now = datetime.now()
-                    current_shift = None
-                    next_shift = None
-                    last_shift = None
-
-                    for s in shifts:
-                        start, end, cg_name, cg_phone, status = s
-                        if start <= now <= end:
-                            current_shift = s
-                            break
-                        elif start > now:
-                            if not next_shift:
-                                next_shift = s
-                        elif end < now:
-                            last_shift = s
-
-                    if current_shift:
-                        start, end, cg_name, _, _ = current_shift
-                        return json.dumps({
-                            "client": client_full_name,
-                            "status": "active",
-                            "message": f"YES. {cg_name} is with {client_full_name} right now.\nShift: {start.strftime('%I:%M %p')} - {end.strftime('%I:%M %p')}\nLocation: {addr}, {city}"
-                        })
-                    elif next_shift:
-                        start, end, cg_name, _, _ = next_shift
-                        return json.dumps({
-                            "client": client_full_name,
-                            "status": "upcoming",
-                            "message": f"No one is there right now. Next shift is {cg_name} at {start.strftime('%I:%M %p')}."
-                        })
-                    else:
-                        start, end, cg_name, _, _ = last_shift if last_shift else (None, None, "None", None, None)
-                        msg = f"No one is there right now. {cg_name} finished at {end.strftime('%I:%M %p')}." if last_shift else f"No active shifts right now for {client_full_name}."
-                        return json.dumps({
-                            "client": client_full_name,
-                            "status": "completed",
-                            "message": msg
-                        })
-
-                except Exception as e:
-                    logger.error(f"Status check failed: {e}")
-                    return json.dumps({"error": str(e)})
-                finally:
-                    if conn:
-                        conn.close()
+                result = await asyncio.to_thread(_sync_client_status, client_name)
+                return json.dumps(result)
 
             elif tool_name == "get_calendar_events":
                 if not self.google:
@@ -600,10 +569,12 @@ class GigiTelegramBot:
                 except Exception as e:
                     logger.warning(f"wttr.in failed: {e}")
 
-                # Fallback: DDG search
+                # Fallback: DDG search (sync — run in thread)
                 try:
                     from ddgs import DDGS
-                    results = DDGS().text(f"current weather {location}", max_results=1)
+                    def _ddg_weather():
+                        return list(DDGS().text(f"current weather {location}", max_results=1))
+                    results = await asyncio.to_thread(_ddg_weather)
                     if results:
                         return json.dumps({"location": location, "weather": results[0].get("body")})
                 except Exception as e:
@@ -612,173 +583,152 @@ class GigiTelegramBot:
                 return json.dumps({"error": "Weather service temporarily unavailable"})
 
             elif tool_name == "get_wellsky_clients":
-                # Use cached database for reliable client lookup (synced daily from WellSky)
-                import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
                 active_only = tool_input.get("active_only", True)
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-                    if search_name:
-                        search_lower = f"%{search_name.lower()}%"
-                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email
-                                 FROM cached_patients WHERE (lower(full_name) LIKE %s
-                                 OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
-                        params = [search_lower, search_lower, search_lower]
-                        if active_only:
-                            sql += " AND is_active = true"
-                        sql += " ORDER BY full_name LIMIT 20"
-                        cur.execute(sql, params)
-                    else:
-                        sql = "SELECT id, first_name, last_name, full_name, phone, home_phone, email FROM cached_patients"
-                        if active_only:
-                            sql += " WHERE is_active = true"
-                        sql += " ORDER BY full_name LIMIT 100"
-                        cur.execute(sql)
-                    rows = cur.fetchall()
-                    client_list = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2],
-                                    "name": r[3], "phone": r[4] or r[5] or "", "email": r[6] or ""} for r in rows]
-                    return json.dumps({"count": len(client_list), "clients": client_list, "search": search_name or "all"})
-                except Exception as e:
-                    logger.error(f"Client cache lookup failed: {e}")
-                    return json.dumps({"error": f"Client lookup failed: {str(e)}"})
-                finally:
-                    if conn:
-                        conn.close()
+
+                def _sync_get_clients():
+                    import psycopg2
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+                    conn = None
+                    try:
+                        conn = psycopg2.connect(db_url)
+                        cur = conn.cursor()
+                        if search_name:
+                            search_lower = f"%{search_name.lower()}%"
+                            sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email
+                                     FROM cached_patients WHERE (lower(full_name) LIKE %s
+                                     OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
+                            params = [search_lower, search_lower, search_lower]
+                            if active_only: sql += " AND is_active = true"
+                            sql += " ORDER BY full_name LIMIT 20"
+                            cur.execute(sql, params)
+                        else:
+                            sql = "SELECT id, first_name, last_name, full_name, phone, home_phone, email FROM cached_patients"
+                            if active_only: sql += " WHERE is_active = true"
+                            sql += " ORDER BY full_name LIMIT 100"
+                            cur.execute(sql)
+                        rows = cur.fetchall()
+                        client_list = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2],
+                                        "name": r[3], "phone": r[4] or r[5] or "", "email": r[6] or ""} for r in rows]
+                        return {"count": len(client_list), "clients": client_list, "search": search_name or "all"}
+                    except Exception as e:
+                        logger.error(f"Client cache lookup failed: {e}")
+                        return {"error": f"Client lookup failed: {str(e)}"}
+                    finally:
+                        if conn: conn.close()
+
+                return json.dumps(await asyncio.to_thread(_sync_get_clients))
 
             elif tool_name == "get_wellsky_caregivers":
-                # Use cached database for reliable caregiver lookup (synced daily from WellSky)
-                import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 search_name = tool_input.get("search_name", "")
                 active_only = tool_input.get("active_only", True)
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-                    if search_name:
-                        search_lower = f"%{search_name.lower()}%"
-                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email,
-                                        preferred_language
-                                 FROM cached_practitioners WHERE (lower(full_name) LIKE %s
-                                 OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
-                        params = [search_lower, search_lower, search_lower]
-                        if active_only:
-                            sql += " AND is_active = true"
-                        sql += " ORDER BY full_name LIMIT 20"
-                        cur.execute(sql, params)
-                    else:
-                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email,
-                                        preferred_language
-                                 FROM cached_practitioners"""
-                        if active_only:
-                            sql += " WHERE is_active = true"
-                        sql += " ORDER BY full_name LIMIT 100"
-                        cur.execute(sql)
-                    rows = cur.fetchall()
-                    cg_list = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2],
-                                "name": r[3], "phone": r[4] or r[5] or "", "email": r[6] or "",
-                                "preferred_language": r[7] or "English"} for r in rows]
-                    return json.dumps({"count": len(cg_list), "caregivers": cg_list, "search": search_name or "all"})
-                except Exception as e:
-                    logger.error(f"Caregiver cache lookup failed: {e}")
-                    return json.dumps({"error": f"Caregiver lookup failed: {str(e)}"})
-                finally:
-                    if conn:
-                        conn.close()
+
+                def _sync_get_caregivers():
+                    import psycopg2
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+                    conn = None
+                    try:
+                        conn = psycopg2.connect(db_url)
+                        cur = conn.cursor()
+                        if search_name:
+                            search_lower = f"%{search_name.lower()}%"
+                            sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email,
+                                            preferred_language
+                                     FROM cached_practitioners WHERE (lower(full_name) LIKE %s
+                                     OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
+                            params = [search_lower, search_lower, search_lower]
+                            if active_only: sql += " AND is_active = true"
+                            sql += " ORDER BY full_name LIMIT 20"
+                            cur.execute(sql, params)
+                        else:
+                            sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email,
+                                            preferred_language
+                                     FROM cached_practitioners"""
+                            if active_only: sql += " WHERE is_active = true"
+                            sql += " ORDER BY full_name LIMIT 100"
+                            cur.execute(sql)
+                        rows = cur.fetchall()
+                        cg_list = [{"id": str(r[0]), "first_name": r[1], "last_name": r[2],
+                                    "name": r[3], "phone": r[4] or r[5] or "", "email": r[6] or "",
+                                    "preferred_language": r[7] or "English"} for r in rows]
+                        return {"count": len(cg_list), "caregivers": cg_list, "search": search_name or "all"}
+                    except Exception as e:
+                        logger.error(f"Caregiver cache lookup failed: {e}")
+                        return {"error": f"Caregiver lookup failed: {str(e)}"}
+                    finally:
+                        if conn: conn.close()
+
+                return json.dumps(await asyncio.to_thread(_sync_get_caregivers))
 
             elif tool_name == "get_wellsky_shifts":
                 from datetime import timedelta
-                import psycopg2
                 days = min(tool_input.get("days", 7), 30)
                 past_days = min(tool_input.get("past_days", 0), 90)
                 open_only = tool_input.get("open_only", False)
                 client_id = tool_input.get("client_id")
                 caregiver_id = tool_input.get("caregiver_id")
 
-                # Determine date range
-                if past_days > 0:
-                    date_from = date.today() - timedelta(days=past_days)
-                    date_to = date.today()
-                else:
-                    date_from = date.today()
-                    date_to = date.today() + timedelta(days=days)
+                def _sync_get_shifts():
+                    import psycopg2
+                    if past_days > 0:
+                        date_from = date.today() - timedelta(days=past_days)
+                        date_to = date.today()
+                    else:
+                        date_from = date.today()
+                        date_to = date.today() + timedelta(days=days)
+                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+                    conn = None
+                    try:
+                        conn = psycopg2.connect(db_url)
+                        cur = conn.cursor()
+                        conditions = ["a.scheduled_start >= %s", "a.scheduled_start < %s"]
+                        params = [date_from, date_to]
+                        if client_id:
+                            conditions.append("a.patient_id = %s"); params.append(client_id)
+                        if caregiver_id:
+                            conditions.append("a.practitioner_id = %s"); params.append(caregiver_id)
+                        if open_only:
+                            conditions.append("(a.practitioner_id IS NULL OR a.status IN ('open', 'pending', 'proposed'))")
+                        where = " AND ".join(conditions)
+                        cur.execute(f"""
+                            SELECT a.id, a.scheduled_start, a.scheduled_end,
+                                   a.actual_start, a.actual_end, a.status,
+                                   a.patient_id, a.practitioner_id, a.service_type,
+                                   p.full_name as client_name, pr.full_name as caregiver_name
+                            FROM cached_appointments a
+                            LEFT JOIN cached_patients p ON a.patient_id = p.id
+                            LEFT JOIN cached_practitioners pr ON a.practitioner_id = pr.id
+                            WHERE {where} ORDER BY a.scheduled_start LIMIT 50
+                        """, params)
+                        shift_list = []
+                        total_hours = 0
+                        for row in cur.fetchall():
+                            scheduled_hours = None
+                            if row[1] and row[2]:
+                                scheduled_hours = round((row[2] - row[1]).total_seconds() / 3600, 1)
+                                total_hours += scheduled_hours
+                            actual_hours = None
+                            if row[3] and row[4]:
+                                actual_hours = round((row[4] - row[3]).total_seconds() / 3600, 1)
+                            shift_list.append({
+                                "id": row[0], "scheduled_start": row[1].isoformat() if row[1] else None,
+                                "scheduled_end": row[2].isoformat() if row[2] else None,
+                                "actual_start": row[3].isoformat() if row[3] else None,
+                                "actual_end": row[4].isoformat() if row[4] else None,
+                                "status": row[5], "client_id": row[6], "caregiver_id": row[7],
+                                "service_type": row[8], "client_name": row[9] or "Unknown",
+                                "caregiver_name": row[10] or "Unassigned",
+                                "scheduled_hours": scheduled_hours, "actual_hours": actual_hours,
+                            })
+                        return {"count": len(shift_list), "total_scheduled_hours": round(total_hours, 1),
+                                "date_range": f"{date_from.isoformat()} to {date_to.isoformat()}", "shifts": shift_list}
+                    except Exception as e:
+                        logger.error(f"Error querying cached shifts: {e}")
+                        return {"error": f"Database error: {str(e)}"}
+                    finally:
+                        if conn: conn.close()
 
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-
-                    # Build query from cached_appointments with JOINs for names
-                    conditions = ["a.scheduled_start >= %s", "a.scheduled_start < %s"]
-                    params = [date_from, date_to]
-
-                    if client_id:
-                        conditions.append("a.patient_id = %s")
-                        params.append(client_id)
-                    if caregiver_id:
-                        conditions.append("a.practitioner_id = %s")
-                        params.append(caregiver_id)
-                    if open_only:
-                        conditions.append("(a.practitioner_id IS NULL OR a.status IN ('open', 'pending', 'proposed'))")
-
-                    where = " AND ".join(conditions)
-                    cur.execute(f"""
-                        SELECT a.id, a.scheduled_start, a.scheduled_end,
-                               a.actual_start, a.actual_end, a.status,
-                               a.patient_id, a.practitioner_id, a.service_type,
-                               p.full_name as client_name,
-                               pr.full_name as caregiver_name
-                        FROM cached_appointments a
-                        LEFT JOIN cached_patients p ON a.patient_id = p.id
-                        LEFT JOIN cached_practitioners pr ON a.practitioner_id = pr.id
-                        WHERE {where}
-                        ORDER BY a.scheduled_start
-                        LIMIT 50
-                    """, params)
-
-                    shift_list = []
-                    total_hours = 0
-                    for row in cur.fetchall():
-                        scheduled_hours = None
-                        if row[1] and row[2]:
-                            scheduled_hours = round((row[2] - row[1]).total_seconds() / 3600, 1)
-                            total_hours += scheduled_hours
-                        actual_hours = None
-                        if row[3] and row[4]:
-                            actual_hours = round((row[4] - row[3]).total_seconds() / 3600, 1)
-
-                        shift_list.append({
-                            "id": row[0],
-                            "scheduled_start": row[1].isoformat() if row[1] else None,
-                            "scheduled_end": row[2].isoformat() if row[2] else None,
-                            "actual_start": row[3].isoformat() if row[3] else None,
-                            "actual_end": row[4].isoformat() if row[4] else None,
-                            "status": row[5],
-                            "client_id": row[6],
-                            "caregiver_id": row[7],
-                            "service_type": row[8],
-                            "client_name": row[9] or "Unknown",
-                            "caregiver_name": row[10] or "Unassigned",
-                            "scheduled_hours": scheduled_hours,
-                            "actual_hours": actual_hours,
-                        })
-
-                    return json.dumps({
-                        "count": len(shift_list),
-                        "total_scheduled_hours": round(total_hours, 1),
-                        "date_range": f"{date_from.isoformat()} to {date_to.isoformat()}",
-                        "shifts": shift_list
-                    })
-                except Exception as e:
-                    logger.error(f"Error querying cached shifts: {e}")
-                    return json.dumps({"error": f"Database error: {str(e)}"})
-                finally:
-                    if conn:
-                        conn.close()
+                return json.dumps(await asyncio.to_thread(_sync_get_shifts))
 
             elif tool_name == "web_search":
                 query = tool_input.get("query", "")
@@ -805,10 +755,12 @@ class GigiTelegramBot:
                                         "url": r.get("url")
                                     })
                                 return json.dumps({"query": query, "results": results})
-                    # Fallback: DuckDuckGo full search
+                    # Fallback: DuckDuckGo full search (sync — run in thread)
                     try:
                         from ddgs import DDGS
-                        results = DDGS().text(query, max_results=5)
+                        def _ddg_search():
+                            return list(DDGS().text(query, max_results=5))
+                        results = await asyncio.to_thread(_ddg_search)
                         if results:
                             formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "url": r.get("href", "")} for r in results]
                             return json.dumps({"query": query, "results": formatted})
@@ -848,9 +800,11 @@ class GigiTelegramBot:
                                     "currency": meta.get("currency", "USD")
                                 })
 
-                    # Fallback: DDG search
+                    # Fallback: DDG search (sync — run in thread)
                     from ddgs import DDGS
-                    results = DDGS().text(f"{symbol} stock price today", max_results=1)
+                    def _ddg_stock():
+                        return list(DDGS().text(f"{symbol} stock price today", max_results=1))
+                    results = await asyncio.to_thread(_ddg_stock)
                     if results:
                         return json.dumps({"symbol": symbol, "info": results[0].get("body", "")})
 
@@ -911,53 +865,57 @@ class GigiTelegramBot:
                     return json.dumps({"error": "Missing title or description"})
 
                 import psycopg2
-                conn = None
-                try:
-                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
-                    cur = conn.cursor()
-                    cur.execute("""
-                        INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
-                        VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
-                        RETURNING id
-                    """, (title, description, priority, "telegram", working_dir))
-                    task_id = cur.fetchone()[0]
-                    conn.commit()
-                    return json.dumps({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
-                except Exception as e:
-                    return json.dumps({"error": f"Failed to create task: {str(e)}"})
-                finally:
-                    if conn:
-                        conn.close()
+                def _sync_create_task():
+                    conn = None
+                    try:
+                        conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
+                        cur = conn.cursor()
+                        cur.execute("""
+                            INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
+                            VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
+                            RETURNING id
+                        """, (title, description, priority, "telegram", working_dir))
+                        task_id = cur.fetchone()[0]
+                        conn.commit()
+                        return json.dumps({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
+                    except Exception as e:
+                        return json.dumps({"error": f"Failed to create task: {str(e)}"})
+                    finally:
+                        if conn:
+                            conn.close()
+                return await asyncio.to_thread(_sync_create_task)
 
             elif tool_name == "check_claude_task":
                 task_id = tool_input.get("task_id")
 
                 import psycopg2
-                conn = None
-                try:
-                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
-                    cur = conn.cursor()
-                    if task_id:
-                        cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (int(task_id),))
-                    else:
-                        cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
-                    row = cur.fetchone()
+                def _sync_check_task():
+                    conn = None
+                    try:
+                        conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
+                        cur = conn.cursor()
+                        if task_id:
+                            cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (int(task_id),))
+                        else:
+                            cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
+                        row = cur.fetchone()
 
-                    if not row:
-                        return json.dumps({"message": "No tasks found"})
+                        if not row:
+                            return json.dumps({"message": "No tasks found"})
 
-                    result_preview = row[3][:500] if row[3] else None
-                    return json.dumps({
-                        "task_id": row[0], "title": row[1], "status": row[2],
-                        "result_preview": result_preview, "error": row[4],
-                        "created_at": row[5].isoformat() if row[5] else None,
-                        "completed_at": row[6].isoformat() if row[6] else None
-                    })
-                except Exception as e:
-                    return json.dumps({"error": f"Failed to check task: {str(e)}"})
-                finally:
-                    if conn:
-                        conn.close()
+                        result_preview = row[3][:500] if row[3] else None
+                        return json.dumps({
+                            "task_id": row[0], "title": row[1], "status": row[2],
+                            "result_preview": result_preview, "error": row[4],
+                            "created_at": row[5].isoformat() if row[5] else None,
+                            "completed_at": row[6].isoformat() if row[6] else None
+                        })
+                    except Exception as e:
+                        return json.dumps({"error": f"Failed to check task: {str(e)}"})
+                    finally:
+                        if conn:
+                            conn.close()
+                return await asyncio.to_thread(_sync_check_task)
 
             elif tool_name == "save_memory":
                 if not MEMORY_AVAILABLE or not _memory_system:
@@ -1008,7 +966,7 @@ class GigiTelegramBot:
                 ml = MemoryLogger()
                 query = tool_input.get("query", "")
                 days_back = tool_input.get("days_back", 30)
-                results = ml.search_logs(query, days_back=days_back)
+                results = await asyncio.to_thread(ml.search_logs, query, days_back=days_back)
                 return json.dumps({"query": query, "results": results[:10], "total": len(results)})
 
             elif tool_name == "browse_webpage":
@@ -1030,7 +988,7 @@ class GigiTelegramBot:
             elif tool_name == "get_morning_briefing":
                 from gigi.morning_briefing_service import MorningBriefingService
                 svc = MorningBriefingService()
-                briefing = svc.generate_briefing()
+                briefing = await asyncio.to_thread(svc.generate_briefing)
                 return briefing
 
             else:
@@ -1077,7 +1035,8 @@ class GigiTelegramBot:
         )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle incoming messages — dispatches to the configured LLM provider"""
+        """Handle incoming messages — dispatches to the configured LLM provider.
+        Uses asyncio.Lock to prevent concurrent messages from corrupting conversation order."""
         user_id = update.effective_user.id
         message_text = update.message.text
 
@@ -1088,45 +1047,54 @@ class GigiTelegramBot:
 
         logger.info(f"Message from Jason: {message_text}")
 
-        # Store user message in shared conversation store
-        self.conversation_store.append("jason", "telegram", "user", message_text)
+        async with self._message_lock:
+            # Store user message in shared conversation store
+            self.conversation_store.append("jason", "telegram", "user", message_text)
 
-        # Send typing indicator
-        await update.message.chat.send_action("typing")
+            # Send typing indicator
+            await update.message.chat.send_action("typing")
 
-        if not self.llm:
-            await update.message.reply_text(
-                f"LLM not configured. Provider={LLM_PROVIDER}, check API key env vars."
-            )
-            return
+            if not self.llm:
+                await update.message.reply_text(
+                    f"LLM not configured. Provider={LLM_PROVIDER}, check API key env vars."
+                )
+                return
 
-        try:
-            # Dispatch to the right provider
-            if LLM_PROVIDER == "gemini":
-                final_text = await self._call_gemini(user_id, update)
-            elif LLM_PROVIDER == "openai":
-                final_text = await self._call_openai(user_id, update)
-            else:
-                final_text = await self._call_anthropic(user_id, update)
+            try:
+                # Dispatch to the right provider (with 60s timeout)
+                if LLM_PROVIDER == "gemini":
+                    final_text = await asyncio.wait_for(
+                        self._call_gemini(user_id, update), timeout=60.0)
+                elif LLM_PROVIDER == "openai":
+                    final_text = await asyncio.wait_for(
+                        self._call_openai(user_id, update), timeout=60.0)
+                else:
+                    final_text = await asyncio.wait_for(
+                        self._call_anthropic(user_id, update), timeout=60.0)
 
-            if not final_text:
-                final_text = "I processed your request but have no text response. Please try again."
+                if not final_text:
+                    final_text = "I processed your request but have no text response. Please try again."
 
-            # Store assistant response in shared conversation store
-            self.conversation_store.append("jason", "telegram", "assistant", final_text)
+                # Store assistant response in shared conversation store
+                self.conversation_store.append("jason", "telegram", "assistant", final_text)
 
-            # Send response (split if too long for Telegram)
-            if len(final_text) > 4000:
-                for i in range(0, len(final_text), 4000):
-                    await update.message.reply_text(final_text[i:i+4000])
-            else:
-                await update.message.reply_text(final_text)
+                # Send response (split if too long for Telegram)
+                if len(final_text) > 4000:
+                    for i in range(0, len(final_text), 4000):
+                        await update.message.reply_text(final_text[i:i+4000])
+                else:
+                    await update.message.reply_text(final_text)
 
-        except Exception as e:
-            logger.error(f"LLM API error ({LLM_PROVIDER}): {e}", exc_info=True)
-            await update.message.reply_text(
-                f"Error ({LLM_PROVIDER}/{LLM_MODEL}): {str(e)}"
-            )
+            except asyncio.TimeoutError:
+                logger.error(f"LLM timeout ({LLM_PROVIDER}/{LLM_MODEL}) after 60s")
+                await update.message.reply_text(
+                    "Sorry, I took too long to respond. Please try again."
+                )
+            except Exception as e:
+                logger.error(f"LLM API error ({LLM_PROVIDER}): {e}", exc_info=True)
+                await update.message.reply_text(
+                    f"Error ({LLM_PROVIDER}/{LLM_MODEL}): {str(e)}"
+                )
 
     # ═══════════════════════════════════════════════════════════
     # ANTHROPIC PROVIDER
@@ -1138,7 +1106,8 @@ class GigiTelegramBot:
         messages = [{"role": m["role"], "content": m["content"]} for m in history]
 
         sys_prompt = _build_telegram_system_prompt(self.conversation_store)
-        response = self.llm.messages.create(
+        response = await asyncio.to_thread(
+            self.llm.messages.create,
             model=LLM_MODEL, max_tokens=4096,
             system=sys_prompt, tools=ANTHROPIC_TOOLS,
             messages=messages
@@ -1175,7 +1144,8 @@ class GigiTelegramBot:
             messages.append({"role": "user", "content": tool_results})
 
             await update.message.chat.send_action("typing")
-            response = self.llm.messages.create(
+            response = await asyncio.to_thread(
+                self.llm.messages.create,
                 model=LLM_MODEL, max_tokens=4096,
                 system=sys_prompt, tools=ANTHROPIC_TOOLS,
                 messages=messages
@@ -1204,7 +1174,8 @@ class GigiTelegramBot:
             tools=GEMINI_TOOLS,
         )
 
-        response = self.llm.models.generate_content(
+        response = await asyncio.to_thread(
+            self.llm.models.generate_content,
             model=LLM_MODEL, contents=contents, config=config
         )
 
@@ -1250,7 +1221,8 @@ class GigiTelegramBot:
             contents.append(genai_types.Content(role="user", parts=fn_response_parts))
 
             await update.message.chat.send_action("typing")
-            response = self.llm.models.generate_content(
+            response = await asyncio.to_thread(
+                self.llm.models.generate_content,
                 model=LLM_MODEL, contents=contents, config=config
             )
 
@@ -1273,7 +1245,8 @@ class GigiTelegramBot:
         for m in history:
             messages.append({"role": m["role"], "content": m["content"]})
 
-        response = self.llm.chat.completions.create(
+        response = await asyncio.to_thread(
+            self.llm.chat.completions.create,
             model=LLM_MODEL, messages=messages, tools=OPENAI_TOOLS
         )
 
@@ -1303,7 +1276,8 @@ class GigiTelegramBot:
                 })
 
             await update.message.chat.send_action("typing")
-            response = self.llm.chat.completions.create(
+            response = await asyncio.to_thread(
+                self.llm.chat.completions.create,
                 model=LLM_MODEL, messages=messages, tools=OPENAI_TOOLS
             )
 

@@ -304,17 +304,26 @@ class MemorySystem:
         """
         Reinforce a memory (pattern was confirmed/repeated).
         Increases confidence by 10-20% (capped by type max).
+        Uses SELECT FOR UPDATE to prevent concurrent read-then-write races.
         """
-        memory = self.get_memory(memory_id)
-        if not memory:
-            return False
-
-        # Calculate new confidence
-        boost = 0.15  # 15% boost
-        new_confidence = min(memory.confidence + boost, self._get_max_confidence(memory.type))
-
         with self._get_connection() as conn:
-            with conn.cursor() as cur:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Lock the row to prevent concurrent reinforcements
+                cur.execute(
+                    "SELECT * FROM gigi_memories WHERE id = %s FOR UPDATE",
+                    (memory_id,)
+                )
+                row = cur.fetchone()
+                if not row:
+                    return False
+
+                old_confidence = float(row['confidence'])
+                memory_type = MemoryType(row['type'])
+
+                # Calculate new confidence
+                boost = 0.15  # 15% boost
+                new_confidence = min(old_confidence + boost, self._get_max_confidence(memory_type))
+
                 cur.execute("""
                     UPDATE gigi_memories
                     SET confidence = %s,
@@ -327,14 +336,14 @@ class MemorySystem:
                     cur,
                     memory_id,
                     "reinforced",
-                    memory.confidence,
+                    old_confidence,
                     new_confidence,
                     "Pattern confirmed/repeated"
                 )
 
             conn.commit()
 
-        logger.info(f"Reinforced memory {memory_id}: {memory.confidence:.2f} → {new_confidence:.2f}")
+        logger.info(f"Reinforced memory {memory_id}: {old_confidence:.2f} → {new_confidence:.2f}")
         return True
 
     def decay_memories(self):
@@ -379,9 +388,11 @@ class MemorySystem:
                     new_status = 'inactive' if new_confidence < threshold else 'active'
 
                     # Handle temporary memories (archive after 48hrs)
+                    # Use DB NOW() for comparison — Python datetime.now() may differ from DB timezone
                     if memory_type == MemoryType.TEMPORARY:
-                        created_at = memory['created_at']
-                        if datetime.now() - created_at > timedelta(hours=48):
+                        cur.execute("SELECT NOW() - %s > INTERVAL '48 hours'", (memory['created_at'],))
+                        is_expired = cur.fetchone()[0]
+                        if is_expired:
                             new_status = 'archived'
 
                     # Update if changed

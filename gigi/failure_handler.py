@@ -151,18 +151,32 @@ class FailureHandler:
     def detect_meltdown(self) -> bool:
         """
         Detect if we're in a meltdown state (cascading failures).
+        Queries the DB for cross-process visibility instead of in-memory tracking.
 
         Returns:
             True if meltdown detected, False otherwise
         """
-        cutoff = datetime.now() - self.meltdown_window
-        recent = [f for f in self.recent_failures if f > cutoff]
-        self.recent_failures = recent
+        try:
+            with self._get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        SELECT COUNT(*) FROM gigi_failure_log
+                        WHERE severity IN ('error', 'critical')
+                          AND occurred_at > NOW() - make_interval(mins => %s)
+                    """, (int(self.meltdown_window.total_seconds() / 60),))
+                    count = cur.fetchone()[0]
 
-        if len(recent) >= self.meltdown_threshold:
-            logger.critical(f"⚠️  MELTDOWN DETECTED: {len(recent)} failures in {self.meltdown_window.seconds/60:.0f} minutes")
-            return True
-        return False
+            if count >= self.meltdown_threshold:
+                logger.critical(f"MELTDOWN DETECTED: {count} failures in {self.meltdown_window.total_seconds()/60:.0f} minutes")
+                return True
+            return False
+        except Exception as e:
+            logger.warning(f"Meltdown detection DB query failed, falling back to in-memory: {e}")
+            # Fallback to in-memory tracking if DB fails
+            cutoff = datetime.now() - self.meltdown_window
+            recent = [f for f in self.recent_failures if f > cutoff]
+            self.recent_failures = recent
+            return len(recent) >= self.meltdown_threshold
 
     def log_failure(
         self,
@@ -428,7 +442,7 @@ class FailureHandler:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 query = """
                     SELECT * FROM gigi_failure_log
-                    WHERE occurred_at > NOW() - INTERVAL '%s hours'
+                    WHERE occurred_at > NOW() - make_interval(hours => %s)
                 """
                 params = [hours]
 
@@ -464,7 +478,7 @@ class FailureHandler:
                         SUM(total_failures) as total,
                         jsonb_object_agg(date::text, total_failures) as daily_counts
                     FROM gigi_failure_stats
-                    WHERE date > CURRENT_DATE - INTERVAL '%s days'
+                    WHERE date > CURRENT_DATE - make_interval(days => %s)
                 """, (days,))
                 row = cur.fetchone()
 
@@ -478,7 +492,7 @@ class FailureHandler:
                 cur.execute("""
                     SELECT type, COUNT(*) as count
                     FROM gigi_failure_log
-                    WHERE occurred_at > NOW() - INTERVAL '%s days'
+                    WHERE occurred_at > NOW() - make_interval(days => %s)
                     GROUP BY type
                     ORDER BY count DESC
                 """, (days,))
@@ -488,7 +502,7 @@ class FailureHandler:
                 cur.execute("""
                     SELECT severity, COUNT(*) as count
                     FROM gigi_failure_log
-                    WHERE occurred_at > NOW() - INTERVAL '%s days'
+                    WHERE occurred_at > NOW() - make_interval(days => %s)
                     GROUP BY severity
                     ORDER BY count DESC
                 """, (days,))

@@ -46,6 +46,7 @@ class PatternDetector:
     def detect_patterns(self) -> List[Dict]:
         """
         Run all pattern detections and return a list of detected patterns.
+        Uses a single DB connection for all checks to avoid connection waste.
 
         Each pattern dict contains:
             type: str - pattern identifier
@@ -55,12 +56,23 @@ class PatternDetector:
             recommendation: str - suggested action
         """
         patterns = []
+        conn = None
+        try:
+            conn = self._get_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
 
-        patterns.extend(self._check_repeated_tool_failures())
-        patterns.extend(self._check_open_shift_trend())
-        patterns.extend(self._check_memory_conflicts())
-        patterns.extend(self._check_high_failure_rate())
-        patterns.extend(self._check_memory_drift())
+            patterns.extend(self._check_repeated_tool_failures(cur))
+            patterns.extend(self._check_open_shift_trend(cur))
+            patterns.extend(self._check_memory_conflicts(cur))
+            patterns.extend(self._check_high_failure_rate(cur))
+            patterns.extend(self._check_memory_drift(cur))
+
+            cur.close()
+        except Exception as e:
+            logger.error(f"Pattern detection DB error: {e}")
+        finally:
+            if conn:
+                conn.close()
 
         # Sort by severity: high first, then medium, then low
         severity_order = {"high": 0, "medium": 1, "low": 2}
@@ -68,13 +80,10 @@ class PatternDetector:
 
         return patterns
 
-    def _check_repeated_tool_failures(self) -> List[Dict]:
+    def _check_repeated_tool_failures(self, cur) -> List[Dict]:
         """Check gigi_failure_log for same tool failing 3+ times in last 7 days."""
         patterns = []
-        conn = None
         try:
-            conn = self._get_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute("""
                 SELECT tool_name, COUNT(*) as fail_count
                 FROM gigi_failure_log
@@ -85,7 +94,6 @@ class PatternDetector:
                 ORDER BY fail_count DESC
             """)
             rows = cur.fetchall()
-            cur.close()
 
             for row in rows:
                 tool = row["tool_name"]
@@ -100,19 +108,13 @@ class PatternDetector:
 
         except Exception as e:
             logger.debug(f"Skipping repeated_tool_failure check: {e}")
-        finally:
-            if conn:
-                conn.close()
 
         return patterns
 
-    def _check_open_shift_trend(self) -> List[Dict]:
+    def _check_open_shift_trend(self, cur) -> List[Dict]:
         """Check cached_appointments for unfilled shifts in next 7 days."""
         patterns = []
-        conn = None
         try:
-            conn = self._get_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute("""
                 SELECT COUNT(*) as open_count
                 FROM cached_appointments
@@ -121,7 +123,6 @@ class PatternDetector:
                   AND (practitioner_id IS NULL OR practitioner_id = '')
             """)
             row = cur.fetchone()
-            cur.close()
 
             if row and row["open_count"] > 0:
                 count = row["open_count"]
@@ -135,19 +136,13 @@ class PatternDetector:
 
         except Exception as e:
             logger.debug(f"Skipping open_shift_trend check: {e}")
-        finally:
-            if conn:
-                conn.close()
 
         return patterns
 
-    def _check_memory_conflicts(self) -> List[Dict]:
+    def _check_memory_conflicts(self, cur) -> List[Dict]:
         """Check gigi_memories for entries with unresolved conflicts."""
         patterns = []
-        conn = None
         try:
-            conn = self._get_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute("""
                 SELECT COUNT(*) as conflict_count
                 FROM gigi_memories
@@ -156,7 +151,6 @@ class PatternDetector:
                   AND array_length(conflicts_with, 1) > 0
             """)
             row = cur.fetchone()
-            cur.close()
 
             if row and row["conflict_count"] > 0:
                 count = row["conflict_count"]
@@ -170,26 +164,19 @@ class PatternDetector:
 
         except Exception as e:
             logger.debug(f"Skipping memory_conflicts check: {e}")
-        finally:
-            if conn:
-                conn.close()
 
         return patterns
 
-    def _check_high_failure_rate(self) -> List[Dict]:
+    def _check_high_failure_rate(self, cur) -> List[Dict]:
         """Check if total failures in last 24 hours exceed threshold."""
         patterns = []
-        conn = None
         try:
-            conn = self._get_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute("""
                 SELECT COUNT(*) as total_failures
                 FROM gigi_failure_log
                 WHERE occurred_at > NOW() - INTERVAL '24 hours'
             """)
             row = cur.fetchone()
-            cur.close()
 
             if row and row["total_failures"] > 10:
                 count = row["total_failures"]
@@ -203,19 +190,13 @@ class PatternDetector:
 
         except Exception as e:
             logger.debug(f"Skipping high_failure_rate check: {e}")
-        finally:
-            if conn:
-                conn.close()
 
         return patterns
 
-    def _check_memory_drift(self) -> List[Dict]:
+    def _check_memory_drift(self, cur) -> List[Dict]:
         """Check for active memories with low confidence that may need attention."""
         patterns = []
-        conn = None
         try:
-            conn = self._get_connection()
-            cur = conn.cursor(cursor_factory=RealDictCursor)
             cur.execute("""
                 SELECT COUNT(*) as drift_count
                 FROM gigi_memories
@@ -223,7 +204,6 @@ class PatternDetector:
                   AND confidence < 0.4
             """)
             row = cur.fetchone()
-            cur.close()
 
             if row and row["drift_count"] > 0:
                 count = row["drift_count"]
@@ -237,9 +217,6 @@ class PatternDetector:
 
         except Exception as e:
             logger.debug(f"Skipping memory_drift check: {e}")
-        finally:
-            if conn:
-                conn.close()
 
         return patterns
 
