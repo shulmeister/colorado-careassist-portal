@@ -192,6 +192,7 @@ ANTHROPIC_TOOLS = [
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity, tool usage, failures. Use when asked 'what happened on...'", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back to search (default 30)"}}, "required": ["query"]}},
     {"name": "browse_webpage", "description": "Browse a webpage and extract its text content. Use for research, reading articles, checking websites.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links (default false)"}}, "required": ["url"]}},
     {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
+    {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary. Do NOT try to build a briefing manually from other tools.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -244,6 +245,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"url": _s("string", "URL to browse"), "extract_links": _s("boolean", "Also extract links (default false)")}, required=["url"])),
         genai_types.FunctionDeclaration(name="take_screenshot", description="Take a screenshot of a webpage. Returns the file path of the saved image.",
             parameters=genai_types.Schema(type="OBJECT", properties={"url": _s("string", "URL to screenshot"), "full_page": _s("boolean", "Capture full scrollable page (default false)")}, required=["url"])),
+        genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -276,6 +279,7 @@ OPENAI_TOOLS = [
     _oai_tool("search_memory_logs", "Search Gigi's daily operation logs.", {"query": {"type": "string"}, "days_back": {"type": "integer"}}, ["query"]),
     _oai_tool("browse_webpage", "Browse a webpage and extract text content.", {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links"}}, ["url"]),
     _oai_tool("take_screenshot", "Take a screenshot of a webpage.", {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Full page capture"}}, ["url"]),
+    _oai_tool("get_morning_briefing", "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.", {}, []),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -328,8 +332,10 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - browse_webpage: Browse any URL and extract its text content (for deep research, reading articles).
 - take_screenshot: Screenshot any webpage (saves to ~/logs/screenshots/).
 - save_memory / recall_memories / forget_memory: Long-term memory management.
+- get_morning_briefing: Full daily briefing (weather, calendar, shifts, emails, ski, alerts).
 
 # CRITICAL RULES
+- **Morning Briefing:** ALWAYS use `get_morning_briefing` when asked for a morning briefing, daily digest, or daily summary. Do NOT try to assemble one manually from other tools. Just call the tool and relay the result.
 - **Operations:** If asked "who is with [Client] right now?", ALWAYS use `get_client_current_status`.
 - **Concerts:** If Jason asks about concerts, use `search_concerts`. Do NOT just list websites.
 - **Weather:** Use `get_weather` for all weather queries.
@@ -1020,6 +1026,12 @@ class GigiTelegramBot:
                 full_page = tool_input.get("full_page", False)
                 result = await browser.take_screenshot(url, full_page=full_page)
                 return json.dumps(result)
+
+            elif tool_name == "get_morning_briefing":
+                from gigi.morning_briefing_service import MorningBriefingService
+                svc = MorningBriefingService()
+                briefing = svc.generate_briefing()
+                return briefing
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
