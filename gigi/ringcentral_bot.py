@@ -19,6 +19,7 @@ import sys
 import logging
 import asyncio
 import json
+from collections import OrderedDict
 from datetime import datetime, date, time, timedelta
 import pytz
 import requests
@@ -473,7 +474,7 @@ class GigiRingCentralBot:
     def __init__(self):
         self.rc_service = ringcentral_messaging_service
         self.wellsky = WellSkyService()
-        self.processed_message_ids = set()
+        self.processed_message_ids = OrderedDict()  # preserves insertion order for FIFO eviction
         self.bot_extension_id = None
         self.startup_time = datetime.utcnow()
         self.reply_history = self._load_reply_history()
@@ -1002,6 +1003,8 @@ class GigiRingCentralBot:
         """Fetch a specific SMS message by ID and process it."""
         if msg_id in self.processed_message_ids:
             return
+        # Mark IMMEDIATELY to prevent WebSocket+polling race
+        self.processed_message_ids[msg_id] = True
         try:
             token = self._get_admin_access_token()
             if not token:
@@ -1024,7 +1027,7 @@ class GigiRingCentralBot:
                 if sms_data.get("direction") == "Inbound" and sms_data.get("type") == "SMS":
                     await self._process_sms_record(sms_data, msg_id)
                 else:
-                    self.processed_message_ids.add(msg_id)
+                    self.processed_message_ids[msg_id] = True
             else:
                 logger.error(f"Failed to fetch SMS {msg_id}: {response.status_code}")
         except Exception as e:
@@ -1039,7 +1042,7 @@ class GigiRingCentralBot:
         logger.info(f"📨 Real-time SMS from {from_phone} → {to_phone}: {text[:60]}")
 
         # Mark as processed IMMEDIATELY to prevent duplicate responses from fallback poll
-        self.processed_message_ids.add(msg_id)
+        self.processed_message_ids[msg_id] = True
 
         sms_record = {
             "id": body.get("id"),
@@ -1062,7 +1065,9 @@ class GigiRingCentralBot:
                 logger.info(f"⏭️ Skipping reply to company number: {from_phone}")
 
         if len(self.processed_message_ids) > 1000:
-            self.processed_message_ids = set(list(self.processed_message_ids)[-500:])
+            # Evict oldest entries (OrderedDict preserves insertion order)
+            while len(self.processed_message_ids) > 500:
+                self.processed_message_ids.popitem(last=False)
 
     def _get_admin_access_token(self):
         """Exchange JWT for access token"""
@@ -1272,17 +1277,17 @@ class GigiRingCentralBot:
                         creation_time = None
 
                 if creation_time and creation_time < self.startup_time:
-                    self.processed_message_ids.add(msg_id)
+                    self.processed_message_ids[msg_id] = True
                     continue
 
             # CRITICAL: Skip messages sent by the bot itself to prevent infinite loops
             creator_id = str(msg.get("creatorId", ""))
             if self.bot_extension_id and creator_id == self.bot_extension_id:
-                self.processed_message_ids.add(msg_id)
+                self.processed_message_ids[msg_id] = True
                 continue
 
             # Mark as processed IMMEDIATELY to prevent duplicate responses
-            self.processed_message_ids.add(msg_id)
+            self.processed_message_ids[msg_id] = True
 
             text = msg.get("text", "")
             # RC @mentions may include ![:Person](id) format — extract clean text
@@ -1366,23 +1371,23 @@ class GigiRingCentralBot:
                                 creation_time = None
 
                         if creation_time and creation_time < self.startup_time:
-                            self.processed_message_ids.add(msg_id)
+                            self.processed_message_ids[msg_id] = True
                             continue
 
                     # Skip messages from bot itself
                     creator_id = str(msg.get("creatorId", ""))
                     if self.bot_extension_id and creator_id == self.bot_extension_id:
-                        self.processed_message_ids.add(msg_id)
+                        self.processed_message_ids[msg_id] = True
                         continue
 
                     text = msg.get("text", "").strip()
                     if not text:
-                        self.processed_message_ids.add(msg_id)
+                        self.processed_message_ids[msg_id] = True
                         continue
 
                     # Mark as processed IMMEDIATELY to prevent duplicate responses
                     # (LLM call + reply send can take 1-3s, during which next poll cycle could pick up same message)
-                    self.processed_message_ids.add(msg_id)
+                    self.processed_message_ids[msg_id] = True
 
                     sender_name = self._resolve_sender_name(creator_id)
                     logger.info(f"Glip DM: New message from {sender_name} ({creator_id}) in chat {chat_id}: {text[:50]}...")
@@ -1468,7 +1473,7 @@ class GigiRingCentralBot:
                 # Only process inbound messages from company lines (skip outbound)
                 direction = sms.get("direction", "")
                 if line_label != "307-459-8220 (Gigi)" and direction == "Outbound":
-                    self.processed_message_ids.add(msg_id)
+                    self.processed_message_ids[msg_id] = True
                     continue
 
                 # Skip historical SMS (older than startup) to prevent bursts on restart
@@ -1483,11 +1488,11 @@ class GigiRingCentralBot:
                             creation_time = None
 
                     if creation_time and creation_time < self.startup_time:
-                        self.processed_message_ids.add(msg_id)
+                        self.processed_message_ids[msg_id] = True
                         continue
 
                 # Mark as processed IMMEDIATELY to prevent duplicate responses
-                self.processed_message_ids.add(msg_id)
+                self.processed_message_ids[msg_id] = True
 
                 # Role 1: Documenter
                 await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
@@ -1501,10 +1506,11 @@ class GigiRingCentralBot:
                     else:
                         logger.info(f"⏭️ Skipping reply to company number: {from_phone}")
 
-            # Cleanup processed IDs to keep memory low (keep last 1000)
+            # Cleanup processed IDs to keep memory low (evict oldest, keep 500)
             if len(self.processed_message_ids) > 1000:
                 logger.info("Cleaning up processed message IDs cache...")
-                self.processed_message_ids = set(list(self.processed_message_ids)[-500:])
+                while len(self.processed_message_ids) > 500:
+                    self.processed_message_ids.popitem(last=False)
 
         except Exception as e:
             logger.error(f"Failed to check direct SMS: {e}")
@@ -2385,8 +2391,12 @@ class GigiRingCentralBot:
 
         except Exception as e:
             logger.error(f"LLM DM reply error ({self.llm_provider}): {e}", exc_info=True)
-            # If conversation history is corrupted, clear and retry
-            self.conversation_store.clear_channel(dm_user_id, "dm")
+            # Only clear conversation on history-corruption errors (e.g., Anthropic 400),
+            # NOT on transient errors (timeouts, rate limits, network issues)
+            err_str = str(e).lower()
+            if "400" in err_str or "invalid" in err_str or "malformed" in err_str:
+                logger.warning(f"Clearing corrupted DM history for {dm_user_id}")
+                self.conversation_store.clear_channel(dm_user_id, "dm")
             return None
 
     # =========================================================================

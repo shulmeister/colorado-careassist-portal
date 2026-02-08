@@ -14,6 +14,7 @@ Memory Types:
 
 import os
 import json
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
@@ -86,9 +87,14 @@ class MemorySystem:
 
         self._init_schema()
 
+    @contextmanager
     def _get_connection(self):
-        """Get database connection."""
-        return psycopg2.connect(self.database_url)
+        """Get database connection (auto-closes on exit)."""
+        conn = psycopg2.connect(self.database_url)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _init_schema(self):
         """Initialize database schema if not exists."""
