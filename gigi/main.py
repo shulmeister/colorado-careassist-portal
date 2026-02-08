@@ -7045,6 +7045,53 @@ async def test_sms_reply(
 
 
 # =============================================================================
+# Ask-Gigi API — Generic endpoint for Siri, Shortcuts, iMessage, Menu Bar, etc.
+# =============================================================================
+
+GIGI_API_TOKEN = os.getenv("GIGI_API_TOKEN", "")
+
+
+class AskGigiRequest(BaseModel):
+    text: str = Field(..., description="The message to send to Gigi")
+    user_id: str = Field(default="jason", description="User identifier")
+    channel: str = Field(default="api", description="Channel name (api, shortcut, siri, imessage, menubar)")
+
+
+@app.post("/api/ask-gigi")
+async def ask_gigi_endpoint(request: AskGigiRequest, authorization: str = Header(None)):
+    """
+    Generic Ask-Gigi endpoint — send text, get Gigi's response with full tool support.
+
+    Auth: Bearer token (GIGI_API_TOKEN env var)
+    """
+    # Verify bearer token
+    if not GIGI_API_TOKEN:
+        raise HTTPException(status_code=503, detail="GIGI_API_TOKEN not configured")
+
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
+
+    token = authorization[7:]  # Strip "Bearer "
+    if token != GIGI_API_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid API token")
+
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Empty text")
+
+    try:
+        from gigi.ask_gigi import ask_gigi
+        response_text = await ask_gigi(
+            text=request.text.strip(),
+            user_id=request.user_id,
+            channel=request.channel,
+        )
+        return {"response": response_text, "channel": request.channel}
+    except Exception as e:
+        logger.error(f"Ask-Gigi endpoint error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
 # Run with Uvicorn
 # =============================================================================
 
