@@ -173,6 +173,24 @@ class RingCentralMessagingService:
             return teams
         return []
 
+    def list_direct_chats(self) -> List[Dict[str, Any]]:
+        """
+        List all 1:1 direct message conversations.
+
+        Returns:
+            List of direct chat dictionaries with id, members, etc.
+        """
+        result = self._api_request("/glip/chats", params={"type": "Direct", "recordCount": 50})
+        if result:
+            chats = result.get("records", [])
+            logger.debug(f"Found {len(chats)} direct chats")
+            return chats
+        return []
+
+    def post_to_chat(self, chat_id: str, message: str) -> Optional[Dict]:
+        """Post a message to any chat by ID."""
+        return self._api_request(f"/glip/chats/{chat_id}/posts", method="POST", data={"text": message})
+
     def find_chat_by_name(self, chat_name: str) -> Optional[Dict[str, Any]]:
         """
         Find a team/chat by name.

@@ -25,8 +25,21 @@ import requests
 
 try:
     import anthropic
+    ANTHROPIC_AVAILABLE = True
 except ImportError:
     anthropic = None
+    ANTHROPIC_AVAILABLE = False
+
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+
+# RingCentral SDK for WebSocket subscriptions (real-time SMS)
+from ringcentral import SDK as RingCentralSDK
+from ringcentral.websocket.events import WebSocketEvents
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -34,8 +47,45 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.ringcentral_messaging_service import ringcentral_messaging_service, RINGCENTRAL_SERVER
 from services.wellsky_service import WellSkyService
 
-# HARDCODED FOR SAFETY - The 719 number is the company main line
-RINGCENTRAL_FROM_NUMBER = "+17194283999"
+# Memory system, mode detector, failure handler
+try:
+    from gigi.memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel
+    _rc_memory_system = MemorySystem()
+    RC_MEMORY_AVAILABLE = True
+    logger.info("Memory system initialized for RC bot")
+except Exception as e:
+    _rc_memory_system = None
+    RC_MEMORY_AVAILABLE = False
+
+try:
+    from gigi.mode_detector import ModeDetector
+    _rc_mode_detector = ModeDetector()
+    RC_MODE_AVAILABLE = True
+    logger.info("Mode detector initialized for RC bot")
+except Exception as e:
+    _rc_mode_detector = None
+    RC_MODE_AVAILABLE = False
+
+try:
+    from gigi.failure_handler import FailureHandler
+    _rc_failure_handler = FailureHandler()
+    RC_FAILURE_HANDLER_AVAILABLE = True
+    logger.info("Failure handler initialized for RC bot")
+except Exception as e:
+    _rc_failure_handler = None
+    RC_FAILURE_HANDLER_AVAILABLE = False
+
+# The 307 number has SmsSender feature on the admin extension
+# The 719 number (CompanyNumber) does NOT support SMS sending
+RINGCENTRAL_FROM_NUMBER = "+13074598220"
+
+# Company lines to monitor for inbound SMS (extension IDs)
+# 307-459-8220 = ext 111 (Gigi AI, polled via extension/~)
+# 719-428-3999 = CompanyNumber, SMS lands in ext 101 (Jason/Admin, ID 262740009)
+# 303-757-1777 = MainCompanyNumber (voice-only, no SMS traffic observed)
+COMPANY_LINE_EXTENSIONS = [
+    {"ext_id": "262740009", "label": "719-428-3999 (Company)", "phone": "+17194283999"},
+]
 
 # ADMIN TOKEN (Jason x101) - Required for visibility into Company Lines (719/303)
 # Standard x111 token is blind to these numbers.
@@ -58,12 +108,18 @@ TIMEZONE = pytz.timezone("America/Denver")
 BUSINESS_START = time(8, 0)
 BUSINESS_END = time(17, 0)
 
-# REPLY MODE - Set to True when Jason says go live with replies
-REPLIES_ENABLED = False
+# REPLY MODE - Controls SMS auto-replies to external callers
+REPLIES_ENABLED = True
+
+# SHADOW MODE - Draft replies but report to DM instead of sending
+# When True: Gigi generates replies but posts them to Jason's DM for review instead of sending SMS
+# When False: Gigi sends SMS replies directly (live mode)
+GIGI_SMS_SHADOW_MODE = os.getenv("GIGI_SMS_SHADOW_MODE", "true").lower() == "true"
+SHADOW_DM_CHAT_ID = os.getenv("GIGI_SHADOW_DM_CHAT_ID", "1586118164482")  # Jason's DM chat
 
 # LOOP PREVENTION - Critical safeguards
-REPLY_COOLDOWN_MINUTES = 30  # Don't reply to same number within this window
-MAX_REPLIES_PER_DAY_PER_NUMBER = 3  # Max replies to any single number per day
+REPLY_COOLDOWN_MINUTES = 0.5  # Don't reply to same number within this window (30 seconds)
+MAX_REPLIES_PER_DAY_PER_NUMBER = 10  # Max replies to any single number per day
 MAX_REPLIES_PER_HOUR_GLOBAL = 20  # Max total SMS per hour
 REPLY_HISTORY_FILE = "/Users/shulmeister/.gigi-reply-history.json"
 
@@ -73,17 +129,37 @@ CAMPAIGN_CHECK_INTERVAL_SECONDS = 300  # Check campaigns every 5 minutes
 CAMPAIGN_ESCALATION_MINUTES = 30  # Escalate unfilled campaigns after 30 min
 VOICE_OUTREACH_ENABLED = os.getenv("VOICE_OUTREACH_ENABLED", "false").lower() == "true"
 
-# Claude API Configuration
+# LLM Provider Configuration — switch via env var (default: gemini to avoid API fees)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-CLAUDE_MODEL = "claude-sonnet-4-20250514"
-CLAUDE_MAX_TOKENS = 1024
-CLAUDE_MAX_TOOL_ROUNDS = 3
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "gemini").lower()
+_DEFAULT_MODELS = {
+    "gemini": "gemini-3-flash-preview",
+    "anthropic": "claude-sonnet-4-20250514",
+}
+LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-3-flash-preview"))
+LLM_MAX_TOKENS = 1024
+LLM_MAX_TOOL_ROUNDS = 5
 CONVERSATION_TIMEOUT_MINUTES = 30
 CONVERSATION_HISTORY_FILE = "/Users/shulmeister/.gigi-sms-conversations.json"
 MAX_CONVERSATION_MESSAGES = 10
 
 # Tools available to Claude for SMS replies
 SMS_TOOLS = [
+    {
+        "name": "get_client_current_status",
+        "description": "Check who is with a client RIGHT NOW. Returns current caregiver, shift times, and status. Use for questions like 'who is with Preston?'",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "client_name": {
+                    "type": "string",
+                    "description": "Name of the client"
+                }
+            },
+            "required": ["client_name"]
+        }
+    },
     {
         "name": "identify_caller",
         "description": "Look up who is texting based on their phone number. Checks caregiver and client records in WellSky. Always call this first to know who you're talking to.",
@@ -174,10 +250,169 @@ SMS_TOOLS = [
             },
             "required": ["caregiver_id", "caregiver_name", "reason"]
         }
-    }
+    },
+    {"name": "save_memory", "description": "Save an important preference, fact, or instruction to long-term memory.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "What to remember"}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
+    {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
+    {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
 ]
 
+# Full tool set for Glip DM replies — matches Telegram capabilities
+DM_TOOLS = [
+    {"name": "get_client_current_status", "description": "Check who is with a client RIGHT NOW. Returns current caregiver, shift times, and status.", "input_schema": {"type": "object", "properties": {"client_name": {"type": "string", "description": "Name of the client"}}, "required": ["client_name"]}},
+    {"name": "get_wellsky_clients", "description": "Search for clients in WellSky by name, or get all active clients.", "input_schema": {"type": "object", "properties": {"search_name": {"type": "string", "description": "Client name to search (leave empty for all)"}, "active_only": {"type": "boolean", "description": "Only active clients (default true)"}}, "required": []}},
+    {"name": "get_wellsky_caregivers", "description": "Search for caregivers in WellSky by name, or get all active caregivers.", "input_schema": {"type": "object", "properties": {"search_name": {"type": "string", "description": "Caregiver name to search (leave empty for all)"}, "active_only": {"type": "boolean", "description": "Only active caregivers (default true)"}}, "required": []}},
+    {"name": "get_wellsky_shifts", "description": "Get shifts from WellSky. Use get_wellsky_clients/caregivers first to find IDs.", "input_schema": {"type": "object", "properties": {"client_id": {"type": "string"}, "caregiver_id": {"type": "string"}, "days": {"type": "integer", "description": "Days ahead (default 7)"}, "past_days": {"type": "integer", "description": "Days back for history/hours (default 0)"}, "open_only": {"type": "boolean", "description": "Only open/unfilled shifts"}}, "required": []}},
+    {"name": "get_weather", "description": "Get current weather and forecast for a location.", "input_schema": {"type": "object", "properties": {"location": {"type": "string", "description": "City and State (e.g. Denver, CO)"}}, "required": ["location"]}},
+    {"name": "web_search", "description": "Search the internet for current information — news, sports, prices, general knowledge.", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "get_stock_price", "description": "Get current stock price for a ticker symbol (AAPL, TSLA, etc.)", "input_schema": {"type": "object", "properties": {"symbol": {"type": "string"}}, "required": ["symbol"]}},
+    {"name": "get_crypto_price", "description": "Get current cryptocurrency price (BTC, ETH, DOGE, SOL, etc.)", "input_schema": {"type": "object", "properties": {"symbol": {"type": "string"}}, "required": ["symbol"]}},
+    {"name": "search_concerts", "description": "Find upcoming concerts and live music events.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Artist, venue, or city to search"}}, "required": ["query"]}},
+    {"name": "get_calendar_events", "description": "Get upcoming events from Jason's Google Calendar.", "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "description": "Days to look ahead (1-7)"}}, "required": []}},
+    {"name": "search_emails", "description": "Search Jason's Gmail.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Gmail search query"}, "max_results": {"type": "integer"}}, "required": []}},
+    {"name": "check_recent_sms", "description": "Check recent inbound SMS text messages across ALL company lines (307-459-8220, 719-428-3999). Shows texts from caregivers, clients, and anyone else who texted in.", "input_schema": {"type": "object", "properties": {"hours": {"type": "integer", "description": "How many hours back to look (default 12, max 48)"}, "from_phone": {"type": "string", "description": "Filter by sender phone number (optional)"}}, "required": []}},
+    {"name": "send_sms", "description": "Send an SMS text message from the company number (307-459-8220) to any phone number.", "input_schema": {"type": "object", "properties": {"to_phone": {"type": "string", "description": "Phone number to text (e.g., +13035551234)"}, "message": {"type": "string", "description": "The SMS message to send (keep under 300 chars)"}}, "required": ["to_phone", "message"]}},
+    {"name": "log_call_out", "description": "Log a caregiver call-out in WellSky and create an urgent admin task for coverage. Use when a caregiver reports they can't make their shift.", "input_schema": {"type": "object", "properties": {"caregiver_id": {"type": "string", "description": "The caregiver's WellSky ID"}, "caregiver_name": {"type": "string", "description": "The caregiver's name"}, "reason": {"type": "string", "description": "Reason for the call-out (e.g., 'sick', 'emergency', 'car trouble')"}, "shift_date": {"type": "string", "description": "Date of the shift (YYYY-MM-DD, defaults to today)"}}, "required": ["caregiver_id", "caregiver_name", "reason"]}},
+    {"name": "identify_caller", "description": "Look up who a phone number belongs to. Checks caregiver, client, staff, and family records in WellSky.", "input_schema": {"type": "object", "properties": {"phone_number": {"type": "string", "description": "Phone number to look up"}}, "required": ["phone_number"]}},
+    {"name": "save_memory", "description": "Save an important preference, fact, or instruction to long-term memory.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "What to remember"}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
+    {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
+    {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
+]
+
+# =========================================================================
+# Gemini-format tool definitions (used when LLM_PROVIDER == "gemini")
+# =========================================================================
+GEMINI_SMS_TOOLS = None
+GEMINI_DM_TOOLS = None
+
+if GEMINI_AVAILABLE:
+    def _gs(type_str, desc, **kwargs):
+        type_map = {"string": "STRING", "integer": "INTEGER", "boolean": "BOOLEAN"}
+        return genai_types.Schema(type=type_map.get(type_str, type_str.upper()), description=desc, **kwargs)
+
+    GEMINI_SMS_TOOLS = [genai_types.Tool(function_declarations=[
+        genai_types.FunctionDeclaration(name="get_client_current_status", description="Check who is with a client RIGHT NOW. Returns current caregiver, shift times, and status.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"client_name": _gs("string", "Name of the client")}, required=["client_name"])),
+        genai_types.FunctionDeclaration(name="identify_caller", description="Look up who is texting based on their phone number. Checks caregiver and client records in WellSky.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"phone_number": _gs("string", "The caller's phone number")}, required=["phone_number"])),
+        genai_types.FunctionDeclaration(name="get_wellsky_shifts", description="Get shift schedule from WellSky. Look up shifts by caregiver_id or client_id.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "WellSky caregiver ID"), "client_id": _gs("string", "WellSky client ID"), "days": _gs("integer", "Days to look ahead (default 7, max 14)")})),
+        genai_types.FunctionDeclaration(name="get_wellsky_clients", description="Search for clients in WellSky by name.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Client name to search for")}, required=["search_name"])),
+        genai_types.FunctionDeclaration(name="get_wellsky_caregivers", description="Search for caregivers in WellSky by name.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Caregiver name to search for")}, required=["search_name"])),
+        genai_types.FunctionDeclaration(name="log_call_out", description="Log a caregiver call-out in WellSky and create an urgent admin task for coverage.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "The caregiver's WellSky ID"), "caregiver_name": _gs("string", "The caregiver's name"), "reason": _gs("string", "Reason for the call-out"), "shift_date": _gs("string", "Date of the shift (YYYY-MM-DD, defaults to today)")}, required=["caregiver_id", "caregiver_name", "reason"])),
+        genai_types.FunctionDeclaration(name="save_memory", description="Save an important preference, fact, or instruction to long-term memory.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"content": _gs("string", "What to remember"), "category": _gs("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _gs("string", "high/medium/low")}, required=["content", "category"])),
+        genai_types.FunctionDeclaration(name="recall_memories", description="Search long-term memory for saved preferences, facts, or instructions.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"category": _gs("string", "Filter by category"), "search_text": _gs("string", "Keywords to search for")})),
+        genai_types.FunctionDeclaration(name="forget_memory", description="Archive a memory that is no longer relevant.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _gs("string", "ID of the memory to archive")}, required=["memory_id"])),
+    ])]
+
+    GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
+        genai_types.FunctionDeclaration(name="get_client_current_status", description="Check who is with a client RIGHT NOW. Returns current caregiver, shift times, and status.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"client_name": _gs("string", "Name of the client")}, required=["client_name"])),
+        genai_types.FunctionDeclaration(name="get_wellsky_clients", description="Search for clients in WellSky by name, or get all active clients.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Client name to search (leave empty for all)"), "active_only": _gs("boolean", "Only active clients (default true)")})),
+        genai_types.FunctionDeclaration(name="get_wellsky_caregivers", description="Search for caregivers in WellSky by name, or get all active caregivers.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Caregiver name to search (leave empty for all)"), "active_only": _gs("boolean", "Only active caregivers (default true)")})),
+        genai_types.FunctionDeclaration(name="get_wellsky_shifts", description="Get shifts from WellSky. Use get_wellsky_clients/caregivers first to find IDs.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"client_id": _gs("string", "WellSky client ID"), "caregiver_id": _gs("string", "WellSky caregiver ID"), "days": _gs("integer", "Days ahead (default 7)"), "past_days": _gs("integer", "Days back for history/hours (default 0)"), "open_only": _gs("boolean", "Only open/unfilled shifts")})),
+        genai_types.FunctionDeclaration(name="get_weather", description="Get current weather and forecast for a location.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"location": _gs("string", "City and State (e.g. Denver, CO)")}, required=["location"])),
+        genai_types.FunctionDeclaration(name="web_search", description="Search the internet for current information.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "The search query")}, required=["query"])),
+        genai_types.FunctionDeclaration(name="get_stock_price", description="Get current stock price for a ticker symbol.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"symbol": _gs("string", "Stock ticker symbol")}, required=["symbol"])),
+        genai_types.FunctionDeclaration(name="get_crypto_price", description="Get current cryptocurrency price.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"symbol": _gs("string", "Crypto symbol")}, required=["symbol"])),
+        genai_types.FunctionDeclaration(name="search_concerts", description="Find upcoming concerts and live music events.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Artist, venue, or city to search")}, required=["query"])),
+        genai_types.FunctionDeclaration(name="get_calendar_events", description="Get upcoming events from Jason's Google Calendar.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"days": _gs("integer", "Days to look ahead (1-7)")})),
+        genai_types.FunctionDeclaration(name="search_emails", description="Search Jason's Gmail.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Gmail search query"), "max_results": _gs("integer", "Max emails to return")})),
+        genai_types.FunctionDeclaration(name="check_recent_sms", description="Check recent inbound SMS across ALL company lines (307-459-8220, 719-428-3999).",
+            parameters=genai_types.Schema(type="OBJECT", properties={"hours": _gs("integer", "Hours back to look (default 12, max 48)"), "from_phone": _gs("string", "Filter by sender phone number")})),
+        genai_types.FunctionDeclaration(name="send_sms", description="Send an SMS from the company number (307-459-8220).",
+            parameters=genai_types.Schema(type="OBJECT", properties={"to_phone": _gs("string", "Phone number to text"), "message": _gs("string", "The SMS message (keep under 300 chars)")}, required=["to_phone", "message"])),
+        genai_types.FunctionDeclaration(name="log_call_out", description="Log a caregiver call-out in WellSky and create an urgent admin task for coverage.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "The caregiver's WellSky ID"), "caregiver_name": _gs("string", "The caregiver's name"), "reason": _gs("string", "Reason for the call-out"), "shift_date": _gs("string", "Date of the shift (YYYY-MM-DD, defaults to today)")}, required=["caregiver_id", "caregiver_name", "reason"])),
+        genai_types.FunctionDeclaration(name="identify_caller", description="Look up who a phone number belongs to. Checks caregiver, client, staff, and family records in WellSky.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"phone_number": _gs("string", "Phone number to look up")}, required=["phone_number"])),
+        genai_types.FunctionDeclaration(name="save_memory", description="Save an important preference, fact, or instruction to long-term memory.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"content": _gs("string", "What to remember"), "category": _gs("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _gs("string", "high/medium/low")}, required=["content", "category"])),
+        genai_types.FunctionDeclaration(name="recall_memories", description="Search long-term memory for saved preferences, facts, or instructions.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"category": _gs("string", "Filter by category"), "search_text": _gs("string", "Keywords to search for")})),
+        genai_types.FunctionDeclaration(name="forget_memory", description="Archive a memory that is no longer relevant.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _gs("string", "ID of the memory to archive")}, required=["memory_id"])),
+    ])]
+
+GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
+
+## Operating Laws (non-negotiable)
+1. SIGNAL FILTERING: Never forward noise. Only surface items requiring judgment or action.
+2. PREFERENCE LOCK: If you've seen a preference twice, it's policy. Never re-ask. Use recall_memories first.
+3. CONDITIONAL AUTONOMY: Act first on low-risk items. Only ask for money/reputation/legal/irreversible.
+4. STATE AWARENESS: Adjust your verbosity and urgency threshold to the current situation.
+5. OPINIONATED DECISIONS: Lead with your recommendation + why + risk + one fallback.
+6. MEMORY: Save important preferences and facts using save_memory. Search memory before asking questions already answered.
+7. PATTERN DETECTION: If you notice a repeating problem, flag it proactively.
+8. SELF-MONITORING: If you're getting verbose or drifting, correct yourself.
+9. PUSH BACK: If you disagree, say why respectfully.
+
+You are messaging with {sender_name}, a team member. This is an INTERNAL company conversation.
+
+CRITICAL RULES:
+- You are the Chief of Staff. Be direct, knowledgeable, and helpful.
+- Use tools to look up real data — never make up shift times or caregiver names.
+- If the sender is Jason (the CEO/owner), you can share any company data freely.
+- For other team members, share data relevant to their role.
+- Keep responses concise but not SMS-short — this is internal messaging, not SMS.
+- No need to identify the caller — you already know who they are from the Glip conversation.
+- ALWAYS use "they/them" pronouns for clients and caregivers unless you are certain of their gender. Preston Hill is female (she/her).
+- Trust tool results. If get_client_current_status says someone IS with a client, report that directly. Do NOT then call a different tool and contradict yourself.
+- If the schedule shows a gap for a 24-hour client, just report the facts (last caregiver, next caregiver, scheduled times). Do NOT say "COVERAGE GAP" or "needs immediate attention" — the schedule data may simply be incomplete. Our 24-hour clients always have coverage.
+
+COMMON SCENARIOS:
+- "Who is with [client]?" or "What caregiver is with [client]?": Use get_client_current_status. This is the DEFINITIVE tool for this question — it checks BOTH the cached database AND the live WellSky API, including 24-hour shifts. Trust its answer and do NOT call additional shift tools to second-guess it.
+- "When is [name]'s next shift?" — The name could be a CLIENT or a CAREGIVER. Try get_client_current_status first (it shows next_shift). If not found as a client, try get_wellsky_shifts with the name as caregiver.
+- Questions about schedules or shifts: Use get_wellsky_shifts.
+- Questions about clients: Use get_wellsky_clients.
+- Questions about caregivers: Use get_wellsky_caregivers. If a name isn't found, the person might be a CLIENT, not a caregiver — try get_wellsky_clients instead.
+- "Any texts from caregivers?": Use check_recent_sms to see recent inbound SMS messages.
+- "Text Angela and tell her...": Use send_sms with their phone number and your message.
+- Caregiver calling out or cancelling: Use log_call_out after confirming the details.
+- "Who is this number?": Use identify_caller to look up a phone number.
+- Operational questions: Answer from your knowledge or use tools.
+
+KEY CAPABILITIES:
+- You CAN see incoming text messages via check_recent_sms — you monitor ALL company lines: 307-459-8220, 719-428-3999, and 303-757-1777.
+- You CAN send text messages via send_sms — you can text caregivers, clients, or anyone.
+- You CAN log call-outs and create urgent admin tasks in WellSky.
+- You CAN look up any phone number to identify who it belongs to.
+- You CAN check calendars, emails, weather, stocks, crypto, and search the web.
+
+ACKNOWLEDGMENTS:
+- If someone replies with just "Sure", "Ok", "Thanks", "Got it", "Cool", "Perfect", "Sounds good", or similar — that's a conversation closer. Just say something brief like "Let me know if you need anything!" Do NOT call tools or start investigating something new.
+
+TONE:
+- Professional but warm — this is a colleague, not an external caller.
+- Proactive — offer additional useful info when relevant, but NOT after acknowledgment messages.
+- Never say "check with the office" — YOU are the office. Look it up.
+- Never say "I don't have access to" something — check your tools first. You have 15+ tools.
+
+Today is {current_date}.
+"""
+
 SMS_SYSTEM_PROMPT = """You are Gigi, the AI assistant for Colorado Care Assist, a home care agency in Colorado Springs. You are responding via SMS text message.
+
+## Operating Laws (non-negotiable)
+1. PREFERENCE LOCK: If you've seen a preference twice, it's policy. Never re-ask. Use recall_memories first.
+2. CONDITIONAL AUTONOMY: Act first on low-risk items. Only ask for escalation on money/reputation/legal.
+3. MEMORY: Save important info using save_memory. Search memory before asking questions already answered.
+4. PATTERN DETECTION: If you notice a repeating problem, flag it proactively.
 
 CRITICAL RULES:
 - Keep responses under 300 characters when possible. This is SMS, not email.
@@ -185,17 +420,27 @@ CRITICAL RULES:
 - Never share sensitive medical info via SMS.
 - Never share other people's phone numbers or personal details.
 - Do NOT make up shift times or caregiver names. Always use tools to look up real data.
-- If unsure, say "I'll have the office follow up with you in the morning."
+- ALWAYS use "they/them" pronouns for clients and caregivers unless you know their gender. Preston Hill is female (she/her).
+- Trust tool results. Report what the tools return — do not editorialize, add urgency, or say "URGENT" unless the human asks you to escalate.
+- If the schedule shows a gap for a 24-hour client, just report the facts (last caregiver, next caregiver). Do NOT say "COVERAGE GAP" or "needs immediate attention" — the schedule data may simply be incomplete.
 
 FIRST MESSAGE PROTOCOL:
 On the FIRST message in a conversation, ALWAYS use identify_caller with the caller's phone number. This tells you if they are a caregiver, client, or unknown.
 
 COMMON SCENARIOS:
+- "Who is with [client]?" or "What caregiver is with [client]?": Use get_client_current_status. This checks BOTH the cached database AND the live WellSky API, including 24-hour shifts. Trust its answer and report it directly.
+- "When is [name]'s next shift?" — Could be a CLIENT or a CAREGIVER. Try get_client_current_status first (shows next_shift). If not found as a client, try get_wellsky_shifts with the name.
 - Caregiver calling out sick: Use identify_caller, then log_call_out. Reassure them.
 - Caregiver asking about schedule: Use identify_caller, then get_wellsky_shifts with their caregiver_id.
 - Client asking when caregiver is coming: Use identify_caller, then get_wellsky_shifts with their client_id.
-- Anyone asking about a person by name: Use get_wellsky_clients or get_wellsky_caregivers.
+- Anyone asking about a person by name: Try get_wellsky_clients first, then get_wellsky_caregivers if not found. A name could be either.
 - Unknown caller or general question: Respond helpfully, note the office will follow up.
+- Simple acknowledgments ("Ok", "Thanks", "Got it", "Sure"): Just respond briefly. Do NOT call tools.
+
+KEY CAPABILITIES:
+- You monitor ALL company lines: 307-459-8220 (your direct line), 719-428-3999 (company line), and 303-757-1777 (main company number).
+- You CAN send text messages via send_sms — you can text caregivers, clients, or anyone.
+- You CAN check recent inbound SMS across all company lines via check_recent_sms.
 
 TONE:
 - Friendly, professional, concise
@@ -215,14 +460,30 @@ class GigiRingCentralBot:
         self.bot_extension_id = None
         self.startup_time = datetime.utcnow()
         self.reply_history = self._load_reply_history()
-        # Claude API for intelligent SMS replies
-        if anthropic and ANTHROPIC_API_KEY:
-            self.claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-            logger.info("Claude API initialized for intelligent SMS replies")
+        # LLM for intelligent SMS/DM replies (Gemini preferred to avoid API fees)
+        self.llm = None
+        self.llm_provider = LLM_PROVIDER
+        if LLM_PROVIDER == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
+            self.llm = genai.Client(api_key=GEMINI_API_KEY)
+            logger.info(f"Gemini LLM initialized ({LLM_MODEL}) for SMS/DM replies")
+        elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+            self.llm = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            logger.info(f"Anthropic LLM initialized ({LLM_MODEL}) for SMS/DM replies")
         else:
-            self.claude = None
-            logger.warning("Claude API not available - using static SMS replies")
+            # Fallback: try Gemini first (free), then Anthropic
+            if GEMINI_AVAILABLE and GEMINI_API_KEY:
+                self.llm = genai.Client(api_key=GEMINI_API_KEY)
+                self.llm_provider = "gemini"
+                logger.warning(f"Provider '{LLM_PROVIDER}' not available, falling back to gemini")
+            elif ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+                self.llm = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                self.llm_provider = "anthropic"
+                logger.warning(f"Provider '{LLM_PROVIDER}' not available, falling back to anthropic")
+            else:
+                logger.warning("No LLM provider available - using static replies")
         self.sms_conversations = self._load_sms_conversations()
+        # Track active team chat conversations (creator_id -> last_interaction_time)
+        self._team_chat_active_conversations = {}
         # Autonomous shift coordination
         self._active_campaigns = {}  # campaign_id -> {shift_id, started_at, client_name}
         self._last_campaign_check = datetime.utcnow()
@@ -238,11 +499,11 @@ class GigiRingCentralBot:
             from gigi.caregiver_preference_extractor import (
                 CaregiverPreferenceExtractor, CAREGIVER_MEMORY_ENABLED
             )
-            if CAREGIVER_MEMORY_ENABLED and self.claude:
+            if CAREGIVER_MEMORY_ENABLED and self.llm:
                 memory_sys = MemorySystem()
                 self.preference_extractor = CaregiverPreferenceExtractor(
                     memory_system=memory_sys,
-                    anthropic_api_key=ANTHROPIC_API_KEY
+                    llm_provider=self.llm_provider,
                 )
                 logger.info("Caregiver preference extractor ENABLED")
             else:
@@ -293,8 +554,185 @@ class GigiRingCentralBot:
         except Exception as e:
             logger.warning(f"Morning briefing service not available: {e}")
 
+        # RingCentral SDK for WebSocket subscriptions
+        self.rc_sdk = None
+        self.rc_platform = None
+        self.ws_client = None
+
         logger.info(f"Bot initialized. Startup time (UTC): {self.startup_time}")
+        if GIGI_SMS_SHADOW_MODE:
+            logger.info("📋 SMS SHADOW MODE: Draft replies will be reported to DM for review (not sent)")
+        else:
+            logger.info("🟢 SMS LIVE MODE: Replies will be sent directly to callers")
         logger.info(f"Reply history loaded: {len(self.reply_history.get('replies', []))} recent replies tracked")
+
+    def _get_client_current_status(self, client_name: str) -> str:
+        """Comprehensive client status check — cached DB + WellSky live API fallback.
+        Returns JSON string with client status, current caregiver, and 24-hour context."""
+        import psycopg2
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+
+        if not client_name:
+            return json.dumps({"error": "No client name provided"})
+
+        conn = None
+        try:
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            search_lower = f"%{client_name.lower()}%"
+            cur.execute("""
+                SELECT id, full_name, address, city FROM cached_patients
+                WHERE is_active = true
+                AND (lower(full_name) LIKE %s OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
+                LIMIT 1
+            """, (search_lower, search_lower, search_lower))
+            client_row = cur.fetchone()
+            if not client_row:
+                return json.dumps({"status": "not_found", "message": f"No active client matching '{client_name}'"})
+
+            client_id, client_full_name, addr, city = client_row
+            now = datetime.now(TIMEZONE).replace(tzinfo=None)
+
+            # Step 1: Check cached DB for active/upcoming shifts (look back 2 days for 24hr shifts)
+            cur.execute("""
+                SELECT a.scheduled_start, a.scheduled_end, p.full_name as caregiver_name, a.status
+                FROM cached_appointments a
+                LEFT JOIN cached_practitioners p ON a.practitioner_id = p.id
+                WHERE a.patient_id = %s
+                AND a.scheduled_start >= CURRENT_DATE - INTERVAL '2 days'
+                AND a.scheduled_start < CURRENT_DATE + INTERVAL '2 days'
+                ORDER BY a.scheduled_start ASC
+            """, (client_id,))
+            all_shifts = cur.fetchall()
+
+            # Detect if this is a 24-hour client (has 24hr shifts in recent history)
+            is_24hr_client = False
+            for s in all_shifts:
+                if s[0] and s[1]:
+                    hours = (s[1] - s[0]).total_seconds() / 3600
+                    if hours >= 20:  # 20+ hours = effectively 24-hour shift
+                        is_24hr_client = True
+                        break
+
+            # Check for currently active shift
+            for s in all_shifts:
+                start, end, cg_name, status = s
+                if start and end and start <= now <= end:
+                    result = {
+                        "client": client_full_name, "status": "active",
+                        "caregiver": cg_name or "Unassigned",
+                        "shift_start": start.strftime('%a %I:%M %p'),
+                        "shift_end": end.strftime('%a %I:%M %p'),
+                        "location": f"{addr}, {city}" if addr else "",
+                        "is_24hr_client": is_24hr_client,
+                        "message": f"{cg_name or 'Unassigned'} is with {client_full_name} right now. Shift: {start.strftime('%a %I:%M %p')} - {end.strftime('%a %I:%M %p')}."
+                    }
+                    return json.dumps(result)
+
+            # Step 2: No active shift in cached DB — check WellSky live API
+            try:
+                live_shifts = self.wellsky.get_shifts(
+                    date_from=date.today() - timedelta(days=1),
+                    date_to=date.today() + timedelta(days=1),
+                    client_id=client_id,
+                    limit=10
+                )
+                for s in live_shifts:
+                    s_start = getattr(s, 'start_datetime', None) or getattr(s, 'scheduled_start', None)
+                    s_end = getattr(s, 'end_datetime', None) or getattr(s, 'scheduled_end', None)
+                    cg_name = getattr(s, 'caregiver_name', None) or ''
+                    cg_id = getattr(s, 'caregiver_id', None) or getattr(s, 'practitioner_id', None)
+
+                    # Resolve "Unassigned" names from cached_practitioners
+                    if (not cg_name or cg_name == 'Unassigned') and cg_id:
+                        try:
+                            cur.execute("SELECT full_name FROM cached_practitioners WHERE id = %s", (str(cg_id),))
+                            prow = cur.fetchone()
+                            if prow and prow[0]:
+                                cg_name = prow[0]
+                        except Exception:
+                            pass
+
+                    # Try to build datetime from date + time strings
+                    if not s_start and hasattr(s, 'date') and hasattr(s, 'start_time') and s.date and s.start_time:
+                        try:
+                            s_start = datetime.combine(s.date, datetime.strptime(s.start_time, "%H:%M").time())
+                        except (ValueError, TypeError):
+                            pass
+                    if not s_end and hasattr(s, 'date') and hasattr(s, 'end_time') and s.date and s.end_time:
+                        try:
+                            s_end = datetime.combine(s.date, datetime.strptime(s.end_time, "%H:%M").time())
+                            if s_start and s_end <= s_start:
+                                s_end += timedelta(days=1)
+                        except (ValueError, TypeError):
+                            pass
+
+                    if s_start and s_end and s_start <= now <= s_end and cg_name and cg_name != 'Unassigned':
+                        result = {
+                            "client": client_full_name, "status": "active",
+                            "caregiver": cg_name,
+                            "source": "live_wellsky",
+                            "shift_start": s_start.strftime('%a %I:%M %p'),
+                            "shift_end": s_end.strftime('%a %I:%M %p'),
+                            "is_24hr_client": is_24hr_client,
+                            "message": f"{cg_name} is with {client_full_name} right now. Shift: {s_start.strftime('%a %I:%M %p')} - {s_end.strftime('%a %I:%M %p')}."
+                        }
+                        return json.dumps(result)
+            except Exception as e:
+                logger.warning(f"WellSky live API fallback failed (non-fatal): {e}")
+
+            # Step 3: No active shift found anywhere — find next upcoming + recent history
+            recent_shifts = []
+            for s in all_shifts:
+                start, end, cg_name, status = s
+                if start and end and end < now and cg_name:
+                    recent_shifts.append({"caregiver": cg_name, "start": start.strftime('%a %I:%M %p'), "end": end.strftime('%a %I:%M %p')})
+
+            next_shifts = [s for s in all_shifts if s[0] and s[0] > now]
+            next_info = None
+            if next_shifts:
+                ns = next_shifts[0]
+                next_info = {"caregiver": ns[2] or "Unassigned", "start": ns[0].strftime('%a %I:%M %p')}
+
+            # Build response — report facts, don't alarm
+            if is_24hr_client:
+                msg = f"{client_full_name} is a 24-hour care client."
+                if recent_shifts:
+                    last = recent_shifts[-1]
+                    msg += f" The last scheduled caregiver was {last['caregiver']} ({last['start']} - {last['end']})."
+                if next_info:
+                    msg += f" The next scheduled caregiver is {next_info['caregiver']} starting {next_info['start']}."
+                msg += f" The schedule does not show a caregiver assigned right now — this may be a gap in the scheduling system rather than actual missing coverage."
+            elif next_info:
+                msg = f"The schedule does not show an active shift for {client_full_name} right now."
+                if recent_shifts:
+                    last = recent_shifts[-1]
+                    msg += f" Last caregiver was {last['caregiver']} ({last['start']} - {last['end']})."
+                msg += f" Next scheduled: {next_info['caregiver']} at {next_info['start']}."
+            else:
+                msg = f"No shifts found in the schedule for {client_full_name} today or tomorrow."
+                if recent_shifts:
+                    last = recent_shifts[-1]
+                    msg += f" Last caregiver was {last['caregiver']} ({last['start']} - {last['end']})."
+
+            result = {
+                "client": client_full_name,
+                "status": "schedule_gap" if is_24hr_client else "no_active_shift",
+                "is_24hr_client": is_24hr_client,
+                "message": msg
+            }
+            if recent_shifts:
+                result["recent_shifts"] = recent_shifts[-3:]
+            if next_info:
+                result["next_shift"] = next_info
+            return json.dumps(result)
+
+        except Exception as e:
+            logger.error(f"get_client_current_status error: {e}", exc_info=True)
+            return json.dumps({"error": f"Failed to check status: {str(e)}"})
+        finally:
+            if conn:
+                conn.close()
 
     def _load_reply_history(self) -> dict:
         """Load reply history from persistent storage for loop prevention"""
@@ -377,11 +815,10 @@ class GigiRingCentralBot:
         self._save_reply_history()
 
     async def initialize(self):
-        """Initialize connections"""
+        """Initialize connections and RingCentral SDK"""
         logger.info("Initializing Gigi Manager Bot...")
 
         # Perform immediate health check SMS
-        # This confirms the bot has started and has send permissions
         await self.send_health_check_sms()
 
         status = self.rc_service.get_status()
@@ -405,8 +842,207 @@ class GigiRingCentralBot:
         except Exception as e:
             logger.warning(f"Could not get bot extension ID: {e}")
 
-        logger.info(f"Monitoring chat: {TARGET_CHAT} and Direct SMS")
+        # Initialize RingCentral SDK for WebSocket subscriptions
+        try:
+            client_id = os.getenv("RINGCENTRAL_CLIENT_ID")
+            client_secret = os.getenv("RINGCENTRAL_CLIENT_SECRET")
+            self.rc_sdk = RingCentralSDK(client_id, client_secret, RINGCENTRAL_SERVER)
+            self.rc_platform = self.rc_sdk.platform()
+            self.rc_platform.login(jwt=ADMIN_JWT_TOKEN)
+            logger.info("✅ RingCentral SDK logged in via JWT")
+        except Exception as e:
+            logger.error(f"RingCentral SDK login failed: {e}")
+            return False
+
+        logger.info(f"Monitoring chat: {TARGET_CHAT} and Direct SMS (WebSocket)")
         return True
+
+    async def run_sms_websocket(self):
+        """Run WebSocket subscription for real-time SMS on all company lines."""
+        # Subscribe to instant SMS events on:
+        # - Gigi's extension (~/extension/~ = ext 111, phone 307-459-8220)
+        # - Admin extension (ext 101, ID 262740009, receives 719-428-3999 SMS)
+        event_filters = [
+            "/restapi/v1.0/account/~/extension/~/message-store/instant?type=SMS",
+        ]
+        for ext in COMPANY_LINE_EXTENSIONS:
+            event_filters.append(
+                f"/restapi/v1.0/account/~/extension/{ext['ext_id']}/message-store/instant?type=SMS"
+            )
+        logger.info(f"📡 WebSocket subscribing to SMS events: {event_filters}")
+        ws_backoff = 30  # Start with 30s, increase on repeated failures
+
+        while True:
+            try:
+                self.ws_client = self.rc_sdk.create_web_socket_client()
+
+                def on_notification(message):
+                    """Handle real-time SMS notification from RingCentral."""
+                    asyncio.ensure_future(self._handle_sms_notification(message))
+
+                def on_ws_created(ws):
+                    nonlocal ws_backoff
+                    ws_backoff = 30  # Reset backoff on successful connection
+                    logger.info(f"📡 WebSocket connection established")
+
+                def on_sub_created(sub):
+                    info = sub.get_subscription_info()
+                    logger.info(f"📡 WebSocket subscription created: {info.get('id', 'unknown')}")
+
+                def on_error(error):
+                    logger.error(f"📡 WebSocket error: {error}")
+
+                def on_raw_message(message):
+                    """Log raw WebSocket messages and route ServerNotifications.
+
+                    The SDK's receiveSubscriptionNotification fires for ServerNotification
+                    messages (via WebSocketSubscription.on_message), so we only need this
+                    as a fallback for cases where the SDK callback doesn't fire.
+                    We use a flag to avoid double-processing.
+                    """
+                    try:
+                        import json as _json
+                        parsed = _json.loads(message) if isinstance(message, str) else message
+                        if isinstance(parsed, list) and len(parsed) > 0:
+                            msg_type = parsed[0].get("type", "unknown")
+                            logger.info(f"📡 WS raw msg: type={msg_type}")
+                            if msg_type == "ServerNotification":
+                                # Route to notification handler — SDK's on_notification
+                                # may also fire, but processed_message_ids prevents double-processing
+                                asyncio.ensure_future(self._handle_sms_notification(parsed))
+                    except Exception as e:
+                        logger.warning(f"📡 WS raw msg parse error: {e}")
+
+                self.ws_client.on(WebSocketEvents.receiveMessage, on_raw_message)
+                # NOTE: NOT registering receiveSubscriptionNotification separately —
+                # on_raw_message already routes ServerNotification messages to avoid double-processing
+                self.ws_client.on(WebSocketEvents.connectionCreated, on_ws_created)
+                self.ws_client.on(WebSocketEvents.subscriptionCreated, on_sub_created)
+                self.ws_client.on(WebSocketEvents.createConnectionError, on_error)
+
+                await asyncio.gather(
+                    self.ws_client.create_new_connection(),
+                    self.ws_client.create_subscription(event_filters),
+                )
+            except Exception as e:
+                logger.error(f"📡 WebSocket failed — reconnecting in {ws_backoff}s")
+                await asyncio.sleep(ws_backoff)
+                ws_backoff = min(ws_backoff * 2, 300)  # Exponential backoff, max 5 min
+                # Re-login SDK before retry — token may have expired (401 TokenInvalid)
+                try:
+                    self.rc_platform.login(jwt=ADMIN_JWT_TOKEN)
+                    logger.info("📡 SDK re-login successful before WebSocket reconnect")
+                except Exception as login_err:
+                    logger.error(f"📡 SDK re-login failed: {login_err}")
+
+    async def _handle_sms_notification(self, message):
+        """Process a real-time SMS notification from WebSocket subscription.
+
+        Notification format from SDK is a list: [meta, payload]
+        - meta: {"type": "ServerNotification", ...}
+        - payload: {"event": "...", "body": {"changes": [{"type": "SMS", "newMessageIds": [...]}]}}
+        """
+        try:
+            # Parse the notification — SDK passes it as a list [meta, payload]
+            if isinstance(message, list) and len(message) >= 2:
+                payload = message[1]
+            elif isinstance(message, dict):
+                payload = message
+            else:
+                logger.warning(f"📨 Unexpected notification format: {type(message)}")
+                return
+
+            body = payload.get("body", {})
+            event_filter = payload.get("event", "")
+            logger.info(f"📨 WebSocket SMS notification: event={event_filter}")
+
+            # Changes-style notification (newMessageIds to fetch)
+            changes = body.get("changes", [])
+            if changes:
+                for change in changes:
+                    change_type = change.get("type", "")
+                    new_ids = change.get("newMessageIds", [])
+                    if change_type == "SMS" and new_ids:
+                        logger.info(f"📨 New SMS message IDs: {new_ids}")
+                        for new_msg_id in new_ids:
+                            await self._fetch_and_process_sms(str(new_msg_id), event_filter)
+                return
+
+            # Direct message body (some instant filters may provide full message)
+            msg_id = str(body.get("id", ""))
+            if msg_id and msg_id not in self.processed_message_ids:
+                direction = body.get("direction", "")
+                msg_type = body.get("type", "")
+                if direction == "Inbound" and msg_type == "SMS":
+                    await self._process_sms_record(body, msg_id)
+
+        except Exception as e:
+            logger.error(f"Error handling SMS notification: {e}", exc_info=True)
+
+    async def _fetch_and_process_sms(self, msg_id: str, event_filter: str):
+        """Fetch a specific SMS message by ID and process it."""
+        if msg_id in self.processed_message_ids:
+            return
+        try:
+            token = self._get_admin_access_token()
+            if not token:
+                logger.error("No token to fetch SMS message")
+                return
+
+            # Determine extension ID from event filter
+            ext_id = "~"
+            if "/extension/" in event_filter:
+                parts = event_filter.split("/extension/")[1].split("/")
+                if parts[0] and parts[0] != "~":
+                    ext_id = parts[0]
+
+            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/{ext_id}/message-store/{msg_id}"
+            headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+            response = requests.get(url, headers=headers, timeout=15)
+
+            if response.status_code == 200:
+                sms_data = response.json()
+                if sms_data.get("direction") == "Inbound" and sms_data.get("type") == "SMS":
+                    await self._process_sms_record(sms_data, msg_id)
+                else:
+                    self.processed_message_ids.add(msg_id)
+            else:
+                logger.error(f"Failed to fetch SMS {msg_id}: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Error fetching SMS {msg_id}: {e}")
+
+    async def _process_sms_record(self, body: dict, msg_id: str):
+        """Process a single inbound SMS record."""
+        from_phone = body.get("from", {}).get("phoneNumber", "")
+        to_phone = (body.get("to", [{}])[0].get("phoneNumber", "") if body.get("to") else "")
+        text = body.get("subject", "")
+
+        logger.info(f"📨 Real-time SMS from {from_phone} → {to_phone}: {text[:60]}")
+
+        sms_record = {
+            "id": body.get("id"),
+            "from": body.get("from", {}),
+            "to": body.get("to", []),
+            "subject": text,
+            "direction": body.get("direction", ""),
+            "creationTime": body.get("creationTime", body.get("lastModifiedTime", "")),
+        }
+
+        # Role 1: Documenter (always)
+        await self.process_documentation(sms_record, text, source_type="sms", phone=from_phone)
+
+        # Role 2: Replier
+        if REPLIES_ENABLED:
+            own_numbers = [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777"]
+            if from_phone not in own_numbers:
+                await self.process_reply(sms_record, text, reply_method="sms", phone=from_phone)
+            else:
+                logger.info(f"⏭️ Skipping reply to company number: {from_phone}")
+
+        self.processed_message_ids.add(msg_id)
+
+        if len(self.processed_message_ids) > 1000:
+            self.processed_message_ids = set(list(self.processed_message_ids)[-500:])
 
     def _get_admin_access_token(self):
         """Exchange JWT for access token"""
@@ -517,18 +1153,26 @@ class GigiRingCentralBot:
         return is_weekday and is_working_hours
 
     async def check_and_act(self):
-        """Main loop: Run Documentation (always) and Reply (after-hours)"""
+        """Main loop: Team chat, DMs, SMS fallback polling, scheduled services."""
         try:
             status = "BUSINESS HOURS (Silent)" if self.is_business_hours() else "AFTER HOURS (Active)"
             logger.info(f"--- Gigi Bot Cycle: {status} ---")
 
-            # 1. Check Direct SMS (RingCentral SMS) - PRIORITY
-            await self.check_direct_sms()
+            # 1. SMS fallback poll (catches anything WebSocket missed, every 4th cycle = ~2 min)
+            if not hasattr(self, '_sms_poll_counter'):
+                self._sms_poll_counter = 0
+            self._sms_poll_counter += 1
+            if self._sms_poll_counter >= 4:
+                self._sms_poll_counter = 0
+                await self.check_direct_sms()
 
             # 2. Check Team Chats (Glip)
             await self.check_team_chats()
 
-            # 3. Check active shift-filling campaigns (every 5 min)
+            # 3. Check Direct Glip Messages (1:1 DMs)
+            await self.check_direct_glip_messages()
+
+            # 4. Check active shift-filling campaigns (every 5 min)
             if GIGI_SHIFT_MONITOR_ENABLED and self._active_campaigns:
                 now = datetime.utcnow()
                 if (now - self._last_campaign_check).total_seconds() >= CAMPAIGN_CHECK_INTERVAL_SECONDS:
@@ -590,6 +1234,7 @@ class GigiRingCentralBot:
         logger.info(f"Glip: Found {len(messages)} recent messages in {TARGET_CHAT}")
         messages.sort(key=lambda x: x.get("creationTime", ""))
 
+        new_msg_count = 0
         for msg in messages:
             msg_id = msg.get("id")
             if msg_id in self.processed_message_ids:
@@ -599,45 +1244,152 @@ class GigiRingCentralBot:
             creation_time_str = msg.get("creationTime", "")
             if creation_time_str:
                 try:
-                    # RC timestamp format: 2026-02-03T18:10:34Z
                     creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
                 except ValueError:
                     try:
                         creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%SZ")
                     except ValueError:
                         creation_time = None
-                
+
                 if creation_time and creation_time < self.startup_time:
-                    logger.debug(f"Skipping historical Glip message {msg_id} (pre-startup)")
                     self.processed_message_ids.add(msg_id)
                     continue
 
             # CRITICAL: Skip messages sent by the bot itself to prevent infinite loops
             creator_id = str(msg.get("creatorId", ""))
             if self.bot_extension_id and creator_id == self.bot_extension_id:
-                logger.debug(f"Skipping message from bot itself: {msg_id}")
                 self.processed_message_ids.add(msg_id)
                 continue
 
-            # Also skip messages that look like bot replies (double safety)
             text = msg.get("text", "")
-            if text.startswith(("Thanks for your message!", "I hear you.", "Got it.", "I've processed", "I've noted")):
-                logger.debug(f"Skipping bot-like message: {msg_id}")
-                self.processed_message_ids.add(msg_id)
-                continue
+            # RC @mentions may include ![:Person](id) format — extract clean text
+            # Also check mentions array for Gigi's name
+            mentions = msg.get("mentions", [])
+            mentioned_names = [m.get("name", "").lower() for m in mentions] if mentions else []
 
-            logger.info(f"Glip: Processing new message {msg_id}: {text[:30]}...")
+            new_msg_count += 1
+            logger.info(f"Glip: Processing new message {msg_id}: {text[:60]}...")
             await self.process_documentation(msg, text, source_type="chat")
 
-            # Only reply on team chat if someone directly addresses Gigi AND replies are enabled
-            if REPLIES_ENABLED and not self.is_business_hours() and "gigi" in text.lower():
-                logger.info(f"Gigi addressed in team chat — replying")
-                await self.process_reply(msg, text, reply_method="chat")
+            # Reply when someone mentions Gigi OR is in an active conversation with her
+            gigi_mentioned = "gigi" in text.lower() or any("gigi" in n for n in mentioned_names)
+
+            # Check if this person has an active conversation with Gigi (within 5 min)
+            in_active_convo = False
+            if creator_id in self._team_chat_active_conversations:
+                last_time = self._team_chat_active_conversations[creator_id]
+                if (datetime.utcnow() - last_time).total_seconds() < 300:
+                    in_active_convo = True
+
+            if gigi_mentioned or in_active_convo:
+                sender_name = self._resolve_sender_name(creator_id) if creator_id else "Team member"
+                reason = "mentioned" if gigi_mentioned else "active conversation"
+                logger.info(f"Gigi replying in team chat ({reason}) to {sender_name}")
+                chat = self.rc_service.find_chat_by_name(TARGET_CHAT)
+                chat_id = chat.get("id") if chat else "team"
+                reply = await self._get_llm_dm_reply(text, sender_name, f"team_{chat_id}")
+                if reply:
+                    try:
+                        self.rc_service.send_message_to_chat(TARGET_CHAT, reply)
+                        logger.info(f"Team chat reply sent: {reply[:50]}...")
+                        # Track this as an active conversation
+                        self._team_chat_active_conversations[creator_id] = datetime.utcnow()
+                    except Exception as e:
+                        logger.error(f"Failed to send team chat reply: {e}")
+                # Update conversation tracking even on initial mention
+                if gigi_mentioned:
+                    self._team_chat_active_conversations[creator_id] = datetime.utcnow()
 
             self.processed_message_ids.add(msg_id)
 
+        if new_msg_count == 0:
+            logger.debug(f"Glip: All {len(messages)} messages in {TARGET_CHAT} were pre-startup or already processed")
+
+    async def check_direct_glip_messages(self):
+        """Monitor Glip 1:1 direct message conversations and reply via Claude."""
+        try:
+            direct_chats = self.rc_service.list_direct_chats()
+            if not direct_chats:
+                return
+
+            for chat in direct_chats:
+                chat_id = chat.get("id")
+                if not chat_id:
+                    continue
+
+                # Get recent messages from this DM
+                messages = self.rc_service.get_chat_messages(
+                    chat_id,
+                    since=datetime.utcnow() - timedelta(minutes=10),
+                    limit=10
+                )
+                if not messages:
+                    continue
+
+                messages.sort(key=lambda x: x.get("creationTime", ""))
+
+                for msg in messages:
+                    msg_id = msg.get("id")
+                    if msg_id in self.processed_message_ids:
+                        continue
+
+                    # Skip historical messages (older than startup)
+                    creation_time_str = msg.get("creationTime", "")
+                    if creation_time_str:
+                        try:
+                            creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%S.%fZ")
+                        except ValueError:
+                            try:
+                                creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%SZ")
+                            except ValueError:
+                                creation_time = None
+
+                        if creation_time and creation_time < self.startup_time:
+                            self.processed_message_ids.add(msg_id)
+                            continue
+
+                    # Skip messages from bot itself
+                    creator_id = str(msg.get("creatorId", ""))
+                    if self.bot_extension_id and creator_id == self.bot_extension_id:
+                        self.processed_message_ids.add(msg_id)
+                        continue
+
+                    text = msg.get("text", "").strip()
+                    if not text:
+                        self.processed_message_ids.add(msg_id)
+                        continue
+
+                    sender_name = self._resolve_sender_name(creator_id)
+                    logger.info(f"Glip DM: New message from {sender_name} ({creator_id}) in chat {chat_id}: {text[:50]}...")
+
+                    # Get LLM reply using Chief of Staff prompt
+                    reply = None
+                    if self.llm:
+                        try:
+                            reply = await self._get_llm_dm_reply(text, sender_name, chat_id)
+                        except Exception as e:
+                            logger.error(f"LLM DM reply failed ({self.llm_provider}): {e}")
+
+                    if not reply:
+                        reply = f"Hi {sender_name.split()[0]}! Let me look into that and get back to you."
+
+                    # Reply in the same DM chat
+                    try:
+                        result = self.rc_service.post_to_chat(chat_id, reply)
+                        if result:
+                            logger.info(f"Glip DM reply sent to chat {chat_id}: {reply[:50]}...")
+                        else:
+                            logger.error(f"Failed to send Glip DM reply to chat {chat_id}")
+                    except Exception as e:
+                        logger.error(f"Error sending Glip DM reply: {e}")
+
+                    self.processed_message_ids.add(msg_id)
+
+        except Exception as e:
+            logger.error(f"Failed to check direct Glip messages: {e}")
+
     async def check_direct_sms(self):
-        """Monitor RingCentral SMS using Admin Token for full visibility"""
+        """Monitor RingCentral SMS across Gigi's extension AND company lines."""
         # Get access token from JWT
         token = self._get_admin_access_token()
 
@@ -646,34 +1398,54 @@ class GigiRingCentralBot:
             return
 
         try:
-            # Poll the extension message-store (x101 context)
-            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/message-store"
-            params = {
-                "messageType": "SMS",
-                "dateFrom": (datetime.utcnow() - timedelta(hours=12)).isoformat(), # 12h lookback for missed msgs
-                "perPage": 100
-            }
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Accept": "application/json"
             }
+            params = {
+                "messageType": "SMS",
+                "dateFrom": (datetime.utcnow() - timedelta(hours=12)).isoformat(),
+                "perPage": 100
+            }
 
-            logger.info("SMS: Polling extension message-store (x101 Admin context) - JWT→Token")
-            response = requests.get(url, headers=headers, params=params, timeout=20)
-            if response.status_code != 200:
-                logger.error(f"RC SMS Store Error: {response.status_code} - {response.text}")
-                return
+            # Poll Gigi's own extension (307 number) + company line extensions (719, etc.)
+            extensions_to_poll = [
+                {"ext_id": "~", "label": "307-459-8220 (Gigi)"},
+            ] + COMPANY_LINE_EXTENSIONS
 
-            data = response.json()
-            records = data.get("records", [])
-            
-            for sms in records:
+            all_records = []
+            for ext_info in extensions_to_poll:
+                ext_id = ext_info["ext_id"]
+                label = ext_info["label"]
+                url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/{ext_id}/message-store"
+                logger.info(f"SMS: Polling {label} message-store")
+                try:
+                    response = requests.get(url, headers=headers, params=params, timeout=20)
+                    if response.status_code == 200:
+                        records = response.json().get("records", [])
+                        # Tag each record with the line it came from
+                        for r in records:
+                            r["_company_line"] = label
+                        all_records.extend(records)
+                    else:
+                        logger.error(f"RC SMS Store Error ({label}): {response.status_code}")
+                except Exception as e:
+                    logger.error(f"Failed to poll {label}: {e}")
+
+            for sms in all_records:
                 msg_id = str(sms.get("id"))
                 from_phone = sms.get("from", {}).get("phoneNumber")
                 to_phone = sms.get("to", [{}])[0].get("phoneNumber")
                 text = sms.get("subject", "")
-                
+                line_label = sms.get("_company_line", "")
+
                 if msg_id in self.processed_message_ids:
+                    continue
+
+                # Only process inbound messages from company lines (skip outbound)
+                direction = sms.get("direction", "")
+                if line_label != "307-459-8220 (Gigi)" and direction == "Outbound":
+                    self.processed_message_ids.add(msg_id)
                     continue
 
                 # Skip historical SMS (older than startup) to prevent bursts on restart
@@ -686,24 +1458,22 @@ class GigiRingCentralBot:
                             creation_time = datetime.strptime(creation_time_str, "%Y-%m-%dT%H:%M:%SZ")
                         except ValueError:
                             creation_time = None
-                    
+
                     if creation_time and creation_time < self.startup_time:
-                        logger.debug(f"Skipping historical SMS {msg_id} (pre-startup)")
                         self.processed_message_ids.add(msg_id)
                         continue
-                
-                # Check for duplicate replies within 60s window (cooldown)
 
                 # Role 1: Documenter
                 await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
 
-                # Role 2: Replier (only when REPLIES_ENABLED)
-                if REPLIES_ENABLED and not self.is_business_hours():
-                    # IMPORTANT: Don't reply if it's from US (to prevent loops)
-                    if from_phone not in [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777", "+16039971495"]:
+                # Role 2: Replier
+                if REPLIES_ENABLED:
+                    # Don't reply to our own numbers (prevent loops), but DO reply to real people
+                    own_numbers = [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777"]
+                    if from_phone not in own_numbers:
                         await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
                     else:
-                        logger.info(f"⏭️ Skipping reply to internal/company number: {from_phone}")
+                        logger.info(f"⏭️ Skipping reply to company number: {from_phone}")
 
                 self.processed_message_ids.add(msg_id)
 
@@ -1258,7 +2028,29 @@ class GigiRingCentralBot:
             except (ValueError, TypeError):
                 pass
 
-        return list(convo.get("messages", []))
+        msgs = list(convo.get("messages", []))
+        # Validate: strip ALL leading orphaned messages until we hit a plain user text.
+        # Orphaned = assistant messages OR user messages containing tool_result
+        # (both crash Claude if they appear without proper preceding context)
+        changed = True
+        while changed and msgs:
+            changed = False
+            # Strip leading assistant messages (orphaned tool_use or stale text)
+            if msgs[0].get("role") == "assistant":
+                msgs.pop(0)
+                changed = True
+                continue
+            # Strip leading user messages that contain tool_result (orphaned)
+            if msgs[0].get("role") == "user" and isinstance(msgs[0].get("content"), list):
+                has_tool_result = any(
+                    isinstance(c, dict) and c.get("type") == "tool_result"
+                    for c in msgs[0]["content"]
+                )
+                if has_tool_result:
+                    msgs.pop(0)
+                    changed = True
+                    continue
+        return msgs
 
     def _add_to_conversation(self, phone: str, role: str, content):
         """Append a message to conversation history for a phone number"""
@@ -1277,13 +2069,16 @@ class GigiRingCentralBot:
         self._save_sms_conversations()
 
     # =========================================================================
-    # Claude SMS Tool Execution
+    # SMS Tool Execution
     # =========================================================================
 
     def _execute_sms_tool(self, tool_name: str, tool_input: dict, caller_phone: str = None) -> str:
         """Execute a tool call and return the result as a JSON string"""
         try:
-            if tool_name == "identify_caller":
+            if tool_name == "get_client_current_status":
+                return self._get_client_current_status(tool_input.get("client_name", ""))
+
+            elif tool_name == "identify_caller":
                 phone = tool_input.get("phone_number", caller_phone or "")
                 # Use fast SQL lookup (checks all 4 tables: staff, practitioners, patients, family)
                 try:
@@ -1454,101 +2249,766 @@ class GigiRingCentralBot:
                 )
                 return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name}. Admin task created."})
 
+            elif tool_name == "save_memory":
+                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
+                    return json.dumps({"error": "Memory system not available"})
+                content = tool_input.get("content", "")
+                category = tool_input.get("category", "general")
+                importance = tool_input.get("importance", "medium")
+                impact_map = {"high": ImpactLevel.HIGH, "medium": ImpactLevel.MEDIUM, "low": ImpactLevel.LOW}
+                memory_id = _rc_memory_system.create_memory(
+                    content=content, memory_type=MemoryType.EXPLICIT_INSTRUCTION,
+                    source=MemorySource.EXPLICIT, confidence=1.0,
+                    category=category, impact_level=impact_map.get(importance, ImpactLevel.MEDIUM)
+                )
+                return json.dumps({"saved": True, "memory_id": memory_id, "content": content})
+
+            elif tool_name == "recall_memories":
+                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
+                    return json.dumps({"memories": [], "message": "Memory system not available"})
+                category = tool_input.get("category")
+                search_text = tool_input.get("search_text")
+                memories = _rc_memory_system.query_memories(category=category, min_confidence=0.3, limit=10)
+                if search_text:
+                    search_lower = search_text.lower()
+                    memories = [m for m in memories if search_lower in m.content.lower()]
+                results = [{"id": m.id, "content": m.content, "category": m.category,
+                           "confidence": float(m.confidence), "type": m.type.value} for m in memories]
+                return json.dumps({"memories": results, "count": len(results)})
+
+            elif tool_name == "forget_memory":
+                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
+                    return json.dumps({"error": "Memory system not available"})
+                memory_id = tool_input.get("memory_id", "")
+                memory = _rc_memory_system.get_memory(memory_id)
+                if not memory:
+                    return json.dumps({"error": f"Memory {memory_id} not found"})
+                with _rc_memory_system._get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("UPDATE gigi_memories SET status = 'archived' WHERE id = %s", (memory_id,))
+                        _rc_memory_system._log_event(cur, memory_id, "archived", memory.confidence, memory.confidence, "User requested forget")
+                    conn.commit()
+                return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
         except Exception as e:
             logger.error(f"SMS tool error ({tool_name}): {e}")
+            if RC_FAILURE_HANDLER_AVAILABLE and _rc_failure_handler:
+                try:
+                    _rc_failure_handler.handle_tool_failure(tool_name, e, {"tool_input": str(tool_input)[:200]})
+                except Exception:
+                    pass
             return json.dumps({"error": f"Tool {tool_name} failed: {str(e)}"})
 
     # =========================================================================
-    # Claude SMS Reply Generation
+    # LLM SMS Reply Generation (Gemini or Anthropic)
     # =========================================================================
 
-    async def _get_claude_sms_reply(self, text: str, phone: str) -> str:
-        """Get an intelligent reply from Claude with tool calling. Returns reply text or None."""
-        if not self.claude:
+    async def _get_llm_sms_reply(self, text: str, phone: str) -> str:
+        """Get an intelligent reply with tool calling. Returns reply text or None."""
+        if not self.llm:
             return None
 
+        now = datetime.now(TIMEZONE)
+        system = SMS_SYSTEM_PROMPT.format(
+            current_date=now.strftime("%A, %B %d, %Y at %I:%M %p MT"),
+            caller_phone=phone
+        )
+
+        # Inject mode context and memories
+        if RC_MODE_AVAILABLE and _rc_mode_detector:
+            try:
+                mode_info = _rc_mode_detector.get_current_mode()
+                system += f"\n\nCurrent Operating Mode: {mode_info.mode.value.upper()} (source: {mode_info.source.value})"
+            except Exception:
+                pass
+
+        if RC_MEMORY_AVAILABLE and _rc_memory_system:
+            try:
+                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=5)
+                if memories:
+                    memory_lines = [f"- {m.content} ({m.category})" for m in memories]
+                    system += "\n\nYour Saved Memories:\n" + "\n".join(memory_lines)
+            except Exception:
+                pass
+
+        # Get text-only conversation history for context
+        conv_history = self._get_conversation_history(phone)
+        conv_history.append({"role": "user", "content": text})
+        self._add_to_conversation(phone, "user", text)
+
         try:
-            now = datetime.now(TIMEZONE)
-            system = SMS_SYSTEM_PROMPT.format(
-                current_date=now.strftime("%A, %B %d, %Y at %I:%M %p MT"),
-                caller_phone=phone
-            )
-
-            messages = self._get_conversation_history(phone)
-            messages.append({"role": "user", "content": text})
-            self._add_to_conversation(phone, "user", text)
-
-            response = self.claude.messages.create(
-                model=CLAUDE_MODEL,
-                max_tokens=CLAUDE_MAX_TOKENS,
-                system=system,
-                tools=SMS_TOOLS,
-                messages=messages
-            )
-
-            tool_round = 0
-            while response.stop_reason == "tool_use" and tool_round < CLAUDE_MAX_TOOL_ROUNDS:
-                tool_round += 1
-                logger.info(f"SMS Claude tool round {tool_round}")
-
-                tool_results = []
-                assistant_content = []
-
-                for block in response.content:
-                    if block.type == "tool_use":
-                        logger.info(f"  Tool: {block.name}({json.dumps(block.input)[:100]})")
-                        result = self._execute_sms_tool(block.name, block.input, caller_phone=phone)
-                        logger.info(f"  Result: {result[:200]}")
-
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": block.id,
-                            "content": result
-                        })
-                        assistant_content.append({
-                            "type": "tool_use",
-                            "id": block.id,
-                            "name": block.name,
-                            "input": block.input
-                        })
-                    elif block.type == "text":
-                        assistant_content.append({
-                            "type": "text",
-                            "text": block.text
-                        })
-
-                self._add_to_conversation(phone, "assistant", assistant_content)
-                self._add_to_conversation(phone, "user", tool_results)
-
-                messages = self._get_conversation_history(phone)
-
-                response = self.claude.messages.create(
-                    model=CLAUDE_MODEL,
-                    max_tokens=CLAUDE_MAX_TOKENS,
-                    system=system,
-                    tools=SMS_TOOLS,
-                    messages=messages
-                )
-
-            # Extract final text
-            final_text = ""
-            for block in response.content:
-                if block.type == "text":
-                    final_text += block.text
+            if self.llm_provider == "gemini":
+                final_text = await self._call_gemini(system, conv_history, GEMINI_SMS_TOOLS,
+                                                     lambda name, inp: self._execute_sms_tool(name, inp, caller_phone=phone),
+                                                     "SMS")
+            else:
+                final_text = await self._call_anthropic(system, conv_history, SMS_TOOLS,
+                                                        lambda name, inp: self._execute_sms_tool(name, inp, caller_phone=phone),
+                                                        "SMS")
 
             if not final_text:
-                final_text = "Thanks for your message. I'll have the office follow up with you in the morning."
+                final_text = "Thanks for your message. I'll have the office follow up with you shortly."
 
             self._add_to_conversation(phone, "assistant", final_text)
-            logger.info(f"Claude SMS reply ({tool_round} tool rounds, {len(final_text)} chars)")
             return final_text
 
         except Exception as e:
-            logger.error(f"Claude SMS reply error: {e}", exc_info=True)
+            logger.error(f"LLM SMS reply error ({self.llm_provider}): {e}", exc_info=True)
             return None
+
+    # =========================================================================
+    # LLM Glip DM Reply Generation (Gemini or Anthropic)
+    # =========================================================================
+
+    async def _get_llm_dm_reply(self, text: str, sender_name: str, chat_id: str) -> str:
+        """Get an intelligent reply for Glip DMs. Uses Chief of Staff prompt."""
+        if not self.llm:
+            return None
+
+        now = datetime.now(TIMEZONE)
+        system = GLIP_DM_SYSTEM_PROMPT.format(
+            sender_name=sender_name,
+            current_date=now.strftime("%A, %B %d, %Y at %I:%M %p MT"),
+        )
+
+        # Inject mode context and memories
+        if RC_MODE_AVAILABLE and _rc_mode_detector:
+            try:
+                mode_info = _rc_mode_detector.get_current_mode()
+                system += f"\n\nCurrent Operating Mode: {mode_info.mode.value.upper()} (source: {mode_info.source.value})"
+            except Exception:
+                pass
+
+        if RC_MEMORY_AVAILABLE and _rc_memory_system:
+            try:
+                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=10)
+                if memories:
+                    memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
+                    system += "\n\nYour Saved Memories:\n" + "\n".join(memory_lines)
+            except Exception:
+                pass
+
+        conv_key = f"dm_{chat_id}"
+        conv_history = self._get_conversation_history(conv_key)
+        conv_history.append({"role": "user", "content": text})
+        self._add_to_conversation(conv_key, "user", text)
+
+        try:
+            if self.llm_provider == "gemini":
+                final_text = await self._call_gemini(system, conv_history, GEMINI_DM_TOOLS,
+                                                     lambda name, inp: self._execute_dm_tool(name, inp),
+                                                     "DM")
+            else:
+                final_text = await self._call_anthropic(system, conv_history, DM_TOOLS,
+                                                        lambda name, inp: self._execute_dm_tool(name, inp),
+                                                        "DM")
+
+            if not final_text:
+                final_text = "I checked our records but couldn't find the specific information. Please text or call the office for assistance."
+
+            self._add_to_conversation(conv_key, "assistant", final_text)
+            logger.info(f"LLM DM reply to {sender_name} ({self.llm_provider}, {len(final_text)} chars)")
+            return final_text
+
+        except Exception as e:
+            logger.error(f"LLM DM reply error ({self.llm_provider}): {e}", exc_info=True)
+            # If conversation history is corrupted, clear and return None
+            clean_key = ''.join(filter(str.isdigit, conv_key))[-10:]
+            self.sms_conversations.pop(clean_key, None)
+            self._save_sms_conversations()
+            return None
+
+    # =========================================================================
+    # Gemini Provider — tool calling loop
+    # =========================================================================
+
+    async def _call_gemini(self, system_prompt: str, conv_history: list, tools, tool_executor, channel: str) -> str:
+        """Call Gemini with tool support. conv_history is text-only [{role, content}]."""
+        # Build Gemini-format contents from text-only history (skip non-text entries from old format)
+        contents = []
+        for m in conv_history:
+            content_val = m.get("content", "")
+            if not isinstance(content_val, str):
+                continue  # Skip old tool_use/tool_result list entries
+            role = "user" if m["role"] == "user" else "model"
+            contents.append(genai_types.Content(
+                role=role,
+                parts=[genai_types.Part(text=content_val)]
+            ))
+
+        config = genai_types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            tools=tools,
+        )
+
+        response = self.llm.models.generate_content(
+            model=LLM_MODEL, contents=contents, config=config
+        )
+
+        tool_round = 0
+        for _ in range(LLM_MAX_TOOL_ROUNDS):
+            # Check if response has function calls
+            function_calls = []
+            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'function_call') and part.function_call:
+                        function_calls.append(part)
+
+            if not function_calls:
+                break
+
+            tool_round += 1
+            logger.info(f"{channel} Gemini tool round {tool_round}")
+
+            # Add model's response to contents
+            contents.append(response.candidates[0].content)
+
+            # Execute each tool and build function response parts
+            fn_response_parts = []
+            for part in function_calls:
+                fc = part.function_call
+                tool_input = dict(fc.args) if fc.args else {}
+                logger.info(f"  Tool: {fc.name}({json.dumps(tool_input)[:100]})")
+
+                # tool_executor may be sync or async (lambda wrapping async)
+                result_str = tool_executor(fc.name, tool_input)
+                if asyncio.iscoroutine(result_str):
+                    result_str = await result_str
+                logger.info(f"  Result: {result_str[:200]}")
+
+                try:
+                    result_data = json.loads(result_str)
+                except (json.JSONDecodeError, TypeError):
+                    result_data = {"result": result_str}
+
+                fn_response_parts.append(
+                    genai_types.Part.from_function_response(
+                        name=fc.name, response=result_data
+                    )
+                )
+
+            contents.append(genai_types.Content(role="user", parts=fn_response_parts))
+
+            response = self.llm.models.generate_content(
+                model=LLM_MODEL, contents=contents, config=config
+            )
+
+        # Extract final text
+        text_parts = []
+        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'text') and part.text:
+                    text_parts.append(part.text)
+
+        final_text = "".join(text_parts)
+        logger.info(f"{channel} Gemini reply ({tool_round} tool rounds, {len(final_text)} chars)")
+        return final_text
+
+    # =========================================================================
+    # Anthropic Provider — tool calling loop (fallback)
+    # =========================================================================
+
+    async def _call_anthropic(self, system_prompt: str, conv_history: list, tools, tool_executor, channel: str) -> str:
+        """Call Anthropic Claude with tool support. conv_history is text-only [{role, content}]."""
+        # Build Anthropic-format messages from text-only history (skip non-text entries from old format)
+        messages = [{"role": m["role"], "content": m["content"]}
+                    for m in conv_history if isinstance(m.get("content"), str)]
+
+        response = self.llm.messages.create(
+            model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
+            system=system_prompt, tools=tools,
+            messages=messages
+        )
+
+        tool_round = 0
+        while response.stop_reason == "tool_use" and tool_round < LLM_MAX_TOOL_ROUNDS:
+            tool_round += 1
+            logger.info(f"{channel} Anthropic tool round {tool_round}")
+
+            tool_results = []
+            assistant_content = []
+
+            for block in response.content:
+                if block.type == "tool_use":
+                    logger.info(f"  Tool: {block.name}({json.dumps(block.input)[:100]})")
+
+                    result = tool_executor(block.name, block.input)
+                    if asyncio.iscoroutine(result):
+                        result = await result
+                    logger.info(f"  Result: {result[:200]}")
+
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result
+                    })
+                    assistant_content.append({
+                        "type": "tool_use", "id": block.id,
+                        "name": block.name, "input": block.input
+                    })
+                elif block.type == "text":
+                    assistant_content.append({"type": "text", "text": block.text})
+
+            messages.append({"role": "assistant", "content": assistant_content})
+            messages.append({"role": "user", "content": tool_results})
+
+            response = self.llm.messages.create(
+                model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
+                system=system_prompt, tools=tools,
+                messages=messages
+            )
+
+        final_text = "".join(b.text for b in response.content if b.type == "text")
+
+        # If exhausted tool rounds without generating text, force a summary
+        if not final_text and tool_round >= LLM_MAX_TOOL_ROUNDS:
+            logger.info(f"{channel} Anthropic exhausted {tool_round} tool rounds — forcing text summary")
+            messages.append({"role": "assistant", "content": [{"type": "text", "text": "Based on the information I've gathered, let me summarize:"}]})
+            messages.append({"role": "user", "content": "Please summarize what you found from the tools you just called. Give a direct, complete answer."})
+            summary_response = self.llm.messages.create(
+                model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
+                system=system_prompt, messages=messages
+            )
+            final_text = "".join(b.text for b in summary_response.content if b.type == "text")
+
+        logger.info(f"{channel} Anthropic reply ({tool_round} tool rounds, {len(final_text)} chars)")
+        return final_text
+
+    # =========================================================================
+    # DM Tool Execution (full tool set matching Telegram capabilities)
+    # =========================================================================
+
+    async def _execute_dm_tool(self, tool_name: str, tool_input: dict) -> str:
+        """Execute a DM tool — full feature parity with Telegram bot."""
+        import psycopg2
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+
+        try:
+            if tool_name == "get_client_current_status":
+                return self._get_client_current_status(tool_input.get("client_name", ""))
+
+            elif tool_name == "get_wellsky_clients":
+                search_name = tool_input.get("search_name", "")
+                active_only = tool_input.get("active_only", True)
+                conn = None
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    if search_name:
+                        search_lower = f"%{search_name.lower()}%"
+                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email
+                                 FROM cached_patients WHERE (lower(full_name) LIKE %s
+                                 OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
+                        params = [search_lower, search_lower, search_lower]
+                        if active_only:
+                            sql += " AND is_active = true"
+                        sql += " ORDER BY full_name LIMIT 20"
+                        cur.execute(sql, params)
+                    else:
+                        sql = "SELECT id, first_name, last_name, full_name, phone, home_phone, email FROM cached_patients"
+                        if active_only:
+                            sql += " WHERE is_active = true"
+                        sql += " ORDER BY full_name LIMIT 100"
+                        cur.execute(sql)
+                    rows = cur.fetchall()
+                    clients = [{"id": str(r[0]), "name": r[3], "phone": r[4] or r[5] or ""} for r in rows]
+                    return json.dumps({"count": len(clients), "clients": clients})
+                finally:
+                    if conn:
+                        conn.close()
+
+            elif tool_name == "get_wellsky_caregivers":
+                search_name = tool_input.get("search_name", "")
+                active_only = tool_input.get("active_only", True)
+                conn = None
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    if search_name:
+                        search_lower = f"%{search_name.lower()}%"
+                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email
+                                 FROM cached_practitioners WHERE (lower(full_name) LIKE %s
+                                 OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
+                        params = [search_lower, search_lower, search_lower]
+                        if active_only:
+                            sql += " AND is_active = true"
+                        sql += " ORDER BY full_name LIMIT 20"
+                        cur.execute(sql, params)
+                    else:
+                        sql = "SELECT id, first_name, last_name, full_name, phone, home_phone, email FROM cached_practitioners"
+                        if active_only:
+                            sql += " WHERE is_active = true"
+                        sql += " ORDER BY full_name LIMIT 100"
+                        cur.execute(sql)
+                    rows = cur.fetchall()
+                    caregivers = [{"id": str(r[0]), "name": r[3], "phone": r[4] or r[5] or ""} for r in rows]
+                    return json.dumps({"count": len(caregivers), "caregivers": caregivers})
+                finally:
+                    if conn:
+                        conn.close()
+
+            elif tool_name == "get_wellsky_shifts":
+                days = min(tool_input.get("days", 7), 30)
+                past_days = min(tool_input.get("past_days", 0), 90)
+                open_only = tool_input.get("open_only", False)
+                client_id = tool_input.get("client_id")
+                caregiver_id = tool_input.get("caregiver_id")
+                if past_days > 0:
+                    date_from = date.today() - timedelta(days=past_days)
+                    date_to = date.today()
+                else:
+                    date_from = date.today()
+                    date_to = date.today() + timedelta(days=days)
+                conn = None
+                try:
+                    conn = psycopg2.connect(db_url)
+                    cur = conn.cursor()
+                    conditions = ["a.scheduled_start >= %s", "a.scheduled_start < %s"]
+                    params = [date_from, date_to]
+                    if client_id:
+                        conditions.append("a.patient_id = %s")
+                        params.append(client_id)
+                    if caregiver_id:
+                        conditions.append("a.practitioner_id = %s")
+                        params.append(caregiver_id)
+                    if open_only:
+                        conditions.append("(a.practitioner_id IS NULL OR a.status IN ('open', 'pending', 'proposed'))")
+                    where = " AND ".join(conditions)
+                    cur.execute(f"""
+                        SELECT a.id, a.scheduled_start, a.scheduled_end, a.status,
+                               p.full_name as client_name, pr.full_name as caregiver_name
+                        FROM cached_appointments a
+                        LEFT JOIN cached_patients p ON a.patient_id = p.id
+                        LEFT JOIN cached_practitioners pr ON a.practitioner_id = pr.id
+                        WHERE {where} ORDER BY a.scheduled_start LIMIT 50
+                    """, params)
+                    shift_list = []
+                    total_hours = 0
+                    for row in cur.fetchall():
+                        hours = round((row[2] - row[1]).total_seconds() / 3600, 1) if row[1] and row[2] else None
+                        if hours:
+                            total_hours += hours
+                        shift_list.append({
+                            "date": row[1].strftime("%a %m/%d") if row[1] else None,
+                            "start": row[1].strftime("%I:%M %p") if row[1] else None,
+                            "end": row[2].strftime("%I:%M %p") if row[2] else None,
+                            "status": row[3], "client": row[4] or "Unknown",
+                            "caregiver": row[5] or "Unassigned", "hours": hours
+                        })
+                    return json.dumps({"count": len(shift_list), "total_hours": round(total_hours, 1),
+                                       "date_range": f"{date_from} to {date_to}", "shifts": shift_list})
+                finally:
+                    if conn:
+                        conn.close()
+
+            elif tool_name == "get_weather":
+                location = tool_input.get("location", "")
+                if not location:
+                    return json.dumps({"error": "No location provided"})
+                import httpx
+                try:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.get(f"https://wttr.in/{location}?format=j1")
+                        if resp.status_code == 200:
+                            w = resp.json()
+                            current = w.get("current_condition", [{}])[0]
+                            forecast = w.get("weather", [{}])[0]
+                            area = w.get("nearest_area", [{}])[0].get("areaName", [{}])[0].get("value", location)
+                            return json.dumps({"location": area, "temp_f": current.get("temp_F"),
+                                "feels_like_f": current.get("FeelsLikeF"),
+                                "description": current.get("weatherDesc", [{}])[0].get("value"),
+                                "humidity": current.get("humidity"), "wind_mph": current.get("windspeedMiles"),
+                                "high_f": forecast.get("maxtempF"), "low_f": forecast.get("mintempF")})
+                except Exception as e:
+                    logger.warning(f"Weather API failed: {e}")
+                try:
+                    from ddgs import DDGS
+                    results = DDGS().text(f"current weather {location}", max_results=1)
+                    if results:
+                        return json.dumps({"location": location, "weather": results[0].get("body")})
+                except Exception:
+                    pass
+                return json.dumps({"error": "Weather service temporarily unavailable"})
+
+            elif tool_name == "web_search":
+                query = tool_input.get("query", "")
+                if not query:
+                    return json.dumps({"error": "No search query provided"})
+                try:
+                    from ddgs import DDGS
+                    results = DDGS().text(query, max_results=5)
+                    if results:
+                        formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "url": r.get("href", "")} for r in results]
+                        return json.dumps({"query": query, "results": formatted})
+                except Exception as e:
+                    logger.warning(f"Web search failed: {e}")
+                return json.dumps({"query": query, "message": "No results found."})
+
+            elif tool_name == "get_stock_price":
+                symbol = tool_input.get("symbol", "").upper()
+                if not symbol:
+                    return json.dumps({"error": "No stock symbol provided"})
+                import httpx
+                try:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d",
+                            headers={"User-Agent": "Mozilla/5.0 (CareAssist/1.0)"})
+                        if resp.status_code == 200:
+                            meta = resp.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
+                            price = meta.get("regularMarketPrice")
+                            if price:
+                                prev = meta.get("chartPreviousClose") or meta.get("previousClose", 0)
+                                change = price - prev if prev else 0
+                                pct = (change / prev * 100) if prev else 0
+                                return json.dumps({"symbol": symbol, "price": f"${price:.2f}",
+                                    "change": f"${change:+.2f}", "change_percent": f"{pct:+.2f}%"})
+                except Exception as e:
+                    logger.warning(f"Stock price error: {e}")
+                return json.dumps({"error": f"Could not find stock price for {symbol}"})
+
+            elif tool_name == "get_crypto_price":
+                symbol = tool_input.get("symbol", "").upper()
+                if not symbol:
+                    return json.dumps({"error": "No crypto symbol provided"})
+                crypto_map = {"BTC": "bitcoin", "BITCOIN": "bitcoin", "ETH": "ethereum",
+                    "DOGE": "dogecoin", "SOL": "solana", "XRP": "ripple", "ADA": "cardano",
+                    "AVAX": "avalanche-2", "LINK": "chainlink", "DOT": "polkadot"}
+                coin_id = crypto_map.get(symbol, symbol.lower())
+                import httpx
+                try:
+                    async with httpx.AsyncClient(timeout=5.0) as client:
+                        resp = await client.get(f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd&include_24hr_change=true")
+                        if resp.status_code == 200:
+                            data = resp.json()
+                            if coin_id in data:
+                                info = data[coin_id]
+                                return json.dumps({"symbol": symbol, "price": f"${info['usd']:,.2f}",
+                                    "24h_change": f"{info.get('usd_24h_change', 0):+.2f}%"})
+                except Exception as e:
+                    logger.warning(f"Crypto price error: {e}")
+                return json.dumps({"error": f"Could not find crypto price for {symbol}"})
+
+            elif tool_name == "search_concerts":
+                query = tool_input.get("query", "concerts in Denver")
+                try:
+                    from ddgs import DDGS
+                    results = DDGS().text(f"{query} concerts tickets 2026", max_results=5)
+                    if results:
+                        formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "url": r.get("href", "")} for r in results]
+                        return json.dumps({"query": query, "results": formatted})
+                except Exception as e:
+                    logger.warning(f"Concert search failed: {e}")
+                return json.dumps({"query": query, "message": "No concert results found."})
+
+            elif tool_name == "get_calendar_events":
+                try:
+                    from gigi.google_service import GoogleService
+                    google = GoogleService()
+                    if google.is_configured:
+                        days = tool_input.get("days", 1)
+                        events = google.get_calendar_events(days=min(days, 7))
+                        return json.dumps({"events": events or [], "count": len(events or [])})
+                except Exception as e:
+                    logger.warning(f"Calendar error: {e}")
+                return json.dumps({"error": "Google Calendar not available"})
+
+            elif tool_name == "search_emails":
+                try:
+                    from gigi.google_service import GoogleService
+                    google = GoogleService()
+                    if google.is_configured:
+                        query = tool_input.get("query", "is:unread")
+                        max_results = tool_input.get("max_results", 5)
+                        emails = google.search_emails(query=query, max_results=max_results)
+                        return json.dumps({"emails": emails or [], "count": len(emails or [])})
+                except Exception as e:
+                    logger.warning(f"Email search error: {e}")
+                return json.dumps({"error": "Gmail not available"})
+
+            elif tool_name == "check_recent_sms":
+                hours = min(tool_input.get("hours", 12), 48)
+                filter_phone = tool_input.get("from_phone")
+                token = self._get_admin_access_token()
+                if not token:
+                    return json.dumps({"error": "Could not get RingCentral access token"})
+                try:
+                    params = {
+                        "messageType": "SMS",
+                        "dateFrom": (datetime.utcnow() - timedelta(hours=hours)).isoformat(),
+                        "perPage": 50,
+                        "direction": "Inbound"
+                    }
+                    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+                    # Poll Gigi's extension + all company line extensions
+                    all_records = []
+                    for ext_info in [{"ext_id": "~", "label": "307"}] + COMPANY_LINE_EXTENSIONS:
+                        try:
+                            url = f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/{ext_info['ext_id']}/message-store"
+                            resp = requests.get(url, headers=headers, params=params, timeout=15)
+                            if resp.status_code == 200:
+                                for r in resp.json().get("records", []):
+                                    r["_line"] = ext_info["label"]
+                                    all_records.append(r)
+                        except Exception:
+                            pass
+                    sms_list = []
+                    seen_ids = set()
+                    for sms in all_records:
+                        sms_id = str(sms.get("id", ""))
+                        if sms_id in seen_ids:
+                            continue
+                        seen_ids.add(sms_id)
+                        from_phone = sms.get("from", {}).get("phoneNumber", "")
+                        if filter_phone and filter_phone not in from_phone:
+                            continue
+                        # Skip messages from our own numbers
+                        own_numbers = [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777"]
+                        if from_phone in own_numbers:
+                            continue
+                        to_phone = sms.get("to", [{}])[0].get("phoneNumber", "")
+                        sms_list.append({
+                            "from": from_phone,
+                            "to": to_phone,
+                            "line": sms.get("_line", ""),
+                            "text": sms.get("subject", ""),
+                            "time": sms.get("creationTime", ""),
+                            "read_status": sms.get("readStatus", ""),
+                        })
+                    # Try to identify senders
+                    for sms_item in sms_list:
+                        try:
+                            from services.wellsky_fast_lookup import identify_caller as fast_identify
+                            caller = fast_identify(sms_item["from"])
+                            if caller:
+                                sms_item["sender_name"] = caller.get("full_name", caller.get("name", ""))
+                                sms_item["sender_type"] = caller.get("type", "unknown")
+                        except Exception:
+                            pass
+                    # Sort by time descending
+                    sms_list.sort(key=lambda x: x.get("time", ""), reverse=True)
+                    return json.dumps({"count": len(sms_list), "hours_back": hours, "lines_monitored": ["307-459-8220", "719-428-3999"], "messages": sms_list})
+                except Exception as e:
+                    logger.error(f"check_recent_sms failed: {e}")
+                    return json.dumps({"error": f"Failed to check SMS: {str(e)}"})
+
+            elif tool_name == "send_sms":
+                to_phone = tool_input.get("to_phone", "")
+                message = tool_input.get("message", "")
+                if not to_phone or not message:
+                    return json.dumps({"error": "Both to_phone and message are required"})
+                success, result = self._send_sms_via_rc(to_phone, message)
+                if success:
+                    logger.info(f"SMS sent from DM tool to {to_phone}: {message[:50]}...")
+                    return json.dumps({"success": True, "message": f"SMS sent to {to_phone}"})
+                else:
+                    return json.dumps({"error": f"Failed to send SMS: {result}"})
+
+            elif tool_name == "log_call_out":
+                caregiver_id = tool_input.get("caregiver_id")
+                caregiver_name = tool_input.get("caregiver_name", "Unknown")
+                reason = tool_input.get("reason", "not specified")
+                shift_date = tool_input.get("shift_date", date.today().isoformat())
+                self.wellsky.create_admin_task(
+                    title=f"CALL-OUT: {caregiver_name} - {reason}",
+                    description=(
+                        f"Caregiver {caregiver_name} called out.\n"
+                        f"Reason: {reason}\n"
+                        f"Shift date: {shift_date}\n"
+                        f"ACTION: Find coverage immediately."
+                    ),
+                    priority="urgent",
+                    related_caregiver_id=caregiver_id
+                )
+                return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name}. Admin task created."})
+
+            elif tool_name == "identify_caller":
+                phone = tool_input.get("phone_number", "")
+                if not phone:
+                    return json.dumps({"error": "No phone number provided"})
+                try:
+                    from services.wellsky_fast_lookup import identify_caller as fast_identify
+                    caller = fast_identify(phone)
+                    if caller:
+                        type_map = {"practitioner": "caregiver", "patient": "client", "staff": "staff", "family": "family"}
+                        result = {
+                            "identified_as": type_map.get(caller.get("type", ""), caller.get("type", "")),
+                            "id": caller.get("id", ""),
+                            "name": caller.get("full_name", caller.get("name", "")),
+                            "phone": phone
+                        }
+                        if caller.get("type") == "family":
+                            result["relationship"] = caller.get("relationship", "")
+                            result["client_name"] = caller.get("client_name", "")
+                        return json.dumps(result)
+                except Exception as e:
+                    logger.warning(f"Fast caller ID failed: {e}")
+                return json.dumps({"identified_as": "unknown", "message": f"Phone number {phone} not found in records"})
+
+            elif tool_name == "save_memory":
+                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
+                    return json.dumps({"error": "Memory system not available"})
+                content = tool_input.get("content", "")
+                category = tool_input.get("category", "general")
+                importance = tool_input.get("importance", "medium")
+                impact_map = {"high": ImpactLevel.HIGH, "medium": ImpactLevel.MEDIUM, "low": ImpactLevel.LOW}
+                memory_id = _rc_memory_system.create_memory(
+                    content=content, memory_type=MemoryType.EXPLICIT_INSTRUCTION,
+                    source=MemorySource.EXPLICIT, confidence=1.0,
+                    category=category, impact_level=impact_map.get(importance, ImpactLevel.MEDIUM)
+                )
+                return json.dumps({"saved": True, "memory_id": memory_id, "content": content})
+
+            elif tool_name == "recall_memories":
+                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
+                    return json.dumps({"memories": [], "message": "Memory system not available"})
+                category = tool_input.get("category")
+                search_text = tool_input.get("search_text")
+                memories = _rc_memory_system.query_memories(category=category, min_confidence=0.3, limit=10)
+                if search_text:
+                    search_lower = search_text.lower()
+                    memories = [m for m in memories if search_lower in m.content.lower()]
+                results = [{"id": m.id, "content": m.content, "category": m.category,
+                           "confidence": float(m.confidence), "type": m.type.value} for m in memories]
+                return json.dumps({"memories": results, "count": len(results)})
+
+            elif tool_name == "forget_memory":
+                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
+                    return json.dumps({"error": "Memory system not available"})
+                memory_id = tool_input.get("memory_id", "")
+                memory = _rc_memory_system.get_memory(memory_id)
+                if not memory:
+                    return json.dumps({"error": f"Memory {memory_id} not found"})
+                with _rc_memory_system._get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute("UPDATE gigi_memories SET status = 'archived' WHERE id = %s", (memory_id,))
+                        _rc_memory_system._log_event(cur, memory_id, "archived", memory.confidence, memory.confidence, "User requested forget")
+                    conn.commit()
+                return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
+
+            else:
+                return json.dumps({"error": f"Unknown tool: {tool_name}"})
+
+        except Exception as e:
+            logger.error(f"DM tool execution error ({tool_name}): {e}")
+            if RC_FAILURE_HANDLER_AVAILABLE and _rc_failure_handler:
+                try:
+                    _rc_failure_handler.handle_tool_failure(tool_name, e, {"tool_input": str(tool_input)[:200]})
+                except Exception:
+                    pass
+            return json.dumps({"error": f"Tool {tool_name} failed: {str(e)}"})
+
+    def _resolve_sender_name(self, creator_id: str) -> str:
+        """Resolve a RingCentral extension ID to a person name."""
+        try:
+            ext_info = self.rc_service._api_request(f"/account/~/extension/{creator_id}")
+            if ext_info:
+                return ext_info.get("name", f"Extension {creator_id}")
+        except Exception as e:
+            logger.warning(f"Could not resolve sender name for {creator_id}: {e}")
+        return f"Extension {creator_id}"
 
     # =========================================================================
     # Process Reply (Claude-powered with static fallback)
@@ -1565,16 +3025,16 @@ class GigiRingCentralBot:
                 logger.warning(f"⛔ LOOP PREVENTION: Blocking reply to {phone}. Reason: {reason}")
                 return
 
-        # --- TRY CLAUDE FIRST ---
+        # --- TRY LLM FIRST ---
         reply = None
-        if self.claude:
+        if self.llm:
             try:
-                reply = await self._get_claude_sms_reply(text, phone or "unknown")
+                reply = await self._get_llm_sms_reply(text, phone or "unknown")
             except Exception as e:
-                logger.error(f"Claude reply failed, falling back to static: {e}")
+                logger.error(f"LLM reply failed ({self.llm_provider}), falling back to static: {e}")
                 reply = None
 
-        # --- FALLBACK: Static replies if Claude unavailable ---
+        # --- FALLBACK: Static replies if LLM unavailable ---
         if not reply:
             lower_text = text.lower()
             if "call out" in lower_text or "sick" in lower_text:
@@ -1598,6 +3058,45 @@ class GigiRingCentralBot:
                     if len(clean_phone) == 10: clean_phone = f"+1{clean_phone}"
                     elif not clean_phone.startswith('+'): clean_phone = f"+{clean_phone}"
 
+                    # --- SHADOW MODE: Report to DM instead of sending ---
+                    if GIGI_SMS_SHADOW_MODE:
+                        # Look up sender name
+                        sender_name = clean_phone
+                        try:
+                            conn = psycopg2.connect(db_url)
+                            cur = conn.cursor()
+                            phone_digits = ''.join(filter(str.isdigit, clean_phone))[-10:]
+                            cur.execute("""
+                                SELECT full_name, 'caregiver' as type FROM cached_practitioners
+                                WHERE phone LIKE %s OR home_phone LIKE %s
+                                UNION ALL
+                                SELECT full_name, 'client' as type FROM cached_patients
+                                WHERE phone LIKE %s OR home_phone LIKE %s
+                                LIMIT 1
+                            """, (f"%{phone_digits}", f"%{phone_digits}", f"%{phone_digits}", f"%{phone_digits}"))
+                            row = cur.fetchone()
+                            if row:
+                                sender_name = f"{row[0]} ({row[1]})"
+                            conn.close()
+                        except Exception:
+                            pass
+
+                        shadow_msg = (
+                            f"**SMS Shadow Mode**\n"
+                            f"**From:** {sender_name} ({clean_phone})\n"
+                            f"**Message:** {text}\n\n"
+                            f"**My draft reply:**\n{reply}"
+                        )
+                        try:
+                            self.rc_service.post_to_chat(SHADOW_DM_CHAT_ID, shadow_msg)
+                            logger.info(f"👻 Shadow Mode: Draft SMS to {clean_phone} reported to DM (not sent)")
+                        except Exception as e:
+                            logger.error(f"Shadow mode DM failed: {e}")
+                        # NOTE: Do NOT record cooldown for shadow mode — no SMS was actually sent,
+                        # so there's no loop risk. Recording cooldown here blocks real inbound SMS.
+                        return
+
+                    # --- LIVE MODE: Actually send the SMS ---
                     logger.info(f"Sending SMS reply to {clean_phone} via {RINGCENTRAL_FROM_NUMBER} (using Admin Token)")
 
                     access_token = self._get_admin_access_token()
@@ -1627,17 +3126,24 @@ class GigiRingCentralBot:
             except Exception as e:
                 logger.error(f"Failed to send {reply_method} reply: {e}")
 
+async def polling_loop(bot):
+    """Run the periodic polling loop for team chat, DMs, and scheduled services."""
+    while True:
+        try:
+            await bot.check_and_act()
+        except Exception as e:
+            logger.error(f"Error in polling loop: {e}")
+        await asyncio.sleep(CHECK_INTERVAL)
+
+
 async def main():
     bot = GigiRingCentralBot()
     if await bot.initialize():
-        while True:
-            try:
-                await bot.check_and_act()
-            except Exception as e:
-                logger.error(f"Error in bot loop: {e}")
-            
-            # Wait for next check
-            await asyncio.sleep(CHECK_INTERVAL)
+        logger.info("🚀 Starting Gigi: WebSocket (SMS) + Polling (Chat/DM/Services)")
+        await asyncio.gather(
+            bot.run_sms_websocket(),   # Real-time SMS via RingCentral WebSocket
+            polling_loop(bot),          # Team chat, DMs, scheduled services
+        )
 
 if __name__ == "__main__":
     asyncio.run(main())

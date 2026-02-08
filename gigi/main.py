@@ -907,19 +907,15 @@ async def verify_retell_signature(request: Request) -> bool:
     """
     Verify the Retell webhook signature to ensure request authenticity.
 
-    Retell uses your API key for webhook signature verification.
+    Uses the official Retell SDK verify() which handles the timestamped
+    signature format: v={timestamp},d={hmac_digest}
     See: https://docs.retellai.com/features/secure-webhook
     """
     if not RETELL_API_KEY:
-        # SECURITY: API key required for signature validation
-        is_production = os.getenv("ENVIRONMENT", "production").lower() == "production"
-        if is_production:
-            logger.error("SECURITY: RETELL_API_KEY not configured - webhook validation disabled!")
-        else:
-            logger.warning("RETELL_API_KEY not configured - skipping signature validation (development)")
-        return True  # Allow for development but log the issue
+        logger.warning("RETELL_API_KEY not configured - skipping signature validation")
+        return True
 
-    # Extract signature from header (handle both naming conventions)
+    # Extract signature from header
     x_retell_signature = request.headers.get("x-retell-signature") or request.headers.get("X-Retell-Signature")
 
     if not x_retell_signature:
@@ -927,16 +923,17 @@ async def verify_retell_signature(request: Request) -> bool:
         return False
 
     body = await request.body()
+    body_str = body.decode('utf-8')
 
-    # Retell uses API key for HMAC-SHA256 signature verification
-    expected_signature = hmac.new(
-        RETELL_API_KEY.encode('utf-8'),
-        body,
-        hashlib.sha256
-    ).hexdigest()
-
-    # Compare signatures (timing-safe comparison)
-    is_valid = hmac.compare_digest(x_retell_signature, expected_signature)
+    try:
+        from retell.lib.webhook_auth import verify as retell_verify
+        is_valid = retell_verify(body_str, RETELL_API_KEY, x_retell_signature)
+    except ImportError:
+        logger.warning("retell-sdk not installed, falling back to allow webhook")
+        return True
+    except Exception as e:
+        logger.error(f"Retell signature verification error: {e}")
+        return False
 
     if not is_valid:
         logger.warning("Invalid Retell signature")
