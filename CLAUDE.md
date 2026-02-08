@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 7, 2026
+**Last Updated:** February 8, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -24,38 +24,51 @@ This is the **unified platform** for Colorado Care Assist, containing:
 | `careassist-unified` | 8765 | portal.coloradocareassist.com | This repo - unified platform |
 | `coloradocareassist` | 3000 | coloradocareassist.com | Marketing website (Next.js) |
 | `hesedhomecare` | 3001 | hesedhomecare.org | Hesed website (Next.js) |
+| `elite-trading-mcp` | 3002 | elitetrading.coloradocareassist.com | Trading MCP server |
+| `gigi-menubar` | - | - | macOS menu bar app (SwiftUI) |
+| `gigi-backend-cca` | - | - | Legacy backend reference |
 | `clawd` | - | - | Gigi config, elite teams, knowledge base |
 
 ---
 
 ## GIGI - THE AI CHIEF OF STAFF
 
-**Gigi is ONE unified AI** operating across two platforms:
+**Gigi is ONE unified AI** operating across 6 channels:
 
-### Communication Platforms
+### Communication Channels
 
-**Platform 1: RingCentral (307-459-8220) — Gigi's primary number**
-The 307 number IS Gigi. All RingCentral channels share the same identity and should have the same capabilities.
-
-| RC Channel | Technology | Handler | Tools | Status |
-|------------|------------|---------|-------|--------|
-| **Voice** | Retell AI Custom LLM | `voice_brain.py` | 21 tools | Working |
-| **SMS** | RC message-store polling | `ringcentral_bot.py` | 15 tools | In Progress |
-| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 15 tools | In Progress |
-| **Team Chat** (New Scheduling) | RC Glip API polling | `ringcentral_bot.py` | 15 tools | In Progress |
-
-**Platform 2: Telegram (@Shulmeisterbot) — Separate channel**
+**RingCentral (307-459-8220) — Gigi's primary number**
 
 | Channel | Technology | Handler | Tools | Status |
 |---------|------------|---------|-------|--------|
-| **Telegram** | Telegram Bot API | `telegram_bot.py` | 15 tools | Working |
+| **Voice** | Retell AI Custom LLM | `voice_brain.py` | 21 tools | Working |
+| **SMS** | RC message-store polling | `ringcentral_bot.py` | 15 tools | In Progress |
+| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 15 tools | In Progress |
+| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | 15 tools | In Progress |
 
-**Key Principle:** Telegram is the only separate channel. Everything else flows through RingCentral 307-459-8220 — call it, text it, DM her, @mention her in team chat — same Gigi.
+**Other Channels**
 
-### RC Text Channel Tools (15 — `ringcentral_bot.py`)
-WellSky: `get_client_current_status`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `log_call_out`, `identify_caller`
-RingCentral: `check_recent_sms`, `send_sms`
-General: `get_weather`, `web_search`, `get_stock_price`, `get_crypto_price`, `search_concerts`, `get_calendar_events`, `search_emails`
+| Channel | Technology | Handler | Tools | Status |
+|---------|------------|---------|-------|--------|
+| **Telegram** | Telegram Bot API | `telegram_bot.py` | 21 tools | Working |
+| **Ask-Gigi API** | REST `/api/ask-gigi` | `ask_gigi.py` | 19 tools | Working |
+| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py` | 19 tools | Working |
+| **iMessage** | BlueBubbles webhook | `main.py` → `ask_gigi.py` | 19 tools | Code Done (needs BB GUI setup) |
+| **Menu Bar** | SwiftUI → ask-gigi API | `ask_gigi.py` | 19 tools | Working |
+
+### Ask-Gigi API (Feb 8 — Foundation for Apple integrations)
+- **Endpoint:** `POST /api/ask-gigi` (mounted at `/gigi/api/ask-gigi` via unified_app)
+- **Auth:** Bearer token via `GIGI_API_TOKEN` env var
+- **Module:** `gigi/ask_gigi.py` — reuses GigiTelegramBot.execute_tool (no duplication)
+- **All channels that use ask_gigi.py** get the same 19 tools (all Telegram tools)
+- **Cross-channel context:** API messages visible from Telegram/SMS and vice versa
+
+### Tool Sets
+**Shared tools (15):** `get_client_current_status`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `log_call_out`, `identify_caller`, `get_weather`, `web_search`, `get_stock_price`, `get_crypto_price`, `search_concerts`, `get_calendar_events`, `search_emails`, `check_recent_sms`, `send_sms`
+
+**Telegram/API extras (+6):** `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`
+
+**Voice-only extras (+6):** `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
 
 ### Gigi's Core Capabilities
 - **WellSky Integration**: Full CRUD on Patients, Practitioners, Appointments, Encounters, DocumentReferences, Subscriptions, ProfileTags, and RelatedPersons. Clock in/out, task logs, shift search, and webhook event subscriptions. See `docs/WELLSKY_HOME_CONNECT_API_REFERENCE.md` for complete endpoint reference.
@@ -66,10 +79,27 @@ General: `get_weather`, `web_search`, `get_stock_price`, `get_crypto_price`, `se
 - **Morning Briefing**: Daily 7 AM Telegram message with weather, calendar, shifts, emails, alerts
 
 ### Gigi Multi-LLM Provider (Feb 7)
-Both `telegram_bot.py` and `voice_brain.py` support 3 providers (Gemini, Anthropic, OpenAI).
-- **Config:** `GIGI_LLM_PROVIDER=gemini` + `GIGI_LLM_MODEL=gemini-3-flash-preview`
-- **Current production:** Gemini 3 Flash Preview — best tool calling + speed (~1.7s avg)
+All 3 handlers (`telegram_bot.py`, `voice_brain.py`, `ringcentral_bot.py`) + `ask_gigi.py` support 3 providers.
+- **Config:** `GIGI_LLM_PROVIDER=gemini` + `GIGI_LLM_MODEL=gemini-2.5-flash`
+- **Current production:** Gemini 2.5 Flash — best tool calling + speed + NO API FEES
+- **Default models:** Gemini=`gemini-2.5-flash`, Anthropic=`claude-sonnet-4-20250514`, OpenAI=`gpt-5.1`
 - Gemini API: use `Part(text=...)` NOT `Part.from_text(...)` (API changed)
+
+### Gigi Subsystems (Feb 8 — All Active)
+- **Memory System** (`gigi/memory_system.py`): PostgreSQL `gigi_memories` + `gigi_memory_audit_log`. Tools: save_memory, recall_memories, forget_memory.
+- **Mode Detector** (`gigi/mode_detector.py`): 8 modes (focus/execution/decision/travel/off_grid/crisis/thinking/review). Time-based auto-detection.
+- **Failure Handler** (`gigi/failure_handler.py`): 10 protocols, meltdown detection (3 in 5 min). Wraps tool failures.
+- **Conversation Store** (`gigi/conversation_store.py`): PostgreSQL `gigi_conversations`. Replaces in-memory dicts and JSON files.
+- **Pattern Detector** (`gigi/pattern_detector.py`): Detects tool failure patterns, open shift trends, memory conflicts.
+- **Self-Monitor** (`gigi/self_monitor.py`): Weekly audit of failures, memory stats, shift coverage.
+- **Memory Logger** (`gigi/memory_logger.py`): Daily markdown journal at `~/.gigi-memory/YYYY-MM-DD.md`.
+- **Constitutional Preamble**: 10 Operating Laws injected into ALL system prompts.
+- **Dynamic System Prompts**: `_build_*_system_prompt()` builders inject memories + mode + date/time per-call.
+
+### Browser Automation (Feb 8)
+- **Module:** `gigi/browser_automation.py` — Playwright + headless Chromium
+- **Tools:** `browse_webpage` (extract page text), `take_screenshot` (save PNG to `~/logs/screenshots/`)
+- Available in Telegram + all ask-gigi API channels
 
 ### Retell Voice Brain (Feb 7 — VALIDATED)
 - **Agent:** `agent_5b425f858369d8df61c363d47f` (Custom LLM, 11labs Susan)
@@ -102,6 +132,9 @@ See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
 | Elite Trading | 3002 | com.coloradocareassist.elite-trading | elitetrading.coloradocareassist.com |
 | PowderPulse | 3003 | com.coloradocareassist.powderpulse | powderpulse.coloradocareassist.com |
 | Telegram Bot | - | com.coloradocareassist.telegram-bot | - |
+| Gigi Menu Bar | - | com.coloradocareassist.gigi-menubar | - |
+| Memory Decay Cron | - | com.coloradocareassist.gigi-memory-decay | - (3:15 AM daily) |
+| Memory Logger | - | com.coloradocareassist.gigi-memory-logger | - (11:59 PM daily) |
 | Cloudflare Tunnel | - | com.cloudflare.cloudflared | - |
 | PostgreSQL 17 | 5432 | homebrew.mxcl.postgresql@17 | - |
 
@@ -146,6 +179,8 @@ All credentials are in `~/.gigi-env` and duplicated in LaunchAgent plists.
 | **Brevo** | `BREVO_API_KEY` | Email marketing |
 | **Cloudflare** | `CF_API_TOKEN`, `CF_ZONE_ID` | DNS management |
 | **Telegram** | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` | Alerts & Gigi bot |
+| **Ask-Gigi API** | `GIGI_API_TOKEN` | Bearer token for /api/ask-gigi |
+| **BlueBubbles** | `BLUEBUBBLES_URL`, `BLUEBUBBLES_PASSWORD` | iMessage bridge |
 
 **IMPORTANT:** Never hardcode credentials. Always use `os.getenv()`.
 
@@ -161,13 +196,22 @@ careassist-unified/
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
 │   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (multi-provider, 21 tools)
-│   ├── telegram_bot.py    # Telegram interface (multi-provider, 15 tools)
+│   ├── telegram_bot.py    # Telegram interface (multi-provider, 21 tools)
 │   ├── ringcentral_bot.py # RC polling, SMS, clock reminders, daily confirmations, morning briefing
-│   ├── main.py            # Retell webhook handlers + signature verification
+│   ├── main.py            # Retell webhooks + /api/ask-gigi + /webhook/imessage
+│   ├── ask_gigi.py        # Generic ask-gigi function (reuses telegram tools, no duplication)
+│   ├── browser_automation.py  # Playwright headless Chromium (browse + screenshot)
+│   ├── conversation_store.py  # PostgreSQL conversation persistence (all channels)
+│   ├── memory_system.py   # Gigi's memory (save/recall/forget via PostgreSQL)
+│   ├── mode_detector.py   # 8-mode auto-detection (focus, crisis, travel, etc.)
+│   ├── failure_handler.py # 10 failure protocols + meltdown detection
+│   ├── pattern_detector.py # Repeated failure + trend detection
+│   ├── self_monitor.py    # Weekly self-audit (Monday morning briefing)
+│   ├── memory_logger.py   # Daily markdown journal at ~/.gigi-memory/
 │   ├── morning_briefing_service.py  # 7 AM daily briefing via Telegram
 │   ├── google_service.py  # Google Calendar + Gmail API (OAuth2)
 │   ├── chief_of_staff_tools.py  # Shared tool implementations
-│   └── CONSTITUTION.md    # Gigi's operating laws
+│   └── CONSTITUTION.md    # Gigi's 10 operating laws
 ├── sales/                 # Sales CRM dashboard
 ├── recruiting/            # Recruiting dashboard (Flask)
 ├── services/              # Shared services
@@ -293,6 +337,8 @@ This script will:
 | `~/scripts/backup-to-gdrive.sh` | Daily DB dump + configs → Google Drive (3 AM) |
 | `~/scripts/claude-task-worker.py` | Claude Code task bridge daemon |
 | `~/scripts/sync_wellsky_clients.py` | WellSky FHIR sync (every 2 hours) |
+| `~/scripts/gigi-memory-decay.py` | Memory decay cron (3:15 AM daily) |
+| `~/scripts/create_gigi_shortcuts.py` | Apple Shortcuts generator for Siri integration |
 
 ### Cron Jobs (Automatic)
 ```bash
@@ -305,10 +351,10 @@ This script will:
 ## BACKUP & DISASTER RECOVERY
 
 - **Daily backup** at 3 AM via `~/scripts/backup-to-gdrive.sh` (LaunchAgent)
-- **What's backed up:** PostgreSQL dump, `~/.gigi-env`, `~/.cloudflared/`, all LaunchAgent plists, all scripts (sh + py), Claude memory files
+- **What's backed up:** PostgreSQL dump, `~/.gigi-env`, `~/.cloudflared/`, all LaunchAgent plists, all scripts (sh + py), Claude memory files, gigi-menubar source
 - **Destination:** Google Drive via rclone (`gdrive:MacMini-Backups`)
 - **Retention:** 7 days local, unlimited on Google Drive
-- **GitHub repos:** All 7 apps pushed to private repos on github.com/shulmeister
+- **GitHub repos:** All 8 apps pushed to private repos on github.com/shulmeister
 
 ### Restore Procedure
 1. Clone all repos from GitHub
@@ -321,6 +367,8 @@ This script will:
 
 ## HISTORY
 
+- **Feb 8, 2026:** Gigi Phases 1-4 activated: Memory System (PostgreSQL-backed save/recall/forget), Mode Detector (8 modes), Failure Handler (10 protocols), Conversation Store (cross-channel PostgreSQL persistence replacing JSON files), Pattern Detector, Self-Monitor (weekly Monday audit), Memory Logger (daily journal). Constitutional preamble + dynamic system prompts for all handlers. Caregiver preference extractor. Memory decay cron (3:15 AM) + memory logger cron (11:59 PM).
+- **Feb 8, 2026:** Apple Integration Phases 1-5: (1) Generic `/api/ask-gigi` REST endpoint with Bearer auth — reuses telegram tools with no code duplication. (2) 3 Apple Shortcuts for Siri ("Ask Gigi", "Morning Briefing", "Who's Working"). (3) iMessage channel via BlueBubbles webhook (code complete, needs BB GUI setup). (4) macOS Menu Bar app (SwiftUI, auto-start via LaunchAgent). (5) Browser automation with Playwright headless Chromium (browse_webpage + take_screenshot tools). All 8 repos pushed to GitHub. gigi-menubar repo created. Backup script updated.
 - **Feb 7, 2026 (evening):** Voice brain fully validated through Retell infrastructure. Fixed WebSocket ping/pong (was blocking → disconnect), added stale response cancellation, send lock, tool_call_invocation/result events. Multi-LLM provider support (Gemini/Anthropic/OpenAI) for voice and Telegram. Fixed Retell webhook signature (SDK verify, not custom HMAC). Fixed Gemini Part.from_text → Part(text=...). All 6 core tools tested: concerts, weather, ski, flights, shifts, caregiver lookup. Added morning briefing service (7 AM daily via Telegram).
 - **Feb 7, 2026 (overnight):** Autonomous 5-agent audit: fixed SQL injection in simulation_service, undefined capture_memory, 14 connection leaks (6 files), missing imports (json/hmac/hashlib), 3 duplicate routes → /api/internal/wellsky/*, SQLAlchemy 2.0 fix, Sales CRM task model aliases, CompanyTasksList useState→useEffect, voice_brain open_only parity. WellSky sync confirmed 1,074 appointments (24 of 71 clients have zero appointments — WellSky-side gap).
 - **Feb 7, 2026:** Fixed 11 CRM bugs (duplicate route, FK, contact/company ID collision, relative URLs, task types). Created 3 QA/security agents (security-auditor, performance-engineer, chaos-engineer). Pushed all 7 repos to GitHub. Fixed backup script to include .py files and Claude memory.
