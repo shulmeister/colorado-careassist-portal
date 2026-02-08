@@ -137,8 +137,39 @@ class MorningBriefingService:
         if ski:
             sections.append(f"SKI CONDITIONS\n{ski}")
 
+        # Pattern detection
+        patterns = self._get_patterns()
+        if patterns:
+            sections.append(patterns)
+
+        # Weekly self-audit (Mondays only)
+        if now.weekday() == 0:  # Monday
+            audit = self._get_self_audit()
+            if audit:
+                sections.append(audit)
+
         sections.append("— Gigi")
         return "\n\n".join(sections)
+
+    def _get_patterns(self) -> Optional[str]:
+        """Get detected patterns from pattern detector."""
+        try:
+            from gigi.pattern_detector import PatternDetector
+            pd = PatternDetector()
+            return pd.get_briefing_section()
+        except Exception as e:
+            logger.warning(f"Pattern detection failed: {e}")
+        return None
+
+    def _get_self_audit(self) -> Optional[str]:
+        """Get weekly self-audit (Mondays only)."""
+        try:
+            from gigi.self_monitor import SelfMonitor
+            sm = SelfMonitor()
+            return sm.get_briefing_section()
+        except Exception as e:
+            logger.warning(f"Self-audit failed: {e}")
+        return None
 
     def _get_weather(self) -> Optional[str]:
         """Get Denver weather from wttr.in."""

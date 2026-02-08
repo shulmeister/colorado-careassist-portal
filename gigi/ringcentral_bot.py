@@ -251,9 +251,10 @@ SMS_TOOLS = [
             "required": ["caregiver_id", "caregiver_name", "reason"]
         }
     },
-    {"name": "save_memory", "description": "Save an important preference, fact, or instruction to long-term memory.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "What to remember"}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
+    {"name": "save_memory", "description": "Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred, assumed, or fabricated information.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "The EXACT fact or preference stated by the user. Quote their words, don't embellish."}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
     {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
     {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
+    {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back (default 30)"}}, "required": ["query"]}},
 ]
 
 # Full tool set for Glip DM replies — matches Telegram capabilities
@@ -273,9 +274,10 @@ DM_TOOLS = [
     {"name": "send_sms", "description": "Send an SMS text message from the company number (307-459-8220) to any phone number.", "input_schema": {"type": "object", "properties": {"to_phone": {"type": "string", "description": "Phone number to text (e.g., +13035551234)"}, "message": {"type": "string", "description": "The SMS message to send (keep under 300 chars)"}}, "required": ["to_phone", "message"]}},
     {"name": "log_call_out", "description": "Log a caregiver call-out in WellSky and create an urgent admin task for coverage. Use when a caregiver reports they can't make their shift.", "input_schema": {"type": "object", "properties": {"caregiver_id": {"type": "string", "description": "The caregiver's WellSky ID"}, "caregiver_name": {"type": "string", "description": "The caregiver's name"}, "reason": {"type": "string", "description": "Reason for the call-out (e.g., 'sick', 'emergency', 'car trouble')"}, "shift_date": {"type": "string", "description": "Date of the shift (YYYY-MM-DD, defaults to today)"}}, "required": ["caregiver_id", "caregiver_name", "reason"]}},
     {"name": "identify_caller", "description": "Look up who a phone number belongs to. Checks caregiver, client, staff, and family records in WellSky.", "input_schema": {"type": "object", "properties": {"phone_number": {"type": "string", "description": "Phone number to look up"}}, "required": ["phone_number"]}},
-    {"name": "save_memory", "description": "Save an important preference, fact, or instruction to long-term memory.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "What to remember"}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
+    {"name": "save_memory", "description": "Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred, assumed, or fabricated information.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "The EXACT fact or preference stated by the user. Quote their words, don't embellish."}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
     {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
     {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
+    {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back (default 30)"}}, "required": ["query"]}},
 ]
 
 # =========================================================================
@@ -302,12 +304,14 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Caregiver name to search for")}, required=["search_name"])),
         genai_types.FunctionDeclaration(name="log_call_out", description="Log a caregiver call-out in WellSky and create an urgent admin task for coverage.",
             parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "The caregiver's WellSky ID"), "caregiver_name": _gs("string", "The caregiver's name"), "reason": _gs("string", "Reason for the call-out"), "shift_date": _gs("string", "Date of the shift (YYYY-MM-DD, defaults to today)")}, required=["caregiver_id", "caregiver_name", "reason"])),
-        genai_types.FunctionDeclaration(name="save_memory", description="Save an important preference, fact, or instruction to long-term memory.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"content": _gs("string", "What to remember"), "category": _gs("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _gs("string", "high/medium/low")}, required=["content", "category"])),
+        genai_types.FunctionDeclaration(name="save_memory", description="Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred or fabricated information.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"content": _gs("string", "The EXACT fact or preference stated by the user"), "category": _gs("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _gs("string", "high/medium/low")}, required=["content", "category"])),
         genai_types.FunctionDeclaration(name="recall_memories", description="Search long-term memory for saved preferences, facts, or instructions.",
             parameters=genai_types.Schema(type="OBJECT", properties={"category": _gs("string", "Filter by category"), "search_text": _gs("string", "Keywords to search for")})),
         genai_types.FunctionDeclaration(name="forget_memory", description="Archive a memory that is no longer relevant.",
             parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _gs("string", "ID of the memory to archive")}, required=["memory_id"])),
+        genai_types.FunctionDeclaration(name="search_memory_logs", description="Search Gigi's daily operation logs for past activity.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Keywords to search"), "days_back": _gs("integer", "Days back (default 30)")}, required=["query"])),
     ])]
 
     GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
@@ -341,12 +345,14 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "The caregiver's WellSky ID"), "caregiver_name": _gs("string", "The caregiver's name"), "reason": _gs("string", "Reason for the call-out"), "shift_date": _gs("string", "Date of the shift (YYYY-MM-DD, defaults to today)")}, required=["caregiver_id", "caregiver_name", "reason"])),
         genai_types.FunctionDeclaration(name="identify_caller", description="Look up who a phone number belongs to. Checks caregiver, client, staff, and family records in WellSky.",
             parameters=genai_types.Schema(type="OBJECT", properties={"phone_number": _gs("string", "Phone number to look up")}, required=["phone_number"])),
-        genai_types.FunctionDeclaration(name="save_memory", description="Save an important preference, fact, or instruction to long-term memory.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"content": _gs("string", "What to remember"), "category": _gs("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _gs("string", "high/medium/low")}, required=["content", "category"])),
+        genai_types.FunctionDeclaration(name="save_memory", description="Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred or fabricated information.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"content": _gs("string", "The EXACT fact or preference stated by the user"), "category": _gs("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _gs("string", "high/medium/low")}, required=["content", "category"])),
         genai_types.FunctionDeclaration(name="recall_memories", description="Search long-term memory for saved preferences, facts, or instructions.",
             parameters=genai_types.Schema(type="OBJECT", properties={"category": _gs("string", "Filter by category"), "search_text": _gs("string", "Keywords to search for")})),
         genai_types.FunctionDeclaration(name="forget_memory", description="Archive a memory that is no longer relevant.",
             parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _gs("string", "ID of the memory to archive")}, required=["memory_id"])),
+        genai_types.FunctionDeclaration(name="search_memory_logs", description="Search Gigi's daily operation logs for past activity.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Keywords to search"), "days_back": _gs("integer", "Days back (default 30)")}, required=["query"])),
     ])]
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
@@ -357,7 +363,7 @@ GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care
 3. CONDITIONAL AUTONOMY: Act first on low-risk items. Only ask for money/reputation/legal/irreversible.
 4. STATE AWARENESS: Adjust your verbosity and urgency threshold to the current situation.
 5. OPINIONATED DECISIONS: Lead with your recommendation + why + risk + one fallback.
-6. MEMORY: Save important preferences and facts using save_memory. Search memory before asking questions already answered.
+6. MEMORY: ONLY save facts the user EXPLICITLY states. NEVER infer, assume, or fabricate memories. Search memory before asking questions already answered.
 7. PATTERN DETECTION: If you notice a repeating problem, flag it proactively.
 8. SELF-MONITORING: If you're getting verbose or drifting, correct yourself.
 9. PUSH BACK: If you disagree, say why respectfully.
@@ -2290,6 +2296,14 @@ class GigiRingCentralBot:
                     conn.commit()
                 return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
 
+            elif tool_name == "search_memory_logs":
+                from gigi.memory_logger import MemoryLogger
+                ml = MemoryLogger()
+                query = tool_input.get("query", "")
+                days_back = tool_input.get("days_back", 30)
+                results = ml.search_logs(query, days_back=days_back)
+                return json.dumps({"query": query, "results": results[:10], "total": len(results)})
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -2987,6 +3001,14 @@ class GigiRingCentralBot:
                         _rc_memory_system._log_event(cur, memory_id, "archived", memory.confidence, memory.confidence, "User requested forget")
                     conn.commit()
                 return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
+
+            elif tool_name == "search_memory_logs":
+                from gigi.memory_logger import MemoryLogger
+                ml = MemoryLogger()
+                query = tool_input.get("query", "")
+                days_back = tool_input.get("days_back", 30)
+                results = ml.search_logs(query, days_back=days_back)
+                return json.dumps({"query": query, "results": results[:10], "total": len(results)})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
