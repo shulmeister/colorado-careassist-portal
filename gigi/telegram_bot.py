@@ -141,11 +141,11 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # GIGI_LLM_MODEL: model name override (auto-detected from provider if not set)
 LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "gemini").lower()
 _DEFAULT_MODELS = {
-    "gemini": "gemini-2.5-flash",  # override with GIGI_LLM_MODEL env var
+    "gemini": "gemini-3-flash-preview",  # override with GIGI_LLM_MODEL env var
     "anthropic": "claude-sonnet-4-5-20250929",
     "openai": "gpt-5.1",
 }
-LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-2.5-flash"))
+LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-3-flash-preview"))
 
 # Configure logging
 logging.basicConfig(

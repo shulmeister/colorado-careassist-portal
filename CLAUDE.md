@@ -42,9 +42,9 @@ This is the **unified platform** for Colorado Care Assist, containing:
 | Channel | Technology | Handler | Tools | Status |
 |---------|------------|---------|-------|--------|
 | **Voice** | Retell AI Custom LLM | `voice_brain.py` | 25 tools | Working |
-| **SMS** | RC message-store polling | `ringcentral_bot.py` | 18 tools | Working |
-| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 21 tools | Working |
-| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | 21 tools | Working |
+| **SMS** | RC message-store polling | `ringcentral_bot.py` | 11 tools | Working |
+| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 22 tools | Working |
+| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | 22 tools | Working |
 
 **Other Channels**
 
@@ -66,11 +66,11 @@ This is the **unified platform** for Colorado Care Assist, containing:
 ### Tool Sets
 **Telegram tools (22):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_morning_briefing`
 
-**Voice extras (25 total):** All Telegram tools minus browser tools, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
+**Voice tools (25):** All Telegram tools minus browser/morning_briefing, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
 
-**RC SMS tools (18):** WellSky tools + memory tools + general tools + `search_concerts`, `check_recent_sms`, `send_sms`, `get_morning_briefing`
+**RC SMS tools (11):** `get_client_current_status`, `identify_caller`, `get_wellsky_shifts`, `get_wellsky_clients`, `get_wellsky_caregivers`, `log_call_out`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `get_morning_briefing`
 
-**RC DM tools (21):** Full Telegram-like set including browser tools + RC-specific tools
+**RC DM/Team Chat tools (22):** Full Telegram-like set including browser tools + `check_recent_sms`, `send_sms`, `log_call_out`, `identify_caller` (replaces `create_claude_task`, `check_claude_task`, `buy_tickets_request`, `book_table_request`)
 
 ### Gigi's Core Capabilities
 - **WellSky Integration**: Full CRUD on Patients, Practitioners, Appointments, Encounters, DocumentReferences, Subscriptions, ProfileTags, and RelatedPersons. Clock in/out, task logs, shift search, and webhook event subscriptions. See `docs/WELLSKY_HOME_CONNECT_API_REFERENCE.md` for complete endpoint reference.
@@ -204,8 +204,8 @@ careassist-unified/
 ├── portal/                # Portal web app (FastAPI)
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
-│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (multi-provider, 21 tools)
-│   ├── telegram_bot.py    # Telegram interface (multi-provider, 21 tools)
+│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (multi-provider, 25 tools)
+│   ├── telegram_bot.py    # Telegram interface (multi-provider, 22 tools)
 │   ├── ringcentral_bot.py # RC polling, SMS, clock reminders, daily confirmations, morning briefing
 │   ├── main.py            # Retell webhooks + /api/ask-gigi + /webhook/imessage
 │   ├── ask_gigi.py        # Generic ask-gigi function (reuses telegram tools, no duplication)
@@ -333,7 +333,7 @@ This script will:
 2. Merge staging → main
 3. Rebuild production
 4. Restart production
-5. Verify production is healthy
+5. Verify production is healthy (retries up to 30s for slow boots)
 
 ### Key Scripts
 
@@ -376,6 +376,7 @@ This script will:
 
 ## HISTORY
 
+- **Feb 8, 2026 (evening):** Fixed 17 race condition bugs across all Gigi handlers (2 sessions): duplicate message handling via asyncio.Lock, wrapped all sync LLM/DB calls in asyncio.to_thread, 60s LLM timeouts, voice brain side-effect tracking on cancellation, reply lock for RC bot, moved user message persistence after LLM success, DB-side meltdown detection, SELECT FOR UPDATE for memory reinforcement, make_interval() for safe SQL intervals, shared DB connections in pattern detector. Also fixed iMessage webhook auth bypass, added retry health checks to promote/restart scripts.
 - **Feb 8, 2026:** Gigi Phases 1-4 activated: Memory System (PostgreSQL-backed save/recall/forget), Mode Detector (8 modes), Failure Handler (10 protocols), Conversation Store (cross-channel PostgreSQL persistence replacing JSON files), Pattern Detector, Self-Monitor (weekly Monday audit), Memory Logger (daily journal). Constitutional preamble + dynamic system prompts for all handlers. Caregiver preference extractor. Memory decay cron (3:15 AM) + memory logger cron (11:59 PM).
 - **Feb 8, 2026:** Apple Integration Phases 1-5: (1) Generic `/api/ask-gigi` REST endpoint with Bearer auth — reuses telegram tools with no code duplication. (2) 3 Apple Shortcuts for Siri ("Ask Gigi", "Morning Briefing", "Who's Working"). (3) iMessage channel via BlueBubbles webhook (code complete, needs BB GUI setup). (4) macOS Menu Bar app (SwiftUI, auto-start via LaunchAgent). (5) Browser automation with Playwright headless Chromium (browse_webpage + take_screenshot tools). All 8 repos pushed to GitHub. gigi-menubar repo created. Backup script updated.
 - **Feb 7, 2026 (evening):** Voice brain fully validated through Retell infrastructure. Fixed WebSocket ping/pong (was blocking → disconnect), added stale response cancellation, send lock, tool_call_invocation/result events. Multi-LLM provider support (Gemini/Anthropic/OpenAI) for voice and Telegram. Fixed Retell webhook signature (SDK verify, not custom HMAC). Fixed Gemini Part.from_text → Part(text=...). All 6 core tools tested: concerts, weather, ski, flights, shifts, caregiver lookup. Added morning briefing service (7 AM daily via Telegram).

@@ -5,7 +5,7 @@
 **Host**: Mac Mini (Jason's Mac Mini via Tailscale)
 **Live URL**: https://portal.coloradocareassist.com
 **GitHub**: https://github.com/shulmeister/colorado-careassist-portal
-**Last Updated**: February 4, 2026
+**Last Updated**: February 8, 2026
 
 ---
 
