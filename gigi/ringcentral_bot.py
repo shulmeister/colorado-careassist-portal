@@ -1038,6 +1038,9 @@ class GigiRingCentralBot:
 
         logger.info(f"📨 Real-time SMS from {from_phone} → {to_phone}: {text[:60]}")
 
+        # Mark as processed IMMEDIATELY to prevent duplicate responses from fallback poll
+        self.processed_message_ids.add(msg_id)
+
         sms_record = {
             "id": body.get("id"),
             "from": body.get("from", {}),
@@ -1057,8 +1060,6 @@ class GigiRingCentralBot:
                 await self.process_reply(sms_record, text, reply_method="sms", phone=from_phone)
             else:
                 logger.info(f"⏭️ Skipping reply to company number: {from_phone}")
-
-        self.processed_message_ids.add(msg_id)
 
         if len(self.processed_message_ids) > 1000:
             self.processed_message_ids = set(list(self.processed_message_ids)[-500:])
@@ -1280,6 +1281,9 @@ class GigiRingCentralBot:
                 self.processed_message_ids.add(msg_id)
                 continue
 
+            # Mark as processed IMMEDIATELY to prevent duplicate responses
+            self.processed_message_ids.add(msg_id)
+
             text = msg.get("text", "")
             # RC @mentions may include ![:Person](id) format — extract clean text
             # Also check mentions array for Gigi's name
@@ -1318,8 +1322,6 @@ class GigiRingCentralBot:
                 # Update conversation tracking even on initial mention
                 if gigi_mentioned:
                     self._team_chat_active_conversations[creator_id] = datetime.utcnow()
-
-            self.processed_message_ids.add(msg_id)
 
         if new_msg_count == 0:
             logger.debug(f"Glip: All {len(messages)} messages in {TARGET_CHAT} were pre-startup or already processed")
@@ -1378,6 +1380,10 @@ class GigiRingCentralBot:
                         self.processed_message_ids.add(msg_id)
                         continue
 
+                    # Mark as processed IMMEDIATELY to prevent duplicate responses
+                    # (LLM call + reply send can take 1-3s, during which next poll cycle could pick up same message)
+                    self.processed_message_ids.add(msg_id)
+
                     sender_name = self._resolve_sender_name(creator_id)
                     logger.info(f"Glip DM: New message from {sender_name} ({creator_id}) in chat {chat_id}: {text[:50]}...")
 
@@ -1401,8 +1407,6 @@ class GigiRingCentralBot:
                             logger.error(f"Failed to send Glip DM reply to chat {chat_id}")
                     except Exception as e:
                         logger.error(f"Error sending Glip DM reply: {e}")
-
-                    self.processed_message_ids.add(msg_id)
 
         except Exception as e:
             logger.error(f"Failed to check direct Glip messages: {e}")
@@ -1482,6 +1486,9 @@ class GigiRingCentralBot:
                         self.processed_message_ids.add(msg_id)
                         continue
 
+                # Mark as processed IMMEDIATELY to prevent duplicate responses
+                self.processed_message_ids.add(msg_id)
+
                 # Role 1: Documenter
                 await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
 
@@ -1493,8 +1500,6 @@ class GigiRingCentralBot:
                         await self.process_reply(sms, text, reply_method="sms", phone=from_phone)
                     else:
                         logger.info(f"⏭️ Skipping reply to company number: {from_phone}")
-
-                self.processed_message_ids.add(msg_id)
 
             # Cleanup processed IDs to keep memory low (keep last 1000)
             if len(self.processed_message_ids) > 1000:
