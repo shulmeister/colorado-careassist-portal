@@ -22,6 +22,7 @@ Core principles:
 
 import os
 import json
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List, Tuple, Callable
 from dataclasses import dataclass
@@ -96,9 +97,14 @@ class FailureHandler:
         self.meltdown_threshold = 3  # 3 failures in 5 minutes = meltdown
         self.meltdown_window = timedelta(minutes=5)
 
+    @contextmanager
     def _get_connection(self):
-        """Get database connection."""
-        return psycopg2.connect(self.database_url)
+        """Get database connection (auto-closes on exit)."""
+        conn = psycopg2.connect(self.database_url)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _init_schema(self):
         """Initialize database schema if not exists."""
@@ -191,11 +197,11 @@ class FailureHandler:
 
             # Check for meltdown
             if self.detect_meltdown():
-                # Upgrade to meltdown
+                # Upgrade to meltdown — save original type before overwriting
+                context['original_failure_type'] = failure_type.value
                 failure_type = FailureType.MELTDOWN_PREVENTION
                 severity = FailureSeverity.CRITICAL
                 action = FailureAction.ABORT
-                context['original_failure_type'] = failure_type.value
                 message = f"MELTDOWN DETECTED: {message} (Part of cascading failure pattern)"
 
         with self._get_connection() as conn:
@@ -217,20 +223,30 @@ class FailureHandler:
                 ))
                 failure_id = cur.fetchone()[0]
 
-                # Update daily stats
+                # Update daily stats (jsonb_set increments count, || would overwrite)
+                type_key = failure_type.value
+                sev_key = severity.value
                 cur.execute("""
                     INSERT INTO gigi_failure_stats (date, total_failures, by_type, by_severity)
                     VALUES (CURRENT_DATE, 1, %s::jsonb, %s::jsonb)
                     ON CONFLICT (date) DO UPDATE SET
                         total_failures = gigi_failure_stats.total_failures + 1,
-                        by_type = gigi_failure_stats.by_type || %s::jsonb,
-                        by_severity = gigi_failure_stats.by_severity || %s::jsonb,
+                        by_type = jsonb_set(
+                            gigi_failure_stats.by_type,
+                            ARRAY[%s],
+                            to_jsonb(COALESCE((gigi_failure_stats.by_type->>%s)::int, 0) + 1)
+                        ),
+                        by_severity = jsonb_set(
+                            gigi_failure_stats.by_severity,
+                            ARRAY[%s],
+                            to_jsonb(COALESCE((gigi_failure_stats.by_severity->>%s)::int, 0) + 1)
+                        ),
                         updated_at = NOW()
                 """, (
-                    Json({failure_type.value: 1}),
-                    Json({severity.value: 1}),
-                    Json({failure_type.value: 1}),
-                    Json({severity.value: 1})
+                    Json({type_key: 1}),
+                    Json({sev_key: 1}),
+                    type_key, type_key,
+                    sev_key, sev_key
                 ))
 
             conn.commit()

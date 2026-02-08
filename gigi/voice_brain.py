@@ -1531,6 +1531,7 @@ class VoiceBrainHandler:
         self.current_response_id = 0
         self._response_task = None  # Track in-flight response generation
         self._send_lock = asyncio.Lock()  # Prevent concurrent WebSocket sends
+        self._greeting_sent = False  # Prevent double greeting
 
     async def handle(self):
         """Main handler loop — ping/pong inline, everything else via tasks"""
@@ -1569,8 +1570,12 @@ class VoiceBrainHandler:
                     asyncio.create_task(self.handle_message(message))
 
         except WebSocketDisconnect:
+            if self._response_task and not self._response_task.done():
+                self._response_task.cancel()
             logger.info(f"Call {self.call_id} disconnected")
         except Exception as e:
+            if self._response_task and not self._response_task.done():
+                self._response_task.cancel()
             logger.error(f"Call {self.call_id} error: {e}", exc_info=True)
 
     async def send(self, data: dict):
@@ -1590,19 +1595,29 @@ class VoiceBrainHandler:
             self.call_info["call_id"] = self.call_id
             logger.info(f"Call details: from={self.call_info.get('from_number')}, call_id={self.call_id}")
 
-            # Generate and send initial greeting
-            greeting, _ = await generate_response([], self.call_info)
-            await self.send({
-                "response_type": "response",
-                "response_id": 0,
-                "content": greeting,
-                "content_complete": True
-            })
+            # Generate and send initial greeting (only once)
+            if not self._greeting_sent:
+                self._greeting_sent = True
+                greeting, _ = await generate_response([], self.call_info)
+                await self.send({
+                    "response_type": "response",
+                    "response_id": 0,
+                    "content": greeting,
+                    "content_complete": True
+                })
 
         elif interaction_type == "response_required":
             response_id = message.get("response_id", 0)
             self.current_response_id = response_id
             transcript = message.get("transcript", [])
+
+            # If transcript is empty and greeting already sent, skip
+            user_msgs = [t for t in transcript if t.get("role") == "user"]
+            if not user_msgs and self._greeting_sent:
+                logger.info(f"Skipping duplicate greeting for response_id={response_id}")
+                return
+            if not user_msgs:
+                self._greeting_sent = True
 
             try:
                 # Callback for intermediate responses (thinking phrases)
@@ -1619,6 +1634,8 @@ class VoiceBrainHandler:
 
                 # Callback for tool call events (visible in Retell transcript)
                 async def on_tool_event(event_type, **kwargs):
+                    if response_id != self.current_response_id:
+                        return  # Stale — don't send
                     if event_type == "invocation":
                         await self.send({
                             "response_type": "tool_call_invocation",
