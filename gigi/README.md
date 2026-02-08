@@ -1,69 +1,69 @@
 # Gigi - AI Chief of Staff
 
-Gigi is Colorado Care Assist's Elite AI assistant. She has evolved from a simple scheduler into a comprehensive **Chief of Staff** capable of managing business operations and Jason's personal requests with secure, real-world execution.
+Gigi is Colorado Care Assist's AI Chief of Staff. She operates across 6+ channels with 22-25 tools per channel, backed by PostgreSQL memory, cross-channel conversation persistence, and self-monitoring subsystems.
 
-## 🚀 Capabilities
-
-### Elite Chief of Staff (Personal Assistant)
-- **Secure Purchases (2FA):** Automates ticket purchases (Ticketmaster) and restaurant bookings (OpenTable) using a secure **Double Confirmation flow**. She sends a 2FA text to Jason's phone and waits for verbal approval.
-- **Unified Google Intelligence:** Direct access to multiple Gmail accounts and search across all accessible Google Calendars.
-- **1Password Integration:** Securely retrieves credentials on the Mac Mini using a headless Service Account.
-
-### CCA Business Operations (Manager Bot)
-- **Team Chat Monitoring:** Scans RingCentral chats for client mentions and task completions.
-- **Auto-Documentation:** Syncs tasks and complaints directly into **WellSky** as clinical notes or admin tasks.
-- **After-Hours Coverage:** Automatically replies to SMS and handles caregiver call-outs when the office is closed.
+> **Primary reference:** See `CLAUDE.md` at the repo root for full architecture, tool lists, and operational details.
 
 ---
 
-## 🏗️ Architecture (Mac Mini Local)
+## Channels
 
-Gigi has migrated from the cloud to Jason's **Mac Mini** for lower latency and enhanced security.
+| Channel | Handler | Tools | Status |
+|---------|---------|-------|--------|
+| **Voice** (307-459-8220) | `voice_brain.py` | 25 | Working |
+| **SMS** (307-459-8220) | `ringcentral_bot.py` | 11 | Working |
+| **DM / Team Chat** | `ringcentral_bot.py` | 22 | Working |
+| **Telegram** | `telegram_bot.py` | 22 | Working |
+| **Ask-Gigi API** | `ask_gigi.py` | 22 | Working |
+| **Apple Shortcuts / Siri** | `ask_gigi.py` | 22 | Working |
+| **iMessage** | `main.py` + `ask_gigi.py` | 22 | Code Done |
+| **Menu Bar** | `ask_gigi.py` | 22 | Working |
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         INFRASTRUCTURE                           │
-├─────────────────────────────────────────────────────────────────┤
-│  Hardware: Mac Mini                                      │
-│  Service Manager: macOS launchd (LaunchAgents)                   │
-│  Database: Local PostgreSQL 17 + SQLite                          │
-│  Security: 1Password CLI (Service Account Mode)                  │
-└─────────────────────────────────────────────────────────────────┘
-```
+## Key Files
 
-## 🛠️ Integrated Tools
+| File | Purpose |
+|------|---------|
+| `voice_brain.py` | Retell Custom LLM WebSocket handler (multi-provider, 25 tools) |
+| `telegram_bot.py` | Telegram bot (multi-provider, 22 tools) |
+| `ringcentral_bot.py` | RC polling loop — SMS, DM, Team Chat, clock reminders, daily confirmations, morning briefing |
+| `main.py` | Retell webhooks, `/api/ask-gigi`, `/webhook/imessage` |
+| `ask_gigi.py` | Generic ask-gigi function (reuses telegram tools, no code duplication) |
+| `browser_automation.py` | Playwright headless Chromium (browse + screenshot) |
+| `conversation_store.py` | PostgreSQL conversation persistence (all channels) |
+| `memory_system.py` | Long-term memory (save/recall/forget via PostgreSQL `gigi_memories`) |
+| `mode_detector.py` | 8-mode auto-detection (focus, crisis, travel, etc.) |
+| `failure_handler.py` | 10 failure protocols + DB-based meltdown detection |
+| `pattern_detector.py` | Repeated failure + trend detection for morning briefing |
+| `self_monitor.py` | Weekly self-audit (Monday morning briefing) |
+| `memory_logger.py` | Daily markdown journal at `~/.gigi-memory/` |
+| `morning_briefing_service.py` | 7 AM daily briefing via Telegram |
+| `google_service.py` | Google Calendar + Gmail API (OAuth2) |
+| `CONSTITUTION.md` | Gigi's 10 non-negotiable operating laws |
 
-| Tool | Description | Status |
-|------|-------------|--------|
-| `verify_caller` | Identifies caregiver/client/owner | ✅ LIVE |
-| `gmail_search` | Search emails for invoices or info | ✅ LIVE |
-| `get_calendar_events` | Check schedule across all calendars | ✅ LIVE |
-| `search_concerts` | Find upcoming shows for favorite artists | ✅ LIVE |
-| `buy_tickets` | Buy tickets via Ticketmaster | 🔐 2FA ACTIVE |
-| `book_table` | Book reservations via OpenTable | 🔐 2FA ACTIVE |
-| `execute_call_out` | Autonomous WellSky shift unassignment | ✅ LIVE |
+## Multi-LLM Provider
 
-## 🔐 Security & 2FA Flow
+All handlers support Gemini, Anthropic, and OpenAI. Configured via:
+- `GIGI_LLM_PROVIDER=gemini` (default)
+- `GIGI_LLM_MODEL=gemini-3-flash-preview` (default)
 
-Gigi uses a **"God View, Human Hand"** security model:
-1. **Request:** Jason asks Gigi to buy tickets.
-2. **Initiation:** Gigi identifies the tickets and sends a **Telegram confirmation** to Jason's phone.
-3. **Verification:** Gigi stays on the call and asks: *"I've sent a text to your phone for security. May I proceed with the purchase?"*
-4. **Execution:** Only after a verbal "Yes" does she use the 1Password Service Account to retrieve card details and complete the transaction.
+## Subsystems
+
+- **Memory System** — PostgreSQL `gigi_memories` + audit log, with confidence decay
+- **Conversation Store** — PostgreSQL `gigi_conversations`, cross-channel context injection
+- **Mode Detector** — 8 operating modes, injected into system prompts
+- **Failure Handler** — 10 protocols, DB-based meltdown detection (3 failures in 5 min)
+- **Pattern Detector** — Tool failure trends, open shifts, memory conflicts, drift
+- **Self-Monitor** — Weekly audit (Monday briefing), failure stats, memory health
+- **Memory Logger** — Daily markdown journal, searchable via `search_memory_logs` tool
+- **Constitutional Preamble** — 10 Operating Laws injected into ALL system prompts
+
+## Security
+
+- All services bind `127.0.0.1`, exposed only via Cloudflare Tunnel
+- iMessage webhook requires BlueBubbles password parameter
+- Retell webhook uses SDK `verify()` (never custom HMAC)
+- Voice brain blocks side-effect tools during test/simulation calls
 
 ---
 
-## 🛠️ Maintenance & Deployment
-
-All services are managed locally on the Mac Mini.
-
-```bash
-# Restart all Gigi services
-sh deploy_local.sh
-
-# Check logs
-tail -f ~/logs/gigi-unified.log
-```
-
----
-*Gigi: Capable, Secure, Local.*
+*For full details, tool lists, API credentials, and operational procedures, see `CLAUDE.md`.*

@@ -130,7 +130,7 @@ class CaregiverPreferenceExtractor:
             )
 
             if self.llm_provider == "gemini" and self.gemini_client:
-                model = os.getenv("GIGI_LLM_MODEL", "gemini-2.5-flash")
+                model = os.getenv("GIGI_LLM_MODEL", "gemini-3-flash-preview")
                 response = self.gemini_client.models.generate_content(
                     model=model,
                     contents=prompt,
