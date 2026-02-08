@@ -166,6 +166,7 @@ TOOL_NAMES = [
     "get_wellsky_shifts", "web_search", "get_stock_price", "get_crypto_price",
     "create_claude_task", "check_claude_task",
     "save_memory", "recall_memories", "forget_memory", "search_memory_logs",
+    "browse_webpage", "take_screenshot",
 ]
 
 # Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
@@ -189,6 +190,8 @@ ANTHROPIC_TOOLS = [
     {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
     {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity, tool usage, failures. Use when asked 'what happened on...'", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back to search (default 30)"}}, "required": ["query"]}},
+    {"name": "browse_webpage", "description": "Browse a webpage and extract its text content. Use for research, reading articles, checking websites.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links (default false)"}}, "required": ["url"]}},
+    {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -237,6 +240,10 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _s("string", "ID of the memory to archive")}, required=["memory_id"])),
         genai_types.FunctionDeclaration(name="search_memory_logs", description="Search Gigi's daily operation logs for past activity.",
             parameters=genai_types.Schema(type="OBJECT", properties={"query": _s("string", "Keywords to search"), "days_back": _s("integer", "Days back (default 30)")}, required=["query"])),
+        genai_types.FunctionDeclaration(name="browse_webpage", description="Browse a webpage and extract its text content. Use for research, reading articles, checking websites.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"url": _s("string", "URL to browse"), "extract_links": _s("boolean", "Also extract links (default false)")}, required=["url"])),
+        genai_types.FunctionDeclaration(name="take_screenshot", description="Take a screenshot of a webpage. Returns the file path of the saved image.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"url": _s("string", "URL to screenshot"), "full_page": _s("boolean", "Capture full scrollable page (default false)")}, required=["url"])),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -267,6 +274,8 @@ OPENAI_TOOLS = [
     _oai_tool("recall_memories", "Search long-term memory.", {"category": {"type": "string"}, "search_text": {"type": "string"}}),
     _oai_tool("forget_memory", "Archive a memory.", {"memory_id": {"type": "string"}}, ["memory_id"]),
     _oai_tool("search_memory_logs", "Search Gigi's daily operation logs.", {"query": {"type": "string"}, "days_back": {"type": "integer"}}, ["query"]),
+    _oai_tool("browse_webpage", "Browse a webpage and extract text content.", {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links"}}, ["url"]),
+    _oai_tool("take_screenshot", "Take a screenshot of a webpage.", {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Full page capture"}}, ["url"]),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -316,6 +325,8 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - search_emails: Search Jason's Gmail.
 - get_wellsky_clients/caregivers: Access business data.
 - web_search: General knowledge, flight prices, travel info.
+- browse_webpage: Browse any URL and extract its text content (for deep research, reading articles).
+- take_screenshot: Screenshot any webpage (saves to ~/logs/screenshots/).
 - save_memory / recall_memories / forget_memory: Long-term memory management.
 
 # CRITICAL RULES
@@ -993,6 +1004,22 @@ class GigiTelegramBot:
                 days_back = tool_input.get("days_back", 30)
                 results = ml.search_logs(query, days_back=days_back)
                 return json.dumps({"query": query, "results": results[:10], "total": len(results)})
+
+            elif tool_name == "browse_webpage":
+                from gigi.browser_automation import get_browser
+                browser = get_browser()
+                url = tool_input.get("url", "")
+                extract_links = tool_input.get("extract_links", False)
+                result = await browser.browse_webpage(url, extract_links=extract_links)
+                return json.dumps(result)
+
+            elif tool_name == "take_screenshot":
+                from gigi.browser_automation import get_browser
+                browser = get_browser()
+                url = tool_input.get("url", "")
+                full_page = tool_input.get("full_page", False)
+                result = await browser.take_screenshot(url, full_page=full_page)
+                return json.dumps(result)
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
