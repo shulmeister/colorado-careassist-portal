@@ -3047,22 +3047,8 @@ async def goformz_wellsky_webhook(request: Request):
 
     This is the final step in the hub-and-spoke integration.
     """
-    # SECURITY: Verify webhook signature if secret is configured
-    goformz_secret = os.getenv("GOFORMZ_WEBHOOK_SECRET")
-    if goformz_secret:
-        import hmac
-        import hashlib
-        signature = request.headers.get("X-GoFormz-Signature") or request.headers.get("X-Webhook-Signature")
-        if not signature:
-            logger.warning("GoFormz webhook: Missing signature header")
-            return JSONResponse({"error": "Missing signature"}, status_code=401)
-        body = await request.body()
-        expected = hmac.new(goformz_secret.encode(), body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            logger.warning("GoFormz webhook: Invalid signature")
-            return JSONResponse({"error": "Invalid signature"}, status_code=401)
-    else:
-        logger.warning("GOFORMZ_WEBHOOK_SECRET not configured - webhook signature validation disabled")
+    # NOTE: GoFormz does not support webhook signature verification.
+    # Security relies on rate limiting (30/min) and Cloudflare protection.
 
     goformz_wellsky_sync = _get_goformz_wellsky_sync()
     if goformz_wellsky_sync is None:
@@ -3092,17 +3078,40 @@ async def goformz_wellsky_webhook(request: Request):
         # Extract form info
         item = payload.get('Item', {})
         submission_id = item.get('Id') or payload.get('submissionId') or payload.get('submission_id')
-        form_name = (
-            payload.get('formName', '') or
-            payload.get('FormName', '') or
-            payload.get('templateName', '')
-        ).lower()
+
+        # GoFormz webhook sends EntityId (template ID), not form name.
+        # Map known template IDs to form types, fallback to formName if present.
+        TEMPLATE_MAP = {
+            'c2d547ca-df85-42c3-89ed-a3f44e3d1bd8': 'client packet',
+            '9c0fa30f-87d4-4e41-b3ea-e0b69fddabb5': 'employee packet',
+        }
+        entity_id = payload.get('EntityId', '') or payload.get('entityId', '')
+        form_name = TEMPLATE_MAP.get(entity_id, '').lower()
+
+        # Fallback: check if formName was explicitly provided (e.g. manual/test calls)
+        if not form_name:
+            form_name = (
+                payload.get('formName', '') or
+                payload.get('FormName', '') or
+                payload.get('templateName', '')
+            ).lower()
 
         if not submission_id:
             return JSONResponse({
                 "success": False,
                 "error": "No submission ID in webhook payload"
             }, status_code=400)
+
+        logger.info(f"GoFormz webhook: entity_id={entity_id}, form_name={form_name}, submission_id={submission_id}")
+
+        # GoFormz webhook only sends IDs — fetch full form data from API
+        form_data = goformz_wellsky_sync.fetch_form_data(submission_id)
+        if form_data:
+            # Inject flattened fields into payload so extraction code can find them
+            payload['data'] = form_data
+            logger.info(f"Fetched {len(form_data)} fields from GoFormz API for form {submission_id}")
+        else:
+            logger.warning(f"Could not fetch form data from GoFormz API for {submission_id} — using raw payload")
 
         # Determine form type and process
         result = {}
@@ -3122,10 +3131,10 @@ async def goformz_wellsky_webhook(request: Request):
             })
         else:
             # Unknown form type - log but don't fail
-            logger.warning(f"Unknown form type in GoFormz webhook: {form_name}")
+            logger.warning(f"Unknown form type in GoFormz webhook: entity_id={entity_id} form_name={form_name}")
             return JSONResponse({
                 "success": True,
-                "message": f"Unknown form type '{form_name}' - no WellSky action taken"
+                "message": f"Unknown form type (entity={entity_id}, name='{form_name}') - no WellSky action taken"
             })
 
         return JSONResponse({
