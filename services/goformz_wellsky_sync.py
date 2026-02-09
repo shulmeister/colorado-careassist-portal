@@ -153,19 +153,28 @@ CLIENT_FIELDS = {
     "insurance_policy": ["ClientInsPolicy", "InsurancePolicy", "PolicyNumber"],
     "insurance_group": ["ClientInsGroup", "InsuranceGroup", "GroupNumber"],
 
-    # Emergency Contacts
-    "ec1_name": ["EC1Name", "EmergencyContact1Name", "EC1FullName"],
-    "ec1_phone": ["EC1Phone", "EmergencyContact1Phone"],
+    # Emergency Contacts (GoFormz uses ClientEmerContact/ClientEmerPhone)
+    "ec1_name": ["ClientEmerContact", "EC1Name", "EmergencyContact1Name", "EC1FullName"],
+    "ec1_phone": ["ClientEmerPhone", "EC1Phone", "EmergencyContact1Phone"],
     "ec1_relationship": ["EC1Relationship", "EC1Relation"],
-    "ec2_name": ["EC2Name", "EmergencyContact2Name"],
-    "ec2_phone": ["EC2Phone", "EmergencyContact2Phone"],
+    "ec2_name": ["ClientOtherContact", "EC2Name", "EmergencyContact2Name"],
+    "ec2_phone": ["ClientOtherPhone", "EC2Phone", "EmergencyContact2Phone"],
     "ec2_relationship": ["EC2Relationship", "EC2Relation"],
 
-    # Responsible Party / POA
-    "rp_name": ["RPName", "ResponsiblePartyName", "POAName"],
-    "rp_phone": ["RPPhone", "ResponsiblePartyPhone", "POAPhone"],
+    # Responsible Party / POA (GoFormz uses ClientAgentName)
+    "rp_name": ["ClientAgentName", "RPName", "ResponsiblePartyName", "POAName"],
+    "rp_phone": ["ClientCarePhone", "RPPhone", "ResponsiblePartyPhone", "POAPhone"],
     "rp_relationship": ["RPRelationship", "ResponsiblePartyRelationship"],
     "rp_address": ["RPAddress", "ResponsiblePartyAddress"],
+
+    # Payer info (GoFormz uses PayerName/PayerPhone/PayerEmail)
+    "payer_name": ["PayerName", "BillToName"],
+    "payer_phone": ["PayerPhone", "BillToPhone"],
+    "payer_email": ["PayerEmail", "BillToEmail"],
+    "payer_address": ["PayerAddress", "BillToAddress"],
+
+    # Start date
+    "start_date": ["ClientStartDate", "StartDate", "ServiceStartDate"],
 
     # Signatures
     "client_signature": ["ClientSignature", "Signature"],
@@ -203,6 +212,16 @@ def _clean_phone(phone: str) -> str:
         return ""
     digits = re.sub(r'[^\d]', '', phone)
     return digits[-10:] if len(digits) >= 10 else digits
+
+
+def _format_ssn(ssn: str) -> str:
+    """Format SSN to XXX-XX-XXXX as required by WellSky."""
+    if not ssn:
+        return ""
+    digits = re.sub(r'[^\d]', '', ssn)
+    if len(digits) == 9:
+        return f"{digits[:3]}-{digits[3:5]}-{digits[5:]}"
+    return ssn  # Return as-is if not 9 digits
 
 
 def _parse_date(date_str: str) -> Optional[str]:
@@ -291,6 +310,63 @@ class GoFormzWellSkySyncService:
                 logger.warning("GoFormz service not available")
                 self._goformz_service = None
         return self._goformz_service
+
+    def fetch_form_data(self, form_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch full form data from GoFormz API and flatten fields.
+
+        GoFormz API returns fields as objects:
+          {'ClientName': {'text': 'Richard Taylor', 'id': '...', 'name': 'ClientName'}}
+        This method flattens them to:
+          {'ClientName': 'Richard Taylor'}
+
+        For checkbox groups (checkedItems), joins with comma:
+          {'GroupPets': {'checkedItems': ['Dog', 'Cat']}} → {'GroupPets': 'Dog, Cat'}
+        """
+        if not self.goformz or not self.goformz.enabled:
+            logger.warning("GoFormz service not available — cannot fetch form data")
+            return None
+
+        try:
+            import requests
+            headers = self.goformz._get_headers()
+            resp = requests.get(
+                f"https://api.goformz.com/v2/formz/{form_id}",
+                headers=headers,
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                logger.error(f"GoFormz API error fetching form {form_id}: {resp.status_code}")
+                return None
+
+            form = resp.json()
+            raw_fields = form.get("fields", {})
+            flat: Dict[str, Any] = {}
+            for name, field_obj in raw_fields.items():
+                if isinstance(field_obj, dict):
+                    # Text fields: {'text': 'value', ...}
+                    if "text" in field_obj and field_obj["text"] is not None:
+                        flat[name] = str(field_obj["text"]).strip()
+                    # Numeric/date fields: {'value': '...', 'displayValue': '...'}
+                    elif "displayValue" in field_obj and field_obj["displayValue"] is not None:
+                        flat[name] = str(field_obj["displayValue"]).strip()
+                    elif "value" in field_obj and field_obj["value"] is not None:
+                        flat[name] = str(field_obj["value"]).strip()
+                    # Checkbox groups: {'checkedItems': ['A', 'B']}
+                    elif "checkedItems" in field_obj:
+                        items = [i for i in field_obj["checkedItems"] if i]
+                        flat[name] = ", ".join(items) if items else ""
+                    else:
+                        flat[name] = ""
+                elif field_obj is not None:
+                    flat[name] = str(field_obj).strip()
+
+            logger.info(f"Fetched GoFormz form {form_id}: {len(flat)} fields extracted")
+            return flat
+
+        except Exception as e:
+            logger.exception(f"Error fetching GoFormz form {form_id}: {e}")
+            return None
 
     # =========================================================================
     # Employee Packet → WellSky Practitioner
@@ -418,7 +494,7 @@ class GoFormzWellSkySyncService:
             zip_code=employee_data.get("zip", ""),
             gender=employee_data.get("gender"),
             birth_date=employee_data.get("dob"),
-            ssn=employee_data.get("ssn", ""),
+            ssn=_format_ssn(employee_data.get("ssn", "")),
             is_hired=True,
             status_id=100,  # 100 = Hired
             profile_tags=profile_tags if profile_tags else None,
