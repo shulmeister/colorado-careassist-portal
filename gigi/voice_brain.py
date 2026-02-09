@@ -942,6 +942,17 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             if not phone or not message:
                 return json.dumps({"error": "Missing phone_number or message"})
 
+            # --- Outbound SMS whitelist (only whitelisted numbers until Gigi goes live) ---
+            import re as _re
+            digits_only = _re.sub(r'[^\d]', '', phone)
+            if digits_only.startswith('1') and len(digits_only) == 11:
+                digits_only = digits_only[1:]
+            whitelist_csv = os.getenv("GIGI_SMS_WHITELIST", "6039971495")
+            whitelist = {n.strip() for n in whitelist_csv.split(",") if n.strip()}
+            if digits_only not in whitelist:
+                logger.warning(f"Voice SMS BLOCKED (not whitelisted): {phone}")
+                return json.dumps({"error": f"SMS to {phone} blocked. Outbound SMS is currently restricted to approved numbers only."})
+
             try:
                 def _send():
                     from sales.shift_filling.sms_service import SMSService
@@ -1090,7 +1101,8 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             elif dest == "office":
                 return json.dumps({"transfer_number": "+13037571777"})
             else:
-                return json.dumps({"transfer_number": dest})
+                logger.warning(f"Transfer BLOCKED (unknown destination): {dest}")
+                return json.dumps({"error": f"Cannot transfer to '{dest}'. Only 'jason' or 'office' are available."})
 
         elif tool_name == "create_claude_task":
             title = tool_input.get("title", "")

@@ -1108,11 +1108,21 @@ class GigiRingCentralBot:
 
     def _send_sms_via_rc(self, to_phone: str, message: str):
         """Send SMS using the admin JWT token. Used by clock reminders and daily confirmations."""
+        # --- Outbound SMS whitelist (only whitelisted numbers until Gigi goes live) ---
+        import re
+        digits_only = re.sub(r'[^\d]', '', to_phone)
+        if digits_only.startswith('1') and len(digits_only) == 11:
+            digits_only = digits_only[1:]  # strip country code for comparison
+        whitelist_csv = os.getenv("GIGI_SMS_WHITELIST", "6039971495")
+        whitelist = {n.strip() for n in whitelist_csv.split(",") if n.strip()}
+        if digits_only not in whitelist:
+            logger.warning(f"SMS BLOCKED (not whitelisted): {to_phone} — message: {message[:80]}...")
+            return False, f"Number {to_phone} not in SMS whitelist. Gigi outbound SMS is restricted."
+
         access_token = self._get_admin_access_token()
         if not access_token:
             return False, "No access token"
 
-        import re
         clean_phone = re.sub(r'[^\d]', '', to_phone)
         if len(clean_phone) == 10:
             clean_phone = f"+1{clean_phone}"
