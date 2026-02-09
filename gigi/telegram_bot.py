@@ -193,6 +193,7 @@ ANTHROPIC_TOOLS = [
     {"name": "browse_webpage", "description": "Browse a webpage and extract its text content. Use for research, reading articles, checking websites.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links (default false)"}}, "required": ["url"]}},
     {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary. Do NOT try to build a briefing manually from other tools.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts. Use when asked about AR, accounts receivable, outstanding invoices, or who owes money.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' (default) or 'detailed' (full invoice list)"}}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -247,6 +248,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"url": _s("string", "URL to screenshot"), "full_page": _s("boolean", "Capture full scrollable page (default false)")}, required=["url"])),
         genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _s("string", "Level of detail: 'summary' or 'detailed'")})),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -280,6 +283,7 @@ OPENAI_TOOLS = [
     _oai_tool("browse_webpage", "Browse a webpage and extract text content.", {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links"}}, ["url"]),
     _oai_tool("take_screenshot", "Take a screenshot of a webpage.", {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Full page capture"}}, ["url"]),
     _oai_tool("get_morning_briefing", "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.", {}, []),
+    _oai_tool("get_ar_report", "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, []),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -333,6 +337,7 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - take_screenshot: Screenshot any webpage (saves to ~/logs/screenshots/).
 - save_memory / recall_memories / forget_memory: Long-term memory management.
 - get_morning_briefing: Full daily briefing (weather, calendar, shifts, emails, ski, alerts).
+- get_ar_report: QuickBooks accounts receivable aging report (outstanding invoices, overdue amounts).
 
 # CRITICAL RULES
 - **Morning Briefing:** ALWAYS use `get_morning_briefing` when asked for a morning briefing, daily digest, or daily summary. Do NOT try to assemble one manually from other tools. Just call the tool and relay the result.
@@ -990,6 +995,18 @@ class GigiTelegramBot:
                 svc = MorningBriefingService()
                 briefing = await asyncio.to_thread(svc.generate_briefing)
                 return briefing
+
+            elif tool_name == "get_ar_report":
+                from sales.quickbooks_service import QuickBooksService
+                qb = QuickBooksService()
+                loaded = await asyncio.to_thread(qb.load_tokens_from_db)
+                if not loaded:
+                    return json.dumps({"error": "QuickBooks not connected. Visit https://portal.coloradocareassist.com/auth/quickbooks to authorize."})
+                detail_level = tool_input.get("detail_level", "summary")
+                result = await asyncio.to_thread(qb.generate_ar_report, detail_level)
+                if result.get("success"):
+                    return result["report"]
+                return json.dumps(result)
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})

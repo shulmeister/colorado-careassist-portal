@@ -256,6 +256,7 @@ SMS_TOOLS = [
     {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back (default 30)"}}, "required": ["query"]}},
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
 ]
 
 # Full tool set for Glip DM replies — matches Telegram capabilities
@@ -282,6 +283,7 @@ DM_TOOLS = [
     {"name": "browse_webpage", "description": "Browse a webpage and extract its text content. Use for research, reading articles, checking websites.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links (default false)"}}, "required": ["url"]}},
     {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
 ]
 
 # =========================================================================
@@ -318,6 +320,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Keywords to search"), "days_back": _gs("integer", "Days back (default 30)")}, required=["query"])),
         genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
     ])]
 
     GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
@@ -365,6 +369,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"url": _gs("string", "URL to screenshot"), "full_page": _gs("boolean", "Capture full scrollable page (default false)")}, required=["url"])),
         genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
     ])]
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
@@ -2255,6 +2261,17 @@ class GigiRingCentralBot:
                 svc = MorningBriefingService()
                 return svc.generate_briefing()
 
+            elif tool_name == "get_ar_report":
+                from sales.quickbooks_service import QuickBooksService
+                qb = QuickBooksService()
+                if not qb.load_tokens_from_db():
+                    return json.dumps({"error": "QuickBooks not connected. Visit https://portal.coloradocareassist.com/auth/quickbooks to authorize."})
+                detail_level = tool_input.get("detail_level", "summary")
+                result = qb.generate_ar_report(detail_level)
+                if result.get("success"):
+                    return result["report"]
+                return json.dumps(result)
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -3006,6 +3023,18 @@ class GigiRingCentralBot:
                 from gigi.morning_briefing_service import MorningBriefingService
                 svc = MorningBriefingService()
                 return svc.generate_briefing()
+
+            elif tool_name == "get_ar_report":
+                from sales.quickbooks_service import QuickBooksService
+                qb = QuickBooksService()
+                loaded = await asyncio.to_thread(qb.load_tokens_from_db)
+                if not loaded:
+                    return json.dumps({"error": "QuickBooks not connected. Visit https://portal.coloradocareassist.com/auth/quickbooks to authorize."})
+                detail_level = tool_input.get("detail_level", "summary")
+                result = await asyncio.to_thread(qb.generate_ar_report, detail_level)
+                if result.get("success"):
+                    return result["report"]
+                return json.dumps(result)
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
