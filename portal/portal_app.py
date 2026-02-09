@@ -3961,18 +3961,26 @@ async def oauth_callback(
     # Store token in database
     try:
         user_email = request.session.get("oauth_user_email", "unknown@example.com")
-        
+
         # Parse expires_at
         expires_at = None
         if token_data.get("expires_at"):
             expires_at = datetime.fromisoformat(token_data["expires_at"])
-        
+
+        # Capture service-specific extra data (e.g., QBO realmId)
+        extra_data = token_data.get("extra_data") or {}
+        if service == "quickbooks":
+            realm_id = request.query_params.get("realmId")
+            if realm_id:
+                extra_data["realm_id"] = realm_id
+                logger.info(f"Captured QuickBooks realmId: {realm_id}")
+
         # Check if token already exists for this user/service
         existing_token = db.query(OAuthToken).filter(
             OAuthToken.user_email == user_email,
             OAuthToken.service == service
         ).first()
-        
+
         if existing_token:
             # Update existing token
             existing_token.access_token = token_data.get("access_token")
@@ -3981,6 +3989,8 @@ async def oauth_callback(
             existing_token.scope = token_data.get("scope")
             existing_token.is_active = True
             existing_token.updated_at = datetime.utcnow()
+            if extra_data:
+                existing_token.extra_data = extra_data
         else:
             # Create new token
             new_token = OAuthToken(
@@ -3991,7 +4001,7 @@ async def oauth_callback(
                 token_type=token_data.get("token_type", "Bearer"),
                 expires_at=expires_at,
                 scope=token_data.get("scope"),
-                extra_data=token_data.get("extra_data")
+                extra_data=extra_data if extra_data else None
             )
             db.add(new_token)
         

@@ -51,8 +51,8 @@ class OAuthManager:
                 "redirect_uri": f"{self.base_url}/auth/mailchimp/callback"
             },
             "quickbooks": {
-                "client_id": os.getenv("QUICKBOOKS_CLIENT_ID"),
-                "client_secret": os.getenv("QUICKBOOKS_CLIENT_SECRET"),
+                "client_id": os.getenv("QB_CLIENT_ID") or os.getenv("QUICKBOOKS_CLIENT_ID"),
+                "client_secret": os.getenv("QB_CLIENT_SECRET") or os.getenv("QUICKBOOKS_CLIENT_SECRET"),
                 "auth_url": "https://appcenter.intuit.com/connect/oauth2",
                 "token_url": "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
                 "scopes": ["com.intuit.quickbooks.accounting"],

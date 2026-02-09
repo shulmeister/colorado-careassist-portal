@@ -7,8 +7,9 @@ Handles customer data fetching and syncing to Brevo.
 import os
 import logging
 import requests
+import psycopg2
 from typing import Dict, List, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -264,4 +265,243 @@ class QuickBooksService:
             'source': 'QuickBooks',
             'notes': f"QuickBooks Customer ID: {customer.get('Id')}"
         }
+
+    def load_tokens_from_db(self) -> bool:
+        """Load OAuth tokens from the oauth_tokens table. Auto-refreshes if expired."""
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        try:
+            conn = psycopg2.connect(db_url)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT access_token, refresh_token, expires_at, extra_data "
+                    "FROM oauth_tokens WHERE service = 'quickbooks' AND is_active = true "
+                    "ORDER BY updated_at DESC LIMIT 1"
+                )
+                row = cur.fetchone()
+            conn.close()
+
+            if not row:
+                logger.warning("No active QuickBooks token found in database")
+                return False
+
+            self.access_token = row[0]
+            self.refresh_token = row[1]
+            expires_at = row[2]
+            extra_data = row[3] or {}
+
+            # Get realm_id from extra_data or env
+            if extra_data.get("realm_id"):
+                self.realm_id = extra_data["realm_id"]
+            if not self.realm_id:
+                self.realm_id = os.getenv("QB_REALM_ID")
+
+            self.enabled = bool(self.client_id and self.client_secret and self.realm_id)
+
+            # Auto-refresh if expired
+            if expires_at and datetime.utcnow() > expires_at:
+                logger.info("QuickBooks token expired, refreshing...")
+                result = self.refresh_access_token()
+                if result.get("success"):
+                    self._save_tokens_to_db()
+                else:
+                    logger.error(f"Token refresh failed: {result.get('error')}")
+                    return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to load QBO tokens from DB: {e}")
+            return False
+
+    def _save_tokens_to_db(self):
+        """Update tokens in the database after a refresh."""
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        try:
+            conn = psycopg2.connect(db_url)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE oauth_tokens SET access_token = %s, refresh_token = %s, "
+                    "expires_at = %s, updated_at = NOW() "
+                    "WHERE service = 'quickbooks' AND is_active = true",
+                    (self.access_token, self.refresh_token,
+                     datetime.utcnow() + timedelta(hours=1))
+                )
+            conn.commit()
+            conn.close()
+            logger.info("QuickBooks tokens updated in database")
+        except Exception as e:
+            logger.error(f"Failed to save QBO tokens to DB: {e}")
+
+    def _api_request(self, method: str, endpoint: str, **kwargs) -> Optional[requests.Response]:
+        """Make an API request with auto-refresh on 401."""
+        url = f"{self.base_url}/v3/company/{self.realm_id}/{endpoint}"
+        response = requests.request(method, url, headers=self._get_headers(), **kwargs)
+
+        if response.status_code == 401:
+            logger.info("QBO 401 - refreshing token and retrying")
+            result = self.refresh_access_token()
+            if result.get("success"):
+                self._save_tokens_to_db()
+                response = requests.request(method, url, headers=self._get_headers(), **kwargs)
+            else:
+                return None
+
+        return response
+
+    def get_invoices(self, status: str = "Open", limit: int = 500) -> Dict[str, Any]:
+        """Get invoices from QuickBooks. status='Open' for unpaid, 'All' for everything."""
+        if not self.enabled:
+            return {"success": False, "error": "QuickBooks not configured"}
+
+        try:
+            if status == "Open":
+                query = f"SELECT * FROM Invoice WHERE Balance > '0' MAXRESULTS {limit}"
+            else:
+                query = f"SELECT * FROM Invoice MAXRESULTS {limit}"
+
+            response = self._api_request("GET", "query", params={"query": query})
+            if not response or response.status_code != 200:
+                error_text = response.text[:200] if response else "No response"
+                return {"success": False, "error": f"API error: {error_text}"}
+
+            data = response.json()
+            invoices = data.get("QueryResponse", {}).get("Invoice", [])
+            if isinstance(invoices, dict):
+                invoices = [invoices]
+
+            return {"success": True, "invoices": invoices, "count": len(invoices)}
+
+        except Exception as e:
+            logger.error(f"Failed to get invoices: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_ar_aging_summary(self) -> Dict[str, Any]:
+        """Get the Accounts Receivable Aging Summary report from QBO."""
+        if not self.enabled:
+            return {"success": False, "error": "QuickBooks not configured"}
+
+        try:
+            response = self._api_request("GET", "reports/AgedReceivables")
+            if not response or response.status_code != 200:
+                error_text = response.text[:200] if response else "No response"
+                return {"success": False, "error": f"API error: {error_text}"}
+
+            return {"success": True, "report": response.json()}
+
+        except Exception as e:
+            logger.error(f"Failed to get AR aging summary: {e}")
+            return {"success": False, "error": str(e)}
+
+    def generate_ar_report(self, detail_level: str = "summary") -> Dict[str, Any]:
+        """Generate a formatted AR report combining aging summary and open invoices."""
+        if not self.enabled:
+            return {"success": False, "error": "QuickBooks not configured"}
+
+        lines = []
+
+        # Get aging summary
+        aging = self.get_ar_aging_summary()
+        if aging.get("success"):
+            report_data = aging["report"]
+            header = report_data.get("Header", {})
+            lines.append(f"📊 AR Aging Report — {header.get('ReportName', 'Aged Receivables')}")
+            lines.append(f"As of: {header.get('DateMacro', header.get('EndPeriod', 'today'))}")
+            lines.append("")
+
+            # Parse rows from QBO report format
+            rows_section = report_data.get("Rows", {})
+            row_list = rows_section.get("Row", [])
+
+            for row in row_list:
+                row_type = row.get("type", "")
+                if row_type == "Data":
+                    cols = row.get("ColData", [])
+                    if cols:
+                        name = cols[0].get("value", "")
+                        amounts = [c.get("value", "") for c in cols[1:]]
+                        if name and any(a and a != "0" and a != "" for a in amounts):
+                            lines.append(f"  {name}: {', '.join(a for a in amounts if a)}")
+                elif row_type == "Section":
+                    section_header = row.get("Header", {})
+                    if section_header:
+                        cols = section_header.get("ColData", [])
+                        if cols:
+                            lines.append(f"\n{cols[0].get('value', '')}")
+                    # Process section rows
+                    section_rows = row.get("Rows", {}).get("Row", [])
+                    for sr in section_rows:
+                        cols = sr.get("ColData", [])
+                        if cols:
+                            name = cols[0].get("value", "")
+                            amounts = [c.get("value", "") for c in cols[1:]]
+                            if name and any(a and a != "0" and a != "" for a in amounts):
+                                lines.append(f"  {name}: {', '.join(a for a in amounts if a)}")
+                    # Section summary
+                    summary = row.get("Summary", {})
+                    if summary:
+                        cols = summary.get("ColData", [])
+                        if cols:
+                            name = cols[0].get("value", "")
+                            amounts = [c.get("value", "") for c in cols[1:]]
+                            lines.append(f"  ** {name}: {', '.join(a for a in amounts if a)}")
+
+            # Columns header (aging buckets)
+            columns = report_data.get("Columns", {}).get("Column", [])
+            if columns:
+                col_names = [c.get("ColTitle", "") for c in columns]
+                lines.insert(3, f"Buckets: {' | '.join(col_names)}")
+                lines.insert(4, "")
+        else:
+            lines.append(f"⚠️ Could not fetch aging summary: {aging.get('error', 'unknown')}")
+
+        # Get open invoices for detail
+        if detail_level == "detailed":
+            invoices_result = self.get_invoices(status="Open")
+            if invoices_result.get("success"):
+                invoices = invoices_result["invoices"]
+                lines.append(f"\n--- Open Invoices ({len(invoices)} total) ---")
+
+                # Sort by balance descending
+                invoices.sort(key=lambda x: float(x.get("Balance", 0)), reverse=True)
+
+                total_ar = sum(float(inv.get("Balance", 0)) for inv in invoices)
+                lines.append(f"Total AR Outstanding: ${total_ar:,.2f}")
+                lines.append("")
+
+                for inv in invoices[:20]:  # Top 20
+                    customer = inv.get("CustomerRef", {}).get("name", "Unknown")
+                    balance = float(inv.get("Balance", 0))
+                    due_date = inv.get("DueDate", "N/A")
+                    inv_num = inv.get("DocNumber", "N/A")
+                    lines.append(f"  #{inv_num} — {customer}: ${balance:,.2f} (due {due_date})")
+
+                if len(invoices) > 20:
+                    lines.append(f"  ... and {len(invoices) - 20} more invoices")
+        else:
+            # Summary: just get totals from open invoices
+            invoices_result = self.get_invoices(status="Open")
+            if invoices_result.get("success"):
+                invoices = invoices_result["invoices"]
+                total_ar = sum(float(inv.get("Balance", 0)) for inv in invoices)
+                overdue = [inv for inv in invoices
+                          if inv.get("DueDate") and inv["DueDate"] < datetime.now().strftime("%Y-%m-%d")]
+                lines.append(f"\n--- Summary ---")
+                lines.append(f"Total AR Outstanding: ${total_ar:,.2f}")
+                lines.append(f"Open Invoices: {len(invoices)}")
+                lines.append(f"Overdue Invoices: {len(overdue)}")
+                if overdue:
+                    overdue_total = sum(float(inv.get("Balance", 0)) for inv in overdue)
+                    lines.append(f"Overdue Amount: ${overdue_total:,.2f}")
+
+                # Top 5 overdue
+                if overdue:
+                    overdue.sort(key=lambda x: float(x.get("Balance", 0)), reverse=True)
+                    lines.append("\nTop Overdue:")
+                    for inv in overdue[:5]:
+                        customer = inv.get("CustomerRef", {}).get("name", "Unknown")
+                        balance = float(inv.get("Balance", 0))
+                        due_date = inv.get("DueDate", "N/A")
+                        lines.append(f"  {customer}: ${balance:,.2f} (due {due_date})")
+
+        return {"success": True, "report": "\n".join(lines)}
 

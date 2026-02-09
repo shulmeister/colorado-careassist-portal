@@ -480,6 +480,17 @@ ANTHROPIC_TOOLS = [
             },
             "required": ["query"]
         }
+    },
+    {
+        "name": "get_ar_report",
+        "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts. Use when asked about AR, accounts receivable, or who owes money.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "detail_level": {"type": "string", "description": "Level of detail: 'summary' (default) or 'detailed' (full invoice list)"}
+            },
+            "required": []
+        }
     }
 ]
 
@@ -1195,6 +1206,18 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             except Exception as e:
                 return json.dumps({"error": f"Log search failed: {str(e)}"})
 
+        elif tool_name == "get_ar_report":
+            from sales.quickbooks_service import QuickBooksService
+            qb = QuickBooksService()
+            loaded = await run_sync(qb.load_tokens_from_db)
+            if not loaded:
+                return json.dumps({"error": "QuickBooks not connected"})
+            detail_level = tool_input.get("detail_level", "summary")
+            result = await run_sync(qb.generate_ar_report, detail_level)
+            if result.get("success"):
+                return result["report"]
+            return json.dumps(result)
+
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -1214,7 +1237,8 @@ SLOW_TOOLS = {
     "get_wellsky_client_details", "search_google_drive",
     "get_wellsky_shifts", "get_client_current_status",
     "web_search", "search_concerts", "search_emails",
-    "get_wellsky_clients", "get_wellsky_caregivers"
+    "get_wellsky_clients", "get_wellsky_caregivers",
+    "get_ar_report"
 }
 
 async def _maybe_acknowledge(call_info, on_token):
