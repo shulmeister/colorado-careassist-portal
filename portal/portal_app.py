@@ -6922,6 +6922,14 @@ Return ONLY valid JSON, no markdown code fences, no explanation. Extract EVERY f
         }, status_code=200)  # Return 200 so frontend can show error
 
 
+@app.get("/payroll", response_class=HTMLResponse)
+async def payroll_converter(current_user: Dict[str, Any] = Depends(get_current_user_optional)):
+    """Wellsky (AK) Payroll Converter - Convert WellSky payroll data for Adams Keegan"""
+    html_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "payroll-converter.html")
+    with open(html_path, "r") as f:
+        return HTMLResponse(content=f.read())
+
+
 @app.get("/va-plan-of-care", response_class=HTMLResponse)
 async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_user_optional)):
     """VA Plan of Care Generator - Convert VA Form 10-7080 to Plan of Care (485)"""
