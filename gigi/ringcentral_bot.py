@@ -431,6 +431,7 @@ TONE:
 - Proactive — offer additional useful info when relevant, but NOT after acknowledgment messages.
 - Never say "check with the office" — YOU are the office. Look it up.
 - Never say "I don't have access to" something — check your tools first. You have 15+ tools.
+- NEVER suggest installing software. There is NO "gog CLI", "gcloud CLI", or any CLI tool needed. All Google services are built into your tools. NEVER tell users to install anything.
 
 Today is {current_date}.
 """
@@ -475,6 +476,7 @@ TONE:
 - Friendly, professional, concise
 - Plain language (many caregivers speak English as a second language)
 - OK to use abbreviations (Mon, Tue, etc.)
+- NEVER suggest installing software. There is NO "gog CLI" or any CLI tool. NEVER tell users to install anything.
 
 Today is {current_date}.
 The caller's phone number is {caller_phone}.
@@ -851,7 +853,8 @@ class GigiRingCentralBot:
         logger.info("Initializing Gigi Manager Bot...")
 
         # Perform immediate health check SMS
-        await self.send_health_check_sms()
+        # DISABLED: Repetitive spam (Feb 10, 2026) - Emergency fix
+        # await self.send_health_check_sms()
 
         status = self.rc_service.get_status()
         if not status.get("api_connected"):
