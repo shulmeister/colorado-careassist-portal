@@ -7669,6 +7669,9 @@ async def fill_va_rfs_form(
 
         # RadioButtonList[1] - Is this a continuation of care?
         # 0=NO (new services), 1=YES (re-authorization from VA 10-7080)
+        # BUSINESS RULE: Continuation of care = YES *ONLY* when the RFS is created
+        # from a VA Form 10-7080 authorization. All other document types (clinical notes,
+        # face sheets, CCD, referrals, etc.) = NO. Default is NO.
         is_continuation = data.get('is_continuation_of_care', False)
         form_data['RadioButtonList[1]'] = 1 if is_continuation else 0
 
@@ -8723,7 +8726,7 @@ async def va_rfs_converter(
                 referral_date: formatDateForDisplay(document.getElementById('referral-date').value),
                 admission_date: formatDateForDisplay(document.getElementById('admission-date').value),
                 discharge_date: formatDateForDisplay(document.getElementById('discharge-date').value),
-                is_continuation_of_care: (window.rfsDocumentType === 'VA_10_7080')  // YES for VA 10-7080, NO for face sheets
+                is_continuation_of_care: (window.rfsDocumentType === 'VA_10_7080')  // YES *ONLY* for VA 10-7080 authorization forms
             };
 
             try {
