@@ -194,6 +194,8 @@ ANTHROPIC_TOOLS = [
     {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary. Do NOT try to build a briefing manually from other tools.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts. Use when asked about AR, accounts receivable, outstanding invoices, or who owes money.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' (default) or 'detailed' (full invoice list)"}}, "required": []}},
+    {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto analysis, macro outlook, sector rotation, portfolio strategy, etc. Returns institutional-grade research with evidence and confidence level. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze in depth"}}, "required": ["question"]}},
+    {"name": "get_polybot_status", "description": "Get Polybot autonomous trading bot performance report. Shows both General strategies (momentum, mean reversion, spread) and Weather Arbitrage strategy performance, plus whale tracker status. Use when asked about Polybot, trading bot, prediction market performance, weather arb, or paper trading results.", "input_schema": {"type": "object", "properties": {"strategy": {"type": "string", "description": "Which strategy group: 'all' (default), 'general', 'weather', or 'whale'"}}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -250,6 +252,10 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _s("string", "Level of detail: 'summary' or 'detailed'")})),
+        genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"question": _s("string", "The financial research question to analyze")}, required=["question"])),
+        genai_types.FunctionDeclaration(name="get_polybot_status", description="Get Polybot autonomous trading bot performance. Shows General strategies, Weather Arb, and whale tracker status.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"strategy": _s("string", "Strategy group: all, general, weather, or whale")})),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -284,6 +290,8 @@ OPENAI_TOOLS = [
     _oai_tool("take_screenshot", "Take a screenshot of a webpage.", {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Full page capture"}}, ["url"]),
     _oai_tool("get_morning_briefing", "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.", {}, []),
     _oai_tool("get_ar_report", "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, []),
+    _oai_tool("deep_research", "Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.", {"question": {"type": "string", "description": "The financial research question to analyze"}}, ["question"]),
+    _oai_tool("get_polybot_status", "Get Polybot trading bot performance report. Shows General strategies, Weather Arb, and whale tracker.", {"strategy": {"type": "string", "description": "Strategy group: all, general, weather, or whale"}}),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -1007,6 +1015,99 @@ class GigiTelegramBot:
                 if result.get("success"):
                     return result["report"]
                 return json.dumps(result)
+
+            elif tool_name == "get_polybot_status":
+                strategy = tool_input.get("strategy", "all")
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        # Fetch all data in parallel
+                        status_resp, weather_resp, whale_resp, trades_resp, positions_resp = await asyncio.gather(
+                            client.get("http://localhost:3002/api/polybot/status"),
+                            client.get("http://localhost:3002/api/polybot/weather/status"),
+                            client.get("http://localhost:3002/api/polybot/whale/status"),
+                            client.get("http://localhost:3002/api/polybot/trades"),
+                            client.get("http://localhost:3002/api/polybot/positions"),
+                        )
+                        status = status_resp.json()
+                        weather = weather_resp.json()
+                        whale = whale_resp.json()
+                        trades = trades_resp.json() if isinstance(trades_resp.json(), list) else trades_resp.json().get("trades", [])
+                        positions = positions_resp.json() if isinstance(positions_resp.json(), list) else []
+
+                        # Build report
+                        report = []
+                        report.append(f"POLYBOT STATUS: {'RUNNING' if status.get('enabled') else 'STOPPED'} | Paper Mode: {'YES' if status.get('paper_mode') else 'LIVE'}")
+                        report.append(f"Cycles: {status.get('cycles', 0)} | Auto-scan: every {status.get('auto_scan_interval', 120)}s")
+                        report.append(f"Portfolio: ${status.get('portfolio_value', 0):,.2f} | P&L: ${status.get('pnl', 0):,.2f} ({status.get('pnl_pct', 0):.2f}%)")
+                        report.append(f"NOTE: P&L numbers have known bugs (capital mismatch + pricing fallback) and are not accurate yet.")
+                        report.append("")
+
+                        if strategy in ("all", "general"):
+                            general_trades = [t for t in trades if t.get("strategy") not in ("weather_arb", "whale_tracker")]
+                            report.append("--- GENERAL STRATEGIES (Momentum, MeanReversion, Spread) ---")
+                            report.append(f"Trades: {len(general_trades)} | Strategies: momentum, mean_reversion, spread")
+                            strats = status.get("strategies", [])
+                            for s in strats:
+                                if s.get("name") not in ("weather_arb", "whale_tracker"):
+                                    report.append(f"  {s['name']}: {'ON' if s.get('enabled') else 'OFF'} | events: {s.get('events_handled', 0)}")
+                            general_positions = [p for p in positions if p.get("strategy") not in ("weather_arb", "whale_tracker")]
+                            report.append(f"Open positions: {len(general_positions)}")
+                            for p in general_positions[:5]:
+                                report.append(f"  {p.get('symbol', '?')[:40]} | {p.get('side', '?')} | entry=${p.get('entry_price', 0):.4f}")
+                            report.append("")
+
+                        if strategy in ("all", "weather"):
+                            perf = weather.get("performance", {})
+                            report.append("--- WEATHER ARBITRAGE ---")
+                            report.append(f"Status: {'SCANNING' if weather.get('enabled') else 'OFF'}")
+                            report.append(f"Markets found: {weather.get('weather_markets_found', 0)} | Signals: {weather.get('signals_generated', 0)}")
+                            report.append(f"Filled trades: {perf.get('filled_trades', 0)} (buys: {perf.get('buy_trades', 0)}, sells: {perf.get('sell_trades', 0)})")
+                            report.append(f"Total invested: ${perf.get('total_bought_usd', 0):.2f} | Fees: ${perf.get('total_fees', 0):.4f}")
+                            bets = weather.get("active_bets", [])
+                            report.append(f"Active bets: {len(bets)}")
+                            for b in bets[:5]:
+                                report.append(f"  {b.get('symbol', '?')[:45]} | {b.get('shares', 0):.0f} shares @ ${b.get('avg_price', 0):.4f}")
+                            report.append(f"Cities tracked: {', '.join(weather.get('cities', []))}")
+                            report.append(f"Entry threshold: <${weather.get('entry_threshold', 0.15)} | Exit: >${weather.get('exit_threshold', 0.45)}")
+                            report.append("")
+
+                        if strategy in ("all", "whale"):
+                            report.append("--- WHALE TRACKER ---")
+                            report.append(f"Wallet: {whale.get('username', '?')} ({whale.get('wallet_address', '?')[:10]}...)")
+                            report.append(f"Tracked positions: {whale.get('tracked_positions', 0)}")
+                            report.append(f"Signals generated: {whale.get('signals_generated', 0)}")
+                            stats = whale.get("wallet_stats", {})
+                            if stats:
+                                report.append(f"Whale portfolio: ${stats.get('total_value_usd', 0):,.2f} | P&L: ${stats.get('total_pnl_usd', 0):,.2f}")
+                                report.append(f"Win rate: {stats.get('win_rate', 0)}% ({stats.get('winning_positions', 0)}W / {stats.get('losing_positions', 0)}L)")
+                            top = whale.get("top_positions", [])[:3]
+                            for p in top:
+                                report.append(f"  {p.get('title', '?')[:40]} | ${p.get('current_value', 0):,.2f} | PnL: {p.get('percent_pnl', 0):.1f}%")
+
+                        return "\n".join(report)
+                except Exception as e:
+                    logger.error(f"Polybot status failed: {e}")
+                    return json.dumps({"error": f"Polybot unavailable: {e}"})
+
+            elif tool_name == "deep_research":
+                question = tool_input.get("question", "")
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=150.0) as client:
+                        resp = await client.post(
+                            "http://localhost:3002/api/research/deep",
+                            json={"question": question}
+                        )
+                        data = resp.json()
+                        answer = data.get("answer", "Research unavailable.")
+                        confidence = data.get("confidence", 0)
+                        tools_used = data.get("metadata", {}).get("tools_used", [])
+                        duration = data.get("metadata", {}).get("total_duration_seconds", 0)
+                        return f"{answer}\n\n---\nConfidence: {confidence:.0%} | Data sources: {len(tools_used)} | Research time: {duration:.0f}s"
+                except Exception as e:
+                    logger.error(f"Deep research failed: {e}")
+                    return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})

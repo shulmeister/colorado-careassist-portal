@@ -284,6 +284,7 @@ DM_TOOLS = [
     {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
+    {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto, macro outlook, etc. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze"}}, "required": ["question"]}},
 ]
 
 # =========================================================================
@@ -322,6 +323,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
+        genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
     ])]
 
     GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
@@ -371,6 +374,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
+        genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
     ])]
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
@@ -2282,6 +2287,25 @@ class GigiRingCentralBot:
                     return result["report"]
                 return json.dumps(result)
 
+            elif tool_name == "deep_research":
+                question = tool_input.get("question", "")
+                try:
+                    import httpx
+                    with httpx.Client(timeout=150.0) as client:
+                        resp = client.post(
+                            "http://localhost:3002/api/research/deep",
+                            json={"question": question}
+                        )
+                        data = resp.json()
+                        answer = data.get("answer", "Research unavailable.")
+                        confidence = data.get("confidence", 0)
+                        tools_used = data.get("metadata", {}).get("tools_used", [])
+                        duration = data.get("metadata", {}).get("total_duration_seconds", 0)
+                        return f"{answer}\n\n---\nConfidence: {confidence:.0%} | Data sources: {len(tools_used)} | Research time: {duration:.0f}s"
+                except Exception as e:
+                    logger.error(f"Deep research failed: {e}")
+                    return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -3045,6 +3069,25 @@ class GigiRingCentralBot:
                 if result.get("success"):
                     return result["report"]
                 return json.dumps(result)
+
+            elif tool_name == "deep_research":
+                question = tool_input.get("question", "")
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=150.0) as client:
+                        resp = await client.post(
+                            "http://localhost:3002/api/research/deep",
+                            json={"question": question}
+                        )
+                        data = resp.json()
+                        answer = data.get("answer", "Research unavailable.")
+                        confidence = data.get("confidence", 0)
+                        tools_used = data.get("metadata", {}).get("tools_used", [])
+                        duration = data.get("metadata", {}).get("total_duration_seconds", 0)
+                        return f"{answer}\n\n---\nConfidence: {confidence:.0%} | Data sources: {len(tools_used)} | Research time: {duration:.0f}s"
+                except Exception as e:
+                    logger.error(f"Deep research failed: {e}")
+                    return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})

@@ -491,6 +491,17 @@ ANTHROPIC_TOOLS = [
             },
             "required": []
         }
+    },
+    {
+        "name": "deep_research",
+        "description": "Run deep autonomous financial research using the Elite Trading platform. Use for any investment question like 'should I buy NVDA' or 'what do you think of ethereum'. Note: takes 30-120 seconds. Only use if caller specifically asks for investment research or stock/crypto analysis.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The financial research question to analyze in depth"}
+            },
+            "required": ["question"]
+        }
     }
 ]
 
@@ -1230,6 +1241,23 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return result["report"]
             return json.dumps(result)
 
+        elif tool_name == "deep_research":
+            question = tool_input.get("question", "")
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=150.0) as client:
+                    resp = await client.post(
+                        "http://localhost:3002/api/research/deep",
+                        json={"question": question}
+                    )
+                    data = resp.json()
+                    answer = data.get("answer", "Research unavailable.")
+                    confidence = data.get("confidence", 0)
+                    return f"{answer}\n\nResearch confidence: {confidence:.0%}"
+            except Exception as e:
+                logger.error(f"Deep research failed: {e}")
+                return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
+
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -1250,7 +1278,8 @@ SLOW_TOOLS = {
     "get_wellsky_shifts", "get_client_current_status",
     "web_search", "search_concerts", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
-    "get_ar_report"
+    "get_ar_report",
+    "deep_research"
 }
 
 async def _maybe_acknowledge(call_info, on_token):
