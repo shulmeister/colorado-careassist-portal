@@ -145,6 +145,16 @@ class MorningBriefingService:
         if ski:
             sections.append(f"SKI CONDITIONS\n{ski}")
 
+        # Financial news highlights
+        news = self._get_financial_news()
+        if news:
+            sections.append(f"FINANCIAL NEWS\n{news}")
+
+        # Trading bot status
+        bots = self._get_trading_bot_status()
+        if bots:
+            sections.append(f"TRADING BOTS\n{bots}")
+
         # Pattern detection
         patterns = self._get_patterns()
         if patterns:
@@ -432,6 +442,126 @@ class MorningBriefingService:
                         logger.warning(f"Ski conditions for {resort['name']} failed: {e}")
         except Exception as e:
             logger.warning(f"Ski conditions fetch failed: {e}")
+
+        return "\n".join(lines) if lines else None
+
+    def _get_financial_news(self) -> Optional[str]:
+        """Get top financial news headlines via DuckDuckGo."""
+        if not httpx:
+            return None
+        try:
+            with httpx.Client(timeout=15, follow_redirects=True) as client:
+                # Use DuckDuckGo instant answer API for market news
+                resp = client.get(
+                    "https://api.duckduckgo.com/",
+                    params={"q": "stock market news today", "format": "json", "no_html": "1"},
+                )
+                headlines = []
+                if resp.status_code == 200:
+                    data = resp.json()
+                    for topic in data.get("RelatedTopics", [])[:5]:
+                        text = topic.get("Text", "")
+                        if text:
+                            headlines.append(f"  - {text[:120]}")
+
+                # Also grab crypto market summary
+                try:
+                    resp2 = client.get(
+                        "https://api.coingecko.com/api/v3/global",
+                        timeout=10,
+                    )
+                    if resp2.status_code == 200:
+                        gdata = resp2.json().get("data", {})
+                        btc_dom = gdata.get("market_cap_percentage", {}).get("btc", 0)
+                        total_cap = gdata.get("total_market_cap", {}).get("usd", 0)
+                        change_24h = gdata.get("market_cap_change_percentage_24h_usd", 0)
+                        cap_str = f"${total_cap/1e12:.2f}T" if total_cap > 1e12 else f"${total_cap/1e9:.1f}B"
+                        direction = "+" if change_24h >= 0 else ""
+                        headlines.append(f"  Crypto: {cap_str} total ({direction}{change_24h:.1f}% 24h) | BTC dominance: {btc_dom:.1f}%")
+                except Exception:
+                    pass
+
+                return "\n".join(headlines) if headlines else None
+        except Exception as e:
+            logger.warning(f"Financial news fetch failed: {e}")
+        return None
+
+    def _get_trading_bot_status(self) -> Optional[str]:
+        """Get status of all trading bots from Elite Trading MCP (localhost:3002)."""
+        if not httpx:
+            return None
+
+        lines = []
+        try:
+            with httpx.Client(timeout=15) as client:
+                # 1. Polybot (Polymarket + Coinbase)
+                try:
+                    resp = client.get("http://localhost:3002/api/polybot/status")
+                    if resp.status_code == 200:
+                        d = resp.json()
+                        portfolio = d.get("portfolio", {})
+                        perf = d.get("performance", {})
+                        pnl = portfolio.get("pnl", 0)
+                        pnl_pct = portfolio.get("pnl_pct", 0)
+                        total = portfolio.get("total_value", 0)
+                        win_rate = perf.get("win_rate", 0)
+                        closed = perf.get("closed_trades", 0)
+                        direction = "+" if pnl >= 0 else ""
+                        lines.append(
+                            f"  Polybot: ${total:,.0f} ({direction}{pnl_pct:.1f}%) | "
+                            f"{closed} closed trades, {win_rate:.0f}% win rate"
+                        )
+                        # Per-strategy summary
+                        strat_perf = d.get("strategy_performance", {})
+                        if strat_perf:
+                            best = max(strat_perf.items(), key=lambda x: x[1].get("realized_pnl", 0), default=None)
+                            if best and best[1].get("closed_trades", 0) > 0:
+                                lines.append(
+                                    f"    Best strategy: {best[0]} "
+                                    f"({best[1]['win_rate']:.0f}% win, ${best[1]['realized_pnl']:+.2f})"
+                                )
+                except Exception as e:
+                    lines.append(f"  Polybot: offline ({e})")
+
+                # 2. ML Crypto Bot
+                try:
+                    resp = client.get("http://localhost:3002/api/ml-bot/status")
+                    if resp.status_code == 200:
+                        d = resp.json()
+                        portfolio = d.get("portfolio", {})
+                        stats = d.get("stats", {})
+                        pnl = portfolio.get("pnl", 0)
+                        pnl_pct = portfolio.get("pnl_pct", 0)
+                        current = portfolio.get("current_value", 0)
+                        win_rate = stats.get("win_rate", 0)
+                        trades = stats.get("trades_executed", 0)
+                        direction = "+" if pnl >= 0 else ""
+                        lines.append(
+                            f"  ML Crypto: ${current:,.0f} ({direction}{pnl_pct:.1f}%) | "
+                            f"{trades} trades, {win_rate:.0f}% win rate"
+                        )
+                except Exception as e:
+                    lines.append(f"  ML Crypto: offline ({e})")
+
+                # 3. Elite Agent Team (investment research)
+                try:
+                    resp = client.get("http://localhost:3002/api/agent/portfolio")
+                    if resp.status_code == 200:
+                        d = resp.json()
+                        perf = d.get("performance", {})
+                        holdings = d.get("holdings", [])
+                        total_pnl = perf.get("total_pnl", 0) if perf else 0
+                        total_pnl_pct = perf.get("total_pnl_pct", 0) if perf else 0
+                        direction = "+" if total_pnl >= 0 else ""
+                        lines.append(
+                            f"  Elite Agents: {len(holdings)} holdings ({direction}{total_pnl_pct:.1f}%)"
+                        )
+                except Exception as e:
+                    lines.append(f"  Elite Agents: offline ({e})")
+
+        except Exception as e:
+            logger.warning(f"Trading bot status fetch failed: {e}")
+            return None
 
         return "\n".join(lines) if lines else None
 
