@@ -195,7 +195,7 @@ ANTHROPIC_TOOLS = [
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary. Do NOT try to build a briefing manually from other tools.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts. Use when asked about AR, accounts receivable, outstanding invoices, or who owes money.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' (default) or 'detailed' (full invoice list)"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto analysis, macro outlook, sector rotation, portfolio strategy, etc. Returns institutional-grade research with evidence and confidence level. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze in depth"}}, "required": ["question"]}},
-    {"name": "get_polybot_status", "description": "Get Polybot autonomous trading bot performance report. Shows both General strategies (momentum, mean reversion, spread) and Weather Arbitrage strategy performance, plus whale tracker status. Use when asked about Polybot, trading bot, prediction market performance, weather arb, or paper trading results.", "input_schema": {"type": "object", "properties": {"strategy": {"type": "string", "description": "Which strategy group: 'all' (default), 'general', 'weather', or 'whale'"}}, "required": []}},
+    {"name": "get_polybot_status", "description": "Get Polybot autonomous trading bot performance report. Shows 5 strategies: momentum, mean reversion, spread, weather arbitrage, and social media arbitrage. Use when asked about Polybot, trading bot, prediction market performance, weather arb, social arb, or paper trading results.", "input_schema": {"type": "object", "properties": {"strategy": {"type": "string", "description": "Which strategy group: 'all' (default), 'general', 'weather', or 'social'"}}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -254,8 +254,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _s("string", "Level of detail: 'summary' or 'detailed'")})),
         genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _s("string", "The financial research question to analyze")}, required=["question"])),
-        genai_types.FunctionDeclaration(name="get_polybot_status", description="Get Polybot autonomous trading bot performance. Shows General strategies, Weather Arb, and whale tracker status.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"strategy": _s("string", "Strategy group: all, general, weather, or whale")})),
+        genai_types.FunctionDeclaration(name="get_polybot_status", description="Get Polybot autonomous trading bot performance. Shows 5 strategies: momentum, mean reversion, spread, weather arb, and social media arb.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"strategy": _s("string", "Strategy group: all, general, weather, or social")})),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -291,7 +291,7 @@ OPENAI_TOOLS = [
     _oai_tool("get_morning_briefing", "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.", {}, []),
     _oai_tool("get_ar_report", "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, []),
     _oai_tool("deep_research", "Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.", {"question": {"type": "string", "description": "The financial research question to analyze"}}, ["question"]),
-    _oai_tool("get_polybot_status", "Get Polybot trading bot performance report. Shows General strategies, Weather Arb, and whale tracker.", {"strategy": {"type": "string", "description": "Strategy group: all, general, weather, or whale"}}),
+    _oai_tool("get_polybot_status", "Get Polybot trading bot performance report. Shows 5 strategies: momentum, mean reversion, spread, weather arb, and social media arb.", {"strategy": {"type": "string", "description": "Strategy group: all, general, weather, or social"}}),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -1023,36 +1023,37 @@ class GigiTelegramBot:
                     import httpx
                     async with httpx.AsyncClient(timeout=30.0) as client:
                         # Fetch all data in parallel
-                        status_resp, weather_resp, whale_resp, trades_resp, positions_resp = await asyncio.gather(
+                        status_resp, weather_resp, social_resp, trades_resp, positions_resp = await asyncio.gather(
                             client.get("http://localhost:3002/api/polybot/status"),
                             client.get("http://localhost:3002/api/polybot/weather/status"),
-                            client.get("http://localhost:3002/api/polybot/whale/status"),
+                            client.get("http://localhost:3002/api/polybot/social/status"),
                             client.get("http://localhost:3002/api/polybot/trades"),
                             client.get("http://localhost:3002/api/polybot/positions"),
                         )
                         status = status_resp.json()
                         weather = weather_resp.json()
-                        whale = whale_resp.json()
-                        trades = trades_resp.json() if isinstance(trades_resp.json(), list) else trades_resp.json().get("trades", [])
-                        positions = positions_resp.json() if isinstance(positions_resp.json(), list) else []
+                        social = social_resp.json()
+                        trades_data = trades_resp.json()
+                        trades = trades_data if isinstance(trades_data, list) else trades_data.get("trades", [])
+                        pos_data = positions_resp.json()
+                        positions = pos_data if isinstance(pos_data, list) else []
 
                         # Build report
                         report = []
                         report.append(f"POLYBOT STATUS: {'RUNNING' if status.get('enabled') else 'STOPPED'} | Paper Mode: {'YES' if status.get('paper_mode') else 'LIVE'}")
                         report.append(f"Cycles: {status.get('cycles', 0)} | Auto-scan: every {status.get('auto_scan_interval', 120)}s")
                         report.append(f"Portfolio: ${status.get('portfolio_value', 0):,.2f} | P&L: ${status.get('pnl', 0):,.2f} ({status.get('pnl_pct', 0):.2f}%)")
-                        report.append(f"NOTE: P&L numbers have known bugs (capital mismatch + pricing fallback) and are not accurate yet.")
                         report.append("")
 
                         if strategy in ("all", "general"):
-                            general_trades = [t for t in trades if t.get("strategy") not in ("weather_arb", "whale_tracker")]
+                            general_trades = [t for t in trades if t.get("strategy") not in ("weather_arb", "social_arb")]
                             report.append("--- GENERAL STRATEGIES (Momentum, MeanReversion, Spread) ---")
                             report.append(f"Trades: {len(general_trades)} | Strategies: momentum, mean_reversion, spread")
                             strats = status.get("strategies", [])
                             for s in strats:
-                                if s.get("name") not in ("weather_arb", "whale_tracker"):
+                                if s.get("name") not in ("weather_arb", "social_arb"):
                                     report.append(f"  {s['name']}: {'ON' if s.get('enabled') else 'OFF'} | events: {s.get('events_handled', 0)}")
-                            general_positions = [p for p in positions if p.get("strategy") not in ("weather_arb", "whale_tracker")]
+                            general_positions = [p for p in positions if p.get("strategy") not in ("weather_arb", "social_arb")]
                             report.append(f"Open positions: {len(general_positions)}")
                             for p in general_positions[:5]:
                                 report.append(f"  {p.get('symbol', '?')[:40]} | {p.get('side', '?')} | entry=${p.get('entry_price', 0):.4f}")
@@ -1070,21 +1071,25 @@ class GigiTelegramBot:
                             for b in bets[:5]:
                                 report.append(f"  {b.get('symbol', '?')[:45]} | {b.get('shares', 0):.0f} shares @ ${b.get('avg_price', 0):.4f}")
                             report.append(f"Cities tracked: {', '.join(weather.get('cities', []))}")
-                            report.append(f"Entry threshold: <${weather.get('entry_threshold', 0.15)} | Exit: >${weather.get('exit_threshold', 0.45)}")
                             report.append("")
 
-                        if strategy in ("all", "whale"):
-                            report.append("--- WHALE TRACKER ---")
-                            report.append(f"Wallet: {whale.get('username', '?')} ({whale.get('wallet_address', '?')[:10]}...)")
-                            report.append(f"Tracked positions: {whale.get('tracked_positions', 0)}")
-                            report.append(f"Signals generated: {whale.get('signals_generated', 0)}")
-                            stats = whale.get("wallet_stats", {})
-                            if stats:
-                                report.append(f"Whale portfolio: ${stats.get('total_value_usd', 0):,.2f} | P&L: ${stats.get('total_pnl_usd', 0):,.2f}")
-                                report.append(f"Win rate: {stats.get('win_rate', 0)}% ({stats.get('winning_positions', 0)}W / {stats.get('losing_positions', 0)}L)")
-                            top = whale.get("top_positions", [])[:3]
-                            for p in top:
-                                report.append(f"  {p.get('title', '?')[:40]} | ${p.get('current_value', 0):,.2f} | PnL: {p.get('percent_pnl', 0):.1f}%")
+                        if strategy in ("all", "social"):
+                            report.append("--- SOCIAL MEDIA ARBITRAGE ---")
+                            report.append(f"Status: {'SCANNING' if social.get('enabled') else 'OFF'}")
+                            report.append(f"Cycles: {social.get('cycles', 0)} | Signals: {social.get('signals_generated', 0)}")
+                            soc_perf = social.get("performance", {})
+                            report.append(f"Total trades: {soc_perf.get('total_trades', 0)} | Realized P&L: ${soc_perf.get('realized_pnl', 0):,.2f}")
+                            report.append(f"Total P&L: ${soc_perf.get('total_pnl', 0):,.2f}")
+                            soc_positions = social.get("active_positions", [])
+                            report.append(f"Active positions: {len(soc_positions)}")
+                            for sp in soc_positions[:5]:
+                                report.append(f"  {sp.get('symbol', '?')[:40]} | {sp.get('shares', 0):.0f} shares @ ${sp.get('avg_price', 0):.4f}")
+                            soc_signals = social.get("recent_signals", [])
+                            if soc_signals:
+                                report.append(f"Recent signals ({len(soc_signals)}):")
+                                for sig in soc_signals[:3]:
+                                    report.append(f"  [{sig.get('source', '?')}] {sig.get('topic', '?')}: {sig.get('direction', '?')} {sig.get('strength', 0):.0%}")
+                            report.append(f"Subreddits: {social.get('subreddits', 'N/A')}")
 
                         return "\n".join(report)
                 except Exception as e:
