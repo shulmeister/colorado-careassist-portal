@@ -710,10 +710,29 @@
             return employees;
         }
 
+        // Detect if a string looks like an SSN (7-9 digits after stripping non-digits)
+        // Handles leading zeros stripped by Excel/Google Sheets
+        function extractSsn(str) {
+            const cleaned = str.replace(/\D/g, '');
+            if (cleaned.length === 9) return cleaned;
+            // Leading zeros stripped by spreadsheet: pad back to 9 digits
+            if (cleaned.length === 8 || cleaned.length === 7) return cleaned.padStart(9, '0');
+            return null;
+        }
+
+        // Canonical name key: lowercase, no commas/periods/quotes, single spaces
+        function canonicalName(str) {
+            return str.toLowerCase().trim()
+                .replace(/["']/g, '')
+                .replace(/[,\.]/g, ' ')  // Replace ALL commas/periods with spaces (not just trailing)
+                .replace(/\s+/g, ' ')
+                .trim();
+        }
+
         function importSsns() {
             const textarea = document.getElementById('ssnTextarea');
             const text = textarea.value.trim();
-            
+
             if (!text) {
                 showMessage('ssnStatus', 'Please enter SSN data', 'warning');
                 return;
@@ -723,58 +742,53 @@
             let newCount = 0;
             let updatedCount = 0;
             let skippedCount = 0;
-
-            // SSN pattern: 9 digits, optionally with dashes (123-45-6789 or 123456789)
-            const ssnPattern = /^\d{3}-?\d{2}-?\d{4}$/;
-            const pureDigitPattern = /^\d{9}$/;
+            const skippedLines = [];
 
             lines.forEach(line => {
                 line = line.trim();
                 if (!line) return;
 
                 let name = '', ssn = '';
-                
+
                 // Handle tab-separated data (most common from Google Sheets)
                 if (line.includes('\t')) {
                     const parts = line.split('\t').map(p => p.trim()).filter(p => p.length > 0);
-                    
+
                     if (parts.length >= 2) {
-                        // Find the SSN by scanning ALL columns for a 9-digit pattern
+                        // Find the SSN by scanning ALL columns for a 7-9 digit pattern
                         let ssnIndex = -1;
                         for (let i = 0; i < parts.length; i++) {
-                            const cleaned = parts[i].replace(/\D/g, '');
-                            if (cleaned.length === 9 && (ssnPattern.test(parts[i]) || pureDigitPattern.test(cleaned))) {
-                                ssn = cleaned;
+                            const extracted = extractSsn(parts[i]);
+                            if (extracted) {
+                                ssn = extracted;
                                 ssnIndex = i;
                                 break;
                             }
                         }
-                        
+
                         // Combine all other columns as the name
                         if (ssnIndex >= 0) {
                             const nameParts = parts.filter((_, idx) => idx !== ssnIndex);
                             name = nameParts.join(' ').trim();
                         } else {
-                            // No SSN found, try old logic: assume first is name, second might be SSN with non-digit chars
-                            name = parts[0];
-                            const potentialSsn = parts[parts.length - 1].replace(/\D/g, '');
-                            if (potentialSsn.length === 9) {
-                                ssn = potentialSsn;
-                            }
+                            // No SSN found in any column
+                            skippedCount++;
+                            skippedLines.push(line.substring(0, 60));
+                            return;
                         }
                     }
                 } else if (line.includes(' - ')) {
                     // Handle "Name - SSN" or "SSN - Name" format
                     const parts = line.split(' - ').map(p => p.trim());
                     if (parts.length >= 2) {
-                        const firstClean = parts[0].replace(/\D/g, '');
-                        const lastClean = parts[parts.length - 1].replace(/\D/g, '');
-                        
-                        if (firstClean.length === 9) {
-                            ssn = firstClean;
+                        const firstSsn = extractSsn(parts[0]);
+                        const lastSsn = extractSsn(parts[parts.length - 1]);
+
+                        if (firstSsn) {
+                            ssn = firstSsn;
                             name = parts.slice(1).join(' - ').trim();
-                        } else if (lastClean.length === 9) {
-                            ssn = lastClean;
+                        } else if (lastSsn) {
+                            ssn = lastSsn;
                             name = parts.slice(0, -1).join(' - ').trim();
                         }
                     }
@@ -782,15 +796,14 @@
                     // Handle "Name, SSN" or "Last, First, SSN" format
                     const parts = line.split(',').map(p => p.trim());
                     if (parts.length >= 2) {
-                        // Check last part for SSN first (most common: "Last, First, SSN")
-                        const lastClean = parts[parts.length - 1].replace(/\D/g, '');
-                        const firstClean = parts[0].replace(/\D/g, '');
-                        
-                        if (lastClean.length === 9) {
-                            ssn = lastClean;
+                        const lastSsn = extractSsn(parts[parts.length - 1]);
+                        const firstSsn = extractSsn(parts[0]);
+
+                        if (lastSsn) {
+                            ssn = lastSsn;
                             name = parts.slice(0, -1).join(', ').trim();
-                        } else if (firstClean.length === 9) {
-                            ssn = firstClean;
+                        } else if (firstSsn) {
+                            ssn = firstSsn;
                             name = parts.slice(1).join(', ').trim();
                         }
                     }
@@ -800,54 +813,41 @@
                     return;
                 }
 
-                // Clean up name and SSN
+                // Clean up
                 name = name.trim();
-                ssn = ssn.trim().replace(/\D/g, ''); // Remove non-digits
 
-                if (name && ssn && ssn.length === 9) {
-                    // Normalize name for consistent matching (same as findSsnByName)
-                    const normalize = (str) => {
-                        return str.toLowerCase().trim().replace(/[,\.]+$/, '').replace(/\s+/g, ' ').trim();
-                    };
-                    
-                    const normalizedName = normalize(name);
-                    
-                    // Check if this is new or an update (only count unique normalized names)
-                    if (ssnData[normalizedName]) {
+                if (name && ssn) {
+                    const key = canonicalName(name);
+
+                    if (ssnData[key]) {
                         updatedCount++;
                     } else {
                         newCount++;
                     }
-                    ssnData[normalizedName] = ssn;
-                    
-                    // Also store original name (normalized) for fallback matching
-                    const originalNormalized = name.toLowerCase().trim().replace(/\s+/g, ' ');
-                    if (originalNormalized !== normalizedName) {
-                        ssnData[originalNormalized] = ssn;
-                    }
-                    
-                    // Store with original casing too (for display/debugging)
-                    ssnData[name] = ssn;
-                    
-                    console.log(`Imported SSN for "${name}" (normalized: "${normalizedName}"): ${ssn}`);
+                    // Store ONCE under canonical key only (no duplicates)
+                    ssnData[key] = ssn;
+
+                    console.log(`Imported SSN for "${name}" (key: "${key}"): ${ssn}`);
                 } else {
                     skippedCount++;
                     if (name || ssn) {
-                        console.log(`Skipped line - name: "${name}", ssn: "${ssn}" (length: ${ssn.length})`);
+                        console.log(`Skipped line - name: "${name}", ssn: "${ssn}"`);
+                        skippedLines.push(line.substring(0, 60));
                     }
                 }
             });
 
-            // Count unique employees (by counting unique SSNs)
-            const uniqueSsns = new Set(Object.values(ssnData));
-            const uniqueCount = uniqueSsns.size;
-            
+            const uniqueCount = Object.keys(ssnData).length;
+
             let message = `${uniqueCount} employees loaded (${newCount} new, ${updatedCount} updated)`;
             if (skippedCount > 0) {
                 message += ` - ${skippedCount} lines skipped`;
+                if (skippedLines.length > 0) {
+                    message += `<br><small class="text-muted">Skipped: ${skippedLines.slice(0, 3).join('; ')}${skippedLines.length > 3 ? '...' : ''}</small>`;
+                }
             }
             showMessage('ssnStatus', message, newCount > 0 || updatedCount > 0 ? 'success' : 'warning');
-            
+
             textarea.value = '';
             if (newCount > 0 || updatedCount > 0) {
                 enableNextStep();
@@ -860,116 +860,125 @@
         }
 
         function viewSsns() {
-            const ssnList = Object.entries(ssnData)
-                .map(([name, ssn]) => `${name}: ${ssn}`)
-                .join('\n');
-            
-            if (ssnList) {
-                alert('Current SSNs:\n\n' + ssnList);
-            } else {
+            const entries = Object.entries(ssnData);
+            if (entries.length === 0) {
                 alert('No SSNs loaded');
+                return;
             }
+            const ssnList = entries
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([name, ssn]) => `${name}: ${ssn.substring(0,3)}-${ssn.substring(3,5)}-${ssn.substring(5)}`)
+                .join('\n');
+            alert(`Current SSNs (${entries.length} employees):\n\n` + ssnList);
         }
 
         function findSsnByName(name) {
             if (!name) return '';
-            
-            // Normalize the name for matching - remove trailing commas, extra spaces, quotes, etc.
-            const normalize = (str) => {
-                return str.toLowerCase().trim()
-                    .replace(/["']/g, '') // Remove quotes
-                    .replace(/[,\.]+$/, '') // Remove trailing commas/periods
-                    .replace(/\s+/g, ' ') // Normalize whitespace
-                    .trim();
-            };
-            
-            const normalizedName = normalize(name);
-            console.log(`Looking up SSN for: "${name}" (normalized: "${normalizedName}")`);
-            
-            // Extract all words from the name (handles "Last, First" and "First Last" formats)
-            const getNameWords = (nameStr) => {
-                return normalize(nameStr).split(/[,\s]+/).filter(p => p.length > 0);
-            };
-            
-            const nameWords = getNameWords(name);
+
+            const lookupKey = canonicalName(name);
+            console.log(`Looking up SSN for: "${name}" (canonical: "${lookupKey}")`);
+
+            // Extract words from a canonical name string
+            const getWords = (str) => canonicalName(str).split(/\s+/).filter(w => w.length > 0);
+
+            const nameWords = getWords(name);
             const nameWordsSet = new Set(nameWords);
-            
-            // Try exact match first (case-insensitive, handles trailing commas)
-            for (const [ssnName, ssn] of Object.entries(ssnData)) {
-                const normalizedSsnName = normalize(ssnName);
-                if (normalizedSsnName === normalizedName) {
-                    console.log(`✓ Exact match found: "${name}" -> "${ssnName}" -> SSN: ${ssn}`);
-                    return ssn;
-                }
+
+            // 1. Exact canonical match (handles "Smith, John" == "smith john")
+            if (ssnData[lookupKey]) {
+                console.log(`  ✓ Exact match: "${lookupKey}" -> SSN: ${ssnData[lookupKey]}`);
+                return ssnData[lookupKey];
             }
-            
-            // Try matching by same words regardless of order (handles "Last, First" vs "First Last")
-            for (const [ssnName, ssn] of Object.entries(ssnData)) {
-                const ssnWords = getNameWords(ssnName);
+
+            // 2. Same words, any order (handles "Last First" vs "First Last")
+            for (const [ssnKey, ssn] of Object.entries(ssnData)) {
+                const ssnWords = getWords(ssnKey);
                 const ssnWordsSet = new Set(ssnWords);
-                
-                // Check if both names have the same words (order doesn't matter)
-                if (nameWords.length === ssnWords.length && 
+                if (nameWords.length === ssnWords.length &&
                     nameWords.length > 0 &&
                     nameWords.every(w => ssnWordsSet.has(w)) &&
                     ssnWords.every(w => nameWordsSet.has(w))) {
-                    console.log(`✓ Same words match (order-independent): "${name}" -> "${ssnName}" -> SSN: ${ssn}`);
+                    console.log(`  ✓ Same-words match: "${name}" -> "${ssnKey}" -> SSN: ${ssn}`);
                     return ssn;
                 }
             }
-            
-            // Try matching by last name (most reliable for "Last, First" vs "First Last")
+
+            // 3. Two-word cross-match: require BOTH first AND last name to appear somewhere
+            //    Handles "Last, First" matching "First Last" even when word count differs (middle names)
             if (nameWords.length >= 2) {
-                const lastName = nameWords[nameWords.length - 1]; // Last word is usually last name
-                
-                for (const [ssnName, ssn] of Object.entries(ssnData)) {
-                    const ssnWords = getNameWords(ssnName);
+                for (const [ssnKey, ssn] of Object.entries(ssnData)) {
+                    const ssnWords = getWords(ssnKey);
                     if (ssnWords.length >= 2) {
-                        const ssnLastName = ssnWords[ssnWords.length - 1];
-                        // Also check first word (in case format is reversed)
-                        const ssnFirstName = ssnWords[0];
-                        const firstName = nameWords[0];
-                        
-                        // Match if last names match OR if one's last name matches other's first name (reversed format)
-                        if ((lastName === ssnLastName && lastName.length > 2) ||
-                            (lastName === ssnFirstName && lastName.length > 2) ||
-                            (firstName === ssnLastName && firstName.length > 2)) {
-                            console.log(`✓ Last name match: "${name}" -> "${ssnName}" -> SSN: ${ssn}`);
+                        // Count how many words from the lookup name appear in the SSN entry
+                        const matchedWords = nameWords.filter(w => ssnWords.includes(w));
+                        // Require at least 2 word matches AND at least 2/3 of the shorter name's words
+                        const minRequired = Math.max(2, Math.ceil(Math.min(nameWords.length, ssnWords.length) * 0.66));
+                        if (matchedWords.length >= minRequired) {
+                            console.log(`  ✓ Multi-word match (${matchedWords.length}/${minRequired} required): "${name}" -> "${ssnKey}" -> SSN: ${ssn}`);
                             return ssn;
                         }
                     }
                 }
             }
-            
-            // Try matching first word (for truncated names like "Aldan-Mu" matching "Aldan-Muna, Diana")
-            if (nameWords.length > 0) {
-                const firstWord = nameWords[0];
-                
-                for (const [ssnName, ssn] of Object.entries(ssnData)) {
-                    const ssnWords = getNameWords(ssnName);
-                    if (ssnWords.length > 0 && 
-                        (ssnWords[0] === firstWord || ssnWords[ssnWords.length - 1] === firstWord) &&
-                        firstWord.length > 3) {
-                        console.log(`✓ First word match: "${name}" -> "${ssnName}" -> SSN: ${ssn}`);
-                        return ssn;
+
+            // 4. Surname match: for 2-word names, check if the LONGER word matches
+            //    (surnames are typically longer than first names, avoids "John" matching "John Doe" AND "John Smith")
+            if (nameWords.length >= 2) {
+                // Sort words by length descending - longest word is most likely the surname
+                const sortedByLen = [...nameWords].sort((a, b) => b.length - a.length);
+                const likelySurname = sortedByLen[0];
+                const likelyFirst = sortedByLen[1];
+
+                if (likelySurname.length >= 4) {
+                    const candidates = [];
+                    for (const [ssnKey, ssn] of Object.entries(ssnData)) {
+                        const ssnWords = getWords(ssnKey);
+                        // Check if the likely surname appears AND the likely first name also appears
+                        if (ssnWords.includes(likelySurname) && ssnWords.includes(likelyFirst)) {
+                            candidates.push({ ssnKey, ssn });
+                        }
+                    }
+                    if (candidates.length === 1) {
+                        console.log(`  ✓ Surname+first match: "${name}" -> "${candidates[0].ssnKey}" -> SSN: ${candidates[0].ssn}`);
+                        return candidates[0].ssn;
                     }
                 }
             }
-            
-            // Try partial match (one name contains the other) - be more conservative
-            for (const [ssnName, ssn] of Object.entries(ssnData)) {
-                const normalizedSsnName = normalize(ssnName);
-                // Only match if the shorter name is at least 4 characters and is contained in the longer
-                const shorter = normalizedName.length < normalizedSsnName.length ? normalizedName : normalizedSsnName;
-                const longer = normalizedName.length >= normalizedSsnName.length ? normalizedName : normalizedSsnName;
-                if (shorter.length >= 4 && longer.includes(shorter)) {
-                    console.log(`✓ Partial match found: "${name}" -> "${ssnName}" -> SSN: ${ssn}`);
-                    return ssn;
+
+            // 5. Truncated name match: WellSky sometimes truncates long names
+            //    Only match if there's exactly ONE candidate and the name is long enough
+            if (nameWords.length > 0) {
+                const candidates = [];
+                for (const [ssnKey, ssn] of Object.entries(ssnData)) {
+                    const ssnWords = getWords(ssnKey);
+                    // Check if any word in the lookup starts with the same 5+ chars as a word in SSN data
+                    let matched = false;
+                    for (const nw of nameWords) {
+                        if (nw.length < 5) continue;
+                        for (const sw of ssnWords) {
+                            if (sw.length < 5) continue;
+                            // One starts with the other (handles truncation in either direction)
+                            if (sw.startsWith(nw) || nw.startsWith(sw)) {
+                                // Also require at least one other word match for safety
+                                const otherMatches = nameWords.filter(w => w !== nw && ssnWords.includes(w));
+                                if (otherMatches.length > 0 || nameWords.length === 1) {
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (matched) break;
+                    }
+                    if (matched) candidates.push({ ssnKey, ssn });
+                }
+                if (candidates.length === 1) {
+                    console.log(`  ✓ Truncated name match: "${name}" -> "${candidates[0].ssnKey}" -> SSN: ${candidates[0].ssn}`);
+                    return candidates[0].ssn;
                 }
             }
-            
-            console.log(`✗ No SSN match found for: "${name}"`);
-            console.log(`Available SSN names:`, Object.keys(ssnData).slice(0, 10)); // Show first 10 for debugging
+
+            console.log(`  ✗ No SSN match for: "${name}"`);
+            console.log(`    Available keys:`, Object.keys(ssnData).slice(0, 10));
             return '';
         }
 
