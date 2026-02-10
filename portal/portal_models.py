@@ -711,3 +711,45 @@ class GigiSimulation(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
+
+class GigiInteractionFeedback(Base):
+    """Human feedback on Gigi's responses for training and improvement."""
+    __tablename__ = "gigi_interaction_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    interaction_type = Column(String(20), nullable=False)  # voice, sms, dm, team_chat, telegram, api
+    interaction_id = Column(String(255), nullable=True, index=True)  # conv_{id} or voice_{call_id}
+
+    # Content snapshot (persists even after conversation_store prunes)
+    user_message = Column(Text, nullable=True)
+    gigi_response = Column(Text, nullable=True)
+    user_identifier = Column(String(255), nullable=True)  # phone number, username, chat ID
+
+    # Feedback
+    rating = Column(String(20), nullable=False)  # good, needs_improvement
+    improvement_notes = Column(Text, nullable=True)
+
+    # Memory integration
+    memory_id = Column(String(100), nullable=True)  # UUID of created memory
+
+    # Metadata
+    reviewed_by = Column(String(255), nullable=False)
+    reviewed_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "interaction_type": self.interaction_type,
+            "interaction_id": self.interaction_id,
+            "user_message": self.user_message,
+            "gigi_response": self.gigi_response,
+            "user_identifier": self.user_identifier,
+            "rating": self.rating,
+            "improvement_notes": self.improvement_notes,
+            "memory_id": self.memory_id,
+            "reviewed_by": self.reviewed_by,
+            "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }
+

@@ -466,11 +466,13 @@ async def record_shadow_feedback(request: Request):
             # If feedback is "bad", capture a correction memory
             if rating == "bad" and MEMORY_SYSTEM_AVAILABLE and memory_system:
                 try:
-                    memory_system.store_memory(
+                    memory_system.create_memory(
                         content=f"Correction on action '{log['action']}': Human marked this as incorrect behavior.",
                         memory_type=MemoryType.CORRECTION,
+                        source=MemorySource.CORRECTION,
+                        confidence=0.9,
                         category="behavior_correction",
-                        impact=ImpactLevel.HIGH,
+                        impact_level=ImpactLevel.HIGH,
                         metadata={"log_id": log_id, "original_details": log['details']}
                     )
                 except Exception as mem_err:
