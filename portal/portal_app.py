@@ -7612,6 +7612,7 @@ async def fill_va_rfs_form(
         # Load the blank VA Form 10-10172 PDF
         pdf_path = os.path.join(os.path.dirname(__file__), '..', 'va_form_10_10172_blank.pdf')
         pdf = PdfWrapper(pdf_path)
+        pdf.global_font_size = 8  # Smaller font to prevent field 18 overflow into attestation
 
         # Map extracted data to PDF form fields using actual field names from PDF
         form_data = {}
@@ -7735,7 +7736,7 @@ async def fill_va_rfs_form(
             reason_parts.append(f"Emergency Contact: {' - '.join(contact_info)}")
 
         if reason_parts:
-            form_data['TextField1[0]'] = '\n\n'.join(reason_parts)
+            form_data['TextField1[0]'] = '\n'.join(reason_parts)
 
         # ORDERINGPROVIDERSNAMEPRINTED[0] - Provider Name (Printed)
         if data.get('ordering_provider_name'):
