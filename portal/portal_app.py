@@ -21,7 +21,7 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from portal_auth import oauth_manager, get_current_user, get_current_user_optional
 from portal_database import get_db, db_manager
-from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher, BrevoWebhookEvent
+from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher, BrevoWebhookEvent, GigiInteractionFeedback
 from services.marketing.metrics_service import (
     get_social_metrics,
     get_ads_metrics,
@@ -450,9 +450,15 @@ async def gigi_dashboard_reports(request: Request, current_user: Dict[str, Any] 
         "active_tab": "reports"
     })
 
-@app.get("/gigi/dashboard/calls")
+@app.get("/gigi/dashboard/communications", response_class=HTMLResponse)
+async def gigi_dashboard_communications(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - Communications Tab"""
+    return templates.TemplateResponse("gigi_dashboard.html", {"request": request, "active_tab": "communications", "user": current_user})
+
+@app.get("/gigi/dashboard/calls", response_class=HTMLResponse)
 async def gigi_dashboard_calls(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
-    return templates.TemplateResponse("gigi_dashboard.html", {"request": request, "active_tab": "calls", "user": current_user})
+    """Redirect old calls route to communications"""
+    return RedirectResponse(url="/gigi/dashboard/communications", status_code=302)
 
 @app.get("/gigi/dashboard/simulations")
 async def gigi_dashboard_simulations(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
@@ -1213,6 +1219,378 @@ async def api_gigi_get_calls(
     except Exception as e:
         logger.error(f"Failed to fetch Retell calls: {e}")
         return JSONResponse({"success": False, "error": str(e)})
+
+@app.get("/api/gigi/communications")
+async def api_gigi_communications(
+    channel: Optional[str] = Query(None),
+    limit: int = Query(50),
+    offset: int = Query(0),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Unified communication feed — Retell voice calls + gigi_conversations (SMS, DM, team chat, etc.)."""
+    import psycopg2
+    items = []
+
+    # Source 1: Retell voice calls
+    retell_api_key = os.getenv("RETELL_API_KEY")
+    agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
+    if retell_api_key and (channel is None or channel == "voice"):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.retellai.com/v2/list-calls",
+                    headers={"Authorization": f"Bearer {retell_api_key}", "Content-Type": "application/json"},
+                    json={"agent_id": agent_id, "limit": 50},
+                    timeout=10,
+                )
+                if response.status_code == 200:
+                    calls = response.json()
+                    for c in calls:
+                        transcript = c.get("transcript_object") or c.get("transcript") or []
+                        user_msg = ""
+                        gigi_msg = ""
+                        if isinstance(transcript, list):
+                            for t in transcript:
+                                if not user_msg and t.get("role") == "user":
+                                    user_msg = t.get("content", "")[:200]
+                                if not gigi_msg and t.get("role") in ("agent", "assistant"):
+                                    gigi_msg = t.get("content", "")[:200]
+                        start_ts = c.get("start_timestamp")
+                        end_ts = c.get("end_timestamp")
+                        duration = None
+                        if start_ts and end_ts:
+                            duration = round((end_ts - start_ts) / 1000) if end_ts > 1e9 else round(end_ts - start_ts)
+                        ts = datetime.utcfromtimestamp(start_ts / 1000).isoformat() if start_ts and start_ts > 1e9 else (datetime.utcfromtimestamp(start_ts).isoformat() if start_ts else None)
+                        items.append({
+                            "id": f"voice_{c.get('call_id', '')}",
+                            "type": "voice",
+                            "user_identifier": c.get("from_number", "Unknown"),
+                            "user_message": user_msg,
+                            "gigi_response": gigi_msg,
+                            "timestamp": ts,
+                            "duration": duration,
+                            "recording_url": c.get("recording_url"),
+                        })
+        except Exception as e:
+            logger.warning(f"Retell calls fetch error: {e}")
+
+    # Source 2: gigi_conversations (SMS, DM, team_chat, telegram, api)
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        try:
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            channel_filter = ""
+            params = [limit + offset]
+            if channel and channel != "voice":
+                channel_filter = "AND gc1.channel = %s"
+                params.append(channel)
+            elif channel is None:
+                # All non-voice channels (voice is handled by Retell above)
+                pass
+
+            cur.execute(f"""
+                SELECT
+                    gc1.id as msg_id,
+                    gc1.user_id,
+                    gc1.channel,
+                    gc1.content as user_message,
+                    gc1.created_at as message_time,
+                    gc2_content as gigi_response,
+                    gc2_time as response_time
+                FROM gigi_conversations gc1
+                LEFT JOIN LATERAL (
+                    SELECT content as gc2_content, created_at as gc2_time
+                    FROM gigi_conversations gc2
+                    WHERE gc2.user_id = gc1.user_id
+                      AND gc2.channel = gc1.channel
+                      AND gc2.role = 'assistant'
+                      AND gc2.created_at > gc1.created_at
+                      AND gc2.created_at < gc1.created_at + INTERVAL '10 minutes'
+                    ORDER BY gc2.created_at ASC
+                    LIMIT 1
+                ) sub ON true
+                WHERE gc1.role = 'user'
+                {channel_filter}
+                ORDER BY gc1.created_at DESC
+                LIMIT %s
+            """, params[::-1] if channel and channel != "voice" else params)
+
+            rows = cur.fetchall()
+            for row in rows:
+                msg_id, user_id, ch, user_msg, msg_time, gigi_resp, resp_time = row
+                items.append({
+                    "id": f"conv_{msg_id}",
+                    "type": ch,
+                    "user_identifier": user_id,
+                    "user_message": (user_msg or "")[:300],
+                    "gigi_response": (gigi_resp or "")[:300],
+                    "timestamp": msg_time.isoformat() if msg_time else None,
+                    "duration": None,
+                    "recording_url": None,
+                })
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Conversation store query error: {e}")
+
+    # Attach feedback status
+    feedback_map = {}
+    if items:
+        try:
+            db_url2 = os.getenv("DATABASE_URL")
+            conn2 = psycopg2.connect(db_url2)
+            cur2 = conn2.cursor()
+            interaction_ids = [i["id"] for i in items]
+            placeholders = ",".join(["%s"] * len(interaction_ids))
+            cur2.execute(
+                f"SELECT interaction_id, rating, improvement_notes FROM gigi_interaction_feedback WHERE interaction_id IN ({placeholders})",
+                interaction_ids
+            )
+            for row in cur2.fetchall():
+                feedback_map[row[0]] = {"rating": row[1], "improvement_notes": row[2]}
+            cur2.close()
+            conn2.close()
+        except Exception:
+            pass
+
+    for item in items:
+        item["feedback"] = feedback_map.get(item["id"])
+
+    # Sort by timestamp descending and paginate
+    items.sort(key=lambda x: x.get("timestamp") or "", reverse=True)
+    paginated = items[offset:offset + limit]
+
+    return JSONResponse({"success": True, "communications": paginated, "total": len(items)})
+
+
+@app.get("/api/gigi/communications/stats")
+async def api_gigi_communication_stats(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Aggregate communication stats for dashboard cards."""
+    import psycopg2
+    db_url = os.getenv("DATABASE_URL")
+    stats = {"total": 0, "by_channel": {}, "reviewed": 0, "good": 0, "needs_improvement": 0}
+    if not db_url:
+        return JSONResponse({"success": True, "stats": stats})
+
+    try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        # Total conversations by channel (last 30 days)
+        cur.execute("""
+            SELECT channel, COUNT(*) FROM gigi_conversations
+            WHERE role = 'user' AND created_at > NOW() - INTERVAL '30 days'
+            GROUP BY channel
+        """)
+        for ch, cnt in cur.fetchall():
+            stats["by_channel"][ch] = cnt
+            stats["total"] += cnt
+
+        # Feedback counts
+        cur.execute("""
+            SELECT rating, COUNT(*) FROM gigi_interaction_feedback
+            GROUP BY rating
+        """)
+        for rating, cnt in cur.fetchall():
+            if rating == "good":
+                stats["good"] = cnt
+            elif rating == "needs_improvement":
+                stats["needs_improvement"] = cnt
+            stats["reviewed"] += cnt
+
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Communication stats error: {e}")
+
+    return JSONResponse({"success": True, "stats": stats})
+
+
+@app.get("/api/gigi/communications/{interaction_id}")
+async def api_gigi_communication_detail(
+    interaction_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Get full conversation detail for an interaction."""
+    import psycopg2
+
+    # Check for existing feedback
+    feedback = None
+    try:
+        db_url = os.getenv("DATABASE_URL")
+        conn_fb = psycopg2.connect(db_url)
+        cur_fb = conn_fb.cursor()
+        cur_fb.execute(
+            "SELECT rating, improvement_notes FROM gigi_interaction_feedback WHERE interaction_id = %s ORDER BY created_at DESC LIMIT 1",
+            (interaction_id,),
+        )
+        fb_row = cur_fb.fetchone()
+        if fb_row:
+            feedback = {"rating": fb_row[0], "improvement_notes": fb_row[1]}
+        cur_fb.close()
+        conn_fb.close()
+    except Exception:
+        pass
+
+    if interaction_id.startswith("voice_"):
+        # Fetch from Retell
+        call_id = interaction_id.replace("voice_", "")
+        retell_api_key = os.getenv("RETELL_API_KEY")
+        if not retell_api_key:
+            return JSONResponse({"success": False, "error": "RETELL_API_KEY not set"})
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"https://api.retellai.com/v2/get-call/{call_id}",
+                    headers={"Authorization": f"Bearer {retell_api_key}"},
+                    timeout=10,
+                )
+                if resp.status_code == 200:
+                    call = resp.json()
+                    return JSONResponse({"success": True, "type": "voice", "detail": call, "feedback": feedback})
+                return JSONResponse({"success": False, "error": resp.text})
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)})
+
+    elif interaction_id.startswith("conv_"):
+        # Fetch from gigi_conversations
+        msg_id = interaction_id.replace("conv_", "")
+        db_url = os.getenv("DATABASE_URL")
+        try:
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            # Get the originating message to find user_id and channel
+            cur.execute("SELECT user_id, channel, created_at FROM gigi_conversations WHERE id = %s", (msg_id,))
+            row = cur.fetchone()
+            if not row:
+                cur.close()
+                conn.close()
+                return JSONResponse({"success": False, "error": "Interaction not found"})
+
+            user_id, channel, msg_time = row
+            # Get all messages in the session (within 30 min window of the user message)
+            cur.execute("""
+                SELECT id, role, content, created_at
+                FROM gigi_conversations
+                WHERE user_id = %s AND channel = %s
+                  AND created_at >= %s - INTERVAL '1 minute'
+                  AND created_at <= %s + INTERVAL '30 minutes'
+                ORDER BY created_at ASC
+            """, (user_id, channel, msg_time, msg_time))
+            messages = []
+            for r in cur.fetchall():
+                messages.append({
+                    "id": r[0],
+                    "role": r[1],
+                    "content": r[2],
+                    "timestamp": r[3].isoformat() if r[3] else None,
+                })
+            cur.close()
+            conn.close()
+
+            return JSONResponse({
+                "success": True,
+                "type": channel,
+                "user_id": user_id,
+                "messages": messages,
+                "feedback": feedback,
+            })
+        except Exception as e:
+            return JSONResponse({"success": False, "error": str(e)})
+
+    return JSONResponse({"success": False, "error": "Invalid interaction ID"})
+
+
+@app.post("/api/gigi/communications/{interaction_id}/feedback")
+async def api_gigi_submit_feedback(
+    interaction_id: str,
+    payload: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Submit feedback on a Gigi interaction — creates memory for learning."""
+    rating = payload.get("rating")
+    if rating not in ("good", "needs_improvement"):
+        raise HTTPException(status_code=400, detail="rating must be 'good' or 'needs_improvement'")
+
+    improvement_notes = payload.get("improvement_notes", "")
+    user_message = payload.get("user_message", "")
+    gigi_response = payload.get("gigi_response", "")
+    interaction_type = payload.get("interaction_type", "unknown")
+    user_identifier = payload.get("user_identifier", "")
+
+    reviewer = current_user.get("email") or current_user.get("name", "unknown")
+
+    feedback = GigiInteractionFeedback(
+        interaction_type=interaction_type,
+        interaction_id=interaction_id,
+        user_message=user_message,
+        gigi_response=gigi_response,
+        user_identifier=user_identifier,
+        rating=rating,
+        improvement_notes=improvement_notes if rating == "needs_improvement" else None,
+        reviewed_by=reviewer,
+    )
+
+    # Create memory for learning
+    memory_id = None
+    try:
+        import sys
+        gigi_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gigi")
+        if gigi_dir not in sys.path:
+            sys.path.insert(0, gigi_dir)
+        from memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel
+        ms = MemorySystem()
+
+        if rating == "good":
+            memory_id = ms.create_memory(
+                content=(
+                    f"Confirmed good response pattern: When user asked '{user_message[:100]}', "
+                    f"responding with '{gigi_response[:150]}' was approved by {reviewer}."
+                ),
+                memory_type=MemoryType.CONFIRMED_PATTERN,
+                source=MemorySource.PATTERN,
+                confidence=0.7,
+                category="response_pattern",
+                impact_level=ImpactLevel.MEDIUM,
+                metadata={"feedback_id": "pending", "channel": interaction_type},
+            )
+        elif rating == "needs_improvement" and improvement_notes:
+            memory_id = ms.create_memory(
+                content=(
+                    f"CORRECTION: {improvement_notes}. "
+                    f"Context: User said '{user_message[:100]}', "
+                    f"Gigi responded '{gigi_response[:100]}' which needs improvement."
+                ),
+                memory_type=MemoryType.CORRECTION,
+                source=MemorySource.CORRECTION,
+                confidence=0.9,
+                category="behavior_correction",
+                impact_level=ImpactLevel.HIGH,
+                metadata={
+                    "feedback_id": "pending",
+                    "channel": interaction_type,
+                    "improvement_notes": improvement_notes,
+                },
+            )
+    except Exception as e:
+        logger.warning(f"Memory creation for feedback failed: {e}")
+
+    feedback.memory_id = memory_id
+    db.add(feedback)
+    db.commit()
+    db.refresh(feedback)
+
+    return JSONResponse({
+        "success": True,
+        "feedback_id": feedback.id,
+        "memory_id": memory_id,
+        "rating": rating,
+    })
+
 
 @app.get("/api/gigi/knowledge/sop")
 async def api_gigi_get_sop(current_user: Dict[str, Any] = Depends(get_current_user)):

@@ -398,9 +398,9 @@
                     <i class="bi bi-graph-up"></i>
                     <span>Reports</span>
                 </a>
-                <a href="/gigi/dashboard/calls" class="nav-link {{ 'active' if active_tab == 'calls' }}">
-                    <i class="bi bi-telephone"></i>
-                    <span>Call Logs</span>
+                <a href="/gigi/dashboard/communications" class="nav-link {{ 'active' if active_tab == 'communications' }}">
+                    <i class="bi bi-chat-dots"></i>
+                    <span>Communications</span>
                 </a>
                 <a href="/gigi/dashboard/simulations" class="nav-link {{ 'active' if active_tab == 'simulations' }}">
                     <i class="bi bi-cpu"></i>
@@ -432,7 +432,7 @@
                     {% elif active_tab == 'escalations' %}Escalations
                     {% elif active_tab == 'users' %}User Management
                     {% elif active_tab == 'reports' %}Analytics & Reports
-                    {% elif active_tab == 'calls' %}Call Logs
+                    {% elif active_tab == 'communications' %}Communications
                     {% elif active_tab == 'simulations' %}Simulations & Testing
                     {% elif active_tab == 'settings' %}Settings
                     {% else %}{{ active_tab|capitalize }}{% endif %}
@@ -720,14 +720,75 @@
                         </div>
                     </div>
                 </div>
-                {% elif active_tab == 'calls' %}
-                <div id="calls-list-container" class="table-container">
-                    <!-- Call logs loaded here -->
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
-                        <span class="ms-2 text-secondary">Loading call logs...</span>
+                {% elif active_tab == 'communications' %}
+                <!-- Channel filter bar -->
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div class="d-flex gap-2 align-items-center">
+                        <select id="comm-channel-filter" onchange="loadCommunications()" class="form-select form-select-sm" style="width: auto; background: var(--bg-secondary); color: var(--text-primary); border-color: var(--border-color);">
+                            <option value="">All Channels</option>
+                            <option value="voice">Voice Calls</option>
+                            <option value="sms">SMS</option>
+                            <option value="dm">RC Direct Messages</option>
+                            <option value="team_chat">RC Team Chat</option>
+                            <option value="telegram">Telegram</option>
+                            <option value="api">Ask Gigi API</option>
+                        </select>
+                        <span class="text-secondary small" id="comm-count-label"></span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <span id="comm-stats-reviewed" class="badge" style="background: var(--bg-tertiary); color: var(--text-secondary);"></span>
+                        <span id="comm-stats-good" class="badge" style="background: rgba(16,185,129,0.15); color: var(--accent-green);"></span>
+                        <span id="comm-stats-improve" class="badge" style="background: rgba(245,158,11,0.15); color: #f59e0b;"></span>
                     </div>
                 </div>
+
+                <!-- Communication list -->
+                <div id="comm-list-container" class="table-container">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary spinner-border-sm" role="status"></div>
+                        <span class="ms-2 text-secondary">Loading communications...</span>
+                    </div>
+                </div>
+
+                <!-- Interaction Detail Modal -->
+                <div class="modal fade" id="interactionDetailModal" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div class="modal-content" style="background: var(--bg-secondary); border: 1px solid var(--border-color);">
+                            <div class="modal-header" style="border-bottom-color: var(--border-color);">
+                                <h5 class="modal-title" style="color: var(--text-primary);">
+                                    <span id="detail-channel-badge" class="badge me-2"></span>
+                                    <span id="detail-user-id"></span>
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+                                <div id="detail-audio-player" style="display:none; margin-bottom: 12px;">
+                                    <audio controls style="width: 100%;" id="detail-audio-el"></audio>
+                                </div>
+                                <div id="detail-messages" style="font-size: 13px; line-height: 1.7;"></div>
+                            </div>
+                            <div class="modal-footer flex-column align-items-stretch" style="border-top-color: var(--border-color);">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span style="color: var(--text-secondary); font-size: 13px;">Rate this response:</span>
+                                    <div class="d-flex gap-2" id="feedback-buttons">
+                                        <button class="btn btn-sm" onclick="submitFeedback('good')" style="background: rgba(16,185,129,0.15); color: var(--accent-green); border: 1px solid rgba(16,185,129,0.3);">
+                                            <i class="bi bi-hand-thumbs-up-fill"></i> Good Response
+                                        </button>
+                                        <button class="btn btn-sm" onclick="showImprovementInput()" style="background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3);">
+                                            <i class="bi bi-hand-thumbs-down-fill"></i> Needs Improvement
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="improvement-input" style="display: none;">
+                                    <textarea id="improvement-notes" class="form-control form-control-sm mb-2" rows="3" placeholder="How should Gigi improve? Be specific..." style="background: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-color);"></textarea>
+                                    <button class="btn btn-sm btn-warning w-100" onclick="submitFeedback('needs_improvement')">Submit Correction</button>
+                                </div>
+                                <div id="feedback-result" style="display: none;" class="text-center py-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {% elif active_tab == 'simulations' %}
                 <!-- Sub-nav for Scenarios vs History -->
                 <div class="d-flex justify-content-between align-items-center mb-4">
@@ -982,8 +1043,9 @@
                 loadSchedule();
             } else if (activeTab === 'escalations') {
                 loadEscalations();
-            } else if (activeTab === 'calls') {
-                loadCalls();
+            } else if (activeTab === 'communications') {
+                loadCommunications();
+                loadCommStats();
             } else if (activeTab === 'users') {
                 loadUsers();
             } else if (activeTab === 'simulations') {
@@ -1011,27 +1073,217 @@
             } catch (err) { console.error(err); }
         }
 
-        async function loadCalls() {
-            const container = document.getElementById('calls-list-container');
+        let currentInteractionId = null;
+        let currentInteractionType = null;
+        let currentUserMessage = '';
+        let currentGigiResponse = '';
+        let currentUserIdentifier = '';
+        let detailModal = null;
+
+        const channelColors = {
+            voice: {bg: 'rgba(99,102,241,0.15)', text: '#818cf8', label: 'Voice'},
+            sms: {bg: 'rgba(16,185,129,0.15)', text: '#10b981', label: 'SMS'},
+            dm: {bg: 'rgba(59,130,246,0.15)', text: '#3b82f6', label: 'DM'},
+            team_chat: {bg: 'rgba(168,85,247,0.15)', text: '#a855f7', label: 'Team Chat'},
+            telegram: {bg: 'rgba(34,211,238,0.15)', text: '#22d3ee', label: 'Telegram'},
+            api: {bg: 'rgba(251,146,60,0.15)', text: '#fb923c', label: 'API'}
+        };
+
+        async function loadCommunications() {
+            const container = document.getElementById('comm-list-container');
+            const channel = document.getElementById('comm-channel-filter').value;
+            const url = channel ? `/api/gigi/communications?channel=${channel}&limit=50` : '/api/gigi/communications?limit=50';
             try {
-                const resp = await fetch('/api/gigi/calls');
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if (data.success && data.communications && data.communications.length > 0) {
+                    document.getElementById('comm-count-label').textContent = `${data.communications.length} interactions`;
+                    const html = data.communications.map(item => {
+                        const ch = channelColors[item.type] || {bg: 'rgba(148,163,184,0.15)', text: '#94a3b8', label: item.type};
+                        const fbRating = item.feedback ? item.feedback.rating : null;
+                        const feedbackIcon = fbRating === 'good'
+                            ? '<i class="bi bi-check-circle-fill text-success"></i>'
+                            : fbRating === 'needs_improvement'
+                            ? '<i class="bi bi-exclamation-circle-fill" style="color:#f59e0b;"></i>'
+                            : '<i class="bi bi-circle text-secondary opacity-50"></i>';
+                        const preview = (item.user_message || '').substring(0, 80) + ((item.user_message || '').length > 80 ? '...' : '');
+                        const ts = new Date(item.timestamp).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
+                        return `
+                        <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center"
+                             style="cursor:pointer;" onclick="viewInteraction('${item.id}', '${item.type}')">
+                            <div style="min-width:0; flex:1;">
+                                <div class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="badge" style="background:${ch.bg}; color:${ch.text}; font-size:10px;">${ch.label}</span>
+                                    <span class="fw-bold small">${item.user_identifier || 'Unknown'}</span>
+                                    <span class="text-secondary" style="font-size:11px;">${ts}</span>
+                                </div>
+                                <div class="text-secondary small text-truncate">${preview || '<em>No message preview</em>'}</div>
+                            </div>
+                            <div class="ms-3 d-flex align-items-center gap-2">
+                                ${feedbackIcon}
+                                <i class="bi bi-chevron-right text-secondary opacity-50"></i>
+                            </div>
+                        </div>`;
+                    }).join('');
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="text-center py-5 text-secondary">No communications found for this filter.</div>';
+                    document.getElementById('comm-count-label').textContent = '0 interactions';
+                }
+            } catch (err) {
+                console.error('Failed to load communications:', err);
+                container.innerHTML = '<div class="text-center py-5 text-danger small">Failed to load communications.</div>';
+            }
+        }
+
+        async function loadCommStats() {
+            try {
+                const resp = await fetch('/api/gigi/communications/stats');
                 const data = await resp.json();
                 if (data.success) {
-                    const html = data.calls.map(c => `
-                        <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
-                            <div>
-                                <div class="fw-bold">${c.from_number} <span class="badge bg-primary bg-opacity-10 text-primary ms-2">${c.call_type}</span></div>
-                                <div class="text-secondary small">${new Date(c.start_timestamp).toLocaleString()} | Duration: ${Math.round(c.duration || 0)}s</div>
-                            </div>
-                            <div class="text-end d-flex gap-2">
-                                ${c.recording_url ? `<a href="${c.recording_url}" target="_blank" class="btn btn-outline-info btn-sm"><i class="bi bi-play-fill"></i> Listen</a>` : ''}
-                                <button class="btn btn-outline-secondary btn-sm" onclick="viewTranscript('${c.call_id}')">Transcript</button>
-                            </div>
-                        </div>
-                    `).join('');
-                    container.innerHTML = html;
+                    const s = data.stats;
+                    document.getElementById('comm-stats-reviewed').textContent = `${s.reviewed || 0} reviewed`;
+                    document.getElementById('comm-stats-good').textContent = `${s.good || 0} good`;
+                    document.getElementById('comm-stats-improve').textContent = `${s.needs_improvement || 0} needs work`;
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error('Failed to load comm stats:', err); }
+        }
+
+        async function viewInteraction(id, channel) {
+            currentInteractionId = id;
+            currentInteractionType = channel;
+            if (!detailModal) detailModal = new bootstrap.Modal(document.getElementById('interactionDetailModal'));
+
+            // Reset state
+            document.getElementById('feedback-buttons').style.display = 'flex';
+            document.getElementById('improvement-input').style.display = 'none';
+            document.getElementById('feedback-result').style.display = 'none';
+            document.getElementById('detail-audio-player').style.display = 'none';
+            document.getElementById('detail-messages').innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+            const ch = channelColors[channel] || {bg: 'rgba(148,163,184,0.15)', text: '#94a3b8', label: channel};
+            document.getElementById('detail-channel-badge').style.background = ch.bg;
+            document.getElementById('detail-channel-badge').style.color = ch.text;
+            document.getElementById('detail-channel-badge').textContent = ch.label;
+
+            detailModal.show();
+
+            try {
+                const resp = await fetch(`/api/gigi/communications/${id}?type=${channel}`);
+                const data = await resp.json();
+                if (data.success) {
+                    let messages = [];
+
+                    if (data.type === 'voice' && data.detail) {
+                        // Voice call from Retell
+                        document.getElementById('detail-user-id').textContent = data.detail.from_number || 'Voice Call';
+                        if (data.detail.recording_url) {
+                            document.getElementById('detail-audio-player').style.display = 'block';
+                            document.getElementById('detail-audio-el').src = data.detail.recording_url;
+                        }
+                        const transcript = data.detail.transcript_object || data.detail.transcript || [];
+                        if (Array.isArray(transcript)) {
+                            messages = transcript.map(t => ({
+                                role: t.role === 'agent' ? 'assistant' : t.role,
+                                content: t.content || '',
+                                timestamp: null,
+                            }));
+                        }
+                    } else {
+                        // Conversation store (SMS, DM, etc.)
+                        document.getElementById('detail-user-id').textContent = data.user_id || 'Unknown User';
+                        messages = data.messages || [];
+                    }
+
+                    // Extract first user msg and first gigi response for feedback context
+                    currentUserMessage = (messages.find(m => m.role === 'user') || {}).content || '';
+                    currentGigiResponse = (messages.find(m => m.role === 'assistant' || m.role === 'gigi') || {}).content || '';
+                    currentUserIdentifier = document.getElementById('detail-user-id').textContent;
+
+                    // Render messages
+                    if (messages.length > 0) {
+                        const msgsHtml = messages.map(m => {
+                            const isGigi = m.role === 'assistant' || m.role === 'gigi';
+                            return `<div class="mb-2 ${isGigi ? 'ps-3' : ''}" style="border-left: ${isGigi ? '2px solid var(--accent-primary)' : 'none'};">
+                                <div style="font-size:11px; color: var(--text-secondary);">${isGigi ? 'Gigi' : 'User'} &middot; ${m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}</div>
+                                <div style="color: var(--text-primary);">${m.content}</div>
+                            </div>`;
+                        }).join('');
+                        document.getElementById('detail-messages').innerHTML = msgsHtml;
+                    } else {
+                        document.getElementById('detail-messages').innerHTML = '<div class="text-secondary text-center py-3">No message details available.</div>';
+                    }
+
+                    // Show existing feedback if already reviewed
+                    if (data.feedback) {
+                        document.getElementById('feedback-buttons').style.display = 'none';
+                        const fbHtml = data.feedback.rating === 'good'
+                            ? '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Rated: Good Response</span>'
+                            : `<span style="color:#f59e0b;"><i class="bi bi-exclamation-circle-fill"></i> Rated: Needs Improvement</span><br><small class="text-secondary">${data.feedback.improvement_notes || ''}</small>`;
+                        document.getElementById('feedback-result').innerHTML = fbHtml;
+                        document.getElementById('feedback-result').style.display = 'block';
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load interaction detail:', err);
+                document.getElementById('detail-messages').innerHTML = '<div class="text-danger text-center">Failed to load details.</div>';
+            }
+        }
+
+        function showImprovementInput() {
+            document.getElementById('improvement-input').style.display = 'block';
+            document.getElementById('improvement-notes').focus();
+        }
+
+        async function submitFeedback(rating) {
+            if (!currentInteractionId) return;
+            const notes = rating === 'needs_improvement' ? document.getElementById('improvement-notes').value.trim() : '';
+            if (rating === 'needs_improvement' && !notes) {
+                document.getElementById('improvement-notes').classList.add('border-warning');
+                document.getElementById('improvement-notes').placeholder = 'Please describe how Gigi should improve...';
+                return;
+            }
+
+            const btn = event.target.closest('button');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            try {
+                const resp = await fetch(`/api/gigi/communications/${currentInteractionId}/feedback`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        rating: rating,
+                        improvement_notes: notes,
+                        interaction_type: currentInteractionType,
+                        user_message: currentUserMessage,
+                        gigi_response: currentGigiResponse,
+                        user_identifier: currentUserIdentifier,
+                        reviewed_by: '{{ current_user.email if current_user else "admin" }}'
+                    })
+                });
+                const data = await resp.json();
+                if (data.success) {
+                    document.getElementById('feedback-buttons').style.display = 'none';
+                    document.getElementById('improvement-input').style.display = 'none';
+                    const resultEl = document.getElementById('feedback-result');
+                    resultEl.style.display = 'block';
+                    resultEl.innerHTML = rating === 'good'
+                        ? '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Feedback saved — Gigi will remember this as a good pattern!</span>'
+                        : '<span style="color:#f59e0b;"><i class="bi bi-exclamation-circle-fill"></i> Correction saved — Gigi will learn from this feedback!</span>';
+                    // Refresh stats and list
+                    loadCommStats();
+                    loadCommunications();
+                } else {
+                    btn.disabled = false;
+                    btn.innerHTML = rating === 'good' ? '<i class="bi bi-hand-thumbs-up-fill"></i> Good Response' : 'Submit Correction';
+                    alert('Failed to save feedback: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Feedback submission failed:', err);
+                btn.disabled = false;
+                btn.innerHTML = rating === 'good' ? '<i class="bi bi-hand-thumbs-up-fill"></i> Good Response' : 'Submit Correction';
+            }
         }
 
         // Escalations Tab
@@ -1327,7 +1579,7 @@
         function renderIssues(issues) {
             const body = document.getElementById('issues-table-body');
             if (!issues || issues.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-secondary">No issues found.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="text-center py-5 text-secondary"><i class="bi bi-check-circle me-2"></i>No issues found. Issues are auto-detected from client complaints or can be reported manually.</td></tr>';
                 return;
             }
 
