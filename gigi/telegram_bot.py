@@ -195,7 +195,7 @@ ANTHROPIC_TOOLS = [
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary. Do NOT try to build a briefing manually from other tools.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts. Use when asked about AR, accounts receivable, outstanding invoices, or who owes money.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' (default) or 'detailed' (full invoice list)"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto analysis, macro outlook, sector rotation, portfolio strategy, etc. Returns institutional-grade research with evidence and confidence level. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze in depth"}}, "required": ["question"]}},
-    {"name": "get_polybot_status", "description": "Get Polybot autonomous trading bot performance report. Shows 5 strategies: momentum, mean reversion, spread, weather arbitrage, and social media arbitrage. Use when asked about Polybot, trading bot, prediction market performance, weather arb, social arb, or paper trading results.", "input_schema": {"type": "object", "properties": {"strategy": {"type": "string", "description": "Which strategy group: 'all' (default), 'general', 'weather', or 'social'"}}, "required": []}},
+    {"name": "get_polybot_status", "description": "Get trading bot performance report for BOTH bots: Polybot (Polymarket prediction markets, 11 strategies) and ML Bot (crypto trading). Shows portfolio value, P&L, open positions, strategy-level performance, risk status. Use when asked about Polybot, trading bots, prediction markets, crypto trading, portfolio, or paper trading results.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -254,8 +254,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _s("string", "Level of detail: 'summary' or 'detailed'")})),
         genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _s("string", "The financial research question to analyze")}, required=["question"])),
-        genai_types.FunctionDeclaration(name="get_polybot_status", description="Get Polybot autonomous trading bot performance. Shows 5 strategies: momentum, mean reversion, spread, weather arb, and social media arb.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"strategy": _s("string", "Strategy group: all, general, weather, or social")})),
+        genai_types.FunctionDeclaration(name="get_polybot_status", description="Get trading bot performance for both Polybot (Polymarket, 11 strategies) and ML Bot (crypto). Shows portfolio, P&L, positions, strategy performance, risk.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -291,7 +291,7 @@ OPENAI_TOOLS = [
     _oai_tool("get_morning_briefing", "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.", {}, []),
     _oai_tool("get_ar_report", "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, []),
     _oai_tool("deep_research", "Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.", {"question": {"type": "string", "description": "The financial research question to analyze"}}, ["question"]),
-    _oai_tool("get_polybot_status", "Get Polybot trading bot performance report. Shows 5 strategies: momentum, mean reversion, spread, weather arb, and social media arb.", {"strategy": {"type": "string", "description": "Strategy group: all, general, weather, or social"}}),
+    _oai_tool("get_polybot_status", "Get trading bot performance for both Polybot (Polymarket, 11 strategies) and ML Bot (crypto). Shows portfolio, P&L, positions, strategy performance, risk.", {}),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -1018,83 +1018,86 @@ class GigiTelegramBot:
                 return json.dumps(result)
 
             elif tool_name == "get_polybot_status":
-                strategy = tool_input.get("strategy", "all")
                 try:
                     import httpx
                     async with httpx.AsyncClient(timeout=30.0) as client:
-                        # Fetch all data in parallel
-                        status_resp, weather_resp, social_resp, trades_resp, positions_resp = await asyncio.gather(
+                        polybot_resp, mlbot_resp = await asyncio.gather(
                             client.get("http://localhost:3002/api/polybot/status"),
-                            client.get("http://localhost:3002/api/polybot/weather/status"),
-                            client.get("http://localhost:3002/api/polybot/social/status"),
-                            client.get("http://localhost:3002/api/polybot/trades"),
-                            client.get("http://localhost:3002/api/polybot/positions"),
+                            client.get("http://localhost:3002/api/ml-bot/status"),
+                            return_exceptions=True,
                         )
-                        status = status_resp.json()
-                        weather = weather_resp.json()
-                        social = social_resp.json()
-                        trades_data = trades_resp.json()
-                        trades = trades_data if isinstance(trades_data, list) else trades_data.get("trades", [])
-                        pos_data = positions_resp.json()
-                        positions = pos_data if isinstance(pos_data, list) else []
 
-                        # Build report
                         report = []
-                        report.append(f"POLYBOT STATUS: {'RUNNING' if status.get('enabled') else 'STOPPED'} | Paper Mode: {'YES' if status.get('paper_mode') else 'LIVE'}")
-                        report.append(f"Cycles: {status.get('cycles', 0)} | Auto-scan: every {status.get('auto_scan_interval', 120)}s")
-                        report.append(f"Portfolio: ${status.get('portfolio_value', 0):,.2f} | P&L: ${status.get('pnl', 0):,.2f} ({status.get('pnl_pct', 0):.2f}%)")
+
+                        # --- POLYBOT (Polymarket) ---
+                        if isinstance(polybot_resp, Exception):
+                            report.append("POLYBOT: UNAVAILABLE")
+                        else:
+                            pb = polybot_resp.json()
+                            portfolio = pb.get("portfolio", {})
+                            perf = pb.get("performance", {})
+                            risk = pb.get("risk", {})
+                            positions = pb.get("positions", {})
+                            poly_positions = positions.get("polymarket", [])
+
+                            report.append(f"POLYBOT (Polymarket) — {'Paper Mode' if pb.get('paper_mode') else 'LIVE'}")
+                            report.append(f"Status: {'RUNNING' if pb.get('is_running') else 'STOPPED'} | Cycles: {pb.get('cycles_completed', 0)}")
+                            report.append(f"Portfolio: ${portfolio.get('total_value', 0):,.2f} | P&L: ${portfolio.get('pnl', 0):,.2f} ({portfolio.get('pnl_pct', 0):.2f}%)")
+                            report.append(f"Trades: {perf.get('total_trades', 0)} total | {perf.get('winning_trades', 0)}W/{perf.get('losing_trades', 0)}L ({perf.get('win_rate', 0):.1f}% win rate)")
+                            report.append(f"Drawdown: {risk.get('drawdown_pct', 0):.1f}% | Kill switch: {risk.get('kill_switch', {}).get('state', '?')}")
+                            report.append("")
+
+                            # Active strategies
+                            strategies = pb.get("strategies", [])
+                            enabled_names = [s["name"] for s in strategies if s.get("enabled")]
+                            report.append(f"Strategies ({len(enabled_names)} active): {', '.join(enabled_names)}")
+                            report.append("")
+
+                            # Strategy performance breakdown
+                            strat_perf = pb.get("strategy_performance", {})
+                            if strat_perf:
+                                report.append("Strategy Performance:")
+                                for name, sp in sorted(strat_perf.items(), key=lambda x: x[1].get("realized_pnl", 0), reverse=True):
+                                    trades = sp.get("total_trades", 0)
+                                    pnl = sp.get("realized_pnl", 0)
+                                    wr = sp.get("win_rate", 0)
+                                    report.append(f"  {name}: {trades} trades, ${pnl:+,.2f} P&L ({wr:.0f}% WR)")
+                                report.append("")
+
+                            # Open positions
+                            report.append(f"Open Positions ({len(poly_positions)}):")
+                            for p in poly_positions[:8]:
+                                sym = p.get("symbol", "?")[:50]
+                                amt = p.get("amount", 0)
+                                entry = p.get("entry_price", 0)
+                                pnl = p.get("unrealized_pnl", 0)
+                                report.append(f"  {sym}: {amt:.1f} shares @ {entry:.4f} (P&L: ${pnl:+.2f})")
+                            if len(poly_positions) > 8:
+                                report.append(f"  ... and {len(poly_positions) - 8} more")
+
                         report.append("")
 
-                        if strategy in ("all", "general"):
-                            general_trades = [t for t in trades if t.get("strategy") not in ("weather_arb", "social_arb")]
-                            report.append("--- GENERAL STRATEGIES (Momentum, MeanReversion, Spread) ---")
-                            report.append(f"Trades: {len(general_trades)} | Strategies: momentum, mean_reversion, spread")
-                            strats = status.get("strategies", [])
-                            for s in strats:
-                                if s.get("name") not in ("weather_arb", "social_arb"):
-                                    report.append(f"  {s['name']}: {'ON' if s.get('enabled') else 'OFF'} | events: {s.get('events_handled', 0)}")
-                            general_positions = [p for p in positions if p.get("strategy") not in ("weather_arb", "social_arb")]
-                            report.append(f"Open positions: {len(general_positions)}")
-                            for p in general_positions[:5]:
-                                report.append(f"  {p.get('symbol', '?')[:40]} | {p.get('side', '?')} | entry=${p.get('entry_price', 0):.4f}")
-                            report.append("")
-
-                        if strategy in ("all", "weather"):
-                            perf = weather.get("performance", {})
-                            report.append("--- WEATHER ARBITRAGE ---")
-                            report.append(f"Status: {'SCANNING' if weather.get('enabled') else 'OFF'}")
-                            report.append(f"Markets found: {weather.get('weather_markets_found', 0)} | Signals: {weather.get('signals_generated', 0)}")
-                            report.append(f"Filled trades: {perf.get('filled_trades', 0)} (buys: {perf.get('buy_trades', 0)}, sells: {perf.get('sell_trades', 0)})")
-                            report.append(f"Total invested: ${perf.get('total_bought_usd', 0):.2f} | Fees: ${perf.get('total_fees', 0):.4f}")
-                            bets = weather.get("active_bets", [])
-                            report.append(f"Active bets: {len(bets)}")
-                            for b in bets[:5]:
-                                report.append(f"  {b.get('symbol', '?')[:45]} | {b.get('shares', 0):.0f} shares @ ${b.get('avg_price', 0):.4f}")
-                            report.append(f"Cities tracked: {', '.join(weather.get('cities', []))}")
-                            report.append("")
-
-                        if strategy in ("all", "social"):
-                            report.append("--- SOCIAL MEDIA ARBITRAGE ---")
-                            report.append(f"Status: {'SCANNING' if social.get('enabled') else 'OFF'}")
-                            report.append(f"Cycles: {social.get('cycles', 0)} | Signals: {social.get('signals_generated', 0)}")
-                            soc_perf = social.get("performance", {})
-                            report.append(f"Total trades: {soc_perf.get('total_trades', 0)} | Realized P&L: ${soc_perf.get('realized_pnl', 0):,.2f}")
-                            report.append(f"Total P&L: ${soc_perf.get('total_pnl', 0):,.2f}")
-                            soc_positions = social.get("active_positions", [])
-                            report.append(f"Active positions: {len(soc_positions)}")
-                            for sp in soc_positions[:5]:
-                                report.append(f"  {sp.get('symbol', '?')[:40]} | {sp.get('shares', 0):.0f} shares @ ${sp.get('avg_price', 0):.4f}")
-                            soc_signals = social.get("recent_signals", [])
-                            if soc_signals:
-                                report.append(f"Recent signals ({len(soc_signals)}):")
-                                for sig in soc_signals[:3]:
-                                    report.append(f"  [{sig.get('source', '?')}] {sig.get('topic', '?')}: {sig.get('direction', '?')} {sig.get('strength', 0):.0%}")
-                            report.append(f"Subreddits: {social.get('subreddits', 'N/A')}")
+                        # --- ML BOT (Crypto) ---
+                        if isinstance(mlbot_resp, Exception):
+                            report.append("ML BOT (Crypto): UNAVAILABLE")
+                        else:
+                            ml = mlbot_resp.json()
+                            ml_port = ml.get("portfolio", {})
+                            ml_stats = ml.get("stats", {})
+                            report.append(f"ML BOT (Crypto) — {'Paper Mode' if ml.get('paper_trading') else 'LIVE'}")
+                            report.append(f"Status: {ml.get('status', '?').upper()}")
+                            report.append(f"Portfolio: ${ml_port.get('current_value', 0):,.2f} | P&L: ${ml_port.get('pnl', 0):,.2f} ({ml_port.get('pnl_pct', 0):.2f}%)")
+                            report.append(f"Trades: {ml_stats.get('trades_executed', 0)} | {ml_stats.get('winning_trades', 0)}W/{ml_stats.get('losing_trades', 0)}L ({ml_stats.get('win_rate', 0):.1f}% WR)")
+                            ml_positions = ml.get("positions", [])
+                            if ml_positions:
+                                report.append(f"Open positions: {len(ml_positions)}")
+                                for mp in ml_positions[:5]:
+                                    report.append(f"  {mp.get('symbol', '?')}: {mp.get('amount', 0):.4f} @ ${mp.get('entry_price', 0):,.2f}")
 
                         return "\n".join(report)
                 except Exception as e:
                     logger.error(f"Polybot status failed: {e}")
-                    return json.dumps({"error": f"Polybot unavailable: {e}"})
+                    return json.dumps({"error": f"Trading bots unavailable: {e}"})
 
             elif tool_name == "deep_research":
                 question = tool_input.get("question", "")

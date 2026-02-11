@@ -588,6 +588,9 @@ class GigiRingCentralBot:
         except Exception as e:
             logger.warning(f"Morning briefing service not available: {e}")
 
+        # Task completion tracking (last notified task ID)
+        self._last_notified_task_id = self._load_last_notified_task_id()
+
         # RingCentral SDK for WebSocket subscriptions
         self.rc_sdk = None
         self.rc_platform = None
@@ -1261,8 +1264,101 @@ class GigiRingCentralBot:
                 except Exception as e:
                     logger.error(f"Morning briefing error: {e}")
 
+            # 7. Claude Code task completion notifications (every cycle)
+            try:
+                await self._check_task_completions()
+            except Exception as e:
+                logger.error(f"Task completion check error: {e}")
+
         except Exception as e:
             logger.error(f"Error in check_and_act: {e}")
+
+    def _load_last_notified_task_id(self) -> int:
+        """Load last notified task ID from DB."""
+        try:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute("SELECT value FROM gigi_dedup_state WHERE key = 'last_notified_task_id'")
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            return int(row[0]) if row else 0
+        except Exception:
+            return 0
+
+    def _save_last_notified_task_id(self, task_id: int):
+        """Persist last notified task ID."""
+        try:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO gigi_dedup_state (key, value, created_at)
+                VALUES ('last_notified_task_id', %s, NOW())
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, created_at = NOW()
+            """, (str(task_id),))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Could not save last notified task ID: {e}")
+
+    async def _check_task_completions(self):
+        """Check for newly completed/failed Claude Code tasks and notify via Telegram."""
+        try:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, title, status, LEFT(result, 200) as result_preview, error
+                FROM claude_code_tasks
+                WHERE status IN ('completed', 'failed')
+                  AND id > %s
+                ORDER BY id ASC
+                LIMIT 5
+            """, (self._last_notified_task_id,))
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+
+            if not rows:
+                return
+
+            for task_id, title, status, result_preview, error in rows:
+                if status == "completed":
+                    msg = f"Task #{task_id} completed: {title}"
+                    if result_preview:
+                        msg += f"\n\nResult: {result_preview}"
+                else:
+                    msg = f"Task #{task_id} FAILED: {title}"
+                    if error:
+                        msg += f"\n\nError: {error[:200]}"
+
+                # Send via Telegram
+                try:
+                    import httpx
+                    tg_token = os.getenv("TELEGRAM_BOT_TOKEN")
+                    tg_chat = os.getenv("TELEGRAM_CHAT_ID", "8215335898")
+                    if tg_token:
+                        async with httpx.AsyncClient(timeout=10) as client:
+                            await client.post(
+                                f"https://api.telegram.org/bot{tg_token}/sendMessage",
+                                json={"chat_id": tg_chat, "text": msg},
+                            )
+                        logger.info(f"Task completion notification sent for #{task_id}")
+                except Exception as e:
+                    logger.warning(f"Task notification send failed: {e}")
+
+                self._last_notified_task_id = task_id
+
+            self._save_last_notified_task_id(self._last_notified_task_id)
+
+        except Exception as e:
+            logger.warning(f"Task completion check failed: {e}")
 
     async def check_team_chats(self):
         """Monitor Glip channels for activity documentation and replies"""
