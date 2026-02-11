@@ -47,8 +47,7 @@ templates = Jinja2Templates(directory=_portal_templates)
 @app.on_event("startup")
 async def startup_event():
     """Start background services on app startup"""
-    logger.info(f"Gigi Startup: RC_BOT_AVAILABLE={RC_BOT_AVAILABLE}, bot_enabled={os.getenv('GIGI_RC_BOT_ENABLED')}")
-    logger.info("Gigi main.py: Background loop managed by unified_app.py")
+    logger.info("Gigi main.py startup — RC bot runs as standalone LaunchAgent")
 
 # Import WellSky service for shift management
 try:
@@ -147,16 +146,9 @@ except Exception as e:
     SHIFT_LOCK_AVAILABLE = False
     logger.warning(f"Shift Lock Manager not available: {e}")
 
-# Import Gigi RingCentral Bot (Gigi Backup)
-try:
-    from gigi.ringcentral_bot import GigiRingCentralBot
-    rc_bot = GigiRingCentralBot()
-    RC_BOT_AVAILABLE = True
-    logger.info("✓ Gigi RingCentral Bot initialized")
-except ImportError as e:
-    rc_bot = None
-    RC_BOT_AVAILABLE = False
-    logger.warning(f"Gigi RingCentral Bot not available: {e}")
+# NOTE: RC bot runs as standalone LaunchAgent, NOT inside the portal process.
+# Removed module-level GigiRingCentralBot() — it was unused dead code causing
+# a heavy init side effect (RC auth, WellSky init, morning briefing service). (Feb 11, 2026)
 
 # Import Partial Availability Parser for nuanced call-out handling
 try:
