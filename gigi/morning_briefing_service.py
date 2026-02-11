@@ -155,6 +155,11 @@ class MorningBriefingService:
         if bots:
             sections.append(f"TRADING BOTS\n{bots}")
 
+        # Claude Code task status
+        tasks = self._get_task_status()
+        if tasks:
+            sections.append(f"CLAUDE CODE TASKS\n{tasks}")
+
         # Pattern detection
         patterns = self._get_patterns()
         if patterns:
@@ -168,6 +173,64 @@ class MorningBriefingService:
 
         sections.append("— Gigi")
         return "\n\n".join(sections)
+
+    def _get_task_status(self) -> Optional[str]:
+        """Get Claude Code task status — pending/stale tasks + recently completed."""
+        if not psycopg2:
+            return None
+        conn = None
+        try:
+            conn = psycopg2.connect(DATABASE_URL)
+            cur = conn.cursor()
+
+            # Pending tasks (still waiting)
+            cur.execute("""
+                SELECT id, title, status, created_at
+                FROM claude_code_tasks
+                WHERE status IN ('pending', 'started')
+                ORDER BY created_at DESC
+                LIMIT 10
+            """)
+            pending = cur.fetchall()
+
+            # Recently completed/failed (last 24h)
+            cur.execute("""
+                SELECT id, title, status, completed_at,
+                       LEFT(result, 100) as result_preview
+                FROM claude_code_tasks
+                WHERE status IN ('completed', 'failed')
+                  AND completed_at > NOW() - INTERVAL '24 hours'
+                ORDER BY completed_at DESC
+                LIMIT 5
+            """)
+            recent = cur.fetchall()
+
+            cur.close()
+
+            if not pending and not recent:
+                return None
+
+            lines = []
+            if pending:
+                for task_id, title, status, created_at in pending:
+                    age_hours = (datetime.utcnow() - created_at).total_seconds() / 3600
+                    stale = " [STALE]" if age_hours > 4 else ""
+                    lines.append(f"  #{task_id} {title} — {status} ({age_hours:.0f}h ago){stale}")
+
+            if recent:
+                if pending:
+                    lines.append("")
+                for task_id, title, status, completed_at, preview in recent:
+                    icon = "done" if status == "completed" else "FAILED"
+                    lines.append(f"  #{task_id} {title} — {icon}")
+
+            return "\n".join(lines) if lines else None
+        except Exception as e:
+            logger.warning(f"Task status fetch failed: {e}")
+            return None
+        finally:
+            if conn:
+                conn.close()
 
     def _get_patterns(self) -> Optional[str]:
         """Get detected patterns from pattern detector."""
