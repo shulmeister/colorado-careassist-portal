@@ -329,33 +329,9 @@ async def diag_rc_status():
         ]
     }
 
-@app.on_event("startup")
-async def start_gigi_bot_from_unified():
-    """Ensure Gigi's background bot starts when the unified app starts"""
-    try:
-        import os
-        import asyncio
-
-        logger.info("🚀 Starting Gigi RingCentral Bot (via Unified App Startup)")
-        from gigi.ringcentral_bot import GigiRingCentralBot
-
-        if os.getenv("GIGI_RC_BOT_ENABLED", "true").lower() == "true":
-            bot = GigiRingCentralBot()
-            await bot.initialize()
-
-            async def run_bot_loop():
-                await asyncio.sleep(15)  # Wait for app to stabilize
-                logger.info("🤖 Gigi RC Bot loop starting (Unified)...")
-                while True:
-                    try:
-                        await bot.check_and_act()
-                    except Exception as e:
-                        logger.error(f"Unified RC Bot Loop Error: {e}")
-                    await asyncio.sleep(60)  # Check every 60s
-
-            asyncio.create_task(run_bot_loop())
-    except Exception as e:
-        logger.error(f"❌ Failed to start Gigi Bot from Unified: {e}")
+# NOTE: The RC bot runs as a standalone LaunchAgent (com.coloradocareassist.gigi-rc-bot).
+# Do NOT start an embedded RC bot here — running two instances causes duplicate responses,
+# duplicate morning briefings, and 409 Telegram conflicts. (Fixed Feb 11, 2026)
 
 logger.info("✅ Portal app configured with sales, recruiting, payroll, powderpulse, and gigi")
 
