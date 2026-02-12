@@ -285,6 +285,7 @@ DM_TOOLS = [
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto, macro outlook, etc. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze"}}, "required": ["question"]}},
+    {"name": "get_weather_arb_status", "description": "Get the Weather Arb bot's live performance: portfolio value, P&L, open positions with current prices. Use when asked about weather arb, weather bot, weather trading, temperature bets, or Polymarket weather positions.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # =========================================================================
@@ -325,6 +326,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
         genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
+        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get Weather Arb bot live performance: portfolio value, P&L, open temperature positions. Use for weather arb, weather bot, weather trading, temperature bets.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
     GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
@@ -376,6 +379,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
         genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
+        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get Weather Arb bot live performance: portfolio value, P&L, open temperature positions. Use for weather arb, weather bot, weather trading, temperature bets.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
@@ -2405,6 +2410,39 @@ class GigiRingCentralBot:
                     logger.error(f"Deep research failed: {e}")
                     return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
 
+            elif tool_name == "get_weather_arb_status":
+                try:
+                    import httpx
+                    with httpx.Client(timeout=30.0) as client:
+                        resp = client.get("http://127.0.0.1:3010/pnl")
+                        if resp.status_code != 200:
+                            return "Weather Arb bot is not responding."
+                        data = resp.json()
+                        report = []
+                        report.append("WEATHER ARB BOT — LIVE")
+                        report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
+                        report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
+                        pnl_val = data.get('unrealized_pnl', 0)
+                        pnl_pct = data.get('unrealized_pnl_pct', 0)
+                        report.append(f"Unrealized P&L: ${pnl_val:+,.2f} ({pnl_pct:+.1f}%)")
+                        report.append("")
+                        positions = data.get("positions", [])
+                        report.append(f"Open Positions ({len(positions)}):")
+                        for p in positions:
+                            title = p.get("title", "?")
+                            shares = p.get("shares", 0)
+                            entry = p.get("entry", 0)
+                            current = p.get("current")
+                            pos_pnl = p.get("pnl")
+                            pos_pct = p.get("pnl_pct")
+                            price_str = f"{current:.0%}" if current else "?"
+                            pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
+                            report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
+                        return "\n".join(report)
+                except Exception as e:
+                    logger.error(f"Weather arb status failed: {e}")
+                    return f"Weather Arb bot unavailable: {e}"
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -3187,6 +3225,39 @@ class GigiRingCentralBot:
                 except Exception as e:
                     logger.error(f"Deep research failed: {e}")
                     return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
+
+            elif tool_name == "get_weather_arb_status":
+                try:
+                    import httpx
+                    async with httpx.AsyncClient(timeout=30.0) as client:
+                        resp = await client.get("http://127.0.0.1:3010/pnl")
+                        if resp.status_code != 200:
+                            return "Weather Arb bot is not responding."
+                        data = resp.json()
+                        report = []
+                        report.append("WEATHER ARB BOT — LIVE")
+                        report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
+                        report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
+                        pnl_val = data.get('unrealized_pnl', 0)
+                        pnl_pct = data.get('unrealized_pnl_pct', 0)
+                        report.append(f"Unrealized P&L: ${pnl_val:+,.2f} ({pnl_pct:+.1f}%)")
+                        report.append("")
+                        positions = data.get("positions", [])
+                        report.append(f"Open Positions ({len(positions)}):")
+                        for p in positions:
+                            title = p.get("title", "?")
+                            shares = p.get("shares", 0)
+                            entry = p.get("entry", 0)
+                            current = p.get("current")
+                            pos_pnl = p.get("pnl")
+                            pos_pct = p.get("pnl_pct")
+                            price_str = f"{current:.0%}" if current else "?"
+                            pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
+                            report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
+                        return "\n".join(report)
+                except Exception as e:
+                    logger.error(f"Weather arb status failed: {e}")
+                    return f"Weather Arb bot unavailable: {e}"
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
