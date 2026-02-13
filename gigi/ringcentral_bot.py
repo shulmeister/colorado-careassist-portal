@@ -1827,17 +1827,35 @@ class GigiRingCentralBot:
         try:
             source_label = "SMS" if source_type == "sms" else "Team Chat"
             sender = caregiver_name or phone or str(msg.get("creatorId", "Unknown"))
-            alert_prefix = "CARE ALERT" if is_alert else "Care Note"
 
-            note_title = f"{alert_prefix}: {note_type.upper()} ({source_label})"
+            # Build a natural, human-readable title for the WellSky dashboard
+            # Should read like Israt or Cynthia wrote it: "Angela Atteberry call-out — Grant Allred shift"
+            if note_type == "callout":
+                note_title = f"{sender} call-out" + (f" — {client_name} shift" if client_name else "")
+            elif note_type == "late":
+                note_title = f"{sender} running late" + (f" — {client_name}" if client_name else "")
+            elif note_type == "safety":
+                snippet = text[:60].rsplit(" ", 1)[0] if len(text) > 60 else text
+                note_title = f"Safety Alert: {client_name or sender} — {snippet}"
+            elif note_type == "complaint":
+                snippet = text[:50].rsplit(" ", 1)[0] if len(text) > 50 else text
+                note_title = f"Complaint: {client_name or sender} — {snippet}"
+            elif note_type == "medication":
+                note_title = f"Medication: {client_name or sender}"
+            elif note_type == "schedule":
+                note_title = f"{sender} shift confirmed" + (f" — {client_name}" if client_name else "")
+            elif note_type == "schedule_change":
+                note_title = f"{sender} schedule change" + (f" — {client_name}" if client_name else "")
+            else:
+                # general/care_plan — use sender + brief snippet of message
+                snippet = text[:60].rsplit(" ", 1)[0] if len(text) > 60 else text
+                note_title = f"{sender}: {snippet}"
+
             note_body = (
-                f"From: {sender}\n"
-                f"Source: {source_label}\n"
-                f"Type: {note_type}\n"
-                f"Priority: {priority}\n"
-                + (f"Client: {client_name}\n" if client_name else "Client: Not identified\n")
-                + (f"Caregiver: {caregiver_name}\n" if caregiver_name else "")
-                + f"\n--- Original Message ---\n{text}\n"
+                f"Via {source_label}\n"
+                + (f"Client: {client_name}\n" if client_name else "")
+                + (f"Caregiver: {caregiver_name}\n" if caregiver_name and caregiver_name != sender else "")
+                + f"\n{text}\n"
             )
 
             # -----------------------------------------------------------------
@@ -1846,12 +1864,12 @@ class GigiRingCentralBot:
             # -----------------------------------------------------------------
             if client_id:
                 try:
-                    full_note = f"{note_title}\n{note_body}"
                     success, result_msg = self.wellsky.add_note_to_client(
                         client_id=client_id,
-                        note=full_note,
+                        note=note_body,
                         note_type=note_type,
-                        source="gigi_manager"
+                        source="gigi_manager",
+                        title=note_title
                     )
                     if success and "WellSky" in str(result_msg):
                         wellsky_synced = True
@@ -1886,12 +1904,13 @@ class GigiRingCentralBot:
                                 shift_client_name = getattr(s, 'client_name', None) or (s.get('client') if isinstance(s, dict) else None)
                                 break
                         if shift_client_id:
-                            full_note = f"{note_title}\n{note_body}\n(Auto-linked via {caregiver_name}'s schedule)"
+                            linked_note = f"{note_body}(Auto-linked via {caregiver_name}'s schedule)\n"
                             success, result_msg = self.wellsky.add_note_to_client(
                                 client_id=shift_client_id,
-                                note=full_note,
+                                note=linked_note,
                                 note_type=note_type,
-                                source="gigi_manager"
+                                source="gigi_manager",
+                                title=note_title
                             )
                             if success and "WellSky" in str(result_msg):
                                 wellsky_synced = True

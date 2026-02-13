@@ -1262,7 +1262,7 @@ class RingCentralMessagingService:
                     if target_client:
                         # 4. Log the Note in WellSky
                         timestamp = msg.get("creationTime", "")
-                        note_text = f"RC DOCUMENTATION SYNC ({timestamp}): {text}"
+                        note_text = text
                         
                         # Use add_note_to_client (the one on line 3765)
                         wellsky_service.add_note_to_client(

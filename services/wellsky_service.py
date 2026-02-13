@@ -3752,7 +3752,8 @@ class WellSkyService:
         client_id: str,
         note: str,
         note_type: str = "general",
-        source: str = "gigi_ai"
+        source: str = "gigi_ai",
+        title: str = ""
     ) -> Tuple[bool, str]:
         """
         Add a note to a client's profile in WellSky.
@@ -3828,11 +3829,12 @@ class WellSkyService:
                         if not encounter_id:
                             continue
 
+                        tl_title = title if title else note_type.replace("_", " ").title()
                         tl_data = {
                             "resourceType": "TaskLog",
                             "status": "COMPLETE",
-                            "title": f"Note: {note_type}",
-                            "description": f"[{source.upper()}] {note}",
+                            "title": tl_title,
+                            "description": note,
                             "recorded": datetime.utcnow().isoformat() + "Z",
                             "show_in_family_room": False
                         }
@@ -3867,9 +3869,24 @@ class WellSkyService:
         # AdminTasks show up in WellSky dashboard and relate to the client
         logger.info(f"No encounter for client {client_id} in 90-day window. Creating AdminTask.")
         try:
-            timestamp = datetime.now().strftime("%m/%d %H:%M")
-            task_title = f"GIGI CARE NOTE: {note_type}"
-            task_desc = f"[{timestamp}] [{source.upper()}]\n{note}"
+            if title:
+                task_title = title
+            else:
+                timestamp = datetime.now().strftime("%m/%d %H:%M")
+                _note_labels = {
+                    "callout": "Call-Out",
+                    "safety": "Safety Alert",
+                    "late": "Running Late",
+                    "complaint": "Complaint",
+                    "medication": "Medication",
+                    "schedule": "Schedule Update",
+                    "schedule_change": "Schedule Change",
+                    "care_plan": "Care Note",
+                    "general": "Care Note",
+                }
+                label = _note_labels.get(note_type, note_type.replace("_", " ").title())
+                task_title = f"{label} ({timestamp})"
+            task_desc = note
 
             success_task, resp_task = self.create_admin_task(
                 title=task_title,
