@@ -195,8 +195,8 @@ ANTHROPIC_TOOLS = [
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary. Do NOT try to build a briefing manually from other tools.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts. Use when asked about AR, accounts receivable, outstanding invoices, or who owes money.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' (default) or 'detailed' (full invoice list)"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto analysis, macro outlook, sector rotation, portfolio strategy, etc. Returns institutional-grade research with evidence and confidence level. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze in depth"}}, "required": ["question"]}},
-    {"name": "get_polybot_status", "description": "Get trading bot performance report for BOTH bots: Polybot (Polymarket prediction markets, 11 strategies) and ML Bot (crypto trading). Shows portfolio value, P&L, open positions, strategy-level performance, risk status. Use when asked about Polybot, trading bots, prediction markets, crypto trading, portfolio, or paper trading results.", "input_schema": {"type": "object", "properties": {}, "required": []}},
-    {"name": "get_weather_arb_status", "description": "Get the Weather Arb bot's live performance: portfolio value, P&L, open positions with current prices, cash balance. This bot trades temperature prediction markets on Polymarket using a laddering strategy. Use when asked about weather arb, weather bot, weather trading, temperature bets, or Polymarket weather positions.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_polybot_status", "description": "Get Elite Trading Polybot status (PAPER MODE — not real money). Polybot runs 11 strategies on Polymarket prediction markets in paper/simulation mode. Shows simulated portfolio, paper P&L, mock positions, and strategy performance. Use to check how the paper trading strategies are performing. For LIVE real-money weather trading, use get_weather_arb_status instead.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_weather_arb_status", "description": "Get live status of BOTH weather temperature trading bots: (1) Polymarket bot — trades international temperature markets via laddering strategy, and (2) Kalshi bot — trades US temperature markets on the regulated Kalshi/Coinbase exchange. Both are LIVE with real money. Use when asked about weather arb, weather bots, weather trading, temperature bets, Polymarket weather, or Kalshi weather.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -255,9 +255,9 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _s("string", "Level of detail: 'summary' or 'detailed'")})),
         genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _s("string", "The financial research question to analyze")}, required=["question"])),
-        genai_types.FunctionDeclaration(name="get_polybot_status", description="Get trading bot performance for both Polybot (Polymarket, 11 strategies) and ML Bot (crypto). Shows portfolio, P&L, positions, strategy performance, risk.",
+        genai_types.FunctionDeclaration(name="get_polybot_status", description="Get Elite Trading Polybot status (PAPER MODE — simulated, not real money). 11 strategies on Polymarket. For LIVE weather bots use get_weather_arb_status.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get Weather Arb bot live performance: portfolio value, P&L, open temperature positions with current prices. Use when asked about weather arb, weather bot, weather trading, temperature bets.",
+        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get BOTH weather trading bots: Polymarket (international temps) and Kalshi (US temps). Both LIVE with real money. Use for weather arb, weather bot, temperature bets.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
@@ -294,8 +294,8 @@ OPENAI_TOOLS = [
     _oai_tool("get_morning_briefing", "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.", {}, []),
     _oai_tool("get_ar_report", "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, []),
     _oai_tool("deep_research", "Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.", {"question": {"type": "string", "description": "The financial research question to analyze"}}, ["question"]),
-    _oai_tool("get_polybot_status", "Get trading bot performance for both Polybot (Polymarket, 11 strategies) and ML Bot (crypto). Shows portfolio, P&L, positions, strategy performance, risk.", {}),
-    _oai_tool("get_weather_arb_status", "Get Weather Arb bot live performance: portfolio value, P&L, open temperature positions. Use for weather arb, weather bot, weather trading, temperature bets.", {}),
+    _oai_tool("get_polybot_status", "Get Elite Trading Polybot status (PAPER MODE — simulated, not real money). 11 strategies on Polymarket. For LIVE weather bots use get_weather_arb_status.", {}),
+    _oai_tool("get_weather_arb_status", "Get BOTH weather trading bots: Polymarket (international temps) and Kalshi (US temps). Both LIVE with real money. Use for weather arb, weather bot, temperature bets.", {}),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -1108,39 +1108,65 @@ class GigiTelegramBot:
             elif tool_name == "get_weather_arb_status":
                 try:
                     import httpx
+                    report = []
                     async with httpx.AsyncClient(timeout=30.0) as client:
-                        pnl_resp = await client.get("http://127.0.0.1:3010/pnl")
-                        if pnl_resp.status_code != 200:
-                            return "Weather Arb bot is not responding."
+                        # --- Polymarket Weather Bot (port 3010) ---
+                        try:
+                            poly_resp = await client.get("http://127.0.0.1:3010/pnl")
+                            if poly_resp.status_code == 200:
+                                data = poly_resp.json()
+                                report.append("=== POLYMARKET WEATHER BOT (LIVE) ===")
+                                report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
+                                report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
+                                pnl_val = data.get('unrealized_pnl', 0)
+                                pnl_pct = data.get('unrealized_pnl_pct', 0)
+                                report.append(f"Unrealized P&L: ${pnl_val:+,.2f} ({pnl_pct:+.1f}%)")
+                                positions = data.get("positions", [])
+                                report.append(f"Open Positions ({len(positions)}):")
+                                for p in positions:
+                                    title = p.get("title", "?")
+                                    shares = p.get("shares", 0)
+                                    entry = p.get("entry", 0)
+                                    current = p.get("current")
+                                    pos_pnl = p.get("pnl")
+                                    pos_pct = p.get("pnl_pct")
+                                    price_str = f"{current:.0%}" if current else "?"
+                                    pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
+                                    report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
+                            else:
+                                report.append("=== POLYMARKET WEATHER BOT — NOT RESPONDING ===")
+                        except Exception:
+                            report.append("=== POLYMARKET WEATHER BOT — OFFLINE ===")
 
-                        data = pnl_resp.json()
-                        report = []
-                        report.append("WEATHER ARB BOT — LIVE")
-                        report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
-                        report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
-                        pnl_val = data.get('unrealized_pnl', 0)
-                        pnl_pct = data.get('unrealized_pnl_pct', 0)
-                        report.append(f"Unrealized P&L: ${pnl_val:+,.2f} ({pnl_pct:+.1f}%)")
                         report.append("")
 
-                        positions = data.get("positions", [])
-                        report.append(f"Open Positions ({len(positions)}):")
-                        for p in positions:
-                            title = p.get("title", "?")
-                            shares = p.get("shares", 0)
-                            entry = p.get("entry", 0)
-                            current = p.get("current")
-                            val = p.get("value")
-                            pos_pnl = p.get("pnl")
-                            pos_pct = p.get("pnl_pct")
-                            price_str = f"{current:.0%}" if current else "?"
-                            pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
-                            report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} → {price_str} | {pnl_str}")
+                        # --- Kalshi Weather Bot (port 3011) ---
+                        try:
+                            kalshi_resp = await client.get("http://127.0.0.1:3011/pnl")
+                            if kalshi_resp.status_code == 200:
+                                data = kalshi_resp.json()
+                                report.append("=== KALSHI WEATHER BOT (LIVE) ===")
+                                report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
+                                report.append(f"Current Value: ${data.get('current_value', 0):,.2f}")
+                                pnl_val = data.get('unrealized_pnl', 0)
+                                report.append(f"Unrealized P&L: ${pnl_val:+,.2f}")
+                                positions = data.get("positions", [])
+                                report.append(f"Open Positions ({len(positions)}):")
+                                for p in positions:
+                                    ticker = p.get("ticker", "?")
+                                    count = p.get("count", 0)
+                                    value = p.get("value", 0)
+                                    pos_pnl = p.get("pnl", 0)
+                                    report.append(f"  {ticker}: {count} contracts | Value: ${value:.2f} | P&L: ${pos_pnl:+.2f}")
+                            else:
+                                report.append("=== KALSHI WEATHER BOT — NOT RESPONDING ===")
+                        except Exception:
+                            report.append("=== KALSHI WEATHER BOT — OFFLINE ===")
 
                         return "\n".join(report)
                 except Exception as e:
                     logger.error(f"Weather arb status failed: {e}")
-                    return f"Weather Arb bot unavailable: {e}"
+                    return f"Weather bots unavailable: {e}"
 
             elif tool_name == "deep_research":
                 question = tool_input.get("question", "")

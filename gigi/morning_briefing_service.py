@@ -622,6 +622,42 @@ class MorningBriefingService:
                 except Exception as e:
                     lines.append(f"  Elite Agents: offline ({e})")
 
+                # 4. Polymarket Weather Bot (port 3010) — LIVE
+                try:
+                    resp = client.get("http://127.0.0.1:3010/pnl")
+                    if resp.status_code == 200:
+                        d = resp.json()
+                        portfolio = d.get("portfolio", {})
+                        positions = d.get("positions", [])
+                        total = portfolio.get("total_value", 0)
+                        pnl = portfolio.get("pnl", 0)
+                        pnl_pct = portfolio.get("pnl_pct", 0)
+                        direction = "+" if pnl >= 0 else ""
+                        lines.append(
+                            f"  Polymarket Weather (LIVE): ${total:.2f} ({direction}{pnl_pct:.1f}%) | "
+                            f"{len(positions)} positions"
+                        )
+                except Exception as e:
+                    lines.append(f"  Polymarket Weather: offline ({e})")
+
+                # 5. Kalshi Weather Bot (port 3011) — LIVE
+                try:
+                    resp = client.get("http://127.0.0.1:3011/pnl")
+                    if resp.status_code == 200:
+                        d = resp.json()
+                        portfolio = d.get("portfolio", {})
+                        positions = d.get("positions", [])
+                        total = portfolio.get("total_value", 0)
+                        pnl = portfolio.get("pnl", 0)
+                        deployed = portfolio.get("deployed", 0)
+                        direction = "+" if pnl >= 0 else ""
+                        lines.append(
+                            f"  Kalshi Weather (LIVE): ${total:.2f} (${deployed:.2f} deployed, {direction}${abs(pnl):.2f} P&L) | "
+                            f"{len(positions)} positions"
+                        )
+                except Exception as e:
+                    lines.append(f"  Kalshi Weather: offline ({e})")
+
         except Exception as e:
             logger.warning(f"Trading bot status fetch failed: {e}")
             return None
