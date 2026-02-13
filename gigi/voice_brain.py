@@ -492,17 +492,7 @@ ANTHROPIC_TOOLS = [
             "required": []
         }
     },
-    {
-        "name": "deep_research",
-        "description": "Run deep autonomous financial research using the Elite Trading platform. Use for any investment question like 'should I buy NVDA' or 'what do you think of ethereum'. Note: takes 30-120 seconds. Only use if caller specifically asks for investment research or stock/crypto analysis.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "question": {"type": "string", "description": "The financial research question to analyze in depth"}
-            },
-            "required": ["question"]
-        }
-    }
+    # deep_research REMOVED from voice — takes 30-120 seconds, unusable on phone calls
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -584,12 +574,22 @@ _VOICE_SYSTEM_PROMPT_BASE = """You are Gigi, the AI Chief of Staff for Colorado 
 - For concerts: ALWAYS use `search_concerts`. Do NOT just list venues.
 - For weather: ALWAYS use `get_weather`.
 - For flights: Use `web_search` to find real-time prices.
+- For shifts/staffing/hours: ALWAYS use `get_wellsky_shifts`. Don't guess or search emails.
+- For trading bots (weather bots, Polymarket, Kalshi): use `get_weather_arb_status`.
 - For call-outs: get the caregiver's name and which shift, then report it
 - Always be warm but efficient - people are busy
+- NEVER HALLUCINATE TOOLS: Only use the tools you actually have. NEVER invent shell commands, CLI tools, or fake tool output. If you can't do something, say so.
 - IMPORTANT — Before purchasing tickets or booking reservations, ALWAYS ask for details first:
   - Tickets: Ask about seat preference — GA, reserved, VIP, pit, balcony, floor, etc. Also ask about price range.
   - Restaurants: Ask about seating preference — indoor, outdoor, booth, bar, patio. Ask about occasion or special requests.
   - Never assume seat location or seating preference. Gather the details, confirm with the caller, then execute.
+
+# Tone
+- NO sycophantic language: never say "locked in", "inner circle", "absolutely", "on it".
+- Be direct and real. Sound like a person, not a corporate chatbot.
+- NEVER start with "Great question!" or "I'd be happy to help!" — just answer.
+- Keep it SHORT. This is a phone call. One or two sentences max per turn.
+- Limit yourself to 2 tool calls maximum per voice turn — speed matters on calls.
 """
 
 
