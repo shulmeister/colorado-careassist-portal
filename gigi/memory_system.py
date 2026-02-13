@@ -10,6 +10,7 @@ Memory Types:
 - inferred_pattern: Gigi detecting patterns (confidence 0.5-0.7)
 - single_inference: One-time observations (confidence 0.3-0.5)
 - temporary: Thinking mode insights (48hr decay)
+- fact: Legacy type (treated same as explicit_instruction, confidence 1.0, never decays)
 """
 
 import os
@@ -33,6 +34,7 @@ class MemoryType(Enum):
     INFERRED_PATTERN = "inferred_pattern"
     SINGLE_INFERENCE = "single_inference"
     TEMPORARY = "temporary"
+    FACT = "fact"  # Legacy type found in DB — treated same as explicit_instruction
 
 
 class MemoryStatus(Enum):
@@ -168,7 +170,7 @@ class MemorySystem:
         metadata = metadata or {}
 
         # Validate confidence ranges per type
-        if memory_type == MemoryType.EXPLICIT_INSTRUCTION:
+        if memory_type in (MemoryType.EXPLICIT_INSTRUCTION, MemoryType.FACT):
             confidence = 1.0
         elif memory_type == MemoryType.CORRECTION:
             confidence = min(confidence, 0.9)
@@ -358,6 +360,7 @@ class MemorySystem:
             MemoryType.INFERRED_PATTERN: 0.20 / 30,    # 20% per month (~0.0067/day)
             MemoryType.SINGLE_INFERENCE: 0.30 / 30,    # 30% per month (~0.01/day) — was 50%/week (too aggressive)
             MemoryType.TEMPORARY: 0.50,                 # 50% per day
+            MemoryType.FACT: 0.0,                       # Legacy type — never decays (same as explicit_instruction)
         }
 
         inactive_thresholds = {
@@ -367,6 +370,7 @@ class MemorySystem:
             MemoryType.INFERRED_PATTERN: 0.2,
             MemoryType.SINGLE_INFERENCE: 0.15,     # Was 0.3 — too aggressive (killed memories in 3 days)
             MemoryType.TEMPORARY: 0.0,  # Archives after 48hrs
+            MemoryType.FACT: 0.0,  # Legacy type — never inactive (same as explicit_instruction)
         }
 
         with self._get_connection() as conn:
@@ -463,6 +467,7 @@ class MemorySystem:
             MemoryType.INFERRED_PATTERN: 0.7,
             MemoryType.SINGLE_INFERENCE: 0.5,
             MemoryType.TEMPORARY: 0.5,
+            MemoryType.FACT: 1.0,  # Legacy type — same as explicit_instruction
         }
         return max_confidence.get(memory_type, 1.0)
 
