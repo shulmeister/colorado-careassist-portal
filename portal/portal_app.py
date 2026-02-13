@@ -2637,9 +2637,10 @@ async def api_wellsky_status(
 async def api_wellsky_caregivers(
     status: Optional[str] = None,
     limit: int = Query(200, ge=1, le=1000),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Return caregivers from WellSky (no auth; internal sync)."""
+    """Return caregivers from WellSky."""
     if wellsky_service is None:
         return JSONResponse({"success": False, "error": "WellSky service not available"}, status_code=503)
 
@@ -2667,9 +2668,10 @@ async def api_wellsky_caregivers(
 async def api_wellsky_clients(
     status: Optional[str] = None,
     limit: int = Query(200, ge=1, le=1000),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Return clients from WellSky (no auth; internal sync)."""
+    """Return clients from WellSky."""
     if wellsky_service is None:
         return JSONResponse({"success": False, "error": "WellSky service not available"}, status_code=503)
 
@@ -3447,7 +3449,8 @@ async def goformz_wellsky_webhook(request: Request):
         ).lower()
 
         # Only process completion events
-        if event_type not in ['form.complete', 'completed', 'submitted', 'signed']:
+        # GoFormz sends EventType: "formcompleted" — compare case-insensitively
+        if event_type not in ['form.complete', 'formcompleted', 'form_completed', 'completed', 'submitted', 'signed']:
             return JSONResponse({
                 "success": True,
                 "message": f"Event type '{event_type}' not a completion - ignored"

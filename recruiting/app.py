@@ -3248,7 +3248,7 @@ def update_lead(lead_id):
 
 # One-time notes population from CSV (column D)
 @app.route('/api/admin/populate-notes-once', methods=['POST'])
-@require_auth
+@require_admin
 def populate_notes_once():
     """One-time endpoint to populate notes from CSV column D"""
     try:

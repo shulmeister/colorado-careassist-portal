@@ -2582,7 +2582,7 @@ async def get_all_tasks(
     the React Admin data provider GET /admin/tasks handler.
     """
     from models import ContactTask, CompanyTask, DealTask
-    from sqlalchemy import union_all, select, literal
+    from sqlalchemy import union_all, select, literal, cast, Integer
 
     # Build queries for each task type
     # NOTE: The actual DB column is completed_at, aliased to done_date for frontend compat
@@ -2595,8 +2595,8 @@ async def get_all_tasks(
         ContactTask.status.label('status'),
         ContactTask.assigned_to.label('assigned_to'),
         ContactTask.contact_id.label('contact_id'),
-        literal(None).label('company_id'),
-        literal(None).label('deal_id'),
+        cast(literal(None), Integer).label('company_id'),
+        cast(literal(None), Integer).label('deal_id'),
         literal('contact').label('task_type'),
         ContactTask.created_at.label('created_at'),
     ).select_from(ContactTask)
@@ -2609,9 +2609,9 @@ async def get_all_tasks(
         CompanyTask.completed_at.label('done_date'),
         CompanyTask.status,
         CompanyTask.assigned_to,
-        literal(None).label('contact_id'),
+        cast(literal(None), Integer).label('contact_id'),
         CompanyTask.company_id,
-        literal(None).label('deal_id'),
+        cast(literal(None), Integer).label('deal_id'),
         literal('company').label('task_type'),
         CompanyTask.created_at,
     ).select_from(CompanyTask)
@@ -2624,8 +2624,8 @@ async def get_all_tasks(
         DealTask.completed_at.label('done_date'),
         DealTask.status,
         DealTask.assigned_to,
-        literal(None).label('contact_id'),
-        literal(None).label('company_id'),
+        cast(literal(None), Integer).label('contact_id'),
+        cast(literal(None), Integer).label('company_id'),
         DealTask.deal_id,
         literal('deal').label('task_type'),
         DealTask.created_at,
@@ -9875,11 +9875,16 @@ async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: Di
 async def create_lead(request: Request, db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
     """Create a new lead"""
     try:
-        from models import Lead, LeadActivity
+        from models import Lead, LeadActivity, PipelineStage
         data = await request.json()
-        
-        # Get the highest order_index in the stage
+
+        # Default to first pipeline stage if stage_id not provided
         stage_id = data.get("stage_id")
+        if not stage_id:
+            first_stage = db.query(PipelineStage).order_by(PipelineStage.order_index.asc()).first()
+            if not first_stage:
+                raise HTTPException(status_code=400, detail="No pipeline stages configured")
+            stage_id = first_stage.id
         max_order = db.query(Lead).filter(Lead.stage_id == stage_id).count()
         
         lead = Lead(
@@ -10458,7 +10463,7 @@ async def get_open_shifts(current_user: Dict[str, Any] = Depends(get_current_use
 @app.get("/api/shift-filling/caregivers")
 async def get_caregivers(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Get all caregivers from WellSky mock"""
-    caregivers = list(wellsky_mock.caregivers.values())
+    caregivers = wellsky_mock.get_caregivers(active_only=True)
     return JSONResponse([{
         "id": c.id,
         "name": c.full_name,
@@ -10470,7 +10475,7 @@ async def get_caregivers(current_user: Dict[str, Any] = Depends(get_current_user
         "reliability_score": c.reliability_score,
         "response_rate": c.response_rate,
         "is_active": c.is_active
-    } for c in caregivers if c.is_active])
+    } for c in caregivers])
 
 
 @app.get("/api/shift-filling/match/{shift_id}")
@@ -10713,6 +10718,10 @@ from services.activity_service import (
     log_activity, update_deal_stage, get_timeline, get_stale_deals,
     get_deal_stage_history, get_stage_analytics, add_contact_to_deal,
     remove_contact_from_deal, get_deal_contacts, get_contact_deals, ActivityType
+)
+from services.ai_enrichment_service import (
+    enrich_company, find_duplicate_contacts, scan_all_duplicates,
+    merge_contacts, summarize_interactions
 )
 
 # --- Unified Timeline API ---
@@ -10979,8 +10988,6 @@ async def enrich_company_endpoint(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Trigger AI enrichment for a company"""
-    from services.ai_enrichment_service import enrich_company
-
     result = await enrich_company(db, company_id, force=force)
     return JSONResponse(result)
 
@@ -10992,8 +10999,6 @@ async def find_contact_duplicates(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Find potential duplicate contacts"""
-    from services.ai_enrichment_service import find_duplicate_contacts
-
     duplicates = find_duplicate_contacts(db, contact_id=contact_id)
     return JSONResponse({
         "contact_id": contact_id,
@@ -11009,8 +11014,6 @@ async def scan_all_duplicates_endpoint(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Scan for all potential duplicate contacts"""
-    from services.ai_enrichment_service import scan_all_duplicates
-
     groups = scan_all_duplicates(db, limit=limit)
     return JSONResponse({
         "duplicate_groups": groups,
@@ -11025,8 +11028,6 @@ async def merge_contacts_endpoint(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Merge duplicate contacts"""
-    from services.ai_enrichment_service import merge_contacts
-
     data = await request.json()
     primary_id = data.get("primary_id")
     duplicate_ids = data.get("duplicate_ids", [])
@@ -11051,8 +11052,6 @@ async def get_contact_interaction_summary(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get AI-generated summary of interactions with a contact"""
-    from services.ai_enrichment_service import summarize_interactions
-
     result = await summarize_interactions(db, contact_id=contact_id)
     return JSONResponse(result)
 
@@ -11064,8 +11063,6 @@ async def get_company_interaction_summary(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get AI-generated summary of interactions with a company"""
-    from services.ai_enrichment_service import summarize_interactions
-
     result = await summarize_interactions(db, company_id=company_id)
     return JSONResponse(result)
 
@@ -11183,7 +11180,7 @@ def _get_root_services():
 
 
 @app.get("/api/wellsky/debug")
-async def wellsky_debug():
+async def wellsky_debug(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Debug endpoint to check WellSky services loading status."""
     import sys as _sys
     import os as _os
