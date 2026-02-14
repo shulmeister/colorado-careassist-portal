@@ -115,6 +115,8 @@ class MorningBriefingService:
         weather = self._get_weather()
         if weather:
             sections.append(f"WEATHER\n{weather}")
+        else:
+            sections.append("WEATHER\n  Weather data temporarily unavailable.")
 
         # Calendar
         calendar = self._get_calendar()
@@ -132,6 +134,8 @@ class MorningBriefingService:
         emails = self._get_unread_emails()
         if emails:
             sections.append(f"INBOX ({emails['count']} unread)\n{emails['summary']}")
+        else:
+            sections.append("INBOX\n  Email check temporarily unavailable.")
 
         # Overnight alerts
         alerts = self._get_overnight_alerts(now)
@@ -570,8 +574,20 @@ class MorningBriefingService:
                         win_rate = perf.get("win_rate", 0)
                         closed = perf.get("closed_trades", 0)
                         direction = "+" if pnl >= 0 else ""
+
+                        # Format P&L % - cap at 999% for display, or show as multiplier if huge
+                        if abs(pnl_pct) > 999:
+                            initial = portfolio.get("initial_capital", 0)
+                            if initial > 0:
+                                multiplier = total / initial
+                                pnl_str = f"{multiplier:.1f}x return"
+                            else:
+                                pnl_str = f"{direction}999+%"
+                        else:
+                            pnl_str = f"{direction}{pnl_pct:.1f}%"
+
                         lines.append(
-                            f"  Polybot: ${total:,.0f} ({direction}{pnl_pct:.1f}%) | "
+                            f"  Polybot: ${total:,.0f} ({pnl_str}) | "
                             f"{closed} closed trades, {win_rate:.0f}% win rate"
                         )
                         # Per-strategy summary
