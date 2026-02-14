@@ -196,7 +196,7 @@ ANTHROPIC_TOOLS = [
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts. Use when asked about AR, accounts receivable, outstanding invoices, or who owes money.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' (default) or 'detailed' (full invoice list)"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto analysis, macro outlook, sector rotation, portfolio strategy, etc. Returns institutional-grade research with evidence and confidence level. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze in depth"}}, "required": ["question"]}},
     {"name": "get_polybot_status", "description": "Get Elite Trading Polybot status (PAPER MODE — not real money). Polybot runs 11 strategies on Polymarket prediction markets in paper/simulation mode. Shows simulated portfolio, paper P&L, mock positions, and strategy performance. Use to check how the paper trading strategies are performing. For LIVE real-money weather trading, use get_weather_arb_status instead.", "input_schema": {"type": "object", "properties": {}, "required": []}},
-    {"name": "get_weather_arb_status", "description": "Get live status of BOTH weather temperature trading bots: (1) Polymarket bot — trades international temperature markets via laddering strategy, and (2) Kalshi bot — trades US temperature markets on the regulated Kalshi/Coinbase exchange. Both are LIVE with real money. Use when asked about weather arb, weather bots, weather trading, temperature bets, Polymarket weather, or Kalshi weather.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_weather_arb_status", "description": "Get live status of weather trading bots: (1) Weather Sniper Bot (Polymarket) — LIVE real money, auto-snipes slam-dunk US temperature markets at daily 11:00 UTC open. Buys YES on 'X°F or higher' / 'X°F or below' when NOAA forecast shows 5°F+ margin. Shows sniper status, target date, forecasts, orders, P&L, and positions. (2) Kalshi bot — trades US temperature markets on Kalshi exchange. Use when asked about weather arb, weather bots, weather trading, temperature bets, weather sniper, Polymarket weather, or Kalshi weather.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -257,7 +257,7 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _s("string", "The financial research question to analyze")}, required=["question"])),
         genai_types.FunctionDeclaration(name="get_polybot_status", description="Get Elite Trading Polybot status (PAPER MODE — simulated, not real money). 11 strategies on Polymarket. For LIVE weather bots use get_weather_arb_status.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get BOTH weather trading bots: Polymarket (international temps) and Kalshi (US temps). Both LIVE with real money. Use for weather arb, weather bot, temperature bets.",
+        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
@@ -295,7 +295,7 @@ OPENAI_TOOLS = [
     _oai_tool("get_ar_report", "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, []),
     _oai_tool("deep_research", "Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.", {"question": {"type": "string", "description": "The financial research question to analyze"}}, ["question"]),
     _oai_tool("get_polybot_status", "Get Elite Trading Polybot status (PAPER MODE — simulated, not real money). 11 strategies on Polymarket. For LIVE weather bots use get_weather_arb_status.", {}),
-    _oai_tool("get_weather_arb_status", "Get BOTH weather trading bots: Polymarket (international temps) and Kalshi (US temps). Both LIVE with real money. Use for weather arb, weather bot, temperature bets.", {}),
+    _oai_tool("get_weather_arb_status", "Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.", {}),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -346,7 +346,7 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - get_wellsky_clients/caregivers: Look up client or caregiver info.
 - get_wellsky_shifts: Look up today's shifts, who's working, shift hours. USE THIS for any shift question.
 - get_polybot_status: Elite Trading paper-mode Polybot status.
-- get_weather_arb_status: LIVE weather trading bots (Polymarket + Kalshi) with real money.
+- get_weather_arb_status: Weather Sniper Bot (Polymarket, LIVE real money). Auto-snipes slam-dunk US temp markets at 11:00 UTC daily. Also shows Kalshi bot.
 - web_search: General knowledge, flight prices, travel info.
 - browse_webpage: Browse any URL and extract its text content (for deep research, reading articles).
 - take_screenshot: Screenshot any webpage (saves to ~/logs/screenshots/).
@@ -1131,12 +1131,46 @@ class GigiTelegramBot:
                     import httpx
                     report = []
                     async with httpx.AsyncClient(timeout=30.0) as client:
-                        # --- Polymarket Weather Bot (port 3010) ---
+                        # --- Weather Sniper Bot (Polymarket, port 3010) ---
                         try:
-                            poly_resp = await client.get("http://127.0.0.1:3010/pnl")
-                            if poly_resp.status_code == 200:
-                                data = poly_resp.json()
-                                report.append("=== POLYMARKET WEATHER BOT (LIVE) ===")
+                            # Fetch both status and P&L in parallel
+                            status_resp, pnl_resp = await asyncio.gather(
+                                client.get("http://127.0.0.1:3010/status"),
+                                client.get("http://127.0.0.1:3010/pnl"),
+                                return_exceptions=True,
+                            )
+
+                            # Sniper status
+                            if not isinstance(status_resp, Exception) and status_resp.status_code == 200:
+                                st = status_resp.json()
+                                sniper = st.get("sniper", {})
+                                cfg = st.get("config", {})
+                                report.append("=== WEATHER SNIPER BOT (LIVE — Polymarket) ===")
+                                report.append(f"Running: {'YES' if st.get('running') else 'NO'} | CLOB: {'Ready' if st.get('clob_ready') else 'Down'}")
+                                report.append(f"Snipe Window: {'ACTIVE' if st.get('snipe_window') else 'Waiting'} (11:00 UTC / 4:00 AM MT daily)")
+                                report.append(f"Target Date: {sniper.get('target_date', '?')} | Scans: {sniper.get('scan_count', 0)}")
+                                report.append(f"Cities: {', '.join(cfg.get('cities', []))}")
+                                report.append(f"Strategy: Buy YES at ${cfg.get('snipe_price', 0):.2f} | Max ${cfg.get('snipe_max_price', 0):.2f} | Budget ${cfg.get('budget_per_market', 0):.0f}/market | Margin {cfg.get('margin_f', 0):.0f}°F")
+                                report.append(f"Orders Placed: {sniper.get('orders_placed', 0)} | Failed: {sniper.get('orders_failed', 0)} | Deployed: ${sniper.get('total_deployed', 0):.2f}")
+
+                                # Show forecasts
+                                forecasts = sniper.get("forecasts_ready", 0)
+                                report.append(f"Forecasts Ready: {forecasts} cities")
+
+                                # Show recent orders
+                                orders = sniper.get("orders", [])
+                                if orders:
+                                    report.append("Recent Snipes:")
+                                    for o in orders[-5:]:
+                                        report.append(f"  {o.get('city', '?')}: {o.get('shares', 0)} shares @ ${o.get('price', 0):.2f} = ${o.get('budget', 0):.2f} [{o.get('status', '?')}]")
+                            else:
+                                report.append("=== WEATHER SNIPER BOT — STATUS UNAVAILABLE ===")
+
+                            report.append("")
+
+                            # P&L and positions
+                            if not isinstance(pnl_resp, Exception) and pnl_resp.status_code == 200:
+                                data = pnl_resp.json()
                                 report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
                                 report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
                                 pnl_val = data.get('unrealized_pnl', 0)
@@ -1154,10 +1188,8 @@ class GigiTelegramBot:
                                     price_str = f"{current:.0%}" if current else "?"
                                     pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
                                     report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
-                            else:
-                                report.append("=== POLYMARKET WEATHER BOT — NOT RESPONDING ===")
                         except Exception:
-                            report.append("=== POLYMARKET WEATHER BOT — OFFLINE ===")
+                            report.append("=== WEATHER SNIPER BOT — OFFLINE ===")
 
                         report.append("")
 
