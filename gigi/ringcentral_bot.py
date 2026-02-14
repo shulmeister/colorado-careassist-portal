@@ -285,7 +285,7 @@ DM_TOOLS = [
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto, macro outlook, etc. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze"}}, "required": ["question"]}},
-    {"name": "get_weather_arb_status", "description": "Get BOTH weather trading bots: Polymarket (international temps, LIVE) and Kalshi (US temps, LIVE). Both trade real money. Use for weather arb, weather bot, temperature bets, Polymarket weather, Kalshi weather.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_weather_arb_status", "description": "Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # =========================================================================
@@ -326,7 +326,7 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
         genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
-        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get BOTH weather trading bots: Polymarket (international temps) and Kalshi (US temps). Both LIVE with real money. Use for weather arb, weather bot, temperature bets.",
+        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
@@ -379,7 +379,7 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
         genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
-        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get BOTH weather trading bots: Polymarket (international temps) and Kalshi (US temps). Both LIVE with real money. Use for weather arb, weather bot, temperature bets.",
+        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
@@ -2442,12 +2442,29 @@ class GigiRingCentralBot:
                     import httpx
                     report = []
                     with httpx.Client(timeout=30.0) as client:
-                        # --- Polymarket Weather Bot (port 3010) ---
+                        # --- Weather Sniper Bot (Polymarket, port 3010) ---
                         try:
-                            poly_resp = client.get("http://127.0.0.1:3010/pnl")
-                            if poly_resp.status_code == 200:
-                                data = poly_resp.json()
-                                report.append("=== POLYMARKET WEATHER BOT (LIVE) ===")
+                            status_resp = client.get("http://127.0.0.1:3010/status")
+                            pnl_resp = client.get("http://127.0.0.1:3010/pnl")
+
+                            if status_resp.status_code == 200:
+                                st = status_resp.json()
+                                sniper = st.get("sniper", {})
+                                cfg = st.get("config", {})
+                                report.append("=== WEATHER SNIPER BOT (LIVE — Polymarket) ===")
+                                report.append(f"Running: {'YES' if st.get('running') else 'NO'} | CLOB: {'Ready' if st.get('clob_ready') else 'Down'}")
+                                report.append(f"Snipe Window: {'ACTIVE' if st.get('snipe_window') else 'Waiting'} (11:00 UTC / 4:00 AM MT daily)")
+                                report.append(f"Target Date: {sniper.get('target_date', '?')} | Scans: {sniper.get('scan_count', 0)}")
+                                report.append(f"Cities: {', '.join(cfg.get('cities', []))}")
+                                report.append(f"Strategy: Buy YES at ${cfg.get('snipe_price', 0):.2f} | Budget ${cfg.get('budget_per_market', 0):.0f}/market | Margin {cfg.get('margin_f', 0):.0f}°F")
+                                report.append(f"Orders Placed: {sniper.get('orders_placed', 0)} | Deployed: ${sniper.get('total_deployed', 0):.2f}")
+                            else:
+                                report.append("=== WEATHER SNIPER BOT — STATUS UNAVAILABLE ===")
+
+                            report.append("")
+
+                            if pnl_resp.status_code == 200:
+                                data = pnl_resp.json()
                                 report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
                                 report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
                                 pnl_val = data.get('unrealized_pnl', 0)
@@ -2465,10 +2482,8 @@ class GigiRingCentralBot:
                                     price_str = f"{current:.0%}" if current else "?"
                                     pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
                                     report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
-                            else:
-                                report.append("=== POLYMARKET WEATHER BOT — NOT RESPONDING ===")
                         except Exception:
-                            report.append("=== POLYMARKET WEATHER BOT — OFFLINE ===")
+                            report.append("=== WEATHER SNIPER BOT — OFFLINE ===")
 
                         report.append("")
 
@@ -3288,12 +3303,32 @@ class GigiRingCentralBot:
                     import httpx
                     report = []
                     async with httpx.AsyncClient(timeout=30.0) as client:
-                        # --- Polymarket Weather Bot (port 3010) ---
+                        # --- Weather Sniper Bot (Polymarket, port 3010) ---
                         try:
-                            poly_resp = await client.get("http://127.0.0.1:3010/pnl")
-                            if poly_resp.status_code == 200:
-                                data = poly_resp.json()
-                                report.append("=== POLYMARKET WEATHER BOT (LIVE) ===")
+                            status_resp, pnl_resp = await asyncio.gather(
+                                client.get("http://127.0.0.1:3010/status"),
+                                client.get("http://127.0.0.1:3010/pnl"),
+                                return_exceptions=True,
+                            )
+
+                            if not isinstance(status_resp, Exception) and status_resp.status_code == 200:
+                                st = status_resp.json()
+                                sniper = st.get("sniper", {})
+                                cfg = st.get("config", {})
+                                report.append("=== WEATHER SNIPER BOT (LIVE — Polymarket) ===")
+                                report.append(f"Running: {'YES' if st.get('running') else 'NO'} | CLOB: {'Ready' if st.get('clob_ready') else 'Down'}")
+                                report.append(f"Snipe Window: {'ACTIVE' if st.get('snipe_window') else 'Waiting'} (11:00 UTC / 4:00 AM MT daily)")
+                                report.append(f"Target Date: {sniper.get('target_date', '?')} | Scans: {sniper.get('scan_count', 0)}")
+                                report.append(f"Cities: {', '.join(cfg.get('cities', []))}")
+                                report.append(f"Strategy: Buy YES at ${cfg.get('snipe_price', 0):.2f} | Budget ${cfg.get('budget_per_market', 0):.0f}/market | Margin {cfg.get('margin_f', 0):.0f}°F")
+                                report.append(f"Orders Placed: {sniper.get('orders_placed', 0)} | Deployed: ${sniper.get('total_deployed', 0):.2f}")
+                            else:
+                                report.append("=== WEATHER SNIPER BOT — STATUS UNAVAILABLE ===")
+
+                            report.append("")
+
+                            if not isinstance(pnl_resp, Exception) and pnl_resp.status_code == 200:
+                                data = pnl_resp.json()
                                 report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
                                 report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
                                 pnl_val = data.get('unrealized_pnl', 0)
@@ -3311,10 +3346,8 @@ class GigiRingCentralBot:
                                     price_str = f"{current:.0%}" if current else "?"
                                     pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
                                     report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
-                            else:
-                                report.append("=== POLYMARKET WEATHER BOT — NOT RESPONDING ===")
                         except Exception:
-                            report.append("=== POLYMARKET WEATHER BOT — OFFLINE ===")
+                            report.append("=== WEATHER SNIPER BOT — OFFLINE ===")
 
                         report.append("")
 

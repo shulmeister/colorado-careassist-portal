@@ -25,6 +25,8 @@ This is the **unified platform** for Colorado Care Assist, containing:
 | `coloradocareassist` | 3000 | coloradocareassist.com | Marketing website (Next.js) |
 | `hesedhomecare` | 3001 | hesedhomecare.org | Hesed website (Next.js) |
 | `elite-trading-mcp` | 3002 | elitetrading.coloradocareassist.com | Trading MCP server |
+| `weather-arb` | 3010 | - (localhost) | Weather Sniper Bot (Polymarket, LIVE) |
+| `status-dashboard` | 3012 | status.coloradocareassist.com | Infrastructure status dashboard |
 | `gigi-menubar` | - | - | macOS menu bar app (SwiftUI) |
 | `gigi-backend-cca` | - | - | Legacy backend reference |
 | `clawd` | - | - | Gigi config, elite teams, knowledge base |
@@ -121,6 +123,56 @@ See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
 
 ---
 
+## WEATHER SNIPER BOT (Polymarket — LIVE, Real Money)
+
+**Location:** `~/mac-mini-apps/weather-arb/` | **Port:** 3010 | **LaunchAgent:** `com.coloradocareassist.weather-arb`
+
+### Strategy
+Auto-snipes slam-dunk Polymarket temperature markets at daily market open:
+1. NOAA forecasts pre-fetched for 6 US cities (T+2 date)
+2. At 10:50 UTC, bot enters fast-poll mode (every 5s)
+3. At 11:00 UTC, Polymarket releases new temperature events for T+2
+4. Bot detects "X°F or higher" / "X°F or below" markets where NOAA forecast exceeds threshold by 5°F+
+5. Places GTC limit buy at $0.22/share the instant each market starts accepting orders
+6. Holds all positions to resolution (no auto-sell)
+7. Telegram notifications for every snipe + hourly heartbeat
+
+### Configuration (Feb 13, 2026)
+- **Cities:** US only — nyc, chicago, seattle, atlanta, dallas, miami (NOAA reliable, 2-3°F RMSE)
+- **Snipe price:** $0.22 | Max price: $0.35 | Budget: $25/market | Max total: $150
+- **Margin required:** 5°F (forecast must beat threshold by this much)
+- **Market timing:** Events created 11:00:00 UTC, accepting orders 3-17 min later (staggered by city)
+- **Wallet:** `0x7c3d3D6557e5B00C9149739Ad1d4Fc088229238C` | Orders routed through `clob-proxy-ams.fly.dev`
+
+### Key Files
+| File | Purpose |
+|------|---------|
+| `sniper.py` | Core strategy: SlamDunk detection, margin check, order execution |
+| `main.py` | FastAPI app + sniper_loop (continuous scan/execute cycle) |
+| `config.py` | All config via WARB_* env vars |
+| `trader.py` | CLOB order execution via Fly.io Amsterdam proxy |
+| `weather.py` | NOAA (US) / Open-Meteo ECMWF (international) forecasts |
+| `markets.py` | Gamma API market discovery, city matching, question parsing |
+| `notifier.py` | Telegram alert delivery |
+
+### API Endpoints
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/health` | Basic health check |
+| GET | `/status` | Full sniper status (running, CLOB, config, orders, forecasts) |
+| GET | `/forecasts` | Current forecasts for all cities on target date |
+| GET | `/orders` | All sniper orders placed this session |
+| GET | `/pnl` | Live P&L from Polymarket data API |
+| POST | `/scan` | Trigger manual scan for slam dunks |
+| POST | `/refresh-forecasts` | Force refresh all forecasts |
+
+### Backtest Results (Feb 13-15, 2026)
+- US cities (NOAA): 1 trade, +345% ROI — perfect accuracy
+- International (ECMWF): 2 trades, -99% — Toronto forecast was 5°C+ off
+- Decision: US cities only until ECMWF improves
+
+---
+
 ## INFRASTRUCTURE
 
 ### Services Running on Mac Mini
@@ -133,6 +185,9 @@ See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
 | Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare | hesedhomecare.org |
 | Elite Trading | 3002 | com.coloradocareassist.elite-trading | elitetrading.coloradocareassist.com |
 | PowderPulse | 3003 | com.coloradocareassist.powderpulse | powderpulse.coloradocareassist.com |
+| Weather Sniper Bot | 3010 | com.coloradocareassist.weather-arb | - (localhost only) |
+| Kalshi Weather Bot | 3011 | com.coloradocareassist.kalshi-weather | - (localhost only) |
+| Status Dashboard | 3012 | com.coloradocareassist.status-dashboard | status.coloradocareassist.com |
 | Telegram Bot | - | com.coloradocareassist.telegram-bot | - |
 | RingCentral Bot | - | com.coloradocareassist.gigi-rc-bot | - |
 | Gigi Menu Bar | - | com.coloradocareassist.gigi-menubar | - |
@@ -376,6 +431,7 @@ This script will:
 
 ## HISTORY
 
+- **Feb 13, 2026:** Weather Sniper Bot built and deployed (LIVE, real money). Rewrote weather-arb from laddering strategy to sniper strategy: auto-buys slam-dunk "or higher"/"or below" temperature markets at 11:00 UTC daily open. NOAA forecasts pre-fetched, GTC limit orders at $0.22. Backtested Feb 13-15: US cities +345% ROI. Restricted to US cities only (NOAA reliable, ECMWF/Toronto forecast was 5°C off). Config: $25/market, 5°F margin, 6 US cities. Updated Gigi's `get_weather_arb_status` tool across all 3 handlers to show sniper status + P&L. Updated status dashboard (status.coloradocareassist.com) with "Weather Sniper Bot" name and sniper-specific data in trading API. Status dashboard at port 3012 also added to CLAUDE.md services table.
 - **Feb 8, 2026 (evening):** Fixed 17 race condition bugs across all Gigi handlers (2 sessions): duplicate message handling via asyncio.Lock, wrapped all sync LLM/DB calls in asyncio.to_thread, 60s LLM timeouts, voice brain side-effect tracking on cancellation, reply lock for RC bot, moved user message persistence after LLM success, DB-side meltdown detection, SELECT FOR UPDATE for memory reinforcement, make_interval() for safe SQL intervals, shared DB connections in pattern detector. Also fixed iMessage webhook auth bypass, added retry health checks to promote/restart scripts.
 - **Feb 8, 2026:** Gigi Phases 1-4 activated: Memory System (PostgreSQL-backed save/recall/forget), Mode Detector (8 modes), Failure Handler (10 protocols), Conversation Store (cross-channel PostgreSQL persistence replacing JSON files), Pattern Detector, Self-Monitor (weekly Monday audit), Memory Logger (daily journal). Constitutional preamble + dynamic system prompts for all handlers. Caregiver preference extractor. Memory decay cron (3:15 AM) + memory logger cron (11:59 PM).
 - **Feb 8, 2026:** Apple Integration Phases 1-5: (1) Generic `/api/ask-gigi` REST endpoint with Bearer auth — reuses telegram tools with no code duplication. (2) 3 Apple Shortcuts for Siri ("Ask Gigi", "Morning Briefing", "Who's Working"). (3) iMessage channel via BlueBubbles webhook (code complete, needs BB GUI setup). (4) macOS Menu Bar app (SwiftUI, auto-start via LaunchAgent). (5) Browser automation with Playwright headless Chromium (browse_webpage + take_screenshot tools). All 8 repos pushed to GitHub. gigi-menubar repo created. Backup script updated.
