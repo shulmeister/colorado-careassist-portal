@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 8, 2026
+**Last Updated:** February 14, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -15,9 +15,10 @@ This is the **unified platform** for Colorado Care Assist, containing:
 | **Gigi AI** | Chief of Staff AI (voice, SMS, Telegram, scheduling) | `/gigi/` |
 | **Sales Dashboard** | CRM for sales tracking | `/sales/` |
 | **Recruiting** | Caregiver recruiting dashboard | `/recruiting/` |
-| **PowderPulse** | Ski weather app (Vue.js) | `/powderpulse/` |
 
-### Related Repositories
+**Note:** PowderPulse was split out to a standalone service on port 3003 (Feb 14, 2026). Source still lives in `/powderpulse/` but runs independently via `powderpulse/server.py`. Portal `/powderpulse` redirects to `powderpulse.coloradocareassist.com`.
+
+### Related Repositories & Standalone Services
 
 | Repo | Port | URL | Description |
 |------|------|-----|-------------|
@@ -25,7 +26,9 @@ This is the **unified platform** for Colorado Care Assist, containing:
 | `coloradocareassist` | 3000 | coloradocareassist.com | Marketing website (Next.js) |
 | `hesedhomecare` | 3001 | hesedhomecare.org | Hesed website (Next.js) |
 | `elite-trading-mcp` | 3002 | elitetrading.coloradocareassist.com | Trading MCP server |
+| **PowderPulse** | 3003 | powderpulse.coloradocareassist.com | Ski weather app (FastAPI + Vue.js SPA) |
 | `weather-arb` | 3010 | - (localhost) | Weather Sniper Bot (Polymarket, LIVE) |
+| `kalshi-poly-arb` | 3013 | - (localhost) | Kalshi-Polymarket arb scanner |
 | `status-dashboard` | 3012 | status.coloradocareassist.com | Infrastructure status dashboard |
 | `gigi-menubar` | - | - | macOS menu bar app (SwiftUI) |
 | `gigi-backend-cca` | - | - | Legacy backend reference |
@@ -184,9 +187,10 @@ Auto-snipes slam-dunk Polymarket temperature markets at daily market open:
 | Main Website | 3000 | com.coloradocareassist.website | coloradocareassist.com |
 | Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare | hesedhomecare.org |
 | Elite Trading | 3002 | com.coloradocareassist.elite-trading | elitetrading.coloradocareassist.com |
-| PowderPulse | 3003 | com.coloradocareassist.powderpulse | powderpulse.coloradocareassist.com |
+| PowderPulse | 3003 | com.coloradocareassist.powderpulse | powderpulse.coloradocareassist.com (standalone FastAPI) |
 | Weather Sniper Bot | 3010 | com.coloradocareassist.weather-arb | - (localhost only) |
 | Kalshi Weather Bot | 3011 | com.coloradocareassist.kalshi-weather | - (localhost only) |
+| Kalshi-Poly Arb | 3013 | com.coloradocareassist.kalshi-poly-arb | - (localhost only) |
 | Status Dashboard | 3012 | com.coloradocareassist.status-dashboard | status.coloradocareassist.com |
 | Telegram Bot | - | com.coloradocareassist.telegram-bot | - |
 | RingCentral Bot | - | com.coloradocareassist.gigi-rc-bot | - |
@@ -255,7 +259,7 @@ All credentials are in `~/.gigi-env` and duplicated in LaunchAgent plists.
 ```
 careassist-unified/
 ├── CLAUDE.md              # This file - main reference
-├── unified_app.py         # Entry point - mounts all sub-apps
+├── unified_app.py         # Entry point - mounts portal, gigi, sales, recruiting
 ├── portal/                # Portal web app (FastAPI)
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
@@ -278,6 +282,10 @@ careassist-unified/
 │   └── CONSTITUTION.md    # Gigi's 10 operating laws
 ├── sales/                 # Sales CRM dashboard
 ├── recruiting/            # Recruiting dashboard (Flask)
+├── powderpulse/           # Standalone ski weather app (NOT mounted in unified_app)
+│   ├── server.py          # FastAPI standalone server (port 3003) + Liftie CORS proxy
+│   ├── src/               # Vue.js source (NWS + ECMWF for US, met.no + ECMWF for intl)
+│   └── dist/              # Built SPA (vite build)
 ├── services/              # Shared services
 │   ├── wellsky_service.py # WellSky API integration
 │   └── ringcentral_messaging_service.py
@@ -431,6 +439,7 @@ This script will:
 
 ## HISTORY
 
+- **Feb 14, 2026:** Split PowderPulse into standalone service on port 3003 (powderpulse.coloradocareassist.com). Created `powderpulse/server.py` (FastAPI + Liftie CORS proxy) replacing `npx serve`. Removed PowderPulse mount + Liftie proxy from unified_app.py. Portal `/powderpulse` now redirects to standalone subdomain. PowderPulse can now restart independently without affecting portal/Gigi. Also upgraded US resort forecasting: NWS (2.5km human-corrected, days 1-7) + ECMWF (days 8-15) via new `hybridWeatherApiUS.js`. International resorts unchanged (met.no + ECMWF). Built Kalshi-Polymarket arb scanner on port 3013.
 - **Feb 13, 2026:** Weather Sniper Bot built and deployed (LIVE, real money). Rewrote weather-arb from laddering strategy to sniper strategy: auto-buys slam-dunk "or higher"/"or below" temperature markets at 11:00 UTC daily open. NOAA forecasts pre-fetched, GTC limit orders at $0.22. Backtested Feb 13-15: US cities +345% ROI. Restricted to US cities only (NOAA reliable, ECMWF/Toronto forecast was 5°C off). Config: $25/market, 5°F margin, 6 US cities. Updated Gigi's `get_weather_arb_status` tool across all 3 handlers to show sniper status + P&L. Updated status dashboard (status.coloradocareassist.com) with "Weather Sniper Bot" name and sniper-specific data in trading API. Status dashboard at port 3012 also added to CLAUDE.md services table.
 - **Feb 8, 2026 (evening):** Fixed 17 race condition bugs across all Gigi handlers (2 sessions): duplicate message handling via asyncio.Lock, wrapped all sync LLM/DB calls in asyncio.to_thread, 60s LLM timeouts, voice brain side-effect tracking on cancellation, reply lock for RC bot, moved user message persistence after LLM success, DB-side meltdown detection, SELECT FOR UPDATE for memory reinforcement, make_interval() for safe SQL intervals, shared DB connections in pattern detector. Also fixed iMessage webhook auth bypass, added retry health checks to promote/restart scripts.
 - **Feb 8, 2026:** Gigi Phases 1-4 activated: Memory System (PostgreSQL-backed save/recall/forget), Mode Detector (8 modes), Failure Handler (10 protocols), Conversation Store (cross-channel PostgreSQL persistence replacing JSON files), Pattern Detector, Self-Monitor (weekly Monday audit), Memory Logger (daily journal). Constitutional preamble + dynamic system prompts for all handlers. Caregiver preference extractor. Memory decay cron (3:15 AM) + memory logger cron (11:59 PM).

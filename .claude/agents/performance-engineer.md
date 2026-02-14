@@ -10,7 +10,7 @@ Monitor, profile, and optimize the performance of all services running on the Ma
 - **Services:**
   - FastAPI (Python) on ports 8765 (prod), 8766 (staging)
   - Next.js on ports 3000 (marketing), 3001 (hesed)
-  - Vue.js on port 3003 (PowderPulse)
+  - FastAPI (Python) on port 3003 (PowderPulse — standalone server + Liftie proxy)
   - Python on port 3002 (Elite Trading)
   - PostgreSQL 17 on port 5432
 - **Database:** `postgresql://careassist:careassist2026@localhost:5432/careassist` (82+ tables)
