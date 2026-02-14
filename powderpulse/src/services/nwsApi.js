@@ -183,22 +183,23 @@ export async function fetchNWSWeather(resort) {
   const props = gridData.properties
 
   // Parse snowfall (NWS gives mm, convert to inches)
-  const snowfallRaw = parseNWSTimeSeries(props.snowfallAmount, 'sum')
+  // NWS wraps each property in { uom, values } — we need the .values array
+  const snowfallRaw = parseNWSTimeSeries(props.snowfallAmount?.values, 'sum')
   const snowfall = snowfallRaw.map(d => ({
     date: d.date,
     snowfall: mmToInches(d.value)
   }))
 
   // Parse temperatures (NWS gives Celsius)
-  const tempMax = parseNWSTimeSeries(props.maxTemperature, 'max')
-  const tempMin = parseNWSTimeSeries(props.minTemperature, 'min')
+  const tempMax = parseNWSTimeSeries(props.maxTemperature?.values, 'max')
+  const tempMin = parseNWSTimeSeries(props.minTemperature?.values, 'min')
 
   // Parse wind
-  const windSpeed = parseNWSTimeSeries(props.windSpeed, 'max')
-  const windGust = parseNWSTimeSeries(props.windGust, 'max')
+  const windSpeed = parseNWSTimeSeries(props.windSpeed?.values, 'max')
+  const windGust = parseNWSTimeSeries(props.windGust?.values, 'max')
 
   // Parse precipitation probability
-  const precipProb = parseNWSTimeSeries(props.probabilityOfPrecipitation, 'max')
+  const precipProb = parseNWSTimeSeries(props.probabilityOfPrecipitation?.values, 'max')
 
   // Build daily forecast (NWS typically provides 7 days)
   const dailyForecast = []
