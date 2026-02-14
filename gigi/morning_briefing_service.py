@@ -570,8 +570,20 @@ class MorningBriefingService:
                         win_rate = perf.get("win_rate", 0)
                         closed = perf.get("closed_trades", 0)
                         direction = "+" if pnl >= 0 else ""
+
+                        # Format P&L % - cap at 999% for display, or show as multiplier if huge
+                        if abs(pnl_pct) > 999:
+                            initial = portfolio.get("initial_capital", 0)
+                            if initial > 0:
+                                multiplier = total / initial
+                                pnl_str = f"{multiplier:.1f}x return"
+                            else:
+                                pnl_str = f"{direction}999+%"
+                        else:
+                            pnl_str = f"{direction}{pnl_pct:.1f}%"
+
                         lines.append(
-                            f"  Polybot: ${total:,.0f} ({direction}{pnl_pct:.1f}%) | "
+                            f"  Polybot: ${total:,.0f} ({pnl_str}) | "
                             f"{closed} closed trades, {win_rate:.0f}% win rate"
                         )
                         # Per-strategy summary
