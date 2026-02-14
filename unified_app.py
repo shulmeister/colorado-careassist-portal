@@ -8,7 +8,6 @@ Architecture:
 - /recruiting/*        → Recruiter dashboard (Flask) - mounted inside portal
 - /payroll             → Payroll converter
 - /gigi/*              → Gigi AI Agent (Retell) - voice assistant
-- /powderpulse/*       → PowderPulse ski weather app
 """
 import os
 import sys
@@ -176,54 +175,15 @@ async def payroll_converter():
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Payroll converter not found")
 
-# ==================== MOUNT POWDERPULSE SKI WEATHER ====================
-try:
-    from fastapi.staticfiles import StaticFiles
+# PowderPulse runs as standalone service on port 3003 (powderpulse.coloradocareassist.com)
+# See powderpulse/server.py — includes its own Liftie API proxy
+from fastapi.responses import RedirectResponse as _RedirectResponse
 
-    powderpulse_dist = os.path.join(os.path.dirname(__file__), "powderpulse", "dist")
-    if os.path.exists(powderpulse_dist):
-        # Serve static assets (js, css, etc)
-        app.mount("/powderpulse/assets", StaticFiles(directory=os.path.join(powderpulse_dist, "assets")), name="powderpulse-assets")
-
-        # Redirect to standalone PowderPulse subdomain (assets have base: '/' so can't serve under /powderpulse/)
-        from fastapi.responses import RedirectResponse
-
-        @app.get("/powderpulse")
-        @app.get("/powderpulse/{path:path}")
-        async def serve_powderpulse(path: str = ""):
-            return RedirectResponse(url="https://powderpulse.coloradocareassist.com", status_code=302)
-
-        logger.info("✅ Mounted PowderPulse at /powderpulse")
-    else:
-        logger.warning("⚠️  PowderPulse dist not found - run 'cd powderpulse && npm run build'")
-except Exception as e:
-    logger.error(f"❌ Failed to mount PowderPulse: {e}")
-
-# ==================== LIFTIE API PROXY FOR POWDERPULSE ====================
-# Liftie API doesn't support CORS, so we proxy requests through our backend
-try:
-    import httpx
-
-    @app.get("/api/liftie/{resort_id}")
-    async def proxy_liftie(resort_id: str):
-        """Proxy requests to Liftie API to bypass CORS"""
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"https://liftie.info/api/resort/{resort_id}",
-                    timeout=10.0
-                )
-                if response.status_code == 200:
-                    return response.json()
-                else:
-                    return {"error": f"Liftie API returned {response.status_code}"}
-        except Exception as e:
-            logger.error(f"Liftie proxy error for {resort_id}: {e}")
-            return {"error": str(e)}
-
-    logger.info("✅ Added Liftie API proxy at /api/liftie/{resort_id}")
-except Exception as e:
-    logger.error(f"❌ Failed to set up Liftie proxy: {e}")
+@app.get("/powderpulse")
+@app.get("/powderpulse/{path:path}")
+async def redirect_powderpulse(path: str = ""):
+    """Redirect old /powderpulse URLs to standalone subdomain."""
+    return _RedirectResponse(url="https://powderpulse.coloradocareassist.com", status_code=302)
 
 # ==================== MOUNT GIGI AI AGENT ====================
 # Gigi is the AI voice assistant powered by Retell AI
