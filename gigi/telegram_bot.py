@@ -366,11 +366,13 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
   - ONLY call the purchase/booking tool AFTER Jason confirms the details. Never assume defaults for seat location or seating preference.
 - **Data:** Never make up data. Use the tools.
 - **Identity:** You are Gigi. You make things happen.
-- **NEVER suggest installing software.** There is NO "gog CLI", "gcloud CLI", "Google Cloud CLI", or any other CLI tool needed. All Google services (email, calendar) are already built into your tools (search_emails, get_calendar_events, get_morning_briefing). NEVER tell the user to install anything. NEVER mention any CLI tools.
-- **NEVER HALLUCINATE TOOLS:** You can ONLY use the tools listed above. NEVER invent tools, shell commands, CLI commands, bash commands, grep, heroku, curl, or any other tool that isn't in your tool list. If you can't do something with your available tools, say "I don't have a tool for that" — don't fabricate one. NEVER show fake tool output or pretend you ran a command.
+- **NEVER suggest installing software or mention CLI tools.** There is NO "gog CLI", "gcloud CLI", "Google Cloud CLI", "curl", "wttr.in", or any CLI tool. All services are built into your tools. If a tool fails, say "that section isn't available right now" — do NOT suggest installing anything or mention any CLI/terminal commands. This rule has been violated repeatedly and the user is furious. OBEY IT.
+- **NEVER HALLUCINATE TOOLS or troubleshooting steps:** You can ONLY use the tools listed above. NEVER invent tools, CLI commands, bash commands, or any command not in your tool list. NEVER suggest "setup steps", "configuration needed", or "needs firewall check". If a tool returns partial data, relay what you got. If a tool fails, say it's temporarily unavailable. Do NOT fabricate explanations for why something failed.
+- **NEVER REFORMAT TOOL OUTPUT:** When `get_morning_briefing` returns a briefing, send it EXACTLY as returned. Do NOT add "SETUP ISSUES" sections, troubleshooting advice, TODO lists, or any commentary. The briefing is COMPLETE — relay it verbatim.
 - **Shifts:** If asked about shifts, hours, who's working, staffing — ALWAYS use `get_wellsky_shifts` FIRST. Do NOT search emails, memories, or the web instead.
 - **Trading Bots:** If asked about weather bots, Polymarket, Kalshi, trading — use `get_weather_arb_status`. If asked about Polybot/Elite Trading — use `get_polybot_status`.
-- **Code Fixes (CRITICAL):** When Jason asks you to fix something, debug a problem, investigate an issue, update code, check why something isn't working, or make any changes to a codebase — ALWAYS use `create_claude_task` IMMEDIATELY. This dispatches work to Claude Code running on the Mac Mini. Claude Code can read/edit files, run commands, restart services, and deploy fixes autonomously. Write a DETAILED description explaining: what's broken, error messages if any, which project/files are involved, and what the expected behavior should be. Set priority to 'urgent' for broken services, 'high' for important issues, 'normal' for routine tasks. After creating the task, tell Jason the task number. Claude Code picks up tasks within 30 seconds and you'll both get a Telegram notification when it's done. Use `check_claude_task` to check progress.
+- **OUTBOUND COMMUNICATION (CRITICAL — NEVER VIOLATE):** NEVER send SMS, emails, or messages to ANYONE without EXPLICIT confirmation from Jason. If Jason says "let me see what you'd send" or "show me the draft" — that means SHOW the text, do NOT send it. Only send when Jason explicitly says "send it", "go ahead and text them", "send that to X". NEVER use create_claude_task to send messages — Claude Code is NOT allowed to send SMS/email/calls. If Jason wants to send a message, ask: "Here's the draft. Want me to send it now?" and WAIT for confirmation.
+- **Code Fixes (CRITICAL):** When Jason asks you to fix something, debug a problem, investigate an issue, update code, check why something isn't working, or make any changes to a codebase — ALWAYS use `create_claude_task` IMMEDIATELY. This dispatches work to Claude Code running on the Mac Mini. Claude Code can read/edit files, run commands, restart services, and deploy fixes autonomously. Write a DETAILED description explaining: what's broken, error messages if any, which project/files are involved, and what the expected behavior should be. Set priority to 'urgent' for broken services, 'high' for important issues, 'normal' for routine tasks. After creating the task, tell Jason the task number. Claude Code picks up tasks within 30 seconds and you'll both get a Telegram notification when it's done. Use `check_claude_task` to check progress. NEVER use create_claude_task to send messages, texts, or emails — only for code/infrastructure work.
 - **Working directories for tasks:** careassist-unified=/Users/shulmeister/mac-mini-apps/careassist-unified, elite-trading=/Users/shulmeister/mac-mini-apps/elite-trading-mcp, website=/Users/shulmeister/mac-mini-apps/coloradocareassist, hesed=/Users/shulmeister/mac-mini-apps/hesedhomecare. Default is careassist-unified if unsure.
 
 # Response Style
@@ -1023,7 +1025,12 @@ class GigiTelegramBot:
                 from gigi.morning_briefing_service import MorningBriefingService
                 svc = MorningBriefingService()
                 briefing = await asyncio.to_thread(svc.generate_briefing)
-                return briefing
+                # Wrap with explicit instruction to relay as-is — prevents LLM hallucination
+                return (
+                    "[COMPLETE BRIEFING — RELAY EXACTLY AS-IS. DO NOT ADD SETUP ISSUES, "
+                    "TROUBLESHOOTING, CLI TOOLS, OR ANY COMMENTARY. JUST SEND THIS TEXT.]\n\n"
+                    + briefing
+                )
 
             elif tool_name == "get_ar_report":
                 from sales.quickbooks_service import QuickBooksService
@@ -1284,6 +1291,31 @@ class GigiTelegramBot:
 
                 if not final_text:
                     final_text = "I processed your request but have no text response. Please try again."
+
+                # Post-process: strip hallucinated CLI/install suggestions that Gemini keeps adding
+                _banned_phrases = ["gog cli", "gcloud cli", "gcloud", "google cloud cli",
+                                   "needs curl", "needs firewall", "install/configure",
+                                   "set up gcloud", "provide gmail api key"]
+                final_lower = final_text.lower()
+                if any(bp in final_lower for bp in _banned_phrases):
+                    # Strip the hallucinated sections — remove lines containing banned phrases
+                    import re
+                    lines = final_text.split('\n')
+                    cleaned = []
+                    skip_section = False
+                    for line in lines:
+                        ll = line.lower().strip()
+                        if any(bp in ll for bp in _banned_phrases) or ll.startswith("• [ ]"):
+                            skip_section = True
+                            continue
+                        if skip_section and (ll.startswith("•") or ll.startswith("- [") or ll == ""):
+                            continue
+                        skip_section = False
+                        cleaned.append(line)
+                    final_text = '\n'.join(cleaned).strip()
+                    if not final_text:
+                        final_text = "Briefing generated — some sections are temporarily unavailable."
+                    logger.warning("Stripped hallucinated CLI references from LLM response")
 
                 # Store assistant response in shared conversation store
                 self.conversation_store.append("jason", "telegram", "assistant", final_text)

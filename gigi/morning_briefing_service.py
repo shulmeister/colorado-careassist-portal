@@ -115,6 +115,8 @@ class MorningBriefingService:
         weather = self._get_weather()
         if weather:
             sections.append(f"WEATHER\n{weather}")
+        else:
+            sections.append("WEATHER\n  Weather data temporarily unavailable.")
 
         # Calendar
         calendar = self._get_calendar()
@@ -132,6 +134,8 @@ class MorningBriefingService:
         emails = self._get_unread_emails()
         if emails:
             sections.append(f"INBOX ({emails['count']} unread)\n{emails['summary']}")
+        else:
+            sections.append("INBOX\n  Email check temporarily unavailable.")
 
         # Overnight alerts
         alerts = self._get_overnight_alerts(now)

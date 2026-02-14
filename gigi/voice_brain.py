@@ -1605,23 +1605,41 @@ class VoiceBrainHandler:
         self._completed_side_effects = []  # Track side effects completed before cancellation
 
     async def handle(self):
-        """Main handler loop — ping/pong inline, everything else via tasks"""
-        await self.websocket.accept()
+        """Main handler loop — ping/pong inline, everything else via tasks.
+
+        Handles Retell reconnection gracefully: if the WebSocket disconnects
+        and Retell opens a new connection, we catch the error and exit cleanly
+        instead of crashing with 'WebSocket is not connected'.
+        """
+        try:
+            await self.websocket.accept()
+        except Exception as e:
+            logger.error(f"Call {self.call_id} failed to accept WebSocket: {e}")
+            return
         logger.info(f"Call {self.call_id} connected")
 
         # Send config
-        await self.send({
-            "response_type": "config",
-            "config": {
-                "auto_reconnect": True,
-                "call_details": True,
-                "transcript_with_tool_calls": True
-            }
-        })
+        try:
+            await self.send({
+                "response_type": "config",
+                "config": {
+                    "auto_reconnect": True,
+                    "call_details": True,
+                    "transcript_with_tool_calls": True
+                }
+            })
+        except Exception as e:
+            logger.warning(f"Call {self.call_id} config send failed: {e}")
+            return
 
         try:
             while True:
-                data = await self.websocket.receive_text()
+                try:
+                    data = await self.websocket.receive_text()
+                except RuntimeError as e:
+                    # "WebSocket is not connected" — Retell reconnected, this connection is dead
+                    logger.warning(f"Call {self.call_id} WebSocket gone (likely reconnect): {e}")
+                    break
                 message = json.loads(data)
                 interaction_type = message.get("interaction_type")
 
@@ -1641,13 +1659,12 @@ class VoiceBrainHandler:
                     asyncio.create_task(self.handle_message(message))
 
         except WebSocketDisconnect:
-            if self._response_task and not self._response_task.done():
-                self._response_task.cancel()
             logger.info(f"Call {self.call_id} disconnected")
         except Exception as e:
+            logger.error(f"Call {self.call_id} error: {e}", exc_info=True)
+        finally:
             if self._response_task and not self._response_task.done():
                 self._response_task.cancel()
-            logger.error(f"Call {self.call_id} error: {e}", exc_info=True)
 
     async def send(self, data: dict):
         """Send JSON message to Retell (serialized to prevent concurrent sends)"""

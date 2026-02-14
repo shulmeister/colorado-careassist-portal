@@ -285,22 +285,55 @@ class MemorySystem:
                 cur.execute(query, params)
                 rows = cur.fetchall()
 
-                return [Memory(
-                    id=str(row['id']),
-                    type=MemoryType(row['type']),
-                    content=row['content'],
-                    confidence=float(row['confidence']),
-                    source=MemorySource(row['source'].lower() if row['source'] else 'explicit'),
-                    created_at=row['created_at'],
-                    last_confirmed_at=row['last_confirmed_at'],
-                    last_reinforced_at=row['last_reinforced_at'],
-                    reinforcement_count=row['reinforcement_count'],
-                    conflicts_with=[str(c) for c in (row['conflicts_with'] or [])],
-                    status=MemoryStatus(row['status']),
-                    category=row['category'],
-                    impact_level=ImpactLevel(row['impact_level']),
-                    metadata=row['metadata'] or {}
-                ) for row in rows]
+                memories = []
+                for row in rows:
+                    try:
+                        # Normalize enum values — DB may have legacy or case-mismatched values
+                        raw_type = (row['type'] or 'explicit_instruction').lower()
+                        raw_source = (row['source'] or 'explicit').lower()
+                        raw_status = (row['status'] or 'active').lower()
+                        raw_impact = (row['impact_level'] or 'medium').lower()
+
+                        try:
+                            mem_type = MemoryType(raw_type)
+                        except ValueError:
+                            mem_type = MemoryType.EXPLICIT_INSTRUCTION  # safe fallback
+
+                        try:
+                            mem_source = MemorySource(raw_source)
+                        except ValueError:
+                            mem_source = MemorySource.EXPLICIT
+
+                        try:
+                            mem_status = MemoryStatus(raw_status)
+                        except ValueError:
+                            mem_status = MemoryStatus.ACTIVE
+
+                        try:
+                            mem_impact = ImpactLevel(raw_impact)
+                        except ValueError:
+                            mem_impact = ImpactLevel.MEDIUM
+
+                        memories.append(Memory(
+                            id=str(row['id']),
+                            type=mem_type,
+                            content=row['content'],
+                            confidence=float(row['confidence']),
+                            source=mem_source,
+                            created_at=row['created_at'],
+                            last_confirmed_at=row['last_confirmed_at'],
+                            last_reinforced_at=row['last_reinforced_at'],
+                            reinforcement_count=row['reinforcement_count'],
+                            conflicts_with=[str(c) for c in (row['conflicts_with'] or [])],
+                            status=mem_status,
+                            category=row['category'],
+                            impact_level=mem_impact,
+                            metadata=row['metadata'] or {}
+                        ))
+                    except Exception as e:
+                        logger.warning(f"Skipping malformed memory row {row.get('id')}: {e}")
+                        continue
+                return memories
 
     def reinforce_memory(self, memory_id: str) -> bool:
         """
