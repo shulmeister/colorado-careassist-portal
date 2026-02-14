@@ -177,6 +177,13 @@ async def payroll_converter():
 
 # PowderPulse runs as standalone service on port 3003 (powderpulse.coloradocareassist.com)
 # See powderpulse/server.py — includes its own Liftie API proxy
+from fastapi.responses import RedirectResponse as _RedirectResponse
+
+@app.get("/powderpulse")
+@app.get("/powderpulse/{path:path}")
+async def redirect_powderpulse(path: str = ""):
+    """Redirect old /powderpulse URLs to standalone subdomain."""
+    return _RedirectResponse(url="https://powderpulse.coloradocareassist.com", status_code=302)
 
 # ==================== MOUNT GIGI AI AGENT ====================
 # Gigi is the AI voice assistant powered by Retell AI
