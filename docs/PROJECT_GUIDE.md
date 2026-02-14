@@ -6,17 +6,21 @@ This is the consolidated, source-of-truth guide for the portal and all spokes. I
 
 ```
 colorado-careassist-portal/          # Unified repo (source of truth)
-├── unified_app.py                   # Main FastAPI app (mounts everything)
+├── unified_app.py                   # Main FastAPI app (mounts portal, gigi, sales, recruiting)
 ├── portal/                          # Portal Hub (FastAPI)
 ├── gigi/                            # Gigi AI agent (FastAPI)
 ├── services/                        # WellSky + marketing services
 ├── templates/                       # Portal + Marketing dashboard templates
 ├── sales/                           # Sales Dashboard (FastAPI + React Admin)
 ├── recruiting/                      # Recruiter Dashboard (Flask)
-└── powderpulse/                     # Vue SPA
+└── powderpulse/                     # Standalone service (NOT in unified_app)
+    ├── server.py                    # FastAPI server (port 3003) + Liftie proxy
+    ├── src/                         # Vue.js source
+    └── dist/                        # Built SPA
 ```
 
-Everything deploys together to a single Mac Mini app via `unified_app.py`.
+Portal, Gigi, Sales, and Recruiting deploy together via `unified_app.py`.
+PowderPulse runs as a **standalone service** on port 3003 (`powderpulse.coloradocareassist.com`) via its own `server.py`. Portal `/powderpulse` redirects to the standalone subdomain.
 
 ## 2) Canonical Location
 

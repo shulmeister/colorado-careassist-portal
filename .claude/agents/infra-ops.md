@@ -17,17 +17,21 @@ You are a senior infrastructure/SRE engineer managing the Colorado CareAssist Ma
 
 ## Services (LaunchAgents)
 
-| Service | Port | LaunchAgent | Plist |
+| Service | Port | LaunchAgent | Notes |
 |---------|------|-------------|-------|
-| Production Portal | 8765 | com.coloradocareassist.gigi-unified | `~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist` |
-| Staging Portal | 8766 | com.coloradocareassist.staging | `~/Library/LaunchAgents/com.coloradocareassist.staging.plist` |
-| Main Website | 3000 | com.coloradocareassist.website | |
-| Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare | |
-| Elite Trading | 3002 | com.coloradocareassist.elite-trading | |
-| PowderPulse | 3003 | com.coloradocareassist.powderpulse | |
-| Telegram Bot | - | com.coloradocareassist.telegram-bot | |
-| Cloudflare Tunnel | - | com.cloudflare.cloudflared | |
-| Claude Task Worker | - | com.coloradocareassist.claude-task-worker | |
+| Production Portal | 8765 | com.coloradocareassist.gigi-unified | Portal + Gigi + Sales + Recruiting |
+| Staging Portal | 8766 | com.coloradocareassist.staging | Same as production (staging branch) |
+| Main Website | 3000 | com.coloradocareassist.website | Next.js |
+| Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare | Next.js |
+| Elite Trading | 3002 | com.coloradocareassist.elite-trading | Standalone Python |
+| PowderPulse | 3003 | com.coloradocareassist.powderpulse | Standalone FastAPI (server.py + Liftie proxy) |
+| Weather Sniper | 3010 | com.coloradocareassist.weather-arb | Polymarket weather bot (LIVE) |
+| Kalshi-Poly Arb | 3013 | com.coloradocareassist.kalshi-poly-arb | Cross-platform arb scanner |
+| Status Dashboard | 3012 | com.coloradocareassist.status-dashboard | Service monitoring |
+| Telegram Bot | - | com.coloradocareassist.telegram-bot | Gigi Telegram |
+| RingCentral Bot | - | com.coloradocareassist.gigi-rc-bot | Gigi RC SMS/DM/Team |
+| Cloudflare Tunnel | - | com.cloudflare.cloudflared | Routes external traffic |
+| Claude Task Worker | - | com.coloradocareassist.claude-task-worker | Task bridge |
 
 ## Service Management Commands
 
