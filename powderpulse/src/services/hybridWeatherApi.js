@@ -1,18 +1,23 @@
 /**
  * Hybrid Weather API - Best of both worlds
  *
- * Strategy (Updated 2026-01-19):
- * - Days 1-10: met.no (yr.no) - verified most accurate
- * - Days 11-16: Open-Meteo with ski-optimized config - extended forecast
+ * Strategy (Updated 2026-02-14):
+ * - US resorts: NWS (days 1-7, 2.5km human-corrected) + ECMWF (days 8-15)
+ *   - NWS incorporates HRRR 3km model, terrain-adjusted by local forecasters
+ *   - Falls back to met.no + ECMWF if NWS is unavailable
+ * - International resorts: met.no (days 1-10) + ECMWF (days 11-15)
  *
  * This gives us:
- * - Highly accurate 10-day forecast from met.no
- * - Extended 15-day forecast using Open-Meteo
+ * - Best available accuracy for US mountain weather (NWS)
+ * - Highly accurate 10-day forecast for international resorts (met.no)
+ * - Extended 15-day forecast from ECMWF for all resorts
  * - Seamless merge with consistent data format
  */
 
 import { fetchMetNoForResort } from './metNoApi.js'
 import { fetchOpenMeteoWeather } from './ensembleWeatherApi.js'
+import { fetchUSResortWeather } from './hybridWeatherApiUS.js'
+import { isUSResort } from './nwsApi.js'
 
 // Delay helper
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
@@ -93,11 +98,17 @@ function mergeForecasts(metNoData, openMeteoData, resort) {
 
 /**
  * Fetch weather for a single resort using hybrid approach
- * met.no for days 1-10, Open-Meteo for days 11-16
+ * US resorts: NWS (days 1-7) + ECMWF (days 8-15)
+ * International: met.no (days 1-10) + ECMWF (days 11-15)
  */
 export async function fetchResortWeather(resort) {
   try {
-    // Fetch both sources in parallel
+    // Route US resorts to NWS-based pipeline for better mountain accuracy
+    if (isUSResort(resort)) {
+      return await fetchUSResortWeather(resort)
+    }
+
+    // International resorts: met.no + ECMWF (unchanged)
     const [metNoData, openMeteoData] = await Promise.all([
       fetchMetNoForResort(resort).catch(e => {
         console.warn(`Met.no failed for ${resort.name}:`, e.message)
@@ -131,7 +142,7 @@ export async function fetchResortWeather(resort) {
 export async function fetchAllResortsWeatherHybrid(resorts) {
   const weatherData = {}
 
-  console.log(`Fetching 15-day hybrid forecast for ${resorts.length} resorts (met.no + Open-Meteo)`)
+  console.log(`Fetching 15-day hybrid forecast for ${resorts.length} resorts (NWS+ECMWF for US, met.no+ECMWF for intl)`)
 
   // Process resorts with small delay to be respectful to APIs
   const DELAY_MS = 100
@@ -149,10 +160,12 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
   }
 
   // Stats
-  const hybridCount = Object.values(weatherData).filter(d => d.source === 'hybrid-met.no+open-meteo').length
+  const nwsHybridCount = Object.values(weatherData).filter(d => d.source === 'hybrid-nws+ecmwf').length
+  const metNoHybridCount = Object.values(weatherData).filter(d => d.source === 'hybrid-met.no+open-meteo').length
   const metNoOnlyCount = Object.values(weatherData).filter(d => d.source === 'met-no').length
-  const openMeteoOnlyCount = Object.values(weatherData).filter(d => d.source === 'open-meteo').length
-  console.log(`Weather fetch complete: ${hybridCount} hybrid, ${metNoOnlyCount} met.no only, ${openMeteoOnlyCount} open-meteo only, ${resorts.length - Object.keys(weatherData).length} failed`)
+  const openMeteoOnlyCount = Object.values(weatherData).filter(d => d.source?.startsWith('open-meteo')).length
+  const failedCount = resorts.length - Object.keys(weatherData).length
+  console.log(`Weather fetch complete: ${nwsHybridCount} NWS+ECMWF (US), ${metNoHybridCount} met.no+ECMWF (intl), ${metNoOnlyCount} met.no only, ${openMeteoOnlyCount} open-meteo only, ${failedCount} failed`)
 
   return weatherData
 }
@@ -162,6 +175,7 @@ export async function fetchAllResortsWeatherHybrid(resorts) {
  */
 export function getSourceStats(weatherData) {
   const stats = {
+    'hybrid-nws+ecmwf': 0,
     'hybrid-met.no+open-meteo': 0,
     'met-no': 0,
     'open-meteo': 0,
