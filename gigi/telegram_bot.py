@@ -1324,30 +1324,9 @@ class GigiTelegramBot:
                 if not final_text:
                     final_text = "I processed your request but have no text response. Please try again."
 
-                # Post-process: strip hallucinated CLI/install suggestions that Gemini keeps adding
-                _banned_phrases = ["gog cli", "gcloud cli", "gcloud", "google cloud cli",
-                                   "needs curl", "needs firewall", "install/configure",
-                                   "set up gcloud", "provide gmail api key"]
-                final_lower = final_text.lower()
-                if any(bp in final_lower for bp in _banned_phrases):
-                    # Strip the hallucinated sections — remove lines containing banned phrases
-                    import re
-                    lines = final_text.split('\n')
-                    cleaned = []
-                    skip_section = False
-                    for line in lines:
-                        ll = line.lower().strip()
-                        if any(bp in ll for bp in _banned_phrases) or ll.startswith("• [ ]"):
-                            skip_section = True
-                            continue
-                        if skip_section and (ll.startswith("•") or ll.startswith("- [") or ll == ""):
-                            continue
-                        skip_section = False
-                        cleaned.append(line)
-                    final_text = '\n'.join(cleaned).strip()
-                    if not final_text:
-                        final_text = "Briefing generated — some sections are temporarily unavailable."
-                    logger.warning("Stripped hallucinated CLI references from LLM response")
+                # Post-process: strip hallucinated CLI/install suggestions (shared filter)
+                from gigi.response_filter import strip_banned_content
+                final_text = strip_banned_content(final_text)
 
                 # Store assistant response in shared conversation store
                 self.conversation_store.append("jason", "telegram", "assistant", final_text)
