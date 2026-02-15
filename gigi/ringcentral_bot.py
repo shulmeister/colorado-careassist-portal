@@ -2629,6 +2629,10 @@ class GigiRingCentralBot:
             if not final_text:
                 final_text = "Thanks for your message. I'll have the office follow up with you shortly."
 
+            # Strip hallucinated CLI/install suggestions (Gemini keeps adding these)
+            from gigi.response_filter import strip_banned_content
+            final_text = strip_banned_content(final_text)
+
             # Persist both user message and assistant reply only after LLM success
             self.conversation_store.append(clean_phone, "sms", "user", text)
             self.conversation_store.append(clean_phone, "sms", "assistant", final_text)
@@ -2697,6 +2701,10 @@ class GigiRingCentralBot:
 
             if not final_text:
                 final_text = "I checked our records but couldn't find the specific information. Please text or call the office for assistance."
+
+            # Strip hallucinated CLI/install suggestions (Gemini keeps adding these)
+            from gigi.response_filter import strip_banned_content
+            final_text = strip_banned_content(final_text)
 
             # Persist both user message and assistant reply only after LLM success
             self.conversation_store.append(dm_user_id, "dm", "user", text)

@@ -119,6 +119,10 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
     if not response_text:
         response_text = "I processed your request but have no text response."
 
+    # Strip hallucinated CLI/install suggestions (Gemini keeps adding these)
+    from gigi.response_filter import strip_banned_content
+    response_text = strip_banned_content(response_text)
+
     # Store assistant response
     store.append(user_id, channel, "assistant", response_text)
 

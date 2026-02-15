@@ -1765,6 +1765,10 @@ class VoiceBrainHandler:
                     on_tool_event=on_tool_event
                 )
 
+                # Strip hallucinated CLI/install suggestions
+                from gigi.response_filter import strip_banned_content
+                response_text = strip_banned_content(response_text)
+
                 # Check staleness before sending final response
                 if response_id != self.current_response_id:
                     logger.info(f"Discarding stale response for id={response_id} (current={self.current_response_id})")
