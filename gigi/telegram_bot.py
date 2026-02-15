@@ -1595,17 +1595,22 @@ async def main():
             # Initialize and clear any stale sessions
             await app.initialize()
 
-            # Delete any stale webhook/polling sessions to prevent 409 Conflict
-            await app.bot.delete_webhook(drop_pending_updates=True)
-            logger.info("Cleared stale Telegram sessions")
+            # BE AGGRESSIVE: Delete any stale webhook/polling sessions to prevent 409 Conflict
+            logger.info("Cleaning up any existing Telegram sessions...")
+            try:
+                await app.bot.delete_webhook(drop_pending_updates=True)
+                await asyncio.sleep(2) # Give it a moment
+            except Exception as e:
+                logger.warning(f"Webhook cleanup failed (non-fatal): {e}")
 
             # Wait for Telegram to fully release any active getUpdates long-poll connections
             # Telegram's long-poll timeout is typically 25-30 seconds
-            wait_secs = 5 if attempt == 0 else min(30, 5 * (attempt + 1))
+            wait_secs = 10 if attempt == 0 else min(45, 10 * (attempt + 1))
             logger.info(f"Waiting {wait_secs}s for Telegram to release stale connections...")
             await asyncio.sleep(wait_secs)
 
             await app.start()
+            logger.info("Starting new polling session...")
             await app.updater.start_polling(
                 drop_pending_updates=True,
                 allowed_updates=["message"],

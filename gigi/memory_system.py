@@ -532,6 +532,33 @@ class MemorySystem:
                 """, (memory_id, limit))
                 return [dict(row) for row in cur.fetchall()]
 
+    async def consolidate_memories(self, llm_client, category: Optional[str] = None):
+        """
+        Use an LLM to review active memories and consolidate overlapping or
+        conflicting facts. This keeps Gigi 'opinionated' and prevents bloat.
+        """
+        memories = self.query_memories(category=category, status=MemoryStatus.ACTIVE)
+        if len(memories) < 2:
+            return
+
+        # Prepare memory list for LLM
+        mem_text = "\n".join([f"ID: {m.id} | Content: {m.content}" for m in memories])
+
+        prompt = f"""Review the following list of AI memories and identify entries that are:
+1. DUPLICATE: Saying the same thing in different words.
+2. CONFLICTING: Direct contradictions.
+3. OVERLAPPING: Can be merged into a single cleaner rule.
+
+Memories:
+{mem_text}
+
+Output a JSON object with:
+- "merges": [ {{"target_id": "...", "source_ids": ["..."], "new_content": "..." }} ]
+- "conflicts": [ {{"ids": ["..."], "resolution_needed": "..." }} ]
+"""
+        # Note: Implementation of LLM call and DB updates would follow here
+        logger.info(f"Consolidation requested for {len(memories)} memories in category {category or 'all'}")
+
 
 # Example usage
 if __name__ == "__main__":

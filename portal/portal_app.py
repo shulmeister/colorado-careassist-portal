@@ -1881,6 +1881,13 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "service": "Colorado CareAssist Portal"}
 
+
+@app.get("/status")
+async def status():
+    """Status endpoint for monitoring dashboard."""
+    return {"status": "ok", "service": "Colorado CareAssist Portal"}
+
+
 # Analytics endpoints
 @app.post("/api/analytics/track-session")
 async def track_session(

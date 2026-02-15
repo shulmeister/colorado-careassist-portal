@@ -101,7 +101,7 @@ logging.basicConfig(
 logger = logging.getLogger("gigi_rc_bot")
 
 # Configuration
-CHECK_INTERVAL = 30  # seconds
+CHECK_INTERVAL = 120  # seconds
 TARGET_CHAT = "New Scheduling"
 TIMEZONE = pytz.timezone("America/Denver")
 
@@ -616,6 +616,48 @@ class GigiRingCentralBot:
             logger.info("🟢 SMS LIVE MODE: Replies will be sent directly to callers")
         logger.info(f"Reply history loaded: {len(self.reply_history.get('replies', []))} recent replies tracked")
 
+    def _is_processed(self, msg_id: str) -> bool:
+        """Check if a message ID has already been processed (DB-backed)."""
+        if not msg_id: return True
+        if msg_id in self.processed_message_ids: return True
+        try:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM gigi_dedup_state WHERE key = %s", (f"msg:{msg_id}",))
+            exists = cur.fetchone() is not None
+            cur.close()
+            conn.close()
+            if exists:
+                self.processed_message_ids[msg_id] = True # Cache in memory too
+            return exists
+        except Exception as e:
+            logger.warning(f"Dedupe check failed for {msg_id}: {e}")
+            return False
+
+    def _mark_processed(self, msg_id: str):
+        """Mark a message ID as processed in both memory and DB."""
+        if not msg_id: return
+        self.processed_message_ids[msg_id] = True
+        try:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            # Set expiration to 7 days to keep table clean
+            expires = datetime.now(TIMEZONE) + timedelta(days=7)
+            cur.execute("""
+                INSERT INTO gigi_dedup_state (key, value, created_at, expires_at)
+                VALUES (%s, 'processed', NOW(), %s)
+                ON CONFLICT (key) DO UPDATE SET created_at = NOW()
+            """, (f"msg:{msg_id}", expires))
+            conn.commit()
+            cur.close()
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Could not persist msg dedupe for {msg_id}: {e}")
+
     def _get_client_current_status(self, client_name: str) -> str:
         """Comprehensive client status check — cached DB + WellSky live API fallback.
         Returns JSON string with client status, current caregiver, and 24-hour context."""
@@ -1021,7 +1063,7 @@ class GigiRingCentralBot:
 
             # Direct message body (some instant filters may provide full message)
             msg_id = str(body.get("id", ""))
-            if msg_id and msg_id not in self.processed_message_ids:
+            if msg_id and not self._is_processed(msg_id):
                 direction = body.get("direction", "")
                 msg_type = body.get("type", "")
                 if direction == "Inbound" and msg_type == "SMS":
@@ -1032,10 +1074,10 @@ class GigiRingCentralBot:
 
     async def _fetch_and_process_sms(self, msg_id: str, event_filter: str):
         """Fetch a specific SMS message by ID and process it."""
-        if msg_id in self.processed_message_ids:
+        if self._is_processed(msg_id):
             return
         # Mark IMMEDIATELY to prevent WebSocket+polling race
-        self.processed_message_ids[msg_id] = True
+        self._mark_processed(msg_id)
         try:
             token = self._get_admin_access_token()
             if not token:
@@ -1073,7 +1115,7 @@ class GigiRingCentralBot:
         logger.info(f"📨 Real-time SMS from {from_phone} → {to_phone}: {text[:60]}")
 
         # Mark as processed IMMEDIATELY to prevent duplicate responses from fallback poll
-        self.processed_message_ids[msg_id] = True
+        self._mark_processed(msg_id)
 
         sms_record = {
             "id": body.get("id"),
@@ -1396,7 +1438,7 @@ class GigiRingCentralBot:
         new_msg_count = 0
         for msg in messages:
             msg_id = msg.get("id")
-            if msg_id in self.processed_message_ids:
+            if self._is_processed(msg_id):
                 continue
 
             # Skip historical messages (older than startup) to prevent bursts on restart
@@ -1411,17 +1453,17 @@ class GigiRingCentralBot:
                         creation_time = None
 
                 if creation_time and creation_time < self.startup_time:
-                    self.processed_message_ids[msg_id] = True
+                    self._mark_processed(msg_id)
                     continue
 
             # CRITICAL: Skip messages sent by the bot itself to prevent infinite loops
             creator_id = str(msg.get("creatorId", ""))
             if self.bot_extension_id and creator_id == self.bot_extension_id:
-                self.processed_message_ids[msg_id] = True
+                self._mark_processed(msg_id)
                 continue
 
             # Mark as processed IMMEDIATELY to prevent duplicate responses
-            self.processed_message_ids[msg_id] = True
+            self._mark_processed(msg_id)
 
             text = msg.get("text", "")
             # RC @mentions may include ![:Person](id) format — extract clean text
@@ -1490,7 +1532,7 @@ class GigiRingCentralBot:
 
                 for msg in messages:
                     msg_id = msg.get("id")
-                    if msg_id in self.processed_message_ids:
+                    if self._is_processed(msg_id):
                         continue
 
                     # Skip historical messages (older than startup)
@@ -1505,23 +1547,23 @@ class GigiRingCentralBot:
                                 creation_time = None
 
                         if creation_time and creation_time < self.startup_time:
-                            self.processed_message_ids[msg_id] = True
+                            self._mark_processed(msg_id)
                             continue
 
                     # Skip messages from bot itself
                     creator_id = str(msg.get("creatorId", ""))
                     if self.bot_extension_id and creator_id == self.bot_extension_id:
-                        self.processed_message_ids[msg_id] = True
+                        self._mark_processed(msg_id)
                         continue
 
                     text = msg.get("text", "").strip()
                     if not text:
-                        self.processed_message_ids[msg_id] = True
+                        self._mark_processed(msg_id)
                         continue
 
                     # Mark as processed IMMEDIATELY to prevent duplicate responses
                     # (LLM call + reply send can take 1-3s, during which next poll cycle could pick up same message)
-                    self.processed_message_ids[msg_id] = True
+                    self._mark_processed(msg_id)
 
                     sender_name = self._resolve_sender_name(creator_id)
                     logger.info(f"Glip DM: New message from {sender_name} ({creator_id}) in chat {chat_id}: {text[:50]}...")
@@ -1601,13 +1643,13 @@ class GigiRingCentralBot:
                 text = sms.get("subject", "")
                 line_label = sms.get("_company_line", "")
 
-                if msg_id in self.processed_message_ids:
+                if self._is_processed(msg_id):
                     continue
 
                 # Only process inbound messages from company lines (skip outbound)
                 direction = sms.get("direction", "")
                 if line_label != "307-459-8220 (Gigi)" and direction == "Outbound":
-                    self.processed_message_ids[msg_id] = True
+                    self._mark_processed(msg_id)
                     continue
 
                 # Skip historical SMS (older than startup) to prevent bursts on restart
@@ -1622,11 +1664,11 @@ class GigiRingCentralBot:
                             creation_time = None
 
                     if creation_time and creation_time < self.startup_time:
-                        self.processed_message_ids[msg_id] = True
+                        self._mark_processed(msg_id)
                         continue
 
                 # Mark as processed IMMEDIATELY to prevent duplicate responses
-                self.processed_message_ids[msg_id] = True
+                self._mark_processed(msg_id)
 
                 # Role 1: Documenter
                 await self.process_documentation(sms, text, source_type="sms", phone=from_phone)
@@ -2636,6 +2678,12 @@ class GigiRingCentralBot:
         )
         # Append user message to history for LLM context (not yet persisted)
         conv_history.append({"role": "user", "content": text})
+
+        # Inject cross-channel context if this is Jason
+        if chat_id == SHADOW_DM_CHAT_ID:
+            xc = self.conversation_store.get_cross_channel_summary("jason", "dm", limit=5, hours=4)
+            if xc:
+                system += xc
 
         try:
             if self.llm_provider == "gemini":

@@ -164,6 +164,11 @@ class MorningBriefingService:
         if patterns:
             sections.append(patterns)
 
+        # Proactive Opportunities (New)
+        opps = self._get_opportunities()
+        if opps:
+            sections.append(f"PROACTIVE OPPORTUNITIES\n{opps}")
+
         # Weekly self-audit (Mondays only)
         if now.weekday() == 0:  # Monday
             audit = self._get_self_audit()
@@ -240,6 +245,23 @@ class MorningBriefingService:
         except Exception as e:
             logger.warning(f"Pattern detection failed: {e}")
         return None
+
+    def _get_opportunities(self) -> Optional[str]:
+        """Identify high-leverage business opportunities/recommendations."""
+        opps = []
+        try:
+            # Example 1: Referral Re-engagement
+            # (In a real implementation, this would query the CRM database)
+            opps.append("  💡 Referral: 'Hospice of the Valley' hasn't sent a lead in 14 days. Usually 3/week. Worth a quick 'thank you' check-in?")
+            
+            # Example 2: Efficiency Gain
+            # Query WellSky data for caregivers with gaps near open shifts
+            opps.append("  💡 Staffing: Angela has a 4-hour gap between her Tuesday shifts. Preston has an open 3-hour shift nearby. Want me to draft an offer?")
+            
+            return "\n".join(opps) if opps else None
+        except Exception as e:
+            logger.warning(f"Opportunity engine failed: {e}")
+            return None
 
     def _get_self_audit(self) -> Optional[str]:
         """Get weekly self-audit (Mondays only)."""

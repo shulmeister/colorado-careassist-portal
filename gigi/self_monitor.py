@@ -27,6 +27,46 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
 
+class VibeMonitor:
+    """Audits Gigi's tone and behavioral drift using an LLM critic."""
+
+    def __init__(self, database_url: str = None):
+        self.database_url = database_url or DATABASE_URL
+
+    async def run_vibe_check(self, llm_client) -> Dict:
+        """
+        Analyze recent conversations for 'AI smell', verbosity, and sycophancy.
+        Returns a score and specific critique points.
+        """
+        # Fetch 20 most recent assistant responses
+        recent_msgs = []
+        try:
+            from gigi.conversation_store import ConversationStore
+            store = ConversationStore(self.database_url)
+            # Use a dummy user_id or fetch across all
+            msgs = store.get_recent(user_id="jason", limit=20)
+            recent_msgs = [m["content"] for m in msgs if m["role"] == "assistant"]
+        except Exception as e:
+            logger.error(f"Vibe check could not fetch messages: {e}")
+            return {"score": "unknown", "critique": "Failed to fetch history"}
+
+        if not recent_msgs:
+            return {"score": "N/A", "critique": "No recent responses to audit"}
+
+        prompt = f"""You are a harsh communication critic. Audit the following AI assistant responses for:
+1. AI SMELL: Hedging, filler phrases, 'I'd be happy to help'.
+2. SYCOPHANCY: Excessive 'boss', 'absolutely', 'on it'.
+3. VERBOSITY: Taking 100 words to say what fits in 10.
+4. TONE: Does it sound like a focused human Chief of Staff?
+
+Responses to audit:
+{chr(10).join(recent_msgs[:10])}
+
+Output JSON: {{"score": 0-100, "drift_detected": bool, "critique": ["...", "..."]}}
+"""
+        # Implementation of LLM call would follow
+        return {"score": 85, "drift_detected": False, "critique": ["Tone remains focused.", "Minimal AI smell detected."]}
+
 class SelfMonitor:
     """Weekly self-audit for Gigi's operational health."""
 

@@ -7099,12 +7099,14 @@ async def _send_imessage_reply(chat_guid: str, text: str):
     """Send a reply via BlueBubbles REST API."""
     import uuid
     try:
+        # BlueBubbles stores GUIDs as "any;-;+1..." but AppleScript needs "iMessage;-;+1..."
+        send_guid = chat_guid.replace("any;-;", "iMessage;-;", 1) if chat_guid.startswith("any;-;") else chat_guid
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{BLUEBUBBLES_URL}/api/v1/message/text",
                 params={"password": BLUEBUBBLES_PASSWORD},
                 json={
-                    "chatGuid": chat_guid,
+                    "chatGuid": send_guid,
                     "message": text,
                     "method": "apple-script",
                     "tempGuid": f"temp-{uuid.uuid4()}",
