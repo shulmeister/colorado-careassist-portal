@@ -159,11 +159,6 @@ class MorningBriefingService:
         if bots:
             sections.append(f"TRADING BOTS\n{bots}")
 
-        # Claude Code task status
-        tasks = self._get_task_status()
-        if tasks:
-            sections.append(f"CLAUDE CODE TASKS\n{tasks}")
-
         # Pattern detection
         patterns = self._get_patterns()
         if patterns:
