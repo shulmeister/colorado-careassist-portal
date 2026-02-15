@@ -58,6 +58,8 @@ def _log_portal_event(description, event_type="info", details=None, icon=None):
 
 # Security Configuration
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', secrets.token_hex(32))
+app.config['SESSION_COOKIE_NAME'] = 'recruiting_session'  # Avoid conflict with Starlette's 'session' cookie
+app.config['SESSION_COOKIE_PATH'] = '/recruiting'  # Scope to recruiting routes only
 app.config['SESSION_COOKIE_SECURE'] = True  # HTTPS only
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
