@@ -27,7 +27,7 @@ class QuickBooksService:
         self.enabled = bool(self.client_id and self.client_secret and self.realm_id)
         
         self.base_url = "https://sandbox-quickbooks.api.intuit.com" if os.getenv('QUICKBOOKS_SANDBOX') == 'true' else "https://quickbooks.api.intuit.com"
-        self.auth_url = "https://appcenter.intuit.com/connect/oauth2" if os.getenv('QUICKBOOKS_SANDBOX') != 'true' else "https://appcenter.intuit.com/connect/oauth2"
+        self.auth_url = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
         
         if not self.enabled:
             logger.warning("QuickBooks credentials not configured. QuickBooks integration disabled.")
@@ -49,8 +49,10 @@ class QuickBooksService:
             return {"success": False, "error": "Refresh token not configured"}
         
         try:
+            # Use the full token URL
+            token_url = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
             response = requests.post(
-                f"{self.auth_url}/token",
+                token_url,
                 data={
                     "grant_type": "refresh_token",
                     "refresh_token": self.refresh_token,

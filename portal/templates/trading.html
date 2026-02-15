@@ -1,0 +1,203 @@
+{% extends "shared_shell.html" %}
+
+{% block head %}
+<style>
+    .trading-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 24px;
+        margin-bottom: 32px;
+    }
+    .bot-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 24px;
+        transition: transform 0.2s;
+    }
+    .bot-card:hover {
+        transform: translateY(-4px);
+        border-color: #475569;
+    }
+    .bot-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    .bot-name {
+        font-size: 18px;
+        font-weight: 600;
+        color: #f1f5f9;
+    }
+    .bot-status {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-weight: 500;
+    }
+    .status-online { background: #065f46; color: #34d399; }
+    .status-offline { background: #7f1d1d; color: #f87171; }
+    
+    .pnl-value {
+        font-size: 32px;
+        font-weight: 700;
+        margin-bottom: 4px;
+    }
+    .pnl-positive { color: #10b981; }
+    .pnl-negative { color: #ef4444; }
+    
+    .stat-row {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 12px;
+        font-size: 14px;
+        color: #94a3b8;
+    }
+    .stat-value {
+        color: #f1f5f9;
+        font-weight: 500;
+    }
+    .loading-shimmer {
+        color: #475569;
+        font-style: italic;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="header-section" style="margin-bottom: 32px;">
+    <h1 style="color: #f1f5f9; font-size: 28px; font-weight: 700;">Trading War Room</h1>
+    <p style="color: #94a3b8;">Real-time performance of autonomous trading bots.</p>
+</div>
+
+<div class="trading-grid">
+    <!-- Polybot -->
+    <div class="bot-card" id="bot-polybot">
+        <div class="bot-header">
+            <span class="bot-name">Polybot (Crypto/Polymarket)</span>
+            <span class="bot-status status-offline" id="poly-status">OFFLINE</span>
+        </div>
+        <div class="pnl-value" id="poly-pnl">$0.00</div>
+        <div id="poly-pnl-pct" style="font-size: 14px; margin-bottom: 16px;">0.0%</div>
+        <div class="stat-row">
+            <span>Win Rate</span>
+            <span class="stat-value" id="poly-win-rate">0%</span>
+        </div>
+        <div class="stat-row">
+            <span>Closed Trades</span>
+            <span class="stat-value" id="poly-trades">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Current Value</span>
+            <span class="stat-value" id="poly-total">$0</span>
+        </div>
+    </div>
+
+    <!-- Weather Live (Polymarket) -->
+    <div class="bot-card" id="bot-weather-poly">
+        <div class="bot-header">
+            <span class="bot-name">Weather (Polymarket)</span>
+            <span class="bot-status status-offline" id="weather-poly-status">OFFLINE</span>
+        </div>
+        <div class="pnl-value" id="weather-poly-pnl">$0.00</div>
+        <div id="weather-poly-pnl-pct" style="font-size: 14px; margin-bottom: 16px;">0.0%</div>
+        <div class="stat-row">
+            <span>Active Positions</span>
+            <span class="stat-value" id="weather-poly-pos">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Total Value</span>
+            <span class="stat-value" id="weather-poly-total">$0</span>
+        </div>
+    </div>
+
+    <!-- Weather Live (Kalshi) -->
+    <div class="bot-card" id="bot-weather-kalshi">
+        <div class="bot-header">
+            <span class="bot-name">Weather (Kalshi)</span>
+            <span class="bot-status status-offline" id="weather-kalshi-status">OFFLINE</span>
+        </div>
+        <div class="pnl-value" id="weather-kalshi-pnl">$0.00</div>
+        <div id="weather-kalshi-deployed" style="font-size: 14px; margin-bottom: 16px; color: #94a3b8;">$0.00 Deployed</div>
+        <div class="stat-row">
+            <span>Active Positions</span>
+            <span class="stat-value" id="weather-kalshi-pos">0</span>
+        </div>
+        <div class="stat-row">
+            <span>Total Value</span>
+            <span class="stat-value" id="weather-kalshi-total">$0</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function updateBotData() {
+        try {
+            const response = await fetch('/api/trading/status');
+            const data = await response.json();
+            
+            // Update Polybot
+            if (data.polybot && data.polybot.status === 'online') {
+                const p = data.polybot;
+                document.getElementById('poly-status').className = 'bot-status status-online';
+                document.getElementById('poly-status').innerText = 'ONLINE';
+                
+                const pnlElem = document.getElementById('poly-pnl');
+                const pnl = p.portfolio.pnl || 0;
+                pnlElem.innerText = `$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                pnlElem.className = `pnl-value ${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`;
+                if (pnl < 0) pnlElem.innerText = '-' + pnlElem.innerText;
+
+                document.getElementById('poly-pnl-pct').innerText = `${p.portfolio.pnl_pct >= 0 ? '+' : ''}${p.portfolio.pnl_pct.toFixed(2)}%`;
+                document.getElementById('poly-pnl-pct').style.color = p.portfolio.pnl_pct >= 0 ? '#10b981' : '#ef4444';
+                
+                document.getElementById('poly-win-rate').innerText = `${p.performance.win_rate.toFixed(0)}%`;
+                document.getElementById('poly-trades').innerText = p.performance.closed_trades;
+                document.getElementById('poly-total').innerText = `$${p.portfolio.total_value.toLocaleString()}`;
+            }
+
+            // Update Weather Poly
+            if (data.weather_poly && data.weather_poly.status === 'online') {
+                const w = data.weather_poly;
+                document.getElementById('weather-poly-status').className = 'bot-status status-online';
+                document.getElementById('weather-poly-status').innerText = 'ONLINE';
+                
+                const pnlElem = document.getElementById('weather-poly-pnl');
+                const pnl = w.portfolio.pnl || 0;
+                pnlElem.innerText = `$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                pnlElem.className = `pnl-value ${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`;
+                
+                document.getElementById('weather-poly-pnl-pct').innerText = `${w.portfolio.pnl_pct >= 0 ? '+' : ''}${w.portfolio.pnl_pct.toFixed(2)}%`;
+                document.getElementById('weather-poly-pnl-pct').style.color = w.portfolio.pnl_pct >= 0 ? '#10b981' : '#ef4444';
+                
+                document.getElementById('weather-poly-pos').innerText = w.positions.length;
+                document.getElementById('weather-poly-total').innerText = `$${w.portfolio.total_value.toLocaleString()}`;
+            }
+
+            // Update Weather Kalshi
+            if (data.weather_kalshi && data.weather_kalshi.status === 'online') {
+                const w = data.weather_kalshi;
+                document.getElementById('weather-kalshi-status').className = 'bot-status status-online';
+                document.getElementById('weather-kalshi-status').innerText = 'ONLINE';
+                
+                const pnlElem = document.getElementById('weather-kalshi-pnl');
+                const pnl = w.portfolio.pnl || 0;
+                pnlElem.innerText = `$${Math.abs(pnl).toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                pnlElem.className = `pnl-value ${pnl >= 0 ? 'pnl-positive' : 'pnl-negative'}`;
+                
+                document.getElementById('weather-kalshi-deployed').innerText = `$${w.portfolio.deployed.toLocaleString()} Deployed`;
+                document.getElementById('weather-kalshi-pos').innerText = w.positions.length;
+                document.getElementById('weather-kalshi-total').innerText = `$${w.portfolio.total_value.toLocaleString()}`;
+            }
+
+        } catch (err) {
+            console.error('Failed to fetch trading status:', err);
+        }
+    }
+
+    // Initial load and interval
+    updateBotData();
+    setInterval(updateBotData, 10000);
+</script>
+{% endblock %}

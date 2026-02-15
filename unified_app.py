@@ -224,6 +224,7 @@ async def redirect_shadow():
     """Redirect /shadow to /gigi/shadow"""
     return RedirectResponse(url="/gigi/shadow")
 
+
 # Debug: Log all routes
 logger.info("=== Registered Routes ===")
 for route in app.routes:

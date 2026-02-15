@@ -192,6 +192,8 @@ Auto-snipes slam-dunk Polymarket temperature markets at daily market open:
 | Kalshi Weather Bot | 3011 | com.coloradocareassist.kalshi-weather | - (localhost only) |
 | Kalshi-Poly Arb | 3013 | com.coloradocareassist.kalshi-poly-arb | - (localhost only) |
 | Status Dashboard | 3012 | com.coloradocareassist.status-dashboard | status.coloradocareassist.com |
+| **Trading Dashboard** | 3014 | com.coloradocareassist.trading-dashboard | trading.coloradocareassist.com |
+| **Gigi Doctor** | - | com.coloradocareassist.gigi-doctor | Proactive token refresh (every 6h) |
 | Telegram Bot | - | com.coloradocareassist.telegram-bot | - |
 | RingCentral Bot | - | com.coloradocareassist.gigi-rc-bot | - |
 | Gigi Menu Bar | - | com.coloradocareassist.gigi-menubar | - |
