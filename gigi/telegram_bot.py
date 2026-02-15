@@ -1129,97 +1129,70 @@ class GigiTelegramBot:
             elif tool_name == "get_weather_arb_status":
                 try:
                     import httpx
-                    report = []
-                    async with httpx.AsyncClient(timeout=30.0) as client:
-                        # --- Weather Sniper Bot (Polymarket, port 3010) ---
+                    result = {"polymarket": {"status": "offline"}, "kalshi": {"status": "offline"}}
+                    async with httpx.AsyncClient(timeout=15.0) as client:
+                        # --- Polymarket Weather Bot (port 3010) ---
                         try:
-                            # Fetch both status and P&L in parallel
                             status_resp, pnl_resp = await asyncio.gather(
                                 client.get("http://127.0.0.1:3010/status"),
                                 client.get("http://127.0.0.1:3010/pnl"),
                                 return_exceptions=True,
                             )
-
-                            # Sniper status
+                            poly = {"status": "online"}
                             if not isinstance(status_resp, Exception) and status_resp.status_code == 200:
                                 st = status_resp.json()
                                 sniper = st.get("sniper", {})
-                                cfg = st.get("config", {})
-                                report.append("=== WEATHER SNIPER BOT (LIVE — Polymarket) ===")
-                                report.append(f"Running: {'YES' if st.get('running') else 'NO'} | CLOB: {'Ready' if st.get('clob_ready') else 'Down'}")
-                                report.append(f"Snipe Window: {'ACTIVE' if st.get('snipe_window') else 'Waiting'} (11:00 UTC / 4:00 AM MT daily)")
-                                report.append(f"Target Date: {sniper.get('target_date', '?')} | Scans: {sniper.get('scan_count', 0)}")
-                                report.append(f"Cities: {', '.join(cfg.get('cities', []))}")
-                                report.append(f"Strategy: Buy YES at ${cfg.get('snipe_price', 0):.2f} | Max ${cfg.get('snipe_max_price', 0):.2f} | Budget ${cfg.get('budget_per_market', 0):.0f}/market | Margin {cfg.get('margin_f', 0):.0f}°F")
-                                report.append(f"Orders Placed: {sniper.get('orders_placed', 0)} | Failed: {sniper.get('orders_failed', 0)} | Deployed: ${sniper.get('total_deployed', 0):.2f}")
-
-                                # Show forecasts
-                                forecasts = sniper.get("forecasts_ready", 0)
-                                report.append(f"Forecasts Ready: {forecasts} cities")
-
-                                # Show recent orders
-                                orders = sniper.get("orders", [])
-                                if orders:
-                                    report.append("Recent Snipes:")
-                                    for o in orders[-5:]:
-                                        report.append(f"  {o.get('city', '?')}: {o.get('shares', 0)} shares @ ${o.get('price', 0):.2f} = ${o.get('budget', 0):.2f} [{o.get('status', '?')}]")
-                            else:
-                                report.append("=== WEATHER SNIPER BOT — STATUS UNAVAILABLE ===")
-
-                            report.append("")
-
-                            # P&L and positions
+                                poly["running"] = bool(st.get("running"))
+                                poly["clob_ready"] = bool(st.get("clob_ready"))
+                                poly["snipe_window_active"] = bool(st.get("snipe_window"))
+                                poly["scans"] = sniper.get("scan_count", 0)
+                                poly["orders_placed"] = sniper.get("orders_placed", 0)
                             if not isinstance(pnl_resp, Exception) and pnl_resp.status_code == 200:
                                 data = pnl_resp.json()
-                                report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
-                                report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
-                                pnl_val = data.get('unrealized_pnl', 0)
-                                pnl_pct = data.get('unrealized_pnl_pct', 0)
-                                report.append(f"Unrealized P&L: ${pnl_val:+,.2f} ({pnl_pct:+.1f}%)")
+                                poly["portfolio_value"] = data.get("portfolio_value", 0)
+                                poly["cash"] = data.get("cash", 0)
+                                poly["deployed"] = data.get("deployed", 0)
+                                poly["unrealized_pnl"] = data.get("unrealized_pnl", 0)
                                 positions = data.get("positions", [])
-                                report.append(f"Open Positions ({len(positions)}):")
-                                for p in positions:
-                                    title = p.get("title", "?")
-                                    shares = p.get("shares", 0)
-                                    entry = p.get("entry", 0)
-                                    current = p.get("current")
-                                    pos_pnl = p.get("pnl")
-                                    pos_pct = p.get("pnl_pct")
-                                    price_str = f"{current:.0%}" if current else "?"
-                                    pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
-                                    report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
-                        except Exception:
-                            report.append("=== WEATHER SNIPER BOT — OFFLINE ===")
-
-                        report.append("")
+                                poly["num_positions"] = len(positions)
+                                poly["positions"] = [
+                                    {"title": p.get("title", "?")[:60], "shares": p.get("shares", 0),
+                                     "entry_pct": round(p.get("entry", 0) * 100), "current_pct": round((p.get("current") or 0) * 100),
+                                     "pnl": round(p.get("pnl", 0), 2), "pnl_pct": round(p.get("pnl_pct", 0), 1)}
+                                    for p in positions[:10]
+                                ]
+                            result["polymarket"] = poly
+                        except Exception as e:
+                            logger.warning(f"Polymarket status fetch: {e}")
 
                         # --- Kalshi Weather Bot (port 3011) ---
                         try:
                             kalshi_resp = await client.get("http://127.0.0.1:3011/pnl")
                             if kalshi_resp.status_code == 200:
                                 data = kalshi_resp.json()
-                                report.append("=== KALSHI WEATHER BOT (LIVE) ===")
-                                report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
-                                report.append(f"Current Value: ${data.get('current_value', 0):,.2f}")
-                                pnl_val = data.get('unrealized_pnl', 0)
-                                report.append(f"Unrealized P&L: ${pnl_val:+,.2f}")
+                                kalshi = {
+                                    "status": "online",
+                                    "portfolio_value": data.get("portfolio_value", 0),
+                                    "cash": data.get("cash", 0),
+                                    "deployed": data.get("deployed", 0),
+                                    "unrealized_pnl": data.get("unrealized_pnl", 0),
+                                }
                                 positions = data.get("positions", [])
-                                report.append(f"Open Positions ({len(positions)}):")
-                                for p in positions:
-                                    ticker = p.get("ticker", "?")
-                                    count = p.get("count", 0)
-                                    value = p.get("value", 0)
-                                    pos_pnl = p.get("pnl", 0)
-                                    report.append(f"  {ticker}: {count} contracts | Value: ${value:.2f} | P&L: ${pos_pnl:+.2f}")
-                            else:
-                                report.append("=== KALSHI WEATHER BOT — NOT RESPONDING ===")
-                        except Exception:
-                            report.append("=== KALSHI WEATHER BOT — OFFLINE ===")
+                                kalshi["num_positions"] = len(positions)
+                                kalshi["positions"] = [
+                                    {"ticker": p.get("ticker", "?"), "side": p.get("side", "?"),
+                                     "count": p.get("count", 0), "value": round(p.get("value", 0), 2),
+                                     "pnl": round(p.get("pnl", 0), 2)}
+                                    for p in positions[:10]
+                                ]
+                                result["kalshi"] = kalshi
+                        except Exception as e:
+                            logger.warning(f"Kalshi status fetch: {e}")
 
-                        return "\n".join(report)
+                    return json.dumps(result)
                 except Exception as e:
                     logger.error(f"Weather arb status failed: {e}")
-                    return f"Weather bots unavailable: {e}"
+                    return json.dumps({"error": f"Weather bots unavailable: {str(e)}"})
 
             elif tool_name == "deep_research":
                 question = tool_input.get("question", "")
@@ -1434,6 +1407,7 @@ class GigiTelegramBot:
 
         # Tool calling loop
         max_rounds = 5
+        fn_response_parts = []
         for tool_round in range(max_rounds):
             # Check if response has function calls
             function_calls = []
@@ -1485,7 +1459,20 @@ class GigiTelegramBot:
             for part in response.candidates[0].content.parts:
                 if hasattr(part, 'text') and part.text:
                     text_parts.append(part.text)
-        return "".join(text_parts)
+        final = "".join(text_parts)
+
+        # Safety net: if Gemini returned no text after tool calls, use last tool result
+        if not final and fn_response_parts:
+            logger.warning("Gemini returned no text after tool call — using tool result as fallback")
+            last_part = fn_response_parts[-1]
+            if hasattr(last_part, 'function_response') and last_part.function_response:
+                fr = last_part.function_response
+                resp_data = fr.response if hasattr(fr, 'response') else {}
+                if isinstance(resp_data, dict):
+                    final = json.dumps(resp_data, indent=2, default=str)
+                else:
+                    final = str(resp_data)
+        return final
 
     # ═══════════════════════════════════════════════════════════
     # OPENAI PROVIDER

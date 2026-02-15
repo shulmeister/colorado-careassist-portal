@@ -2440,80 +2440,51 @@ class GigiRingCentralBot:
             elif tool_name == "get_weather_arb_status":
                 try:
                     import httpx
-                    report = []
-                    with httpx.Client(timeout=30.0) as client:
-                        # --- Weather Sniper Bot (Polymarket, port 3010) ---
+                    result = {"polymarket": {"status": "offline"}, "kalshi": {"status": "offline"}}
+                    with httpx.Client(timeout=15.0) as client:
                         try:
                             status_resp = client.get("http://127.0.0.1:3010/status")
                             pnl_resp = client.get("http://127.0.0.1:3010/pnl")
-
+                            poly = {"status": "online"}
                             if status_resp.status_code == 200:
                                 st = status_resp.json()
                                 sniper = st.get("sniper", {})
-                                cfg = st.get("config", {})
-                                report.append("=== WEATHER SNIPER BOT (LIVE — Polymarket) ===")
-                                report.append(f"Running: {'YES' if st.get('running') else 'NO'} | CLOB: {'Ready' if st.get('clob_ready') else 'Down'}")
-                                report.append(f"Snipe Window: {'ACTIVE' if st.get('snipe_window') else 'Waiting'} (11:00 UTC / 4:00 AM MT daily)")
-                                report.append(f"Target Date: {sniper.get('target_date', '?')} | Scans: {sniper.get('scan_count', 0)}")
-                                report.append(f"Cities: {', '.join(cfg.get('cities', []))}")
-                                report.append(f"Strategy: Buy YES at ${cfg.get('snipe_price', 0):.2f} | Budget ${cfg.get('budget_per_market', 0):.0f}/market | Margin {cfg.get('margin_f', 0):.0f}°F")
-                                report.append(f"Orders Placed: {sniper.get('orders_placed', 0)} | Deployed: ${sniper.get('total_deployed', 0):.2f}")
-                            else:
-                                report.append("=== WEATHER SNIPER BOT — STATUS UNAVAILABLE ===")
-
-                            report.append("")
-
+                                poly["running"] = bool(st.get("running"))
+                                poly["scans"] = sniper.get("scan_count", 0)
                             if pnl_resp.status_code == 200:
                                 data = pnl_resp.json()
-                                report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
-                                report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
-                                pnl_val = data.get('unrealized_pnl', 0)
-                                pnl_pct = data.get('unrealized_pnl_pct', 0)
-                                report.append(f"Unrealized P&L: ${pnl_val:+,.2f} ({pnl_pct:+.1f}%)")
-                                positions = data.get("positions", [])
-                                report.append(f"Open Positions ({len(positions)}):")
-                                for p in positions:
-                                    title = p.get("title", "?")
-                                    shares = p.get("shares", 0)
-                                    entry = p.get("entry", 0)
-                                    current = p.get("current")
-                                    pos_pnl = p.get("pnl")
-                                    pos_pct = p.get("pnl_pct")
-                                    price_str = f"{current:.0%}" if current else "?"
-                                    pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
-                                    report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
+                                poly["portfolio_value"] = data.get("portfolio_value", 0)
+                                poly["cash"] = data.get("cash", 0)
+                                poly["unrealized_pnl"] = data.get("unrealized_pnl", 0)
+                                poly["num_positions"] = len(data.get("positions", []))
+                                poly["positions"] = [
+                                    {"title": p.get("title", "?")[:60], "pnl": round(p.get("pnl", 0), 2), "pnl_pct": round(p.get("pnl_pct", 0), 1)}
+                                    for p in data.get("positions", [])[:10]
+                                ]
+                            result["polymarket"] = poly
                         except Exception:
-                            report.append("=== WEATHER SNIPER BOT — OFFLINE ===")
-
-                        report.append("")
-
-                        # --- Kalshi Weather Bot (port 3011) ---
+                            pass
                         try:
                             kalshi_resp = client.get("http://127.0.0.1:3011/pnl")
                             if kalshi_resp.status_code == 200:
                                 data = kalshi_resp.json()
-                                report.append("=== KALSHI WEATHER BOT (LIVE) ===")
-                                report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
-                                report.append(f"Current Value: ${data.get('current_value', 0):,.2f}")
-                                pnl_val = data.get('unrealized_pnl', 0)
-                                report.append(f"Unrealized P&L: ${pnl_val:+,.2f}")
-                                positions = data.get("positions", [])
-                                report.append(f"Open Positions ({len(positions)}):")
-                                for p in positions:
-                                    ticker = p.get("ticker", "?")
-                                    count = p.get("count", 0)
-                                    value = p.get("value", 0)
-                                    pos_pnl = p.get("pnl", 0)
-                                    report.append(f"  {ticker}: {count} contracts | Value: ${value:.2f} | P&L: ${pos_pnl:+.2f}")
-                            else:
-                                report.append("=== KALSHI WEATHER BOT — NOT RESPONDING ===")
+                                result["kalshi"] = {
+                                    "status": "online",
+                                    "portfolio_value": data.get("portfolio_value", 0),
+                                    "cash": data.get("cash", 0),
+                                    "unrealized_pnl": data.get("unrealized_pnl", 0),
+                                    "num_positions": len(data.get("positions", [])),
+                                    "positions": [
+                                        {"ticker": p.get("ticker", "?"), "count": p.get("count", 0), "pnl": round(p.get("pnl", 0), 2)}
+                                        for p in data.get("positions", [])[:10]
+                                    ]
+                                }
                         except Exception:
-                            report.append("=== KALSHI WEATHER BOT — OFFLINE ===")
-
-                        return "\n".join(report)
+                            pass
+                    return json.dumps(result)
                 except Exception as e:
                     logger.error(f"Weather arb status failed: {e}")
-                    return f"Weather bots unavailable: {e}"
+                    return json.dumps({"error": f"Weather bots unavailable: {str(e)}"})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
@@ -3309,83 +3280,54 @@ class GigiRingCentralBot:
             elif tool_name == "get_weather_arb_status":
                 try:
                     import httpx
-                    report = []
-                    async with httpx.AsyncClient(timeout=30.0) as client:
-                        # --- Weather Sniper Bot (Polymarket, port 3010) ---
+                    result = {"polymarket": {"status": "offline"}, "kalshi": {"status": "offline"}}
+                    async with httpx.AsyncClient(timeout=15.0) as client:
                         try:
                             status_resp, pnl_resp = await asyncio.gather(
                                 client.get("http://127.0.0.1:3010/status"),
                                 client.get("http://127.0.0.1:3010/pnl"),
                                 return_exceptions=True,
                             )
-
+                            poly = {"status": "online"}
                             if not isinstance(status_resp, Exception) and status_resp.status_code == 200:
                                 st = status_resp.json()
                                 sniper = st.get("sniper", {})
-                                cfg = st.get("config", {})
-                                report.append("=== WEATHER SNIPER BOT (LIVE — Polymarket) ===")
-                                report.append(f"Running: {'YES' if st.get('running') else 'NO'} | CLOB: {'Ready' if st.get('clob_ready') else 'Down'}")
-                                report.append(f"Snipe Window: {'ACTIVE' if st.get('snipe_window') else 'Waiting'} (11:00 UTC / 4:00 AM MT daily)")
-                                report.append(f"Target Date: {sniper.get('target_date', '?')} | Scans: {sniper.get('scan_count', 0)}")
-                                report.append(f"Cities: {', '.join(cfg.get('cities', []))}")
-                                report.append(f"Strategy: Buy YES at ${cfg.get('snipe_price', 0):.2f} | Budget ${cfg.get('budget_per_market', 0):.0f}/market | Margin {cfg.get('margin_f', 0):.0f}°F")
-                                report.append(f"Orders Placed: {sniper.get('orders_placed', 0)} | Deployed: ${sniper.get('total_deployed', 0):.2f}")
-                            else:
-                                report.append("=== WEATHER SNIPER BOT — STATUS UNAVAILABLE ===")
-
-                            report.append("")
-
+                                poly["running"] = bool(st.get("running"))
+                                poly["scans"] = sniper.get("scan_count", 0)
                             if not isinstance(pnl_resp, Exception) and pnl_resp.status_code == 200:
                                 data = pnl_resp.json()
-                                report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
-                                report.append(f"Deployed: ${data.get('deployed', 0):,.2f} | Current Value: ${data.get('current_value', 0):,.2f}")
-                                pnl_val = data.get('unrealized_pnl', 0)
-                                pnl_pct = data.get('unrealized_pnl_pct', 0)
-                                report.append(f"Unrealized P&L: ${pnl_val:+,.2f} ({pnl_pct:+.1f}%)")
-                                positions = data.get("positions", [])
-                                report.append(f"Open Positions ({len(positions)}):")
-                                for p in positions:
-                                    title = p.get("title", "?")
-                                    shares = p.get("shares", 0)
-                                    entry = p.get("entry", 0)
-                                    current = p.get("current")
-                                    pos_pnl = p.get("pnl")
-                                    pos_pct = p.get("pnl_pct")
-                                    price_str = f"{current:.0%}" if current else "?"
-                                    pnl_str = f"${pos_pnl:+.2f} ({pos_pct:+.1f}%)" if pos_pnl is not None else "N/A"
-                                    report.append(f"  {title}: {shares:.0f} shares @ {entry:.0%} -> {price_str} | {pnl_str}")
+                                poly["portfolio_value"] = data.get("portfolio_value", 0)
+                                poly["cash"] = data.get("cash", 0)
+                                poly["unrealized_pnl"] = data.get("unrealized_pnl", 0)
+                                poly["num_positions"] = len(data.get("positions", []))
+                                poly["positions"] = [
+                                    {"title": p.get("title", "?")[:60], "pnl": round(p.get("pnl", 0), 2), "pnl_pct": round(p.get("pnl_pct", 0), 1)}
+                                    for p in data.get("positions", [])[:10]
+                                ]
+                            result["polymarket"] = poly
                         except Exception:
-                            report.append("=== WEATHER SNIPER BOT — OFFLINE ===")
-
-                        report.append("")
-
-                        # --- Kalshi Weather Bot (port 3011) ---
+                            pass
                         try:
                             kalshi_resp = await client.get("http://127.0.0.1:3011/pnl")
                             if kalshi_resp.status_code == 200:
                                 data = kalshi_resp.json()
-                                report.append("=== KALSHI WEATHER BOT (LIVE) ===")
-                                report.append(f"Portfolio: ${data.get('portfolio_value', 0):,.2f} | Cash: ${data.get('cash', 0):,.2f}")
-                                report.append(f"Current Value: ${data.get('current_value', 0):,.2f}")
-                                pnl_val = data.get('unrealized_pnl', 0)
-                                report.append(f"Unrealized P&L: ${pnl_val:+,.2f}")
-                                positions = data.get("positions", [])
-                                report.append(f"Open Positions ({len(positions)}):")
-                                for p in positions:
-                                    ticker = p.get("ticker", "?")
-                                    count = p.get("count", 0)
-                                    value = p.get("value", 0)
-                                    pos_pnl = p.get("pnl", 0)
-                                    report.append(f"  {ticker}: {count} contracts | Value: ${value:.2f} | P&L: ${pos_pnl:+.2f}")
-                            else:
-                                report.append("=== KALSHI WEATHER BOT — NOT RESPONDING ===")
+                                result["kalshi"] = {
+                                    "status": "online",
+                                    "portfolio_value": data.get("portfolio_value", 0),
+                                    "cash": data.get("cash", 0),
+                                    "unrealized_pnl": data.get("unrealized_pnl", 0),
+                                    "num_positions": len(data.get("positions", [])),
+                                    "positions": [
+                                        {"ticker": p.get("ticker", "?"), "count": p.get("count", 0), "pnl": round(p.get("pnl", 0), 2)}
+                                        for p in data.get("positions", [])[:10]
+                                    ]
+                                }
                         except Exception:
-                            report.append("=== KALSHI WEATHER BOT — OFFLINE ===")
-
-                        return "\n".join(report)
+                            pass
+                    return json.dumps(result)
                 except Exception as e:
                     logger.error(f"Weather arb status failed: {e}")
-                    return f"Weather bots unavailable: {e}"
+                    return json.dumps({"error": f"Weather bots unavailable: {str(e)}"})
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
