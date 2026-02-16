@@ -15,13 +15,13 @@ To use: Configure Retell agent with response_engine type "custom-llm"
 and llm_websocket_url pointing to this endpoint.
 """
 
+import asyncio
+import json
+import logging
 import os
 import sys
-import json
-import asyncio
-import logging
-from datetime import datetime, date
-from typing import Optional, Dict, Any, List
+from datetime import date, datetime
+from typing import Dict, List, Optional
 
 # Add parent to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -73,7 +73,7 @@ except Exception as e:
 
 # Memory system, mode detector, failure handler
 try:
-    from gigi.memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel
+    from gigi.memory_system import ImpactLevel, MemorySource, MemorySystem, MemoryType
     memory_system = MemorySystem()
     MEMORY_AVAILABLE = True
     logger.info("Memory system initialized for voice brain")
@@ -493,6 +493,35 @@ ANTHROPIC_TOOLS = [
         }
     },
     # deep_research REMOVED from voice — takes 30-120 seconds, unusable on phone calls
+    {
+        "name": "watch_tickets",
+        "description": "Set up a ticket watch for an artist or event. Gigi will monitor Ticketmaster and AXS and send Telegram alerts when tickets go on presale or general sale.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "artist": {"type": "string", "description": "Artist or event name to watch"},
+                "venue": {"type": "string", "description": "Venue to filter (optional)"},
+                "city": {"type": "string", "description": "City to search (default Denver)"}
+            },
+            "required": ["artist"]
+        }
+    },
+    {
+        "name": "list_ticket_watches",
+        "description": "List all active ticket watches Gigi is monitoring.",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "remove_ticket_watch",
+        "description": "Stop watching for tickets. Use list_ticket_watches first to get the watch ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "watch_id": {"type": "integer", "description": "Watch ID to remove"}
+            },
+            "required": ["watch_id"]
+        }
+    },
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -627,7 +656,6 @@ SYSTEM_PROMPT = _build_voice_system_prompt()
 
 async def execute_tool(tool_name: str, tool_input: dict) -> str:
     """Execute a tool and return the result - same logic as Telegram bot"""
-    import psycopg2
     import httpx
 
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
@@ -723,8 +751,9 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"error": "No client name provided"})
 
             def _cached_status_check(name_val):
-                import psycopg2
                 from datetime import datetime
+
+                import psycopg2
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = None
                 try:
@@ -878,7 +907,6 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
 
         elif tool_name == "get_wellsky_shifts":
             # Uses cached_appointments (instant SQL) — no live API calls during voice
-            from datetime import timedelta
             days = min(tool_input.get("days", 7), 30)
             past_days = min(tool_input.get("past_days", 0), 90)
             open_only = tool_input.get("open_only", False)
@@ -986,7 +1014,9 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
 
             try:
                 def _send_team():
-                    from services.ringcentral_messaging_service import ringcentral_messaging_service
+                    from services.ringcentral_messaging_service import (
+                        ringcentral_messaging_service,
+                    )
                     return ringcentral_messaging_service.send_message_to_chat("New Scheduling", message)
                 result = await run_sync(_send_team)
                 return json.dumps(result)
@@ -1101,7 +1131,9 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             # Log to team chat
             try:
                 def _report():
-                    from services.ringcentral_messaging_service import ringcentral_messaging_service
+                    from services.ringcentral_messaging_service import (
+                        ringcentral_messaging_service,
+                    )
                     msg = f"CALL-OUT: {caregiver} called out for {shift_date}. Reason: {reason}"
                     ringcentral_messaging_service.send_message_to_chat("New Scheduling", msg)
                     return {"success": True, "message": f"Call-out reported for {caregiver}"}
@@ -1263,6 +1295,25 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 logger.error(f"Deep research failed: {e}")
                 return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
 
+        elif tool_name == "watch_tickets":
+            from gigi.chief_of_staff_tools import cos_tools
+            artist = tool_input.get("artist", "")
+            venue = tool_input.get("venue")
+            city = tool_input.get("city", "Denver")
+            result = await cos_tools.watch_tickets(artist=artist, venue=venue, city=city)
+            return json.dumps(result)
+
+        elif tool_name == "list_ticket_watches":
+            from gigi.chief_of_staff_tools import cos_tools
+            result = await cos_tools.list_ticket_watches()
+            return json.dumps(result)
+
+        elif tool_name == "remove_ticket_watch":
+            from gigi.chief_of_staff_tools import cos_tools
+            watch_id = tool_input.get("watch_id")
+            result = await cos_tools.remove_ticket_watch(watch_id=watch_id)
+            return json.dumps(result)
+
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -1327,11 +1378,12 @@ async def _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulat
 
         # Dedup: prevent duplicate team messages within 60 seconds
         if name == "send_team_message":
-            import hashlib, time as _t
+            import hashlib
+            import time as _t
             msg_hash = hashlib.md5(json.dumps(inp, sort_keys=True).encode()).hexdigest()
             now = _t.time()
             if msg_hash in _recent_team_messages and now - _recent_team_messages[msg_hash] < 60:
-                logger.warning(f"[dedup] Blocked duplicate send_team_message within 60s")
+                logger.warning("[dedup] Blocked duplicate send_team_message within 60s")
                 return json.dumps({"success": True, "deduplicated": True, "message": "Message already sent"})
             _recent_team_messages[msg_hash] = now
             # Clean old entries

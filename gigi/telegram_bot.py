@@ -5,12 +5,12 @@ Handles Telegram messages for Jason via @Shulmeisterbot
 WITH ACTUAL TOOL CALLING - Calendar, Email, WellSky
 """
 
-import os
-import sys
-import logging
 import asyncio
 import json
-from datetime import datetime, date
+import logging
+import os
+import sys
+from datetime import date, datetime
 from pathlib import Path
 
 # Load environment variables from .env file
@@ -38,9 +38,9 @@ try:
     from telegram.ext import (
         Application,
         CommandHandler,
+        ContextTypes,
         MessageHandler,
         filters,
-        ContextTypes,
     )
 except ImportError:
     print("❌ python-telegram-bot not installed. Installing...")
@@ -50,9 +50,9 @@ except ImportError:
     from telegram.ext import (
         Application,
         CommandHandler,
+        ContextTypes,
         MessageHandler,
         filters,
-        ContextTypes,
     )
 
 # Import LLM SDKs (both available, selected by env var)
@@ -98,7 +98,7 @@ except Exception as e:
 
 # Memory system, mode detector, failure handler
 try:
-    from gigi.memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel
+    from gigi.memory_system import ImpactLevel, MemorySource, MemorySystem, MemoryType
     _memory_system = MemorySystem()
     MEMORY_AVAILABLE = True
     print("✓ Memory system initialized for Telegram bot")
@@ -197,6 +197,9 @@ ANTHROPIC_TOOLS = [
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto analysis, macro outlook, sector rotation, portfolio strategy, etc. Returns institutional-grade research with evidence and confidence level. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze in depth"}}, "required": ["question"]}},
     {"name": "get_polybot_status", "description": "Get Elite Trading Polybot status (PAPER MODE — not real money). Polybot runs 11 strategies on Polymarket prediction markets in paper/simulation mode. Shows simulated portfolio, paper P&L, mock positions, and strategy performance. Use to check how the paper trading strategies are performing. For LIVE real-money weather trading, use get_weather_arb_status instead.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_weather_arb_status", "description": "Get live status of weather trading bots: (1) Weather Sniper Bot (Polymarket) — LIVE real money, auto-snipes slam-dunk US temperature markets at daily 11:00 UTC open. Buys YES on 'X°F or higher' / 'X°F or below' when NOAA forecast shows 5°F+ margin. Shows sniper status, target date, forecasts, orders, P&L, and positions. (2) Kalshi bot — trades US temperature markets on Kalshi exchange. Use when asked about weather arb, weather bots, weather trading, temperature bets, weather sniper, Polymarket weather, or Kalshi weather.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "watch_tickets", "description": "Set up a ticket watch for an artist or event. Gigi will monitor Ticketmaster and AXS (via Bandsintown) and send Telegram alerts when tickets go on presale, general sale, or new events are listed. Use when Jason says 'watch for tickets', 'let me know when tickets drop', 'monitor tickets for', etc.", "input_schema": {"type": "object", "properties": {"artist": {"type": "string", "description": "Artist or event name to watch"}, "venue": {"type": "string", "description": "Specific venue to filter (optional, e.g. 'Red Rocks')"}, "city": {"type": "string", "description": "City to search (default: Denver)"}}, "required": ["artist"]}},
+    {"name": "list_ticket_watches", "description": "List all active ticket watches — shows what artists/events Gigi is monitoring for ticket alerts.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "remove_ticket_watch", "description": "Stop watching for tickets on a specific watch. Use list_ticket_watches first to get the watch ID.", "input_schema": {"type": "object", "properties": {"watch_id": {"type": "integer", "description": "Watch ID to remove"}}, "required": ["watch_id"]}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -259,6 +262,12 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="watch_tickets", description="Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends Telegram alerts when tickets go on presale or general sale.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"artist": _s("string", "Artist or event name"), "venue": _s("string", "Venue to filter (optional)"), "city": _s("string", "City (default Denver)")}, required=["artist"])),
+        genai_types.FunctionDeclaration(name="list_ticket_watches", description="List all active ticket watches Gigi is monitoring.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="remove_ticket_watch", description="Stop watching for tickets. Use list_ticket_watches first to get watch ID.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"watch_id": _s("integer", "Watch ID to remove")}, required=["watch_id"])),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -296,6 +305,9 @@ OPENAI_TOOLS = [
     _oai_tool("deep_research", "Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.", {"question": {"type": "string", "description": "The financial research question to analyze"}}, ["question"]),
     _oai_tool("get_polybot_status", "Get Elite Trading Polybot status (PAPER MODE — simulated, not real money). 11 strategies on Polymarket. For LIVE weather bots use get_weather_arb_status.", {}),
     _oai_tool("get_weather_arb_status", "Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.", {}),
+    _oai_tool("watch_tickets", "Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends alerts when tickets go on sale.", {"artist": {"type": "string", "description": "Artist or event name"}, "venue": {"type": "string", "description": "Venue filter (optional)"}, "city": {"type": "string", "description": "City (default Denver)"}}, ["artist"]),
+    _oai_tool("list_ticket_watches", "List all active ticket watches.", {}, []),
+    _oai_tool("remove_ticket_watch", "Stop watching for tickets.", {"watch_id": {"type": "integer", "description": "Watch ID to remove"}}, ["watch_id"]),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -320,7 +332,7 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - **NEVER say you "don't have a phone number"**
 
 # Your Elite Capabilities (Chief of Staff)
-- **Concerts & Events:** You can find concerts (search_concerts) and BUY tickets (buy_tickets_request).
+- **Concerts & Events:** You can find concerts (search_concerts), BUY tickets (buy_tickets_request), and SET UP TICKET WATCHES (watch_tickets) that monitor Ticketmaster/AXS and alert Jason via Telegram when tickets go on presale or general sale. Use list_ticket_watches to show active watches and remove_ticket_watch to stop one.
 - **Dining:** You can make restaurant reservations (book_table_request).
 - **Weather:** Use `get_weather` for real-time weather and forecasts.
 - **Flights:** Use `web_search` to find flight prices and options.
@@ -493,8 +505,9 @@ class GigiTelegramBot:
                     return json.dumps({"error": "No client name provided"})
 
                 def _sync_client_status(name_val):
-                    import psycopg2
                     from datetime import datetime
+
+                    import psycopg2
                     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                     conn = None
                     try:
@@ -1212,6 +1225,28 @@ class GigiTelegramBot:
                 except Exception as e:
                     logger.error(f"Deep research failed: {e}")
                     return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
+
+            elif tool_name == "watch_tickets":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                artist = tool_input.get("artist", "")
+                venue = tool_input.get("venue")
+                city = tool_input.get("city", "Denver")
+                result = await cos_tools.watch_tickets(artist=artist, venue=venue, city=city)
+                return json.dumps(result)
+
+            elif tool_name == "list_ticket_watches":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                result = await cos_tools.list_ticket_watches()
+                return json.dumps(result)
+
+            elif tool_name == "remove_ticket_watch":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                watch_id = tool_input.get("watch_id")
+                result = await cos_tools.remove_ticket_watch(watch_id=watch_id)
+                return json.dumps(result)
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
