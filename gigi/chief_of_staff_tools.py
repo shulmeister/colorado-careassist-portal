@@ -146,18 +146,24 @@ class ChiefOfStaffTools:
 
     async def watch_tickets(self, artist: str, venue: str = None, city: str = "Denver"):
         """Create a ticket watch — monitors Ticketmaster/AXS for on-sale dates."""
+        import asyncio
+
         from gigi.ticket_monitor import create_watch
-        return create_watch(artist, venue=venue, city=city)
+        return await asyncio.to_thread(create_watch, artist, venue, city)
 
     async def list_ticket_watches(self):
         """List all active ticket watches."""
+        import asyncio
+
         from gigi.ticket_monitor import list_watches
-        return list_watches()
+        return await asyncio.to_thread(list_watches)
 
     async def remove_ticket_watch(self, watch_id: int):
         """Remove a ticket watch."""
+        import asyncio
+
         from gigi.ticket_monitor import remove_watch
-        return remove_watch(watch_id)
+        return await asyncio.to_thread(remove_watch, int(watch_id))
 
 # Singleton
 cos_tools = ChiefOfStaffTools()
