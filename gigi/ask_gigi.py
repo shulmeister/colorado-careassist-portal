@@ -152,6 +152,7 @@ async def _call_gemini(bot, history, sys_prompt):
     )
 
     max_rounds = 5
+    fn_response_parts = []
     for tool_round in range(max_rounds):
         function_calls = []
         if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
@@ -195,7 +196,20 @@ async def _call_gemini(bot, history, sys_prompt):
         for part in response.candidates[0].content.parts:
             if hasattr(part, 'text') and part.text:
                 text_parts.append(part.text)
-    return "".join(text_parts)
+    final = "".join(text_parts)
+
+    # Safety net: if Gemini returned no text after tool calls, use last tool result
+    if not final and fn_response_parts:
+        logger.warning("Ask-Gigi: Gemini returned no text after tool call — using tool result as fallback")
+        last_part = fn_response_parts[-1]
+        if hasattr(last_part, 'function_response') and last_part.function_response:
+            fr = last_part.function_response
+            resp_data = fr.response if hasattr(fr, 'response') else {}
+            if isinstance(resp_data, dict):
+                final = json.dumps(resp_data, indent=2, default=str)
+            else:
+                final = str(resp_data)
+    return final
 
 
 async def _call_anthropic(bot, history, sys_prompt):
