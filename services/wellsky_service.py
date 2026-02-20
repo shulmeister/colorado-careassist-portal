@@ -3863,56 +3863,10 @@ class WellSkyService:
                 except Exception as e:
                     logger.error(f"Error syncing note ({days_back}d window): {e}")
 
-        # Fallback: No encounter found — create Clinical Note (DocumentReference)
-        # Shows in client's Documents tab, NOT in Tasks dashboard
-        logger.info(f"No encounter for client {client_id} in 90-day window. Creating Clinical Note.")
-        try:
-            if title:
-                note_title = title
-            else:
-                timestamp = datetime.now().strftime("%m/%d %H:%M")
-                _note_labels = {
-                    "callout": "Call-Out",
-                    "safety": "Safety Alert",
-                    "late": "Running Late",
-                    "complaint": "Complaint",
-                    "medication": "Medication",
-                    "schedule": "Schedule Update",
-                    "schedule_change": "Schedule Change",
-                    "care_plan": "Care Note",
-                    "general": "Care Note",
-                }
-                label = _note_labels.get(note_type, note_type.replace("_", " ").title())
-                note_title = f"{label} ({timestamp})"
-
-            success_note, resp_note = self.create_clinical_note(
-                patient_id=str(client_id),
-                title=note_title,
-                note_text=note,
-                source=source,
-            )
-            if success_note:
-                doc_id = resp_note.get("id", "unknown") if isinstance(resp_note, dict) else "unknown"
-                try:
-                    import sqlite3
-                    conn = sqlite3.connect('portal.db')
-                    cursor = conn.cursor()
-                    cursor.execute('''
-                        UPDATE gigi_documentation_log
-                        SET wellsky_synced = 1
-                        WHERE person_type = 'client' AND person_id = ?
-                        ORDER BY created_at DESC LIMIT 1
-                    ''', (client_id,))
-                    conn.commit()
-                    conn.close()
-                except Exception:
-                    pass
-                logger.info(f"Created WellSky Clinical Note {doc_id} for client {client_id}")
-                return True, f"Note synced to WellSky Clinical Note {doc_id}"
-            else:
-                logger.warning(f"Clinical Note creation also failed for client {client_id}: {resp_note}")
-        except Exception as e:
-            logger.error(f"Error creating Clinical Note fallback for {client_id}: {e}")
+        # Fallback: No encounter found — log locally only (do NOT create AdminTask)
+        # AdminTasks flood the WellSky Tasks dashboard with documentation entries.
+        # The local gigi_documentation_log table preserves the full documentation trail.
+        logger.info(f"No encounter for client {client_id} in 90-day window. Note saved locally only (no AdminTask).")
 
         logger.warning(f"All WellSky sync methods failed for client {client_id}. Note saved locally only.")
         return True, "Note documented locally (all WellSky sync methods failed)"
