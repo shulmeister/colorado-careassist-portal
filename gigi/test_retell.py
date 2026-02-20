@@ -14,14 +14,15 @@ Usage:
     python gigi/test_retell.py --check        # Verify Retell API connection
 """
 
-import os
 import json
-import requests
+import os
 import sys
+
+import requests
 
 # Retell API configuration
 RETELL_API_KEY = os.getenv("RETELL_API_KEY")
-RETELL_AGENT_ID = "agent_363f3725498b851037ea84bda5"
+RETELL_AGENT_ID = os.getenv("RETELL_CUSTOM_LLM_AGENT_ID", "agent_5b425f858369d8df61c363d47f")
 RETELL_API_BASE = "https://api.retellai.com"
 
 # Webhook base for local testing
@@ -299,7 +300,7 @@ def test_webhook_endpoints():
                 failed += 1
 
         except requests.exceptions.Timeout:
-            print(f"  ✗ Request timed out")
+            print("  ✗ Request timed out")
             failed += 1
         except Exception as e:
             print(f"  ✗ Error: {e}")

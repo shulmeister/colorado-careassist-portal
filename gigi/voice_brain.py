@@ -531,7 +531,29 @@ ANTHROPIC_TOOLS = [
             "required": []
         }
     },
-    # deep_research REMOVED from voice — takes 30-120 seconds, unusable on phone calls
+    {
+        "name": "deep_research",
+        "description": "Run deep autonomous financial research using 40+ data tools and 9 AI agents. Takes 30-120 seconds. Tell the caller you'll look into it and they can ask about something else while you wait.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "The financial research question to analyze"}
+            },
+            "required": ["question"]
+        }
+    },
+    {
+        "name": "browse_webpage",
+        "description": "Browse a webpage and extract its text content. Use for research, reading articles, checking websites. Takes 10-30 seconds. Tell the caller you'll check it and they can ask about something else while you wait.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "url": {"type": "string", "description": "URL to browse"},
+                "extract_links": {"type": "boolean", "description": "Also extract links (default false)"}
+            },
+            "required": ["url"]
+        }
+    },
     {
         "name": "watch_tickets",
         "description": "Set up a ticket watch for an artist or event. Gigi will monitor Ticketmaster and AXS and send Telegram alerts when tickets go on presale or general sale.",
@@ -1498,6 +1520,14 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 logger.error(f"Deep research failed: {e}")
                 return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
 
+        elif tool_name == "browse_webpage":
+            from gigi.browser_automation import get_browser
+            browser = get_browser()
+            url = tool_input.get("url", "")
+            extract_links = tool_input.get("extract_links", False)
+            result = await browser.browse_webpage(url, extract_links=extract_links)
+            return json.dumps(result)
+
         elif tool_name == "get_morning_briefing":
             from gigi.morning_briefing_service import MorningBriefingService
             svc = MorningBriefingService()
@@ -1686,7 +1716,8 @@ SLOW_TOOLS = {
     "web_search", "search_concerts", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
-    "deep_research"
+    "deep_research",
+    "browse_webpage"
 }
 
 async def _maybe_acknowledge(call_info, on_token):
