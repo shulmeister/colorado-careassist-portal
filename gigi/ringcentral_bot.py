@@ -2766,6 +2766,8 @@ class GigiRingCentralBot:
                             content = content[:idx] + completed_task + "\n" + rest[rest.index("\n") + 1:]
                         else:
                             content = content[:idx] + completed_task + "\n" + rest
+                    else:
+                        content += f"\n## Done\n{completed_task}\n"
                     with open(path, "w") as f:
                         f.write(content)
                     return json.dumps({"success": True, "completed": completed_task})
@@ -2778,8 +2780,11 @@ class GigiRingCentralBot:
                     return json.dumps({"error": "No note provided"})
                 path = os.path.expanduser("~/Scratchpad.md")
                 try:
-                    with open(path, "r") as f:
-                        content = f.read()
+                    try:
+                        with open(path, "r") as f:
+                            content = f.read()
+                    except FileNotFoundError:
+                        content = "# Scratchpad\n\n---\n"
                     from datetime import datetime as dt
                     timestamp = dt.now().strftime("%I:%M %p")
                     content = content.rstrip() + f"\n- {note} ({timestamp})\n"
@@ -2793,8 +2798,9 @@ class GigiRingCentralBot:
                 target_date = tool_input.get("date", "")
                 try:
                     import glob as g
+                    import re as _re
                     from datetime import datetime as dt
-                    d = target_date if target_date else dt.now().strftime("%Y-%m-%d")
+                    d = target_date if _re.match(r"^\d{4}-\d{2}-\d{2}$", target_date) else dt.now().strftime("%Y-%m-%d")
                     matches = g.glob(os.path.join(os.path.expanduser("~/Daily Notes"), f"{d}*"))
                     if matches:
                         with open(matches[0], "r") as f:
@@ -3810,6 +3816,8 @@ class GigiRingCentralBot:
                                 content = content[:idx] + completed_task + "\n" + rest[rest.index("\n") + 1:]
                             else:
                                 content = content[:idx] + completed_task + "\n" + rest
+                        else:
+                            content += f"\n## Done\n{completed_task}\n"
                         with open(path, "w") as f:
                             f.write(content)
                         return {"success": True, "completed": completed_task}
@@ -3824,8 +3832,11 @@ class GigiRingCentralBot:
                 def _dm_capture_note():
                     try:
                         path = os.path.expanduser("~/Scratchpad.md")
-                        with open(path, "r") as f:
-                            content = f.read()
+                        try:
+                            with open(path, "r") as f:
+                                content = f.read()
+                        except FileNotFoundError:
+                            content = "# Scratchpad\n\n---\n"
                         from datetime import datetime as dt
                         timestamp = dt.now().strftime("%I:%M %p")
                         content = content.rstrip() + f"\n- {note} ({timestamp})\n"
@@ -3841,8 +3852,9 @@ class GigiRingCentralBot:
                 def _dm_read_notes():
                     try:
                         import glob as g
+                        import re as _re
                         from datetime import datetime as dt
-                        d = target_date if target_date else dt.now().strftime("%Y-%m-%d")
+                        d = target_date if _re.match(r"^\d{4}-\d{2}-\d{2}$", target_date) else dt.now().strftime("%Y-%m-%d")
                         matches = g.glob(os.path.join(os.path.expanduser("~/Daily Notes"), f"{d}*"))
                         if matches:
                             with open(matches[0], "r") as f:

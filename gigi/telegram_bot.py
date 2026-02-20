@@ -1423,6 +1423,9 @@ class GigiTelegramBot:
                                 content = content[:idx] + completed_task + "\n" + rest[rest.index("\n") + 1:]
                             else:
                                 content = content[:idx] + completed_task + "\n" + rest
+                        else:
+                            # No Done section — append one
+                            content += f"\n## Done\n{completed_task}\n"
                         with open(path, "w") as f:
                             f.write(content)
                         return {"success": True, "completed": completed_task}
@@ -1437,8 +1440,11 @@ class GigiTelegramBot:
                 def _capture_note():
                     try:
                         path = os.path.expanduser("~/Scratchpad.md")
-                        with open(path, "r") as f:
-                            content = f.read()
+                        try:
+                            with open(path, "r") as f:
+                                content = f.read()
+                        except FileNotFoundError:
+                            content = "# Scratchpad\n\n---\n"
                         from datetime import datetime as dt
                         timestamp = dt.now().strftime("%I:%M %p")
                         content = content.rstrip() + f"\n- {note} ({timestamp})\n"
@@ -1453,9 +1459,11 @@ class GigiTelegramBot:
                 target_date = tool_input.get("date", "")
                 def _read_daily_notes():
                     try:
+                        import re as _re
                         from datetime import datetime as dt
                         if target_date:
-                            d = target_date
+                            # Sanitize: only allow YYYY-MM-DD
+                            d = target_date if _re.match(r"^\d{4}-\d{2}-\d{2}$", target_date) else dt.now().strftime("%Y-%m-%d")
                         else:
                             d = dt.now().strftime("%Y-%m-%d")
                         # Daily notes use format: YYYY-MM-DD Day.md or just YYYY-MM-DD.md
