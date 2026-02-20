@@ -562,6 +562,21 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
+        "name": "get_morning_briefing",
+        "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. Use when asked for a briefing or daily summary.",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_polybot_status",
+        "description": "Get Elite Trading paper-mode Polybot status.",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "get_weather_arb_status",
+        "description": "Get weather trading bots status: Weather Sniper Bot (Polymarket, LIVE) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
         "name": "get_task_board",
         "description": "Read Jason's task board. Shows tasks by section: Today, Soon, Later, Waiting, Agenda, Inbox, Done. Use when asked about priorities or to-dos.",
         "input_schema": {"type": "object", "properties": {}, "required": []}
@@ -1482,6 +1497,40 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             except Exception as e:
                 logger.error(f"Deep research failed: {e}")
                 return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
+
+        elif tool_name == "get_morning_briefing":
+            from gigi.morning_briefing_service import MorningBriefingService
+            svc = MorningBriefingService()
+            briefing = await run_sync(svc.generate_briefing)
+            return briefing if isinstance(briefing, str) else json.dumps(briefing)
+
+        elif tool_name == "get_polybot_status":
+            try:
+                import httpx
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get("http://localhost:3002/api/status")
+                    return json.dumps(resp.json())
+            except Exception as e:
+                return json.dumps({"error": f"Polybot unavailable: {e}"})
+
+        elif tool_name == "get_weather_arb_status":
+            try:
+                import httpx
+                results = {}
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    try:
+                        r1 = await client.get("http://localhost:3010/status")
+                        results["polymarket_sniper"] = r1.json()
+                    except Exception:
+                        results["polymarket_sniper"] = {"error": "unavailable"}
+                    try:
+                        r2 = await client.get("http://localhost:3011/status")
+                        results["kalshi_sniper"] = r2.json()
+                    except Exception:
+                        results["kalshi_sniper"] = {"error": "unavailable"}
+                return json.dumps(results)
+            except Exception as e:
+                return json.dumps({"error": f"Weather bots unavailable: {e}"})
 
         elif tool_name == "watch_tickets":
             from gigi.chief_of_staff_tools import cos_tools

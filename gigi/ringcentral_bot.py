@@ -271,6 +271,16 @@ SMS_TOOLS = [
     {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
 ]
 
+# Auto-extend SMS tools from Telegram canonical set (ensures tool parity across channels)
+try:
+    from gigi.telegram_bot import ANTHROPIC_TOOLS as _TELE_TOOLS
+    _sms_names = {t["name"] for t in SMS_TOOLS}
+    for _t in _TELE_TOOLS:
+        if _t["name"] not in _sms_names:
+            SMS_TOOLS.append(_t)
+except ImportError:
+    pass
+
 # Full tool set for Glip DM replies — matches Telegram capabilities
 DM_TOOLS = [
     {"name": "get_client_current_status", "description": "Check who is with a client RIGHT NOW. Returns current caregiver, shift times, and status.", "input_schema": {"type": "object", "properties": {"client_name": {"type": "string", "description": "Name of the client"}}, "required": ["client_name"]}},
@@ -311,8 +321,18 @@ DM_TOOLS = [
     {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
 ]
 
+# Auto-extend DM tools from Telegram canonical set (ensures tool parity across channels)
+try:
+    from gigi.telegram_bot import ANTHROPIC_TOOLS as _TELE_TOOLS
+    _dm_names = {t["name"] for t in DM_TOOLS}
+    for _t in _TELE_TOOLS:
+        if _t["name"] not in _dm_names:
+            DM_TOOLS.append(_t)
+except ImportError:
+    pass
+
 # =========================================================================
-# Gemini-format tool definitions (used when LLM_PROVIDER == "gemini")
+# Gemini-format tool definitions — auto-generated from Anthropic-format lists
 # =========================================================================
 GEMINI_SMS_TOOLS = None
 GEMINI_DM_TOOLS = None
@@ -322,133 +342,22 @@ if GEMINI_AVAILABLE:
         type_map = {"string": "STRING", "integer": "INTEGER", "boolean": "BOOLEAN"}
         return genai_types.Schema(type=type_map.get(type_str, type_str.upper()), description=desc, **kwargs)
 
-    GEMINI_SMS_TOOLS = [genai_types.Tool(function_declarations=[
-        genai_types.FunctionDeclaration(name="get_client_current_status", description="Check who is with a client RIGHT NOW. Returns current caregiver, shift times, and status.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"client_name": _gs("string", "Name of the client")}, required=["client_name"])),
-        genai_types.FunctionDeclaration(name="identify_caller", description="Look up who is texting based on their phone number. Checks caregiver and client records in WellSky.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"phone_number": _gs("string", "The caller's phone number")}, required=["phone_number"])),
-        genai_types.FunctionDeclaration(name="get_wellsky_shifts", description="Get shift schedule from WellSky. Look up shifts by caregiver_id or client_id.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "WellSky caregiver ID"), "client_id": _gs("string", "WellSky client ID"), "days": _gs("integer", "Days to look ahead (default 7, max 14)")})),
-        genai_types.FunctionDeclaration(name="get_wellsky_clients", description="Search for clients in WellSky by NAME. Pass the person's actual name, NOT a numeric ID.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Client's name (e.g. 'Preston Hill'). Must be a text name, NOT a WellSky numeric ID.")}, required=["search_name"])),
-        genai_types.FunctionDeclaration(name="get_wellsky_caregivers", description="Search for caregivers in WellSky by NAME. Pass the person's actual name, NOT a numeric ID.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Caregiver's name (e.g. 'Angela Atteberry'). Must be a text name, NOT a WellSky numeric ID.")}, required=["search_name"])),
-        genai_types.FunctionDeclaration(name="log_call_out", description="Log a caregiver call-out in WellSky and create an urgent admin task for coverage.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "The caregiver's WellSky ID"), "caregiver_name": _gs("string", "The caregiver's name"), "reason": _gs("string", "Reason for the call-out"), "shift_date": _gs("string", "Date of the shift (YYYY-MM-DD, defaults to today)")}, required=["caregiver_id", "caregiver_name", "reason"])),
-        genai_types.FunctionDeclaration(name="save_memory", description="Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred or fabricated information.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"content": _gs("string", "The EXACT fact or preference stated by the user"), "category": _gs("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _gs("string", "high/medium/low")}, required=["content", "category"])),
-        genai_types.FunctionDeclaration(name="recall_memories", description="Search long-term memory for saved preferences, facts, or instructions.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"category": _gs("string", "Filter by category"), "search_text": _gs("string", "Keywords to search for")})),
-        genai_types.FunctionDeclaration(name="forget_memory", description="Archive a memory that is no longer relevant.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _gs("string", "ID of the memory to archive")}, required=["memory_id"])),
-        genai_types.FunctionDeclaration(name="search_memory_logs", description="Search Gigi's daily operation logs for past activity.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Keywords to search"), "days_back": _gs("integer", "Days back (default 30)")}, required=["query"])),
-        genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
-        genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
-        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="watch_tickets", description="Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends alerts when tickets go on sale.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"artist": _gs("string", "Artist or event name"), "venue": _gs("string", "Venue (optional)"), "city": _gs("string", "City (default Denver)")}, required=["artist"])),
-        genai_types.FunctionDeclaration(name="list_ticket_watches", description="List all active ticket watches.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="remove_ticket_watch", description="Stop watching for tickets.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"watch_id": _gs("integer", "Watch ID to remove")}, required=["watch_id"])),
-        genai_types.FunctionDeclaration(name="clock_in_shift", description="Clock a caregiver into their shift in WellSky.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
-        genai_types.FunctionDeclaration(name="clock_out_shift", description="Clock a caregiver out of their shift in WellSky.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
-        genai_types.FunctionDeclaration(name="find_replacement_caregiver", description="Find replacement caregiver when someone calls out. Scores by fit, initiates SMS outreach.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"shift_id": _gs("string", "Shift ID needing coverage"), "original_caregiver_id": _gs("string", "WellSky ID of caregiver who called out"), "reason": _gs("string", "Reason for calloff")}, required=["shift_id", "original_caregiver_id"])),
-        genai_types.FunctionDeclaration(name="get_task_board", description="Read Jason's task board. Shows tasks by section.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="add_task", description="Add a task to Jason's task board.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"task": _gs("string", "The task description"), "section": _gs("string", "Board section: Today, Soon, Later, Waiting, Agenda, Inbox")}, required=["task"])),
-        genai_types.FunctionDeclaration(name="complete_task", description="Mark a task done on Jason's task board.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"task_text": _gs("string", "Text of the task to complete")}, required=["task_text"])),
-        genai_types.FunctionDeclaration(name="capture_note", description="Capture a quick note or idea to Jason's scratchpad.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"note": _gs("string", "The note or idea to capture")}, required=["note"])),
-        genai_types.FunctionDeclaration(name="get_daily_notes", description="Read today's daily notes for context.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"date": _gs("string", "Date YYYY-MM-DD (default: today)")})),
-    ])]
+    def _auto_gemini_tools(tools_list):
+        """Auto-generate Gemini tool declarations from Anthropic-format tools."""
+        decls = []
+        for t in tools_list:
+            props = {k: _gs(v.get("type", "string"), v.get("description", k))
+                     for k, v in t["input_schema"]["properties"].items()}
+            req = t["input_schema"].get("required", [])
+            decls.append(genai_types.FunctionDeclaration(
+                name=t["name"], description=t["description"],
+                parameters=genai_types.Schema(type="OBJECT", properties=props, required=req if req else None)))
+        return [genai_types.Tool(function_declarations=decls)]
 
-    GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
-        genai_types.FunctionDeclaration(name="get_client_current_status", description="Check who is with a client RIGHT NOW. Returns current caregiver, shift times, and status.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"client_name": _gs("string", "Name of the client")}, required=["client_name"])),
-        genai_types.FunctionDeclaration(name="get_wellsky_clients", description="Search for clients in WellSky by name, or get all active clients.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Client name to search (leave empty for all)"), "active_only": _gs("boolean", "Only active clients (default true)")})),
-        genai_types.FunctionDeclaration(name="get_wellsky_caregivers", description="Search for caregivers in WellSky by name, or get all active caregivers.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Caregiver name to search (leave empty for all)"), "active_only": _gs("boolean", "Only active caregivers (default true)")})),
-        genai_types.FunctionDeclaration(name="get_wellsky_shifts", description="Get shifts from WellSky. Use get_wellsky_clients/caregivers first to find IDs.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"client_id": _gs("string", "WellSky client ID"), "caregiver_id": _gs("string", "WellSky caregiver ID"), "days": _gs("integer", "Days ahead (default 7)"), "past_days": _gs("integer", "Days back for history/hours (default 0)"), "open_only": _gs("boolean", "Only open/unfilled shifts")})),
-        genai_types.FunctionDeclaration(name="get_weather", description="Get current weather and forecast for a location.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"location": _gs("string", "City and State (e.g. Denver, CO)")}, required=["location"])),
-        genai_types.FunctionDeclaration(name="web_search", description="Search the internet for current information.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "The search query")}, required=["query"])),
-        genai_types.FunctionDeclaration(name="get_stock_price", description="Get current stock price for a ticker symbol.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"symbol": _gs("string", "Stock ticker symbol")}, required=["symbol"])),
-        genai_types.FunctionDeclaration(name="get_crypto_price", description="Get current cryptocurrency price.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"symbol": _gs("string", "Crypto symbol")}, required=["symbol"])),
-        genai_types.FunctionDeclaration(name="search_concerts", description="Find upcoming concerts and live music events.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Artist, venue, or city to search")}, required=["query"])),
-        genai_types.FunctionDeclaration(name="get_calendar_events", description="Get upcoming events from Jason's Google Calendar.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"days": _gs("integer", "Days to look ahead (1-7)")})),
-        genai_types.FunctionDeclaration(name="search_emails", description="Search Jason's Gmail.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Gmail search query"), "max_results": _gs("integer", "Max emails to return")})),
-        genai_types.FunctionDeclaration(name="check_recent_sms", description="Check recent inbound SMS across ALL company lines (307-459-8220, 719-428-3999).",
-            parameters=genai_types.Schema(type="OBJECT", properties={"hours": _gs("integer", "Hours back to look (default 12, max 48)"), "from_phone": _gs("string", "Filter by sender phone number")})),
-        genai_types.FunctionDeclaration(name="send_sms", description="Send an SMS from the company number (307-459-8220).",
-            parameters=genai_types.Schema(type="OBJECT", properties={"to_phone": _gs("string", "Phone number to text"), "message": _gs("string", "The SMS message (keep under 300 chars)")}, required=["to_phone", "message"])),
-        genai_types.FunctionDeclaration(name="log_call_out", description="Log a caregiver call-out in WellSky and create an urgent admin task for coverage.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "The caregiver's WellSky ID"), "caregiver_name": _gs("string", "The caregiver's name"), "reason": _gs("string", "Reason for the call-out"), "shift_date": _gs("string", "Date of the shift (YYYY-MM-DD, defaults to today)")}, required=["caregiver_id", "caregiver_name", "reason"])),
-        genai_types.FunctionDeclaration(name="identify_caller", description="Look up who a phone number belongs to. Checks caregiver, client, staff, and family records in WellSky.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"phone_number": _gs("string", "Phone number to look up")}, required=["phone_number"])),
-        genai_types.FunctionDeclaration(name="save_memory", description="Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred or fabricated information.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"content": _gs("string", "The EXACT fact or preference stated by the user"), "category": _gs("string", "Category: scheduling, communication, travel, health, operations, personal, general"), "importance": _gs("string", "high/medium/low")}, required=["content", "category"])),
-        genai_types.FunctionDeclaration(name="recall_memories", description="Search long-term memory for saved preferences, facts, or instructions.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"category": _gs("string", "Filter by category"), "search_text": _gs("string", "Keywords to search for")})),
-        genai_types.FunctionDeclaration(name="forget_memory", description="Archive a memory that is no longer relevant.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"memory_id": _gs("string", "ID of the memory to archive")}, required=["memory_id"])),
-        genai_types.FunctionDeclaration(name="search_memory_logs", description="Search Gigi's daily operation logs for past activity.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"query": _gs("string", "Keywords to search"), "days_back": _gs("integer", "Days back (default 30)")}, required=["query"])),
-        genai_types.FunctionDeclaration(name="browse_webpage", description="Browse a webpage and extract its text content. Use for research, reading articles, checking websites.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"url": _gs("string", "URL to browse"), "extract_links": _gs("boolean", "Also extract links (default false)")}, required=["url"])),
-        genai_types.FunctionDeclaration(name="take_screenshot", description="Take a screenshot of a webpage. Returns the file path of the saved image.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"url": _gs("string", "URL to screenshot"), "full_page": _gs("boolean", "Capture full scrollable page (default false)")}, required=["url"])),
-        genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _gs("string", "Level of detail: 'summary' or 'detailed'")})),
-        genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
-        genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="watch_tickets", description="Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends alerts when tickets go on sale.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"artist": _gs("string", "Artist or event name"), "venue": _gs("string", "Venue (optional)"), "city": _gs("string", "City (default Denver)")}, required=["artist"])),
-        genai_types.FunctionDeclaration(name="list_ticket_watches", description="List all active ticket watches.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="remove_ticket_watch", description="Stop watching for tickets.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"watch_id": _gs("integer", "Watch ID to remove")}, required=["watch_id"])),
-        genai_types.FunctionDeclaration(name="clock_in_shift", description="Clock a caregiver into their shift in WellSky.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
-        genai_types.FunctionDeclaration(name="clock_out_shift", description="Clock a caregiver out of their shift in WellSky.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
-        genai_types.FunctionDeclaration(name="find_replacement_caregiver", description="Find replacement caregiver when someone calls out. Scores by fit, initiates SMS outreach.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"shift_id": _gs("string", "Shift ID needing coverage"), "original_caregiver_id": _gs("string", "WellSky ID of caregiver who called out"), "reason": _gs("string", "Reason for calloff")}, required=["shift_id", "original_caregiver_id"])),
-        genai_types.FunctionDeclaration(name="get_task_board", description="Read Jason's task board. Shows tasks by section: Today, Soon, Later, Waiting, Agenda, Inbox, Done.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
-        genai_types.FunctionDeclaration(name="add_task", description="Add a task to Jason's task board.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"task": _gs("string", "The task description"), "section": _gs("string", "Board section: Today, Soon, Later, Waiting, Agenda, Inbox")}, required=["task"])),
-        genai_types.FunctionDeclaration(name="complete_task", description="Mark a task done on Jason's task board.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"task_text": _gs("string", "Text of the task to complete (partial match OK)")}, required=["task_text"])),
-        genai_types.FunctionDeclaration(name="capture_note", description="Capture a quick note or idea to Jason's scratchpad.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"note": _gs("string", "The note or idea to capture")}, required=["note"])),
-        genai_types.FunctionDeclaration(name="get_daily_notes", description="Read today's daily notes for context.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"date": _gs("string", "Date YYYY-MM-DD (default: today)")})),
-    ])]
+    GEMINI_SMS_TOOLS = _auto_gemini_tools(SMS_TOOLS)
+    GEMINI_DM_TOOLS = _auto_gemini_tools(DM_TOOLS)
+
+    logger.info(f"Gemini tools auto-generated: SMS={len(SMS_TOOLS)}, DM={len(DM_TOOLS)}")
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
 
@@ -498,6 +407,7 @@ KEY CAPABILITIES:
 - You CAN find replacement caregivers when someone calls out via find_replacement_caregiver.
 - You CAN look up any phone number to identify who it belongs to.
 - You CAN check calendars, emails, weather, stocks, crypto, and search the web.
+- You have the FULL Gigi tool set: concerts, ticket watches, task board, notes, trading bots, AR reports, deep research, browser automation, and more.
 
 ACKNOWLEDGMENTS:
 - If someone replies with just "Sure", "Ok", "Thanks", "Got it", "Cool", "Perfect", "Sounds good", or similar — that's a conversation closer. Just say something brief like "Let me know if you need anything!" Do NOT call tools or start investigating something new.
@@ -555,6 +465,7 @@ KEY CAPABILITIES:
 - You CAN look up clients and caregivers by NAME using get_wellsky_clients and get_wellsky_caregivers.
 - You CAN check shift schedules using get_wellsky_shifts (requires a caregiver_id or client_id from the lookup tools).
 - You CAN identify who is texting using identify_caller with their phone number.
+- You have the FULL Gigi tool set: weather, web search, concerts, stocks, crypto, calendar, email, task board, notes, memory, research, trading bots, ticket watches, AR reports, browsing, and more.
 
 TONE:
 - Friendly, professional, concise
@@ -2810,7 +2721,21 @@ class GigiRingCentralBot:
                     return json.dumps({"error": f"Failed: {str(e)}"})
 
             else:
-                return json.dumps({"error": f"Unknown tool: {tool_name}"})
+                # Delegate to Telegram bot for shared tools not natively handled
+                try:
+                    if not hasattr(self, '_shared_tele_bot'):
+                        from gigi.telegram_bot import GigiTelegramBot
+                        self._shared_tele_bot = GigiTelegramBot()
+                    loop = asyncio.new_event_loop()
+                    try:
+                        result = loop.run_until_complete(
+                            self._shared_tele_bot.execute_tool(tool_name, tool_input))
+                    finally:
+                        loop.close()
+                    return result
+                except Exception as e:
+                    logger.error(f"Delegated SMS tool {tool_name} failed: {e}")
+                    return json.dumps({"error": f"Tool '{tool_name}' is not available right now."})
 
         except Exception as e:
             logger.error(f"SMS tool error ({tool_name}): {e}")
@@ -3865,7 +3790,15 @@ class GigiRingCentralBot:
                 return json.dumps(await asyncio.to_thread(_dm_read_notes))
 
             else:
-                return json.dumps({"error": f"Unknown tool: {tool_name}"})
+                # Delegate to Telegram bot for shared tools not natively handled
+                try:
+                    if not hasattr(self, '_shared_tele_bot'):
+                        from gigi.telegram_bot import GigiTelegramBot
+                        self._shared_tele_bot = GigiTelegramBot()
+                    return await self._shared_tele_bot.execute_tool(tool_name, tool_input)
+                except Exception as e:
+                    logger.error(f"Delegated DM tool {tool_name} failed: {e}")
+                    return json.dumps({"error": f"Tool '{tool_name}' is not available right now."})
 
         except Exception as e:
             logger.error(f"DM tool execution error ({tool_name}): {e}")
