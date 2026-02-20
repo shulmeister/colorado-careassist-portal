@@ -83,7 +83,8 @@ class SimulationRunner:
             raise ValueError("GEMINI_API_KEY not set")
 
         genai.configure(api_key=api_key)
-        self.llm_model_name = os.getenv("GIGI_LLM_MODEL", "gemini-1.5-flash-preview")
+        # Always use Gemini for simulated caller generation (independent of Gigi's LLM provider)
+        self.llm_model_name = os.getenv("SIMULATION_LLM_MODEL", "gemini-2.0-flash")
         self.llm = genai.GenerativeModel(self.llm_model_name)
 
         # Voice Brain WebSocket URL — use current server's port

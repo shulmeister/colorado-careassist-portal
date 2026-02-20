@@ -578,7 +578,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Peter Hwang, 45 years old, calling from cell phone",
         "goal": "Confirm services offered, ask how to get started, leave contact info for callback",
         "personality": "Calm and straightforward, asks a few questions then ready to leave number",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": ["get_wellsky_clients"],
         "expected_behavior": [
             "Agent identifies not-in-system quickly",
             "Agent offers correct routing (prospect client vs caregiver)",
@@ -597,7 +597,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Michelle Grant, 57, daughter of a client",
         "goal": "Get reassurance and a clear next step for confused mother",
         "personality": "Over-explains, repeats herself, jumps between details (meds, schedule, fall, caregiver)",
-        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients"],
         "expected_behavior": [
             "Agent takes control politely (one-question-at-a-time)",
             "Agent summarizes and states next action",
@@ -617,7 +617,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Evelyn Price, 83, active client with memory issues",
         "goal": "Get reassurance and clarity about when caregiver is coming",
         "personality": "Repeats 'When is she coming?' and 'Are you sure?' - does not remember agent's last answer",
-        "expected_tools": ["verify_caller", "get_client_schedule"],
+        "expected_tools": ["get_wellsky_clients", "get_wellsky_shifts"],
         "expected_behavior": [
             "Agent stays patient and consistent",
             "Agent answers simply without adding new complexity",
@@ -637,7 +637,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Brian Kline, 52, son of a client",
         "goal": "Make a complaint about caregiver leaving early, demand accountability",
         "personality": "Angry and protective, says 'This is neglect' and threatens to call the state",
-        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients", "send_team_message"],
         "expected_behavior": [
             "Agent does not get defensive",
             "Agent acknowledges concern once and moves to action",
@@ -657,7 +657,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Dana Walters, 49, calling for her father",
         "goal": "Find out if someone can start tonight/tomorrow, understand minimum hours, leave info",
         "personality": "Urgent but polite, wants clear yes/no answers quickly",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": ["get_wellsky_clients"],
         "expected_behavior": [
             "Agent avoids over-promising",
             "Agent captures key intake info quickly",
@@ -677,7 +677,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Harold Simmons, 80, active client",
         "goal": "Get advice on whether to take another blood pressure pill while feeling dizzy",
         "personality": "Worried, asking agent to tell him what to do, reluctant to call 911",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": ["get_wellsky_clients"],
         "expected_behavior": [
             "Agent does not provide medical advice",
             "Agent directs to 911 for emergency or appropriate clinical resource",
@@ -697,7 +697,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Ashley Nguyen, caregiver at Colorado Care Assist",
         "goal": "Get paycheck issue fixed tonight, know who will call and when",
         "personality": "Frustrated, needs rent money, says 'My check is wrong' and 'I need this fixed ASAP'",
-        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_tools": ["get_wellsky_caregivers", "send_team_message"],
         "expected_behavior": [
             "Agent refuses payroll help after hours without sounding dismissive",
             "Agent captures essential details (what's wrong, date range, amount)",
@@ -717,7 +717,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Jamal Carter, caregiver at Colorado Care Assist",
         "goal": "Notify office of lateness, make sure client is not confused, confirm doing right thing",
         "personality": "Stressed, talking fast, keeps repeating 'I'm not calling out, I'm still coming'",
-        "expected_tools": ["verify_caller", "get_active_shifts"],
+        "expected_tools": ["get_wellsky_caregivers", "get_wellsky_shifts", "send_team_message"],
         "expected_behavior": [
             "Agent gathers ETA and reason quickly",
             "Agent logs the issue and reassures without lecturing",
@@ -737,7 +737,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Linda Martinez, 74, active client",
         "goal": "Complain about inconsistent service, get assurance something will change",
         "personality": "Angry but not abusive, says 'If this happens again, we're done'",
-        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients", "send_team_message"],
         "expected_behavior": [
             "Agent acknowledges frustration once and stays calm",
             "Agent escalates to Jason Shulman or Cynthia Pointe",
@@ -757,7 +757,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Tom Reynolds, 60, shopping for care for his mom",
         "goal": "Get hourly rate, minimum hours, how fast care can start, whether deposit required",
         "personality": "Interrupts if agent talks too long, asks same price question in different ways",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": ["get_wellsky_clients"],
         "expected_behavior": [
             "Caller gets a clear, simple price answer (no negotiation)",
             "Caller is guided to next step: callback / intake",
@@ -778,7 +778,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Karen Miller, 62, calling about her 84-year-old father",
         "goal": "Understand what CCA does, find out if they can help soon, feel reassured",
         "personality": "Anxious, rambles, doesn't use right terminology, calms down if guided clearly",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": ["get_wellsky_clients"],
         "expected_behavior": [
             "Agent explains non-medical home care clearly",
             "Agent avoids over-promising on timeline",
@@ -799,7 +799,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Maria Lopez, caregiver at Colorado Care Assist",
         "goal": "Let agency know she can't make shift, ensure client is covered, avoid getting blamed",
         "personality": "Rushed and apologetic, speaks quickly, jumps between thoughts",
-        "expected_tools": ["verify_caller", "get_active_shifts", "execute_caregiver_call_out"],
+        "expected_tools": ["get_wellsky_caregivers", "get_wellsky_shifts", "report_call_out"],
         "expected_behavior": [
             "Agent stays calm and takes control",
             "Agent gathers key info without lecturing",
@@ -819,7 +819,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Robert Jenkins, 78, active client",
         "goal": "Find out what's going on, make sure he's not forgotten, get reassurance",
         "personality": "Speaks slowly and politely, apologizes for calling, gets quieter if dismissed",
-        "expected_tools": ["verify_caller", "get_active_shifts", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients", "get_wellsky_shifts", "send_team_message"],
         "expected_behavior": [
             "Agent reassures with warm tone",
             "Agent checks schedule and logs issue",
@@ -839,7 +839,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Susan Parker, 55, daughter of 82-year-old client with memory issues",
         "goal": "Confirm caregiver schedule, make sure mother is safe, know the plan",
         "personality": "Polite but tense, speaks quickly, jumps between details, protective",
-        "expected_tools": ["verify_caller", "get_client_schedule", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients", "get_wellsky_shifts", "send_team_message"],
         "expected_behavior": [
             "Agent reassures about mother's safety",
             "Agent clearly states what's happening tonight",
