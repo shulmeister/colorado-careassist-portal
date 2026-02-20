@@ -10,7 +10,6 @@ Reuses GigiTelegramBot's execute_tool (600+ lines of tool implementations)
 without duplication. All 19 tools available across all channels.
 """
 
-import os
 import json
 import logging
 from datetime import datetime
@@ -31,12 +30,14 @@ def _get_bot():
     return _bot_instance
 
 
-def _build_system_prompt(channel: str, conversation_store=None):
+def _build_system_prompt(channel: str, conversation_store=None, user_message=None):
     """Build system prompt with dynamic context, adapted for the given channel."""
     from gigi.telegram_bot import (
         _TELEGRAM_SYSTEM_PROMPT_BASE,
-        MEMORY_AVAILABLE, _memory_system,
-        MODE_AVAILABLE, _mode_detector,
+        MEMORY_AVAILABLE,
+        MODE_AVAILABLE,
+        _memory_system,
+        _mode_detector,
     )
 
     parts = [_TELEGRAM_SYSTEM_PROMPT_BASE]
@@ -72,6 +73,17 @@ def _build_system_prompt(channel: str, conversation_store=None):
         except Exception as e:
             logger.warning(f"Cross-channel context failed: {e}")
 
+    # Inject elite team context if triggered
+    if user_message:
+        try:
+            from gigi.elite_teams import detect_team, get_team_context
+            team_key = detect_team(user_message)
+            if team_key:
+                parts.append(get_team_context(team_key))
+                logger.info(f"Elite team activated via {channel}: {team_key}")
+        except Exception:
+            pass
+
     return "\n".join(parts)
 
 
@@ -88,9 +100,7 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
         Gigi's response text
     """
     from gigi.telegram_bot import (
-        LLM_PROVIDER, LLM_MODEL,
-        ANTHROPIC_TOOLS, GEMINI_TOOLS, OPENAI_TOOLS,
-        GEMINI_AVAILABLE,
+        LLM_PROVIDER,
     )
 
     bot = _get_bot()
@@ -99,8 +109,8 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
     # Store user message
     store.append(user_id, channel, "user", text)
 
-    # Build system prompt with cross-channel context
-    sys_prompt = _build_system_prompt(channel, store)
+    # Build system prompt with cross-channel context + elite team detection
+    sys_prompt = _build_system_prompt(channel, store, user_message=text)
 
     # Get conversation history for this channel
     history = store.get_recent(user_id, channel, limit=20)
@@ -131,8 +141,9 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
 
 async def _call_gemini(bot, history, sys_prompt):
     """Gemini tool-calling loop (mirrors telegram_bot._call_gemini without Telegram deps)."""
-    from gigi.telegram_bot import LLM_MODEL, GEMINI_TOOLS
     from google.genai import types as genai_types
+
+    from gigi.telegram_bot import GEMINI_TOOLS, LLM_MODEL
 
     contents = []
     for m in history:
@@ -214,7 +225,7 @@ async def _call_gemini(bot, history, sys_prompt):
 
 async def _call_anthropic(bot, history, sys_prompt):
     """Anthropic tool-calling loop."""
-    from gigi.telegram_bot import LLM_MODEL, ANTHROPIC_TOOLS
+    from gigi.telegram_bot import ANTHROPIC_TOOLS, LLM_MODEL
 
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
 

@@ -459,8 +459,8 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 """
 
 
-def _build_telegram_system_prompt(conversation_store=None):
-    """Build the system prompt with dynamic context: date, memories, mode, cross-channel."""
+def _build_telegram_system_prompt(conversation_store=None, user_message=None):
+    """Build the system prompt with dynamic context: date, memories, mode, cross-channel, elite teams."""
     parts = [_TELEGRAM_SYSTEM_PROMPT_BASE]
 
     # Current date/time
@@ -492,6 +492,17 @@ def _build_telegram_system_prompt(conversation_store=None):
                 parts.append(xc)
         except Exception as e:
             logger.warning(f"Cross-channel context failed: {e}")
+
+    # Inject elite team context if triggered
+    if user_message:
+        try:
+            from gigi.elite_teams import detect_team, get_team_context
+            team_key = detect_team(user_message)
+            if team_key:
+                parts.append(get_team_context(team_key))
+                logger.info(f"Elite team activated: {team_key}")
+        except Exception as e:
+            logger.warning(f"Elite team detection failed: {e}")
 
     return "\n".join(parts)
 
@@ -1617,7 +1628,8 @@ class GigiTelegramBot:
         history = self.conversation_store.get_recent("jason", "telegram", limit=20)
         messages = [{"role": m["role"], "content": m["content"]} for m in history]
 
-        sys_prompt = _build_telegram_system_prompt(self.conversation_store)
+        user_msg = update.message.text if update.message else None
+        sys_prompt = _build_telegram_system_prompt(self.conversation_store, user_message=user_msg)
         response = await asyncio.to_thread(
             self.llm.messages.create,
             model=LLM_MODEL, max_tokens=4096,
@@ -1681,8 +1693,9 @@ class GigiTelegramBot:
                 parts=[genai_types.Part(text=m["content"])]
             ))
 
+        user_msg = update.message.text if update.message else None
         config = genai_types.GenerateContentConfig(
-            system_instruction=_build_telegram_system_prompt(self.conversation_store),
+            system_instruction=_build_telegram_system_prompt(self.conversation_store, user_message=user_msg),
             tools=GEMINI_TOOLS,
         )
 
@@ -1767,7 +1780,8 @@ class GigiTelegramBot:
         """Call OpenAI with tool support."""
         # Build OpenAI-format messages from shared conversation store
         history = self.conversation_store.get_recent("jason", "telegram", limit=20)
-        messages = [{"role": "system", "content": _build_telegram_system_prompt(self.conversation_store)}]
+        user_msg = update.message.text if update.message else None
+        messages = [{"role": "system", "content": _build_telegram_system_prompt(self.conversation_store, user_message=user_msg)}]
         for m in history:
             messages.append({"role": m["role"], "content": m["content"]})
 
