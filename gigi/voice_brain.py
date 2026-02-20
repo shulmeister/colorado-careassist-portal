@@ -1521,12 +1521,16 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
 
         elif tool_name == "browse_webpage":
-            from gigi.browser_automation import get_browser
-            browser = get_browser()
-            url = tool_input.get("url", "")
-            extract_links = tool_input.get("extract_links", False)
-            result = await browser.browse_webpage(url, extract_links=extract_links)
-            return json.dumps(result)
+            try:
+                from gigi.browser_automation import get_browser
+                browser = get_browser()
+                url = tool_input.get("url", "")
+                extract_links = tool_input.get("extract_links", False)
+                result = await browser.browse_webpage(url, extract_links=extract_links)
+                return json.dumps(result)
+            except Exception as e:
+                logger.error(f"Browse webpage failed: {e}")
+                return json.dumps({"error": f"Could not browse webpage: {e}"})
 
         elif tool_name == "get_morning_briefing":
             from gigi.morning_briefing_service import MorningBriefingService
