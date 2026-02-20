@@ -2537,16 +2537,16 @@ class GigiRingCentralBot:
 
             elif tool_name == "watch_tickets":
                 from gigi.ticket_monitor import create_watch
-                result = await asyncio.to_thread(create_watch, tool_input.get("artist", ""), tool_input.get("venue"), tool_input.get("city", "Denver"))
+                result = create_watch(tool_input.get("artist", ""), tool_input.get("venue"), tool_input.get("city", "Denver"))
                 return json.dumps(result)
 
             elif tool_name == "list_ticket_watches":
                 from gigi.ticket_monitor import list_watches
-                return json.dumps(await asyncio.to_thread(list_watches))
+                return json.dumps(list_watches())
 
             elif tool_name == "remove_ticket_watch":
                 from gigi.ticket_monitor import remove_watch
-                return json.dumps(await asyncio.to_thread(remove_watch, int(tool_input.get("watch_id", 0))))
+                return json.dumps(remove_watch(int(tool_input.get("watch_id", 0))))
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
