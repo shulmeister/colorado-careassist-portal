@@ -264,6 +264,11 @@ SMS_TOOLS = [
     {"name": "clock_in_shift", "description": "Clock a caregiver into their shift in WellSky. Use when a caregiver texts that they forgot to clock in. Look up their shift first with get_wellsky_shifts.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
     {"name": "clock_out_shift", "description": "Clock a caregiver out of their shift in WellSky. Use when a caregiver texts that they forgot to clock out. Look up their shift first with get_wellsky_shifts.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
     {"name": "find_replacement_caregiver", "description": "Find a replacement caregiver when someone calls out sick. Scores by fit, initiates SMS outreach.", "input_schema": {"type": "object", "properties": {"shift_id": {"type": "string", "description": "Shift/appointment ID needing coverage"}, "original_caregiver_id": {"type": "string", "description": "WellSky ID of caregiver who called out"}, "reason": {"type": "string", "description": "Reason for calloff"}}, "required": ["shift_id", "original_caregiver_id"]}},
+    {"name": "get_task_board", "description": "Read Jason's task board. Shows tasks by section: Today, Soon, Later, Waiting, Agenda, Inbox, Done.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "add_task", "description": "Add a task to Jason's task board. Use when Jason texts 'I have a task', 'add to my list', 'remind me to'.", "input_schema": {"type": "object", "properties": {"task": {"type": "string", "description": "The task description"}, "section": {"type": "string", "description": "Board section: Today, Soon, Later, Waiting, Agenda, Inbox (default: Today)"}}, "required": ["task"]}},
+    {"name": "complete_task", "description": "Mark a task done on Jason's task board.", "input_schema": {"type": "object", "properties": {"task_text": {"type": "string", "description": "Text of the task to complete (partial match OK)"}}, "required": ["task_text"]}},
+    {"name": "capture_note", "description": "Capture a quick note or idea to Jason's scratchpad. Use when Jason texts 'I have an idea', 'note this', 'jot this down'.", "input_schema": {"type": "object", "properties": {"note": {"type": "string", "description": "The note or idea to capture"}}, "required": ["note"]}},
+    {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
 ]
 
 # Full tool set for Glip DM replies — matches Telegram capabilities
@@ -299,6 +304,11 @@ DM_TOOLS = [
     {"name": "clock_in_shift", "description": "Clock a caregiver into their shift in WellSky. Use when a caregiver needs help clocking in.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
     {"name": "clock_out_shift", "description": "Clock a caregiver out of their shift in WellSky. Use when a caregiver needs help clocking out.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
     {"name": "find_replacement_caregiver", "description": "Find a replacement caregiver when someone calls out sick. Scores by fit, initiates SMS outreach.", "input_schema": {"type": "object", "properties": {"shift_id": {"type": "string", "description": "Shift/appointment ID needing coverage"}, "original_caregiver_id": {"type": "string", "description": "WellSky ID of caregiver who called out"}, "reason": {"type": "string", "description": "Reason for calloff"}}, "required": ["shift_id", "original_caregiver_id"]}},
+    {"name": "get_task_board", "description": "Read Jason's task board. Shows tasks by section: Today, Soon, Later, Waiting, Agenda, Inbox, Done.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "add_task", "description": "Add a task to Jason's task board. Use when Jason says 'I have a task', 'add to my list', 'remind me to'.", "input_schema": {"type": "object", "properties": {"task": {"type": "string", "description": "The task description"}, "section": {"type": "string", "description": "Board section: Today, Soon, Later, Waiting, Agenda, Inbox (default: Today)"}}, "required": ["task"]}},
+    {"name": "complete_task", "description": "Mark a task done on Jason's task board.", "input_schema": {"type": "object", "properties": {"task_text": {"type": "string", "description": "Text of the task to complete (partial match OK)"}}, "required": ["task_text"]}},
+    {"name": "capture_note", "description": "Capture a quick note or idea to Jason's scratchpad.", "input_schema": {"type": "object", "properties": {"note": {"type": "string", "description": "The note or idea to capture"}}, "required": ["note"]}},
+    {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
 ]
 
 # =========================================================================
@@ -353,6 +363,16 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
         genai_types.FunctionDeclaration(name="find_replacement_caregiver", description="Find replacement caregiver when someone calls out. Scores by fit, initiates SMS outreach.",
             parameters=genai_types.Schema(type="OBJECT", properties={"shift_id": _gs("string", "Shift ID needing coverage"), "original_caregiver_id": _gs("string", "WellSky ID of caregiver who called out"), "reason": _gs("string", "Reason for calloff")}, required=["shift_id", "original_caregiver_id"])),
+        genai_types.FunctionDeclaration(name="get_task_board", description="Read Jason's task board. Shows tasks by section.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="add_task", description="Add a task to Jason's task board.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"task": _gs("string", "The task description"), "section": _gs("string", "Board section: Today, Soon, Later, Waiting, Agenda, Inbox")}, required=["task"])),
+        genai_types.FunctionDeclaration(name="complete_task", description="Mark a task done on Jason's task board.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"task_text": _gs("string", "Text of the task to complete")}, required=["task_text"])),
+        genai_types.FunctionDeclaration(name="capture_note", description="Capture a quick note or idea to Jason's scratchpad.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"note": _gs("string", "The note or idea to capture")}, required=["note"])),
+        genai_types.FunctionDeclaration(name="get_daily_notes", description="Read today's daily notes for context.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"date": _gs("string", "Date YYYY-MM-DD (default: today)")})),
     ])]
 
     GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
@@ -418,6 +438,16 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
         genai_types.FunctionDeclaration(name="find_replacement_caregiver", description="Find replacement caregiver when someone calls out. Scores by fit, initiates SMS outreach.",
             parameters=genai_types.Schema(type="OBJECT", properties={"shift_id": _gs("string", "Shift ID needing coverage"), "original_caregiver_id": _gs("string", "WellSky ID of caregiver who called out"), "reason": _gs("string", "Reason for calloff")}, required=["shift_id", "original_caregiver_id"])),
+        genai_types.FunctionDeclaration(name="get_task_board", description="Read Jason's task board. Shows tasks by section: Today, Soon, Later, Waiting, Agenda, Inbox, Done.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="add_task", description="Add a task to Jason's task board.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"task": _gs("string", "The task description"), "section": _gs("string", "Board section: Today, Soon, Later, Waiting, Agenda, Inbox")}, required=["task"])),
+        genai_types.FunctionDeclaration(name="complete_task", description="Mark a task done on Jason's task board.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"task_text": _gs("string", "Text of the task to complete (partial match OK)")}, required=["task_text"])),
+        genai_types.FunctionDeclaration(name="capture_note", description="Capture a quick note or idea to Jason's scratchpad.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"note": _gs("string", "The note or idea to capture")}, required=["note"])),
+        genai_types.FunctionDeclaration(name="get_daily_notes", description="Read today's daily notes for context.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"date": _gs("string", "Date YYYY-MM-DD (default: today)")})),
     ])]
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
@@ -2674,6 +2704,111 @@ class GigiRingCentralBot:
                 except Exception as e:
                     return json.dumps({"error": f"Shift filling failed: {str(e)}"})
 
+            elif tool_name == "get_task_board":
+                try:
+                    with open(os.path.expanduser("~/Task Board.md"), "r") as f:
+                        return json.dumps({"task_board": f.read()})
+                except FileNotFoundError:
+                    return json.dumps({"task_board": "(empty)"})
+
+            elif tool_name == "add_task":
+                task_text = tool_input.get("task", "").strip()
+                section = tool_input.get("section", "Today").strip()
+                if not task_text:
+                    return json.dumps({"error": "No task text provided"})
+                valid_sections = ["Today", "Soon", "Later", "Waiting", "Agenda", "Inbox", "Reference"]
+                section_match = next((s for s in valid_sections if s.lower() == section.lower()), "Today")
+                path = os.path.expanduser("~/Task Board.md")
+                try:
+                    with open(path, "r") as f:
+                        content = f.read()
+                    marker = f"## {section_match}\n"
+                    if marker in content:
+                        idx = content.index(marker) + len(marker)
+                        rest = content[idx:]
+                        if rest.startswith("-\n") or rest.startswith("- \n"):
+                            content = content[:idx] + f"- [ ] {task_text}\n" + rest[rest.index("\n") + 1:]
+                        else:
+                            content = content[:idx] + f"- [ ] {task_text}\n" + rest
+                    else:
+                        content += f"\n## {section_match}\n- [ ] {task_text}\n"
+                    with open(path, "w") as f:
+                        f.write(content)
+                    return json.dumps({"success": True, "task": task_text, "section": section_match})
+                except Exception as e:
+                    return json.dumps({"error": f"Failed: {str(e)}"})
+
+            elif tool_name == "complete_task":
+                task_text = tool_input.get("task_text", "").strip().lower()
+                if not task_text:
+                    return json.dumps({"error": "No task text provided"})
+                try:
+                    path = os.path.expanduser("~/Task Board.md")
+                    with open(path, "r") as f:
+                        lines = f.readlines()
+                    completed = False
+                    completed_task = ""
+                    new_lines = []
+                    for line in lines:
+                        if not completed and "- [ ]" in line and task_text in line.lower():
+                            completed_task = line.replace("- [ ]", "- [x]").strip()
+                            completed = True
+                        else:
+                            new_lines.append(line)
+                    if not completed:
+                        return json.dumps({"error": f"No uncompleted task matching '{task_text}'"})
+                    content = "".join(new_lines)
+                    done_marker = "## Done\n"
+                    if done_marker in content:
+                        idx = content.index(done_marker) + len(done_marker)
+                        rest = content[idx:]
+                        if rest.startswith("-\n") or rest.startswith("- \n"):
+                            content = content[:idx] + completed_task + "\n" + rest[rest.index("\n") + 1:]
+                        else:
+                            content = content[:idx] + completed_task + "\n" + rest
+                    else:
+                        content += f"\n## Done\n{completed_task}\n"
+                    with open(path, "w") as f:
+                        f.write(content)
+                    return json.dumps({"success": True, "completed": completed_task})
+                except Exception as e:
+                    return json.dumps({"error": f"Failed: {str(e)}"})
+
+            elif tool_name == "capture_note":
+                note = tool_input.get("note", "").strip()
+                if not note:
+                    return json.dumps({"error": "No note provided"})
+                path = os.path.expanduser("~/Scratchpad.md")
+                try:
+                    try:
+                        with open(path, "r") as f:
+                            content = f.read()
+                    except FileNotFoundError:
+                        content = "# Scratchpad\n\n---\n"
+                    from datetime import datetime as dt
+                    timestamp = dt.now().strftime("%I:%M %p")
+                    content = content.rstrip() + f"\n- {note} ({timestamp})\n"
+                    with open(path, "w") as f:
+                        f.write(content)
+                    return json.dumps({"success": True, "note": note})
+                except Exception as e:
+                    return json.dumps({"error": f"Failed: {str(e)}"})
+
+            elif tool_name == "get_daily_notes":
+                target_date = tool_input.get("date", "")
+                try:
+                    import glob as g
+                    import re as _re
+                    from datetime import datetime as dt
+                    d = target_date if _re.match(r"^\d{4}-\d{2}-\d{2}$", target_date) else dt.now().strftime("%Y-%m-%d")
+                    matches = g.glob(os.path.join(os.path.expanduser("~/Daily Notes"), f"{d}*"))
+                    if matches:
+                        with open(matches[0], "r") as f:
+                            return json.dumps({"date": d, "notes": f.read()})
+                    return json.dumps({"date": d, "notes": "(no daily notes for this date)"})
+                except Exception as e:
+                    return json.dumps({"error": f"Failed: {str(e)}"})
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -3613,6 +3748,121 @@ class GigiRingCentralBot:
                     except Exception as e:
                         return {"error": f"Shift filling failed: {str(e)}"}
                 return json.dumps(await asyncio.to_thread(_dm_find_replacement))
+
+            elif tool_name == "get_task_board":
+                def _dm_read_board():
+                    try:
+                        with open(os.path.expanduser("~/Task Board.md"), "r") as f:
+                            return {"task_board": f.read()}
+                    except FileNotFoundError:
+                        return {"task_board": "(empty)"}
+                return json.dumps(await asyncio.to_thread(_dm_read_board))
+
+            elif tool_name == "add_task":
+                task_text = tool_input.get("task", "").strip()
+                section = tool_input.get("section", "Today").strip()
+                if not task_text:
+                    return json.dumps({"error": "No task text provided"})
+                valid_sections = ["Today", "Soon", "Later", "Waiting", "Agenda", "Inbox", "Reference"]
+                section_match = next((s for s in valid_sections if s.lower() == section.lower()), "Today")
+                def _dm_add_task():
+                    try:
+                        path = os.path.expanduser("~/Task Board.md")
+                        with open(path, "r") as f:
+                            content = f.read()
+                        marker = f"## {section_match}\n"
+                        if marker in content:
+                            idx = content.index(marker) + len(marker)
+                            rest = content[idx:]
+                            if rest.startswith("-\n") or rest.startswith("- \n"):
+                                content = content[:idx] + f"- [ ] {task_text}\n" + rest[rest.index("\n") + 1:]
+                            else:
+                                content = content[:idx] + f"- [ ] {task_text}\n" + rest
+                        else:
+                            content += f"\n## {section_match}\n- [ ] {task_text}\n"
+                        with open(path, "w") as f:
+                            f.write(content)
+                        return {"success": True, "task": task_text, "section": section_match}
+                    except Exception as e:
+                        return {"error": f"Failed: {str(e)}"}
+                return json.dumps(await asyncio.to_thread(_dm_add_task))
+
+            elif tool_name == "complete_task":
+                task_text = tool_input.get("task_text", "").strip().lower()
+                if not task_text:
+                    return json.dumps({"error": "No task text provided"})
+                def _dm_complete_task():
+                    try:
+                        path = os.path.expanduser("~/Task Board.md")
+                        with open(path, "r") as f:
+                            lines = f.readlines()
+                        completed = False
+                        completed_task = ""
+                        new_lines = []
+                        for line in lines:
+                            if not completed and "- [ ]" in line and task_text in line.lower():
+                                completed_task = line.replace("- [ ]", "- [x]").strip()
+                                completed = True
+                            else:
+                                new_lines.append(line)
+                        if not completed:
+                            return {"error": f"No uncompleted task matching '{task_text}'"}
+                        content = "".join(new_lines)
+                        done_marker = "## Done\n"
+                        if done_marker in content:
+                            idx = content.index(done_marker) + len(done_marker)
+                            rest = content[idx:]
+                            if rest.startswith("-\n") or rest.startswith("- \n"):
+                                content = content[:idx] + completed_task + "\n" + rest[rest.index("\n") + 1:]
+                            else:
+                                content = content[:idx] + completed_task + "\n" + rest
+                        else:
+                            content += f"\n## Done\n{completed_task}\n"
+                        with open(path, "w") as f:
+                            f.write(content)
+                        return {"success": True, "completed": completed_task}
+                    except Exception as e:
+                        return {"error": f"Failed: {str(e)}"}
+                return json.dumps(await asyncio.to_thread(_dm_complete_task))
+
+            elif tool_name == "capture_note":
+                note = tool_input.get("note", "").strip()
+                if not note:
+                    return json.dumps({"error": "No note provided"})
+                def _dm_capture_note():
+                    try:
+                        path = os.path.expanduser("~/Scratchpad.md")
+                        try:
+                            with open(path, "r") as f:
+                                content = f.read()
+                        except FileNotFoundError:
+                            content = "# Scratchpad\n\n---\n"
+                        from datetime import datetime as dt
+                        timestamp = dt.now().strftime("%I:%M %p")
+                        content = content.rstrip() + f"\n- {note} ({timestamp})\n"
+                        with open(path, "w") as f:
+                            f.write(content)
+                        return {"success": True, "note": note}
+                    except Exception as e:
+                        return {"error": f"Failed: {str(e)}"}
+                return json.dumps(await asyncio.to_thread(_dm_capture_note))
+
+            elif tool_name == "get_daily_notes":
+                target_date = tool_input.get("date", "")
+                def _dm_read_notes():
+                    try:
+                        import glob as g
+                        import re as _re
+                        from datetime import datetime as dt
+                        d = target_date if _re.match(r"^\d{4}-\d{2}-\d{2}$", target_date) else dt.now().strftime("%Y-%m-%d")
+                        matches = g.glob(os.path.join(os.path.expanduser("~/Daily Notes"), f"{d}*"))
+                        if matches:
+                            with open(matches[0], "r") as f:
+                                return {"date": d, "notes": f.read()}
+                        return {"date": d, "notes": "(no daily notes for this date)"}
+                    except Exception as e:
+                        return {"error": f"Failed: {str(e)}"}
+                return json.dumps(await asyncio.to_thread(_dm_read_notes))
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
