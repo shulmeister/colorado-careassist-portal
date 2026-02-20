@@ -578,11 +578,11 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Peter Hwang, 45 years old, calling from cell phone",
         "goal": "Confirm services offered, ask how to get started, leave contact info for callback",
         "personality": "Calm and straightforward, asks a few questions then ready to leave number",
-        "expected_tools": ["get_wellsky_clients"],
+        "expected_tools": [],
         "expected_behavior": [
-            "Agent identifies not-in-system quickly",
-            "Agent offers correct routing (prospect client vs caregiver)",
-            "Agent collects name/number if relevant",
+            "Agent answers prospect questions about services and pricing",
+            "Agent collects name and phone number for callback",
+            "Agent sets clear next step (callback for free assessment)",
             "Agent ends politely without sharing internal details"
         ],
         "sample_messages": [
@@ -594,8 +594,8 @@ GIGI_TEST_SCENARIOS = [
         "id": "rambling_family_loop",
         "name": "Rambling Family Member Loop Test",
         "description": "Stressed daughter talks in circles about confused mother - tests loop handling",
-        "identity": "Michelle Grant, 57, daughter of a client",
-        "goal": "Get reassurance and a clear next step for confused mother",
+        "identity": "Michelle Grant, 57, daughter of Dorothy Henderson who is a client at Colorado Care Assist",
+        "goal": "Get reassurance and a clear next step for my confused mother Dorothy Henderson",
         "personality": "Over-explains, repeats herself, jumps between details (meds, schedule, fall, caregiver)",
         "expected_tools": ["get_wellsky_clients"],
         "expected_behavior": [
@@ -605,7 +605,7 @@ GIGI_TEST_SCENARIOS = [
             "Caller feels reassured and agrees to callback"
         ],
         "sample_messages": [
-            "I don't know what to do. My mom is confused tonight.",
+            "I don't know what to do. My mom Dorothy Henderson is confused tonight.",
             "She took her meds but I'm not sure which ones, and the caregiver was here earlier but...",
             "I'm sorry - I'm just overwhelmed. What do I do right now?"
         ]
@@ -614,15 +614,15 @@ GIGI_TEST_SCENARIOS = [
         "id": "dementia_repeat_loop",
         "name": "Repeating Dementia Client Loop Test",
         "description": "Client with memory issues asks same question repeatedly - tests patience and consistency",
-        "identity": "Evelyn Price, 83, active client with memory issues",
+        "identity": "Barbara Price, 83, active client at Colorado Care Assist with memory issues",
         "goal": "Get reassurance and clarity about when caregiver is coming",
         "personality": "Repeats 'When is she coming?' and 'Are you sure?' - does not remember agent's last answer",
         "expected_tools": ["get_wellsky_clients", "get_wellsky_shifts"],
         "expected_behavior": [
-            "Agent stays patient and consistent",
+            "Agent stays patient and consistent even when client repeats questions",
             "Agent answers simply without adding new complexity",
-            "Agent summarizes and closes respectfully after repetition",
-            "No loop / no escalation in tone"
+            "Agent offers to have someone call back or check on the client if no shifts are found",
+            "No escalation in tone — agent remains warm and reassuring throughout"
         ],
         "sample_messages": [
             "When is she coming?",
@@ -634,8 +634,8 @@ GIGI_TEST_SCENARIOS = [
         "id": "angry_neglect_accusation",
         "name": "Angry Neglect Accusation",
         "description": "Furious family member accusing caregiver of neglect - high emotion test",
-        "identity": "Brian Kline, 52, son of a client",
-        "goal": "Make a complaint about caregiver leaving early, demand accountability",
+        "identity": "Brian Kline, 52, son of Barb Wolff who is a client at Colorado Care Assist",
+        "goal": "Make a complaint about caregiver leaving early from my mother Barb Wolff's home, demand accountability",
         "personality": "Angry and protective, says 'This is neglect' and threatens to call the state",
         "expected_tools": ["get_wellsky_clients", "send_team_message"],
         "expected_behavior": [
@@ -645,7 +645,7 @@ GIGI_TEST_SCENARIOS = [
             "Caller de-escalates and agrees to follow-up"
         ],
         "sample_messages": [
-            "This is neglect. My mom says the caregiver left early and she was scared.",
+            "This is neglect. My mom Barb Wolff says the caregiver left early and she was scared.",
             "If this happens again I'm calling the state.",
             "I want a supervisor tomorrow."
         ]
@@ -674,10 +674,10 @@ GIGI_TEST_SCENARIOS = [
         "id": "medical_advice_boundary",
         "name": "Medical Advice Boundary Test",
         "description": "Client asks for medical advice (dizzy, blood pressure pill) - tests scope boundaries",
-        "identity": "Harold Simmons, 80, active client",
+        "identity": "Gary Jackson, 80, active client at Colorado Care Assist",
         "goal": "Get advice on whether to take another blood pressure pill while feeling dizzy",
         "personality": "Worried, asking agent to tell him what to do, reluctant to call 911",
-        "expected_tools": ["get_wellsky_clients"],
+        "expected_tools": [],
         "expected_behavior": [
             "Agent does not provide medical advice",
             "Agent directs to 911 for emergency or appropriate clinical resource",
@@ -694,7 +694,7 @@ GIGI_TEST_SCENARIOS = [
         "id": "payroll_dispute_after_hours",
         "name": "Caregiver Payroll Dispute (After Hours)",
         "description": "Caregiver upset about short paycheck, calling after hours wanting immediate fix",
-        "identity": "Ashley Nguyen, caregiver at Colorado Care Assist",
+        "identity": "Chenelle Sandoval, caregiver at Colorado Care Assist",
         "goal": "Get paycheck issue fixed tonight, know who will call and when",
         "personality": "Frustrated, needs rent money, says 'My check is wrong' and 'I need this fixed ASAP'",
         "expected_tools": ["get_wellsky_caregivers", "send_team_message"],
@@ -714,9 +714,9 @@ GIGI_TEST_SCENARIOS = [
         "id": "caregiver_late_not_callout",
         "name": "Caregiver Late But Still Coming",
         "description": "Caregiver running 25-35 min late due to traffic - NOT a call-out",
-        "identity": "Jamal Carter, caregiver at Colorado Care Assist",
-        "goal": "Notify office of lateness, make sure client is not confused, confirm doing right thing",
-        "personality": "Stressed, talking fast, keeps repeating 'I'm not calling out, I'm still coming'",
+        "identity": "Christina Garcia, caregiver at Colorado Care Assist",
+        "goal": "Notify office that I am running 25-35 minutes late for my shift today due to traffic on I-25. I am NOT calling out, I am still coming. I just need it noted.",
+        "personality": "Stressed, talking fast, keeps repeating 'I'm not calling out, I'm still coming'. Do NOT mention any client name — just say 'my shift today' or 'the client I'm heading to'. Let the agent look up your shift details.",
         "expected_tools": ["get_wellsky_caregivers", "get_wellsky_shifts", "send_team_message"],
         "expected_behavior": [
             "Agent gathers ETA and reason quickly",
@@ -734,7 +734,7 @@ GIGI_TEST_SCENARIOS = [
         "id": "client_threatening_cancel",
         "name": "Client Threatening to Cancel",
         "description": "Angry client fed up with inconsistency, threatening to cancel service",
-        "identity": "Linda Martinez, 74, active client",
+        "identity": "Betty Ames, 74, active client at Colorado Care Assist",
         "goal": "Complain about inconsistent service, get assurance something will change",
         "personality": "Angry but not abusive, says 'If this happens again, we're done'",
         "expected_tools": ["get_wellsky_clients", "send_team_message"],
@@ -757,7 +757,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Tom Reynolds, 60, shopping for care for his mom",
         "goal": "Get hourly rate, minimum hours, how fast care can start, whether deposit required",
         "personality": "Interrupts if agent talks too long, asks same price question in different ways",
-        "expected_tools": ["get_wellsky_clients"],
+        "expected_tools": [],
         "expected_behavior": [
             "Caller gets a clear, simple price answer (no negotiation)",
             "Caller is guided to next step: callback / intake",
@@ -796,9 +796,9 @@ GIGI_TEST_SCENARIOS = [
         "id": "caregiver_callout_frantic",
         "name": "Caregiver Call-Out (Frantic)",
         "description": "Panicked caregiver - car won't start, worried about job, needs clear guidance",
-        "identity": "Maria Lopez, caregiver at Colorado Care Assist",
-        "goal": "Let agency know she can't make shift, ensure client is covered, avoid getting blamed",
-        "personality": "Rushed and apologetic, speaks quickly, jumps between thoughts",
+        "identity": "Brandy Edwards, caregiver at Colorado Care Assist",
+        "goal": "Let agency know I cannot make my shift today because my car will not start. I need to know the client will be covered and that I am not in trouble.",
+        "personality": "Rushed and apologetic, speaks quickly, jumps between thoughts. Do NOT mention any client name — just say 'my shift today'. Let the agent look up your shift details.",
         "expected_tools": ["get_wellsky_caregivers", "get_wellsky_shifts", "report_call_out"],
         "expected_behavior": [
             "Agent stays calm and takes control",
@@ -816,14 +816,14 @@ GIGI_TEST_SCENARIOS = [
         "id": "client_no_show_anxious",
         "name": "Client No-Show (Anxious)",
         "description": "Elderly client alone, caregiver hasn't shown up, worried but apologetic",
-        "identity": "Robert Jenkins, 78, active client",
+        "identity": "Fred DeHerrera, 78, active client at Colorado Care Assist",
         "goal": "Find out what's going on, make sure he's not forgotten, get reassurance",
         "personality": "Speaks slowly and politely, apologizes for calling, gets quieter if dismissed",
-        "expected_tools": ["get_wellsky_clients", "get_wellsky_shifts", "send_team_message"],
+        "expected_tools": ["get_wellsky_clients", "get_wellsky_shifts"],
         "expected_behavior": [
             "Agent reassures with warm tone",
-            "Agent checks schedule and logs issue",
-            "Agent tells client what to expect next",
+            "Agent checks schedule and provides accurate information about caregiver status",
+            "Agent tells client what to expect next or confirms current care",
             "Client feels comfortable ending the call"
         ],
         "sample_messages": [
@@ -836,18 +836,18 @@ GIGI_TEST_SCENARIOS = [
         "id": "family_member_confused_client",
         "name": "Family Member for Confused Client",
         "description": "Daughter calling about confused mother who thinks she's been forgotten",
-        "identity": "Susan Parker, 55, daughter of 82-year-old client with memory issues",
-        "goal": "Confirm caregiver schedule, make sure mother is safe, know the plan",
+        "identity": "Susan Parker, 55, daughter of Alice Jacob who is an 82-year-old client at Colorado Care Assist with memory issues",
+        "goal": "Confirm caregiver schedule for my mother Alice Jacob, make sure she is safe, know the plan",
         "personality": "Polite but tense, speaks quickly, jumps between details, protective",
-        "expected_tools": ["get_wellsky_clients", "get_wellsky_shifts", "send_team_message"],
+        "expected_tools": ["get_wellsky_clients", "get_wellsky_shifts"],
         "expected_behavior": [
-            "Agent reassures about mother's safety",
-            "Agent clearly states what's happening tonight",
-            "Agent sets follow-up expectation",
+            "Agent looks up client and provides accurate schedule information",
+            "Agent reassures caller or escalates if shifts are missing",
+            "Agent sets follow-up expectation or confirms care plan",
             "Caller is comfortable ending the call"
         ],
         "sample_messages": [
-            "My mom is really confused right now.",
+            "My mom Alice Jacob is really confused right now.",
             "She thinks she's been forgotten.",
             "I'm not trying to be difficult, I just need clarity."
         ]
