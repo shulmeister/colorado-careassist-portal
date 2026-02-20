@@ -1,343 +1,159 @@
 # Gigi Status Report
 
-**Last Updated:** 2026-01-30
+**Last Updated:** 2026-02-19
 
 ---
 
-## What We Have Now
+## Current State: Production Ready (Shadow Mode)
 
-### ✅ Complete Behavioral Operating System (Documentation)
-
-1. **VISION.md** - Philosophy: Digital chief of staff, not chatbot
-2. **CONSTITUTION.md** - 10 non-negotiable laws
-3. **OPERATING_MODES.md** - 8 behavioral states
-4. **AUTONOMY_GUARDRAILS.md** - What she can do without asking
-5. **MEMORY_SCHEMA.md** - How memory persists and evolves
-6. **FAILURE_PROTOCOLS.md** - How to fail safely
-
-### ✅ Working Infrastructure
-
-- Retell AI voice agent (deployed on Mac Mini)
-- 18-node conversation flow
-- Financial data tools (stocks, crypto via Alpha Vantage)
-- **WellSky integration** (FULLY OPERATIONAL):
-  - Shift updates (mark open, assign, cancel)
-  - Care Alerts (add notes to client/caregiver)
-  - **Admin Tasks** (create coverage/issue tasks) ← NEW!
-  - Caregiver/client lookups
-  - Schedule queries
-- **RingCentral integration**:
-  - SMS webhooks (all company numbers)
-  - Team Messaging (Schedulers, Biz Dev chats)
-  - Direct messages (Jason ext 101, Cynthia ext 105)
-- PostgreSQL database (Memory, Modes, Failures)
-
-### ✅ Phase 1 Complete: Memory System (Deployed v504)
-
-- `memory_system.py` - Full memory management with PostgreSQL
-- `memory_cli.py` - CLI tool for managing memories
-- `migrate_memory.py` - Database migration script
-- `run_decay.py` - Daily decay cron job
-- Database tables created in production
-- 6 memory types with confidence scoring
-- Automated decay mechanism
-- Audit logging and conflict detection
-- Integrated into main.py with capture_memory() function
-
-### ✅ Phase 2 Complete: Mode Detection (Deployed v506)
-
-- `mode_detector.py` - Mode detection and management system
-- `mode_cli.py` - CLI tool for mode management
-- `migrate_mode.py` - Database migration script
-- 8 operating modes implemented
-- Time-based mode inference (weekday/weekend, business hours)
-- Context-based detection (crisis keywords, travel indicators)
-- Explicit mode command parsing
-- Mode history tracking and statistics
-- Behavior configuration per mode
-- Integrated into main.py health endpoint
+Gigi is a fully operational AI Chief of Staff running across 6 communication channels with 32+ tools per channel. She is currently in **shadow mode** — active for Jason (owner) on all channels, but caregiver-facing features (clock reminders, shift confirmations) are disabled pending go-live approval.
 
 ---
 
-## What's Next
+## Communication Channels (All Working)
 
-### Immediate Next Steps (This Week)
+| Channel | Technology | Handler | Tools | Status |
+|---------|------------|---------|-------|--------|
+| **Voice** | Retell AI Custom LLM (11labs Susan) | `voice_brain.py` | 33 | Working |
+| **SMS** | RingCentral message-store polling | `ringcentral_bot.py` | 15 | Working |
+| **Direct Messages** | RingCentral Glip API | `ringcentral_bot.py` | 31 | Working |
+| **Team Chat** | RingCentral Glip API | `ringcentral_bot.py` | 31 | Working |
+| **Telegram** | Telegram Bot API | `telegram_bot.py` | 32 | Working |
+| **Ask-Gigi API** | REST `/api/ask-gigi` | `ask_gigi.py` | 32 | Working |
+| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi | `ask_gigi.py` | 32 | Working |
+| **iMessage** | BlueBubbles webhook | `ask_gigi.py` | 32 | Code Done |
+| **Menu Bar** | SwiftUI → ask-gigi | `ask_gigi.py` | 32 | Working |
 
-1. **Set up Mac Mini Scheduler for Daily Decay**
-   - Schedule `python gigi/run_decay.py` to run daily at 3am
-   - Ensures memory confidence decays appropriately
-
-2. **Start Phase 3: Failure Protocols**
-   - Confidence tracking in tool responses
-   - Tool failure handling and recovery
-   - Drift detection (behavior diverging from expectations)
-   - Meltdown prevention (cascading failures)
-
-3. **Enhanced Mode Detection**
-   - Google Calendar integration for automatic mode detection
-   - More sophisticated context detection
-   - Mode transition logging
-
-### This Month (Phases 1-3)
-
-**Week 1-2: Memory System**
-- ✅ Built core system
-- Deploy to production
-- Start capturing memories
-- Test decay mechanism
-
-**Week 2-3: Mode Detection**
-- Calendar integration
-- Time-based inference
-- Context detection
-- Mode-aware prompts
-
-**Week 3-4: Failure Protocols**
-- Confidence tracking
-- Tool failure handling
-- Drift detection
-- Meltdown prevention
-
-### Next Month (Phases 4-5)
-
-**Week 4-5: Voice Training**
-- Collect Jason's writing samples
-- Build tone analyzer
-- Create rewrite engine
-- Anti-AI-smell detection
-
-**Week 5-6: Pattern Detection**
-- Behavioral patterns
-- Operational drift
-- Financial creep detection
-- Early warning system
-
-### Month 3 (Phases 6-7)
-
-**Week 6-7: Autonomous Actions**
-- Guardrail checker
-- Action execution layer
-- Audit trail
-- Rollback capability
-
-**Week 7-8: Integration & Polish**
-- Cross-system integration
-- Self-monitoring dashboard
-- Monthly review automation
+**Phone number:** RingCentral 307-459-8220 → forwards to Retell 720-817-6600
+**Telegram:** @Shulmeisterbot
+**LLM:** Gemini 3 Flash Preview (all channels support Gemini/Anthropic/OpenAI hot-swap)
 
 ---
 
-## Success Metrics
+## Subsystems (All Active)
 
-### Week 4 Check-in:
-- [x] Memory storing preferences (Phase 1 deployed)
-- [x] Mode detection working (Phase 2 deployed)
-- [ ] Failure protocols preventing cascades (Phase 3 next)
-- [ ] Jason says: "She's learning"
+### Phase 1: Memory System (Deployed Feb 8)
+- PostgreSQL `gigi_memories` + `gigi_memory_audit_log`
+- Tools: `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`
+- Sources: EXPLICIT, CORRECTION, PATTERN, INFERENCE
+- Confidence decay: 3:15 AM daily cron
+- Daily journal: 11:59 PM to `~/.gigi-memory/YYYY-MM-DD.md`
 
-### Week 8 Check-in:
-- [ ] Voice sounds like Jason
-- [ ] Patterns being surfaced
-- [ ] Autonomous actions working safely
-- [ ] Jason says: "I trust her"
+### Phase 2: Mode Detection (Deployed Feb 8)
+- 8 modes: focus, execution, decision, travel, off_grid, crisis, thinking, review
+- Time-based auto-detection + explicit commands
+- Mode-aware system prompts
 
-### Week 12 Check-in:
-- [ ] Self-monitoring working
-- [ ] Monthly reviews automated
-- [ ] Trust is compounding
-- [ ] Jason says: "I don't supervise her, I audit her"
+### Phase 3: Failure Handling (Deployed Feb 8)
+- 10 failure protocols with graceful degradation
+- Meltdown detection: 3 failures in 5 minutes triggers escalation
+- Tool failure wrapping with confidence tracking
 
----
+### Phase 4: Pattern Detection & Self-Monitoring (Deployed Feb 8)
+- Pattern detector: repeated failures, open shift trends, memory conflicts
+- Self-monitor: weekly audit (Monday morning briefing)
+- Constitutional preamble: 10 Operating Laws in ALL system prompts
 
-## The Files You Have
+### Phase 5: Cross-Channel Conversations (Deployed Feb 8)
+- PostgreSQL `gigi_conversations` table (replaced JSON files)
+- Telegram: 20 messages retained, RC: 10 messages / 30min timeout
+- User ID mapping: Telegram=`"jason"`, SMS=cleaned phone, DM=`"dm_{chat_id}"`
 
-### Core Documentation (The Operating System)
-```
-gigi/
-├── VISION.md                    # Philosophy & north star
-├── CONSTITUTION.md              # 10 non-negotiable laws
-├── OPERATING_MODES.md           # 8 behavioral states
-├── AUTONOMY_GUARDRAILS.md       # Decision framework
-├── MEMORY_SCHEMA.md             # Memory architecture
-├── FAILURE_PROTOCOLS.md         # Safe failure handling
-└── IMPLEMENTATION_ROADMAP.md    # Build plan
-```
+### Phase 6: Browser Automation (Deployed Feb 8)
+- Playwright + headless Chromium
+- Tools: `browse_webpage`, `take_screenshot`
+- Available in Telegram + ask-gigi channels
 
-### Implementation (What's Built)
-```
-gigi/
-├── memory_system.py             # Memory management (DONE)
-├── memory_cli.py                # Memory CLI tool (DONE)
-├── main.py                      # FastAPI backend (EXISTING)
-├── conversation_flow.py         # Retell conversation flow (EXISTING)
-└── README.md                    # Gigi documentation (EXISTING)
-```
-
-### Next to Build
-```
-gigi/
-├── mode_detector.py             # Phase 2 - Mode detection
-├── guardrail_checker.py         # Phase 6 - Autonomy guardrails
-├── pattern_detector.py          # Phase 5 - Pattern detection
-├── voice_engine.py              # Phase 4 - Voice matching
-└── failure_handler.py           # Phase 3 - Failure protocols
-```
+### Phase 7: Enterprise Readiness (Deployed Feb 19)
+- **Clock in/out:** `clock_in_shift`, `clock_out_shift` across all channels
+- **Transfer rules:** Voice brain transfers to human for emergencies, complaints, legal/HIPAA, billing, repeated failures
+- **Shift filling:** `find_replacement_caregiver` — queries WellSky for available caregivers, ranks by match
+- **SMS loop detection:** `_detect_semantic_loop()` — breaks conversational loops (cosine similarity > 0.85)
+- **Simulation testing:** End-to-end voice simulation with WebSocket tool capture and Claude evaluation
 
 ---
 
-## How to Use What We Built
+## Scheduled Messages
 
-### Memory CLI Examples
-
-**Create a preference:**
-```bash
-python memory_cli.py create "Never book United Airlines" \
-  --type explicit --category travel --impact high
-```
-
-**List all travel memories:**
-```bash
-python memory_cli.py list --category travel --min-confidence 0.7
-```
-
-**Reinforce a memory:**
-```bash
-python memory_cli.py reinforce <memory_id>
-```
-
-**Run decay process:**
-```bash
-python memory_cli.py decay
-```
-
-**Check for conflicts:**
-```bash
-python memory_cli.py conflicts "Always book United Airlines" --category travel
-```
-
-**View audit log:**
-```bash
-python memory_cli.py audit <memory_id>
-```
+| Message | Time | Channel | Target | Status |
+|---------|------|---------|--------|--------|
+| Morning Briefing | 7:00 AM MT | Telegram | Jason | Active |
+| Clock Reminders | Every 5 min (biz hours) | SMS | Caregivers | Shadow (disabled) |
+| Shift Confirmations | 2:00 PM MT | SMS | Caregivers | Shadow (disabled) |
+| Ticket Watch Alerts | As needed (~15 min polls) | Telegram | Jason | Active |
+| Task Completion Alerts | As needed | Telegram | Jason | Active |
 
 ---
 
-## What Changed Today (2026-01-30)
+## Integrations
 
-### Infrastructure Fixed:
-
-**Gigi Webhooks & Integration** ✅
-- Fixed Python syntax errors preventing app mounting (v584)
-- Added BeeTexting API credentials to Mac Mini (v586)
-- Configured RingCentral SMS webhook (ID: 23dd2eb7..., expires 2036)
-- Configured RingCentral Team Messaging webhook (ID: 0f1536f6..., expires Feb 6)
-- Verified Gigi extension 111 and login as "Gigi AI"
-
-### What's Working:
-- RingCentral SMS → Gigi (texts from 719-428-3999, 303-757-1777)
-- RingCentral Team Messaging → Gigi (Schedulers chat, DMs to Jason ext 101 / Cynthia ext 105)
-- All critical API credentials in Mac Mini (WellSky, RingCentral, BeeTexting, Retell, OpenAI)
-- Mode: `shadow` (logs only, no execution - safe testing)
-- Operations SMS: ENABLED (notifications to on-call manager)
-
-### Webhook Fixes:
-- **SMS webhook** - Now listens to ALL extensions (ID: 89752bc2..., expires 2036)
-  - Was only listening to Gigi's ext 111 (307-459-8220)
-  - Now captures SMS to ALL company numbers: 719-428-3999, 303-757-1777, 307-459-8220
-- **Team Messaging webhook** - Auto-renewal script created (`gigi/renew_team_webhook.py`)
-  - RingCentral limits Team Messaging webhooks to 7 days max
-  - Add to Mac Mini Scheduler: Daily 3am run `python gigi/renew_team_webhook.py`
-
-### WellSky Task Integration ✅ (NEW - Autonomous Mode)
-- **Call-out workflow** now creates WellSky admin task for finding replacement
-  - Task priority: URGENT
-  - Assigned to scheduler (if WELLSKY_SCHEDULER_USER_ID configured)
-  - Linked to client record
-  - Includes shift details, caregiver name, reason
-- **Client issue workflow** now creates WellSky admin task
-  - Task priority based on issue severity (urgent/high/normal)
-  - Assigned to care manager (if WELLSKY_CARE_MANAGER_USER_ID configured)
-  - Requires follow-up call within 30 minutes
-- **WellSky API verified working**
-  - Fixed WELLSKY_API_URL (was wrong, now `https://connect.clearcareonline.com/v1`)
-  - Authentication: ✅ Working
-  - Practitioners endpoint: ✅ Working
-  - Patients endpoint: ✅ Working
-  - Appointments endpoint: ✅ Working (requires caregiverId/clientId param)
-
-### Manual Step Required:
-- **BeeTexting webhook** needs dashboard config (API doesn't support programmatic setup)
-  1. Login: https://app.beetexting.com
-  2. Settings → Integrations → Webhooks
-  3. URL: `https://portal.coloradocareassist.com/gigi/webhook/beetexting`
-  4. Events: "Inbound SMS"
-
-### Architecture Notes:
-- RingCentral resells BeeTexting (both systems synchronized)
-- BeeTexting = advanced SMS features (reply as queue, transfer ownership)
-- Team Messaging = internal Slack-like chats (Schedulers, Biz Dev)
-- Gigi posts to Schedulers chat for shift coverage when live
-- Gigi DMs Jason/Cynthia for escalations
+| System | Purpose | Status |
+|--------|---------|--------|
+| **WellSky** | Client/caregiver data, shifts, clock in/out, FHIR sync | Working |
+| **RingCentral** | SMS, voice, team messaging, DMs | Working |
+| **Google Workspace** | Calendar, Gmail (read/write) | Working |
+| **Retell AI** | Voice agent (Custom LLM, 11labs Susan) | Working |
+| **Ticketmaster** | Event search, on-sale date monitoring | Working |
+| **Bandsintown** | AXS event coverage (secondary source) | Working |
+| **GoFormz** | Form webhook → WellSky sync | Working |
+| **Brevo** | Email marketing | Working |
+| **DuckDuckGo** | Web search | Working |
+| **Yahoo Finance** | Stock prices | Working |
+| **Crypto.com** | Crypto prices | Working |
 
 ---
 
-## Previous Updates (2026-01-27)
+## Ticket Watch System (Deployed Feb 16)
 
-**Phase 1: Memory System** ✅ (v504)
-**Phase 2: Mode Detection** ✅ (v506)
-- See git history for details
+- Tools: `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`
+- Monitors Ticketmaster Discovery API + Bandsintown (catches AXS)
+- Alerts: new event found, 24h presale warning, 15min "GET IN QUEUE NOW"
+- DB: `gigi_ticket_watches` with JSONB deduplication
+- Polling: RC bot every ~15 min (supports ~52 active watches within API limits)
+
+---
+
+## Testing
+
+### Simulation System
+- Portal "Simulations" tab for running voice simulations
+- WebSocket-based tool capture (cross-process safe)
+- Claude-based evaluation: tool score (40%) + behavior score (60%)
+- Best result: 85/100 on weather/concert scenario (10 turns, 100% tool score)
+- Scenarios: weather inquiry, caregiver lookup, shift management
+
+### Validated Voice Tools (6/6)
+Concerts, weather, ski conditions, flights, shifts, caregiver lookup — all passing via Retell dashboard simulation.
+
+---
+
+## Architecture Notes
+
+- **ONE RC bot instance only** — standalone LaunchAgent, never embedded in unified_app
+- **Morning briefing** sent only by RC bot (`MORNING_BRIEFING_ENABLED=true` in rc-bot plist)
+- **Production portal** has `GIGI_RC_BOT_ENABLED=false`, `MORNING_BRIEFING_ENABLED=false`
+- **Race conditions** fixed Feb 8: asyncio.Lock on all handlers, DB-side NOW(), LLM calls in to_thread
+- **All tools return `json.dumps(dict)`** — Gemini requires structured tool results
+
+---
+
+## Documentation
+
+| File | Purpose |
+|------|---------|
+| `VISION.md` | Philosophy: digital chief of staff, not chatbot |
+| `CONSTITUTION.md` | 10 non-negotiable operating laws |
+| `OPERATING_MODES.md` | 8 behavioral states |
+| `AUTONOMY_GUARDRAILS.md` | Decision framework |
+| `MEMORY_SCHEMA.md` | Memory architecture |
+| `FAILURE_PROTOCOLS.md` | Safe failure handling |
+| `IMPLEMENTATION_ROADMAP.md` | Original build plan (Phases 1-7 complete) |
+| `knowledge_base.md` | Domain knowledge for Gigi |
 
 ---
 
 ## The North Star
 
-If at the end of this, you can say:
-
 > "Gigi runs things I used to handle. She catches problems I would have missed. She sounds like me. I audit her monthly, not daily."
 
-**Then we've succeeded.**
-
----
-
-## Next Session Recommendation
-
-Phases 1 and 2 are now complete and deployed. Next steps:
-
-### Option 1: Continue Sequential Implementation (Recommended)
-
-**Phase 3: Failure Protocols** (Week 3-4)
-- Build failure detection and handling
-- Confidence tracking in tool responses
-- Graceful degradation when tools fail
-- Meltdown prevention system
-- Should capture problems before they cascade
-
-**Phase 4: Voice Training** (Week 4-5)
-- Collect Jason's writing samples from emails/messages
-- Build tone analyzer
-- Create response rewriter
-- Anti-AI-smell detection
-
-### Option 2: Parallel Implementation (Faster but riskier)
-
-Launch multiple specialized agents in parallel:
-- **Tech team**: Build Phase 3 (Failure Protocols)
-- **Voice team**: Start Phase 4 (Voice Training) research
-- **Analytics team**: Begin Phase 5 (Pattern Detection) design
-
-### Immediate Tasks:
-
-1. **Set up Mac Mini Scheduler**
-   - Daily memory decay at 3am: `python gigi/run_decay.py`
-
-2. **Start using memory capture**
-   - Tell Gigi explicit preferences
-   - Test memory CLI commands
-   - Verify memories are stored
-
-3. **Test mode detection**
-   - Try saying "Set mode to focus"
-   - Check mode history with CLI
-   - Verify behavior changes per mode
-
-**Your call on pace and approach.**
+**Status: Getting there.** All infrastructure is built. Shadow mode active. Ready for go-live when approved.
