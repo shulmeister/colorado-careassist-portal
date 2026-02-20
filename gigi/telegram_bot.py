@@ -167,6 +167,7 @@ TOOL_NAMES = [
     "create_claude_task", "check_claude_task",
     "save_memory", "recall_memories", "forget_memory", "search_memory_logs",
     "browse_webpage", "take_screenshot",
+    "clock_in_shift", "clock_out_shift", "find_replacement_caregiver",
 ]
 
 # Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
@@ -200,6 +201,9 @@ ANTHROPIC_TOOLS = [
     {"name": "watch_tickets", "description": "Set up a ticket watch for an artist or event. Gigi will monitor Ticketmaster and AXS (via Bandsintown) and send Telegram alerts when tickets go on presale, general sale, or new events are listed. Use when Jason says 'watch for tickets', 'let me know when tickets drop', 'monitor tickets for', etc.", "input_schema": {"type": "object", "properties": {"artist": {"type": "string", "description": "Artist or event name to watch"}, "venue": {"type": "string", "description": "Specific venue to filter (optional, e.g. 'Red Rocks')"}, "city": {"type": "string", "description": "City to search (default: Denver)"}}, "required": ["artist"]}},
     {"name": "list_ticket_watches", "description": "List all active ticket watches — shows what artists/events Gigi is monitoring for ticket alerts.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "remove_ticket_watch", "description": "Stop watching for tickets on a specific watch. Use list_ticket_watches first to get the watch ID.", "input_schema": {"type": "object", "properties": {"watch_id": {"type": "integer", "description": "Watch ID to remove"}}, "required": ["watch_id"]}},
+    {"name": "clock_in_shift", "description": "Clock a caregiver into their shift in WellSky. Use when a caregiver forgot to clock in or needs help. Look up their shift first with get_wellsky_shifts.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name (for logging)"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
+    {"name": "clock_out_shift", "description": "Clock a caregiver out of their shift in WellSky. Use when a caregiver forgot to clock out or needs help. Look up their shift first with get_wellsky_shifts.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name (for logging)"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
+    {"name": "find_replacement_caregiver", "description": "Find a replacement caregiver when someone calls out sick. Searches available caregivers, scores by fit, initiates SMS outreach. Use after a call-out when a shift needs coverage.", "input_schema": {"type": "object", "properties": {"shift_id": {"type": "string", "description": "Shift/appointment ID needing coverage"}, "original_caregiver_id": {"type": "string", "description": "WellSky ID of caregiver who called out"}, "reason": {"type": "string", "description": "Reason for calloff"}}, "required": ["shift_id", "original_caregiver_id"]}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -268,6 +272,12 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="remove_ticket_watch", description="Stop watching for tickets. Use list_ticket_watches first to get watch ID.",
             parameters=genai_types.Schema(type="OBJECT", properties={"watch_id": _s("integer", "Watch ID to remove")}, required=["watch_id"])),
+        genai_types.FunctionDeclaration(name="clock_in_shift", description="Clock a caregiver into their shift in WellSky. Use when a caregiver forgot to clock in or needs help.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _s("string", "Shift/appointment ID from WellSky"), "caregiver_name": _s("string", "Caregiver name"), "notes": _s("string", "Optional notes")}, required=["appointment_id"])),
+        genai_types.FunctionDeclaration(name="clock_out_shift", description="Clock a caregiver out of their shift in WellSky. Use when a caregiver forgot to clock out or needs help.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _s("string", "Shift/appointment ID from WellSky"), "caregiver_name": _s("string", "Caregiver name"), "notes": _s("string", "Optional notes")}, required=["appointment_id"])),
+        genai_types.FunctionDeclaration(name="find_replacement_caregiver", description="Find a replacement caregiver when someone calls out sick. Scores by fit, initiates SMS outreach.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"shift_id": _s("string", "Shift/appointment ID needing coverage"), "original_caregiver_id": _s("string", "WellSky ID of caregiver who called out"), "reason": _s("string", "Reason for calloff")}, required=["shift_id", "original_caregiver_id"])),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -308,6 +318,9 @@ OPENAI_TOOLS = [
     _oai_tool("watch_tickets", "Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends alerts when tickets go on sale.", {"artist": {"type": "string", "description": "Artist or event name"}, "venue": {"type": "string", "description": "Venue filter (optional)"}, "city": {"type": "string", "description": "City (default Denver)"}}, ["artist"]),
     _oai_tool("list_ticket_watches", "List all active ticket watches.", {}, []),
     _oai_tool("remove_ticket_watch", "Stop watching for tickets.", {"watch_id": {"type": "integer", "description": "Watch ID to remove"}}, ["watch_id"]),
+    _oai_tool("clock_in_shift", "Clock a caregiver into their shift in WellSky.", {"appointment_id": {"type": "string", "description": "Shift/appointment ID"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, ["appointment_id"]),
+    _oai_tool("clock_out_shift", "Clock a caregiver out of their shift in WellSky.", {"appointment_id": {"type": "string", "description": "Shift/appointment ID"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, ["appointment_id"]),
+    _oai_tool("find_replacement_caregiver", "Find replacement caregiver when someone calls out. Scores by fit, initiates SMS outreach.", {"shift_id": {"type": "string", "description": "Shift ID needing coverage"}, "original_caregiver_id": {"type": "string", "description": "WellSky ID of caregiver who called out"}, "reason": {"type": "string", "description": "Reason for calloff"}}, ["shift_id", "original_caregiver_id"]),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -1247,6 +1260,61 @@ class GigiTelegramBot:
                 watch_id = tool_input.get("watch_id")
                 result = await cos_tools.remove_ticket_watch(watch_id=watch_id)
                 return json.dumps(result)
+
+            elif tool_name == "clock_in_shift":
+                appointment_id = tool_input.get("appointment_id", "")
+                caregiver_name = tool_input.get("caregiver_name", "")
+                notes = tool_input.get("notes", "Clocked in via Gigi")
+                if not appointment_id:
+                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
+                def _clock_in():
+                    if WellSkyService is None:
+                        return {"error": "WellSky service not available"}
+                    ws = WellSkyService()
+                    success, message = ws.clock_in_shift(appointment_id, notes=notes)
+                    return {"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name}
+                return json.dumps(await asyncio.to_thread(_clock_in))
+
+            elif tool_name == "clock_out_shift":
+                appointment_id = tool_input.get("appointment_id", "")
+                caregiver_name = tool_input.get("caregiver_name", "")
+                notes = tool_input.get("notes", "Clocked out via Gigi")
+                if not appointment_id:
+                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
+                def _clock_out():
+                    if WellSkyService is None:
+                        return {"error": "WellSky service not available"}
+                    ws = WellSkyService()
+                    success, message = ws.clock_out_shift(appointment_id, notes=notes)
+                    return {"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name}
+                return json.dumps(await asyncio.to_thread(_clock_out))
+
+            elif tool_name == "find_replacement_caregiver":
+                shift_id = tool_input.get("shift_id", "")
+                original_caregiver_id = tool_input.get("original_caregiver_id", "")
+                reason = tool_input.get("reason", "called out")
+                if not shift_id or not original_caregiver_id:
+                    return json.dumps({"error": "Missing shift_id or original_caregiver_id"})
+                def _find_replacement():
+                    try:
+                        from sales.shift_filling.engine import shift_filling_engine
+                        campaign = shift_filling_engine.process_calloff(
+                            shift_id=shift_id, caregiver_id=original_caregiver_id,
+                            reason=reason, reported_by="gigi_telegram"
+                        )
+                        if not campaign:
+                            return {"success": False, "error": "Could not create replacement campaign"}
+                        return {
+                            "success": True, "campaign_id": campaign.id,
+                            "status": campaign.status.value if hasattr(campaign.status, 'value') else str(campaign.status),
+                            "caregivers_contacted": campaign.total_contacted,
+                            "message": f"Replacement search started. Contacting {campaign.total_contacted} caregivers via SMS."
+                        }
+                    except ImportError:
+                        return {"error": "Shift filling engine not available"}
+                    except Exception as e:
+                        return {"error": f"Shift filling failed: {str(e)}"}
+                return json.dumps(await asyncio.to_thread(_find_replacement))
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
