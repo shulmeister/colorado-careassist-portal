@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 14, 2026
+**Last Updated:** February 19, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -28,6 +28,7 @@ This is the **unified platform** for Colorado Care Assist, containing:
 | `elite-trading-mcp` | 3002 | elitetrading.coloradocareassist.com | Trading MCP server |
 | **PowderPulse** | 3003 | powderpulse.coloradocareassist.com | Ski weather app (FastAPI + Vue.js SPA) |
 | `weather-arb` | 3010 | - (localhost) | Weather Sniper Bot (Polymarket, LIVE) |
+| `kalshi-weather` | 3011 | - (localhost) | Weather Sniper Bot (Kalshi, LIVE) |
 | `kalshi-poly-arb` | 3013 | - (localhost) | Kalshi-Polymarket arb scanner |
 | `status-dashboard` | 3012 | status.coloradocareassist.com | Infrastructure status dashboard |
 | `gigi-menubar` | - | - | macOS menu bar app (SwiftUI) |
@@ -46,36 +47,36 @@ This is the **unified platform** for Colorado Care Assist, containing:
 
 | Channel | Technology | Handler | Tools | Status |
 |---------|------------|---------|-------|--------|
-| **Voice** | Retell AI Custom LLM | `voice_brain.py` | 25 tools | Working |
-| **SMS** | RC message-store polling | `ringcentral_bot.py` | 11 tools | Working |
-| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 22 tools | Working |
-| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | 22 tools | Working |
+| **Voice** | Retell AI Custom LLM | `voice_brain.py` | 33 tools | Working |
+| **SMS** | RC message-store polling | `ringcentral_bot.py` | 15 tools | Working |
+| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 31 tools | Working |
+| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | 31 tools | Working |
 
 **Other Channels**
 
 | Channel | Technology | Handler | Tools | Status |
 |---------|------------|---------|-------|--------|
-| **Telegram** | Telegram Bot API | `telegram_bot.py` | 22 tools | Working |
-| **Ask-Gigi API** | REST `/api/ask-gigi` | `ask_gigi.py` | 22 tools | Working |
-| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py` | 22 tools | Working |
-| **iMessage** | BlueBubbles webhook | `main.py` → `ask_gigi.py` | 22 tools | Code Done (needs BB GUI setup) |
-| **Menu Bar** | SwiftUI → ask-gigi API | `ask_gigi.py` | 22 tools | Working |
+| **Telegram** | Telegram Bot API | `telegram_bot.py` | 32 tools | Working |
+| **Ask-Gigi API** | REST `/api/ask-gigi` | `ask_gigi.py` | 32 tools | Working |
+| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py` | 32 tools | Working |
+| **iMessage** | BlueBubbles webhook | `main.py` → `ask_gigi.py` | 32 tools | Code Done (needs BB GUI setup) |
+| **Menu Bar** | SwiftUI → ask-gigi API | `ask_gigi.py` | 32 tools | Working |
 
 ### Ask-Gigi API (Feb 8 — Foundation for Apple integrations)
 - **Endpoint:** `POST /api/ask-gigi` (mounted at `/gigi/api/ask-gigi` via unified_app)
 - **Auth:** Bearer token via `GIGI_API_TOKEN` env var
 - **Module:** `gigi/ask_gigi.py` — reuses GigiTelegramBot.execute_tool (no duplication)
-- **All channels that use ask_gigi.py** get the same 22 tools (all Telegram tools)
+- **All channels that use ask_gigi.py** get the same 32 tools (all Telegram tools)
 - **Cross-channel context:** API messages visible from Telegram/SMS and vice versa
 
 ### Tool Sets
-**Telegram tools (22):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_morning_briefing`
+**Telegram tools (32):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_morning_briefing`, `get_ar_report`, `get_polybot_status`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
 
-**Voice tools (25):** All Telegram tools minus browser/morning_briefing, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
+**Voice tools (33):** All Telegram tools minus browser/morning_briefing/get_polybot_status, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
 
-**RC SMS tools (11):** `get_client_current_status`, `identify_caller`, `get_wellsky_shifts`, `get_wellsky_clients`, `get_wellsky_caregivers`, `log_call_out`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `get_morning_briefing`
+**RC SMS tools (15):** `get_client_current_status`, `identify_caller`, `get_wellsky_shifts`, `get_wellsky_clients`, `get_wellsky_caregivers`, `log_call_out`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `get_morning_briefing`, `get_ar_report`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
 
-**RC DM/Team Chat tools (22):** Full Telegram-like set including browser tools + `check_recent_sms`, `send_sms`, `log_call_out`, `identify_caller` (replaces `create_claude_task`, `check_claude_task`, `buy_tickets_request`, `book_table_request`)
+**RC DM/Team Chat tools (31):** Full Telegram-like set including browser tools + `check_recent_sms`, `send_sms`, `log_call_out`, `identify_caller`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
 
 ### Gigi's Core Capabilities
 - **WellSky Integration**: Full CRUD on Patients, Practitioners, Appointments, Encounters, DocumentReferences, Subscriptions, ProfileTags, and RelatedPersons. Clock in/out, task logs, shift search, and webhook event subscriptions. See `docs/WELLSKY_HOME_CONNECT_API_REFERENCE.md` for complete endpoint reference.
@@ -107,6 +108,34 @@ All 3 handlers (`telegram_bot.py`, `voice_brain.py`, `ringcentral_bot.py`) + `as
 - **Module:** `gigi/browser_automation.py` — Playwright + headless Chromium
 - **Tools:** `browse_webpage` (extract page text), `take_screenshot` (save PNG to `~/logs/screenshots/`)
 - Available in Telegram + all ask-gigi API channels
+
+### Enterprise Readiness (Feb 19)
+Five features built for production readiness with clients and employees:
+1. **Clock In/Out Tools** — `clock_in_shift`, `clock_out_shift` across all channels (voice, SMS, Telegram, DM). Caregivers can clock in/out by talking to Gigi or texting.
+2. **Transfer Call Rules** — Voice brain system prompt includes "When to Transfer Calls (CRITICAL)" section. Gigi transfers to a human for: emergencies, complaints, legal/HIPAA, billing, repeated failures (3+), explicit requests.
+3. **Shift Filling Engine** — `find_replacement_caregiver` tool wired across all channels. Queries WellSky for available caregivers matching skills/availability, ranks by proximity and past performance.
+4. **SMS Semantic Loop Detection** — `_detect_semantic_loop()` in RC bot. Detects when Gigi is repeating herself in SMS conversations (cosine similarity > 0.85 on last 3 messages). Breaks loop with escalation.
+5. **Simulation Testing** — End-to-end voice simulation via portal Simulations tab. WebSocket-based tool capture (cross-process safe). Evaluator scores tool usage (40%) + conversation behavior (60%). Best score: 85/100 on weather/concert scenario.
+
+### Ticket Watch System (Feb 16)
+- **Purpose:** Monitors Ticketmaster + Bandsintown for concert/event on-sale dates. Sends Telegram alerts.
+- **Tools:** `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch` (all channels)
+- **Polling:** RC bot checks every ~15 min. Ticketmaster Discovery API (5000 calls/day) + Bandsintown (catches AXS events).
+- **Alerts:** New event found, 24h before on-sale, 15min before on-sale ("GET IN QUEUE NOW")
+- **DB:** `gigi_ticket_watches` table with `notified_events` JSONB for deduplication
+
+### Scheduled Outbound Messages
+| Message | Time | Channel | Target | Env Flag |
+|---------|------|---------|--------|----------|
+| **Morning Briefing** | 7:00 AM MT | Telegram | Jason | `MORNING_BRIEFING_ENABLED` |
+| **Clock In/Out Reminders** | Every 5 min (business hours) | SMS | Caregivers | `CLOCK_REMINDER_ENABLED` |
+| **Shift Confirmations** | 2:00 PM MT | SMS | Caregivers | `DAILY_CONFIRMATION_ENABLED` |
+| **Ticket Watch Alerts** | As needed (15 min polls) | Telegram | Jason | Always on (if watches exist) |
+| **Task Completion Alerts** | As needed | Telegram | Jason | Always on |
+| **Memory Decay** | 3:15 AM MT | Internal | DB only | Separate LaunchAgent |
+| **Memory Logger** | 11:59 PM MT | Internal | Disk only | Separate LaunchAgent |
+
+**Shadow Mode (current):** `CLOCK_REMINDER_ENABLED=false`, `DAILY_CONFIRMATION_ENABLED=false` — no outbound to caregivers.
 
 ### Retell Voice Brain (Feb 7 — VALIDATED)
 - **Agent:** `agent_5b425f858369d8df61c363d47f` (Custom LLM, 11labs Susan)
@@ -265,9 +294,9 @@ careassist-unified/
 ├── portal/                # Portal web app (FastAPI)
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
-│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (multi-provider, 25 tools)
-│   ├── telegram_bot.py    # Telegram interface (multi-provider, 22 tools)
-│   ├── ringcentral_bot.py # RC polling, SMS, clock reminders, daily confirmations, morning briefing
+│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (multi-provider, 33 tools)
+│   ├── telegram_bot.py    # Telegram interface (multi-provider, 32 tools)
+│   ├── ringcentral_bot.py # RC polling, SMS (15 tools), DM/Team (31 tools), scheduled messages
 │   ├── main.py            # Retell webhooks + /api/ask-gigi + /webhook/imessage
 │   ├── ask_gigi.py        # Generic ask-gigi function (reuses telegram tools, no duplication)
 │   ├── browser_automation.py  # Playwright headless Chromium (browse + screenshot)
@@ -279,6 +308,11 @@ careassist-unified/
 │   ├── self_monitor.py    # Weekly self-audit (Monday morning briefing)
 │   ├── memory_logger.py   # Daily markdown journal at ~/.gigi-memory/
 │   ├── morning_briefing_service.py  # 7 AM daily briefing via Telegram
+│   ├── clock_reminder_service.py    # SMS clock in/out reminders to caregivers
+│   ├── daily_confirmation_service.py # 2 PM shift confirmation SMS to caregivers
+│   ├── ticket_monitor.py  # Ticketmaster + Bandsintown polling, Telegram alerts
+│   ├── simulation_service.py  # Voice simulation runner (WebSocket-based)
+│   ├── simulation_evaluator.py # Simulation scoring (tool 40% + behavior 60%)
 │   ├── google_service.py  # Google Calendar + Gmail API (OAuth2)
 │   ├── chief_of_staff_tools.py  # Shared tool implementations
 │   └── CONSTITUTION.md    # Gigi's 10 operating laws
@@ -441,6 +475,8 @@ This script will:
 
 ## HISTORY
 
+- **Feb 19, 2026:** Enterprise readiness build — 5 items for production use with clients/employees: (1) Clock in/out tools across all channels, (2) Transfer call rules in voice brain, (3) Shift filling engine (`find_replacement_caregiver`) wired to all handlers, (4) SMS semantic loop detection (`_detect_semantic_loop()`), (5) End-to-end simulation testing with WebSocket tool capture and Claude-based evaluation (85/100 best score). Also fixed simulation bugs: `content_complete` protocol handling, cross-process tool capture via WebSocket events, Gemini empty-text nudge. Updated all tool counts: Telegram 32, Voice 33, SMS 15, DM/Team 31. Full documentation refresh.
+- **Feb 16, 2026:** Ticket watch system deployed — `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch` tools across all channels. Ticketmaster Discovery API + Bandsintown for AXS coverage. Telegram alerts: new events, 24h presale warning, 15min "get in queue" alert. DB: `gigi_ticket_watches` table with JSONB dedup tracking. RC bot polls every ~15 min.
 - **Feb 14, 2026:** Split PowderPulse into standalone service on port 3003 (powderpulse.coloradocareassist.com). Created `powderpulse/server.py` (FastAPI + Liftie CORS proxy) replacing `npx serve`. Removed PowderPulse mount + Liftie proxy from unified_app.py. Portal `/powderpulse` now redirects to standalone subdomain. PowderPulse can now restart independently without affecting portal/Gigi. Also upgraded US resort forecasting: NWS (2.5km human-corrected, days 1-7) + ECMWF (days 8-15) via new `hybridWeatherApiUS.js`. International resorts unchanged (met.no + ECMWF). Built Kalshi-Polymarket arb scanner on port 3013.
 - **Feb 13, 2026:** Weather Sniper Bot built and deployed (LIVE, real money). Rewrote weather-arb from laddering strategy to sniper strategy: auto-buys slam-dunk "or higher"/"or below" temperature markets at 11:00 UTC daily open. NOAA forecasts pre-fetched, GTC limit orders at $0.22. Backtested Feb 13-15: US cities +345% ROI. Restricted to US cities only (NOAA reliable, ECMWF/Toronto forecast was 5°C off). Config: $25/market, 5°F margin, 6 US cities. Updated Gigi's `get_weather_arb_status` tool across all 3 handlers to show sniper status + P&L. Updated status dashboard (status.coloradocareassist.com) with "Weather Sniper Bot" name and sniper-specific data in trading API. Status dashboard at port 3012 also added to CLAUDE.md services table.
 - **Feb 8, 2026 (evening):** Fixed 17 race condition bugs across all Gigi handlers (2 sessions): duplicate message handling via asyncio.Lock, wrapped all sync LLM/DB calls in asyncio.to_thread, 60s LLM timeouts, voice brain side-effect tracking on cancellation, reply lock for RC bot, moved user message persistence after LLM success, DB-side meltdown detection, SELECT FOR UPDATE for memory reinforcement, make_interval() for safe SQL intervals, shared DB connections in pattern detector. Also fixed iMessage webhook auth bypass, added retry health checks to promote/restart scripts.
