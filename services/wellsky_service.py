@@ -16,15 +16,13 @@ API Documentation: https://apidocs.clearcareonline.com/
 """
 from __future__ import annotations
 
-import os
-import json
 import logging
-import hashlib
-import time
+import os
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
-from dataclasses import dataclass, field, asdict
 from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
+
 import requests
 
 logger = logging.getLogger(__name__)
@@ -690,16 +688,16 @@ class WellSkyService:
         #     active_filter = True
         # elif status == ClientStatus.DISCHARGED:
         #     active_filter = False
-            
+
         page = offset // limit if limit > 0 else 0
         clients = self.search_patients(active=active_filter, limit=limit, page=page)
-        
+
         # Local filtering for status if requested
         if status == ClientStatus.ACTIVE:
             return [c for c in clients if c.status == ClientStatus.ACTIVE]
         elif status == ClientStatus.DISCHARGED:
             return [c for c in clients if c.status == ClientStatus.DISCHARGED]
-            
+
         return clients
 
     def get_client(self, client_id: str) -> Optional[WellSkyClient]:
@@ -1324,7 +1322,7 @@ class WellSkyService:
             active = True
         elif status in (CaregiverStatus.INACTIVE, CaregiverStatus.TERMINATED):
             active = False
-            
+
         page = offset // limit if limit > 0 else 0
         # search_practitioners defaults to is_hired=True, which is correct for caregivers
         return self.search_practitioners(active=active, limit=limit, page=page)
@@ -1351,7 +1349,7 @@ class WellSkyService:
         results = self.search_practitioners(phone=clean_phone, active=True, is_hired=True, limit=1)
         if results:
             return results[0]
-            
+
         # FALLBACK: If mobile_phone search fails, get all active and filter manually
         # (Connect API can be picky about which phone field it searches)
         all_active = self.get_caregivers(status=CaregiverStatus.ACTIVE, limit=100)
@@ -1359,7 +1357,7 @@ class WellSkyService:
             cg_clean = re.sub(r'[^\d]', '', cg.phone or '')[-10:]
             if cg_clean == clean_phone:
                 return cg
-                
+
         return None
 
     def get_active_caregiver_count(self) -> int:
@@ -2547,7 +2545,7 @@ class WellSkyService:
                 "longitude": lon
             }
         }
-        
+
         success, response = self._make_request("POST", endpoint, data=data)
         if success:
             return True, f"Clocked in successfully. Carelog ID: {response.get('id')}"
@@ -2579,11 +2577,11 @@ class WellSkyService:
             },
             "generalComment": notes[:1000]
         }
-        
+
         success, response = self._make_request("PUT", endpoint, data=data)
         if success:
             return True, "Clocked out successfully"
-            
+
         # Fallback: if 404, maybe it was an appointment_id?
         if not success and isinstance(response, dict) and response.get("status_code") == 404:
              logger.info(f"Clock out 404 for {target_id}, attempting ID resolution via clockin...")
@@ -3865,12 +3863,12 @@ class WellSkyService:
                 except Exception as e:
                     logger.error(f"Error syncing note ({days_back}d window): {e}")
 
-        # Fallback: No encounter found — create AdminTask in WellSky
-        # AdminTasks show up in WellSky dashboard and relate to the client
-        logger.info(f"No encounter for client {client_id} in 90-day window. Creating AdminTask.")
+        # Fallback: No encounter found — create Clinical Note (DocumentReference)
+        # Shows in client's Documents tab, NOT in Tasks dashboard
+        logger.info(f"No encounter for client {client_id} in 90-day window. Creating Clinical Note.")
         try:
             if title:
-                task_title = title
+                note_title = title
             else:
                 timestamp = datetime.now().strftime("%m/%d %H:%M")
                 _note_labels = {
@@ -3885,16 +3883,16 @@ class WellSkyService:
                     "general": "Care Note",
                 }
                 label = _note_labels.get(note_type, note_type.replace("_", " ").title())
-                task_title = f"{label} ({timestamp})"
-            task_desc = note
+                note_title = f"{label} ({timestamp})"
 
-            success_task, resp_task = self.create_admin_task(
-                title=task_title,
-                description=task_desc,
-                related_client_id=str(client_id),
+            success_note, resp_note = self.create_clinical_note(
+                patient_id=str(client_id),
+                title=note_title,
+                note_text=note,
+                source=source,
             )
-            if success_task:
-                task_id = resp_task.get("id", "unknown") if isinstance(resp_task, dict) else "unknown"
+            if success_note:
+                doc_id = resp_note.get("id", "unknown") if isinstance(resp_note, dict) else "unknown"
                 try:
                     import sqlite3
                     conn = sqlite3.connect('portal.db')
@@ -3909,12 +3907,12 @@ class WellSkyService:
                     conn.close()
                 except Exception:
                     pass
-                logger.info(f"Created WellSky AdminTask {task_id} for client {client_id}")
-                return True, f"Note synced to WellSky AdminTask {task_id}"
+                logger.info(f"Created WellSky Clinical Note {doc_id} for client {client_id}")
+                return True, f"Note synced to WellSky Clinical Note {doc_id}"
             else:
-                logger.warning(f"AdminTask creation also failed for client {client_id}: {resp_task}")
+                logger.warning(f"Clinical Note creation also failed for client {client_id}: {resp_note}")
         except Exception as e:
-            logger.error(f"Error creating AdminTask fallback for {client_id}: {e}")
+            logger.error(f"Error creating Clinical Note fallback for {client_id}: {e}")
 
         logger.warning(f"All WellSky sync methods failed for client {client_id}. Note saved locally only.")
         return True, "Note documented locally (all WellSky sync methods failed)"
@@ -3987,7 +3985,7 @@ class WellSkyService:
         """
         caregiver = self.get_caregiver_by_phone(phone)
         today = date.today()
-        
+
         if caregiver:
             logger.info(f"Fetching shifts for caregiver ID: {caregiver.id}")
             shifts = self.get_shifts(
@@ -4004,7 +4002,7 @@ class WellSkyService:
         all_shifts = self.get_shifts(date_from=today, date_to=today, limit=500)
         import re
         clean_phone = re.sub(r'[^\d]', '', phone)[-10:]
-        
+
         matched_shifts = []
         for s in all_shifts:
             # Match by caregiver phone if available in shift object
@@ -4012,11 +4010,11 @@ class WellSkyService:
                 if re.sub(r'[^\d]', '', s.caregiver_phone)[-10:] == clean_phone:
                     matched_shifts.append(s)
                     continue
-            
+
             # Match by name if we found a caregiver record earlier
             if caregiver and s.caregiver_id == caregiver.id:
                 matched_shifts.append(s)
-                
+
         logger.info(f"Aggressive scan found {len(matched_shifts)} shifts for {phone}")
         return matched_shifts
 
@@ -6024,7 +6022,7 @@ class WellSkyService:
             shift.status = ShiftStatus.CANCELLED
             shift.notes = f"{shift.notes}\n[CANCELLED by {cancelled_by}] {reason}" if shift.notes else f"[CANCELLED by {cancelled_by}] {reason}"
             logger.info(f"Mock: Cancelled shift {shift_id}")
-            return True, f"Shift cancelled"
+            return True, "Shift cancelled"
 
         # Real API call
         try:
