@@ -1,34 +1,54 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, status, Query, UploadFile, File, BackgroundTasks
+import asyncio
+import hashlib
+import hmac
+import logging
+import os
+from datetime import date as date_cls
+from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+from urllib.parse import quote_plus, urlencode
+
+import httpx
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from sqlalchemy.orm import Session
-import os
-import logging
-import asyncio
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, date as date_cls
-import httpx
-import hmac
-import hashlib
-from urllib.parse import urlencode, quote_plus, urljoin
 
 # Rate limiting
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from portal_auth import oauth_manager, get_current_user, get_current_user_optional
-from portal_database import get_db, db_manager
-from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher, BrevoWebhookEvent, GigiInteractionFeedback
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
+from portal_auth import get_current_user, get_current_user_optional, oauth_manager
+from portal_database import db_manager, get_db
+from portal_models import (
+    BrevoWebhookEvent,
+    GigiInteractionFeedback,
+    PortalTool,
+    ToolClick,
+    UserSession,
+    Voucher,
+)
+from services.activity_stream_service import activity_stream
 from services.marketing.metrics_service import (
-    get_social_metrics,
     get_ads_metrics,
     get_email_metrics,
+    get_social_metrics,
 )
 from services.search_service import search_service
-from services.activity_stream_service import activity_stream
+
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
     from services.client_satisfaction_service import client_satisfaction_service
@@ -47,7 +67,9 @@ except ImportError as e:
 
 # Import GoFormz → WellSky sync service for webhook processing
 try:
-    from services.goformz_wellsky_sync import goformz_wellsky_sync as _goformz_wellsky_sync_module
+    from services.goformz_wellsky_sync import (
+        goformz_wellsky_sync as _goformz_wellsky_sync_module,
+    )
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.warning(f"GoFormz-WellSky sync service not available: {e}")
@@ -55,7 +77,12 @@ except ImportError as e:
 
 # Import WellSky service directly for Operations Dashboard
 try:
-    from services.wellsky_service import wellsky_service, ShiftStatus, ClientStatus, CaregiverStatus
+    from services.wellsky_service import (
+        CaregiverStatus,
+        ClientStatus,
+        ShiftStatus,
+        wellsky_service,
+    )
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.warning(f"WellSky service not available: {e}")
@@ -64,10 +91,11 @@ except ImportError as e:
     ClientStatus = None
     CaregiverStatus = None
 
-from dotenv import load_dotenv
-from datetime import date
-from itsdangerous import URLSafeTimedSerializer
 import json
+from datetime import date
+
+from dotenv import load_dotenv
+from itsdangerous import URLSafeTimedSerializer
 
 # Load environment variables
 load_dotenv()
@@ -144,7 +172,9 @@ async def autonomous_documentation_sync():
         try:
             logger.info("Starting autonomous RingCentral -> WellSky sync...")
             with db_manager.get_session() as db:
-                from services.ringcentral_messaging_service import ringcentral_messaging_service
+                from services.ringcentral_messaging_service import (
+                    ringcentral_messaging_service,
+                )
 
                 channels = ["New Scheduling", "Biz Dev"]
                 for channel in channels:
@@ -184,7 +214,7 @@ async def startup_event():
         logger.info("Gigi Autonomous Documentation Engine started.")
     else:
         logger.info("Staging environment detected — skipping autonomous documentation sync.")
-    
+
     # Ensure Gigi Brain tile exists
     try:
         with db_manager.get_session() as db:
@@ -218,8 +248,10 @@ async def startup_event():
         logger.error(f"Error ensuring Gigi Brain tile: {e}")
 
 # Add session middleware for OAuth state management
-from starlette.middleware.sessions import SessionMiddleware
 import secrets
+
+from starlette.middleware.sessions import SessionMiddleware
+
 SESSION_SECRET = os.getenv("SESSION_SECRET_KEY")
 if not SESSION_SECRET:
     SESSION_SECRET = secrets.token_urlsafe(32)
@@ -259,13 +291,13 @@ _root_dir = os.path.dirname(_portal_dir)
 templates = Jinja2Templates(directory=os.path.join(_portal_dir, "templates"))
 app.mount("/static", StaticFiles(directory=os.path.join(_root_dir, "static")), name="static")
 
-# 
+#
 
 # Recruiter dashboard is mounted at /recruiting via unified_app.py
 # Sales dashboard is mounted at /sales via unified_app.py
 # Gigi AI agent is mounted at /gigi via unified_app.py
 
-# 
+#
 
 # Convenience redirects
 @app.get("/login")
@@ -299,7 +331,7 @@ async def auth_callback(request: Request, code: str = None, state: str = None, e
     try:
         # SECURITY: Pass state for CSRF validation
         result = await oauth_manager.handle_callback(code, state or "", request=request)
-        
+
         # Create response with session cookie
         response = RedirectResponse(url="/", status_code=302)
         response.set_cookie(
@@ -310,9 +342,9 @@ async def auth_callback(request: Request, code: str = None, state: str = None, e
             secure=True,  # HTTPS required in production
             samesite="lax"
         )
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Callback error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Authentication failed: {str(e)}")
@@ -323,7 +355,7 @@ async def logout(request: Request):
     session_token = request.cookies.get("session_token")
     if session_token:
         oauth_manager.logout(session_token)
-    
+
     response = JSONResponse({"success": True, "message": "Logged out successfully"})
     response.delete_cookie("session_token")
     return response
@@ -347,7 +379,7 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
     if not current_user:
         # Redirect to login if not authenticated
         return RedirectResponse(url="/auth/login")
-    
+
     ringcentral_config = {
         "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
         "client_id": RINGCENTRAL_EMBED_CLIENT_ID,
@@ -373,11 +405,11 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
         params["enableGlip"] = "true"        # Enable Chat/Glip tab
         params["disableGlip"] = "false"      # Make sure Glip is not disabled
         params["disableConferences"] = "true"  # Disable video/meetings
-        
+
         # ALWAYS USE DARK THEME - DO NOT CHANGE
         params["theme"] = "dark"             # Force dark theme to match portal design
         params["_t"] = str(int(time.time()))  # Cache buster to force theme reload
-        
+
         ringcentral_config["query_string"] = urlencode(params)
 
     response = templates.TemplateResponse("portal.html", {
@@ -913,6 +945,15 @@ async def api_gigi_get_simulation_details(
         if not row:
             return JSONResponse({"success": False, "error": "Simulation not found"})
 
+        # Helper: psycopg2 auto-parses JSONB columns, so value may already be
+        # a Python object. Only call json.loads() on strings.
+        def _parse_jsonb(val, default=None):
+            if val is None:
+                return default if default is not None else []
+            if isinstance(val, (list, dict)):
+                return val
+            return json.loads(val)
+
         return JSONResponse({
             "success": True,
             "simulation": {
@@ -925,15 +966,15 @@ async def api_gigi_get_simulation_details(
                 "completed_at": row[6].isoformat() if row[6] else None,
                 "duration": row[7],
                 "transcript": row[8],
-                "transcript_json": json.loads(row[9]) if row[9] else [],
+                "transcript_json": _parse_jsonb(row[9], []),
                 "turn_count": row[10],
-                "tool_calls": json.loads(row[11]) if row[11] else [],
-                "expected_tools": json.loads(row[12]) if row[12] else [],
-                "tools_used": json.loads(row[13]) if row[13] else [],
+                "tool_calls": _parse_jsonb(row[11], []),
+                "expected_tools": _parse_jsonb(row[12], []),
+                "tools_used": _parse_jsonb(row[13], []),
                 "tool_score": row[14],
                 "behavior_score": row[15],
                 "overall_score": row[16],
-                "evaluation": json.loads(row[17]) if row[17] else {},
+                "evaluation": _parse_jsonb(row[17], {}),
                 "error": row[18],
                 "launched_by": row[19],
                 "created_at": row[20].isoformat() if row[20] else None
@@ -1053,21 +1094,72 @@ async def api_gigi_get_schedule(
     date_str: Optional[str] = Query(None),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get today's schedule for Gigi Dashboard from WellSky"""
-    if wellsky_service is None:
-        return JSONResponse({"success": False, "error": "WellSky service not available"})
+    """Get today's schedule for Gigi Dashboard from cached WellSky data"""
+    import psycopg2
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
     try:
         target_date = date_cls.fromisoformat(date_str) if date_str else date_cls.today()
-        
-        # Get all shifts for the day
-        shifts = wellsky_service.get_shifts(date_from=target_date, date_to=target_date, limit=200)
-        
+
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                a.id, a.scheduled_start, a.scheduled_end, a.actual_start, a.actual_end,
+                a.status, a.service_type, a.location_address, a.notes,
+                p.id as client_id, p.full_name as client_name, p.phone as client_phone,
+                pr.id as caregiver_id, pr.full_name as caregiver_name, pr.phone as caregiver_phone
+            FROM cached_appointments a
+            LEFT JOIN cached_patients p ON a.patient_id = p.id
+            LEFT JOIN cached_practitioners pr ON a.practitioner_id = pr.id
+            WHERE a.scheduled_start::date = %s
+            ORDER BY a.scheduled_start
+        """, (target_date.isoformat(),))
+
+        rows = cur.fetchall()
+        shifts = []
+        for r in rows:
+            client_full = r[10] or "Unknown Client"
+            client_parts = client_full.split(" ", 1)
+            sched_start = r[1]
+            sched_end = r[2]
+            duration_hours = 0
+            if sched_start and sched_end:
+                delta = sched_end - sched_start
+                duration_hours = delta.total_seconds() / 3600
+                if duration_hours < 0:
+                    duration_hours += 24  # overnight shift
+            shifts.append({
+                "id": r[0],
+                "start_time": sched_start.strftime("%I:%M %p") if sched_start else "TBD",
+                "end_time": sched_end.strftime("%I:%M %p") if sched_end else "TBD",
+                "actual_start": r[3].strftime("%I:%M %p") if r[3] else None,
+                "actual_end": r[4].strftime("%I:%M %p") if r[4] else None,
+                "status": r[5] or "scheduled",
+                "service_type": r[6],
+                "location": r[7],
+                "notes": r[8],
+                "client_id": r[9],
+                "client_name": client_full,
+                "client_first_name": client_parts[0],
+                "client_last_name": client_parts[1] if len(client_parts) > 1 else "",
+                "client_phone": r[11],
+                "caregiver_id": r[12],
+                "caregiver_name": r[13] or "Unassigned",
+                "caregiver_phone": r[14],
+                "duration_hours": round(duration_hours, 1),
+                "city": (r[7] or "").split(",")[0] if r[7] else "CO",
+                "date": target_date.isoformat(),
+            })
+
+        conn.close()
+
         return JSONResponse({
             "success": True,
             "date": target_date.isoformat(),
-            "shifts": [s.to_dict() for s in shifts],
-            "count": len(shifts)
+            "shifts": shifts,
+            "count": len(shifts),
+            "data_source": "cached_appointments (synced every 2h from WellSky)"
         })
     except Exception as e:
         logger.error(f"Failed to fetch schedule: {e}")
@@ -1080,18 +1172,18 @@ async def api_gigi_get_escalations(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get high-priority escalations (Urgent issues and Call Logs)"""
-    from portal_models import ClientComplaint, ActivityFeedItem
-    
+    from portal_models import ActivityFeedItem, ClientComplaint
+
     # 1. Get Urgent/High Issues
     urgent_issues = db.query(ClientComplaint).filter(
         ClientComplaint.severity.in_(["high", "critical"])
     ).order_by(ClientComplaint.created_at.desc()).limit(limit).all()
-    
+
     # 2. Get Recent Voice Activity (Transfers and Completions)
     voice_events = db.query(ActivityFeedItem).filter(
         ActivityFeedItem.event_type.in_(["call_transfer", "call_ended"])
     ).order_by(ActivityFeedItem.created_at.desc()).limit(limit).all()
-    
+
     return JSONResponse({
         "success": True,
         "issues": [i.to_dict() for i in urgent_issues],
@@ -1107,13 +1199,13 @@ async def api_wellsky_search_clients(
 ):
     if wellsky_service is None:
         return JSONResponse({"success": False, "error": "WellSky service not available"})
-    
+
     # Simple prefix search for now
     clients = wellsky_service.get_clients(limit=limit)
     if q:
         q = q.lower()
         clients = [c for c in clients if q in c.full_name.lower()]
-        
+
     return JSONResponse({
         "success": True,
         "clients": [c.to_dict() for c in clients]
@@ -1127,12 +1219,12 @@ async def api_wellsky_search_caregivers(
 ):
     if wellsky_service is None:
         return JSONResponse({"success": False, "error": "WellSky service not available"})
-    
+
     caregivers = wellsky_service.get_caregivers(limit=limit)
     if q:
         q = q.lower()
         caregivers = [c for c in caregivers if q in c.full_name.lower()]
-        
+
     return JSONResponse({
         "success": True,
         "caregivers": [c.to_dict() for c in caregivers]
@@ -1146,14 +1238,14 @@ async def api_wellsky_search_shifts(
 ):
     if wellsky_service is None:
         return JSONResponse({"success": False, "error": "WellSky service not available"})
-    
+
     # Fetch today and future shifts for this client
     shifts = wellsky_service.get_shifts(
-        client_id=clientId, 
+        client_id=clientId,
         date_from=date_cls.today(),
         limit=limit
     )
-        
+
     return JSONResponse({
         "success": True,
         "shifts": [s.to_dict() for s in shifts]
@@ -1167,10 +1259,10 @@ async def api_gigi_get_users(
 ):
     """Get portal users and their recent activity"""
     from portal_models import UserSession
-    
+
     # Get active sessions/users
     sessions = db.query(UserSession).order_by(UserSession.login_time.desc()).limit(limit).all()
-    
+
     # Deduplicate by user_email to show unique users
     users = {}
     for s in sessions:
@@ -1181,7 +1273,7 @@ async def api_gigi_get_users(
                 "last_active": s.login_time.isoformat(),
                 "status": "Active" if s.logout_time is None else "Offline"
             }
-            
+
     return JSONResponse({
         "success": True,
         "users": list(users.values())
@@ -1195,10 +1287,10 @@ async def api_gigi_get_calls(
     """Get Retell AI call logs with recordings"""
     retell_api_key = os.getenv("RETELL_API_KEY")
     agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
-    
+
     if not retell_api_key:
         return JSONResponse({"success": False, "error": "RETELL_API_KEY not set"})
-        
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -1542,7 +1634,7 @@ async def api_gigi_submit_feedback(
         gigi_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gigi")
         if gigi_dir not in sys.path:
             sys.path.insert(0, gigi_dir)
-        from memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel
+        from memory_system import ImpactLevel, MemorySource, MemorySystem, MemoryType
         ms = MemorySystem()
 
         if rating == "good":
@@ -1616,7 +1708,7 @@ async def api_gigi_save_sop(
     content = payload.get("content")
     if content is None:
         return JSONResponse({"success": False, "error": "No content provided"})
-    
+
     try:
         with open(sop_path, "w") as f:
             f.write(content)
@@ -1636,13 +1728,13 @@ async def api_gigi_get_memories(
         # We need to import MemorySystem from gigi.memory_system
         # Note: gigi directory might not be in path or might need relative import
         sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "gigi"))
-        from memory_system import MemorySystem, MemoryStatus
-        
+        from memory_system import MemoryStatus, MemorySystem
+
         ms = MemorySystem()
         memories = ms.query_memories(category=category, status=MemoryStatus.ACTIVE, limit=limit)
-        
+
         return JSONResponse({
-            "success": True, 
+            "success": True,
             "memories": [
                 {
                     "id": m.id,
@@ -1670,7 +1762,7 @@ async def get_tools(
         tools = db.query(PortalTool).filter(
             PortalTool.is_active == True
         ).order_by(PortalTool.display_order, PortalTool.name).all()
-        
+
         return JSONResponse({
             "success": True,
             "tools": [tool.to_dict() for tool in tools]
@@ -1694,7 +1786,7 @@ async def global_search(
     except Exception as e:
         logger.error(f"Search error: {e}")
         return JSONResponse({
-            "success": False, 
+            "success": False,
             "error": str(e),
             "results": []
         })
@@ -1720,7 +1812,7 @@ async def log_internal_event(
         data = await request.json()
         if not all(k in data for k in ["source", "description"]):
              raise HTTPException(status_code=400, detail="Missing source or description")
-             
+
         activity_stream.log_activity(
             source=data.get("source"),
             description=data.get("description"),
@@ -1756,13 +1848,13 @@ async def create_tool(
             display_order=data.get("display_order", 0),
             is_active=data.get("is_active", True)
         )
-        
+
         db.add(tool)
         db.commit()
         db.refresh(tool)
-        
+
         logger.info(f"Created tool: {tool.name}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Tool created successfully",
@@ -1788,7 +1880,7 @@ async def update_tool(
         tool = db.query(PortalTool).filter(PortalTool.id == tool_id).first()
         if not tool:
             raise HTTPException(status_code=404, detail="Tool not found")
-        
+
         # Update fields
         if "name" in data:
             tool.name = data.get("name")
@@ -1804,13 +1896,13 @@ async def update_tool(
             tool.display_order = data.get("display_order")
         if "is_active" in data:
             tool.is_active = data.get("is_active")
-        
+
         tool.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(tool)
-        
+
         logger.info(f"Updated tool: {tool.name}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Tool updated successfully",
@@ -1835,13 +1927,13 @@ async def delete_tool(
         tool = db.query(PortalTool).filter(PortalTool.id == tool_id).first()
         if not tool:
             raise HTTPException(status_code=404, detail="Tool not found")
-        
+
         tool_name = tool.name
         db.delete(tool)
         db.commit()
-        
+
         logger.info(f"Deleted tool: {tool_name}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Tool deleted successfully"
@@ -1856,9 +1948,10 @@ async def delete_tool(
 @app.get("/favicon.ico")
 async def favicon():
     """Serve favicon"""
-    from fastapi.responses import FileResponse, Response
     import os
-    
+
+    from fastapi.responses import FileResponse, Response
+
     favicon_path = os.path.join(_root_dir, "static", "favicon.ico")
     if os.path.exists(favicon_path):
         response = FileResponse(favicon_path)
@@ -1873,7 +1966,7 @@ async def favicon():
         response = Response(content=content, media_type="image/svg+xml")
         response.headers["Cache-Control"] = "public, max-age=86400"
         return response
-    
+
     return Response(status_code=204)
 
 @app.get("/health")
@@ -1900,14 +1993,14 @@ async def track_session(
         data = await request.json()
         action = data.get("action")
         duration_seconds = data.get("duration_seconds")
-        
+
         # Get IP address
         ip_address = request.client.host
         if request.headers.get("X-Forwarded-For"):
             ip_address = request.headers.get("X-Forwarded-For").split(",")[0].strip()
-        
+
         user_agent = request.headers.get("User-Agent", "")
-        
+
         if action == "login":
             # Create new session
             session = UserSession(
@@ -1920,7 +2013,7 @@ async def track_session(
             db.add(session)
             db.commit()
             db.refresh(session)
-            
+
             return JSONResponse({
                 "success": True,
                 "session_id": session.id
@@ -1931,7 +2024,7 @@ async def track_session(
                 UserSession.user_email == current_user.get("email"),
                 UserSession.logout_time.is_(None)
             ).order_by(UserSession.login_time.desc()).first()
-            
+
             if session:
                 session.logout_time = datetime.utcnow()
                 if duration_seconds:
@@ -1941,13 +2034,13 @@ async def track_session(
                     duration = (session.logout_time - session.login_time).total_seconds()
                     session.duration_seconds = int(duration)
                 db.commit()
-            
+
             return JSONResponse({
                 "success": True
             })
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
-            
+
     except Exception as e:
         logger.error(f"Error tracking session: {str(e)}")
         db.rollback()
@@ -1962,14 +2055,14 @@ async def track_click(
     """Track tool click"""
     try:
         data = await request.json()
-        
+
         # Get IP address
         ip_address = request.client.host
         if request.headers.get("X-Forwarded-For"):
             ip_address = request.headers.get("X-Forwarded-For").split(",")[0].strip()
-        
+
         user_agent = request.headers.get("User-Agent", "")
-        
+
         click = ToolClick(
             user_email=current_user.get("email"),
             user_name=current_user.get("name"),
@@ -1980,14 +2073,14 @@ async def track_click(
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         db.add(click)
         db.commit()
-        
+
         return JSONResponse({
             "success": True
         })
-        
+
     except Exception as e:
         logger.error(f"Error tracking click: {str(e)}")
         db.rollback()
@@ -2010,7 +2103,7 @@ async def get_weather(
                 "error": "Weather service not configured",
                 "weather": None
             }, status_code=200)
-        
+
         # Build API URL
         if lat and lon:
             url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}"
@@ -2021,10 +2114,10 @@ async def get_weather(
                 "success": False,
                 "error": "Please provide a city name, zip code, or coordinates"
             }, status_code=400)
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=10.0)
-            
+
             if response.status_code == 200:
                 weather_data = response.json()
                 return JSONResponse({
@@ -2041,7 +2134,7 @@ async def get_weather(
                     "success": False,
                     "error": "Unable to fetch weather data"
                 }, status_code=response.status_code)
-                
+
     except httpx.TimeoutException:
         return JSONResponse({
             "success": False,
@@ -2061,19 +2154,19 @@ async def get_analytics_summary(
 ):
     """Get analytics summary"""
     try:
-        from sqlalchemy import func, distinct
-        
+        from sqlalchemy import distinct, func
+
         # Get summary stats
         total_sessions = db.query(func.count(UserSession.id)).scalar() or 0
         total_clicks = db.query(func.count(ToolClick.id)).scalar() or 0
         active_users = db.query(func.count(distinct(UserSession.user_email))).scalar() or 0
-        
+
         # Get recent sessions (last 50)
         sessions = db.query(UserSession).order_by(UserSession.login_time.desc()).limit(50).all()
-        
+
         # Get recent clicks (last 100)
         clicks = db.query(ToolClick).order_by(ToolClick.clicked_at.desc()).limit(100).all()
-        
+
         return JSONResponse({
             "success": True,
             "summary": {
@@ -2084,7 +2177,7 @@ async def get_analytics_summary(
             "sessions": [session.to_dict() for session in sessions],
             "clicks": [click.to_dict() for click in clicks]
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting analytics summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting analytics: {str(e)}")
@@ -2103,7 +2196,7 @@ async def voucher_list_page(
         "adapter_url": RINGCENTRAL_EMBED_ADAPTER_URL,
         "query_string": ""
     }
-    
+
     if ringcentral_config["enabled"]:
         import time
         params = {
@@ -2118,13 +2211,13 @@ async def voucher_list_page(
         params["enableGlip"] = "true"        # Enable Chat/Glip tab
         params["disableGlip"] = "false"      # Make sure Glip is not disabled
         params["disableConferences"] = "true"  # Disable video/meetings
-        
+
         # ALWAYS USE DARK THEME - DO NOT CHANGE
         params["theme"] = "dark"             # Force dark theme to match portal design
         params["_t"] = str(int(time.time()))  # Cache buster to force theme reload
-        
+
         ringcentral_config["query_string"] = urlencode(params)
-    
+
     return templates.TemplateResponse("vouchers.html", {
         "request": request,
         "user": current_user,
@@ -2141,22 +2234,22 @@ async def get_vouchers(
     """Get all vouchers with optional filtering"""
     try:
         query = db.query(Voucher)
-        
+
         # Apply filters if provided
         if client_name:
             query = query.filter(Voucher.client_name.ilike(f"%{client_name}%"))
         if status:
             query = query.filter(Voucher.status.ilike(f"%{status}%"))
-        
+
         # Order by invoice date descending
         vouchers = query.order_by(Voucher.invoice_date.desc()).all()
-        
+
         return JSONResponse({
             "success": True,
             "vouchers": [voucher.to_dict() for voucher in vouchers],
             "total": len(vouchers)
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting vouchers: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting vouchers: {str(e)}")
@@ -2170,19 +2263,19 @@ async def create_voucher(
     """Create a new voucher"""
     try:
         data = await request.json()
-        
+
         # Parse dates if provided
         voucher_start_date = None
         voucher_end_date = None
         invoice_date = None
-        
+
         if data.get("voucher_start_date"):
             voucher_start_date = datetime.strptime(data["voucher_start_date"], "%Y-%m-%d").date()
         if data.get("voucher_end_date"):
             voucher_end_date = datetime.strptime(data["voucher_end_date"], "%Y-%m-%d").date()
         if data.get("invoice_date"):
             invoice_date = datetime.strptime(data["invoice_date"], "%Y-%m-%d").date()
-        
+
         # Create new voucher
         voucher = Voucher(
             client_name=data["client_name"],
@@ -2196,17 +2289,17 @@ async def create_voucher(
             voucher_image_url=data.get("voucher_image_url"),
             created_by=current_user.get("email")
         )
-        
+
         db.add(voucher)
         db.commit()
         db.refresh(voucher)
-        
+
         return JSONResponse({
             "success": True,
             "voucher": voucher.to_dict(),
             "message": "Voucher created successfully"
         })
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating voucher: {str(e)}")
@@ -2222,12 +2315,12 @@ async def update_voucher(
     """Update an existing voucher"""
     try:
         voucher = db.query(Voucher).filter(Voucher.id == voucher_id).first()
-        
+
         if not voucher:
             raise HTTPException(status_code=404, detail="Voucher not found")
-        
+
         data = await request.json()
-        
+
         # Update fields
         if "client_name" in data:
             voucher.client_name = data["client_name"]
@@ -2247,18 +2340,18 @@ async def update_voucher(
             voucher.notes = data["notes"]
         if "voucher_image_url" in data:
             voucher.voucher_image_url = data["voucher_image_url"]
-        
+
         voucher.updated_by = current_user.get("email")
-        
+
         db.commit()
         db.refresh(voucher)
-        
+
         return JSONResponse({
             "success": True,
             "voucher": voucher.to_dict(),
             "message": "Voucher updated successfully"
         })
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2275,18 +2368,18 @@ async def delete_voucher(
     """Delete a voucher"""
     try:
         voucher = db.query(Voucher).filter(Voucher.id == voucher_id).first()
-        
+
         if not voucher:
             raise HTTPException(status_code=404, detail="Voucher not found")
-        
+
         db.delete(voucher)
         db.commit()
-        
+
         return JSONResponse({
             "success": True,
             "message": "Voucher deleted successfully"
         })
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2303,16 +2396,16 @@ async def trigger_voucher_sync(
     """Manually trigger voucher sync from Google Drive"""
     try:
         from voucher_sync_service import run_sync
-        
+
         logger.info(f"Manual sync triggered by {current_user.get('email')}")
         summary = run_sync(hours_back=hours_back)
-        
+
         return JSONResponse({
             "success": True,
             "summary": summary,
             "message": f"Sync complete. Processed {summary['files_processed']} of {summary['files_found']} files."
         })
-        
+
     except Exception as e:
         logger.error(f"Error in manual sync: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
@@ -2329,23 +2422,23 @@ async def get_sync_status(
             "sheets_id_configured": bool(os.getenv("GOOGLE_SHEETS_VOUCHER_ID")),
             "ready": False
         }
-        
+
         status["ready"] = all([
             status["drive_folder_configured"],
             status["service_account_configured"],
             status["sheets_id_configured"]
         ])
-        
+
         return JSONResponse({
             "success": True,
             "status": status
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting sync status: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting status: {str(e)}")
 
-# 
+#
 
 # Sales dashboard is now mounted at /sales via unified_app.py
 # No redirect needed - the mounted FastAPI app handles /sales/* routes directly
@@ -2388,10 +2481,10 @@ async def recruitment_dashboard_embedded(
         "RECRUITMENT_DASHBOARD_URL",
         "https://portal.coloradocareassist.com/recruiting"
     )
-    
+
     # Get session token from cookie to pass to dashboard
     session_token = request.cookies.get("session_token", "")
-    
+
     # Append session token as query parameter (Recruiter Dashboard needs to accept this)
     if session_token:
         separator = "&" if "?" in recruitment_dashboard_url else "?"
@@ -2403,7 +2496,7 @@ async def recruitment_dashboard_embedded(
     else:
         logger.warning("No session token found - Recruiter Dashboard will require login")
         recruitment_url_with_auth = recruitment_dashboard_url
-    
+
     return templates.TemplateResponse("recruitment_embedded.html", {
         "request": request,
         "user": current_user,
@@ -2494,9 +2587,9 @@ async def client_satisfaction_dashboard_legacy(
     )
 
 
-# 
+#
 # Client Satisfaction API Endpoints
-# 
+#
 
 @app.get("/api/client-satisfaction/summary")
 async def api_client_satisfaction_summary(
@@ -2757,9 +2850,9 @@ async def api_wellsky_shifts(
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
-# 
+#
 # Operations Dashboard (Client Operations with WellSky Integration)
-# 
+#
 
 @app.get("/operations", response_class=HTMLResponse)
 async def operations_dashboard(
@@ -3097,9 +3190,9 @@ async def api_operations_at_risk(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# 
+#
 # Gigi AI Agent Control API
-# 
+#
 
 # In-memory Gigi settings (defaults from environment, can be toggled at runtime)
 _gigi_settings = {
@@ -3249,7 +3342,7 @@ async def api_gigi_ringcentral_command(request: Request):
     # Handle RingCentral webhook validation request
     validation_token = request.headers.get("Validation-Token")
     if validation_token:
-        logger.info(f"RingCentral webhook validation request received")
+        logger.info("RingCentral webhook validation request received")
         return Response(
             content="",
             status_code=200,
@@ -3334,7 +3427,9 @@ async def api_gigi_ringcentral_command(request: Request):
         # Send reply if we have a response
         if response_message:
             try:
-                from services.ringcentral_messaging_service import ringcentral_messaging_service
+                from services.ringcentral_messaging_service import (
+                    ringcentral_messaging_service,
+                )
                 # Build sender info for reply
                 sender_info = {
                     "name": sender_name,
@@ -3402,7 +3497,7 @@ async def api_gigi_command_simple(
 
 #
 # GoFormz → WellSky Webhook Endpoint
-# 
+#
 
 def _get_goformz_wellsky_sync():
     """Get the goformz_wellsky_sync service (loaded at module import time)."""
@@ -3559,9 +3654,9 @@ async def goformz_wellsky_sync_status(
     })
 
 
-# 
+#
 # AI Care Coordinator API Endpoints (Gigi/Gigi Style)
-# 
+#
 
 @app.get("/api/ai-coordinator/status")
 async def api_ai_coordinator_status(
@@ -3972,9 +4067,9 @@ async def api_sync_surveys(
     return JSONResponse(result)
 
 
-# 
+#
 # RingCentral Chat Scanner API
-# 
+#
 
 @app.get("/api/client-satisfaction/ringcentral/status")
 async def api_ringcentral_status(
@@ -4084,9 +4179,9 @@ async def api_ringcentral_preview(
     })
 
 
-# 
+#
 # RingCentral Call Pattern Monitoring API
-# 
+#
 
 @app.get("/api/client-satisfaction/ringcentral/call-queues")
 async def api_ringcentral_call_queues(
@@ -4203,11 +4298,11 @@ async def connections_page(
 ):
     """Render the data connections management page."""
     from portal_models import OAuthToken
-    
+
     # Check which services are connected for this user
     user_email = current_user.get("email", "unknown@example.com")
     connected_services = {}
-    
+
     services = ["facebook", "google-ads", "mailchimp", "quickbooks"]
     for service in services:
         token = db.query(OAuthToken).filter(
@@ -4216,7 +4311,7 @@ async def connections_page(
             OAuthToken.is_active == True
         ).first()
         connected_services[service] = token is not None
-    
+
     return templates.TemplateResponse("connections.html", {
         "request": request,
         "user": current_user,
@@ -4232,17 +4327,18 @@ async def oauth_initiate(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Initiate OAuth flow for a service"""
-    from services.oauth_manager import oauth_manager
     import secrets
-    
+
+    from services.oauth_manager import oauth_manager
+
     # Generate and store CSRF state token
     state = secrets.token_urlsafe(32)
     request.session[f"oauth_state_{service}"] = state
     request.session["oauth_user_email"] = current_user.get("email")
-    
+
     # Get authorization URL
     auth_url = oauth_manager.get_authorization_url(service, state)
-    
+
     if not auth_url:
         return HTMLResponse(
             content=f"""
@@ -4262,7 +4358,7 @@ async def oauth_initiate(
             """,
             status_code=400
         )
-    
+
     return RedirectResponse(url=auth_url)
 
 
@@ -4276,10 +4372,11 @@ async def oauth_callback(
     db: Session = Depends(get_db)
 ):
     """Handle OAuth callback from service"""
-    from services.oauth_manager import oauth_manager
-    from portal_models import OAuthToken
     from datetime import datetime
-    
+
+    from portal_models import OAuthToken
+    from services.oauth_manager import oauth_manager
+
     # Check for errors
     if error:
         return HTMLResponse(
@@ -4300,7 +4397,7 @@ async def oauth_callback(
             </html>
             """
         )
-    
+
     # Verify state (CSRF protection)
     expected_state = request.session.get(f"oauth_state_{service}")
     if not state or state != expected_state:
@@ -4322,10 +4419,10 @@ async def oauth_callback(
             """,
             status_code=400
         )
-    
+
     # Exchange code for token
     token_data = await oauth_manager.exchange_code_for_token(service, code)
-    
+
     if not token_data:
         return HTMLResponse(
             content="""
@@ -4345,7 +4442,7 @@ async def oauth_callback(
             """,
             status_code=500
         )
-    
+
     # Store token in database
     try:
         user_email = request.session.get("oauth_user_email", "unknown@example.com")
@@ -4392,12 +4489,12 @@ async def oauth_callback(
                 extra_data=extra_data if extra_data else None
             )
             db.add(new_token)
-        
+
         db.commit()
-        
+
         # Clean up session
         request.session.pop(f"oauth_state_{service}", None)
-        
+
         return HTMLResponse(
             content=f"""
             <html>
@@ -4416,7 +4513,7 @@ async def oauth_callback(
             </html>
             """
         )
-        
+
     except Exception as e:
         logger.error(f"Error storing OAuth token: {e}")
         db.rollback()
@@ -4449,7 +4546,7 @@ async def marketing_dashboard(
     # Compute default date range (last 30 days)
     end_date = datetime.now().date()
     start_date = end_date - timedelta(days=29)
-    
+
     # Wire up RingCentral config for sidebar
     ringcentral_config = {
         "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
@@ -4457,7 +4554,7 @@ async def marketing_dashboard(
         "adapter_url": RINGCENTRAL_EMBED_ADAPTER_URL,
         "query_string": ""
     }
-    
+
     if ringcentral_config["enabled"]:
         import time
         params = {
@@ -4474,7 +4571,7 @@ async def marketing_dashboard(
         params["theme"] = "dark"
         params["_t"] = str(int(time.time()))
         ringcentral_config["query_string"] = urlencode(params)
-    
+
     # Placeholder datasets (will be replaced once APIs are wired)
     placeholder_metrics = {
         "social": {
@@ -4486,7 +4583,7 @@ async def marketing_dashboard(
             "campaigns": []
         }
     }
-    
+
     return templates.TemplateResponse("marketing.html", {
         "request": request,
         "user": current_user,
@@ -4526,15 +4623,15 @@ async def api_marketing_social(
     """Return social performance metrics (placeholder until APIs wired)."""
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
-    
+
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
-    
+
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
+
     data = get_social_metrics(start, end, compare)
-    
+
     return JSONResponse({
         "success": True,
         "range": {
@@ -4555,7 +4652,6 @@ async def google_ads_webhook(request: Request):
 
     The script runs in Google Ads and POSTs data here periodically.
     """
-    import json
     from datetime import datetime
 
     # SECURITY: Verify webhook secret (required for security)
@@ -4567,16 +4663,16 @@ async def google_ads_webhook(request: Request):
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
     else:
         logger.warning("GOOGLE_ADS_WEBHOOK_SECRET not configured - webhook not secured")
-    
+
     try:
         data = await request.json()
         logger.info(f"Google Ads webhook received data from customer {data.get('customer_id')}")
-        
+
         # Store the data (simple in-memory cache for now)
         # In production, you might want to store in database or Redis
         from services.marketing.google_ads_service import google_ads_service
         google_ads_service.cache_script_data(data)
-        
+
         return JSONResponse({
             "status": "success",
             "message": "Data received and cached",
@@ -4598,24 +4694,24 @@ async def api_marketing_ads(
     """Return ads performance metrics from Google Ads Scripts or API."""
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
-    
+
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
-    
+
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
+
     # Try to get data from script cache first, fall back to API
     from services.marketing.google_ads_service import google_ads_service
     script_data = google_ads_service.get_cached_script_data(start, end)
-    
+
     if script_data:
         logger.info("Using Google Ads Script data")
         data = script_data
     else:
         logger.info("No script data available, trying API")
         data = get_ads_metrics(start, end, compare)
-    
+
     return JSONResponse({
         "success": True,
         "range": {
@@ -4640,8 +4736,8 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
     # SECURITY: Verify Brevo webhook signature if secret is configured
     brevo_secret = os.getenv("BREVO_WEBHOOK_SECRET")
     if brevo_secret:
-        import hmac
         import hashlib
+        import hmac
         # Brevo uses X-Sib-Signature header
         signature = request.headers.get("X-Sib-Signature")
         if not signature:
@@ -4658,7 +4754,7 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
     try:
         data = await request.json()
         logger.info(f"Brevo marketing webhook received: {data.get('event', 'unknown')} for {data.get('email', 'unknown')}")
-        
+
         # Extract webhook data
         event_type = data.get("event")
         recipient_email = data.get("email", "").lower().strip()
@@ -4668,11 +4764,11 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
         date_sent_str = data.get("date_sent")
         date_event_str = data.get("date_event")
         click_url = data.get("URL") if event_type == "click" else None
-        
+
         if not recipient_email:
             logger.warning("No email address in Brevo webhook")
             return JSONResponse({"status": "error", "reason": "no email address"})
-        
+
         # Parse dates
         date_sent = None
         date_event = None
@@ -4683,13 +4779,13 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
                 date_event = datetime.strptime(date_event_str, "%Y-%m-%d %H:%M:%S")
         except Exception as e:
             logger.warning(f"Error parsing dates: {e}")
-        
+
         # Check for duplicate webhook events
         if webhook_id:
             existing = db.query(BrevoWebhookEvent).filter(
                 BrevoWebhookEvent.webhook_id == webhook_id
             ).first()
-            
+
             if existing:
                 logger.debug(f"Brevo webhook event already processed: webhook ID {webhook_id}")
                 return JSONResponse({
@@ -4697,7 +4793,7 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
                     "logged": False,
                     "reason": "duplicate"
                 })
-        
+
         # Store metadata as JSON
         import json as json_lib
         metadata = {
@@ -4708,7 +4804,7 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
         }
         if event_type in ["hard_bounce", "soft_bounce", "spam"]:
             metadata["reason"] = data.get("reason")
-        
+
         # Create webhook event record
         webhook_event = BrevoWebhookEvent(
             webhook_id=webhook_id,
@@ -4721,20 +4817,20 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
             click_url=click_url,
             event_metadata=json_lib.dumps(metadata) if metadata else None,
         )
-        
+
         db.add(webhook_event)
         db.commit()
         db.refresh(webhook_event)
-        
+
         logger.info(f"Stored Brevo webhook event: {event_type} for {recipient_email} (campaign {campaign_id})")
-        
+
         return JSONResponse({
             "status": "success",
             "logged": True,
             "event": event_type,
             "webhook_event_id": webhook_event.id
         })
-        
+
     except Exception as e:
         logger.error(f"Error processing Brevo marketing webhook: {e}", exc_info=True)
         db.rollback()
@@ -4777,32 +4873,33 @@ async def api_marketing_website(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Return website and GBP metrics from GA4 and Google Business Profile."""
+    import logging
+
     from services.marketing.ga4_service import ga4_service
     from services.marketing.gbp_service import gbp_service
-    import logging
-    
+
     logger = logging.getLogger(__name__)
-    
+
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
-    
+
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
-    
+
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
+
     # Log the request
     logger.info(f"Fetching website metrics from {start} to {end}")
-    
+
     # Fetch GA4 and GBP data
     ga4_data = ga4_service.get_website_metrics(start, end)
     gbp_data = gbp_service.get_gbp_metrics(start, end)
-    
+
     # Log if we're using mock data
     if ga4_data.get("total_users") == 188:
         logger.warning("GA4 returned mock data - check service account permissions")
-    
+
     return JSONResponse({
         "success": True,
         "range": {
@@ -4822,15 +4919,16 @@ async def test_ga4_connection(
     _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test GA4 connection and return status."""
-    from services.marketing.ga4_service import ga4_service
     import os
-    
+
+    from services.marketing.ga4_service import ga4_service
+
     status = {
         "service_account_configured": bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")),
         "property_id": os.getenv("GA4_PROPERTY_ID", "445403783"),
         "client_initialized": ga4_service.client is not None,
     }
-    
+
     if ga4_service.client:
         try:
             # Try a simple query
@@ -4843,7 +4941,7 @@ async def test_ga4_connection(
         except Exception as e:
             status["test_query_successful"] = False
             status["error"] = str(e)
-    
+
     return JSONResponse(status)
 
 
@@ -4852,15 +4950,15 @@ async def test_predis_connection(
     _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test Predis AI connection and return status."""
+
     from services.marketing.predis_service import predis_service
-    import os
-    
+
     status = {
         "api_key_configured": bool(predis_service.api_key),
         "api_working": False,
         "account_info": None
     }
-    
+
     if predis_service.api_key:
         try:
             # Test API connection
@@ -4869,7 +4967,7 @@ async def test_predis_connection(
             status["account_info"] = account_info
         except Exception as e:
             status["error"] = str(e)
-    
+
     return JSONResponse(status)
 
 
@@ -4880,7 +4978,7 @@ async def get_predis_posts(
 ):
     """Get recent Predis AI generated posts."""
     from services.marketing.predis_service import predis_service
-    
+
     try:
         posts = predis_service.get_recent_creations(page=page)
         return JSONResponse({
@@ -4902,21 +5000,21 @@ async def generate_predis_content(
 ):
     """Generate new content using Predis AI."""
     from services.marketing.predis_service import predis_service
-    
+
     try:
         data = await request.json()
         prompt = data.get("prompt", "")
         media_type = data.get("media_type", "single_image")
-        
+
         if not prompt:
             return JSONResponse({
                 "success": False,
                 "error": "Prompt is required"
             }, status_code=400)
-        
+
         result = predis_service.generate_content(prompt=prompt, media_type=media_type)
         return JSONResponse(result)
-        
+
     except Exception as e:
         return JSONResponse({
             "success": False,
@@ -4931,7 +5029,7 @@ async def get_predis_templates(
 ):
     """Get Predis AI templates."""
     from services.marketing.predis_service import predis_service
-    
+
     try:
         templates = predis_service.get_templates(page=page)
         return JSONResponse({
@@ -4951,9 +5049,9 @@ async def test_gbp_connection(
     _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test GBP connection and return status."""
+
     from services.marketing.gbp_service import gbp_service
-    import os
-    
+
     status = {
         "oauth_configured": bool(gbp_service.client_id and gbp_service.client_secret),
         "access_token_available": bool(gbp_service.access_token),
@@ -4961,14 +5059,14 @@ async def test_gbp_connection(
         "location_ids": gbp_service.location_ids,
         "service_initialized": bool(gbp_service.access_token),
     }
-    
+
     if gbp_service.access_token:
         try:
             # Try to get accounts and locations
             accounts = gbp_service.get_accounts()
             status["accounts_accessible"] = len(accounts)
             status["accounts"] = accounts[:3]  # First 3 accounts
-            
+
             # Try to get locations - prefer LOCATION_GROUP accounts (these have business locations)
             locations = []
             location_group_accounts = [a for a in accounts if a.get('type') == 'LOCATION_GROUP']
@@ -4978,11 +5076,11 @@ async def test_gbp_connection(
                 locations.extend(account_locations[:3])  # First 3 locations per account
             status["locations_accessible"] = len(locations)
             status["locations"] = locations
-            
+
         except Exception as e:
             status["locations_accessible"] = 0
             status["error"] = str(e)
-    
+
     return JSONResponse(status)
 
 
@@ -5004,58 +5102,59 @@ async def api_marketing_engagement(
     - LinkedIn
     - Google Business Profile (calls, directions)
     """
+    import logging
+
     from services.marketing.ga4_service import ga4_service
     from services.marketing.gbp_service import gbp_service
-    from services.marketing.pinterest_service import pinterest_service
     from services.marketing.linkedin_service import linkedin_service
-    import logging
-    
+    from services.marketing.pinterest_service import pinterest_service
+
     logger = logging.getLogger(__name__)
-    
+
     # Date range
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
-    
+
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
+
     days = (end - start).days + 1
-    
+
     # Fetch data from all sources
     try:
         # GA4 data for traffic sources
         ga4_data = ga4_service.get_website_metrics(start, end)
-        
+
         # Get social metrics
         social_data = get_social_metrics(start, end, None)
-        
-        # Get ads metrics  
+
+        # Get ads metrics
         ads_data = get_ads_metrics(start, end, None)
-        
+
         # GBP for calls/directions
         gbp_data = gbp_service.get_gbp_metrics(start, end)
-        
+
         # Pinterest metrics
         pinterest_data = pinterest_service.get_user_metrics(start, end)
-        
+
         # LinkedIn metrics
         linkedin_data = linkedin_service.get_metrics(start, end)
-        
+
     except Exception as e:
         logger.error(f"Error fetching engagement data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     # Build attribution breakdown - where are engagements coming from?
     attribution = {
         "by_source": [],
         "by_type": []
     }
-    
+
     # Calculate engagement by source
     sources = []
-    
+
     # Facebook/Instagram (only if real data)
     fb_engagement = 0
     fb_likes = 0
@@ -5076,7 +5175,7 @@ async def api_marketing_engagement(
                 "followers": fb_likes,
                 "type": "social"
             })
-    
+
     # Google Ads - conversions as engagement (only if real data, not placeholder)
     google_conversions = 0
     google_clicks = 0
@@ -5094,7 +5193,7 @@ async def api_marketing_engagement(
                     "conversions": google_conversions,
                     "type": "paid"
                 })
-    
+
     # GA4 - organic traffic
     organic_sessions = 0
     direct_sessions = 0
@@ -5104,7 +5203,7 @@ async def api_marketing_engagement(
         organic_sessions = sessions_by_source.get("google", 0)
         direct_sessions = sessions_by_source.get("direct", 0)
         referral_sessions = sessions_by_source.get("fb", 0) + sessions_by_source.get("l.facebook.com", 0)
-        
+
         sources.append({
             "source": "Organic Search",
             "icon": "🌐",
@@ -5117,7 +5216,7 @@ async def api_marketing_engagement(
             "engagements": direct_sessions,
             "type": "direct"
         })
-    
+
     # GBP - calls and actions
     gbp_calls = 0
     gbp_directions = 0
@@ -5136,7 +5235,7 @@ async def api_marketing_engagement(
                 "website_clicks": gbp_website,
                 "type": "local"
             })
-    
+
     # Pinterest
     pinterest_engagement = 0
     if pinterest_data and not pinterest_data.get("is_placeholder"):
@@ -5153,7 +5252,7 @@ async def api_marketing_engagement(
                 "clicks": pinterest_data.get("clicks", 0),
                 "type": "social"
             })
-    
+
     # LinkedIn
     linkedin_engagement = 0
     if linkedin_data and not linkedin_data.get("is_placeholder"):
@@ -5165,11 +5264,11 @@ async def api_marketing_engagement(
                 "engagements": linkedin_engagement,
                 "type": "social"
             })
-    
+
     # Sort by engagement count
     sources.sort(key=lambda x: x.get("engagements", 0), reverse=True)
     attribution["by_source"] = sources
-    
+
     # Build engagement by type (only real data)
     type_breakdown = [
         {"type": "Organic Search", "icon": "🔍", "value": organic_sessions, "color": "#3b82f6"},
@@ -5181,19 +5280,19 @@ async def api_marketing_engagement(
     if google_clicks > 0:
         type_breakdown.insert(0, {"type": "Paid Ads", "icon": "💰", "value": google_clicks, "color": "#22c55e"})
     attribution["by_type"] = [t for t in type_breakdown if t["value"] > 0]
-    
+
     # Track which sources are using placeholder data
     placeholder_sources = []
     if ads_data and ads_data.get("google_ads", {}).get("is_placeholder"):
         placeholder_sources.append("Google Ads")
     if social_is_placeholder:
         placeholder_sources.append("Facebook/Instagram")
-    
+
     # Calculate totals
     total_engagements = sum(s.get("engagements", 0) for s in sources)
     total_conversions = google_conversions
     total_calls = gbp_calls
-    
+
     # Build daily trend from GA4 data
     daily_trend = []
     if ga4_data and ga4_data.get("users_over_time"):
@@ -5202,14 +5301,14 @@ async def api_marketing_engagement(
                 "date": entry.get("date"),
                 "engagements": entry.get("users", 0),
             })
-    
+
     # Add social chart data if available
     if social_data and social_data.get("post_overview", {}).get("chart"):
         for i, entry in enumerate(social_data["post_overview"]["chart"]):
             if i < len(daily_trend):
                 daily_trend[i]["social"] = entry.get("engagement", 0)
                 daily_trend[i]["engagements"] += entry.get("engagement", 0)
-    
+
     return JSONResponse({
         "success": True,
         "range": {
@@ -5263,20 +5362,21 @@ async def api_marketing_pinterest(
     
     Returns pin performance, saves, clicks, and engagement data.
     """
-    from services.marketing.pinterest_service import pinterest_service
     from datetime import date, timedelta
-    
+
+    from services.marketing.pinterest_service import pinterest_service
+
     # Default to last 30 days
     if to_date:
         end = date.fromisoformat(to_date)
     else:
         end = date.today()
-    
+
     if from_date:
         start = date.fromisoformat(from_date)
     else:
         start = end - timedelta(days=30)
-    
+
     try:
         data = pinterest_service.get_user_metrics(start, end)
         return JSONResponse({
@@ -5301,14 +5401,15 @@ async def test_pinterest_connection(
     _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test Pinterest connection and return status."""
-    from services.marketing.pinterest_service import pinterest_service
     import os
-    
+
+    from services.marketing.pinterest_service import pinterest_service
+
     status = {
         "access_token_configured": bool(os.getenv("PINTEREST_ACCESS_TOKEN")),
         "app_id": os.getenv("PINTEREST_APP_ID"),
     }
-    
+
     if pinterest_service._is_configured():
         try:
             user = pinterest_service.get_user_account()
@@ -5364,8 +5465,9 @@ async def pinterest_oauth_callback(
     error: Optional[str] = None,
 ):
     """Pinterest OAuth callback - exchange code for access token."""
-    import os
     import base64
+    import os
+
     import requests
 
     if error:
@@ -5438,20 +5540,21 @@ async def api_marketing_linkedin(
     
     Returns post performance, impressions, clicks, and engagement data.
     """
-    from services.marketing.linkedin_service import linkedin_service
     from datetime import date, timedelta
-    
+
+    from services.marketing.linkedin_service import linkedin_service
+
     # Default to last 30 days
     if to_date:
         end = date.fromisoformat(to_date)
     else:
         end = date.today()
-    
+
     if from_date:
         start = date.fromisoformat(from_date)
     else:
         start = end - timedelta(days=30)
-    
+
     try:
         data = linkedin_service.get_metrics(start, end)
         return JSONResponse({
@@ -5476,15 +5579,16 @@ async def test_linkedin_connection(
     _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test LinkedIn connection and return status."""
-    from services.marketing.linkedin_service import linkedin_service
     import os
-    
+
+    from services.marketing.linkedin_service import linkedin_service
+
     status = {
         "client_id_configured": bool(os.getenv("LINKEDIN_CLIENT_ID")),
         "access_token_configured": bool(os.getenv("LINKEDIN_ACCESS_TOKEN")),
         "organization_id": os.getenv("LINKEDIN_ORGANIZATION_ID"),
     }
-    
+
     if linkedin_service._is_configured():
         try:
             profile = linkedin_service.get_profile()
@@ -5508,7 +5612,7 @@ async def test_linkedin_connection(
     else:
         status["connection_successful"] = False
         status["error"] = "LinkedIn credentials not configured"
-    
+
     return JSONResponse(status)
 
 
@@ -5526,24 +5630,24 @@ async def linkedin_oauth_callback(
     We exchange it for an access token.
     """
     from services.marketing.linkedin_service import linkedin_service
-    
+
     if error:
         return JSONResponse({
             "success": False,
             "error": error,
             "error_description": error_description,
         })
-    
+
     if not code:
         return JSONResponse({
             "success": False,
             "error": "No authorization code received",
         })
-    
+
     # Exchange code for token
     redirect_uri = "https://portal.coloradocareassist.com/api/linkedin/callback"
     token_data = linkedin_service.exchange_code_for_token(code, redirect_uri)
-    
+
     if token_data and "access_token" in token_data:
         # Return the token (user needs to set it as env var)
         return JSONResponse({
@@ -5561,9 +5665,9 @@ async def linkedin_oauth_callback(
         })
 
 
-# 
+#
 # TikTok Marketing Endpoints
-# 
+#
 
 @app.get("/api/marketing/tiktok")
 async def api_marketing_tiktok(
@@ -5620,8 +5724,9 @@ async def test_tiktok_connection(
     _test_ok: None = Depends(require_portal_test_endpoints_enabled)
 ):
     """Test TikTok connection and return status."""
-    from services.marketing.tiktok_service import tiktok_service
     import os
+
+    from services.marketing.tiktok_service import tiktok_service
 
     status = {
         "client_key_configured": bool(os.getenv("TIKTOK_CLIENT_KEY")),
@@ -5644,9 +5749,9 @@ async def test_tiktok_connection(
     return JSONResponse(status)
 
 
-# 
+#
 # Google Business Profile OAuth Endpoints
-# 
+#
 
 @app.get("/api/gbp/auth")
 async def gbp_oauth_start():
@@ -5654,15 +5759,15 @@ async def gbp_oauth_start():
     Start GBP OAuth flow. Returns URL to redirect user to.
     """
     from services.marketing.gbp_service import gbp_service
-    
+
     oauth_url = gbp_service.get_oauth_url()
-    
+
     if not oauth_url:
         return JSONResponse({
             "success": False,
             "error": "GBP OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.",
         })
-    
+
     return JSONResponse({
         "success": True,
         "oauth_url": oauth_url,
@@ -5683,22 +5788,22 @@ async def gbp_oauth_callback(
     We exchange it for access and refresh tokens.
     """
     from services.marketing.gbp_service import gbp_service
-    
+
     if error:
         return JSONResponse({
             "success": False,
             "error": error,
         })
-    
+
     if not code:
         return JSONResponse({
             "success": False,
             "error": "No authorization code received",
         })
-    
+
     # Exchange code for tokens
     token_data = gbp_service.exchange_code_for_tokens(code)
-    
+
     if token_data.get("success"):
         # Return the tokens (user needs to set them as env vars)
         return JSONResponse({
@@ -5723,14 +5828,14 @@ async def gbp_status():
     Check GBP connection status and available locations.
     """
     from services.marketing.gbp_service import gbp_service
-    
+
     status = {
         "oauth_configured": bool(gbp_service.client_id and gbp_service.client_secret),
         "authenticated": bool(gbp_service.access_token),
         "has_refresh_token": bool(gbp_service.refresh_token),
         "configured_locations": gbp_service.location_ids,
     }
-    
+
     if not status["oauth_configured"]:
         status["error"] = "Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET"
         status["oauth_url"] = None
@@ -5743,7 +5848,7 @@ async def gbp_status():
             accounts = gbp_service.get_accounts()
             status["accounts"] = len(accounts)
             status["account_names"] = [a.get("accountName", a.get("name")) for a in accounts]
-            
+
             # Try to get locations
             all_locations = []
             for account in accounts:
@@ -5755,35 +5860,39 @@ async def gbp_status():
                         "title": loc.get("title") or loc.get("storefrontAddress", {}).get("addressLines", [0]) if loc.get("storefrontAddress") else "Unknown",
                         "address": loc.get("storefrontAddress", {}).get("addressLines", []) if loc.get("storefrontAddress") else []
                     })
-            
+
             # Also show configured location IDs
             if gbp_service.location_ids:
                 status["configured_location_ids"] = gbp_service.location_ids
                 status["using_configured_locations"] = True
-            
+
             status["locations"] = all_locations
             status["total_locations_found"] = len(all_locations)
-            
+
         except Exception as e:
             status["error"] = f"Error fetching accounts: {str(e)}"
-    
+
     return JSONResponse(status)
 
 
-# 
+#
 # Shift Filling API Endpoints (Operations Dashboard)
-# 
+#
 
 # Add the sales directory to the path for shift_filling imports
 import sys
+
 sales_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'sales')
 if sales_dir not in sys.path:
     sys.path.insert(0, sales_dir)
 
 try:
     from shift_filling import (
-        shift_filling_engine, wellsky_mock, sms_service,
-        CaregiverMatcher, OutreachStatus
+        CaregiverMatcher,
+        OutreachStatus,
+        shift_filling_engine,
+        sms_service,
+        wellsky_mock,
     )
     SHIFT_FILLING_AVAILABLE = True
     logger.info("Shift filling module loaded successfully")
@@ -5967,9 +6076,10 @@ async def get_sms_log(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Get SMS message log from RingCentral for 719-428-3999"""
-    import requests
-    from datetime import datetime, timedelta
     import re
+    from datetime import datetime, timedelta
+
+    import requests
 
     # RingCentral credentials
     client_id = os.getenv("RINGCENTRAL_CLIENT_ID")
@@ -6053,14 +6163,14 @@ async def get_sms_log(
         return JSONResponse({"messages": [], "error": str(e)})
 
 
-# 
+#
 # End of Shift Filling API Endpoints
-# 
+#
 
 
-# 
+#
 # Gigi AI Agent API Endpoints (After-Hours Support)
-# 
+#
 
 @app.post("/api/client-satisfaction/issues")
 async def api_log_client_issue(request: Request):
@@ -6122,7 +6232,7 @@ async def api_sync_rc_to_wellsky(
     Trigger Gigi to scan RingCentral channels and sync documentation to WellSky.
     """
     from services.ringcentral_messaging_service import ringcentral_messaging_service
-    
+
     results = {}
     channels = ["New Scheduling", "Biz Dev"]
 
@@ -6133,13 +6243,13 @@ async def api_sync_rc_to_wellsky(
 
         # 2. Sync General Tasks
         task_res = ringcentral_messaging_service.sync_tasks_to_wellsky(db, chat_name=channel, hours_back=hours)
-        
+
         results[channel] = {
             "complaints_detected": scan_res.get("potential_complaints", []),
             "complaints_created": complaint_res.get("created_count", 0),
             "tasks_synced": task_res.get("tasks_synced", 0)
         }
-        
+
     return JSONResponse({
         "success": True,
         "results": results,
@@ -6203,9 +6313,9 @@ async def api_log_call_out(request: Request):
         }, status_code=500)
 
 
-# 
+#
 # WellSky Shift Management API (Used by Gigi for Call-Outs)
-# 
+#
 
 @app.put("/api/wellsky/shifts/{shift_id}")
 async def api_update_wellsky_shift(shift_id: str, request: Request):
@@ -6403,9 +6513,9 @@ async def api_trigger_replacement_blast(request: Request):
         }, status_code=500)
 
 
-# 
+#
 # Internal Shift Filling API (Called by Gigi - No Auth Required)
-# 
+#
 
 @app.get("/api/internal/shift-filling/match/{shift_id}")
 async def internal_match_caregivers(shift_id: str, max_results: int = 10):
@@ -6595,7 +6705,7 @@ async def retell_shift_offer_complete(request: Request):
     if not retell_key:
         logger.error("RETELL_API_KEY not set — rejecting shift-offer webhook")
         return JSONResponse({"error": "Server misconfiguration"}, status_code=503)
-    import hmac, hashlib, json as _json
+    import json as _json
     body_bytes = await request.body()
     signature = request.headers.get("x-retell-signature", "")
     expected = hmac.new(retell_key.encode(), body_bytes, hashlib.sha256).hexdigest()
@@ -7285,7 +7395,7 @@ Return ONLY valid JSON, no markdown code fences, no explanation. Extract EVERY f
             return JSONResponse({
                 "success": True,
                 "data": extracted_data,
-                "message": f"PDF parsed successfully using Gemini AI"
+                "message": "PDF parsed successfully using Gemini AI"
             })
         else:
             raise Exception(f"No candidates in Gemini response: {json.dumps(result)}")
@@ -7321,7 +7431,7 @@ async def payroll_converter(current_user: Dict[str, Any] = Depends(get_current_u
 @app.get("/va-plan-of-care", response_class=HTMLResponse)
 async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_user_optional)):
     """VA Plan of Care Generator - Convert VA Form 10-7080 to Plan of Care (485)"""
-    va_html_content = """<!DOCTYPE html>
+    va_html_content = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -7989,9 +8099,9 @@ async def fill_va_rfs_form(
     current_user: Dict[str, Any] = Depends(get_current_user_optional)
 ):
     """Fill official VA Form 10-10172 RFS PDF with extracted data"""
-    from PyPDFForm import PdfWrapper
     from datetime import datetime
-    import io
+
+    from PyPDFForm import PdfWrapper
 
     try:
         # Get form data from request
@@ -8182,7 +8292,7 @@ async def va_rfs_converter(
 ):
     """VA RFS Converter - Convert referral face sheets to VA Form 10-10172 RFS"""
 
-    va_rfs_html_content = """<!DOCTYPE html>
+    va_rfs_html_content = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">

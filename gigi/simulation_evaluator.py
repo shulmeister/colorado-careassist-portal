@@ -10,10 +10,10 @@ Author: Colorado Care Assist
 Date: February 6, 2026
 """
 
-import os
 import json
 import logging
-from typing import Dict, List, Any
+import os
+from typing import Any, Dict, List
 
 import anthropic
 import psycopg2
@@ -219,8 +219,14 @@ async def generate_simulation_report(simulation_id: int) -> str:
     if not row:
         return "Simulation not found"
 
-    scenario_name, call_id, turns, tool_score, behavior_score, overall_score, details_json, transcript = row
-    details = json.loads(details_json) if details_json else {}
+    scenario_name, call_id, turns, tool_score, behavior_score, overall_score, details_raw, transcript = row
+    # psycopg2 auto-parses JSONB columns — only json.loads() if it's still a string
+    if details_raw is None:
+        details = {}
+    elif isinstance(details_raw, dict):
+        details = details_raw
+    else:
+        details = json.loads(details_raw)
 
     # Generate report
     status_emoji = "✅" if overall_score >= 70 else "⚠️" if overall_score >= 50 else "❌"
