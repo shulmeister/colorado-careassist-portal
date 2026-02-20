@@ -1,44 +1,41 @@
 """
 AI Enrichment Service for CRM
 
-Uses Gemini to:
+Uses Anthropic Haiku to:
 - Enrich company data (size, industry, contacts)
 - Detect duplicate contacts
 - Summarize interactions
 """
 
-import os
 import json
+import os
 import re
 from datetime import datetime
-from typing import Optional, List, Dict, Any, Tuple
-from sqlalchemy.orm import Session
+from typing import Any, Dict, List
+
 from sqlalchemy import func, or_
+from sqlalchemy.orm import Session
 
 try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
 except ImportError:
-    GEMINI_AVAILABLE = False
+    ANTHROPIC_AVAILABLE = False
 
-from models import Contact, ReferralSource, ActivityLog
+from models import ActivityLog, Contact, ReferralSource
 
-
-# Configure Gemini
-if GEMINI_AVAILABLE:
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if api_key:
-        genai.configure(api_key=api_key)
+# Anthropic Haiku for text-only enrichment (fast, reliable, cheap)
+_ENRICHMENT_MODEL = "claude-haiku-4-5-20251001"
 
 
-def get_gemini_model():
-    """Get configured Gemini model"""
-    if not GEMINI_AVAILABLE:
+def _get_anthropic_client():
+    """Get configured Anthropic client"""
+    if not ANTHROPIC_AVAILABLE:
         return None
-    try:
-        return genai.GenerativeModel("gemini-1.5-flash")
-    except Exception:
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
         return None
+    return anthropic.Anthropic(api_key=api_key)
 
 
 # =============================================================================
@@ -79,13 +76,13 @@ async def enrich_company(
                 }
             }
 
-    model = get_gemini_model()
-    if not model:
-        return {"error": "Gemini not available"}
+    client = _get_anthropic_client()
+    if not client:
+        return {"error": "Anthropic not available"}
 
     # Build prompt
     prompt = f"""You are a business research assistant. Given the following company information,
-provide enriched data. Return ONLY valid JSON.
+provide enriched data. Return ONLY valid JSON, no markdown.
 
 Company Name: {company.name}
 Organization: {company.organization or 'N/A'}
@@ -105,8 +102,12 @@ If you cannot determine a field with reasonable confidence, use null.
 """
 
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        response = client.messages.create(
+            model=_ENRICHMENT_MODEL,
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        text = response.content[0].text.strip()
 
         # Extract JSON from response
         json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
@@ -288,7 +289,7 @@ def merge_contacts(
     Returns:
         Result of merge operation
     """
-    from services.activity_service import log_activity, ActivityType
+    from services.activity_service import ActivityType, log_activity
 
     primary = db.query(Contact).filter_by(id=primary_id).first()
     if not primary:
@@ -370,9 +371,9 @@ async def summarize_interactions(
     Returns:
         AI-generated summary
     """
-    model = get_gemini_model()
-    if not model:
-        return {"error": "Gemini not available"}
+    client = _get_anthropic_client()
+    if not client:
+        return {"error": "Anthropic not available"}
 
     # Get activities
     query = db.query(ActivityLog)
@@ -399,7 +400,7 @@ async def summarize_interactions(
         for a in activities[:30]
     ])
 
-    prompt = f"""Analyze these CRM activities and provide a summary. Return ONLY valid JSON.
+    prompt = f"""Analyze these CRM activities and provide a summary. Return ONLY valid JSON, no markdown.
 
 Activities (most recent first):
 {activity_text}
@@ -416,8 +417,12 @@ Return JSON with:
 """
 
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip()
+        response = client.messages.create(
+            model=_ENRICHMENT_MODEL,
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        text = response.content[0].text.strip()
 
         json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
         if json_match:

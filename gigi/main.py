@@ -490,6 +490,31 @@ async def record_shadow_feedback(request: Request):
 
     return {"success": False, "error": "Log entry not found"}
 
+@app.get("/api/gigi/learning/stats")
+async def get_learning_stats():
+    """Get stats from the shadow mode learning pipeline."""
+    try:
+        from gigi.learning_pipeline import get_learning_stats
+        stats = get_learning_stats()
+        return {"success": True, **stats}
+    except Exception as e:
+        logger.error(f"Learning stats error: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.post("/api/gigi/learning/run")
+async def run_learning_pipeline_endpoint():
+    """Manually trigger the learning pipeline."""
+    import asyncio
+    try:
+        from gigi.learning_pipeline import run_learning_pipeline
+        results = await asyncio.to_thread(run_learning_pipeline)
+        return {"success": True, **results}
+    except Exception as e:
+        logger.error(f"Learning pipeline error: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/simulate/callout")
 async def simulate_callout():
     """

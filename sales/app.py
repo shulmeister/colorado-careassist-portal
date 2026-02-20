@@ -1,7 +1,8 @@
 # CRITICAL: Ensure sales directory is in Python path for services imports
 # This is needed when the app is mounted via unified_app.py
-import sys as _sys
 import os as _os
+import sys as _sys
+
 _sales_dir = _os.path.dirname(_os.path.abspath(__file__))
 if _sales_dir not in _sys.path:
     _sys.path.insert(0, _sales_dir)
@@ -14,42 +15,73 @@ try:
 except ImportError:
     pass  # pillow_heif not installed
 
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Depends, status, Query, BackgroundTasks
-from pydantic import BaseModel
-from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+import io
+import json
+import logging
+import os
+import re
+import threading
+import time
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
+
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func
-import os
-import json
-import io
-import re
-from typing import List, Dict, Any, Optional, Tuple
-import logging
-import time
-import threading
-from datetime import datetime, timedelta, timezone
+
 try:
     import pytz
 except ImportError:
     pytz = None
 # parser.py no longer used - replaced by ai_document_parser.py
-from ai_document_parser import ai_parser
-from google_sheets import GoogleSheetsManager
-from database import get_db, db_manager
-from models import Visit, TimeEntry, Contact, ActivityNote, FinancialEntry, SalesBonus, DashboardSummary, EmailCount, ActivityLog, Deal, Expense, Lead, ReferralSource, ContactTask, DealTask, CompanyTask, ProcessedDriveFile
-from analytics import AnalyticsEngine
-from migrate_data import GoogleSheetsMigrator
-from business_card_scanner import BusinessCardScanner
-from mailchimp_service import MailchimpService
-from auth import oauth_manager, get_current_user, get_current_user_optional
-from google_drive_service import GoogleDriveService
 from activity_logger import ActivityLogger
+from ai_document_parser import ai_parser
+from analytics import AnalyticsEngine
+from auth import get_current_user, get_current_user_optional, oauth_manager
+from business_card_scanner import BusinessCardScanner
+from database import db_manager, get_db
 from dotenv import load_dotenv
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from google_drive_service import GoogleDriveService
+from google_sheets import GoogleSheetsManager
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+from mailchimp_service import MailchimpService
+from migrate_data import GoogleSheetsMigrator
+from models import (
+    ActivityLog,
+    ActivityNote,
+    CompanyTask,
+    Contact,
+    ContactTask,
+    DashboardSummary,
+    Deal,
+    DealTask,
+    EmailCount,
+    Expense,
+    FinancialEntry,
+    Lead,
+    ProcessedDriveFile,
+    ReferralSource,
+    SalesBonus,
+    TimeEntry,
+    Visit,
+)
+
 try:
     import httpx
 except ImportError:
@@ -102,7 +134,7 @@ def ensure_contact_schema():
 
     def column_exists(conn, column_name: str) -> bool:
         if dialect == "sqlite":
-            rows = conn.execute(text(f"PRAGMA table_info(contacts)")).fetchall()
+            rows = conn.execute(text("PRAGMA table_info(contacts)")).fetchall()
             return any(row[1] == column_name for row in rows)
         query = text(
             "SELECT column_name FROM information_schema.columns "
@@ -154,7 +186,7 @@ def ensure_deal_schema():
 
     with engine.connect() as conn:
         dialect = engine.dialect.name
-        
+
         # Create table if missing
         if dialect == "sqlite":
             conn.execute(
@@ -208,7 +240,7 @@ def ensure_deal_schema():
                     """
                 )
             )
-            
+
         # Add missing columns if table existed without them
         columns = {
             "company_id": "INTEGER",
@@ -233,7 +265,7 @@ def ensure_deal_schema():
                 clean_col = column.replace('"', '')
                 rows = conn.execute(text("PRAGMA table_info(deals)")).fetchall()
                 return any(row[1] == clean_col for row in rows)
-            
+
             clean_col = column.replace('"', '')
             row = conn.execute(
                 text(
@@ -441,13 +473,13 @@ def ensure_financial_entry_schema():
     # Check if table exists
     with engine.connect() as conn:
         dialect = engine.dialect.name
-        
+
         # Check if financial_entries table exists
         if dialect == "sqlite":
             table_exists = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='financial_entries'")).fetchone()
         else:
             table_exists = conn.execute(text("SELECT table_name FROM information_schema.tables WHERE table_name='financial_entries'")).fetchone()
-            
+
         if not table_exists:
             return
 
@@ -456,7 +488,7 @@ def ensure_financial_entry_schema():
             if dialect == "sqlite":
                 rows = conn.execute(text("PRAGMA table_info(financial_entries)")).fetchall()
                 return any(row[1] == column for row in rows)
-            
+
             row = conn.execute(
                 text(
                     "SELECT column_name FROM information_schema.columns WHERE table_name='financial_entries' AND column_name=:column"
@@ -470,7 +502,7 @@ def ensure_financial_entry_schema():
             conn.execute(text("ALTER TABLE financial_entries ADD COLUMN user_email VARCHAR(255)"))
             if dialect == "sqlite":
                 # conn.commit() - SQLAlchemy connection auto-commits DDL in some versions, but let's be safe
-                pass 
+                pass
             else:
                 conn.commit()
 
@@ -478,6 +510,7 @@ ensure_financial_entry_schema()
 
 # Portal SSO configuration (shared secret with main portal)
 import secrets as _secrets_mod
+
 PORTAL_SECRET = os.getenv("PORTAL_SECRET")
 if not PORTAL_SECRET:
     PORTAL_SECRET = _secrets_mod.token_urlsafe(32)
@@ -514,17 +547,17 @@ logger = logging.getLogger(__name__)
 # Sync manager to prevent logjam
 class SyncManager:
     """Manages Google Sheets sync to prevent concurrent syncs and cache results"""
-    
+
     def __init__(self):
         self.last_sync_time = 0
         self.sync_lock = threading.Lock()
         self.sync_interval = 60  # Only sync once per 60 seconds max
         self.last_sync_result: Optional[Dict[str, Any]] = None
-    
+
     def should_sync(self) -> bool:
         """Check if enough time has passed since last sync"""
         return (time.time() - self.last_sync_time) > self.sync_interval
-    
+
     def sync_if_needed(self, force: bool = False) -> Dict[str, Any]:
         """
         Sync from Google Sheets if enough time has passed (or when forced).
@@ -533,24 +566,24 @@ class SyncManager:
         if not force and not self.should_sync():
             logger.debug("Sync skipped - too soon since last sync")
             return self.last_sync_result or {"success": True, "visits_migrated": 0, "time_entries_migrated": 0}
-        
+
         if not self.sync_lock.acquire(blocking=False):
             logger.debug("Sync skipped - another sync in progress")
             return self.last_sync_result or {"success": True, "visits_migrated": 0, "time_entries_migrated": 0}
-        
+
         try:
             # Guard again after acquiring the lock to avoid duplicate work
             if not force and not self.should_sync():
                 logger.debug("Sync skipped - another request already synced")
                 return self.last_sync_result or {"success": True, "visits_migrated": 0, "time_entries_migrated": 0}
-            
+
             logger.info("SYNC: Starting Google Sheets sync%s...", " (forced)" if force else "")
             migrator = GoogleSheetsMigrator()
             result = migrator.migrate_all_data()
-            
+
             self.last_sync_time = time.time()
             self.last_sync_result = result
-            
+
             if result.get("success"):
                 logger.info(
                     "SYNC: Success - %s visits, %s time entries",
@@ -559,7 +592,7 @@ class SyncManager:
                 )
             else:
                 logger.error("SYNC: Failed - %s", result.get('error', 'Unknown error'))
-            
+
             return result
         except Exception as e:
             logger.error("SYNC ERROR: %s", str(e), exc_info=True)
@@ -578,18 +611,18 @@ def ensure_financial_schema():
 
     with engine.connect() as conn:
         dialect = engine.dialect.name
-        
+
         # Check if user_email column exists
         exists = False
         if dialect == "sqlite":
-            rows = conn.execute(text(f"PRAGMA table_info(financial_entries)")).fetchall()
+            rows = conn.execute(text("PRAGMA table_info(financial_entries)")).fetchall()
             exists = any(row[1] == "user_email" for row in rows)
         else:
             row = conn.execute(
                 text("SELECT column_name FROM information_schema.columns WHERE table_name='financial_entries' AND column_name='user_email'")
             ).fetchone()
             exists = row is not None
-            
+
         if not exists:
             logger.info("Adding user_email column to financial_entries table")
             try:
@@ -673,13 +706,13 @@ async def auth_callback(request: Request, code: str = None, error: str = None):
     if error:
         logger.error(f"OAuth error: {error}")
         raise HTTPException(status_code=400, detail=f"Authentication failed: {error}")
-    
+
     if not code:
         raise HTTPException(status_code=400, detail="Authorization code not provided")
-    
+
     try:
         result = await oauth_manager.handle_callback(code, "")
-        
+
         # Create response with session cookie
         response = RedirectResponse(url="/", status_code=302)
         response.set_cookie(
@@ -690,9 +723,9 @@ async def auth_callback(request: Request, code: str = None, error: str = None):
             secure=True,  # HTTPS required in production
             samesite="lax"
         )
-        
+
         return response
-        
+
     except Exception as e:
         logger.error(f"Callback error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Authentication failed: {str(e)}")
@@ -703,7 +736,7 @@ async def logout(request: Request):
     session_token = request.cookies.get("session_token")
     if session_token:
         oauth_manager.logout(session_token)
-    
+
     response = JSONResponse({"success": True, "message": "Logged out successfully"})
     response.delete_cookie("session_token")
     return response
@@ -787,13 +820,13 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
     if not current_user:
         # Redirect to login if not authenticated
         return RedirectResponse(url="/auth/login")
-    
+
     # Serve React app
     frontend_index = os.path.join(os.path.dirname(__file__), "frontend", "dist", "index.html")
     if os.path.exists(frontend_index):
         logger.info(f"✅ Serving React app from {frontend_index}")
         return FileResponse(frontend_index)
-    
+
     # Fallback to old Jinja2 template if React build doesn't exist
     logger.warning(f"⚠️  React frontend not found at {frontend_index}, redirecting to /legacy")
     return RedirectResponse(url="/legacy")
@@ -809,35 +842,35 @@ async def upload_file(
         # Validate file type
         file_extension = file.filename.lower().split('.')[-1] if '.' in file.filename else ''
         allowed_extensions = ['pdf', 'jpg', 'jpeg', 'png', 'heic', 'heif']
-        
+
         if file_extension not in allowed_extensions:
             raise HTTPException(status_code=400, detail=f"Only {', '.join(allowed_extensions)} files are allowed")
-        
+
         # Read file content
         content = await file.read()
 
         # Expense detection for local upload (receipts). Keep it conservative: require filename keywords.
         is_expense_file = _is_expense_filename(file.filename)
-        
+
         if file_extension == 'pdf':
             # Expense receipt PDF - use AI to extract details
             if is_expense_file:
                 logger.info(f"Parsing expense receipt PDF with AI: {file.filename}")
                 receipt_result = ai_parser.parse_receipt(content, file.filename)
-                
+
                 amount = receipt_result.get("amount", 0) if receipt_result.get("success") else 0
                 vendor = receipt_result.get("vendor", "Unknown") if receipt_result.get("success") else "Unknown"
                 category = receipt_result.get("category", "Uncategorized") if receipt_result.get("success") else "Uncategorized"
                 description = receipt_result.get("description", f"Receipt from {file.filename}")
                 expense_date = _parse_receipt_date(receipt_result) if receipt_result.get("success") else datetime.utcnow()
-                
+
                 # Assign to tracked expense user (Jacob/Maryssa), default to Jacob
                 assigned_owner = _choose_expense_owner(
                     assign_to=None,
                     owner_email=None,
                     current_user_email=current_user.get("email"),
                 )
-                
+
                 new_expense = Expense(
                     user_email=assigned_owner,
                     amount=amount,
@@ -863,12 +896,12 @@ async def upload_file(
             # Parse PDF (MyWay route or Time tracking) using AI
             logger.info(f"Parsing PDF with AI: {file.filename}")
             result = ai_parser.parse_myway_pdf(content, file.filename)
-            
+
             if not result.get("success", False):
                 # MyWay parsing failed - try as a receipt first
                 logger.info(f"MyWay parsing failed, trying as receipt: {file.filename}")
                 receipt_result = ai_parser.parse_receipt(content, file.filename)
-                
+
                 if receipt_result.get("success") and receipt_result.get("amount"):
                     # It's a receipt! Save as expense
                     logger.info(f"Detected as receipt: {file.filename}")
@@ -877,14 +910,14 @@ async def upload_file(
                     category = receipt_result.get("category", "Uncategorized")
                     description = receipt_result.get("description", f"Receipt from {file.filename}")
                     expense_date = _parse_receipt_date(receipt_result)
-                    
+
                     # Assign to tracked expense user (Jacob/Maryssa), default to Jacob
                     assigned_owner = _choose_expense_owner(
                         assign_to=None,
                         owner_email=None,
                         current_user_email=current_user.get("email"),
                     )
-                    
+
                     new_expense = Expense(
                         user_email=assigned_owner,
                         amount=amount,
@@ -906,10 +939,12 @@ async def upload_file(
                         "ai_extracted": receipt_result,
                         "assigned_to": assigned_owner
                     })
-                
-                logger.warning(f"Receipt parsing also failed; attempting business-card OCR fallback")
+
+                logger.warning("Receipt parsing also failed; attempting business-card OCR fallback")
                 try:
-                    import pdfplumber, io
+                    import io
+
+                    import pdfplumber
                     # Rasterize first page to image for business-card OCR
                     with pdfplumber.open(io.BytesIO(content)) as pdf:
                         if not pdf.pages:
@@ -937,7 +972,7 @@ async def upload_file(
                         first_name = contact_data.get('first_name', '').strip()
                         last_name = contact_data.get('last_name', '').strip()
                         name = contact_data.get('name', '').strip()
-                        
+
                         # Normalize names
                         if name and not first_name and not last_name:
                             parts = name.split(' ', 1)
@@ -947,12 +982,12 @@ async def upload_file(
                             parts = first_name.split(' ', 1)
                             first_name = parts[0]
                             last_name = parts[1] if len(parts) > 1 else ''
-                        
+
                         if first_name and not existing_contact.first_name:
                             existing_contact.first_name = first_name
                         if last_name and not existing_contact.last_name:
                             existing_contact.last_name = last_name
-                        
+
                         if not existing_contact.phone and contact_data.get('phone'):
                             existing_contact.phone = contact_data['phone']
                         if not existing_contact.title and contact_data.get('title'):
@@ -978,7 +1013,7 @@ async def upload_file(
                         first_name = contact_data.get('first_name', '').strip()
                         last_name = contact_data.get('last_name', '').strip()
                         name = contact_data.get('name', '').strip()
-                        
+
                         # If we have name but no first/last, split it
                         if name and not first_name and not last_name:
                             parts = name.split(' ', 1)
@@ -989,11 +1024,11 @@ async def upload_file(
                             parts = first_name.split(' ', 1)
                             first_name = parts[0]
                             last_name = parts[1] if len(parts) > 1 else ''
-                        
+
                         # Build full name if not provided
                         if not name and (first_name or last_name):
                             name = f"{first_name} {last_name}".strip()
-                        
+
                         new_contact = Contact(
                             first_name=first_name,
                             last_name=last_name,
@@ -1060,7 +1095,7 @@ async def upload_file(
                 except Exception as e:
                     logger.error(f"Business card PDF fallback failed: {e}")
                     raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {str(e)}")
-        
+
             # Return appropriate response based on PDF type
             if result["type"] == "time_tracking":
                 # Serialize date if it's a datetime object
@@ -1069,7 +1104,7 @@ async def upload_file(
                     date_value = date_value.date().isoformat()
                 elif date_value and hasattr(date_value, 'date'):
                     date_value = date_value.date().isoformat()
-                
+
                 logger.info(f"Successfully parsed time tracking data: {date_value} - {result['total_hours']} hours")
                 return JSONResponse({
                     "success": True,
@@ -1083,17 +1118,17 @@ async def upload_file(
                 visits = result["visits"]
                 mileage = result.get("mileage")
                 visit_date = result.get("date")
-                
+
                 if not visits and not mileage:
                     raise HTTPException(status_code=400, detail="No visits or mileage found in PDF")
-                
+
                 user_email = current_user.get("email", "unknown@coloradocareassist.com")
-                
+
                 # Save visits to database (with duplicate checking)
                 saved_visits = []
                 skipped_duplicates = []
                 visit_errors = []
-                
+
                 def normalize_business_name(name):
                     """Normalize business name for duplicate checking"""
                     if not name:
@@ -1103,23 +1138,23 @@ async def upload_file(
                     normalized = re.sub(r'[^\w\s]', '', normalized)  # Remove punctuation
                     normalized = re.sub(r'\s+', ' ', normalized)  # Normalize spaces
                     return normalized
-                
+
                 logger.info(f"Attempting to save {len(visits)} visits for {user_email}")
                 for visit_data in visits:
                     try:
                         business_name = visit_data.get("business_name", "Unknown")
                         stop_number = visit_data.get("stop_number", 0)
                         v_date = visit_data.get("visit_date") or visit_date or datetime.utcnow()
-                        
+
                         # Duplicate check: same date, stop number, and normalized business name
                         v_date_only = v_date.date() if hasattr(v_date, 'date') else v_date
                         business_normalized = normalize_business_name(business_name)
-                        
+
                         existing_visits = db.query(Visit).filter(
                             func.date(Visit.visit_date) == v_date_only,
                             Visit.stop_number == stop_number
                         ).all()
-                        
+
                         is_duplicate = False
                         for ev in existing_visits:
                             if normalize_business_name(ev.business_name) == business_normalized:
@@ -1131,10 +1166,10 @@ async def upload_file(
                                 })
                                 logger.info(f"Skipping duplicate visit: {business_name} on {v_date_only}")
                                 break
-                        
+
                         if is_duplicate:
                             continue
-                        
+
                         logger.info(f"Creating visit: {business_name} on {v_date}")
                         new_visit = Visit(
                             stop_number=stop_number,
@@ -1151,7 +1186,7 @@ async def upload_file(
                         db.flush()  # Get the ID
                         saved_visits.append(new_visit)
                         logger.info(f"✓ Flushed visit ID {new_visit.id}: {new_visit.business_name}")
-                        
+
                         # Log activity for each visit (non-blocking)
                         # IMPORTANT: Activity logging must never rollback the visit transaction
                         try:
@@ -1171,7 +1206,7 @@ async def upload_file(
                         logger.error(error_msg, exc_info=True)
                         visit_errors.append(error_msg)
                         # Continue with other visits even if one fails
-                
+
                 # Save mileage to FinancialEntry if present
                 if mileage and visit_date:
                     try:
@@ -1179,12 +1214,12 @@ async def upload_file(
                             entry_date = datetime.fromisoformat(visit_date)
                         else:
                             entry_date = visit_date
-                        
+
                         # Check if entry already exists for this date
                         existing_entry = db.query(FinancialEntry).filter(
                             func.date(FinancialEntry.date) == entry_date.date()
                         ).first()
-                        
+
                         if existing_entry:
                             existing_entry.miles_driven = mileage
                             existing_entry.mileage_cost = mileage * 0.70
@@ -1205,7 +1240,7 @@ async def upload_file(
                         logger.info(f"Saved mileage: {mileage} miles for {user_email}")
                     except Exception as e:
                         logger.error(f"Error saving mileage: {e}")
-                
+
                 # If NO visits were saved but some were parsed, that's a critical error
                 logger.info(f"Visit save summary: parsed={len(visits)}, flushed={len(saved_visits)}, errors={len(visit_errors)}")
                 if len(visits) > 0 and len(saved_visits) == 0:
@@ -1213,17 +1248,17 @@ async def upload_file(
                     error_details = "\n".join(visit_errors) if visit_errors else "Unknown database error"
                     logger.error(f"ALL VISITS FAILED TO SAVE: {error_details}")
                     raise HTTPException(
-                        status_code=500, 
+                        status_code=500,
                         detail=f"Failed to save any visits to database. Parsed {len(visits)} visits but all failed to save. Errors: {error_details}"
                     )
-                
+
                 # Serialize BEFORE commit to avoid detached instance errors
                 logger.info("Serializing visits before commit...")
                 serialized_visits = []
                 for visit in saved_visits:
                     serialized_visits.append(visit.to_dict())
                 logger.info(f"Serialized {len(serialized_visits)} visits")
-                
+
                 # Commit all changes
                 logger.info(f"Committing {len(saved_visits)} visits to database...")
                 try:
@@ -1233,7 +1268,7 @@ async def upload_file(
                     logger.error(f"✗ COMMIT FAILED: {commit_error}", exc_info=True)
                     db.rollback()
                     raise HTTPException(status_code=500, detail=f"Database commit failed: {str(commit_error)}")
-                
+
                 logger.info(f"Successfully saved {len(serialized_visits)} visits to database, skipped {len(skipped_duplicates)} duplicates")
                 response_data = {
                     "success": True,
@@ -1263,13 +1298,13 @@ async def upload_file(
                 if is_expense_file:
                     logger.info(f"Parsing expense receipt image with AI: {file.filename}")
                     receipt_result = ai_parser.parse_receipt(content, file.filename)
-                    
+
                     amount = receipt_result.get("amount", 0) if receipt_result.get("success") else 0
                     vendor = receipt_result.get("vendor", "Unknown") if receipt_result.get("success") else "Unknown"
                     category = receipt_result.get("category", "Uncategorized") if receipt_result.get("success") else "Uncategorized"
                     description = receipt_result.get("description", "")
                     expense_date = _parse_receipt_date(receipt_result) if receipt_result.get("success") else datetime.utcnow()
-                    
+
                     # Assign to tracked expense user (Jacob/Maryssa), default to Jacob
                     assigned_owner = _choose_expense_owner(
                         assign_to=None,
@@ -1300,29 +1335,29 @@ async def upload_file(
                     })
 
                 result = business_card_scanner.scan_image(content)
-                
+
                 if not result.get("success", False):
                     error_msg = result.get("error", "Failed to scan business card")
                     logger.error(f"Business card scanning failed: {error_msg}")
                     raise HTTPException(status_code=400, detail=error_msg)
-                
+
                 # Validate contact information
                 contact_data = business_card_scanner.validate_contact(result["contact"])
-                
+
                 # Save to database
                 # Check for existing contact by email if present
                 existing_contact = None
                 if contact_data.get('email'):
                     existing_contact = db.query(Contact).filter(Contact.email == contact_data['email']).first()
-                
+
                 if existing_contact:
                     logger.info(f"Updating existing contact: {contact_data.get('email')}")
-                    
+
                     # Update first_name and last_name if available
                     first_name = contact_data.get('first_name', '').strip()
                     last_name = contact_data.get('last_name', '').strip()
                     name = contact_data.get('name', '').strip()
-                    
+
                     # Normalize names
                     if name and not first_name and not last_name:
                         parts = name.split(' ', 1)
@@ -1332,12 +1367,12 @@ async def upload_file(
                         parts = first_name.split(' ', 1)
                         first_name = parts[0]
                         last_name = parts[1] if len(parts) > 1 else ''
-                    
+
                     if first_name and not existing_contact.first_name:
                         existing_contact.first_name = first_name
                     if last_name and not existing_contact.last_name:
                         existing_contact.last_name = last_name
-                    
+
                     # Update fields if they are empty in existing record
                     if not existing_contact.phone and contact_data.get('phone'):
                         existing_contact.phone = contact_data['phone']
@@ -1347,14 +1382,14 @@ async def upload_file(
                         existing_contact.company = contact_data['company']
                     if not existing_contact.website and contact_data.get('website'):
                         existing_contact.website = contact_data['website']
-                    
+
                     # Merge notes
                     new_notes = f"Scanned from business card on {datetime.now().strftime('%Y-%m-%d')}"
                     if existing_contact.notes:
                         existing_contact.notes = existing_contact.notes + "\n" + new_notes
                     else:
                         existing_contact.notes = new_notes
-                        
+
                     existing_contact.updated_at = datetime.utcnow()
                     db.add(existing_contact)
                     db.commit()
@@ -1365,7 +1400,7 @@ async def upload_file(
                     first_name = contact_data.get('first_name', '').strip()
                     last_name = contact_data.get('last_name', '').strip()
                     name = contact_data.get('name', '').strip()
-                    
+
                     # If we have name but no first/last, split it
                     if name and not first_name and not last_name:
                         parts = name.split(' ', 1)
@@ -1376,11 +1411,11 @@ async def upload_file(
                         parts = first_name.split(' ', 1)
                         first_name = parts[0]
                         last_name = parts[1] if len(parts) > 1 else ''
-                    
+
                     # Build full name if not provided
                     if not name and (first_name or last_name):
                         name = f"{first_name} {last_name}".strip()
-                    
+
                     logger.info(f"Creating new contact from scan: {name}")
                     new_contact = Contact(
                         first_name=first_name,
@@ -1413,7 +1448,7 @@ async def upload_file(
                         existing_company = db.query(ReferralSource).filter(
                             ReferralSource.name == contact_data['company']
                         ).first()
-                        
+
                         if not existing_company:
                             new_company = ReferralSource(
                                 name=contact_data['company'],
@@ -1437,7 +1472,7 @@ async def upload_file(
                             logger.info(f"Company already exists: {contact_data['company']}")
                     except Exception as e:
                         logger.error(f"Error creating company: {e}")
-                
+
                 # Create Lead (Deal) for this contact
                 saved_lead = None
                 try:
@@ -1463,7 +1498,7 @@ async def upload_file(
                     logger.info(f"Created new lead for: {contact_data.get('name')}")
                 except Exception as e:
                     logger.error(f"Error creating lead: {e}")
-                
+
                 # Log activity
                 try:
                     ActivityLogger.log_business_card_scan(
@@ -1488,7 +1523,7 @@ async def upload_file(
                 if mailchimp_service.enabled and contact_data.get('email'):
                     mailchimp_result = mailchimp_service.add_contact(contact_data)
                     logger.info(f"Mailchimp export result: {mailchimp_result}")
-                
+
                 logger.info(f"Successfully scanned and saved business card: {contact_data.get('name', 'Unknown')}")
                 return JSONResponse({
                     "success": True,
@@ -1576,6 +1611,7 @@ def _extract_amount_from_pdf_bytes(content: bytes) -> float:
     """Extract a likely total from a PDF by scanning text."""
     try:
         import io
+
         import pdfplumber
 
         text = ""
@@ -1727,12 +1763,12 @@ def _parse_receipt_date(receipt_result: Dict[str, Any]) -> datetime:
     if not receipt_date:
         logger.info("No date found in receipt result, using current UTC time")
         return datetime.utcnow()
-    
+
     # If it's already a datetime object, return it
     if isinstance(receipt_date, datetime):
         logger.info(f"Using receipt date (datetime): {receipt_date}")
         return receipt_date
-    
+
     # Try to parse string dates in YYYY-MM-DD format
     if isinstance(receipt_date, str):
         try:
@@ -1751,7 +1787,7 @@ def _parse_receipt_date(receipt_result: Dict[str, Any]) -> datetime:
             except (ValueError, AttributeError):
                 logger.warning(f"Could not parse receipt date: {receipt_date}, using current date")
                 return datetime.utcnow()
-    
+
     logger.warning(f"Receipt date is unexpected type: {type(receipt_date)}, using current date")
     return datetime.utcnow()
 
@@ -1760,6 +1796,7 @@ def _extract_hours_from_pdf_text(content: bytes) -> Optional[float]:
     """Lightweight fallback to extract hours from PDF text when parser returns null."""
     try:
         import io
+
         import pdfplumber
         text = ""
         with pdfplumber.open(io.BytesIO(content)) as pdf:
@@ -1913,11 +1950,12 @@ async def get_company_logo_svg(
     This avoids third-party image blocking (Brave/adblockers) because the browser only loads same-origin SVG.
     """
     try:
-        from models import ReferralSource
-        from fastapi.responses import Response
         import base64
         import re
+
         import httpx
+        from fastapi.responses import Response
+        from models import ReferralSource
 
         source = db.query(ReferralSource).filter(ReferralSource.id == company_id).first()
         if not source:
@@ -2308,12 +2346,11 @@ async def admin_delete_contact(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Delete a contact and cascade delete related tasks."""
-    from models import ContactTask
-    
+
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
-    
+
     try:
         # Delete related contact tasks first (cascade)
         db.query(ContactTask).filter(ContactTask.contact_id == contact_id).delete(synchronize_session=False)
@@ -2345,20 +2382,20 @@ async def merge_contacts(
     - Deletes the duplicate contacts
     """
     try:
-        from models import Contact, Deal, ActivityLog
-        
+        from models import ActivityLog, Contact, Deal
+
         # Get primary contact
         primary = db.query(Contact).filter(Contact.id == request.primary_id).first()
         if not primary:
             raise HTTPException(status_code=404, detail="Primary contact not found")
-        
+
         # Get duplicate contacts
         duplicates = db.query(Contact).filter(Contact.id.in_(request.duplicate_ids)).all()
         if not duplicates:
             raise HTTPException(status_code=404, detail="No duplicate contacts found")
-        
+
         merged_count = 0
-        
+
         for dup in duplicates:
             # Enrich primary with missing data from duplicate
             if not primary.email and dup.email:
@@ -2381,20 +2418,20 @@ async def merge_contacts(
                 primary.last_name = dup.last_name
             if not primary.name and dup.name:
                 primary.name = dup.name
-            
+
             # Merge notes
             if dup.notes:
                 if primary.notes:
                     primary.notes = f"{primary.notes}\n---\n{dup.notes}"
                 else:
                     primary.notes = dup.notes
-            
+
             # Move activity logs to primary
             db.query(ActivityLog).filter(ActivityLog.contact_id == dup.id).update(
                 {ActivityLog.contact_id: primary.id},
                 synchronize_session=False
             )
-            
+
             # Move deals that reference this contact (in contact_ids JSON)
             deals = db.query(Deal).all()
             for deal in deals:
@@ -2408,24 +2445,24 @@ async def merge_contacts(
                             db.add(deal)
                     except Exception:
                         pass
-            
+
             # Delete the duplicate
             db.delete(dup)
             merged_count += 1
-        
+
         # Update the primary contact
         db.add(primary)
         db.commit()
-        
+
         logger.info(f"Merged {merged_count} contacts into {primary.id}")
-        
+
         return {
             "success": True,
             "merged_count": merged_count,
             "primary_id": primary.id,
             "message": f"Successfully merged {merged_count} contacts"
         }
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -2446,18 +2483,17 @@ async def get_contact_tasks(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Get tasks for a specific contact."""
-    from models import ContactTask
-    
+
     query = db.query(ContactTask)
-    
+
     if contact_id:
         query = query.filter(ContactTask.contact_id == contact_id)
     if status:
         query = query.filter(ContactTask.status == status)
-    
+
     query = query.order_by(ContactTask.due_date.asc().nulls_last(), ContactTask.created_at.desc())
     tasks = query.all()
-    
+
     return {"data": [t.to_dict() for t in tasks]}
 
 
@@ -2468,19 +2504,19 @@ async def create_contact_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Create a task for a contact."""
-    from models import ContactTask, Contact
-    
+    from models import Contact
+
     data = await request.json()
     contact_id = data.get("contact_id")
-    
+
     if not contact_id:
         raise HTTPException(status_code=400, detail="contact_id is required")
-    
+
     # Verify contact exists
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
-    
+
     task = ContactTask(
         contact_id=contact_id,
         title=data.get("text") or data.get("title") or "Untitled Task",
@@ -2490,11 +2526,11 @@ async def create_contact_task(
         assigned_to=data.get("assigned_to") or data.get("sales_id") or current_user.get("email"),
         created_by=current_user.get("email"),
     )
-    
+
     db.add(task)
     db.commit()
     db.refresh(task)
-    
+
     return JSONResponse(task.to_dict(), status_code=status.HTTP_201_CREATED)
 
 
@@ -2506,14 +2542,13 @@ async def update_contact_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Update a contact task."""
-    from models import ContactTask
-    
+
     task = db.query(ContactTask).filter(ContactTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    
+
     data = await request.json()
-    
+
     if "title" in data:
         task.title = data["title"]
     if "text" in data:
@@ -2531,13 +2566,13 @@ async def update_contact_task(
             task.completed_at = None
     if "assigned_to" in data:
         task.assigned_to = data["assigned_to"]
-    
+
     task.updated_at = datetime.now(timezone.utc)
-    
+
     db.add(task)
     db.commit()
     db.refresh(task)
-    
+
     return task.to_dict()
 
 
@@ -2548,15 +2583,14 @@ async def delete_contact_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Delete a contact task."""
-    from models import ContactTask
-    
+
     task = db.query(ContactTask).filter(ContactTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    
+
     db.delete(task)
     db.commit()
-    
+
     return {"success": True, "message": "Task deleted"}
 
 
@@ -2581,8 +2615,7 @@ async def get_all_tasks(
     Moved from /admin/tasks to /admin/unified-tasks to avoid collision with
     the React Admin data provider GET /admin/tasks handler.
     """
-    from models import ContactTask, CompanyTask, DealTask
-    from sqlalchemy import union_all, select, literal, cast, Integer
+    from sqlalchemy import Integer, cast, literal, select, union_all
 
     # Build queries for each task type
     # NOTE: The actual DB column is completed_at, aliased to done_date for frontend compat
@@ -2715,8 +2748,7 @@ async def get_all_tasks(
 # ---------------------------------------------------------------------------
 def _to_contact_summary_dict(contact, company_name: Optional[str] = None) -> Dict[str, Any]:
     """Map Contact to the contacts_summary shape expected by the frontend."""
-    from models import LeadTask
-    
+
     # Parse first/last name from full name if not set
     first_name = getattr(contact, "first_name", None)
     last_name = getattr(contact, "last_name", None)
@@ -2724,7 +2756,7 @@ def _to_contact_summary_dict(contact, company_name: Optional[str] = None) -> Dic
         parts = contact.name.strip().split(None, 1)
         first_name = parts[0] if parts else ""
         last_name = parts[1] if len(parts) > 1 else ""
-    
+
     return {
         "id": contact.id,
         "first_name": first_name or "",
@@ -3084,7 +3116,7 @@ async def admin_get_company(
 ):
     """Return a single company record (ReferralSource) for React Admin getOne()."""
     try:
-        from models import ReferralSource, Contact
+        from models import Contact, ReferralSource
 
         source = db.query(ReferralSource).filter(ReferralSource.id == company_id).first()
         if not source:
@@ -3255,32 +3287,35 @@ def _call_openai_enrich(prompt: str) -> Optional[dict]:
         return None
 
 
-def _call_gemini_enrich(prompt: str) -> Optional[dict]:
-    api_key = os.getenv("GEMINI_API_KEY")
+def _call_anthropic_enrich(prompt: str) -> Optional[dict]:
+    api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         return None
-    models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
-    for model in models:
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-            resp = httpx.post(
-                url,
-                headers={"x-goog-api-key": api_key, "Content-Type": "application/json"},
-                json={"contents": [{"parts": [{"text": prompt}]}]},
-                timeout=30.0,
-            )
-            if resp.status_code == 404:
-                continue
-            if resp.status_code != 200:
-                continue
-            data = resp.json()
-            text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-            text = re.sub(r"^```json\s*", "", text.strip(), flags=re.IGNORECASE)
-            text = re.sub(r"```$", "", text.strip())
-            return json.loads(text)
-        except Exception:
-            continue
-    return None
+    try:
+        resp = httpx.post(
+            "https://api.anthropic.com/v1/messages",
+            headers={
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            },
+            json={
+                "model": "claude-haiku-4-5-20251001",
+                "max_tokens": 500,
+                "messages": [{"role": "user", "content": prompt}],
+            },
+            timeout=30.0,
+        )
+        if resp.status_code != 200:
+            logger.warning("Anthropic enrich error %s: %s", resp.status_code, resp.text[:200])
+            return None
+        text = resp.json()["content"][0]["text"]
+        text = re.sub(r"^```json\s*", "", text.strip(), flags=re.IGNORECASE)
+        text = re.sub(r"```$", "", text.strip())
+        return json.loads(text)
+    except Exception as e:
+        logger.warning("Anthropic enrich exception: %s", e)
+        return None
 
 
 def _enrich_company_record(source) -> dict:
@@ -3294,8 +3329,8 @@ def _enrich_company_record(source) -> dict:
         source_type=source.source_type or "",
         notes=(source.notes or "")[:500],
     )
-    # Use Gemini first (faster, cheaper), fallback to OpenAI
-    result = _call_gemini_enrich(prompt)
+    # Use Anthropic Haiku first (reliable), fallback to OpenAI
+    result = _call_anthropic_enrich(prompt)
     if not result:
         result = _call_openai_enrich(prompt)
     return result or {}
@@ -3462,7 +3497,7 @@ async def admin_get_tasks(
     due_date_gte: Optional[str] = Query(default=None, alias="due_date@gte"),
 ):
     try:
-        from models import ContactTask, CompanyTask
+        from models import CompanyTask, ContactTask
         from sqlalchemy import or_
 
         # React Admin data provider sometimes sends JSON in `filter=...`
@@ -3635,7 +3670,7 @@ async def admin_get_task(
 ):
     """Get a single task by ID. Searches ContactTask, CompanyTask, then LeadTask."""
     try:
-        from models import LeadTask, ContactTask, CompanyTask
+        from models import CompanyTask, ContactTask, LeadTask
 
         # Try ContactTask first (most common)
         task = db.query(ContactTask).filter(ContactTask.id == task_id).first()
@@ -3667,7 +3702,15 @@ async def admin_create_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        from models import LeadTask, LeadActivity, Lead, ContactTask, CompanyTask, ReferralSource, Contact
+        from models import (
+            CompanyTask,
+            Contact,
+            ContactTask,
+            Lead,
+            LeadActivity,
+            LeadTask,
+            ReferralSource,
+        )
 
         data = await request.json()
         contact_id = data.get("contact_id")
@@ -3765,7 +3808,7 @@ async def admin_update_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        from models import LeadTask, LeadActivity, CompanyTask, ContactTask
+        from models import CompanyTask, ContactTask, LeadActivity, LeadTask
 
         data = await request.json()
 
@@ -3862,7 +3905,7 @@ async def admin_delete_task(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     try:
-        from models import LeadTask, CompanyTask, ContactTask
+        from models import CompanyTask, ContactTask, LeadTask
 
         # Try ContactTask first
         task = db.query(ContactTask).filter(ContactTask.id == task_id).first()
@@ -3895,6 +3938,7 @@ async def admin_delete_task(
 def _download_drive_public(url: str) -> Optional[tuple]:
     """Best-effort public Google Drive download without Drive API."""
     import re
+
     import requests
 
     # Try to extract file id from common drive URL patterns
@@ -3934,7 +3978,7 @@ async def upload_from_url(
     try:
         url = request.url
         logger.info(f"Processing URL upload: {url}")
-        
+
         # Download file from Drive
         drive_service = GoogleDriveService()
         print(f"DEBUG: Attempting to download from URL: {url}")
@@ -3949,7 +3993,7 @@ async def upload_from_url(
 
         if not result:
             raise HTTPException(status_code=400, detail="Failed to download file from URL. Ensure the link is accessible or make it public.")
-            
+
         content, filename, metadata = result
         logger.info(f"Downloaded file: {filename} ({len(content)} bytes)")
 
@@ -3971,9 +4015,9 @@ async def upload_from_url(
         is_pdf = content[:4] == b'%PDF' or filename.lower().endswith('.pdf')
         is_image = _looks_like_image_bytes(content, filename) and not is_pdf
         is_expense_file = _is_expense_filename(filename)
-        
+
         logger.info(f"File type detection: is_pdf={is_pdf}, is_image={is_image}, is_expense={is_expense_file}")
-        
+
         # PDF FILES: Use AI parser (MyWay routes, receipts)
         parse_result = None
         parse_error = None
@@ -3987,7 +4031,7 @@ async def upload_from_url(
                     vendor = receipt_result.get("vendor", "Unknown")
                     category = receipt_result.get("category", "Uncategorized")
                     description = receipt_result.get("description", "")
-                    
+
                     new_expense = Expense(
                         user_email=assigned_owner,
                         amount=amount,
@@ -4018,7 +4062,7 @@ async def upload_from_url(
                     parse_error = str(e)
                     logger.warning(f"AI PDF parser threw exception: {e}")
                     parse_result = {"success": False, "error": str(e)}
-        
+
         # IMAGE FILES: Receipt or Business Card
         # IMPORTANT: For Drive uploads, ALWAYS try receipt parsing first (content-based),
         # regardless of filename. Only fall back to business card if it's not a receipt.
@@ -4026,7 +4070,7 @@ async def upload_from_url(
             # Try receipt parsing first for ALL images from Drive
             logger.info(f"[upload-url] Attempting receipt parse for image: {filename}")
             receipt_result = ai_parser.parse_receipt(content, filename)
-            
+
             # If AI found a valid receipt with an amount, save as expense
             if receipt_result.get("success") and receipt_result.get("amount"):
                 amount = receipt_result.get("amount", 0)
@@ -4034,7 +4078,7 @@ async def upload_from_url(
                 category = receipt_result.get("category", "Uncategorized")
                 description = receipt_result.get("description", "")
                 expense_date = _parse_receipt_date(receipt_result)
-                
+
                 new_expense = Expense(
                     user_email=assigned_owner,
                     amount=amount,
@@ -4055,7 +4099,7 @@ async def upload_from_url(
                     "ai_extracted": receipt_result,
                     "assigned_to": assigned_owner
                 })
-            
+
             # Not a receipt (or AI couldn't extract a meaningful amount) -> treat as business card
             logger.info(f"[upload-url] Image did not parse as receipt (success={receipt_result.get('success')}, amount={receipt_result.get('amount')}), trying business card for {filename}")
             logger.info(f"Parsing business card image with AI: {filename}")
@@ -4066,11 +4110,11 @@ async def upload_from_url(
                 first_name = contact_data.get('first_name') or ''
                 last_name = contact_data.get('last_name') or ''
                 full_name = f"{first_name} {last_name}".strip() or None
-                
+
                 existing_contact = None
                 if contact_data.get('email'):
                     existing_contact = db.query(Contact).filter(Contact.email == contact_data['email']).first()
-                
+
                 if existing_contact:
                     existing_contact.updated_at = datetime.utcnow()
                     db.add(existing_contact)
@@ -4100,7 +4144,7 @@ async def upload_from_url(
                     db.commit()
                     db.refresh(new_contact)
                     saved_contact = new_contact
-                
+
                 return JSONResponse({
                     "success": True,
                     "filename": filename,
@@ -4108,7 +4152,7 @@ async def upload_from_url(
                     "contact": saved_contact.to_dict(),
                     "ai_extracted": card_result
                 })
-        
+
         # Handle successful time tracking
         if parse_result and parse_result.get("success") and parse_result.get("type") == "time_tracking":
             date_value = parse_result.get("date")
@@ -4141,7 +4185,7 @@ async def upload_from_url(
             saved_visits = []
             skipped_duplicates = []
             visit_errors = []
-            
+
             def normalize_business_name(name):
                 """Normalize business name for duplicate checking"""
                 if not name:
@@ -4151,23 +4195,23 @@ async def upload_from_url(
                 normalized = re.sub(r'[^\w\s]', '', normalized)  # Remove punctuation
                 normalized = re.sub(r'\s+', ' ', normalized)  # Normalize spaces
                 return normalized
-            
+
             logger.info(f"[upload-url] Attempting to save {len(visits)} visits for {user_email}")
             for visit_data in visits:
                 try:
                     business_name = visit_data.get("business_name", "Unknown")
                     stop_number = visit_data.get("stop_number", 0)
                     v_date = visit_data.get("visit_date") or visit_date or datetime.utcnow()
-                    
+
                     # Duplicate check: same date, stop number, and normalized business name
                     v_date_only = v_date.date() if hasattr(v_date, 'date') else v_date
                     business_normalized = normalize_business_name(business_name)
-                    
+
                     existing_visits = db.query(Visit).filter(
                         func.date(Visit.visit_date) == v_date_only,
                         Visit.stop_number == stop_number
                     ).all()
-                    
+
                     is_duplicate = False
                     for ev in existing_visits:
                         if normalize_business_name(ev.business_name) == business_normalized:
@@ -4179,10 +4223,10 @@ async def upload_from_url(
                             })
                             logger.info(f"[upload-url] Skipping duplicate visit: {business_name} on {v_date_only}")
                             break
-                    
+
                     if is_duplicate:
                         continue
-                    
+
                     new_visit = Visit(
                         stop_number=stop_number,
                         business_name=business_name,
@@ -4292,7 +4336,7 @@ async def upload_from_url(
 
         # Should not reach here - all paths should have returned
         raise HTTPException(status_code=400, detail=f"Unhandled file type: {filename}")
-            
+
     except HTTPException as he:
         raise he
     except Exception as e:
@@ -4338,67 +4382,68 @@ def _find_similar_company(db, company_name: str):
     """Find an existing company with a similar name to avoid duplicates."""
     if not company_name or len(company_name) < 3:
         return None
-    
-    from models import ReferralSource
+
     import re
-    
+
+    from models import ReferralSource
+
     # Normalize the input name
     normalized = company_name.lower().strip()
     normalized = re.sub(r'[^\w\s]', '', normalized)
-    
+
     # Get first 2 significant words as the base
     words = normalized.split()
     if not words:
         return None
-    
+
     base_words = [w for w in words[:3] if len(w) >= 3 and w not in ['the', 'of', 'at', 'and', 'for']]
     if not base_words:
         return None
-    
+
     # Search for companies containing these words
     search_term = base_words[0]  # Use first significant word
-    
+
     # Try exact organization match first
     exact = db.query(ReferralSource).filter(
         ReferralSource.organization.ilike(company_name)
     ).first()
     if exact:
         return exact
-    
+
     # Try fuzzy match - find companies where the name contains our search term
     candidates = db.query(ReferralSource).filter(
         ReferralSource.organization.ilike(f"%{search_term}%")
     ).all()
-    
+
     if not candidates:
         return None
-    
+
     # Score candidates by how similar they are
     best_match = None
     best_score = 0
-    
+
     for c in candidates:
         c_normalized = (c.organization or "").lower()
         c_normalized = re.sub(r'[^\w\s]', '', c_normalized)
-        
+
         # Count matching words
         c_words = set(c_normalized.split())
         input_words = set(normalized.split())
         matching = len(c_words.intersection(input_words))
-        
+
         # Bonus for exact substring match
         if search_term in c_normalized:
             matching += 1
-        
+
         if matching > best_score:
             best_score = matching
             best_match = c
-    
+
     # Only return if we have a decent match (at least 2 words matching)
     if best_score >= 2:
         logger.info(f"Fuzzy matched '{company_name}' to existing company '{best_match.organization}'")
         return best_match
-    
+
     return None
 
 
@@ -4430,25 +4475,24 @@ def _convert_heic_to_jpeg(content: bytes) -> Tuple[bytes, str]:
     2. pillow_heif direct API (faster if it works)
     3. PIL with registered HEIF opener
     """
-    import io
     import subprocess
     import tempfile
-    
+
     # Method 1: Try ImageMagick (most reliable for iPhone HEIC with metadata issues)
     try:
         with tempfile.NamedTemporaryFile(suffix='.heic', delete=False) as tmp_in:
             tmp_in.write(content)
             tmp_in_path = tmp_in.name
-        
+
         tmp_out_path = tmp_in_path.replace('.heic', '.jpg')
-        
+
         # Use ImageMagick convert command
         result = subprocess.run(
             ['convert', tmp_in_path, '-quality', '90', tmp_out_path],
             capture_output=True,
             timeout=30
         )
-        
+
         if result.returncode == 0 and os.path.exists(tmp_out_path):
             with open(tmp_out_path, 'rb') as f:
                 jpeg_bytes = f.read()
@@ -4466,7 +4510,7 @@ def _convert_heic_to_jpeg(content: bytes) -> Tuple[bytes, str]:
         logger.info("ImageMagick not installed, trying pillow_heif")
     except Exception as e:
         logger.warning(f"ImageMagick conversion failed: {e}")
-    
+
     # Method 2: Try pillow_heif direct API (handles some cases PIL plugin misses)
     try:
         import pillow_heif
@@ -4481,7 +4525,7 @@ def _convert_heic_to_jpeg(content: bytes) -> Tuple[bytes, str]:
         return jpeg_bytes, "image/jpeg"
     except Exception as e:
         logger.warning(f"pillow_heif.open_heif failed: {e}")
-    
+
     # Method 3: Try PIL with registered HEIF opener
     try:
         from PIL import Image
@@ -4495,7 +4539,7 @@ def _convert_heic_to_jpeg(content: bytes) -> Tuple[bytes, str]:
         return jpeg_bytes, "image/jpeg"
     except Exception as e:
         logger.warning(f"PIL conversion failed: {e}")
-    
+
     # All methods failed - return original with image/heic mime type
     # Gemini may still accept it
     logger.warning("All HEIC conversion methods failed, sending as image/heic")
@@ -4509,6 +4553,7 @@ def _extract_business_card_openai(content: bytes, filename: str = "") -> Optiona
         return None
     try:
         import base64
+
         import httpx
 
         # Convert HEIC to JPEG for API compatibility
@@ -4521,7 +4566,7 @@ def _extract_business_card_openai(content: bytes, filename: str = "") -> Optiona
                 mime = "image/png"
             elif filename.lower().endswith(".webp"):
                 mime = "image/webp"
-        
+
         b64 = base64.b64encode(content).decode("utf-8")
 
         # Use gpt-4o for best quality business card extraction
@@ -4567,11 +4612,12 @@ def _extract_business_card_gemini(content: bytes, filename: str = "") -> Optiona
         return None
     try:
         import base64
+
         import httpx
 
         is_heic = filename.lower().endswith(('.heic', '.heif'))
         original_content = content
-        
+
         # For HEIC: Try sending directly first (Gemini API supports HEIC)
         if is_heic:
             mime = "image/heic"
@@ -4580,7 +4626,7 @@ def _extract_business_card_gemini(content: bytes, filename: str = "") -> Optiona
             mime = "image/jpeg"
             if filename.lower().endswith(".png"):
                 mime = "image/png"
-        
+
         b64 = base64.b64encode(content).decode("utf-8")
 
         # Use best available Gemini models for business card extraction
@@ -4624,7 +4670,7 @@ def _extract_business_card_gemini(content: bytes, filename: str = "") -> Optiona
             except Exception as e:
                 logger.warning(f"Gemini {model} exception: {e}")
                 continue
-        
+
         # If all models failed and we were trying HEIC directly, retry with converted content
         if is_heic and mime == "image/heic":
             logger.info("Direct HEIC failed, retrying with converted content")
@@ -4662,7 +4708,7 @@ def _extract_business_card_gemini(content: bytes, filename: str = "") -> Optiona
                             continue
             except Exception as e:
                 logger.warning(f"Retry with conversion failed: {e}")
-        
+
         return None
     except Exception as e:
         logger.warning(f"Gemini business card extract error: {e}")
@@ -4676,7 +4722,7 @@ def _extract_business_card_ai(content: bytes, filename: str = "") -> Optional[Di
     For other formats: Try Gemini first (faster/cheaper), then OpenAI for quality fallback.
     """
     is_heic = filename.lower().endswith(('.heic', '.heif'))
-    
+
     if is_heic:
         # Gemini handles HEIC better - try it first
         logger.info(f"HEIC file detected, trying Gemini first: {filename}")
@@ -4700,20 +4746,20 @@ _bulk_jobs: Dict[str, Dict[str, Any]] = {}
 
 def _process_business_cards_background(job_id: str, files: list, folder_url: str, assign_to: str):
     """Background task to process business cards."""
-    from models import Contact, ReferralSource
     from activity_logger import ActivityLogger
-    
+    from models import Contact, ReferralSource
+
     # Get a fresh database session for background task
     db = db_manager.get_session()
     drive_service = GoogleDriveService()
-    
+
     job = _bulk_jobs[job_id]
-    
+
     try:
         for file_info in files:
             file_id = file_info.get("id")
             file_name = file_info.get("name", "unknown")
-            
+
             try:
                 # Download the file
                 download_result = drive_service.download_file_by_id(file_id)
@@ -4733,13 +4779,13 @@ def _process_business_cards_background(job_id: str, files: list, folder_url: str
 
                 first_name = (card_data.get("first_name") or "").strip()
                 last_name = (card_data.get("last_name") or "").strip()
-                
+
                 # Normalize: If first_name contains a space and last_name is empty, split it
                 if first_name and ' ' in first_name and not last_name:
                     parts = first_name.split(' ', 1)
                     first_name = parts[0]
                     last_name = parts[1] if len(parts) > 1 else ''
-                
+
                 company_name = (card_data.get("company") or "").strip()
                 email = (card_data.get("email") or "").strip()
                 phone = (card_data.get("phone") or "").strip()
@@ -4747,7 +4793,7 @@ def _process_business_cards_background(job_id: str, files: list, folder_url: str
                 address = (card_data.get("address") or "").strip()
                 website = (card_data.get("website") or "").strip()
                 notes = (card_data.get("notes") or "").strip()
-                
+
                 # Try to extract name from email if missing
                 first_name, last_name = _extract_name_from_email(email, first_name, last_name)
 
@@ -4868,7 +4914,7 @@ def _process_business_cards_background(job_id: str, files: list, folder_url: str
 
         job["status"] = "completed"
         job["message"] = f"Processed {job['processed']} of {job['total_files']} business cards"
-        
+
     except Exception as e:
         logger.error(f"Bulk processing job {job_id} failed: {e}")
         job["status"] = "failed"
@@ -4895,18 +4941,18 @@ def _get_cached_folder_files(folder_url: str, drive_service) -> List[Dict[str, A
     """Get folder files from cache or fetch if not cached/expired."""
     import hashlib
     cache_key = hashlib.md5(folder_url.encode()).hexdigest()
-    
+
     now = time.time()
     if cache_key in _folder_file_cache:
         cached = _folder_file_cache[cache_key]
         if now - cached["timestamp"] < _cache_ttl_seconds:
             logger.info(f"Using cached file list for folder ({len(cached['files'])} files)")
             return cached["files"]
-    
+
     # Fetch fresh list with recursive scanning for subfolders
-    logger.info(f"Fetching file list from Google Drive folder (recursive)...")
+    logger.info("Fetching file list from Google Drive folder (recursive)...")
     files = drive_service.list_files_in_folder(folder_url, image_only=True, recursive=True)
-    
+
     # Cache it
     _folder_file_cache[cache_key] = {
         "files": files,
@@ -4935,8 +4981,8 @@ async def trigger_auto_scan(
     Trigger auto-scan of all three Google Drive folders.
     Scans for new files only (tracks processed files to avoid duplicates).
     """
-    from models import ProcessedDriveFile, Contact, ReferralSource, Visit, FinancialEntry, Expense
     from ai_document_parser import ai_parser
+    from models import Contact, Expense, FinancialEntry, ReferralSource, Visit
 
     drive_service = GoogleDriveService()
     if not drive_service.enabled:
@@ -5154,7 +5200,6 @@ async def get_auto_scan_status(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Get status of processed files by folder type"""
-    from models import ProcessedDriveFile
 
     try:
         # Count processed files by folder type
@@ -5196,7 +5241,7 @@ async def bulk_process_business_cards(
     Frontend should loop until has_more=False.
     """
     from models import Contact, ReferralSource
-    
+
     folder_url = request.folder_url
     assign_to = request.assign_to or current_user.get("email", "")
     start_index = request.start_index
@@ -5212,10 +5257,10 @@ async def bulk_process_business_cards(
         raise HTTPException(status_code=400, detail="No image files found in the folder. Ensure the folder is shared with the service account.")
 
     total_files = len(all_files)
-    
+
     # Get the batch to process
     batch_files = all_files[start_index:start_index + batch_size]
-    
+
     if not batch_files:
         # All done
         return JSONResponse({
@@ -5239,7 +5284,7 @@ async def bulk_process_business_cards(
     for file_info in batch_files:
         file_id = file_info.get("id")
         file_name = file_info.get("name", "unknown")
-        
+
         try:
             # Download
             download_result = drive_service.download_file_by_id(file_id)
@@ -5266,14 +5311,14 @@ async def bulk_process_business_cards(
             address = (card_data.get("address") or "").strip()
             website = (card_data.get("website") or "").strip()
             notes = (card_data.get("notes") or "").strip()
-            
+
             # Try to extract name from email if missing
             first_name, last_name = _extract_name_from_email(email, first_name, last_name)
 
             if not first_name and not last_name and not company_name:
                 results["errors"].append(f"{file_name}: no data extracted")
                 continue
-            
+
             # Validate extracted data doesn't look like OCR garbage
             def _looks_like_garbage(text: str) -> bool:
                 if not text or len(text) < 2:
@@ -5299,7 +5344,7 @@ async def bulk_process_business_cards(
                     if pattern in text.lower():
                         return True
                 return False
-            
+
             if _looks_like_garbage(first_name) or _looks_like_garbage(last_name):
                 results["errors"].append(f"{file_name}: extracted data looks invalid")
                 continue
@@ -5419,7 +5464,7 @@ async def get_bulk_job_status(job_id: str):
     """Get status of a bulk business card processing job."""
     if job_id not in _bulk_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
-    
+
     job = _bulk_jobs[job_id]
     return JSONResponse({
         "success": True,
@@ -5462,14 +5507,14 @@ async def bulk_process_business_cards_sync(
     import hashlib as _hashlib
     cache_key = _hashlib.md5(folder_url.encode()).hexdigest()
     cached_data = _folder_file_cache.get(cache_key)
-    
+
     if cached_data and (time.time() - cached_data["timestamp"] < _CACHE_TTL_SECONDS):
         all_files = cached_data["files"]
     else:
         all_files = drive_service.list_files_in_folder(folder_url, image_only=True, recursive=True)
         if all_files:
             _folder_file_cache[cache_key] = {"files": all_files, "timestamp": time.time()}
-    
+
     total_files = len(all_files)
     files = all_files[start_index:start_index + batch_size]
     if not files and start_index == 0:
@@ -5517,7 +5562,7 @@ async def bulk_process_business_cards_sync(
             address = (card_data.get("address") or "").strip()
             website = (card_data.get("website") or "").strip()
             notes = (card_data.get("notes") or "").strip()
-            
+
             # Try to extract name from email if missing
             first_name, last_name = _extract_name_from_email(email, first_name, last_name)
 
@@ -5656,10 +5701,11 @@ async def bulk_process_business_cards_sync(
 async def save_visits(request: Request, db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
     """Save visits from PDF upload to database and Google Sheet"""
     try:
-        from sqlalchemy import func
-        from datetime import datetime
         import re
-        
+        from datetime import datetime
+
+        from sqlalchemy import func
+
         def normalize_business_name(name):
             """Normalize business name for duplicate checking"""
             if not name:
@@ -5667,18 +5713,18 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
             normalized = (name or "").lower().strip()
             normalized = re.sub(r'\s+', ' ', normalized)
             return normalized
-        
+
         data = await request.json()
         visits = data.get("visits", [])
-        
+
         if not visits:
             raise HTTPException(status_code=400, detail="No visits provided")
-        
+
         # Check for duplicates in database
         duplicate_info = []
         saved_visits = []
         skipped_visits = []
-        
+
         for visit_data in visits:
             # Handle both dict and object formats
             if isinstance(visit_data, dict):
@@ -5696,7 +5742,7 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
                 address = getattr(visit_data, "address", None)
                 city = getattr(visit_data, "city", None)
                 notes = getattr(visit_data, "notes", None)
-            
+
             # Parse date if it's a string - handle timezone correctly to avoid day shifts
             if visit_date:
                 if isinstance(visit_date, str):
@@ -5730,17 +5776,17 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
             else:
                 # Default to today at midnight
                 visit_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            
+
             # Check if this visit already exists (same date, normalized business name, stop number)
             visit_date_only = visit_date.date() if visit_date else datetime.now().date()
             business_normalized = normalize_business_name(business_name or "")
-            
+
             # Simplified duplicate check - get all visits on this date and check in Python
             existing_visits = db.query(Visit).filter(
                 func.date(Visit.visit_date) == visit_date_only,
                 Visit.stop_number == (stop_number or 1)
             ).all()
-            
+
             # Check if any existing visit has matching normalized business name
             existing_visit = None
             for ev in existing_visits:
@@ -5748,7 +5794,7 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
                 if ev_business_normalized == business_normalized:
                     existing_visit = ev
                     break
-            
+
             if existing_visit:
                 # Duplicate found - skip saving but report it
                 duplicate_info.append({
@@ -5761,7 +5807,7 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
                 })
                 skipped_visits.append(visit_data)
                 continue
-            
+
             visit = Visit(
                 stop_number=stop_number,
                 business_name=business_name or "",
@@ -5772,13 +5818,13 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
             )
             db.add(visit)
             saved_visits.append(visit)
-        
+
         db.commit()
-        
+
         # Refresh all visits to get IDs
         for visit in saved_visits:
             db.refresh(visit)
-        
+
         # Prepare visits data for Google Sheets (only non-duplicates)
         visits_for_sheet = []
         for visit_data in saved_visits:
@@ -5789,7 +5835,7 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
                 "city": visit_data.city or "",
                 "notes": visit_data.notes or ""
             })
-        
+
         # Also sync to Google Sheets if available (only new visits, not duplicates)
         if sheets_manager and visits_for_sheet:
             try:
@@ -5797,14 +5843,14 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
                 logger.info(f"Synced {len(visits_for_sheet)} new visits to Google Sheets")
             except Exception as e:
                 logger.warning(f"Failed to sync to Google Sheets: {str(e)}")
-        
+
         logger.info(f"Successfully saved {len(saved_visits)} new visits, skipped {len(skipped_visits)} duplicates")
-        
+
         # Build response message
         message = f"Successfully saved {len(saved_visits)} visit(s)"
         if duplicate_info:
             message += f", skipped {len(duplicate_info)} duplicate(s)"
-        
+
         return JSONResponse({
             "success": True,
             "message": message,
@@ -5812,7 +5858,7 @@ async def save_visits(request: Request, db: Session = Depends(get_db), current_u
             "duplicates": len(duplicate_info),
             "duplicate_details": duplicate_info if duplicate_info else []
         })
-        
+
     except Exception as e:
         logger.error(f"Error saving visits: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error saving visits: {str(e)}")
@@ -5823,26 +5869,26 @@ async def append_to_sheet(request: Request, db: Session = Depends(get_db), curre
     try:
         data = await request.json()
         data_type = data.get("type", "myway_route")
-        
+
         if data_type == "time_tracking":
             # Handle time tracking data
             date = data.get("date")
             total_hours = data.get("total_hours")
-            
+
             if not date or total_hours is None:
                 raise HTTPException(status_code=400, detail="Date and total_hours are required for time tracking")
-            
+
             # Save to database
             from datetime import datetime
             time_entry = TimeEntry(
                 date=datetime.fromisoformat(date.replace('Z', '+00:00')) if 'T' in date else datetime.strptime(date, '%Y-%m-%d'),
                 hours_worked=total_hours
             )
-            
+
             db.add(time_entry)
             db.commit()
             db.refresh(time_entry)
-            
+
             # Also sync to Google Sheets if available
             if sheets_manager:
                 try:
@@ -5850,23 +5896,23 @@ async def append_to_sheet(request: Request, db: Session = Depends(get_db), curre
                     logger.info("Synced time entry to Google Sheets")
                 except Exception as e:
                     logger.warning(f"Failed to sync to Google Sheets: {str(e)}")
-            
+
             logger.info(f"Successfully saved time entry: {date} - {total_hours} hours")
-            
+
             return JSONResponse({
                 "success": True,
                 "message": f"Successfully saved {total_hours} hours for {date}",
                 "date": date,
                 "hours": total_hours
             })
-        
+
         else:
             # Handle MyWay route data
             visits = data.get("visits", [])
-            
+
             if not visits:
                 raise HTTPException(status_code=400, detail="No visits provided")
-            
+
             # Save visits to database
             saved_visits = []
             for visit_data in visits:
@@ -5895,7 +5941,7 @@ async def append_to_sheet(request: Request, db: Session = Depends(get_db), curre
                         visit_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
                 else:
                     visit_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-                
+
                 visit = Visit(
                     stop_number=visit_data.get("stop_number"),
                     business_name=visit_data.get("business_name"),
@@ -5906,13 +5952,13 @@ async def append_to_sheet(request: Request, db: Session = Depends(get_db), curre
                 )
                 db.add(visit)
                 saved_visits.append(visit)
-            
+
             db.commit()
-            
+
             # Refresh all visits to get IDs
             for visit in saved_visits:
                 db.refresh(visit)
-            
+
             # Also sync to Google Sheets if available
             if sheets_manager:
                 try:
@@ -5920,15 +5966,15 @@ async def append_to_sheet(request: Request, db: Session = Depends(get_db), curre
                     logger.info("Synced visits to Google Sheets")
                 except Exception as e:
                     logger.warning(f"Failed to sync to Google Sheets: {str(e)}")
-            
+
             logger.info(f"Successfully saved {len(visits)} visits to database")
-            
+
             return JSONResponse({
                 "success": True,
                 "message": f"Successfully saved {len(visits)} visits to database",
                 "appended_count": len(visits)
             })
-        
+
     except Exception as e:
         logger.error(f"Error saving data: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error saving data: {str(e)}")
@@ -5942,7 +5988,7 @@ async def test_gmail_connection(
     """Test Gmail API connection"""
     try:
         from gmail_service import GmailService
-        
+
         gmail_service = GmailService()
         result = gmail_service.test_connection()
         return JSONResponse(result)
@@ -6087,14 +6133,14 @@ async def update_visit_notes(
     try:
         data = await request.json()
         notes = data.get('notes', '')
-        
+
         visit = db.query(Visit).filter(Visit.id == visit_id).first()
         if not visit:
             return JSONResponse({"success": False, "error": "Visit not found"}, status_code=404)
-        
+
         visit.notes = notes
         db.commit()
-        
+
         logger.info(f"Updated notes for visit {visit_id}")
         return JSONResponse({"success": True})
     except Exception as e:
@@ -6161,7 +6207,7 @@ def _apply_contact_filters(
             query = query.filter(Contact.account_manager == sales_id_to_email[sales_id])
         else:
             # Try filtering by the ID as a string (in case account_manager stores ID)
-            query = query.filter(Contact.account_manager == str(sales_id)) 
+            query = query.filter(Contact.account_manager == str(sales_id))
     if tags:
         for tag in tags:
             tag_value = tag.strip()
@@ -6298,14 +6344,14 @@ async def get_contacts(
         if account_manager and not sales_id:
             # Direct email filter - handled in _apply_contact_filters via account_manager column
             pass
-        
+
         # Also support Range header if provided
         range_header = request.headers.get("Range")
         range_param = range or (range_header.split("=")[1] if range_header else None)
         start, end = _parse_range(range_param)
 
         query = db.query(Contact)
-        
+
         # Apply search filter
         if search_q:
             like = f"%{search_q.strip()}%"
@@ -6319,7 +6365,7 @@ async def get_contacts(
                     Contact.phone.ilike(like),
                 )
             )
-        
+
         query = _apply_contact_filters(
             query,
             tags,
@@ -6358,16 +6404,16 @@ async def get_contacts(
 def sync_contact_to_brevo_crm(contact: Contact) -> None:
     """Sync a contact to Brevo CRM and add to appropriate list based on contact_type."""
     try:
-        from brevo_service import BrevoService
         import requests
-        
+        from brevo_service import BrevoService
+
         brevo = BrevoService()
         if not brevo.enabled:
             return
-        
+
         if not contact.email:
             return  # Skip contacts without email
-        
+
         # Normalize names
         first_name = contact.first_name or ''
         last_name = contact.last_name or ''
@@ -6375,7 +6421,7 @@ def sync_contact_to_brevo_crm(contact: Contact) -> None:
             parts = first_name.split(' ', 1)
             first_name = parts[0]
             last_name = parts[1] if len(parts) > 1 else ''
-        
+
         contact_data = {
             'email': contact.email,
             'first_name': first_name,
@@ -6387,18 +6433,18 @@ def sync_contact_to_brevo_crm(contact: Contact) -> None:
             'status': contact.status or '',
             'source': contact.source or 'dashboard'
         }
-        
+
         # Sync to Brevo CRM
         result = brevo.sync_contact_to_crm(contact_data)
         if not result.get('success'):
             logger.warning(f"Failed to sync contact to Brevo: {result.get('error')}")
             return
-        
+
         # Add to appropriate Brevo list based on contact_type
         contact_type = (contact.contact_type or '').lower()
         target_list_name = None
         target_list_keywords = []
-        
+
         if contact_type == 'referral':
             # Business cards and referral sources → "Referral Source" list
             target_list_name = "Referral Source"
@@ -6408,7 +6454,7 @@ def sync_contact_to_brevo_crm(contact: Contact) -> None:
             target_list_name = "Client"
             target_list_keywords = ['client']
         # Employees don't go through this function (they're handled by GoFormz webhook only)
-        
+
         if target_list_name and target_list_keywords:
             # Find the list
             lists_result = brevo.get_lists()
@@ -6424,7 +6470,7 @@ def sync_contact_to_brevo_crm(contact: Contact) -> None:
                         elif contact_type == 'client' and 'referral' not in name_lower and 'caregiver' not in name_lower:
                             target_list_id = lst.get('id')
                             break
-                
+
                 # Add to list if found
                 if target_list_id:
                     list_response = requests.post(
@@ -6436,7 +6482,7 @@ def sync_contact_to_brevo_crm(contact: Contact) -> None:
                         logger.info(f"Added {contact.email} to Brevo {target_list_name} list")
                     else:
                         logger.warning(f"Failed to add {contact.email} to {target_list_name} list: {list_response.status_code}")
-        
+
         logger.info(f"Synced contact to Brevo CRM: {contact.email}")
     except Exception as e:
         logger.error(f"Error syncing contact to Brevo CRM: {str(e)}", exc_info=True)
@@ -6447,11 +6493,11 @@ def sync_company_to_brevo_crm(company: ReferralSource) -> None:
     """Sync a company to Brevo CRM in the background."""
     try:
         from brevo_service import BrevoService
-        
+
         brevo = BrevoService()
         if not brevo.enabled:
             return
-        
+
         company_data = {
             'name': company.name or company.organization or "Unknown Company",
             'email': company.email or '',
@@ -6463,7 +6509,7 @@ def sync_company_to_brevo_crm(company: ReferralSource) -> None:
             'source_type': company.source_type or '',
             'notes': company.notes or ''
         }
-        
+
         result = brevo.create_or_update_company(company_data)
         if result.get('success'):
             logger.info(f"Synced company to Brevo CRM: {company.name}")
@@ -6478,11 +6524,11 @@ def sync_deal_to_brevo_crm(deal: Deal) -> None:
     """Sync a deal to Brevo CRM in the background."""
     try:
         from brevo_service import BrevoService
-        
+
         brevo = BrevoService()
         if not brevo.enabled:
             return
-        
+
         deal_data = {
             'name': deal.name or f"Deal #{deal.id}",
             'amount': deal.amount or 0,
@@ -6490,7 +6536,7 @@ def sync_deal_to_brevo_crm(deal: Deal) -> None:
             'description': deal.description or '',
             'stage': deal.stage or 'opportunity'
         }
-        
+
         result = brevo.create_or_update_deal(deal_data)
         if result.get('success'):
             logger.info(f"Synced deal to Brevo CRM: {deal.name}")
@@ -6504,32 +6550,33 @@ def sync_deal_to_brevo_crm(deal: Deal) -> None:
 def send_welcome_email_to_new_client(contact: Contact) -> None:
     """Send welcome email to a contact who just became a client."""
     try:
-        from brevo_service import BrevoService
         import os
-        
+
+        from brevo_service import BrevoService
+
         # Only send if contact has email
         if not contact.email:
             return
-        
+
         # Load welcome email template
         template_path = os.path.join(os.path.dirname(__file__), "welcome_email_new_customer.html")
         if not os.path.exists(template_path):
             logger.warning(f"Welcome email template not found at {template_path}")
             return
-        
+
         with open(template_path, 'r', encoding='utf-8') as f:
             html_content = f.read()
-        
+
         # Replace template variables
         first_name = contact.first_name or contact.name or "Valued Client"
         html_content = html_content.replace("{{FIRSTNAME}}", first_name)
-        
+
         # Send via Brevo
         brevo = BrevoService()
         if not brevo.enabled:
             logger.warning("Brevo not configured, cannot send welcome email")
             return
-        
+
         result = brevo.send_transactional_email(
             to_email=contact.email,
             subject="Welcome to Colorado CareAssist",
@@ -6539,12 +6586,12 @@ def send_welcome_email_to_new_client(contact: Contact) -> None:
             to_name=contact.name or contact.first_name,
             reply_to="jason@coloradocareassist.com"
         )
-        
+
         if result.get("success"):
             logger.info(f"Sent welcome email to new client: {contact.email}")
         else:
             logger.error(f"Failed to send welcome email to {contact.email}: {result.get('error')}")
-            
+
     except Exception as e:
         logger.error(f"Error sending welcome email: {str(e)}", exc_info=True)
         # Don't fail the contact update if email send fails
@@ -6573,22 +6620,22 @@ async def create_contact(
     try:
         payload = await request.json()
         now = datetime.now(timezone.utc)
-        
+
         # Normalize first_name and last_name - split if first_name contains full name
         first_name = (payload.get("first_name") or "").strip()
         last_name = (payload.get("last_name") or "").strip()
-        
+
         # If first_name contains a space and last_name is empty, split it
         if first_name and ' ' in first_name and not last_name:
             parts = first_name.split(' ', 1)
             first_name = parts[0]
             last_name = parts[1] if len(parts) > 1 else ''
-        
+
         # Build full name from first_name/last_name if name not provided
         name = payload.get("name")
         if not name and (first_name or last_name):
             name = f"{first_name or ''} {last_name or ''}".strip()
-        
+
         contact_type = payload.get("contact_type")
         is_new_client = contact_type == "client"
 
@@ -6625,7 +6672,7 @@ async def create_contact(
         db.add(contact)
         db.commit()
         db.refresh(contact)
-        
+
         # Log to Portal
         await _log_portal_event(
             description=f"New contact: {contact.name}",
@@ -6633,19 +6680,19 @@ async def create_contact(
             details=f"Type: {contact.contact_type or 'Unknown'} | Company: {contact.company}",
             icon="👤"
         )
-        
+
         # Sync to Brevo CRM in background
         import threading
         thread = threading.Thread(target=sync_contact_to_brevo_crm, args=(contact,))
         thread.daemon = True
         thread.start()
-        
+
         # Send welcome email if contact is created as a client
         if is_new_client:
             thread = threading.Thread(target=send_welcome_email_to_new_client, args=(contact,))
             thread.daemon = True
             thread.start()
-        
+
         return JSONResponse(contact.to_dict(), status_code=status.HTTP_201_CREATED)
     except Exception as e:
         logger.error(f"Error creating contact: {str(e)}", exc_info=True)
@@ -6667,29 +6714,29 @@ async def update_contact(
 
     try:
         payload = await request.json()
-        
+
         # Track if contact_type changed to "client" (for welcome email automation)
         old_contact_type = contact.contact_type
         became_client = False
-        
+
         # Handle first_name and last_name separately with normalization
         if "first_name" in payload or "last_name" in payload:
             first = (payload.get("first_name", contact.first_name) or "").strip()
             last = (payload.get("last_name", contact.last_name) or "").strip()
-            
+
             # If first_name contains a space and last_name is empty, split it
             if first and ' ' in first and not last:
                 parts = first.split(' ', 1)
                 first = parts[0]
                 last = parts[1] if len(parts) > 1 else ''
-            
+
             contact.first_name = first
             contact.last_name = last
-            
+
             # Update full name if not explicitly provided
             if not payload.get("name"):
                 contact.name = f"{first} {last}".strip()
-        
+
         # Handle company_id - auto-populate company text if changing company
         if "company_id" in payload:
             new_company_id = payload.get("company_id")
@@ -6717,7 +6764,7 @@ async def update_contact(
         ]:
             if field in payload:
                 setattr(contact, field, payload.get(field))
-        
+
         # Check if contact just became a client
         if "contact_type" in payload:
             new_contact_type = payload.get("contact_type")
@@ -6734,19 +6781,19 @@ async def update_contact(
         db.add(contact)
         db.commit()
         db.refresh(contact)
-        
+
         # Sync to Brevo CRM in background
         import threading
         thread = threading.Thread(target=sync_contact_to_brevo_crm, args=(contact,))
         thread.daemon = True
         thread.start()
-        
+
         # Send welcome email if contact just became a client
         if became_client:
             thread = threading.Thread(target=send_welcome_email_to_new_client, args=(contact,))
             thread.daemon = True
             thread.start()
-        
+
         return JSONResponse(contact.to_dict())
     except Exception as e:
         logger.error(f"Error updating contact: {str(e)}", exc_info=True)
@@ -6761,8 +6808,7 @@ async def delete_contact(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Delete a contact and its related tasks."""
-    from models import ContactTask
-    
+
     contact = db.query(Contact).filter(Contact.id == contact_id).first()
     if not contact:
         raise HTTPException(status_code=404, detail="Contact not found")
@@ -6892,13 +6938,13 @@ async def create_deal(
         db.add(deal)
         db.commit()
         db.refresh(deal)
-        
+
         # Sync to Brevo CRM in background
         import threading
         thread = threading.Thread(target=sync_deal_to_brevo_crm, args=(deal,))
         thread.daemon = True
         thread.start()
-        
+
         return JSONResponse(deal.to_dict(), status_code=status.HTTP_201_CREATED)
     except Exception as e:
         logger.error(f"Error creating deal: {str(e)}", exc_info=True)
@@ -6918,7 +6964,7 @@ async def update_deal(
         raise HTTPException(status_code=404, detail="Deal not found")
     try:
         payload = await request.json()
-        
+
         # Capture old stage
         old_stage = deal.stage
 
@@ -6950,7 +6996,7 @@ async def update_deal(
         db.add(deal)
         db.commit()
         db.refresh(deal)
-        
+
         # Log stage changes to portal
         if payload.get("stage") and old_stage != deal.stage:
             icon = "📈"
@@ -6958,20 +7004,20 @@ async def update_deal(
                 icon = "🏆"
             elif deal.stage == "Closed Lost":
                 icon = "📉"
-            
+
             await _log_portal_event(
                 description=f"Deal Updated: {deal.name}",
                 event_type="deal_stage_change",
                 details=f"Stage: {old_stage} -> {deal.stage} | Amount: ${deal.amount or 0}",
                 icon=icon
             )
-        
+
         # Sync to Brevo CRM in background
         import threading
         thread = threading.Thread(target=sync_deal_to_brevo_crm, args=(deal,))
         thread.daemon = True
         thread.start()
-        
+
         return JSONResponse(deal.to_dict())
     except Exception as e:
         logger.error(f"Error updating deal: {str(e)}", exc_info=True)
@@ -6999,7 +7045,7 @@ async def delete_deal(
 
 @app.post("/api/sync-mailchimp-contacts")
 async def sync_mailchimp_contacts_endpoint(
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
     tag_filter: Optional[str] = Query(default=None, description="Filter by Mailchimp tag (e.g., 'Referral Source', 'Client')")
 ):
@@ -7011,28 +7057,28 @@ async def sync_mailchimp_contacts_endpoint(
     """
     try:
         from mailchimp_service import MailchimpService
-        
+
         mailchimp_service = MailchimpService()
-        
+
         if not mailchimp_service.enabled:
             return JSONResponse({
                 "success": False,
                 "error": "Mailchimp not configured"
             })
-        
+
         logger.info(f"Starting Mailchimp contacts sync (filter: {tag_filter})...")
-        
+
         # Use the new sync_from_mailchimp method with tag mapping
         result = mailchimp_service.sync_from_mailchimp(tag_filter=tag_filter)
-        
+
         if not result.get("success"):
             return JSONResponse({
                 "success": False,
                 "error": result.get("error", "Unknown error")
             })
-        
+
         mailchimp_contacts = result.get("contacts", [])
-        
+
         if not mailchimp_contacts:
             return JSONResponse({
                 "success": True,
@@ -7041,42 +7087,42 @@ async def sync_mailchimp_contacts_endpoint(
                 "updated": 0,
                 "skipped": 0
             })
-        
+
         # Check existing contacts by email
         existing_contacts = {c.email.lower(): c for c in db.query(Contact).filter(Contact.email.isnot(None)).all() if c.email}
-        
+
         added_count = 0
         updated_count = 0
         skipped_count = 0
-        
+
         for mc_contact in mailchimp_contacts:
             email = (mc_contact.get('email') or '').lower().strip()
             if not email:
                 skipped_count += 1
                 continue
-            
+
             first_name = mc_contact.get('first_name', '').strip()
             last_name = mc_contact.get('last_name', '').strip()
             name = mc_contact.get('name', '').strip() or f"{first_name} {last_name}".strip()
             if not name:
                 name = email.split('@')[0]
-            
+
             # Check if contact exists
             if email in existing_contacts:
                 # Update existing contact with Mailchimp data
                 existing = existing_contacts[email]
                 updated = False
-                
+
                 # Update contact_type if we got one from Mailchimp
                 if mc_contact.get('contact_type') and not existing.contact_type:
                     existing.contact_type = mc_contact['contact_type']
                     updated = True
-                
+
                 # Update status if we got one from Mailchimp
                 if mc_contact.get('status') and not existing.status:
                     existing.status = mc_contact['status']
                     updated = True
-                
+
                 # Merge tags
                 if mc_contact.get('tags'):
                     existing_tags = []
@@ -7085,11 +7131,11 @@ async def sync_mailchimp_contacts_endpoint(
                             existing_tags = json.loads(existing.tags)
                         except:
                             existing_tags = [t.strip() for t in existing.tags.split(',') if t.strip()]
-                    
+
                     new_tags = list(set(existing_tags + mc_contact['tags']))
                     existing.tags = json.dumps(new_tags)
                     updated = True
-                
+
                 if updated:
                     db.add(existing)
                     updated_count += 1
@@ -7102,7 +7148,7 @@ async def sync_mailchimp_contacts_endpoint(
                     if isinstance(val, dict):
                         return val.get('addr1', '') or ''
                     return str(val).strip() if val else ''
-                
+
                 contact = Contact(
                     name=name,
                     first_name=first_name or None,
@@ -7119,27 +7165,27 @@ async def sync_mailchimp_contacts_endpoint(
                     scanned_date=datetime.utcnow(),
                     created_at=datetime.utcnow()
                 )
-                
+
                 db.add(contact)
                 existing_contacts[email] = contact
                 added_count += 1
-        
+
         db.commit()
-        
+
         total_count = db.query(Contact).count()
-        
+
         logger.info(f"Mailchimp sync complete: Added {added_count}, Updated {updated_count}, Skipped {skipped_count}")
-        
+
         return JSONResponse({
             "success": True,
-            "message": f"Synced contacts from Mailchimp",
+            "message": "Synced contacts from Mailchimp",
             "added": added_count,
             "updated": updated_count,
             "skipped": skipped_count,
             "total": total_count,
             "filter": tag_filter
         })
-        
+
     except Exception as e:
         logger.error(f"Error syncing Mailchimp contacts: {str(e)}", exc_info=True)
         db.rollback()
@@ -7148,7 +7194,7 @@ async def sync_mailchimp_contacts_endpoint(
 
 @app.post("/api/sync-brevo-contacts")
 async def sync_brevo_contacts_endpoint(
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """
@@ -7157,28 +7203,28 @@ async def sync_brevo_contacts_endpoint(
     """
     try:
         from brevo_service import BrevoService
-        
+
         brevo_service = BrevoService()
-        
+
         if not brevo_service.enabled:
             return JSONResponse({
                 "success": False,
                 "error": "Brevo not configured. Add BREVO_API_KEY to environment."
             })
-        
+
         logger.info("Starting Brevo contacts sync...")
-        
+
         # Get all contacts from Brevo
         result = brevo_service.get_all_contacts(limit=5000)
-        
+
         if not result.get("success"):
             return JSONResponse({
                 "success": False,
                 "error": result.get("error", "Failed to fetch from Brevo")
             })
-        
+
         brevo_contacts = result.get("contacts", [])
-        
+
         if not brevo_contacts:
             return JSONResponse({
                 "success": True,
@@ -7187,28 +7233,28 @@ async def sync_brevo_contacts_endpoint(
                 "updated": 0,
                 "total": db.query(Contact).count()
             })
-        
+
         # Check existing contacts by email
         existing_contacts = {c.email.lower(): c for c in db.query(Contact).filter(Contact.email.isnot(None)).all() if c.email}
-        
+
         added_count = 0
         updated_count = 0
-        
+
         for bc in brevo_contacts:
             email = (bc.get('email') or '').lower().strip()
             if not email:
                 continue
-            
+
             attrs = bc.get('attributes', {})
             first_name = attrs.get('FIRSTNAME', '').strip()
             last_name = attrs.get('LASTNAME', '').strip()
             name = f"{first_name} {last_name}".strip() or email.split('@')[0]
-            
+
             if email in existing_contacts:
                 # Update existing contact
                 existing = existing_contacts[email]
                 updated = False
-                
+
                 if attrs.get('COMPANY') and not existing.company:
                     existing.company = attrs['COMPANY']
                     updated = True
@@ -7221,7 +7267,7 @@ async def sync_brevo_contacts_endpoint(
                 if attrs.get('SMS') and not existing.phone:
                     existing.phone = attrs['SMS']
                     updated = True
-                
+
                 if updated:
                     db.add(existing)
                     updated_count += 1
@@ -7242,17 +7288,17 @@ async def sync_brevo_contacts_endpoint(
                     scanned_date=datetime.utcnow(),
                     created_at=datetime.utcnow()
                 )
-                
+
                 db.add(contact)
                 existing_contacts[email] = contact
                 added_count += 1
-        
+
         db.commit()
-        
+
         total_count = db.query(Contact).count()
-        
+
         logger.info(f"Brevo sync complete: Added {added_count}, Updated {updated_count}")
-        
+
         return JSONResponse({
             "success": True,
             "message": f"Synced {len(brevo_contacts)} contacts from Brevo",
@@ -7260,7 +7306,7 @@ async def sync_brevo_contacts_endpoint(
             "updated": updated_count,
             "total": total_count
         })
-        
+
     except Exception as e:
         logger.error(f"Error syncing Brevo contacts: {str(e)}", exc_info=True)
         db.rollback()
@@ -7288,16 +7334,16 @@ async def get_brevo_lists(
     try:
         from brevo_service import BrevoService
         brevo = BrevoService()
-        
+
         if not brevo.enabled:
             return JSONResponse({
                 "success": False,
                 "error": "Brevo not configured"
             }, status_code=400)
-        
+
         result = brevo.get_lists()
         return result
-        
+
     except Exception as e:
         logger.error(f"Error getting Brevo lists: {str(e)}")
         return JSONResponse({
@@ -7315,17 +7361,17 @@ async def get_newsletter_template(
     try:
         import os
         template_path = os.path.join(os.path.dirname(__file__), template_name)
-        
+
         # Security: Only allow .html files in the root directory
         if not template_name.endswith('.html') or '/' in template_name or '\\' in template_name:
             raise HTTPException(status_code=400, detail="Invalid template name")
-        
+
         if not os.path.exists(template_path):
             raise HTTPException(status_code=404, detail=f"Template {template_name} not found")
-        
+
         with open(template_path, 'r', encoding='utf-8') as f:
             html_content = f.read()
-        
+
         return JSONResponse({
             "success": True,
             "html": html_content,
@@ -7354,18 +7400,19 @@ async def send_newsletter_to_list_endpoint(
         month: Month name for template variable
     """
     try:
-        from brevo_service import BrevoService
         import os
         from datetime import datetime
-        
+
+        from brevo_service import BrevoService
+
         brevo_service = BrevoService()
-        
+
         if not brevo_service.enabled:
             return JSONResponse({
                 "success": False,
                 "error": "Brevo not configured. Add BREVO_API_KEY to environment."
             }, status_code=400)
-        
+
         # Get or generate HTML content
         html_content = request.html_content
         if request.use_template and not html_content:
@@ -7373,7 +7420,7 @@ async def send_newsletter_to_list_endpoint(
             if os.path.exists(template_path):
                 with open(template_path, 'r', encoding='utf-8') as f:
                     html_content = f.read()
-                
+
                 # Replace template variables
                 month_str = request.month or datetime.now().strftime("%B %Y")
                 html_content = html_content.replace("{{MONTH}}", month_str)
@@ -7383,13 +7430,13 @@ async def send_newsletter_to_list_endpoint(
                     "success": False,
                     "error": "Newsletter template not found"
                 }, status_code=404)
-        
+
         if not html_content:
             return JSONResponse({
                 "success": False,
                 "error": "HTML content is required"
             }, status_code=400)
-        
+
         # Send newsletter
         result = brevo_service.send_newsletter_to_list(
             list_id=request.list_id,
@@ -7398,7 +7445,7 @@ async def send_newsletter_to_list_endpoint(
             sender_name="Colorado CareAssist",
             sender_email=None  # Will use account default
         )
-        
+
         if result.get("success"):
             return JSONResponse({
                 "success": True,
@@ -7413,7 +7460,7 @@ async def send_newsletter_to_list_endpoint(
                 "error": result.get("error", "Failed to send newsletter"),
                 "details": result
             }, status_code=500)
-            
+
     except Exception as e:
         logger.error(f"Error sending newsletter: {str(e)}")
         return JSONResponse({
@@ -7433,7 +7480,7 @@ async def sync_crm_to_brevo_endpoint(
     try:
         import subprocess
         import sys
-        
+
         # Run the sync script
         result = subprocess.run(
             [sys.executable, "sync_crm_bidirectional.py"],
@@ -7441,7 +7488,7 @@ async def sync_crm_to_brevo_endpoint(
             text=True,
             timeout=300  # 5 minute timeout
         )
-        
+
         if result.returncode == 0:
             return JSONResponse({
                 "success": True,
@@ -7454,7 +7501,7 @@ async def sync_crm_to_brevo_endpoint(
                 "error": "Sync script failed",
                 "output": result.stderr.splitlines()[-20:]
             }, status_code=500)
-            
+
     except subprocess.TimeoutExpired:
         return JSONResponse({
             "success": False,
@@ -7479,7 +7526,7 @@ async def sync_from_brevo_endpoint(
     try:
         import subprocess
         import sys
-        
+
         # Run the cleanup sync script
         result = subprocess.run(
             [sys.executable, "sync_from_brevo_to_dashboard.py"],
@@ -7487,7 +7534,7 @@ async def sync_from_brevo_endpoint(
             text=True,
             timeout=300  # 5 minute timeout
         )
-        
+
         if result.returncode == 0:
             return JSONResponse({
                 "success": True,
@@ -7500,7 +7547,7 @@ async def sync_from_brevo_endpoint(
                 "error": "Sync script failed",
                 "output": result.stderr.splitlines()[-20:]
             }, status_code=500)
-            
+
     except subprocess.TimeoutExpired:
         return JSONResponse({
             "success": False,
@@ -7526,14 +7573,14 @@ async def quickbooks_oauth_authorize(
         import os
         import secrets
         from urllib.parse import quote
-        
+
         client_id = os.getenv('QB_CLIENT_ID') or os.getenv('QUICKBOOKS_CLIENT_ID')
         if not client_id:
             return JSONResponse({
                 "success": False,
                 "error": "QuickBooks Client ID not configured"
             }, status_code=400)
-        
+
         # Generate a random state parameter for CSRF protection
         state = secrets.token_urlsafe(32)
 
@@ -7556,7 +7603,7 @@ async def quickbooks_oauth_authorize(
 
         redirect_uri = "https://portal.coloradocareassist.com/sales/api/quickbooks/oauth/callback"
         scope = "com.intuit.quickbooks.accounting"
-        
+
         auth_url = (
             f"https://appcenter.intuit.com/connect/oauth2?"
             f"client_id={client_id}&"
@@ -7565,9 +7612,9 @@ async def quickbooks_oauth_authorize(
             f"response_type=code&"
             f"state={state}"
         )
-        
+
         return RedirectResponse(url=auth_url)
-        
+
     except Exception as e:
         logger.error(f"Error initiating QuickBooks OAuth: {str(e)}", exc_info=True)
         return JSONResponse({
@@ -7590,6 +7637,7 @@ async def quickbooks_oauth_callback(
     """
     try:
         import os
+
         import requests
 
         # Validate CSRF state parameter
@@ -7633,7 +7681,7 @@ async def quickbooks_oauth_callback(
                     </body>
                 </html>
             """)
-        
+
         if not code:
             return HTMLResponse("""
                 <html>
@@ -7644,11 +7692,11 @@ async def quickbooks_oauth_callback(
                     </body>
                 </html>
             """)
-        
+
         client_id = os.getenv('QB_CLIENT_ID') or os.getenv('QUICKBOOKS_CLIENT_ID')
         client_secret = os.getenv('QB_CLIENT_SECRET') or os.getenv('QUICKBOOKS_CLIENT_SECRET')
         redirect_uri = "https://portal.coloradocareassist.com/sales/api/quickbooks/oauth/callback"
-        
+
         if not client_id or not client_secret:
             return HTMLResponse("""
                 <html>
@@ -7658,10 +7706,10 @@ async def quickbooks_oauth_callback(
                     </body>
                 </html>
             """)
-        
+
         # Exchange code for tokens
         token_url = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
-        
+
         response = requests.post(
             token_url,
             headers={
@@ -7675,7 +7723,7 @@ async def quickbooks_oauth_callback(
             },
             auth=(client_id, client_secret)
         )
-        
+
         if response.status_code != 200:
             return HTMLResponse(f"""
                 <html>
@@ -7687,15 +7735,15 @@ async def quickbooks_oauth_callback(
                     </body>
                 </html>
             """)
-        
+
         token_data = response.json()
         access_token = token_data.get('access_token')
         refresh_token = token_data.get('refresh_token')
         expires_in = token_data.get('expires_in', 3600)
-        
+
         # Store realmId if provided
         realm_id = realmId or os.getenv('QB_REALM_ID') or os.getenv('QUICKBOOKS_REALM_ID')
-        
+
         # Show success page with instructions to set environment variables
         return HTMLResponse(f"""
             <html>
@@ -7744,7 +7792,7 @@ mac-mini run "python3 -c 'from quickbooks_service import QuickBooksService; qb =
                 </body>
             </html>
         """)
-        
+
     except Exception as e:
         logger.error(f"Error in QuickBooks OAuth callback: {str(e)}", exc_info=True)
         return HTMLResponse(f"""
@@ -7786,7 +7834,7 @@ async def sync_quickbooks_to_brevo_endpoint(
     try:
         import subprocess
         import sys
-        
+
         # Run the sync script
         result = subprocess.run(
             [sys.executable, "sync_quickbooks_to_brevo.py"],
@@ -7794,7 +7842,7 @@ async def sync_quickbooks_to_brevo_endpoint(
             text=True,
             timeout=300  # 5 minute timeout
         )
-        
+
         if result.returncode == 0:
             return JSONResponse({
                 "success": True,
@@ -7807,7 +7855,7 @@ async def sync_quickbooks_to_brevo_endpoint(
                 "error": "Sync script failed",
                 "output": result.stderr.splitlines()[-30:]
             }, status_code=500)
-            
+
     except subprocess.TimeoutExpired:
         return JSONResponse({
             "success": False,
@@ -7850,7 +7898,7 @@ async def sync_goformz_to_brevo_endpoint(
     try:
         import subprocess
         import sys
-        
+
         # Run the sync script
         result = subprocess.run(
             [sys.executable, "sync_goformz_to_brevo.py", "--since-hours", str(since_hours)],
@@ -7858,7 +7906,7 @@ async def sync_goformz_to_brevo_endpoint(
             text=True,
             timeout=300  # 5 minute timeout
         )
-        
+
         if result.returncode == 0:
             return JSONResponse({
                 "success": True,
@@ -7871,7 +7919,7 @@ async def sync_goformz_to_brevo_endpoint(
                 "error": "Sync script failed",
                 "output": result.stderr.splitlines()[-30:]
             }, status_code=500)
-            
+
     except subprocess.TimeoutExpired:
         return JSONResponse({
             "success": False,
@@ -7892,43 +7940,43 @@ async def goformz_webhook(request: Request):
     Handles both Client Packets (adds to dashboard + Brevo) and Employee Packets (Brevo only).
     """
     try:
-        from goformz_service import GoFormzService
-        from brevo_service import BrevoService
         import requests
-        
+        from brevo_service import BrevoService
+        from goformz_service import GoFormzService
+
         payload = await request.json()
-        
+
         # Log the full payload for debugging
         logger.info(f"GoFormz webhook received: {json.dumps(payload, indent=2)}")
-        
+
         # GoFormz webhook payload structure: EventType, EntityId, Timestamp, Item {Id, Url, Recompleted}
         event_type = payload.get('EventType', '').lower() or payload.get('event', '').lower() or payload.get('eventType', '').lower()
-        
+
         # Check if this is a form completion event
         if event_type not in ['form.complete', 'completed', 'submitted', 'signed']:
             logger.info(f"GoFormz webhook - Ignoring: event type '{event_type}' not a completion")
             return JSONResponse({"success": True, "message": f"Event type '{event_type}' not a completion"})
-        
+
         # Extract submission/item info
         item = payload.get('Item', {})
         submission_id = item.get('Id') or payload.get('submissionId') or payload.get('submission_id')
         form_url = item.get('Url')  # API endpoint to fetch form details
-        
+
         if not submission_id:
             return JSONResponse({"success": False, "error": "No submission ID in webhook"})
-        
+
         logger.info(f"GoFormz webhook - Event: '{event_type}', Submission ID: '{submission_id}', Form URL: '{form_url}'")
-        
+
         goformz = GoFormzService()
         brevo = BrevoService()
-        
+
         if not goformz.enabled or not brevo.enabled:
             return JSONResponse({"success": False, "error": "GoFormz or Brevo not configured"})
-        
+
         # Fetch form details from GoFormz API
         form_data = {}
         form_name = ""
-        
+
         # Strategy 1: Map EntityId to form type (if known)
         # This is a fallback if we can't fetch from API
         entity_id = payload.get('EntityId')
@@ -7936,11 +7984,11 @@ async def goformz_webhook(request: Request):
             'c2d547ca-df85-42c3-89ed-a3f44e3d1bd8': 'client packet',  # Client Packet template ID
             '9c0fa30f-87d4-4e41-b3ea-e0b69fddabb5': 'employee packet',  # Employee Packet template ID
         }
-        
+
         if entity_id in entity_id_to_form_type:
             form_name = entity_id_to_form_type[entity_id]
             logger.info(f"Mapped EntityId {entity_id} to form type: '{form_name}'")
-        
+
         # Strategy 1b: Try to get template name from EntityId via API (if mapping didn't work)
         if not form_name and entity_id:
             try:
@@ -7959,13 +8007,13 @@ async def goformz_webhook(request: Request):
                     logger.warning(f"Failed to get template from EntityId: {template_response.status_code} - {template_response.text[:200]}")
             except Exception as e:
                 logger.warning(f"Failed to get template name from EntityId: {str(e)}", exc_info=True)
-        
+
         # Strategy 1c: Check if GoFormz workflow added form name to payload
         if not form_name:
             form_name = (payload.get('formName', '') or payload.get('FormName', '') or payload.get('templateName', '') or '').lower()
             if form_name:
                 logger.info(f"Got form name from webhook payload: '{form_name}'")
-        
+
         # Strategy 2: Try to fetch submission data using submission ID via v1 API
         if submission_id:
             try:
@@ -7977,23 +8025,23 @@ async def goformz_webhook(request: Request):
                 if submission_response.status_code == 200:
                     submission_data = submission_response.json()
                     logger.info(f"Fetched submission from GoFormz v1 API: {json.dumps(submission_data, indent=2)[:500]}")
-                    
+
                     # Extract form name if we don't have it yet
                     if not form_name:
                         form_name = (submission_data.get('formName', '') or submission_data.get('FormName', '') or submission_data.get('templateName', '') or '').lower()
-                    
+
                     # Extract form data (fields/values)
                     # GoFormz submission structure may have data, fields, or formData
                     form_data = (
-                        submission_data.get('data', {}) or 
-                        submission_data.get('Data', {}) or 
-                        submission_data.get('formData', {}) or 
-                        submission_data.get('FormData', {}) or 
-                        submission_data.get('fields', {}) or 
-                        submission_data.get('Fields', {}) or 
+                        submission_data.get('data', {}) or
+                        submission_data.get('Data', {}) or
+                        submission_data.get('formData', {}) or
+                        submission_data.get('FormData', {}) or
+                        submission_data.get('fields', {}) or
+                        submission_data.get('Fields', {}) or
                         {}
                     )
-                    
+
                     # If form_data is a list, convert to dict
                     if isinstance(form_data, list):
                         form_data = {item.get('Name', item.get('name', '')): item.get('Value', item.get('value', '')) for item in form_data if isinstance(item, dict)}
@@ -8001,7 +8049,7 @@ async def goformz_webhook(request: Request):
                     logger.warning(f"Failed to fetch submission from GoFormz v1 API: {submission_response.status_code} - {submission_response.text[:200]}")
             except Exception as e:
                 logger.warning(f"Error fetching submission from GoFormz v1 API: {str(e)}")
-        
+
         # Strategy 3: Try the v2 URL provided by GoFormz (may require different auth)
         if not form_data and form_url:
             try:
@@ -8010,11 +8058,11 @@ async def goformz_webhook(request: Request):
                 if response.status_code == 200:
                     form_details = response.json()
                     logger.info(f"Fetched form details from GoFormz v2 URL: {json.dumps(form_details, indent=2)[:500]}")
-                    
+
                     # Extract form name if we don't have it yet
                     if not form_name:
                         form_name = (form_details.get('Name', '') or form_details.get('name', '') or '').lower()
-                    
+
                     # Extract form data - GoFormz v2 API structure
                     if not form_data:
                         # Try different possible locations for form data
@@ -8027,11 +8075,11 @@ async def goformz_webhook(request: Request):
                             form_details.get('FormData', {}) or
                             {}
                         )
-                        
+
                         # If it's a list, convert to dict
                         if isinstance(form_data, list):
                             form_data = {item.get('Name', item.get('name', '')): item.get('Value', item.get('value', item.get('text', ''))) for item in form_data if isinstance(item, dict)}
-                        
+
                         # Log the structure for debugging
                         logger.info(f"Form data structure - type: {type(form_data)}, keys: {list(form_data.keys())[:10] if isinstance(form_data, dict) else 'not a dict'}")
                         if isinstance(form_data, dict) and 'ClientEmail' in form_data:
@@ -8040,18 +8088,18 @@ async def goformz_webhook(request: Request):
                     logger.warning(f"Failed to fetch form from GoFormz v2 URL: {response.status_code} - {response.text[:200]}")
             except Exception as e:
                 logger.warning(f"Error fetching form details from GoFormz v2 URL: {str(e)}")
-        
+
         logger.info(f"GoFormz webhook - Form name: '{form_name}'")
-        
+
         # Determine form type from form name
         is_client_packet = 'client packet' in form_name
         is_employee_packet = 'employee packet' in form_name or ('employee' in form_name and 'packet' in form_name)
-        
+
         # Only process Client Packet or Employee Packet completions
         if not is_client_packet and not is_employee_packet:
             logger.info(f"GoFormz webhook - Ignoring: form name '{form_name}' doesn't match Client or Employee Packet")
             return JSONResponse({"success": True, "message": "Not a Client or Employee Packet, ignoring"})
-        
+
         # Extract contact data from form_data
         # GoFormz form data structure: fields can be in various formats
         # Sometimes values are nested dicts with 'value' or 'Value' keys
@@ -8063,11 +8111,11 @@ async def goformz_webhook(request: Request):
                 # Try common nested value keys
                 return field_value.get('value') or field_value.get('Value') or field_value.get('text') or field_value.get('Text') or ''
             return ''
-        
+
         email = ''
         first_name = ''
         last_name = ''
-        
+
         # Try multiple ways to extract email
         if isinstance(form_data, dict):
             # Common email field names in GoFormz Client Packet
@@ -8083,13 +8131,13 @@ async def goformz_webhook(request: Request):
                 form_data.get('email_address'),
                 form_data.get('Email Address'),
             ]
-            
+
             for candidate in email_candidates:
                 if candidate:
                     email = extract_value(candidate)
                     if email and '@' in email and '.' in email:
                         break
-            
+
             if not email:
                 # Try looking for email in nested structures or any field containing "email"
                 for key, value in form_data.items():
@@ -8099,13 +8147,13 @@ async def goformz_webhook(request: Request):
                             email = extracted
                             logger.info(f"Found email in field '{key}': {email}")
                             break
-        
+
         email = email.strip().lower() if email and isinstance(email, str) else ''
-        
+
         if not email:
             logger.warning(f"No email found in form data. Form data keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'not a dict'}")
             return JSONResponse({"success": False, "error": "No email in submission"})
-        
+
         # Extract first name and last name
         # Client Packet uses: ClientName
         # Employee Packet uses: EmpFN (first name) and EmpLN (last name) or Employee Name
@@ -8126,7 +8174,7 @@ async def goformz_webhook(request: Request):
                         if first_name and isinstance(first_name, str):
                             first_name = first_name.strip()
                             break
-            
+
             if not last_name:
                 last_name_candidates = [
                     form_data.get('EmpLN'),
@@ -8141,7 +8189,7 @@ async def goformz_webhook(request: Request):
                         if last_name and isinstance(last_name, str):
                             last_name = last_name.strip()
                             break
-            
+
             # If we don't have name yet, try ClientName field (Client Packet format)
             if not first_name and not last_name:
                 client_name_candidates = [
@@ -8153,13 +8201,13 @@ async def goformz_webhook(request: Request):
                     form_data.get('Name'),
                     form_data.get('name'),
                 ]
-                
+
                 for candidate in client_name_candidates:
                     if candidate:
                         client_name = extract_value(candidate)
                         if client_name:
                             break
-            
+
             if client_name and isinstance(client_name, str):
                 client_name = client_name.strip()
                 if client_name:
@@ -8167,7 +8215,7 @@ async def goformz_webhook(request: Request):
                     name_parts = client_name.split(' ', 1)
                     first_name = name_parts[0] if name_parts else ''
                     last_name = name_parts[1] if len(name_parts) > 1 else ''
-            
+
             if not first_name and not last_name:
                 # Fallback to separate first/last name fields
                 first_name_candidates = [
@@ -8183,7 +8231,7 @@ async def goformz_webhook(request: Request):
                         if first_name and isinstance(first_name, str):
                             first_name = first_name.strip()
                             break
-                
+
                 last_name_candidates = [
                     form_data.get('last_name'),
                     form_data.get('Last Name'),
@@ -8197,9 +8245,9 @@ async def goformz_webhook(request: Request):
                         if last_name and isinstance(last_name, str):
                             last_name = last_name.strip()
                             break
-        
+
         logger.info(f"Extracted contact data - Email: '{email}', First: '{first_name}', Last: '{last_name}'")
-        
+
         # Build contact data and handle routing
         if is_client_packet:
             # CLIENT PACKET: Add to Brevo "Client" list AND create portal contact
@@ -8233,33 +8281,33 @@ async def goformz_webhook(request: Request):
             exclude_keywords = ['client', 'referral', 'employee']
             success_message_prefix = "Employee"
             create_portal_contact = False
-        
+
         # Add to Brevo
         result = brevo.add_contact(contact_data)
-        
+
         if not result.get('success'):
             return JSONResponse({
                 "success": False,
                 "error": f"Failed to add to Brevo: {result.get('error')}"
             })
-        
+
         # Find or create the appropriate list
         lists_result = brevo.get_lists()
         if lists_result.get('success'):
             target_list_id = None
-            
+
             # First, try to find existing list
             for lst in lists_result.get('lists', []):
                 name_lower = lst.get('name', '').lower()
                 # Check if list matches our keywords and doesn't match exclude keywords
                 matches = any(keyword in name_lower for keyword in target_list_keywords)
                 excludes = any(keyword in name_lower for keyword in exclude_keywords)
-                
+
                 if matches and not excludes:
                     target_list_id = lst.get('id')
                     logger.info(f"Found {target_list_name} list: ID {target_list_id}")
                     break
-            
+
             # If not found, create it
             if not target_list_id:
                 create_result = brevo.create_list(target_list_name)
@@ -8268,7 +8316,7 @@ async def goformz_webhook(request: Request):
                     logger.info(f"Created {target_list_name} list: ID {target_list_id}")
                 else:
                     logger.warning(f"Failed to create {target_list_name} list: {create_result.get('error')}")
-            
+
             # Add to the appropriate list
             if target_list_id:
                 list_response = requests.post(
@@ -8276,19 +8324,19 @@ async def goformz_webhook(request: Request):
                     headers=brevo._get_headers(),
                     json={"emails": [email]}
                 )
-                
+
                 if list_response.status_code in (200, 201, 204):
                     logger.info(f"Added {email} to Brevo {target_list_name} list via GoFormz webhook")
-                    
+
                     # For Client Packets: Also create portal contact
                     if create_portal_contact:
                         try:
                             from database import db_manager
                             db = db_manager.SessionLocal()
-                            
+
                             # Check if contact already exists
                             existing_contact = db.query(Contact).filter(Contact.email == email).first()
-                            
+
                             if not existing_contact:
                                 new_contact = Contact(
                                     first_name=first_name,
@@ -8305,14 +8353,14 @@ async def goformz_webhook(request: Request):
                                 db.add(new_contact)
                                 db.commit()
                                 logger.info(f"Created portal contact for {email}")
-                                
+
                                 # Send welcome email
                                 import threading
                                 welcome_thread = threading.Thread(target=send_welcome_email_to_new_client, args=(new_contact,))
                                 welcome_thread.daemon = True
                                 welcome_thread.start()
                                 logger.info(f"Triggered welcome email for {email}")
-                                
+
                                 # Sync to Brevo CRM (already in list, but ensure CRM sync)
                                 crm_thread = threading.Thread(target=sync_contact_to_brevo_crm, args=(new_contact,))
                                 crm_thread.daemon = True
@@ -8324,7 +8372,7 @@ async def goformz_webhook(request: Request):
                                     existing_contact.updated_at = datetime.utcnow()
                                     db.commit()
                                     logger.info(f"Updated existing contact {email} to client type")
-                                
+
                                 # Always send welcome email when Client Packet is completed
                                 # (even if contact already exists as client - they just completed the packet!)
                                 import threading
@@ -8332,27 +8380,27 @@ async def goformz_webhook(request: Request):
                                 welcome_thread.daemon = True
                                 welcome_thread.start()
                                 logger.info(f"Triggered welcome email for client {email} (Client Packet completed)")
-                            
+
                             db.close()
                         except Exception as e:
                             logger.error(f"Error creating portal contact for {email}: {str(e)}", exc_info=True)
                             # Don't fail the webhook if portal contact creation fails
-                    
+
                     if is_client_packet:
                         message = f"{success_message_prefix} {email} added to Brevo {target_list_name} list - welcome email will be sent"
                     else:  # Employee Packet
                         message = f"{success_message_prefix} {email} added to Brevo {target_list_name} list - Brevo automation will send welcome email"
-                    
+
                     return JSONResponse({
                         "success": True,
                         "message": message
                     })
-        
+
         return JSONResponse({
             "success": True,
             "message": f"Contact added to Brevo, but failed to add to {target_list_name} list"
         })
-        
+
     except Exception as e:
         logger.error(f"Error processing GoFormz webhook: {str(e)}", exc_info=True)
         return JSONResponse({
@@ -8371,22 +8419,22 @@ async def test_welcome_email(
     try:
         from database import db_manager
         db = db_manager.SessionLocal()
-        
+
         contact = db.query(Contact).filter(Contact.email == email).first()
         if not contact:
             return JSONResponse({
                 "success": False,
                 "error": f"Contact with email {email} not found"
             }, status_code=404)
-        
+
         # Send welcome email
         import threading
         welcome_thread = threading.Thread(target=send_welcome_email_to_new_client, args=(contact,))
         welcome_thread.daemon = True
         welcome_thread.start()
-        
+
         db.close()
-        
+
         return JSONResponse({
             "success": True,
             "message": f"Welcome email triggered for {email}"
@@ -8413,17 +8461,17 @@ async def cleanup_gmail_from_referrals_endpoint(
         dry_run: If True, only previews what would be removed (default: True)
     """
     try:
-        from brevo_service import BrevoService
         import requests
-        
+        from brevo_service import BrevoService
+
         brevo = BrevoService()
-        
+
         if not brevo.enabled:
             return JSONResponse({
                 "success": False,
                 "error": "Brevo not configured"
             }, status_code=400)
-        
+
         # Find the referral source list
         lists_result = brevo.get_lists()
         if not lists_result.get('success'):
@@ -8431,9 +8479,9 @@ async def cleanup_gmail_from_referrals_endpoint(
                 "success": False,
                 "error": f"Failed to get lists: {lists_result.get('error')}"
             }, status_code=500)
-        
+
         lists = lists_result.get('lists', [])
-        
+
         if list_id:
             target_list = next((lst for lst in lists if lst.get('id') == list_id), None)
             if not target_list:
@@ -8444,7 +8492,7 @@ async def cleanup_gmail_from_referrals_endpoint(
         else:
             # Find referral source list
             referral_lists = [
-                lst for lst in lists 
+                lst for lst in lists
                 if 'referral' in lst.get('name', '').lower()
             ]
             if not referral_lists:
@@ -8452,61 +8500,61 @@ async def cleanup_gmail_from_referrals_endpoint(
                     "success": False,
                     "error": "No referral source list found"
                 }, status_code=404)
-            
+
             target_list = referral_lists[0]
             for lst in referral_lists:
                 if 'referral source' in lst.get('name', '').lower():
                     target_list = lst
                     break
-        
+
         list_id = target_list.get('id')
         list_name = target_list.get('name')
-        
+
         # Get all contacts from the list
         all_contacts = []
         offset = 0
         limit_per_request = 50
-        
+
         while True:
             response = requests.get(
                 f"{brevo.base_url}/contacts/lists/{list_id}/contacts",
                 headers=brevo._get_headers(),
                 params={"limit": limit_per_request, "offset": offset}
             )
-            
+
             if response.status_code != 200:
                 return JSONResponse({
                     "success": False,
                     "error": f"Failed to get contacts: {response.status_code}"
                 }, status_code=500)
-            
+
             data = response.json()
             contacts_batch = data.get('contacts', [])
             all_contacts.extend(contacts_batch)
-            
+
             if len(contacts_batch) < limit_per_request:
                 break
-            
+
             offset += limit_per_request
-        
+
         # Filter for Gmail addresses
         gmail_contacts = []
         for contact in all_contacts:
             email = contact.get('email', '').strip().lower()
             if email.endswith('@gmail.com') or email.endswith('@googlemail.com'):
                 gmail_contacts.append(contact)
-        
+
         gmail_emails = [c.get('email') for c in gmail_contacts]
         gmail_details = [
             {
                 "email": c.get('email'),
-                "name": c.get('attributes', {}).get('FIRSTNAME', '') or 
-                        c.get('attributes', {}).get('LASTNAME', '') or 
+                "name": c.get('attributes', {}).get('FIRSTNAME', '') or
+                        c.get('attributes', {}).get('LASTNAME', '') or
                         c.get('email', '')
             }
             for c in gmail_contacts
         ]
-        
+
         result = {
             "success": True,
             "list_id": list_id,
@@ -8517,7 +8565,7 @@ async def cleanup_gmail_from_referrals_endpoint(
             "gmail_details": gmail_details[:100],
             "dry_run": dry_run
         }
-        
+
         # If not dry run, actually remove them
         if not dry_run:
             if not gmail_emails:
@@ -8525,32 +8573,32 @@ async def cleanup_gmail_from_referrals_endpoint(
                     **result,
                     "message": "No Gmail addresses found to remove"
                 })
-            
+
             # Remove in batches
             batch_size = 50
             total_removed = 0
             errors = []
-            
+
             for i in range(0, len(gmail_emails), batch_size):
                 batch = gmail_emails[i:i+batch_size]
-                
+
                 batch_response = requests.post(
                     f"{brevo.base_url}/contacts/lists/{list_id}/contacts/remove",
                     headers=brevo._get_headers(),
                     json={"emails": batch}
                 )
-                
+
                 if batch_response.status_code in (200, 201, 204):
                     total_removed += len(batch)
                 else:
                     errors.append(f"Batch {i//batch_size + 1}: {batch_response.status_code}")
-            
+
             result["removed"] = total_removed
             result["errors"] = errors if errors else None
             result["message"] = f"Removed {total_removed} Gmail contacts from '{list_name}'"
-        
+
         return JSONResponse(result)
-        
+
     except Exception as e:
         logger.error(f"Error cleaning up Gmail from referrals: {str(e)}", exc_info=True)
         return JSONResponse({
@@ -8572,51 +8620,51 @@ async def push_contacts_to_brevo(
     """
     try:
         from brevo_service import BrevoService
-        
+
         brevo_service = BrevoService()
-        
+
         if not brevo_service.enabled:
             return JSONResponse({
                 "success": False,
                 "error": "Brevo not configured. Add BREVO_API_KEY to environment."
             })
-        
+
         # Build query for contacts to push
         query = db.query(Contact).filter(
             Contact.email.isnot(None),
             Contact.email != ''
         )
-        
+
         if contact_type_filter:
             query = query.filter(Contact.contact_type == contact_type_filter)
-        
+
         if source_filter:
             query = query.filter(Contact.source == source_filter)
-        
+
         contacts = query.all()
-        
+
         # Filter for quality contacts
         quality_contacts = []
         for c in contacts:
             email = (c.email or '').strip().lower()
             name = (c.name or '').strip()
-            
+
             # Skip garbage
             if len(email) < 5 or '@' not in email:
                 continue
-            
+
             # Check if name is just email prefix (garbage)
             email_prefix = email.split('@')[0].lower()
             name_is_garbage = not name or len(name) <= 2 or name.lower().replace(' ', '') == email_prefix
-            
+
             # Must have either a real name OR a company
             if name_is_garbage and not c.company:
                 continue
-            
+
             # Get first/last name - properly split if needed
             first_name = c.first_name or ''
             last_name = c.last_name or ''
-            
+
             # If first_name contains a space, it's likely a full name - split it
             if first_name and ' ' in first_name.strip():
                 parts = first_name.strip().split(' ', 1)
@@ -8627,7 +8675,7 @@ async def push_contacts_to_brevo(
                 parts = name.strip().split(' ', 1)
                 first_name = parts[0]
                 last_name = parts[1] if len(parts) > 1 else (last_name or '')
-            
+
             quality_contacts.append({
                 'email': email,
                 'first_name': first_name or '',
@@ -8639,7 +8687,7 @@ async def push_contacts_to_brevo(
                 'status': c.status or '',
                 'source': c.source or 'dashboard'
             })
-        
+
         if not quality_contacts:
             return JSONResponse({
                 "success": True,
@@ -8647,7 +8695,7 @@ async def push_contacts_to_brevo(
                 "pushed": 0,
                 "filtered_out": len(contacts)
             })
-        
+
         # Ensure we have a list to add to
         lists_result = brevo_service.get_lists()
         list_id = None
@@ -8656,16 +8704,16 @@ async def push_contacts_to_brevo(
                 if 'contact' in lst['name'].lower() or 'all' in lst['name'].lower():
                     list_id = lst['id']
                     break
-        
+
         if not list_id:
             create_result = brevo_service.create_list("Dashboard Contacts")
             if create_result.get('success'):
                 list_id = create_result.get('list_id')
-        
+
         logger.info(f"Pushing {len(quality_contacts)} contacts to Brevo (list_id: {list_id})...")
-        
+
         result = brevo_service.bulk_import_contacts(quality_contacts, list_id=list_id)
-        
+
         if result.get('success'):
             return JSONResponse({
                 "success": True,
@@ -8680,7 +8728,7 @@ async def push_contacts_to_brevo(
                 "error": result.get('error', 'Unknown error'),
                 "errors": result.get('errors')
             })
-        
+
     except Exception as e:
         logger.error(f"Error pushing to Brevo: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error pushing contacts: {str(e)}")
@@ -8701,25 +8749,25 @@ async def export_contacts_to_mailchimp(
     """
     try:
         from mailchimp_service import MailchimpService
-        
+
         mailchimp_service = MailchimpService()
-        
+
         if not mailchimp_service.enabled:
             return JSONResponse({
                 "success": False,
                 "error": "Mailchimp not configured"
             })
-        
+
         # Build query
         query = db.query(Contact).filter(Contact.email.isnot(None))
-        
+
         if contact_type_filter:
             query = query.filter(Contact.contact_type == contact_type_filter)
         if status_filter:
             query = query.filter(Contact.status == status_filter)
-        
+
         contacts = query.all()
-        
+
         if not contacts:
             return JSONResponse({
                 "success": True,
@@ -8727,11 +8775,11 @@ async def export_contacts_to_mailchimp(
                 "exported": 0,
                 "failed": 0
             })
-        
+
         exported_count = 0
         failed_count = 0
         errors = []
-        
+
         for contact in contacts:
             # Build contact info for Mailchimp
             contact_info = {
@@ -8746,17 +8794,17 @@ async def export_contacts_to_mailchimp(
                 'status': contact.status,
                 'tags': json.loads(contact.tags) if contact.tags else []
             }
-            
+
             result = mailchimp_service.add_contact(contact_info)
-            
+
             if result.get('success'):
                 exported_count += 1
             else:
                 failed_count += 1
                 errors.append(f"{contact.email}: {result.get('error', 'Unknown error')}")
-        
+
         logger.info(f"Mailchimp export complete: Exported {exported_count}, Failed {failed_count}")
-        
+
         return JSONResponse({
             "success": True,
             "message": f"Exported {exported_count} contacts to Mailchimp",
@@ -8768,7 +8816,7 @@ async def export_contacts_to_mailchimp(
                 "status": status_filter
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Error exporting to Mailchimp: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error exporting contacts: {str(e)}")
@@ -8778,15 +8826,15 @@ async def sync_gmail_emails_endpoint(db: Session = Depends(get_db), current_user
     """Sync email count from Gmail API (emails sent in last 7 days)"""
     try:
         from gmail_service import GmailService
-        
+
         gmail_service = GmailService()
-        
+
         if not gmail_service.enabled:
             return JSONResponse({
                 "success": False,
                 "error": "Gmail not configured. Set GMAIL_SERVICE_ACCOUNT_EMAIL and GMAIL_SERVICE_ACCOUNT_KEY"
             })
-        
+
         logger.info("Starting Gmail email count sync...")
         counts_result = gmail_service.get_emails_sent_last_7_days()
         total_count = counts_result.get("total", 0)
@@ -8794,10 +8842,10 @@ async def sync_gmail_emails_endpoint(db: Session = Depends(get_db), current_user
         user_summary = ", ".join(
             f"{email} ({count})" for email, count in per_user_counts.items()
         ) or ", ".join(gmail_service.user_emails)
-        
+
         # Get or create email count record
         email_count = db.query(EmailCount).order_by(EmailCount.updated_at.desc()).first()
-        
+
         if not email_count:
             email_count = EmailCount(
                 emails_sent_7_days=total_count,
@@ -8811,16 +8859,16 @@ async def sync_gmail_emails_endpoint(db: Session = Depends(get_db), current_user
             email_count.user_email = user_summary
             email_count.last_synced = datetime.utcnow()
             logger.info("Updated existing email count record")
-        
+
         db.commit()
         db.refresh(email_count)
-        
+
         logger.info(
             "Gmail sync complete: %s emails sent in last 7 days (%s)",
             total_count,
             user_summary,
         )
-        
+
         return JSONResponse({
             "success": True,
             "message": f"Synced {total_count} emails sent in last 7 days",
@@ -8828,7 +8876,7 @@ async def sync_gmail_emails_endpoint(db: Session = Depends(get_db), current_user
             "user_summary": user_summary,
             "per_user": per_user_counts
         })
-        
+
     except Exception as e:
         logger.error(f"Error syncing Gmail emails: {str(e)}", exc_info=True)
         db.rollback()
@@ -8838,11 +8886,12 @@ async def sync_gmail_emails_endpoint(db: Session = Depends(get_db), current_user
 async def sync_dashboard_summary_endpoint(db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
     """One-time sync of dashboard summary values from Google Sheet Dashboard tab (B21, B22, B23)"""
     try:
-        import gspread
-        from google.oauth2.service_account import Credentials
         import json
         import os
-        
+
+        import gspread
+        from google.oauth2.service_account import Credentials
+
         # Get credentials
         creds_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_KEY')
         if not creds_json:
@@ -8850,7 +8899,7 @@ async def sync_dashboard_summary_endpoint(db: Session = Depends(get_db), current
                 "success": False,
                 "error": "Google Sheets not configured"
             })
-        
+
         creds_dict = json.loads(creds_json)
         creds = Credentials.from_service_account_info(creds_dict, scopes=[
             'https://www.googleapis.com/auth/spreadsheets',
@@ -8859,22 +8908,22 @@ async def sync_dashboard_summary_endpoint(db: Session = Depends(get_db), current
         client = gspread.authorize(creds)
         spreadsheet = client.open_by_key(os.getenv('SHEET_ID'))
         dashboard_worksheet = spreadsheet.worksheet('Dashboard')
-        
+
         logger.info("Reading dashboard summary values from Google Sheet...")
-        
+
         # Read cells B21, B22, B23
         value_b21 = dashboard_worksheet.cell(21, 2).value  # Total Hours
         value_b22 = dashboard_worksheet.cell(22, 2).value  # Total Costs
         value_b23 = dashboard_worksheet.cell(23, 2).value  # Total Bonuses
-        
+
         # Parse values
         total_hours = float(str(value_b21).replace(',', '').strip()) if value_b21 else 0.0
         total_costs = float(str(value_b22).replace('$', '').replace(',', '').strip()) if value_b22 else 0.0
         total_bonuses = float(str(value_b23).replace('$', '').replace(',', '').strip()) if value_b23 else 0.0
-        
+
         # Get or create dashboard summary record
         summary = db.query(DashboardSummary).order_by(DashboardSummary.updated_at.desc()).first()
-        
+
         if not summary:
             summary = DashboardSummary(
                 total_hours=total_hours,
@@ -8888,11 +8937,11 @@ async def sync_dashboard_summary_endpoint(db: Session = Depends(get_db), current
             summary.total_costs = total_costs
             summary.total_bonuses = total_bonuses
             summary.last_synced = datetime.utcnow()
-        
+
         db.commit()
-        
+
         logger.info(f"Dashboard summary synced: Hours={total_hours}, Costs={total_costs}, Bonuses={total_bonuses}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Dashboard summary synced successfully",
@@ -8903,7 +8952,7 @@ async def sync_dashboard_summary_endpoint(db: Session = Depends(get_db), current
                 "last_synced": summary.last_synced.isoformat()
             }
         })
-        
+
     except Exception as e:
         logger.error(f"Error syncing dashboard summary: {str(e)}", exc_info=True)
         db.rollback()
@@ -8928,28 +8977,28 @@ async def scan_business_card(file: UploadFile = File(...), current_user: Dict[st
         # Validate file type
         if not file.content_type.startswith('image/'):
             raise HTTPException(status_code=400, detail="Only image files are allowed")
-        
+
         # Read file content
         content = await file.read()
-        
+
         # Scan business card
         result = business_card_scanner.scan_image(content)
-        
+
         if not result.get("success", False):
             error_msg = result.get("error", "Failed to scan business card")
             raise HTTPException(status_code=400, detail=error_msg)
-        
+
         # Validate contact information
         contact = business_card_scanner.validate_contact(result["contact"])
-        
+
         logger.info(f"Successfully scanned business card: {contact.get('name', 'Unknown')}")
-        
+
         return JSONResponse({
             "success": True,
             "filename": file.filename,
             "contact": contact
         })
-        
+
     except Exception as e:
         logger.error(f"Error scanning business card: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error scanning business card: {str(e)}")
@@ -8959,7 +9008,7 @@ async def save_contact(request: Request, db: Session = Depends(get_db), current_
     """Save new contact to database"""
     try:
         data = await request.json()
-        
+
         # Create new contact
         contact = Contact(
             name=data.get("name"),
@@ -8971,7 +9020,7 @@ async def save_contact(request: Request, db: Session = Depends(get_db), current_
             address=data.get("address"),
             notes=data.get("notes")
         )
-        
+
         db.add(contact)
         db.commit()
         db.refresh(contact)
@@ -9007,7 +9056,7 @@ async def save_contact(request: Request, db: Session = Depends(get_db), current_
             "message": "Contact saved successfully",
             "contact": contact.to_dict()
         })
-        
+
     except Exception as e:
         logger.error(f"Error saving contact: {str(e)}")
         db.rollback()
@@ -9019,7 +9068,7 @@ async def migrate_data(current_user: Dict[str, Any] = Depends(get_current_user))
     try:
         migrator = GoogleSheetsMigrator()
         result = migrator.migrate_all_data()
-        
+
         if result["success"]:
             logger.info(f"Migration successful: {result['visits_migrated']} visits, {result['time_entries_migrated']} time entries")
             return JSONResponse({
@@ -9031,7 +9080,7 @@ async def migrate_data(current_user: Dict[str, Any] = Depends(get_current_user))
         else:
             logger.error(f"Migration failed: {result['error']}")
             raise HTTPException(status_code=500, detail=f"Migration failed: {result['error']}")
-            
+
     except Exception as e:
         logger.error(f"Error during migration: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Migration error: {str(e)}")
@@ -9079,31 +9128,31 @@ async def create_activity_note(request: Request, db: Session = Depends(get_db), 
         data = await request.json()
         date_str = data.get("date")
         notes_text = data.get("notes")
-        
+
         if not date_str or not notes_text:
             raise HTTPException(status_code=400, detail="Date and notes are required")
-        
+
         # Parse date
         from datetime import datetime
         note_date = datetime.fromisoformat(date_str.replace('Z', '+00:00')) if 'T' in date_str else datetime.strptime(date_str, '%Y-%m-%d')
-        
+
         activity_note = ActivityNote(
             date=note_date,
             notes=notes_text
         )
-        
+
         db.add(activity_note)
         db.commit()
         db.refresh(activity_note)
-        
+
         logger.info(f"Successfully created activity note for {note_date}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Activity note created successfully",
             "note": activity_note.to_dict()
         })
-        
+
     except Exception as e:
         logger.error(f"Error creating activity note: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error creating activity note: {str(e)}")
@@ -9114,26 +9163,26 @@ async def update_activity_note(note_id: int, request: Request, db: Session = Dep
     try:
         data = await request.json()
         notes_text = data.get("notes")
-        
+
         if not notes_text:
             raise HTTPException(status_code=400, detail="Notes are required")
-        
+
         activity_note = db.query(ActivityNote).filter(ActivityNote.id == note_id).first()
         if not activity_note:
             raise HTTPException(status_code=404, detail="Activity note not found")
-        
+
         activity_note.notes = notes_text
         db.commit()
         db.refresh(activity_note)
-        
+
         logger.info(f"Successfully updated activity note {note_id}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Activity note updated successfully",
             "note": activity_note.to_dict()
         })
-        
+
     except Exception as e:
         logger.error(f"Error updating activity note: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error updating activity note: {str(e)}")
@@ -9145,17 +9194,17 @@ async def delete_activity_note(note_id: int, db: Session = Depends(get_db), curr
         activity_note = db.query(ActivityNote).filter(ActivityNote.id == note_id).first()
         if not activity_note:
             raise HTTPException(status_code=404, detail="Activity note not found")
-        
+
         db.delete(activity_note)
         db.commit()
-        
+
         logger.info(f"Successfully deleted activity note {note_id}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Activity note deleted successfully"
         })
-        
+
     except Exception as e:
         logger.error(f"Error deleting activity note: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error deleting activity note: {str(e)}")
@@ -9175,32 +9224,32 @@ async def ringcentral_webhook(request: Request, db: Session = Depends(get_db)):
         import re
         data = await request.json()
         logger.info(f"RingCentral webhook received: {data}")
-        
+
         # Extract call data from RingCentral webhook payload
         # Format varies by RingCentral subscription, adjust as needed
         event_type = data.get("event")
-        
+
         if event_type not in ["call.completed", "call.ended"]:
             return JSONResponse({"status": "ignored", "reason": "not a completed call"})
-        
+
         call_data = data.get("body", {})
         phone_number = call_data.get("to", {}).get("phoneNumber") or call_data.get("from", {}).get("phoneNumber")
         direction = call_data.get("direction", "outbound")  # "Inbound" or "Outbound"
         duration = call_data.get("duration", 0)  # in seconds
         caller_email = call_data.get("extension", {}).get("email")
-        
+
         if not phone_number:
             logger.warning("No phone number in RingCentral webhook")
             return JSONResponse({"status": "error", "reason": "no phone number"})
-        
+
         # Find contact by phone number
         # Clean phone number for matching
         clean_phone = re.sub(r'[^\d]', '', phone_number)[-10:]  # Last 10 digits
-        
+
         contact = db.query(Contact).filter(
             Contact.phone.like(f'%{clean_phone}%')
         ).first()
-        
+
         # Find related deal if contact exists
         deal = None
         if contact:
@@ -9208,7 +9257,7 @@ async def ringcentral_webhook(request: Request, db: Session = Depends(get_db)):
                 Lead.contact_name == contact.name,
                 Lead.stage.in_(["incoming", "ongoing", "pending"])
             ).first()
-        
+
         # Log the call activity
         ActivityLogger.log_call(
             db=db,
@@ -9223,15 +9272,15 @@ async def ringcentral_webhook(request: Request, db: Session = Depends(get_db)):
                 "deal_id": deal.id if deal else None
             }
         )
-        
+
         logger.info(f"Logged RingCentral call: {phone_number} ({duration}s)")
-        
+
         return JSONResponse({
             "status": "success",
             "logged": True,
             "contact_found": contact is not None
         })
-        
+
     except Exception as e:
         logger.error(f"Error processing RingCentral webhook: {e}")
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
@@ -9250,7 +9299,7 @@ async def brevo_webhook(request: Request, db: Session = Depends(get_db)):
     try:
         data = await request.json()
         logger.info(f"Brevo webhook received: {data.get('event', 'unknown')} for {data.get('email', 'unknown')}")
-        
+
         # Extract webhook data
         event_type = data.get("event")
         recipient_email = data.get("email", "").lower().strip()
@@ -9259,11 +9308,11 @@ async def brevo_webhook(request: Request, db: Session = Depends(get_db)):
         date_sent = data.get("date_sent")
         date_event = data.get("date_event")
         webhook_id = data.get("id")  # Unique webhook event ID
-        
+
         if not recipient_email:
             logger.warning("No email address in Brevo webhook")
             return JSONResponse({"status": "error", "reason": "no email address"})
-        
+
         # Check for duplicate webhook events using webhook ID to avoid processing the same webhook twice
         # Note: We want to log each contact's event separately, so we only deduplicate by webhook ID
         if webhook_id:
@@ -9271,7 +9320,7 @@ async def brevo_webhook(request: Request, db: Session = Depends(get_db)):
                 ActivityLog.activity_type == "email",
                 ActivityLog.extra_data.like(f'%"webhook_id":{webhook_id}%')
             ).first()
-            
+
             if existing:
                 logger.debug(f"Brevo webhook event already processed: webhook ID {webhook_id}")
                 return JSONResponse({
@@ -9279,10 +9328,10 @@ async def brevo_webhook(request: Request, db: Session = Depends(get_db)):
                     "logged": False,
                     "reason": "duplicate"
                 })
-        
+
         # Find contact by email address
         contact = db.query(Contact).filter(Contact.email == recipient_email).first()
-        
+
         # Find related deal if contact exists
         deal_id = None
         if contact:
@@ -9291,7 +9340,7 @@ async def brevo_webhook(request: Request, db: Session = Depends(get_db)):
                 Lead.stage.in_(["incoming", "ongoing", "pending"])
             ).first()
             deal_id = deal.id if deal else None
-        
+
         # Build metadata
         metadata = {
             "campaign_id": campaign_id,
@@ -9302,11 +9351,11 @@ async def brevo_webhook(request: Request, db: Session = Depends(get_db)):
             "recipient": recipient_email,
             "webhook_id": webhook_id,  # For duplicate detection
         }
-        
+
         # Add URL for click events
         if event_type == "click" and data.get("URL"):
             metadata["click_url"] = data.get("URL")
-        
+
         # Build email subject/description based on event type
         if event_type == "delivered":
             subject = f"Newsletter: {campaign_name}"
@@ -9324,11 +9373,11 @@ async def brevo_webhook(request: Request, db: Session = Depends(get_db)):
             # For other events (hard_bounce, soft_bounce, spam, unsubscribe), still log but with event type
             subject = f"Newsletter {event_type}: {campaign_name}"
             description = f"Email newsletter {event_type}: {campaign_name}"
-        
+
         # Log the email activity
         # Use a generic sender email since Brevo sends on behalf of the account
         sender_email = "newsletter@coloradocareassist.com"
-        
+
         ActivityLogger.log_email(
             db=db,
             subject=subject,
@@ -9340,16 +9389,16 @@ async def brevo_webhook(request: Request, db: Session = Depends(get_db)):
             metadata=metadata,
             commit=True,
         )
-        
+
         logger.info(f"Logged Brevo {event_type} event: {recipient_email} - {campaign_name}")
-        
+
         return JSONResponse({
             "status": "success",
             "logged": True,
             "contact_found": contact is not None,
             "event": event_type
         })
-        
+
     except Exception as e:
         logger.error(f"Error processing Brevo webhook: {e}", exc_info=True)
         return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
@@ -9364,10 +9413,10 @@ async def sync_gmail_emails(db: Session = Depends(get_db), current_user: Dict[st
     """Manually trigger Gmail email sync"""
     try:
         from gmail_activity_sync import GmailActivitySync
-        
+
         syncer = GmailActivitySync()
         syncer.sync_recent_emails(db, max_results=100, since_minutes=1440)  # Last 24 hours
-        
+
         return JSONResponse({
             "success": True,
             "message": "Gmail sync completed"
@@ -9386,10 +9435,10 @@ async def sync_gmail_for_contact(
     """Sync Gmail emails for a specific contact"""
     try:
         from gmail_activity_sync import GmailActivitySync
-        
+
         syncer = GmailActivitySync()
         syncer.sync_emails_for_contact(db, contact_id, max_results=50)
-        
+
         return JSONResponse({
             "success": True,
             "message": f"Synced emails for contact {contact_id}"
@@ -9411,10 +9460,10 @@ async def sync_ringcentral_calls(
     """Manually trigger RingCentral call log sync"""
     try:
         from ringcentral_service import RingCentralService
-        
+
         service = RingCentralService()
         synced_count = service.sync_call_logs_to_activities(db, since_minutes=1440)  # Last 24 hours
-        
+
         return JSONResponse({
             "success": True,
             "message": f"Synced {synced_count} calls from RingCentral"
@@ -9426,7 +9475,7 @@ async def sync_ringcentral_calls(
 
 @app.get("/api/expenses")
 async def get_expenses(
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
     user_email: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -9435,24 +9484,24 @@ async def get_expenses(
     """Get expenses with optional filters"""
     try:
         query = db.query(Expense)
-        
+
         if user_email:
             query = query.filter(Expense.user_email == user_email)
-            
+
         if start_date:
             try:
                 start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
                 query = query.filter(Expense.date >= start)
             except ValueError:
                 pass
-                
+
         if end_date:
             try:
                 end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
                 query = query.filter(Expense.date <= end)
             except ValueError:
                 pass
-                
+
         expenses = query.order_by(Expense.date.desc()).all()
         return JSONResponse([e.to_dict() for e in expenses])
     except Exception as e:
@@ -9475,24 +9524,24 @@ async def get_pay_period_summary(
         # Start date: Dec 2, 2025 (aligns with Jan 13-26 biweekly Mondays)
         start_date = datetime(2025, 12, 2)
         now = datetime.utcnow()
-        
+
         # Calculate days since start
         delta = now - start_date
         days_since_start = delta.days
         period_length = 14
-        
+
         # Calculate current period index (0-based)
         if days_since_start < 0:
-             current_period_index = 0 
+             current_period_index = 0
         else:
              current_period_index = days_since_start // period_length
-        
+
         # Apply offset (negative = past periods)
         period_index = max(0, current_period_index + (period_offset or 0))
-             
+
         current_period_start = start_date + timedelta(days=period_index * period_length)
         current_period_end = current_period_start + timedelta(days=13, hours=23, minutes=59, seconds=59)
-        
+
         # Sales reps to track expenses for
         # Format: {"email": "display_name"} - update email when new hire starts
         EXPENSE_USERS = {
@@ -9501,10 +9550,10 @@ async def get_pay_period_summary(
             "maryssa@coloradocareassist.com": "Colorado Springs (Vacant)",
         }
         users = list(EXPENSE_USERS.keys())
-        
+
         # Determine if this is a completed period (for payroll purposes)
         is_completed = period_index < current_period_index
-        
+
         summary = {
             "period": {
                 "start": current_period_start.isoformat(),
@@ -9518,7 +9567,7 @@ async def get_pay_period_summary(
             },
             "users": {}
         }
-        
+
         for email in users:
             # Get expenses
             expenses = db.query(Expense).filter(
@@ -9526,19 +9575,19 @@ async def get_pay_period_summary(
                 Expense.date >= current_period_start,
                 Expense.date <= current_period_end
             ).all()
-            
+
             expense_total = sum(e.amount or 0 for e in expenses)
-            
+
             # Get mileage from FinancialEntry
             mileage_entries = db.query(FinancialEntry).filter(
                 FinancialEntry.user_email == email,
                 FinancialEntry.date >= current_period_start,
                 FinancialEntry.date <= current_period_end
             ).all()
-            
+
             total_miles = sum(e.miles_driven or 0 for e in mileage_entries)
             mileage_total = sum(e.mileage_cost or 0 for e in mileage_entries)
-            
+
             # Merge items for display
             items = []
             for e in expenses:
@@ -9550,7 +9599,7 @@ async def get_pay_period_summary(
                     "status": e.status,
                     "url": e.receipt_url
                 })
-            
+
             for m in mileage_entries:
                 if m.miles_driven:
                     items.append({
@@ -9561,10 +9610,10 @@ async def get_pay_period_summary(
                         "miles": m.miles_driven,
                         "rate": 0.70
                     })
-            
+
             # Sort items by date desc
             items.sort(key=lambda x: x["date"], reverse=True)
-            
+
             summary["users"][email] = {
                 "display_name": EXPENSE_USERS.get(email, email.split("@")[0].title()),
                 "total_miles": total_miles,
@@ -9573,16 +9622,16 @@ async def get_pay_period_summary(
                 "grand_total": round(mileage_total + expense_total, 2),
                 "items": items
             }
-            
+
         return JSONResponse(summary)
-        
+
     except Exception as e:
         logger.error(f"Error getting pay period summary: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/financials")
 async def get_financials(
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db),
     current_user: Dict[str, Any] = Depends(get_current_user),
     user_email: Optional[str] = None,
     start_date: Optional[str] = None,
@@ -9591,24 +9640,24 @@ async def get_financials(
     """Get financial entries (mileage) with optional filters"""
     try:
         query = db.query(FinancialEntry)
-        
+
         if user_email:
             query = query.filter(FinancialEntry.user_email == user_email)
-            
+
         if start_date:
             try:
                 start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
                 query = query.filter(FinancialEntry.date >= start)
             except ValueError:
                 pass
-                
+
         if end_date:
             try:
                 end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
                 query = query.filter(FinancialEntry.date <= end)
             except ValueError:
                 pass
-                
+
         entries = query.order_by(FinancialEntry.date.desc()).all()
         return JSONResponse([e.to_dict() for e in entries])
     except Exception as e:
@@ -9677,13 +9726,13 @@ async def get_activity_logs(
 
         # Sort by modified_time/created_at (most recent first)
         all_logs.sort(key=lambda x: (x.get('modified_time') or x.get('created_at') or '0000-00-00'), reverse=True)
-        
+
         return JSONResponse({
             "success": True,
             "logs": all_logs,
             "count": len(all_logs)
         })
-        
+
     except Exception as e:
         logger.error(f"Error fetching activity logs: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error fetching activity logs: {str(e)}")
@@ -9694,12 +9743,12 @@ async def add_activity_log(request: Request, db: Session = Depends(get_db), curr
     try:
         data = await request.json()
         url = data.get("url", "").strip()
-        
+
         if not url:
             raise HTTPException(status_code=400, detail="URL is required")
-        
+
         drive_service = GoogleDriveService()
-        
+
         # Extract file ID from URL (no API needed for this)
         file_id = drive_service.extract_file_id_from_url(url) if drive_service.enabled else None
         if not file_id:
@@ -9710,7 +9759,7 @@ async def add_activity_log(request: Request, db: Session = Depends(get_db), curr
                 file_id = match.group(1)
             else:
                 raise HTTPException(status_code=400, detail="Invalid Google Drive URL. Please provide a valid Google Docs link.")
-        
+
         # Check if already exists in database
         existing = db.query(ActivityLog).filter(ActivityLog.file_id == file_id).first()
         if existing:
@@ -9748,7 +9797,7 @@ async def add_activity_log(request: Request, db: Session = Depends(get_db), curr
                 "message": "Activity log already exists",
                 "log": existing.to_dict()
             })
-        
+
         # Try to get file metadata via API (optional - works without it)
         file_metadata = None
         if drive_service.enabled:
@@ -9757,12 +9806,12 @@ async def add_activity_log(request: Request, db: Session = Depends(get_db), curr
                 # Check if it's a Google Doc
                 if file_metadata.get('mime_type') != 'application/vnd.google-apps.document':
                     raise HTTPException(status_code=400, detail="Only Google Docs are supported as activity logs")
-        
+
         # Create preview/edit URLs - use standard Google Docs URLs
         # For publicly shared docs, the preview URL works in iframes
         preview_url = f"https://docs.google.com/document/d/{file_id}/preview"
         edit_url = f"https://docs.google.com/document/d/{file_id}/edit"
-        
+
         # Parse dates if available
         modified_time = None
         created_time = None
@@ -9776,7 +9825,7 @@ async def add_activity_log(request: Request, db: Session = Depends(get_db), curr
                 created_time = datetime.fromisoformat(file_metadata['created_time'].replace('Z', '+00:00'))
             except:
                 pass
-        
+
         # If we don't have dates from API, use current date in Mountain Time as upload date
         if not modified_time and not created_time:
             if pytz:
@@ -9795,7 +9844,7 @@ async def add_activity_log(request: Request, db: Session = Depends(get_db), curr
                 today_utc = datetime(now_utc.year, now_utc.month, now_utc.day, 0, 0, 0, tzinfo=timezone.utc)
                 created_time = today_utc
                 modified_time = today_utc
-        
+
         # Save to database
         activity_log = ActivityLog(
             file_id=file_id,
@@ -9808,19 +9857,19 @@ async def add_activity_log(request: Request, db: Session = Depends(get_db), curr
             created_time=created_time,
             manually_added=True
         )
-        
+
         db.add(activity_log)
         db.commit()
         db.refresh(activity_log)
-        
+
         logger.info(f"Successfully added activity log: {activity_log.name or file_id}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Activity log added successfully",
             "log": activity_log.to_dict()
         })
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -9886,7 +9935,7 @@ async def create_lead(request: Request, db: Session = Depends(get_db), current_u
                 raise HTTPException(status_code=400, detail="No pipeline stages configured")
             stage_id = first_stage.id
         max_order = db.query(Lead).filter(Lead.stage_id == stage_id).count()
-        
+
         lead = Lead(
             name=data.get("name"),
             contact_name=data.get("contact_name"),
@@ -9904,10 +9953,10 @@ async def create_lead(request: Request, db: Session = Depends(get_db), current_u
             order_index=max_order,
             referral_source_id=data.get("referral_source_id")
         )
-        
+
         db.add(lead)
         db.flush()  # Get the lead ID
-        
+
         # Log activity
         activity = LeadActivity(
             lead_id=lead.id,
@@ -9917,13 +9966,13 @@ async def create_lead(request: Request, db: Session = Depends(get_db), current_u
             new_value=lead.name
         )
         db.add(activity)
-        
+
         db.commit()
         db.refresh(lead)
-        
+
         logger.info(f"Created lead: {lead.name}")
         return JSONResponse({"success": True, "lead": lead.to_dict()})
-        
+
     except Exception as e:
         logger.error(f"Error creating lead: {str(e)}")
         db.rollback()
@@ -9935,21 +9984,21 @@ async def update_lead(lead_id: int, request: Request, db: Session = Depends(get_
     try:
         from models import Lead, LeadActivity
         data = await request.json()
-        
+
         lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
-        
+
         # Track changes for activity log
         changes = []
-        
+
         # Update fields and track changes
         fields_to_update = [
             "name", "contact_name", "email", "phone", "address", "city",
             "source", "payor_source", "priority", "notes", "referral_source_id",
             "expected_revenue"
         ]
-        
+
         for field in fields_to_update:
             if field in data:
                 old_value = getattr(lead, field)
@@ -9957,14 +10006,14 @@ async def update_lead(lead_id: int, request: Request, db: Session = Depends(get_
                 if old_value != new_value:
                     setattr(lead, field, new_value)
                     changes.append((field, old_value, new_value))
-        
+
         # Handle expected_close_date separately (datetime field)
         if "expected_close_date" in data and data["expected_close_date"]:
             new_date = datetime.fromisoformat(data["expected_close_date"])
             if lead.expected_close_date != new_date:
                 changes.append(("expected_close_date", lead.expected_close_date, new_date))
                 lead.expected_close_date = new_date
-        
+
         # Log activities for each change
         for field, old_val, new_val in changes:
             activity = LeadActivity(
@@ -9976,13 +10025,13 @@ async def update_lead(lead_id: int, request: Request, db: Session = Depends(get_
                 user_email=current_user.get("email")
             )
             db.add(activity)
-        
+
         db.commit()
         db.refresh(lead)
-        
+
         logger.info(f"Updated lead {lead_id}: {len(changes)} changes")
         return JSONResponse({"success": True, "lead": lead.to_dict()})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -9996,23 +10045,23 @@ async def move_lead(lead_id: int, request: Request, db: Session = Depends(get_db
     try:
         from models import Lead, LeadActivity, PipelineStage
         data = await request.json()
-        
+
         lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
-        
+
         old_stage_id = lead.stage_id
         new_stage_id = data.get("stage_id")
         new_order_index = data.get("order_index", 0)
-        
+
         # If moving to a different stage
         if old_stage_id != new_stage_id:
             old_stage = db.query(PipelineStage).filter(PipelineStage.id == old_stage_id).first()
             new_stage = db.query(PipelineStage).filter(PipelineStage.id == new_stage_id).first()
-            
+
             lead.stage_id = new_stage_id
             lead.order_index = new_order_index
-            
+
             # Log activity
             activity = LeadActivity(
                 lead_id=lead.id,
@@ -10026,13 +10075,13 @@ async def move_lead(lead_id: int, request: Request, db: Session = Depends(get_db
         else:
             # Just reordering within the same stage
             lead.order_index = new_order_index
-        
+
         db.commit()
         db.refresh(lead)
-        
+
         logger.info(f"Moved lead {lead_id} to stage {new_stage_id}, order {new_order_index}")
         return JSONResponse({"success": True, "lead": lead.to_dict()})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10048,14 +10097,14 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
         lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
-        
+
         lead_name = lead.name
         db.delete(lead)
         db.commit()
-        
+
         logger.info(f"Deleted lead: {lead_name}")
         return JSONResponse({"success": True, "message": "Lead deleted successfully"})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10081,7 +10130,7 @@ async def create_referral_source(request: Request, db: Session = Depends(get_db)
     try:
         from models import ReferralSource
         data = await request.json()
-        
+
         source = ReferralSource(
             name=data.get("name"),
             organization=data.get("organization"),
@@ -10093,20 +10142,20 @@ async def create_referral_source(request: Request, db: Session = Depends(get_db)
             status=data.get("status", "active"),
             notes=data.get("notes")
         )
-        
+
         db.add(source)
         db.commit()
         db.refresh(source)
-        
+
         # Sync to Brevo CRM in background
         import threading
         thread = threading.Thread(target=sync_company_to_brevo_crm, args=(source,))
         thread.daemon = True
         thread.start()
-        
+
         logger.info(f"Created referral source: {source.name}")
         return JSONResponse({"success": True, "source": source.to_dict()})
-        
+
     except Exception as e:
         logger.error(f"Error creating referral source: {str(e)}")
         db.rollback()
@@ -10118,28 +10167,28 @@ async def update_referral_source(source_id: int, request: Request, db: Session =
     try:
         from models import ReferralSource
         data = await request.json()
-        
+
         source = db.query(ReferralSource).filter(ReferralSource.id == source_id).first()
         if not source:
             raise HTTPException(status_code=404, detail="Referral source not found")
-        
+
         # Update fields
         for field in ["name", "organization", "contact_name", "email", "phone", "address", "source_type", "status", "notes"]:
             if field in data:
                 setattr(source, field, data[field])
-        
+
         db.commit()
         db.refresh(source)
-        
+
         # Sync to Brevo CRM in background
         import threading
         thread = threading.Thread(target=sync_company_to_brevo_crm, args=(source,))
         thread.daemon = True
         thread.start()
-        
+
         logger.info(f"Updated referral source: {source.name}")
         return JSONResponse({"success": True, "source": source.to_dict()})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10155,14 +10204,14 @@ async def delete_referral_source(source_id: int, db: Session = Depends(get_db), 
         source = db.query(ReferralSource).filter(ReferralSource.id == source_id).first()
         if not source:
             raise HTTPException(status_code=404, detail="Referral source not found")
-        
+
         source_name = source.name
         db.delete(source)
         db.commit()
-        
+
         logger.info(f"Deleted referral source: {source_name}")
         return JSONResponse({"success": True, "message": "Referral source deleted successfully"})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10186,16 +10235,16 @@ async def get_all_tasks(db: Session = Depends(get_db), current_user: Dict[str, A
 async def create_lead_task(lead_id: int, request: Request, db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
     """Create a task for a lead"""
     try:
-        from models import Lead, LeadTask, LeadActivity
+        from models import Lead, LeadActivity, LeadTask
         data = await request.json()
         creator_email = current_user.get("email")
         requested_assignee = data.get("assigned_to") or data.get("sales_id")
         assignee_email = requested_assignee or creator_email
-        
+
         lead = db.query(Lead).filter(Lead.id == lead_id).first()
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
-        
+
         task = LeadTask(
             lead_id=lead_id,
             title=data.get("title"),
@@ -10205,10 +10254,10 @@ async def create_lead_task(lead_id: int, request: Request, db: Session = Depends
             assigned_to=assignee_email,
             created_by=creator_email,
         )
-        
+
         db.add(task)
         db.flush()
-        
+
         # Log activity
         activity = LeadActivity(
             lead_id=lead_id,
@@ -10218,13 +10267,13 @@ async def create_lead_task(lead_id: int, request: Request, db: Session = Depends
             new_value=task.title
         )
         db.add(activity)
-        
+
         db.commit()
         db.refresh(task)
-        
+
         logger.info(f"Created task for lead {lead_id}: {task.title}")
         return JSONResponse({"success": True, "task": task.to_dict()})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10236,15 +10285,15 @@ async def create_lead_task(lead_id: int, request: Request, db: Session = Depends
 async def update_lead_task(task_id: int, request: Request, db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
     """Update a lead task"""
     try:
-        from models import LeadTask, LeadActivity
+        from models import LeadActivity, LeadTask
         data = await request.json()
-        
+
         task = db.query(LeadTask).filter(LeadTask.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        
+
         old_status = task.status
-        
+
         # Update fields
         if "title" in data:
             task.title = data["title"]
@@ -10256,7 +10305,7 @@ async def update_lead_task(task_id: int, request: Request, db: Session = Depends
             task.status = data["status"]
             if data["status"] == "completed" and old_status != "completed":
                 task.completed_at = datetime.utcnow()
-                
+
                 # Log activity
                 activity = LeadActivity(
                     lead_id=task.lead_id,
@@ -10268,13 +10317,13 @@ async def update_lead_task(task_id: int, request: Request, db: Session = Depends
 
         if "assigned_to" in data:
             task.assigned_to = data["assigned_to"]
-        
+
         db.commit()
         db.refresh(task)
-        
+
         logger.info(f"Updated task {task_id}")
         return JSONResponse({"success": True, "task": task.to_dict()})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10290,14 +10339,14 @@ async def delete_lead_task(task_id: int, db: Session = Depends(get_db), current_
         task = db.query(LeadTask).filter(LeadTask.id == task_id).first()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        
+
         task_title = task.title
         db.delete(task)
         db.commit()
-        
+
         logger.info(f"Deleted task: {task_title}")
         return JSONResponse({"success": True, "message": "Task deleted successfully"})
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -10310,17 +10359,18 @@ async def delete_lead_task(task_id: int, db: Session = Depends(get_db), current_
 async def seed_activity_logs(db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
     """Create sample activity logs for testing"""
     try:
-        from models import ActivityLog, Contact, ReferralSource
-        from activity_logger import ActivityLogger
         from datetime import timedelta
-        
+
+        from activity_logger import ActivityLogger
+        from models import ActivityLog, Contact, ReferralSource
+
         # Get some recent contacts and companies
         contacts = db.query(Contact).limit(5).all()
         companies = db.query(ReferralSource).limit(5).all()
-        
+
         created_logs = []
         user_email = current_user.get("email", "unknown@coloradocareassist.com")
-        
+
         # Create different types of activity logs
         if contacts:
             # Card scan
@@ -10332,7 +10382,7 @@ async def seed_activity_logs(db: Session = Depends(get_db), current_user: Dict[s
                 filename="test_card.jpg"
             )
             created_logs.append(log1)
-            
+
             # Call
             log2 = ActivityLogger.log_call(
                 db=db,
@@ -10343,7 +10393,7 @@ async def seed_activity_logs(db: Session = Depends(get_db), current_user: Dict[s
                 call_direction="outbound"
             )
             created_logs.append(log2)
-            
+
             # Email
             if len(contacts) > 1:
                 log3 = ActivityLogger.log_email(
@@ -10354,7 +10404,7 @@ async def seed_activity_logs(db: Session = Depends(get_db), current_user: Dict[s
                     contact_id=contacts[1].id
                 )
                 created_logs.append(log3)
-        
+
         if companies:
             # Visit
             log4 = ActivityLogger.log_visit(
@@ -10366,7 +10416,7 @@ async def seed_activity_logs(db: Session = Depends(get_db), current_user: Dict[s
                 company_id=companies[0].id
             )
             created_logs.append(log4)
-            
+
             # Note
             if len(companies) > 1:
                 log5 = ActivityLogger.log_note(
@@ -10376,17 +10426,17 @@ async def seed_activity_logs(db: Session = Depends(get_db), current_user: Dict[s
                     company_id=companies[1].id
                 )
                 created_logs.append(log5)
-        
+
         # Get count
         total_logs = db.query(ActivityLog).count()
-        
+
         return JSONResponse({
             "success": True,
             "created": len([l for l in created_logs if l is not None]),
             "total_logs": total_logs,
             "message": f"Created {len([l for l in created_logs if l is not None])} sample activity logs. Total logs in database: {total_logs}"
         })
-        
+
     except Exception as e:
         logger.error(f"Error seeding activity logs: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to seed activity logs: {str(e)}")
@@ -10412,8 +10462,11 @@ async def get_lead_activities(lead_id: int, db: Session = Depends(get_db), curre
 # ============================================================================
 
 from shift_filling import (
-    shift_filling_engine, wellsky_mock, sms_service,
-    CaregiverMatcher, OutreachStatus
+    CaregiverMatcher,
+    OutreachStatus,
+    shift_filling_engine,
+    sms_service,
+    wellsky_mock,
 )
 
 
@@ -10715,13 +10768,24 @@ async def simulate_sms_response(
 # ============================================================================
 
 from services.activity_service import (
-    log_activity, update_deal_stage, get_timeline, get_stale_deals,
-    get_deal_stage_history, get_stage_analytics, add_contact_to_deal,
-    remove_contact_from_deal, get_deal_contacts, get_contact_deals, ActivityType
+    ActivityType,
+    add_contact_to_deal,
+    get_contact_deals,
+    get_deal_contacts,
+    get_deal_stage_history,
+    get_stage_analytics,
+    get_stale_deals,
+    get_timeline,
+    log_activity,
+    remove_contact_from_deal,
+    update_deal_stage,
 )
 from services.ai_enrichment_service import (
-    enrich_company, find_duplicate_contacts, scan_all_duplicates,
-    merge_contacts, summarize_interactions
+    enrich_company,
+    find_duplicate_contacts,
+    merge_contacts,
+    scan_all_duplicates,
+    summarize_interactions,
 )
 
 # --- Unified Timeline API ---
@@ -10932,7 +10996,6 @@ async def get_contact_relationships(
     activity_count = db.query(ActivityLog).filter_by(contact_id=contact_id).count()
 
     # Get pending tasks
-    from models import ContactTask
     pending_tasks = db.query(ContactTask).filter_by(
         contact_id=contact_id, status="pending"
     ).count()
@@ -11083,8 +11146,7 @@ async def favicon():
 @app.get("/legacy", response_class=HTMLResponse)
 async def legacy_dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Serve the legacy Jinja2 dashboard for backward compatibility"""
-    from urllib.parse import urlencode
-    
+
     ringcentral_config = {
         'clientId': RINGCENTRAL_EMBED_CLIENT_ID or '',
         'server': RINGCENTRAL_EMBED_SERVER,
@@ -11128,9 +11190,9 @@ def _get_root_services():
     if _root_services_cache:
         return _root_services_cache['wellsky'], _root_services_cache['sync'], _root_services_cache['ProspectStatus']
 
-    import sys as _sys
-    import os as _os
     import importlib.util
+    import os as _os
+    import sys as _sys
     import traceback
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
@@ -11182,7 +11244,6 @@ def _get_root_services():
 @app.get("/api/wellsky/debug")
 async def wellsky_debug(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Debug endpoint to check WellSky services loading status."""
-    import sys as _sys
     import os as _os
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
@@ -11191,7 +11252,7 @@ async def wellsky_debug(current_user: Dict[str, Any] = Depends(get_current_user)
     try:
         wellsky, sync, status = _get_root_services()
         service_loaded = True
-    except Exception as e:
+    except Exception:
         service_loaded = False
 
     return JSONResponse({
@@ -11430,12 +11491,12 @@ async def spa_catchall(
 
     if not current_user:
         return RedirectResponse(url="/auth/login")
-    
+
     # Serve React app index.html for all non-API routes
     frontend_index = os.path.join(frontend_dist, "index.html")
     if os.path.exists(frontend_index):
         return FileResponse(frontend_index)
-    
+
     raise HTTPException(status_code=404, detail="Frontend not found")
 
 if __name__ == "__main__":

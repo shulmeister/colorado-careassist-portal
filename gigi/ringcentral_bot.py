@@ -271,15 +271,10 @@ SMS_TOOLS = [
     {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
 ]
 
-# Auto-extend SMS tools from Telegram canonical set (ensures tool parity across channels)
-try:
-    from gigi.telegram_bot import ANTHROPIC_TOOLS as _TELE_TOOLS
-    _sms_names = {t["name"] for t in SMS_TOOLS}
-    for _t in _TELE_TOOLS:
-        if _t["name"] not in _sms_names:
-            SMS_TOOLS.append(_t)
-except ImportError:
-    pass
+# NOTE: SMS tools are intentionally limited to operational tools only.
+# Caregivers text this number — they should NOT have access to personal
+# assistant tools (browse_webpage, buy_tickets, stocks, etc.).
+# Only Jason gets full Gigi capability via DM/Telegram/voice.
 
 # Full tool set for Glip DM replies — matches Telegram capabilities
 DM_TOOLS = [
@@ -3931,6 +3926,21 @@ class GigiRingCentralBot:
                             logger.info(f"👻 Shadow Mode: Draft SMS to {clean_phone} reported to DM (not sent)")
                         except Exception as e:
                             logger.error(f"Shadow mode DM failed: {e}")
+
+                        # Persist draft to DB for learning pipeline
+                        try:
+                            conn = psycopg2.connect(db_url)
+                            cur = conn.cursor()
+                            cur.execute("""
+                                INSERT INTO gigi_sms_drafts (from_phone, from_name, inbound_text, draft_reply)
+                                VALUES (%s, %s, %s, %s)
+                            """, (clean_phone, sender_name, text, reply))
+                            conn.commit()
+                            conn.close()
+                            logger.info(f"📝 Shadow draft persisted to gigi_sms_drafts for {clean_phone}")
+                        except Exception as e:
+                            logger.error(f"Shadow draft DB persist failed: {e}")
+
                         # NOTE: Do NOT record cooldown for shadow mode — no SMS was actually sent,
                         # so there's no loop risk. Recording cooldown here blocks real inbound SMS.
                         return
