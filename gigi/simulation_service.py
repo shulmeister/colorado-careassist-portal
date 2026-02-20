@@ -74,6 +74,8 @@ class SimulationRunner:
         self.started_at = None
 
         # Configure Gemini (new SDK)
+        if not GENAI_AVAILABLE:
+            raise ValueError("google.genai SDK not installed — cannot run simulations")
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY not set")
