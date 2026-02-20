@@ -144,7 +144,7 @@ _DEFAULT_MODELS = {
 }
 LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-3-flash-preview"))
 LLM_MAX_TOKENS = 1024
-LLM_MAX_TOOL_ROUNDS = 5
+LLM_MAX_TOOL_ROUNDS = 7
 CONVERSATION_TIMEOUT_MINUTES = 30
 MAX_CONVERSATION_MESSAGES = 10
 
@@ -203,13 +203,13 @@ SMS_TOOLS = [
     },
     {
         "name": "get_wellsky_clients",
-        "description": "Search for clients in WellSky by name.",
+        "description": "Search for clients in WellSky by NAME. Pass the person's actual name, NOT a numeric ID.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "search_name": {
                     "type": "string",
-                    "description": "Client name to search for (first, last, or full)"
+                    "description": "Client's name to search (e.g. 'Preston' or 'Hill' or 'Preston Hill'). Must be a text name, NOT a WellSky numeric ID."
                 }
             },
             "required": ["search_name"]
@@ -217,13 +217,13 @@ SMS_TOOLS = [
     },
     {
         "name": "get_wellsky_caregivers",
-        "description": "Search for caregivers in WellSky by name.",
+        "description": "Search for caregivers in WellSky by NAME. Pass the person's actual name, NOT a numeric ID.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "search_name": {
                     "type": "string",
-                    "description": "Caregiver name to search for (first, last, or full)"
+                    "description": "Caregiver's name to search (e.g. 'Angela' or 'Atteberry'). Must be a text name, NOT a WellSky numeric ID."
                 }
             },
             "required": ["search_name"]
@@ -313,10 +313,10 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"phone_number": _gs("string", "The caller's phone number")}, required=["phone_number"])),
         genai_types.FunctionDeclaration(name="get_wellsky_shifts", description="Get shift schedule from WellSky. Look up shifts by caregiver_id or client_id.",
             parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "WellSky caregiver ID"), "client_id": _gs("string", "WellSky client ID"), "days": _gs("integer", "Days to look ahead (default 7, max 14)")})),
-        genai_types.FunctionDeclaration(name="get_wellsky_clients", description="Search for clients in WellSky by name.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Client name to search for")}, required=["search_name"])),
-        genai_types.FunctionDeclaration(name="get_wellsky_caregivers", description="Search for caregivers in WellSky by name.",
-            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Caregiver name to search for")}, required=["search_name"])),
+        genai_types.FunctionDeclaration(name="get_wellsky_clients", description="Search for clients in WellSky by NAME. Pass the person's actual name, NOT a numeric ID.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Client's name (e.g. 'Preston Hill'). Must be a text name, NOT a WellSky numeric ID.")}, required=["search_name"])),
+        genai_types.FunctionDeclaration(name="get_wellsky_caregivers", description="Search for caregivers in WellSky by NAME. Pass the person's actual name, NOT a numeric ID.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"search_name": _gs("string", "Caregiver's name (e.g. 'Angela Atteberry'). Must be a text name, NOT a WellSky numeric ID.")}, required=["search_name"])),
         genai_types.FunctionDeclaration(name="log_call_out", description="Log a caregiver call-out in WellSky and create an urgent admin task for coverage.",
             parameters=genai_types.Schema(type="OBJECT", properties={"caregiver_id": _gs("string", "The caregiver's WellSky ID"), "caregiver_name": _gs("string", "The caregiver's name"), "reason": _gs("string", "Reason for the call-out"), "shift_date": _gs("string", "Date of the shift (YYYY-MM-DD, defaults to today)")}, required=["caregiver_id", "caregiver_name", "reason"])),
         genai_types.FunctionDeclaration(name="save_memory", description="Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred or fabricated information.",
@@ -493,13 +493,15 @@ COMMON SCENARIOS:
 - Caregiver asking about schedule: Use identify_caller, then get_wellsky_shifts with their caregiver_id.
 - Client asking when caregiver is coming: Use identify_caller, then get_wellsky_shifts with their client_id.
 - Anyone asking about a person by name: Try get_wellsky_clients first, then get_wellsky_caregivers if not found. A name could be either.
+- IMPORTANT: get_wellsky_clients and get_wellsky_caregivers search by NAME (e.g. "Angela"), NOT by WellSky ID numbers. If you have a caregiver_id or client_id from identify_caller, pass it directly to get_wellsky_shifts — do NOT pass it to get_wellsky_clients/caregivers.
 - Unknown caller or general question: Respond helpfully, note the office will follow up.
 - Simple acknowledgments ("Ok", "Thanks", "Got it", "Sure"): Just respond briefly. Do NOT call tools.
 
 KEY CAPABILITIES:
 - You monitor ALL company lines: 307-459-8220 (your direct line), 719-428-3999 (company line), and 303-757-1777 (main company number).
-- You CAN send text messages via send_sms — you can text caregivers, clients, or anyone.
-- You CAN check recent inbound SMS across all company lines via check_recent_sms.
+- You CAN look up clients and caregivers by NAME using get_wellsky_clients and get_wellsky_caregivers.
+- You CAN check shift schedules using get_wellsky_shifts (requires a caregiver_id or client_id from the lookup tools).
+- You CAN identify who is texting using identify_caller with their phone number.
 
 TONE:
 - Friendly, professional, concise
@@ -2790,6 +2792,33 @@ class GigiRingCentralBot:
                     text_parts.append(part.text)
 
         final_text = "".join(text_parts)
+
+        # If exhausted tool rounds without generating text, force a summary call WITHOUT tools
+        if not final_text and tool_round >= LLM_MAX_TOOL_ROUNDS:
+            logger.info(f"{channel} Gemini exhausted {tool_round} tool rounds with no text — forcing summary")
+            # Ask Gemini to summarize what it found, with NO tools to prevent more function calls
+            contents.append(genai_types.Content(
+                role="user",
+                parts=[genai_types.Part(text="Based on all the tool results above, please give a direct, complete answer to the original question. Be concise.")]
+            ))
+            summary_config = genai_types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                # No tools — force text-only response
+            )
+            try:
+                summary_response = await asyncio.to_thread(
+                    self.llm.models.generate_content,
+                    model=LLM_MODEL, contents=contents, config=summary_config
+                )
+                if summary_response.candidates and summary_response.candidates[0].content and summary_response.candidates[0].content.parts:
+                    for part in summary_response.candidates[0].content.parts:
+                        if hasattr(part, 'text') and part.text:
+                            text_parts.append(part.text)
+                    final_text = "".join(text_parts)
+                    logger.info(f"{channel} Gemini forced summary: {len(final_text)} chars")
+            except Exception as e:
+                logger.error(f"{channel} Gemini forced summary failed: {e}")
+
         logger.info(f"{channel} Gemini reply ({tool_round} tool rounds, {len(final_text)} chars)")
         return final_text
 
