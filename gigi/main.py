@@ -10,26 +10,26 @@ This FastAPI middleware provides the tool functions that Gigi calls
 during conversations to look up information and take actions.
 """
 
+import asyncio
+import json
+import logging
 import os
 import re
-import json
-import hmac
-import hashlib
-import logging
+import sys
 from dataclasses import dataclass
-from datetime import datetime, timedelta, time as time_cls
-from typing import Optional, Dict, Any, List, Literal, Tuple
+from datetime import datetime, timedelta
+from datetime import time as time_cls
 from enum import Enum
 from types import SimpleNamespace
+from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, Request, HTTPException, Depends, Header
-from fastapi.responses import JSONResponse, Response, HTMLResponse
+import httpx
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
-import httpx
-import sys
-import asyncio
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Configure logging
@@ -51,7 +51,7 @@ async def startup_event():
 
 # Import WellSky service for shift management
 try:
-    from services.wellsky_service import WellSkyService, ShiftStatus
+    from services.wellsky_service import ShiftStatus, WellSkyService
     wellsky = WellSkyService()
     WELLSKY_AVAILABLE = True
 except ImportError:
@@ -68,7 +68,13 @@ except ImportError:
 
 # Import Gigi Memory System
 try:
-    from gigi.memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel, MemoryStatus
+    from gigi.memory_system import (
+        ImpactLevel,
+        MemorySource,
+        MemoryStatus,
+        MemorySystem,
+        MemoryType,
+    )
     memory_system = MemorySystem()
     MEMORY_SYSTEM_AVAILABLE = True
     logger.info("✓ Gigi Memory System initialized")
@@ -79,7 +85,9 @@ except Exception as e:
 
 # Import Gigi Mode Detection System
 try:
-    from gigi.mode_detector import ModeDetector, OperatingMode, ModeSource, parse_mode_command
+    from gigi.mode_detector import (
+        ModeDetector,
+    )
     mode_detector = ModeDetector()
     MODE_DETECTOR_AVAILABLE = True
     logger.info("✓ Gigi Mode Detector initialized")
@@ -90,7 +98,10 @@ except Exception as e:
 
 # Import Gigi Failure Protocol System
 try:
-    from gigi.failure_handler import FailureHandler, FailureType, FailureSeverity, FailureAction, safe_tool_call
+    from gigi.failure_handler import (
+        FailureHandler,
+        FailureSeverity,
+    )
     failure_handler = FailureHandler()
     FAILURE_HANDLER_AVAILABLE = True
     logger.info("✓ Gigi Failure Handler initialized")
@@ -137,7 +148,8 @@ except Exception as e:
 
 # Import Gigi Shift Lock System for coordinator coordination
 try:
-    from gigi.shift_lock import get_shift_lock_manager, ShiftLockConflictError as CoordinatorLockError
+    from gigi.shift_lock import ShiftLockConflictError as CoordinatorLockError
+    from gigi.shift_lock import get_shift_lock_manager
     shift_lock_manager = get_shift_lock_manager()
     SHIFT_LOCK_AVAILABLE = True
     logger.info("✓ Gigi Shift Lock Manager initialized")
@@ -194,11 +206,11 @@ async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any]
         # Extract client info
         client_id = None
         client_name = "Unknown Client"
-        
+
         if caller_info and caller_info.get("caller_type") == "client":
             client_id = caller_info.get("person_id")
             client_name = caller_info.get("name", "Unknown Client")
-        
+
         if not client_id:
             logger.info(f"Transfer logging skipped: Caller is not an identified client ({client_name})")
             return
@@ -206,7 +218,7 @@ async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any]
         # 1. Log Care Alert Note
         timestamp = datetime.now().strftime("%I:%M %p")
         note_text = f"🚨 CARE ALERT: Call forwarded to Jason Shulman at {timestamp}. Reason: {reason}. (Source: Gigi Voice Agent)"
-        
+
         wellsky.add_note_to_client(
             client_id=client_id,
             note=note_text,
@@ -239,8 +251,12 @@ async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any]
 # Import enhanced webhook functionality for caller ID, transfer, and message taking
 try:
     from enhanced_webhook import (
-        CallerLookupService, generate_greeting, transfer_call,
-        send_telegram_message, handle_message_received, get_weather
+        CallerLookupService,
+        generate_greeting,
+        get_weather,
+        handle_message_received,
+        send_telegram_message,
+        transfer_call,
     )
     ENHANCED_WEBHOOK_AVAILABLE = True
 except ImportError:
@@ -420,6 +436,7 @@ SHADOW_LOGS = []
 
 import uuid
 
+
 def log_shadow_action(action: str, details: Dict[str, Any], trigger: str = "Unknown"):
     """Log an action taken in shadow mode."""
     entry = {
@@ -448,13 +465,13 @@ async def record_shadow_feedback(request: Request):
     data = await request.json()
     log_id = data.get("id")
     rating = data.get("rating")  # "good" or "bad"
-    
+
     for log in SHADOW_LOGS:
         if log["id"] == log_id:
             log["feedback"] = rating
             # In a real system, we would save this to a dataset for fine-tuning
             logger.info(f"Feedback recorded for {log_id}: {rating}")
-            
+
             # If feedback is "bad", capture a correction memory
             if rating == "bad" and MEMORY_SYSTEM_AVAILABLE and memory_system:
                 try:
@@ -470,7 +487,7 @@ async def record_shadow_feedback(request: Request):
                 except Exception as mem_err:
                     logger.warning(f"Failed to store correction memory: {mem_err}")
             return {"success": True}
-    
+
     return {"success": False, "error": "Log entry not found"}
 
 @app.post("/simulate/callout")
@@ -480,16 +497,16 @@ async def simulate_callout():
     Triggers execute_caregiver_call_out with mock data.
     """
     logger.info("Starting simulated call-out...")
-    
+
     # Mock data
     mock_caregiver_id = "TEST_CG_123"
     mock_shift_id = "TEST_SHIFT_456"
     mock_reason = "Simulation Test (Sick)"
-    
+
     # Force log entry for the simulation start
     if GIGI_MODE == "shadow":
         log_shadow_action(
-            "SIMULATION_START", 
+            "SIMULATION_START",
             {
                 "type": "caregiver_call_out",
                 "caregiver_id": mock_caregiver_id,
@@ -497,14 +514,14 @@ async def simulate_callout():
             },
             trigger="Manual Simulation Button"
         )
-    
+
     # Execute the tool (which handles Shadow Mode internally)
     result = await execute_caregiver_call_out(
         caregiver_id=mock_caregiver_id,
         shift_id=mock_shift_id,
         reason=mock_reason
     )
-    
+
     return {
         "status": "simulation_complete",
         "mode": GIGI_MODE,
@@ -515,14 +532,14 @@ async def simulate_callout():
 async def get_shadow_dashboard():
     """Simple dashboard to view Gigi's shadow mode actions."""
     status_color = "orange" if GIGI_MODE == "shadow" else "green"
-    
+
     # Calculate stats
     total_logs = len(SHADOW_LOGS)
     rated_logs = [l for l in SHADOW_LOGS if l['feedback'] is not None]
     good_logs = [l for l in rated_logs if l['feedback'] == 'good']
-    
+
     approval_rate = (len(good_logs) / len(rated_logs) * 100) if rated_logs else 0
-    
+
     html = f"""
     <html>
     <head>
@@ -691,14 +708,14 @@ async def get_shadow_dashboard():
             
             <div id="logs">
     """
-    
+
     for log in reversed(SHADOW_LOGS):
         feedback_class = ""
         if log['feedback'] == 'good':
             feedback_class = "feedback-given feedback-good"
         elif log['feedback'] == 'bad':
             feedback_class = "feedback-given feedback-bad"
-            
+
         html += f"""
         <div class="review-card" id="card-{log['id']}">
             <div class="card-header">
@@ -742,7 +759,7 @@ async def get_shadow_dashboard():
             </div>
         </div>
         """
-        
+
     html += """
             </div>
         </div>
@@ -796,7 +813,7 @@ async def _log_portal_event(description: str, event_type: str = "info", details:
         # Determine URL - all services run on localhost (Mac Mini)
         port = os.getenv("PORT", "8765")
         portal_url = os.getenv("PORTAL_URL", f"http://localhost:{port}")
-            
+
         payload = {
                     "source": "Gigi",
                     "description": description,
@@ -1639,7 +1656,7 @@ async def send_glip_message(chat_id: str, text: str) -> bool:
     if not token:
         logger.warning("RingCentral not available - Glip message not sent")
         return False
-    
+
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -1766,14 +1783,14 @@ async def notify_escalation_contacts(issue_type: str, client_name: str, summary:
             # Send to Cynthia directly
             cynthia_result = ringcentral_messaging_service.notify_cynthia(message)
             if cynthia_result.get("success"):
-                logger.info(f"RingCentral message sent to Cynthia")
+                logger.info("RingCentral message sent to Cynthia")
                 success = True
 
             # Also notify Jason for urgent issues
             if priority == "urgent" or issue_type == "cancel_threat":
                 jason_result = ringcentral_messaging_service.notify_jason(message)
                 if jason_result.get("success"):
-                    logger.info(f"RingCentral message sent to Jason")
+                    logger.info("RingCentral message sent to Jason")
                     success = True
         except Exception as e:
             logger.error(f"RingCentral messaging failed: {e}")
@@ -1941,7 +1958,7 @@ async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optio
     # =========================================================================
     # STEP 2: Fall back to WellSky API
     # =========================================================================
-    logger.info(f"Cache MISS for shifts, checking WellSky...")
+    logger.info("Cache MISS for shifts, checking WellSky...")
     shifts = await _get_caregiver_shifts(person_id)
 
     if not shifts:
@@ -2054,7 +2071,7 @@ async def get_active_shifts(person_id: str) -> List[Dict[str, Any]]:
 
         logger.info(f"Found {len(active_shifts)} active shifts in next 24 hours")
         return active_shifts
-        
+
     except Exception as e:
         logger.error(f"Error in get_active_shifts: {e}")
         # Return empty list on failure rather than crashing conversation
@@ -2134,9 +2151,9 @@ async def execute_caregiver_call_out(
                     "shift_locked": True,
                     "locked_by": locked_by,
                     "message": (
-                        f"I see this shift is currently being processed by our team. "
-                        f"Please hold on for just a moment while they handle it, or "
-                        f"try calling back in a few minutes if you need immediate assistance."
+                        "I see this shift is currently being processed by our team. "
+                        "Please hold on for just a moment while they handle it, or "
+                        "try calling back in a few minutes if you need immediate assistance."
                     ),
                     "errors": [f"Shift locked by {locked_by}"],
                     "action_completed": True,
@@ -2150,7 +2167,7 @@ async def execute_caregiver_call_out(
                 shift_id=shift_id,
                 reason=reason
             )
-            
+
     except Exception as e:
         # Phase 3 Failure Protocol: Handle tool failure gracefully
         return handle_tool_error("execute_caregiver_call_out", e, {
@@ -2295,7 +2312,7 @@ async def _execute_caregiver_call_out_locked(
     # =========================================================================
     wellsky_update_failed = False
     wellsky_failure_reason = ""
-    
+
     if GIGI_MODE == "shadow":
         log_shadow_action("UNASSIGN_CAREIVER_FROM_SHIFT", {"shift_id": shift_id, "caregiver_id": caregiver_id})
         result["step_a_wellsky_updated"] = True
@@ -2306,14 +2323,14 @@ async def _execute_caregiver_call_out_locked(
             if appointment_obj:
                 # 2. Modify the object: un-assign the caregiver
                 appointment_obj["caregiver"] = None
-                
+
                 # 3. PUT the modified object back
                 update_success, update_response = wellsky.update_appointment(shift_id, appointment_obj)
-                
+
                 if update_success:
                     result["step_a_wellsky_updated"] = True
                     logger.info(f"STEP A SUCCESS: Caregiver {caregiver_id} un-assigned from shift {shift_id} in WellSky.")
-                    
+
                     # 4. Add a Note to the Client (Care Alert)
                     wellsky.add_note_to_client(
                         client_id=client_id,
@@ -2342,12 +2359,12 @@ async def _execute_caregiver_call_out_locked(
         except Exception as e:
             wellsky_update_failed = True
             wellsky_failure_reason = str(e)
-    
+
     # CRITICAL CHECK: If the update failed, STOP and escalate.
     if wellsky_update_failed:
         logger.error(f"⚠️ ABORTING call-out process - WellSky update failed for shift {shift_id}: {wellsky_failure_reason}")
         # (Escalation block follows)
-        pass 
+        pass
 
     # =========================================================================
     # STEP B: Notify Team & Assign Thread
@@ -2411,7 +2428,7 @@ async def _execute_caregiver_call_out_locked(
         result["action_completed"] = True
         result["next_step"] = "Tell caregiver manager was notified. Ask 'Is there anything else?'"
 
-        logger.info(f"execute_caregiver_call_out ABORTED - human escalation sent")
+        logger.info("execute_caregiver_call_out ABORTED - human escalation sent")
         return result  # ⛔ STOP HERE - do NOT proceed with Steps B & C
 
     # =========================================================================
@@ -2521,7 +2538,7 @@ async def _execute_caregiver_call_out_locked(
             jason_phone = "+17205550101"  # TODO: Update with actual Jason's number
             await _send_sms_beetexting(jason_phone, escalation_message)
             await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_message)
-            logger.critical(f"ESCALATED notification failure to Jason + on-call manager")
+            logger.critical("ESCALATED notification failure to Jason + on-call manager")
         else:
             logger.critical(f"[SMS DISABLED] Would escalate: {escalation_message}")
 
@@ -2539,7 +2556,7 @@ async def _execute_caregiver_call_out_locked(
         )
         if OPERATIONS_SMS_ENABLED:
             await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
-            logger.info(f"SMS notification sent to on-call manager")
+            logger.info("SMS notification sent to on-call manager")
         else:
             logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
 
@@ -2569,16 +2586,16 @@ async def _execute_caregiver_call_out_locked(
     elif result["step_a_wellsky_updated"] and steps_completed == 1:
         # WellSky updated but only 1 of B/C succeeded
         result["message"] = (
-            f"I've updated the scheduling system to mark your shift as open. "
-            f"I had some trouble with the automated notifications, so I've alerted "
-            f"the on-call manager who will follow up manually. Feel better!"
+            "I've updated the scheduling system to mark your shift as open. "
+            "I had some trouble with the automated notifications, so I've alerted "
+            "the on-call manager who will follow up manually. Feel better!"
         )
     else:
         # This should never happen (we would have returned early), but just in case
         result["message"] = (
-            f"I've logged your call-out, but I had some trouble updating all systems. "
-            f"I've notified the on-call manager who will make sure coverage is handled. "
-            f"Please also try to contact the office directly if possible."
+            "I've logged your call-out, but I had some trouble updating all systems. "
+            "I've notified the on-call manager who will make sure coverage is handled. "
+            "Please also try to contact the office directly if possible."
         )
 
     # Critical: Signal to LLM that this action is complete
@@ -2650,15 +2667,15 @@ async def cancel_shift_acceptance(
                     "shift_locked": True,
                     "locked_by": locked_by,
                     "message": (
-                        f"I see this shift is currently being processed. Please hold on for just "
-                        f"a moment while the team handles it, or try calling back in a few minutes."
+                        "I see this shift is currently being processed. Please hold on for just "
+                        "a moment while the team handles it, or try calling back in a few minutes."
                     ),
                     "errors": [f"Shift locked by {locked_by}"],
                     "action_completed": True,
                     "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
                 }
         else:
-            logger.warning(f"Shift lock manager not available - proceeding without lock")
+            logger.warning("Shift lock manager not available - proceeding without lock")
             return await _cancel_shift_acceptance_locked(
                 caregiver_id=caregiver_id,
                 shift_id=shift_id,
@@ -2744,12 +2761,12 @@ async def _cancel_shift_acceptance_locked(
                 )
                 if OPERATIONS_SMS_ENABLED:
                     await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_msg)
-                    logger.critical(f"ESCALATED cancellation failure to on-call manager")
+                    logger.critical("ESCALATED cancellation failure to on-call manager")
 
                 result["message"] = (
-                    f"I understand you need to cancel, but I'm having trouble updating the system. "
-                    f"I've notified the manager on duty who will handle this manually. "
-                    f"They'll call you back shortly to confirm."
+                    "I understand you need to cancel, but I'm having trouble updating the system. "
+                    "I've notified the manager on duty who will handle this manually. "
+                    "They'll call you back shortly to confirm."
                 )
                 return result  # Stop here if WellSky fails
 
@@ -2815,7 +2832,7 @@ async def _cancel_shift_acceptance_locked(
     if OPERATIONS_SMS_ENABLED:
         await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, manager_message)
         result["step_c_manager_notified"] = True
-        logger.info(f"STEP C SUCCESS: Manager notified of cancellation")
+        logger.info("STEP C SUCCESS: Manager notified of cancellation")
     else:
         logger.info(f"[SMS DISABLED] Would notify manager: {manager_message}")
 
@@ -2839,8 +2856,8 @@ async def _cancel_shift_acceptance_locked(
             )
     else:
         result["message"] = (
-            f"I'm having trouble cancelling this in the system. I've alerted the manager "
-            f"who will handle it manually and call you back to confirm."
+            "I'm having trouble cancelling this in the system. I've alerted the manager "
+            "who will handle it manually and call you back to confirm."
         )
 
     result["action_completed"] = True
@@ -2947,7 +2964,7 @@ async def report_call_out(
             result = ringcentral_messaging_service.notify_scheduler_chat(rc_message)
             scheduler_notified = result.get("success", False)
             if scheduler_notified:
-                logger.info(f"RingCentral notification sent to New Scheduler chat")
+                logger.info("RingCentral notification sent to New Scheduler chat")
             else:
                 logger.warning(f"Failed to notify New Scheduler chat: {result.get('error')}")
         except Exception as e:
@@ -3332,7 +3349,7 @@ async def log_client_issue(
 
     # Auto-escalate cancel threats to urgent
     if is_cancel_threat and priority != "urgent":
-        logger.info(f"Auto-escalating to urgent priority due to cancel threat language")
+        logger.info("Auto-escalating to urgent priority due to cancel threat language")
         priority = "urgent"
 
     issue_data = {
@@ -3380,10 +3397,10 @@ async def log_client_issue(
         # 1. Create WellSky Task for client issue
         if WELLSKY_AVAILABLE and wellsky:
             task_priority = "urgent" if priority == "urgent" else "high" if priority == "high" else "normal"
-            
+
             # Use effective_client_id or fallback to None for generic task
             ws_client_id = effective_client_id if effective_client_id != "UNKNOWN" else None
-            
+
             task_created = wellsky.create_admin_task(
                 title=f"Client Issue: {issue_type}",
                 description=f"{note}\n\nPriority: {priority}\nLogged by: Gigi AI\nRequires follow-up call within 30 minutes",
@@ -3394,7 +3411,7 @@ async def log_client_issue(
             if task_created:
                 logger.info(f"✅ WellSky Task created for client issue: {issue_type} (Client: {ws_client_id or 'GENERAL'})")
             else:
-                logger.warning(f"⚠️ Failed to create WellSky Task for client issue")
+                logger.warning("⚠️ Failed to create WellSky Task for client issue")
 
         # 2. Notify Team
         schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
@@ -3418,9 +3435,9 @@ async def log_client_issue(
             priority=priority
         )
         if escalation_sent:
-            logger.info(f"Escalation notification sent to Cynthia and Jason")
+            logger.info("Escalation notification sent to Cynthia and Jason")
         else:
-            logger.warning(f"Escalation notification failed or disabled")
+            logger.warning("Escalation notification failed or disabled")
 
     if issue_id:
         return ClientIssueReport(
@@ -3615,7 +3632,7 @@ async def report_late(
             if response.status_code in (200, 201):
                 data = response.json()
                 logger.info(f"Late notification sent for shift {shift_id}")
-                
+
                 # ==========================================================================
                 # WORKFLOW: Notify Team
                 # ==========================================================================
@@ -4668,10 +4685,10 @@ async def retell_webhook(request: Request):
                         if cg:
                             logger.info(f"Caller ID (WellSky): Found Caregiver {cg.full_name}")
                             return {"name": cg.first_name, "type": "caregiver", "full_name": cg.full_name}
-                        
+
                         # Try Client (heuristic search if direct lookup missing)
                         # clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
-                        # clients = wellsky.search_patients(...) 
+                        # clients = wellsky.search_patients(...)
                         # (Skipping complex client search for speed, prioritizing CGs for now)
                     except Exception as e:
                         logger.warning(f"WellSky lookup failed: {e}")
@@ -4684,18 +4701,18 @@ async def retell_webhook(request: Request):
                     except Exception as e:
                         logger.warning(f"Database lookup failed: {e}")
                 return None
-            
+
             lookup_service = CallerLookupService(
                 db_lookup_fn=db_lookup,
                 cache_lookup_fn=lambda phone: _lookup_in_cache(phone)
             )
-            
+
             caller_info = lookup_service.lookup(from_number)
             greeting = generate_greeting(caller_info)
-            
+
             # Store enhanced info in call context
             _store_call_context(call_id, caller_info)
-            
+
             # Log the lookup result
             if caller_info.get("found"):
                 name = caller_info.get("name", "Unknown")
@@ -4703,7 +4720,7 @@ async def retell_webhook(request: Request):
                 logger.info(f"AUTO-LOOKUP: Found {name} via {source}")
             else:
                 logger.info(f"AUTO-LOOKUP: Unknown caller {from_number}")
-            
+
             # Prepare response with greeting and action instructions
             response_data = {
                 "status": "ok",
@@ -4720,7 +4737,7 @@ async def retell_webhook(request: Request):
             if caller_info.get("should_transfer"):
                 response_data["action"] = "greet_and_transfer"
                 logger.info(f"Will transfer call to Jason after greeting: '{greeting}'")
-                
+
                 # Log to WellSky 24/7/365
                 asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Auto-routing (Known Client)"))
             elif caller_info.get("take_message"):
@@ -4832,12 +4849,12 @@ async def retell_webhook(request: Request):
                 elif tool_name == "transfer_to_jason" and ENHANCED_WEBHOOK_AVAILABLE:
                     reason = tool_args.get("reason", "Requested by caller")
                     success = transfer_call(call_id, JASON_PHONE)
-                    
+
                     # Log to WellSky if success
                     if success:
                         caller_info = _get_call_context(call_id)
                         asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=reason))
-                        
+
                     results.append({
                         "tool_call_id": tool_call_id,
                         "result": {
@@ -4851,17 +4868,17 @@ async def retell_webhook(request: Request):
                     caller_phone = tool_args.get("caller_phone", "Unknown")
                     caller_name = tool_args.get("caller_name", "")
                     message_text = tool_args.get("message", "")
-                    
+
                     # Format caller info for message handler
                     caller_info = {
                         "phone": caller_phone,
                         "name": caller_name if caller_name else None,
                         "type": "unknown"
                     }
-                    
+
                     # Send to Telegram
                     handle_message_received(caller_info, message_text, call_id)
-                    
+
                     results.append({
                         "tool_call_id": tool_call_id,
                         "result": {
@@ -5079,8 +5096,10 @@ async def retell_function_call(function_name: str, request: Request):
             logger.info(f"get_schedule called: name={person_name}, type={person_type}, days={days}")
 
             try:
+                from datetime import date as date_cls
+                from datetime import timedelta
+
                 import psycopg2
-                from datetime import date as date_cls, timedelta
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = psycopg2.connect(db_url)
                 cur = conn.cursor()
@@ -5324,7 +5343,9 @@ async def retell_function_call(function_name: str, request: Request):
                 return JSONResponse({"success": False, "error": "Missing required field: message"})
 
             try:
-                from services.ringcentral_messaging_service import ringcentral_messaging_service
+                from services.ringcentral_messaging_service import (
+                    ringcentral_messaging_service,
+                )
                 if ringcentral_messaging_service:
                     result = ringcentral_messaging_service.send_message_to_chat(
                         chat_name="New Scheduling",
@@ -5492,7 +5513,7 @@ async def retell_function_call(function_name: str, request: Request):
         elif function_name == "resolve_person":
             if not ENTITY_RESOLUTION_AVAILABLE:
                 raise HTTPException(status_code=503, detail="Entity Resolution service is not available.")
-            
+
             name = args.get("name")
             if not name:
                 raise HTTPException(status_code=400, detail="Name is required for resolution.")
@@ -5655,11 +5676,11 @@ async def retell_function_call(function_name: str, request: Request):
             # Transfer call to Jason's cell phone
             logger.info("Transferring call to Jason at 603-997-1495")
             record_tool_call(call_id, function_name)
-            
+
             # Log to WellSky 24/7/365
             caller_info = _get_call_context(call_id)
             asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Direct tool call: transfer_to_jason"))
-            
+
             return JSONResponse({
                 "response_type": "transfer_call",
                 "transfer_to": "+16039971495",
@@ -5670,11 +5691,11 @@ async def retell_function_call(function_name: str, request: Request):
             # Transfer call to on-call manager line
             logger.info("Transferring call to on-call line at 303-757-1777")
             record_tool_call(call_id, function_name)
-            
+
             # Log to WellSky 24/7/365
             caller_info = _get_call_context(call_id)
             asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Direct tool call: transfer_to_oncall"))
-            
+
             return JSONResponse({
                 "response_type": "transfer_call",
                 "transfer_to": "+13037571777",
@@ -5763,15 +5784,15 @@ async def retell_function_call(function_name: str, request: Request):
                 clean_number = "+" + clean_number
             logger.info(f"Transferring call to {clean_number}")
             record_tool_call(call_id, function_name)
-            
+
             # Log to WellSky 24/7/365
             caller_info = _get_call_context(call_id)
             asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=f"Direct tool call: transfer_call to {clean_number}"))
-            
+
             return JSONResponse({
                 "response_type": "transfer_call",
                 "transfer_to": clean_number,
-                "message": f"I'm transferring your call now. Please hold."
+                "message": "I'm transferring your call now. Please hold."
             })
 
         elif function_name == "get_weather":
@@ -5798,7 +5819,7 @@ async def retell_function_call(function_name: str, request: Request):
             record_tool_call(call_id, function_name)
             return JSONResponse({
                 "response_type": "response",
-                "response": f"Got it. I'll make sure Jason gets your message.",
+                "response": "Got it. I'll make sure Jason gets your message.",
                 "content": "Message recorded and sent to Jason"
             })
 
@@ -6300,7 +6321,7 @@ def detect_sms_intent(message: str) -> str:
 
     # New Client Inquiry / Biz Dev
     if any(phrase in msg_lower for phrase in [
-        "looking for care", "need a caregiver", "rates", "cost", 
+        "looking for care", "need a caregiver", "rates", "cost",
         "new client", "sign up", "services", "help for my mom", "help for my dad",
         "care for my", "interested in services"
     ]):
@@ -6383,7 +6404,7 @@ def _log_clock_issue_to_wellsky(
     """Create WellSky task + care alert note for clock-in/out issues."""
     caregiver_name = caller_name or "Caregiver"
     action_label = "clock out" if intent == "clock_out" else "clock in"
-    
+
     # 1. ALWAYS LOG LOCALLY FIRST (Safety Backup)
     try:
         import sqlite3
@@ -6430,18 +6451,21 @@ def _log_clock_issue_to_wellsky(
         except Exception as e:
             logger.error(f"Failed to document in TaskLog: {e}")
 
-    # Fallback to Admin Task (for office visibility)
-    wellsky.create_admin_task(
-        title=f"SMS {action_label.upper()} - {caregiver_name}",
-        description=(
-            f"Caregiver: {caregiver_name}\n"
-            f"Message: {message}\n"
-            f"Shift: {getattr(shift, 'id', 'unknown')}"
-        ),
-        priority="high",
-        related_client_id=str(client_id) if client_id else None,
-        related_caregiver_id=str(caregiver_id) if caregiver_id else None
-    )
+    # Fallback: Clinical Note (documentation, not a task)
+    if client_id:
+        wellsky.create_clinical_note(
+            patient_id=str(client_id),
+            title=f"SMS {action_label.upper()} - {caregiver_name}",
+            note_text=f"Caregiver: {caregiver_name}\nMessage: {message}\nShift: {getattr(shift, 'id', 'unknown')}",
+            source="gigi_sms",
+        )
+    else:
+        wellsky.create_admin_task(
+            title=f"SMS {action_label.upper()} - {caregiver_name}",
+            description=f"Caregiver: {caregiver_name}\nMessage: {message}\nShift: {getattr(shift, 'id', 'unknown')}",
+            priority="high",
+            related_caregiver_id=str(caregiver_id) if caregiver_id else None
+        )
 
 
 def _log_unmatched_sms_to_wellsky(
@@ -6453,7 +6477,7 @@ def _log_unmatched_sms_to_wellsky(
     """Create WellSky task for caregiver SMS that couldn't be matched to a shift."""
     caregiver_name = caller_name or "Unknown Caregiver"
     action_label = "clock out" if intent == "clock_out" else "clock in"
-    
+
     # ALWAYS LOG LOCALLY FIRST (Safety Backup)
     try:
         import sqlite3
@@ -6516,7 +6540,7 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
 
     # FORCE REPLY for now to ensure reliability, ignoring office hours gates
-    should_reply = True 
+    should_reply = True
     if not should_reply:
         logger.info("SMS auto-reply is disabled. Processing without reply.")
 
@@ -6600,7 +6624,7 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                     # Send to on-call manager
                     if OPERATIONS_SMS_ENABLED:
                         await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, coordinator_message)
-                        logger.info(f"Sent partial availability alert to coordinator")
+                        logger.info("Sent partial availability alert to coordinator")
 
                     # Generate empathetic response to caregiver
                     reply_text = (
@@ -6684,11 +6708,11 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                     # Smart Call-Out Handling (Continuity First)
                     if caller_info and caller_info.caller_type == CallerType.CAREGIVER and caller_info.person_id:
                         caregiver_id = caller_info.person_id
-                        
+
                         # Find the shift they mean (upcoming or current)
                         # We use get_shift_details logic which checks cache then API
                         shift_details = await get_shift_details(caregiver_id)
-                        
+
                         if shift_details:
                             # Execute Smart Call-Out Logic
                             result = await execute_caregiver_call_out(
@@ -6696,10 +6720,10 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                                 shift_id=shift_details.shift_id,
                                 reason=sms.message[:200]
                             )
-                            
+
                             if result.get("success") or result.get("step_a_wellsky_updated"):
                                 action_taken = "Processed call-out and started finding coverage."
-                                
+
                                 # Create a mock shift object for context formatting
                                 current_shift = SimpleNamespace(
                                     client_first_name=shift_details.client_name.split()[0] if shift_details.client_name else "Client",
@@ -6733,7 +6757,7 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                             date_str = shift.date.strftime("%a %m/%d") if shift.date else ""
                             shift_lines.append(f"- {date_str} {shift.start_time}: {client}")
                         shift_context = "UPCOMING SHIFTS:\n" + "\n".join(shift_lines)
-                    
+
                     # Notify Schedulers
                     schedulers_chat = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
                     if schedulers_chat:
@@ -6888,7 +6912,7 @@ async def beetexting_webhook(request: Request):
             return JSONResponse({"status": "ok", "action": "skipped_outbound"})
 
         if not from_number or not message:
-            logger.warning(f"Missing from_number or message in webhook payload")
+            logger.warning("Missing from_number or message in webhook payload")
             return JSONResponse({"status": "error", "message": "Missing required fields"}, status_code=400)
 
         # Handle the inbound SMS
@@ -6899,7 +6923,7 @@ async def beetexting_webhook(request: Request):
             contact_name=payload.get("contactName"),
         )
         result = await handle_inbound_sms(sms)
-        
+
         # Log to Portal
         await _log_portal_event(
             description=f"SMS from {from_number}",
@@ -6930,7 +6954,7 @@ async def ringcentral_sms_webhook(request: Request):
     # Handle RingCentral validation request
     validation_token = request.headers.get("Validation-Token")
     if validation_token:
-        logger.info(f"RingCentral webhook validation request received")
+        logger.info("RingCentral webhook validation request received")
         return Response(
             content=validation_token,
             headers={"Validation-Token": validation_token},
@@ -6990,7 +7014,7 @@ async def ringcentral_sms_webhook(request: Request):
             contact_name = from_info.get("name")
 
         if not from_number or not message:
-            logger.warning(f"Missing from_number or message in RingCentral payload")
+            logger.warning("Missing from_number or message in RingCentral payload")
             return JSONResponse({"status": "error", "message": "Missing required fields"}, status_code=400)
 
         # Handle the inbound SMS
