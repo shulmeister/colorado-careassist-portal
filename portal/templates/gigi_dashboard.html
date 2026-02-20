@@ -1936,8 +1936,9 @@
                         btn.innerHTML = '<i class="bi bi-check-circle"></i> Running...';
                     }
 
-                    // Show toast notification
-                    showToast('Simulation launched! Check history for results.', 'success');
+                    // Show toast and auto-switch to history view
+                    showToast('Simulation launched! Switching to history...', 'success');
+                    setTimeout(() => switchSimulations('history'), 1000);
 
                     // Start polling for completion
                     if (data.simulation_id && card) {

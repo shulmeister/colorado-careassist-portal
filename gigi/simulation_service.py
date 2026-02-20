@@ -10,17 +10,24 @@ Author: Colorado Care Assist
 Date: February 6, 2026
 """
 
-import os
-import json
 import asyncio
+import json
 import logging
+import os
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional
 
-import websockets
-import google.generativeai as genai
 import psycopg2
+import websockets
+
+# Gemini SDK (new style)
+try:
+    from google import genai
+    from google.genai import types as genai_types
+    GENAI_AVAILABLE = True
+except ImportError:
+    GENAI_AVAILABLE = False
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -66,19 +73,21 @@ class SimulationRunner:
         self.error = None
         self.started_at = None
 
-        # Configure Gemini
+        # Configure Gemini (new SDK)
+        if not GENAI_AVAILABLE:
+            raise ValueError("google.genai SDK not installed — cannot run simulations")
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY not set")
 
-        genai.configure(api_key=gemini_api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.llm = genai.Client(api_key=gemini_api_key)
+        self.llm_model = os.getenv("GIGI_LLM_MODEL", "gemini-3-flash-preview")
 
-        # Voice Brain WebSocket URL
-        ws_host = os.getenv("VOICE_BRAIN_WS_HOST", "localhost:8765")
-        self.ws_url = f"ws://{ws_host}/llm-websocket/{call_id}"
+        # Voice Brain WebSocket URL — use current server's port
+        ws_port = os.getenv("PORT", "8765")
+        self.ws_url = f"ws://localhost:{ws_port}/llm-websocket/{call_id}"
 
-        logger.info(f"[Sim {call_id}] Initialized for scenario: {scenario['name']}")
+        logger.info(f"[Sim {call_id}] Initialized for scenario: {scenario['name']} -> {self.ws_url}")
 
     async def run(self):
         """Execute the simulation"""
@@ -94,10 +103,10 @@ class SimulationRunner:
 
             # Connect to Voice Brain
             try:
-                async with websockets.connect(self.ws_url, open_timeout=5) as websocket:
+                async with websockets.connect(self.ws_url, open_timeout=10) as websocket:
                     logger.info(f"[Sim {self.call_id}] Connected to Voice Brain")
 
-                    # Wait for config and initial greeting
+                    # Handle config + send call_details + receive greeting
                     await self._handle_initial_exchange(websocket)
 
                     # Run conversation for up to 10 turns or until completion
@@ -115,7 +124,7 @@ class SimulationRunner:
                         await self._send_user_message(websocket, user_message)
                         self.transcript.append({"role": "user", "content": user_message})
 
-                        # Receive response
+                        # Receive response (may include ping/pong frames to skip)
                         assistant_response = await self._receive_response(websocket)
                         if assistant_response:
                             self.transcript.append({"role": "assistant", "content": assistant_response})
@@ -150,8 +159,8 @@ class SimulationRunner:
             await self._update_db_status("failed", error_message=str(e))
 
     async def _generate_user_response(self) -> str:
-        """Use Gemini Flash to generate realistic user response"""
-        system_prompt = f"""You are simulating a phone call to a home care agency.
+        """Use Gemini to generate realistic user response"""
+        prompt = f"""You are simulating a phone call to a home care agency.
 
 Identity: {self.scenario['identity']}
 Goal: {self.scenario['goal']}
@@ -170,19 +179,26 @@ Conversation so far:
 Generate your next response as the caller (JUST the response, no meta-commentary):"""
 
         try:
-            response = self.model.generate_content(
-                system_prompt,
-                generation_config=genai.types.GenerationConfig(
-                    max_output_tokens=100,
-                    temperature=0.7,
-                )
+            config = genai_types.GenerateContentConfig(
+                max_output_tokens=100,
+                temperature=0.7,
+            )
+            response = await asyncio.to_thread(
+                self.llm.models.generate_content,
+                model=self.llm_model,
+                contents=prompt,
+                config=config,
             )
 
-            return response.text.strip()
+            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, 'text') and part.text:
+                        return part.text.strip()
+
+            return "I understand. Can you tell me more?"
 
         except Exception as e:
             logger.error(f"[Sim {self.call_id}] Gemini error: {e}")
-            # Fallback to canned responses
             fallback_responses = [
                 "I understand. Can you tell me more?",
                 "Yes, that makes sense.",
@@ -191,23 +207,40 @@ Generate your next response as the caller (JUST the response, no meta-commentary
             return fallback_responses[len(self.transcript) % len(fallback_responses)]
 
     async def _handle_initial_exchange(self, websocket):
-        """Handle config and initial greeting"""
+        """Handle config + send call_details + receive greeting (Retell protocol)"""
         try:
-            # Receive config request
+            # 1. Receive config from voice brain
             msg = await asyncio.wait_for(websocket.recv(), timeout=10)
             data = json.loads(msg)
 
             if data.get("response_type") == "config":
-                logger.info(f"[Sim {self.call_id}] Received config request")
+                logger.info(f"[Sim {self.call_id}] Received config")
 
-            # Receive initial greeting
-            msg = await asyncio.wait_for(websocket.recv(), timeout=10)
+            # 2. Send call_details (simulating what Retell sends to trigger greeting)
+            from_number = self.scenario.get("from_number", "+13074598220")
+            await websocket.send(json.dumps({
+                "interaction_type": "call_details",
+                "call": {
+                    "call_id": self.call_id,
+                    "from_number": from_number,
+                    "to_number": "+17208176600",
+                    "direction": "inbound",
+                    "call_type": "phone_call",
+                    "metadata": {"simulation": True}
+                }
+            }))
+            logger.info(f"[Sim {self.call_id}] Sent call_details (from: {from_number})")
+
+            # 3. Receive greeting from voice brain
+            msg = await asyncio.wait_for(websocket.recv(), timeout=20)
             data = json.loads(msg)
 
             if data.get("response_type") == "response":
                 greeting = data.get("content", "")
                 self.transcript.append({"role": "assistant", "content": greeting})
                 logger.info(f"[Sim {self.call_id}] Greeting: {greeting[:100]}...")
+            else:
+                logger.warning(f"[Sim {self.call_id}] Unexpected message type after call_details: {data.get('response_type')}")
 
         except asyncio.TimeoutError:
             logger.error(f"[Sim {self.call_id}] Timeout waiting for initial exchange")
@@ -217,7 +250,7 @@ Generate your next response as the caller (JUST the response, no meta-commentary
             raise
 
     async def _send_user_message(self, websocket, message: str):
-        """Send user message to Voice Brain"""
+        """Send user message to Voice Brain (Retell protocol)"""
         payload = {
             "interaction_type": "response_required",
             "response_id": len(self.transcript),
@@ -227,16 +260,35 @@ Generate your next response as the caller (JUST the response, no meta-commentary
         logger.info(f"[Sim {self.call_id}] Sent: {message[:100]}...")
 
     async def _receive_response(self, websocket) -> Optional[str]:
-        """Receive assistant response from Voice Brain"""
+        """Receive assistant response from Voice Brain, skipping ping/pong frames"""
+        deadline = asyncio.get_event_loop().time() + 45  # 45s total timeout
         try:
-            msg = await asyncio.wait_for(websocket.recv(), timeout=30)
-            data = json.loads(msg)
+            while asyncio.get_event_loop().time() < deadline:
+                remaining = deadline - asyncio.get_event_loop().time()
+                msg = await asyncio.wait_for(websocket.recv(), timeout=max(remaining, 1))
+                data = json.loads(msg)
 
-            if data.get("response_type") == "response":
-                content = data.get("content", "")
-                logger.info(f"[Sim {self.call_id}] Received: {content[:100]}...")
-                return content
+                if data.get("response_type") == "ping_pong":
+                    # Voice brain might send ping/pong — respond and continue
+                    await websocket.send(json.dumps({
+                        "interaction_type": "ping_pong",
+                        "timestamp": data.get("timestamp")
+                    }))
+                    continue
 
+                if data.get("response_type") == "response":
+                    content = data.get("content", "")
+                    logger.info(f"[Sim {self.call_id}] Received: {content[:100]}...")
+                    return content
+
+                # tool_call_invocation / tool_call_result — skip, wait for final response
+                if data.get("response_type") in ("tool_call_invocation", "tool_call_result"):
+                    logger.info(f"[Sim {self.call_id}] Tool event: {data.get('response_type')}")
+                    continue
+
+                logger.info(f"[Sim {self.call_id}] Skipping message type: {data.get('response_type')}")
+
+            logger.error(f"[Sim {self.call_id}] Timeout waiting for response")
             return None
 
         except asyncio.TimeoutError:
