@@ -374,6 +374,14 @@ GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care
 
 You are messaging with {sender_name}, a team member. This is an INTERNAL company conversation.
 
+ABOUT JASON (the CEO/owner):
+- Family: Wife Jennifer, daughters Lucky, Ava, and Gigi (you're named after his youngest)
+- JAM BAND FANATIC: Phish (#1), Goose, Billy Strings, Widespread Panic, String Cheese, Trey Anastasio
+- Also: Dogs In A Pile, Pigeons Playing Ping Pong, STS9, Dom Dolla, John Summit, Tame Impala, Khruangbin
+- Venues: Red Rocks, Mission Ballroom, Ogden, Fillmore, Greek Theatre LA, The Sphere Vegas
+- Travel: United Premier Gold (lifetime), Hertz Gold, Marriott Bonvoy Gold, TSA Pre, Epic + Ikon ski
+- Style: "King of the Deal" — best quality for least money. Sharp, efficient, no fluff.
+
 CRITICAL RULES:
 - You are the Chief of Staff. Be direct, knowledgeable, and helpful.
 - Use tools to look up real data — never make up shift times or caregiver names.
@@ -1313,36 +1321,36 @@ class GigiRingCentralBot:
                 except Exception as e:
                     logger.error(f"Daily confirmation error: {e}")
 
-            # 6. Morning briefing via Telegram (service handles its own 7am timing)
-            if self.morning_briefing:
-                try:
-                    sent = self.morning_briefing.check_and_send()
-                    if sent:
-                        logger.info("Morning briefing sent to Jason via Telegram")
-                except Exception as e:
-                    logger.error(f"Morning briefing error: {e}")
+            # 6. Morning briefing — DISABLED (user request: no unsolicited messages)
+            # if self.morning_briefing:
+            #     try:
+            #         sent = self.morning_briefing.check_and_send()
+            #         if sent:
+            #             logger.info("Morning briefing sent to Jason via Telegram")
+            #     except Exception as e:
+            #         logger.error(f"Morning briefing error: {e}")
 
-            # 7. Claude Code task completion notifications (every cycle)
-            try:
-                await self._check_task_completions()
-            except Exception as e:
-                logger.error(f"Task completion check error: {e}")
+            # 7. Claude Code task completion notifications — DISABLED (user request: no unsolicited messages)
+            # try:
+            #     await self._check_task_completions()
+            # except Exception as e:
+            #     logger.error(f"Task completion check error: {e}")
 
-            # 8. Ticket watch monitor (every 30th cycle = ~15 min)
-            if not hasattr(self, '_ticket_check_counter'):
-                self._ticket_check_counter = 0
-                self._ticket_monitor = None
-            self._ticket_check_counter += 1
-            if self._ticket_check_counter >= 30:
-                self._ticket_check_counter = 0
-                try:
-                    if self._ticket_monitor is None:
-                        from gigi.ticket_monitor import TicketMonitorService
-                        self._ticket_monitor = TicketMonitorService()
-                    await asyncio.to_thread(self._ticket_monitor.check_watches)
-                    logger.debug("Ticket watch check completed")
-                except Exception as e:
-                    logger.error(f"Ticket monitor error: {e}")
+            # 8. Ticket watch monitor — DISABLED (user request: no unsolicited messages)
+            # if not hasattr(self, '_ticket_check_counter'):
+            #     self._ticket_check_counter = 0
+            #     self._ticket_monitor = None
+            # self._ticket_check_counter += 1
+            # if self._ticket_check_counter >= 30:
+            #     self._ticket_check_counter = 0
+            #     try:
+            #         if self._ticket_monitor is None:
+            #             from gigi.ticket_monitor import TicketMonitorService
+            #             self._ticket_monitor = TicketMonitorService()
+            #         await asyncio.to_thread(self._ticket_monitor.check_watches)
+            #         logger.debug("Ticket watch check completed")
+            #     except Exception as e:
+            #         logger.error(f"Ticket monitor error: {e}")
 
         except Exception as e:
             logger.error(f"Error in check_and_act: {e}")
