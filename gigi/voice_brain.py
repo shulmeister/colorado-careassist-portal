@@ -398,6 +398,45 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
+        "name": "clock_in_shift",
+        "description": "Clock a caregiver into their shift. Use when a caregiver says they forgot to clock in or needs help clocking in. Look up their shift first with get_wellsky_shifts.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "appointment_id": {"type": "string", "description": "The shift/appointment ID from WellSky (get this from get_wellsky_shifts)"},
+                "caregiver_name": {"type": "string", "description": "Caregiver's name (for logging)"},
+                "notes": {"type": "string", "description": "Optional notes (e.g. 'clocked in via phone call')"}
+            },
+            "required": ["appointment_id"]
+        }
+    },
+    {
+        "name": "clock_out_shift",
+        "description": "Clock a caregiver out of their shift. Use when a caregiver says they forgot to clock out or needs help clocking out. Look up their shift first with get_wellsky_shifts.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "appointment_id": {"type": "string", "description": "The shift/appointment ID from WellSky (get this from get_wellsky_shifts)"},
+                "caregiver_name": {"type": "string", "description": "Caregiver's name (for logging)"},
+                "notes": {"type": "string", "description": "Optional notes (e.g. 'clocked out via phone call')"}
+            },
+            "required": ["appointment_id"]
+        }
+    },
+    {
+        "name": "find_replacement_caregiver",
+        "description": "Find a replacement caregiver when someone calls out sick. Searches available caregivers, scores them by fit, and initiates SMS outreach. Use after report_call_out when a shift needs coverage.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "shift_id": {"type": "string", "description": "The shift/appointment ID that needs coverage"},
+                "original_caregiver_id": {"type": "string", "description": "WellSky ID of the caregiver who called out"},
+                "reason": {"type": "string", "description": "Reason for the calloff"}
+            },
+            "required": ["shift_id", "original_caregiver_id"]
+        }
+    },
+    {
         "name": "transfer_call",
         "description": "Transfer the call to another number.",
         "input_schema": {
@@ -590,7 +629,25 @@ _VOICE_SYSTEM_PROMPT_BASE = """You are Gigi, the AI Chief of Staff for Colorado 
 - Make restaurant reservations (book_table_request)
 - Get stock and crypto prices
 - Transfer calls to Jason or the office
+- Clock caregivers in/out of shifts (clock_in_shift, clock_out_shift)
+- Find replacement caregivers when someone calls out (find_replacement_caregiver)
 - Save and recall memories (save_memory, recall_memories)
+
+# When to Transfer Calls (CRITICAL)
+Transfer to Jason when:
+- Caller is angry, upset, or escalating — after ONE attempt to help
+- Billing, payment, or invoice disputes
+- Medical emergencies or safety concerns about a client
+- A client or family member ASKS for a human or supervisor
+- You've tried 2 tools and still can't resolve the issue
+- Employment questions (hiring, firing, pay rates, raises)
+- Legal questions or complaints about discrimination/harassment
+Transfer to office when:
+- General office inquiries during business hours
+- Fax/mail requests
+- Vendor or supplier calls
+
+DO NOT transfer if you can handle it with your tools. Caregivers asking about shifts, clock in/out, call-outs — handle those yourself.
 
 # Key People
 - Jason Shulman: Owner (transfer to him for escalations)
@@ -1142,6 +1199,87 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             except Exception as e:
                 return json.dumps({"error": str(e)})
 
+        elif tool_name == "clock_in_shift":
+            appointment_id = tool_input.get("appointment_id", "")
+            caregiver_name = tool_input.get("caregiver_name", "")
+            notes = tool_input.get("notes", "Clocked in via Gigi voice call")
+            if not appointment_id:
+                return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first to find the shift ID."})
+            try:
+                def _clock_in():
+                    if WELLSKY_AVAILABLE and wellsky:
+                        success, message = wellsky.clock_in_shift(appointment_id, notes=notes)
+                        return {"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name}
+                    else:
+                        return {"error": "WellSky service not available"}
+                result = await run_sync(_clock_in)
+                return json.dumps(result)
+            except Exception as e:
+                logger.error(f"Clock-in error: {e}")
+                return json.dumps({"error": f"Clock-in failed: {str(e)}"})
+
+        elif tool_name == "clock_out_shift":
+            appointment_id = tool_input.get("appointment_id", "")
+            caregiver_name = tool_input.get("caregiver_name", "")
+            notes = tool_input.get("notes", "Clocked out via Gigi voice call")
+            if not appointment_id:
+                return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first to find the shift ID."})
+            try:
+                def _clock_out():
+                    if WELLSKY_AVAILABLE and wellsky:
+                        success, message = wellsky.clock_out_shift(appointment_id, notes=notes)
+                        return {"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name}
+                    else:
+                        return {"error": "WellSky service not available"}
+                result = await run_sync(_clock_out)
+                return json.dumps(result)
+            except Exception as e:
+                logger.error(f"Clock-out error: {e}")
+                return json.dumps({"error": f"Clock-out failed: {str(e)}"})
+
+        elif tool_name == "find_replacement_caregiver":
+            shift_id = tool_input.get("shift_id", "")
+            original_caregiver_id = tool_input.get("original_caregiver_id", "")
+            reason = tool_input.get("reason", "called out")
+            if not shift_id or not original_caregiver_id:
+                return json.dumps({"error": "Missing shift_id or original_caregiver_id"})
+            try:
+                def _find_replacement():
+                    try:
+                        from sales.shift_filling.engine import shift_filling_engine
+                        campaign = shift_filling_engine.process_calloff(
+                            shift_id=shift_id,
+                            caregiver_id=original_caregiver_id,
+                            reason=reason,
+                            reported_by="gigi_voice"
+                        )
+                        if not campaign:
+                            return {"success": False, "error": "Could not create replacement campaign"}
+                        contacted = []
+                        for o in campaign.caregivers_contacted[:5]:
+                            contacted.append({
+                                "name": getattr(o, 'caregiver', {}).get('full_name', 'Unknown') if isinstance(getattr(o, 'caregiver', None), dict) else str(getattr(getattr(o, 'caregiver', None), 'full_name', 'Unknown')),
+                                "tier": getattr(o, 'tier', 0),
+                                "score": getattr(o, 'match_score', 0),
+                            })
+                        return {
+                            "success": True,
+                            "campaign_id": campaign.id,
+                            "status": campaign.status.value if hasattr(campaign.status, 'value') else str(campaign.status),
+                            "caregivers_contacted": campaign.total_contacted,
+                            "top_matches": contacted,
+                            "message": f"Replacement search started. Contacting {campaign.total_contacted} caregivers via SMS."
+                        }
+                    except ImportError:
+                        return {"error": "Shift filling engine not available"}
+                    except Exception as e:
+                        return {"error": f"Shift filling failed: {str(e)}"}
+                result = await run_sync(_find_replacement)
+                return json.dumps(result)
+            except Exception as e:
+                logger.error(f"Find replacement error: {e}")
+                return json.dumps({"error": str(e)})
+
         elif tool_name == "transfer_call":
             dest = tool_input.get("destination", "").lower()
             if dest == "jason":
@@ -1597,6 +1735,24 @@ async def _generate_gemini(messages, call_info, on_token, call_id, is_simulation
         texts = [p.text for p in response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
         if texts:
             return "".join(texts), transfer_number
+
+    # Gemini returned no text after tool calls — nudge it to speak
+    logger.warning("[gemini] No text in response after tool loop, nudging for spoken response")
+    contents.append(genai_types.Content(role="user", parts=[
+        genai_types.Part(text="Based on the information you found, please give a brief spoken response to the caller.")
+    ]))
+    try:
+        nudge_response = await asyncio.to_thread(
+            llm_client.models.generate_content,
+            model=LLM_MODEL, contents=contents, config=config
+        )
+        if nudge_response.candidates and nudge_response.candidates[0].content and nudge_response.candidates[0].content.parts:
+            texts = [p.text for p in nudge_response.candidates[0].content.parts if hasattr(p, 'text') and p.text]
+            if texts:
+                return "".join(texts), transfer_number
+    except Exception as e:
+        logger.error(f"[gemini] Nudge call failed: {e}")
+
     return None, transfer_number
 
 

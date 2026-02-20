@@ -69,6 +69,7 @@ class SimulationRunner:
         self.launched_by = launched_by
 
         self.transcript: List[Dict] = []  # {role: user/assistant, content: str}
+        self.captured_tool_calls: List[Dict] = []  # Captured from WebSocket events
         self.status = "pending"
         self.error = None
         self.started_at = None
@@ -160,28 +161,41 @@ class SimulationRunner:
 
     async def _generate_user_response(self) -> str:
         """Use Gemini to generate realistic user response"""
-        prompt = f"""You are simulating a phone call to a home care agency.
+        # Determine what the caller should say based on conversation stage
+        turn_count = len([t for t in self.transcript if t["role"] == "user"])
 
-Identity: {self.scenario['identity']}
-Goal: {self.scenario['goal']}
-Personality: {self.scenario['personality']}
+        if turn_count == 0:
+            stage_hint = "This is your FIRST message. Introduce yourself and state your reason for calling clearly."
+        elif turn_count >= 4:
+            stage_hint = "The conversation has gone on long enough. Wrap up — say thanks and goodbye."
+        else:
+            stage_hint = "Continue the conversation naturally. Answer any questions the agent asked."
 
-IMPORTANT:
-- Respond naturally as this person would in a phone conversation
-- Keep responses short (1-3 sentences) like real speech
-- Follow the goal but don't be robotic
-- Show the personality traits
-- If you've achieved your goal and the agent answered your questions, say goodbye
+        prompt = f"""You are role-playing a phone caller to a home care agency. Output ONLY the exact words you would speak.
 
-Conversation so far:
+CALLER PROFILE:
+- Name/Role: {self.scenario['identity']}
+- Reason for calling: {self.scenario['goal']}
+- Personality: {self.scenario['personality']}
+
+STAGE: {stage_hint}
+
+RULES (MUST FOLLOW):
+1. Output 1-3 complete sentences. MINIMUM 8 words total.
+2. NEVER cut off mid-sentence. Every sentence must end with a period, question mark, or exclamation point.
+3. Be specific — include names, dates, times, shift details when relevant.
+4. NO quotation marks, NO stage directions, NO asterisks, NO parentheses.
+5. If the agent already helped you, say "Thank you, goodbye" to end the call.
+
+CONVERSATION SO FAR:
 {self._format_transcript_for_context()}
 
-Generate your next response as the caller (JUST the response, no meta-commentary):"""
+YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
         try:
             config = genai_types.GenerateContentConfig(
-                max_output_tokens=100,
-                temperature=0.7,
+                max_output_tokens=300,
+                temperature=0.4,
             )
             response = await asyncio.to_thread(
                 self.llm.models.generate_content,
@@ -193,18 +207,55 @@ Generate your next response as the caller (JUST the response, no meta-commentary
             if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
                 for part in response.candidates[0].content.parts:
                     if hasattr(part, 'text') and part.text:
-                        return part.text.strip()
+                        text = part.text.strip().strip('"').strip("'")
+                        # Remove stage directions like *sighs* or (pauses)
+                        import re
+                        text = re.sub(r'\*[^*]+\*', '', text).strip()
+                        text = re.sub(r'\([^)]+\)', '', text).strip()
 
-            return "I understand. Can you tell me more?"
+                        if len(text.split()) < 3:
+                            # Truly too short — use context fallback
+                            return self._get_context_fallback()
+
+                        # If text doesn't end with punctuation, append a period
+                        if not any(text.rstrip().endswith(p) for p in '.!?'):
+                            text = text.rstrip() + "."
+
+                        return text
+
+            return self._get_context_fallback()
 
         except Exception as e:
             logger.error(f"[Sim {self.call_id}] Gemini error: {e}")
-            fallback_responses = [
-                "I understand. Can you tell me more?",
-                "Yes, that makes sense.",
-                "Okay, I see.",
-            ]
-            return fallback_responses[len(self.transcript) % len(fallback_responses)]
+            return self._get_context_fallback()
+
+    def _get_context_fallback(self) -> str:
+        """Generate a context-appropriate fallback when Gemini fails."""
+        turn_count = len([t for t in self.transcript if t["role"] == "user"])
+        name = self.scenario['identity'].split(',')[0].strip()
+
+        if turn_count == 0:
+            return f"Hi, my name is {name}. {self.scenario['goal']}."
+        elif turn_count >= 4:
+            return "Thank you for your help. Goodbye."
+
+        # Build a contextual response based on last agent message
+        last_agent_msg = ""
+        for t in reversed(self.transcript):
+            if t["role"] == "assistant":
+                last_agent_msg = t["content"].lower()
+                break
+
+        if "name" in last_agent_msg or "who" in last_agent_msg:
+            return f"My name is {name}."
+        elif "shift" in last_agent_msg or "schedule" in last_agent_msg or "when" in last_agent_msg:
+            return "It is my afternoon shift tomorrow. I have a fever and cannot come in."
+        elif "anything else" in last_agent_msg:
+            return "No, that is everything. Thank you for your help. Goodbye."
+        elif "sorry" in last_agent_msg or "trouble" in last_agent_msg:
+            return f"My name is {name} and I work the afternoon shift. Can you please log my callout for tomorrow?"
+        else:
+            return f"I need to call out sick for my shift tomorrow. My name is {name}."
 
     async def _handle_initial_exchange(self, websocket):
         """Handle config + send call_details + receive greeting (Retell protocol)"""
@@ -260,8 +311,13 @@ Generate your next response as the caller (JUST the response, no meta-commentary
         logger.info(f"[Sim {self.call_id}] Sent: {message[:100]}...")
 
     async def _receive_response(self, websocket) -> Optional[str]:
-        """Receive assistant response from Voice Brain, skipping ping/pong frames"""
-        deadline = asyncio.get_event_loop().time() + 45  # 45s total timeout
+        """Receive assistant response from Voice Brain, waiting for content_complete=True.
+
+        The voice brain sends intermediate responses (thinking phrases like
+        "Let me look that up") with content_complete=False BEFORE executing tools.
+        We must skip those and wait for the final content_complete=True response.
+        """
+        deadline = asyncio.get_event_loop().time() + 60  # 60s total timeout (tools can be slow)
         try:
             while asyncio.get_event_loop().time() < deadline:
                 remaining = deadline - asyncio.get_event_loop().time()
@@ -269,7 +325,6 @@ Generate your next response as the caller (JUST the response, no meta-commentary
                 data = json.loads(msg)
 
                 if data.get("response_type") == "ping_pong":
-                    # Voice brain might send ping/pong — respond and continue
                     await websocket.send(json.dumps({
                         "interaction_type": "ping_pong",
                         "timestamp": data.get("timestamp")
@@ -278,21 +333,48 @@ Generate your next response as the caller (JUST the response, no meta-commentary
 
                 if data.get("response_type") == "response":
                     content = data.get("content", "")
-                    logger.info(f"[Sim {self.call_id}] Received: {content[:100]}...")
-                    return content
+                    content_complete = data.get("content_complete", False)
 
-                # tool_call_invocation / tool_call_result — skip, wait for final response
-                if data.get("response_type") in ("tool_call_invocation", "tool_call_result"):
-                    logger.info(f"[Sim {self.call_id}] Tool event: {data.get('response_type')}")
+                    if content_complete:
+                        # This is the final response — return it
+                        logger.info(f"[Sim {self.call_id}] Final response: {content[:100]}...")
+                        return content
+                    else:
+                        # Intermediate thinking phrase — skip and keep waiting
+                        logger.info(f"[Sim {self.call_id}] Intermediate (skipped): {content[:80]}")
+                        continue
+
+                # Capture tool calls from WebSocket events (cross-process safe)
+                if data.get("response_type") == "tool_call_invocation":
+                    tool_call_id = data.get("tool_call_id", "")
+                    tool_name = data.get("name", "unknown")
+                    if not hasattr(self, '_pending_tools'):
+                        self._pending_tools = {}
+                    self._pending_tools[tool_call_id] = tool_name
+                    logger.info(f"[Sim {self.call_id}] Tool invocation: {tool_name}")
+                    continue
+
+                if data.get("response_type") == "tool_call_result":
+                    tool_call_id = data.get("tool_call_id", "")
+                    pending = getattr(self, '_pending_tools', {})
+                    tool_name = pending.pop(tool_call_id, "unknown")
+                    result_content = data.get("content", "")
+                    self.captured_tool_calls.append({
+                        "tool": tool_name,
+                        "input": {},
+                        "result": result_content[:500],
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    logger.info(f"[Sim {self.call_id}] Tool captured: {tool_name}")
                     continue
 
                 logger.info(f"[Sim {self.call_id}] Skipping message type: {data.get('response_type')}")
 
-            logger.error(f"[Sim {self.call_id}] Timeout waiting for response")
+            logger.error(f"[Sim {self.call_id}] Timeout waiting for final response")
             return None
 
         except asyncio.TimeoutError:
-            logger.error(f"[Sim {self.call_id}] Timeout waiting for response")
+            logger.error(f"[Sim {self.call_id}] Timeout waiting for final response")
             return None
         except Exception as e:
             logger.error(f"[Sim {self.call_id}] Error receiving response: {e}")
@@ -302,11 +384,12 @@ Generate your next response as the caller (JUST the response, no meta-commentary
         """Evaluate and save results"""
         duration = (datetime.now() - self.started_at).seconds if self.started_at else 0
 
-        # Get tool calls
-        tool_calls = SIMULATION_TOOL_CALLS.get(self.call_id, [])
+        # Get tool calls — prefer WebSocket captures (cross-process safe),
+        # fall back to in-memory global dict (same-process only)
+        tool_calls = self.captured_tool_calls or SIMULATION_TOOL_CALLS.get(self.call_id, [])
         tools_used = list(set([t["tool"] for t in tool_calls]))
 
-        logger.info(f"[Sim {self.call_id}] Completing simulation - {len(self.transcript)} turns, {len(tool_calls)} tool calls")
+        logger.info(f"[Sim {self.call_id}] Completing simulation - {len(self.transcript)} turns, {len(tool_calls)} tool calls (tools: {tools_used})")
 
         # Evaluate
         from gigi.simulation_evaluator import evaluate_simulation

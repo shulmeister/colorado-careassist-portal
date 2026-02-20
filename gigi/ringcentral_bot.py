@@ -261,6 +261,9 @@ SMS_TOOLS = [
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back (default 30)"}}, "required": ["query"]}},
     {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
+    {"name": "clock_in_shift", "description": "Clock a caregiver into their shift in WellSky. Use when a caregiver texts that they forgot to clock in. Look up their shift first with get_wellsky_shifts.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
+    {"name": "clock_out_shift", "description": "Clock a caregiver out of their shift in WellSky. Use when a caregiver texts that they forgot to clock out. Look up their shift first with get_wellsky_shifts.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
+    {"name": "find_replacement_caregiver", "description": "Find a replacement caregiver when someone calls out sick. Scores by fit, initiates SMS outreach.", "input_schema": {"type": "object", "properties": {"shift_id": {"type": "string", "description": "Shift/appointment ID needing coverage"}, "original_caregiver_id": {"type": "string", "description": "WellSky ID of caregiver who called out"}, "reason": {"type": "string", "description": "Reason for calloff"}}, "required": ["shift_id", "original_caregiver_id"]}},
 ]
 
 # Full tool set for Glip DM replies — matches Telegram capabilities
@@ -293,6 +296,9 @@ DM_TOOLS = [
     {"name": "watch_tickets", "description": "Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends Telegram alerts when tickets go on presale or general sale.", "input_schema": {"type": "object", "properties": {"artist": {"type": "string", "description": "Artist or event name"}, "venue": {"type": "string", "description": "Venue filter (optional)"}, "city": {"type": "string", "description": "City (default Denver)"}}, "required": ["artist"]}},
     {"name": "list_ticket_watches", "description": "List all active ticket watches.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "remove_ticket_watch", "description": "Stop watching for tickets.", "input_schema": {"type": "object", "properties": {"watch_id": {"type": "integer", "description": "Watch ID to remove"}}, "required": ["watch_id"]}},
+    {"name": "clock_in_shift", "description": "Clock a caregiver into their shift in WellSky. Use when a caregiver needs help clocking in.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
+    {"name": "clock_out_shift", "description": "Clock a caregiver out of their shift in WellSky. Use when a caregiver needs help clocking out.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
+    {"name": "find_replacement_caregiver", "description": "Find a replacement caregiver when someone calls out sick. Scores by fit, initiates SMS outreach.", "input_schema": {"type": "object", "properties": {"shift_id": {"type": "string", "description": "Shift/appointment ID needing coverage"}, "original_caregiver_id": {"type": "string", "description": "WellSky ID of caregiver who called out"}, "reason": {"type": "string", "description": "Reason for calloff"}}, "required": ["shift_id", "original_caregiver_id"]}},
 ]
 
 # =========================================================================
@@ -341,6 +347,12 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="remove_ticket_watch", description="Stop watching for tickets.",
             parameters=genai_types.Schema(type="OBJECT", properties={"watch_id": _gs("integer", "Watch ID to remove")}, required=["watch_id"])),
+        genai_types.FunctionDeclaration(name="clock_in_shift", description="Clock a caregiver into their shift in WellSky.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
+        genai_types.FunctionDeclaration(name="clock_out_shift", description="Clock a caregiver out of their shift in WellSky.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
+        genai_types.FunctionDeclaration(name="find_replacement_caregiver", description="Find replacement caregiver when someone calls out. Scores by fit, initiates SMS outreach.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"shift_id": _gs("string", "Shift ID needing coverage"), "original_caregiver_id": _gs("string", "WellSky ID of caregiver who called out"), "reason": _gs("string", "Reason for calloff")}, required=["shift_id", "original_caregiver_id"])),
     ])]
 
     GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
@@ -400,6 +412,12 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="remove_ticket_watch", description="Stop watching for tickets.",
             parameters=genai_types.Schema(type="OBJECT", properties={"watch_id": _gs("integer", "Watch ID to remove")}, required=["watch_id"])),
+        genai_types.FunctionDeclaration(name="clock_in_shift", description="Clock a caregiver into their shift in WellSky.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
+        genai_types.FunctionDeclaration(name="clock_out_shift", description="Clock a caregiver out of their shift in WellSky.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"appointment_id": _gs("string", "Shift/appointment ID"), "caregiver_name": _gs("string", "Caregiver name"), "notes": _gs("string", "Optional notes")}, required=["appointment_id"])),
+        genai_types.FunctionDeclaration(name="find_replacement_caregiver", description="Find replacement caregiver when someone calls out. Scores by fit, initiates SMS outreach.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"shift_id": _gs("string", "Shift ID needing coverage"), "original_caregiver_id": _gs("string", "WellSky ID of caregiver who called out"), "reason": _gs("string", "Reason for calloff")}, required=["shift_id", "original_caregiver_id"])),
     ])]
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
@@ -436,7 +454,9 @@ COMMON SCENARIOS:
 - Questions about caregivers: Use get_wellsky_caregivers. If a name isn't found, the person might be a CLIENT, not a caregiver — try get_wellsky_clients instead.
 - "Any texts from caregivers?": Use check_recent_sms to see recent inbound SMS messages.
 - "Text Angela and tell her...": Use send_sms with their phone number and your message.
-- Caregiver calling out or cancelling: Use log_call_out after confirming the details.
+- Caregiver calling out or cancelling: Use log_call_out after confirming the details. Then use find_replacement_caregiver to start finding a replacement.
+- "I forgot to clock in" or "Can you clock me in?": Use identify_caller to find them, then get_wellsky_shifts to find their shift, then clock_in_shift with the appointment ID.
+- "I forgot to clock out" or "Can you clock me out?": Same flow — identify, find shift, then clock_out_shift.
 - "Who is this number?": Use identify_caller to look up a phone number.
 - Operational questions: Answer from your knowledge or use tools.
 
@@ -444,6 +464,8 @@ KEY CAPABILITIES:
 - You CAN see incoming text messages via check_recent_sms — you monitor ALL company lines: 307-459-8220, 719-428-3999, and 303-757-1777.
 - You CAN send text messages via send_sms — you can text caregivers, clients, or anyone.
 - You CAN log call-outs and create urgent admin tasks in WellSky.
+- You CAN clock caregivers in and out of shifts via clock_in_shift and clock_out_shift.
+- You CAN find replacement caregivers when someone calls out via find_replacement_caregiver.
 - You CAN look up any phone number to identify who it belongs to.
 - You CAN check calendars, emails, weather, stocks, crypto, and search the web.
 
@@ -489,7 +511,8 @@ On the FIRST message in a conversation, ALWAYS use identify_caller with the call
 COMMON SCENARIOS:
 - "Who is with [client]?" or "What caregiver is with [client]?": Use get_client_current_status. This checks BOTH the cached database AND the live WellSky API, including 24-hour shifts. Trust its answer and report it directly.
 - "When is [name]'s next shift?" — Could be a CLIENT or a CAREGIVER. Try get_client_current_status first (shows next_shift). If not found as a client, try get_wellsky_shifts with the name.
-- Caregiver calling out sick: Use identify_caller, then log_call_out. Reassure them.
+- Caregiver calling out sick: Use identify_caller, then log_call_out. Then use find_replacement_caregiver to start finding a replacement. Reassure them.
+- Caregiver forgot to clock in/out: Use identify_caller, then get_wellsky_shifts to find their shift, then clock_in_shift or clock_out_shift.
 - Caregiver asking about schedule: Use identify_caller, then get_wellsky_shifts with their caregiver_id.
 - Client asking when caregiver is coming: Use identify_caller, then get_wellsky_shifts with their client_id.
 - Anyone asking about a person by name: Try get_wellsky_clients first, then get_wellsky_caregivers if not found. A name could be either.
@@ -885,15 +908,65 @@ class GigiRingCentralBot:
 
         return True, "OK"
 
-    def _record_reply(self, phone: str):
+    def _record_reply(self, phone: str, reply_text: str = ""):
         """Record that we sent a reply to this number"""
         clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
         self.reply_history.setdefault('replies', []).append({
             'phone': clean_phone,
-            'timestamp': datetime.utcnow().isoformat()
+            'timestamp': datetime.utcnow().isoformat(),
+            'text': reply_text[:200] if reply_text else ""
         })
         self.reply_history['hourly_count'] = self.reply_history.get('hourly_count', 0) + 1
         self._save_reply_history()
+
+    def _detect_semantic_loop(self, phone: str, new_reply: str) -> bool:
+        """
+        Detect if Gigi is repeating herself to this phone number.
+        Compares key phrases in the new reply against recent replies.
+        Returns True if a semantic loop is detected.
+        """
+        import re
+        clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+
+        # Gather recent reply texts to this number (last 3)
+        recent_texts = []
+        for reply in reversed(self.reply_history.get('replies', [])):
+            reply_phone = ''.join(filter(str.isdigit, reply.get('phone', '')))[-10:]
+            if reply_phone == clean_phone and reply.get('text'):
+                recent_texts.append(reply['text'])
+                if len(recent_texts) >= 3:
+                    break
+
+        if len(recent_texts) < 2:
+            return False
+
+        def _extract_key_phrases(text: str) -> set:
+            """Extract meaningful words (4+ chars, lowercase, no stopwords)."""
+            stopwords = {'this', 'that', 'with', 'from', 'have', 'been', 'will', 'your',
+                         'more', 'about', 'would', 'could', 'should', 'their', 'there',
+                         'here', 'they', 'them', 'than', 'then', 'also', 'just', 'like',
+                         'when', 'what', 'which', 'were', 'some', 'these', 'those',
+                         'into', 'other', 'know', 'need', 'help', 'back', 'sure',
+                         'please', 'thanks', 'thank', 'very', 'really', 'going'}
+            words = set(re.findall(r'[a-z]{4,}', text.lower()))
+            return words - stopwords
+
+        new_phrases = _extract_key_phrases(new_reply)
+        if not new_phrases:
+            return False
+
+        # Check overlap with each recent reply
+        loop_count = 0
+        for prev_text in recent_texts:
+            prev_phrases = _extract_key_phrases(prev_text)
+            if not prev_phrases:
+                continue
+            overlap = len(new_phrases & prev_phrases) / max(len(new_phrases), 1)
+            if overlap >= 0.5:  # 50%+ overlap = semantically similar
+                loop_count += 1
+
+        # If 2+ recent replies are similar to the new one, it's a loop
+        return loop_count >= 2
 
     async def initialize(self):
         """Initialize connections and RingCentral SDK"""
@@ -2548,6 +2621,59 @@ class GigiRingCentralBot:
                 from gigi.ticket_monitor import remove_watch
                 return json.dumps(remove_watch(int(tool_input.get("watch_id", 0))))
 
+            elif tool_name == "clock_in_shift":
+                appointment_id = tool_input.get("appointment_id", "")
+                caregiver_name = tool_input.get("caregiver_name", "")
+                notes = tool_input.get("notes", "Clocked in via Gigi SMS")
+                if not appointment_id:
+                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
+                try:
+                    from services.wellsky_service import WellSkyService
+                    ws = WellSkyService()
+                    success, message = ws.clock_in_shift(appointment_id, notes=notes)
+                    return json.dumps({"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name})
+                except Exception as e:
+                    return json.dumps({"error": f"Clock-in failed: {str(e)}"})
+
+            elif tool_name == "clock_out_shift":
+                appointment_id = tool_input.get("appointment_id", "")
+                caregiver_name = tool_input.get("caregiver_name", "")
+                notes = tool_input.get("notes", "Clocked out via Gigi SMS")
+                if not appointment_id:
+                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
+                try:
+                    from services.wellsky_service import WellSkyService
+                    ws = WellSkyService()
+                    success, message = ws.clock_out_shift(appointment_id, notes=notes)
+                    return json.dumps({"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name})
+                except Exception as e:
+                    return json.dumps({"error": f"Clock-out failed: {str(e)}"})
+
+            elif tool_name == "find_replacement_caregiver":
+                shift_id = tool_input.get("shift_id", "")
+                original_caregiver_id = tool_input.get("original_caregiver_id", "")
+                reason = tool_input.get("reason", "called out")
+                if not shift_id or not original_caregiver_id:
+                    return json.dumps({"error": "Missing shift_id or original_caregiver_id"})
+                try:
+                    from sales.shift_filling.engine import shift_filling_engine
+                    campaign = shift_filling_engine.process_calloff(
+                        shift_id=shift_id, caregiver_id=original_caregiver_id,
+                        reason=reason, reported_by="gigi_sms"
+                    )
+                    if not campaign:
+                        return json.dumps({"success": False, "error": "Could not create replacement campaign"})
+                    return json.dumps({
+                        "success": True, "campaign_id": campaign.id,
+                        "status": campaign.status.value if hasattr(campaign.status, 'value') else str(campaign.status),
+                        "caregivers_contacted": campaign.total_contacted,
+                        "message": f"Replacement search started. Contacting {campaign.total_contacted} caregivers via SMS."
+                    })
+                except ImportError:
+                    return json.dumps({"error": "Shift filling engine not available"})
+                except Exception as e:
+                    return json.dumps({"error": f"Shift filling failed: {str(e)}"})
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -3435,6 +3561,59 @@ class GigiRingCentralBot:
                 from gigi.ticket_monitor import remove_watch
                 return json.dumps(await asyncio.to_thread(remove_watch, int(tool_input.get("watch_id", 0))))
 
+            elif tool_name == "clock_in_shift":
+                appointment_id = tool_input.get("appointment_id", "")
+                caregiver_name = tool_input.get("caregiver_name", "")
+                notes = tool_input.get("notes", "Clocked in via Gigi DM")
+                if not appointment_id:
+                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
+                def _dm_clock_in():
+                    from services.wellsky_service import WellSkyService
+                    ws = WellSkyService()
+                    success, message = ws.clock_in_shift(appointment_id, notes=notes)
+                    return {"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name}
+                return json.dumps(await asyncio.to_thread(_dm_clock_in))
+
+            elif tool_name == "clock_out_shift":
+                appointment_id = tool_input.get("appointment_id", "")
+                caregiver_name = tool_input.get("caregiver_name", "")
+                notes = tool_input.get("notes", "Clocked out via Gigi DM")
+                if not appointment_id:
+                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
+                def _dm_clock_out():
+                    from services.wellsky_service import WellSkyService
+                    ws = WellSkyService()
+                    success, message = ws.clock_out_shift(appointment_id, notes=notes)
+                    return {"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name}
+                return json.dumps(await asyncio.to_thread(_dm_clock_out))
+
+            elif tool_name == "find_replacement_caregiver":
+                shift_id = tool_input.get("shift_id", "")
+                original_caregiver_id = tool_input.get("original_caregiver_id", "")
+                reason = tool_input.get("reason", "called out")
+                if not shift_id or not original_caregiver_id:
+                    return json.dumps({"error": "Missing shift_id or original_caregiver_id"})
+                def _dm_find_replacement():
+                    try:
+                        from sales.shift_filling.engine import shift_filling_engine
+                        campaign = shift_filling_engine.process_calloff(
+                            shift_id=shift_id, caregiver_id=original_caregiver_id,
+                            reason=reason, reported_by="gigi_dm"
+                        )
+                        if not campaign:
+                            return {"success": False, "error": "Could not create replacement campaign"}
+                        return {
+                            "success": True, "campaign_id": campaign.id,
+                            "status": campaign.status.value if hasattr(campaign.status, 'value') else str(campaign.status),
+                            "caregivers_contacted": campaign.total_contacted,
+                            "message": f"Replacement search started. Contacting {campaign.total_contacted} caregivers via SMS."
+                        }
+                    except ImportError:
+                        return {"error": "Shift filling engine not available"}
+                    except Exception as e:
+                        return {"error": f"Shift filling failed: {str(e)}"}
+                return json.dumps(await asyncio.to_thread(_dm_find_replacement))
+
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -3500,6 +3679,12 @@ class GigiRingCentralBot:
                 reply = "Got it. I've notified the care team that you need assistance. Someone will get back to you shortly."
             else:
                 reply = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
+
+        # --- SEMANTIC LOOP DETECTION ---
+        if reply and reply_method == "sms" and phone:
+            if self._detect_semantic_loop(phone, reply):
+                logger.warning(f"🔁 SEMANTIC LOOP detected for {phone} — forcing escalation reply")
+                reply = "I want to make sure you get the help you need. Let me have someone from the team call you back shortly."
 
         # --- SEND REPLY ---
         if reply:
@@ -3572,7 +3757,7 @@ class GigiRingCentralBot:
                     response = requests.post(url, headers=headers, json=data, timeout=20)
                     if response.status_code == 200:
                         logger.info(f"🌙 After-Hours SMS Reply Sent to {clean_phone}")
-                        self._record_reply(clean_phone)
+                        self._record_reply(clean_phone, reply)
                     else:
                         logger.error(f"Failed to send SMS reply: {response.status_code} - {response.text}")
 
