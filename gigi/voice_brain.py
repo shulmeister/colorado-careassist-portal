@@ -561,6 +561,56 @@ ANTHROPIC_TOOLS = [
             "required": ["watch_id"]
         }
     },
+    {
+        "name": "get_task_board",
+        "description": "Read Jason's task board. Shows tasks by section: Today, Soon, Later, Waiting, Agenda, Inbox, Done. Use when asked about priorities or to-dos.",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "add_task",
+        "description": "Add a task to Jason's task board. Use when Jason says 'I have a task', 'add to my list', 'remind me to', 'I need to'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "The task description"},
+                "section": {"type": "string", "description": "Board section: Today, Soon, Later, Inbox (default: Today)"}
+            },
+            "required": ["task"]
+        }
+    },
+    {
+        "name": "complete_task",
+        "description": "Mark a task done on Jason's task board. Use when Jason says 'done with X', 'finished X', 'check off X'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "task_text": {"type": "string", "description": "Text of the task to complete (partial match OK)"}
+            },
+            "required": ["task_text"]
+        }
+    },
+    {
+        "name": "capture_note",
+        "description": "Capture a quick note or idea to Jason's scratchpad. Use when Jason says 'I have an idea', 'note this', 'jot this down'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "note": {"type": "string", "description": "The note or idea to capture"}
+            },
+            "required": ["note"]
+        }
+    },
+    {
+        "name": "get_daily_notes",
+        "description": "Read today's daily notes for context on what Jason has been working on.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}
+            },
+            "required": []
+        }
+    },
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -1450,6 +1500,114 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             from gigi.chief_of_staff_tools import cos_tools
             watch_id = tool_input.get("watch_id")
             result = await cos_tools.remove_ticket_watch(watch_id=watch_id)
+            return json.dumps(result)
+
+        elif tool_name == "get_task_board":
+            def _voice_read_board():
+                try:
+                    with open(os.path.expanduser("~/Task Board.md"), "r") as f:
+                        return {"task_board": f.read()}
+                except FileNotFoundError:
+                    return {"task_board": "(empty)"}
+            result = await run_sync(_voice_read_board)
+            return json.dumps(result)
+
+        elif tool_name == "add_task":
+            task_text = tool_input.get("task", "").strip()
+            section = tool_input.get("section", "Today").strip()
+            if not task_text:
+                return json.dumps({"error": "No task text provided"})
+            valid_sections = ["Today", "Soon", "Later", "Waiting", "Agenda", "Inbox", "Reference"]
+            section_match = next((s for s in valid_sections if s.lower() == section.lower()), "Today")
+            def _voice_add_task():
+                path = os.path.expanduser("~/Task Board.md")
+                with open(path, "r") as f:
+                    content = f.read()
+                marker = f"## {section_match}\n"
+                if marker in content:
+                    idx = content.index(marker) + len(marker)
+                    rest = content[idx:]
+                    if rest.startswith("-\n") or rest.startswith("- \n"):
+                        content_new = content[:idx] + f"- [ ] {task_text}\n" + rest[rest.index('\n') + 1:]
+                    else:
+                        content_new = content[:idx] + f"- [ ] {task_text}\n" + rest
+                else:
+                    content_new = content + f"\n## {section_match}\n- [ ] {task_text}\n"
+                with open(path, "w") as f:
+                    f.write(content_new)
+                return {"success": True, "task": task_text, "section": section_match}
+            result = await run_sync(_voice_add_task)
+            return json.dumps(result)
+
+        elif tool_name == "complete_task":
+            task_text = tool_input.get("task_text", "").strip().lower()
+            if not task_text:
+                return json.dumps({"error": "No task text provided"})
+            def _voice_complete_task():
+                try:
+                    path = os.path.expanduser("~/Task Board.md")
+                    with open(path, "r") as f:
+                        lines = f.readlines()
+                    completed = False
+                    completed_task = ""
+                    new_lines = []
+                    for line in lines:
+                        if not completed and "- [ ]" in line and task_text in line.lower():
+                            completed_task = line.replace("- [ ]", "- [x]").strip()
+                            completed = True
+                        else:
+                            new_lines.append(line)
+                    if not completed:
+                        return {"error": f"No uncompleted task matching '{task_text}'"}
+                    content = "".join(new_lines)
+                    done_marker = "## Done\n"
+                    if done_marker in content:
+                        idx = content.index(done_marker) + len(done_marker)
+                        rest = content[idx:]
+                        if rest.startswith("-\n") or rest.startswith("- \n"):
+                            content = content[:idx] + completed_task + "\n" + rest[rest.index("\n") + 1:]
+                        else:
+                            content = content[:idx] + completed_task + "\n" + rest
+                    with open(path, "w") as f:
+                        f.write(content)
+                    return {"success": True, "completed": completed_task}
+                except Exception as e:
+                    return {"error": f"Failed: {str(e)}"}
+            result = await run_sync(_voice_complete_task)
+            return json.dumps(result)
+
+        elif tool_name == "capture_note":
+            note = tool_input.get("note", "").strip()
+            if not note:
+                return json.dumps({"error": "No note provided"})
+            def _voice_capture_note():
+                path = os.path.expanduser("~/Scratchpad.md")
+                with open(path, "r") as f:
+                    content = f.read()
+                from datetime import datetime as dt
+                timestamp = dt.now().strftime("%I:%M %p")
+                content = content.rstrip() + f"\n- {note} ({timestamp})\n"
+                with open(path, "w") as f:
+                    f.write(content)
+                return {"success": True, "note": note}
+            result = await run_sync(_voice_capture_note)
+            return json.dumps(result)
+
+        elif tool_name == "get_daily_notes":
+            target_date = tool_input.get("date", "")
+            def _voice_read_notes():
+                try:
+                    import glob as g
+                    from datetime import datetime as dt
+                    d = target_date if target_date else dt.now().strftime("%Y-%m-%d")
+                    matches = g.glob(os.path.join(os.path.expanduser("~/Daily Notes"), f"{d}*"))
+                    if matches:
+                        with open(matches[0], "r") as f:
+                            return {"date": d, "notes": f.read()}
+                    return {"date": d, "notes": "(no daily notes for this date)"}
+                except Exception as e:
+                    return {"error": f"Failed: {str(e)}"}
+            result = await run_sync(_voice_read_notes)
             return json.dumps(result)
 
         else:
