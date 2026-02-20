@@ -14,13 +14,14 @@ Two Distinct Roles:
    - Ensures nothing falls through the cracks, even if "handled" silently.
 """
 
-import os
-import sys
-import logging
 import asyncio
 import json
+import logging
+import os
+import sys
 from collections import OrderedDict
-from datetime import datetime, date, time, timedelta
+from datetime import date, datetime, time, timedelta
+
 import pytz
 import requests
 
@@ -45,16 +46,19 @@ from ringcentral.websocket.events import WebSocketEvents
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from services.ringcentral_messaging_service import ringcentral_messaging_service, RINGCENTRAL_SERVER
+from services.ringcentral_messaging_service import (
+    RINGCENTRAL_SERVER,
+    ringcentral_messaging_service,
+)
 from services.wellsky_service import WellSkyService
 
 # Memory system, mode detector, failure handler
 try:
-    from gigi.memory_system import MemorySystem, MemoryType, MemorySource, ImpactLevel
+    from gigi.memory_system import ImpactLevel, MemorySource, MemorySystem, MemoryType
     _rc_memory_system = MemorySystem()
     RC_MEMORY_AVAILABLE = True
     logger.info("Memory system initialized for RC bot")
-except Exception as e:
+except Exception:
     _rc_memory_system = None
     RC_MEMORY_AVAILABLE = False
 
@@ -63,7 +67,7 @@ try:
     _rc_mode_detector = ModeDetector()
     RC_MODE_AVAILABLE = True
     logger.info("Mode detector initialized for RC bot")
-except Exception as e:
+except Exception:
     _rc_mode_detector = None
     RC_MODE_AVAILABLE = False
 
@@ -72,7 +76,7 @@ try:
     _rc_failure_handler = FailureHandler()
     RC_FAILURE_HANDLER_AVAILABLE = True
     logger.info("Failure handler initialized for RC bot")
-except Exception as e:
+except Exception:
     _rc_failure_handler = None
     RC_FAILURE_HANDLER_AVAILABLE = False
 
@@ -286,6 +290,9 @@ DM_TOOLS = [
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto, macro outlook, etc. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze"}}, "required": ["question"]}},
     {"name": "get_weather_arb_status", "description": "Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "watch_tickets", "description": "Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends Telegram alerts when tickets go on presale or general sale.", "input_schema": {"type": "object", "properties": {"artist": {"type": "string", "description": "Artist or event name"}, "venue": {"type": "string", "description": "Venue filter (optional)"}, "city": {"type": "string", "description": "City (default Denver)"}}, "required": ["artist"]}},
+    {"name": "list_ticket_watches", "description": "List all active ticket watches.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "remove_ticket_watch", "description": "Stop watching for tickets.", "input_schema": {"type": "object", "properties": {"watch_id": {"type": "integer", "description": "Watch ID to remove"}}, "required": ["watch_id"]}},
 ]
 
 # =========================================================================
@@ -328,6 +335,12 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
         genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="watch_tickets", description="Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends alerts when tickets go on sale.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"artist": _gs("string", "Artist or event name"), "venue": _gs("string", "Venue (optional)"), "city": _gs("string", "City (default Denver)")}, required=["artist"])),
+        genai_types.FunctionDeclaration(name="list_ticket_watches", description="List all active ticket watches.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="remove_ticket_watch", description="Stop watching for tickets.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"watch_id": _gs("integer", "Watch ID to remove")}, required=["watch_id"])),
     ])]
 
     GEMINI_DM_TOOLS = [genai_types.Tool(function_declarations=[
@@ -381,6 +394,12 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"question": _gs("string", "The financial research question to analyze")}, required=["question"])),
         genai_types.FunctionDeclaration(name="get_weather_arb_status", description="Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="watch_tickets", description="Set up a ticket watch for an artist/event. Monitors Ticketmaster and AXS, sends alerts when tickets go on sale.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"artist": _gs("string", "Artist or event name"), "venue": _gs("string", "Venue (optional)"), "city": _gs("string", "City (default Denver)")}, required=["artist"])),
+        genai_types.FunctionDeclaration(name="list_ticket_watches", description="List all active ticket watches.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="remove_ticket_watch", description="Stop watching for tickets.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"watch_id": _gs("integer", "Watch ID to remove")}, required=["watch_id"])),
     ])]
 
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
@@ -542,10 +561,11 @@ class GigiRingCentralBot:
         # --- Caregiver preference extraction (GAP 3) ---
         self.preference_extractor = None
         try:
-            from gigi.memory_system import MemorySystem
             from gigi.caregiver_preference_extractor import (
-                CaregiverPreferenceExtractor, CAREGIVER_MEMORY_ENABLED
+                CAREGIVER_MEMORY_ENABLED,
+                CaregiverPreferenceExtractor,
             )
+            from gigi.memory_system import MemorySystem
             if CAREGIVER_MEMORY_ENABLED and self.llm:
                 memory_sys = MemorySystem()
                 self.preference_extractor = CaregiverPreferenceExtractor(
@@ -562,7 +582,10 @@ class GigiRingCentralBot:
         self.clock_reminder = None
         self._last_clock_check = datetime.utcnow()
         try:
-            from gigi.clock_reminder_service import ClockReminderService, CLOCK_REMINDER_ENABLED
+            from gigi.clock_reminder_service import (
+                CLOCK_REMINDER_ENABLED,
+                ClockReminderService,
+            )
             if CLOCK_REMINDER_ENABLED:
                 self.clock_reminder = ClockReminderService(
                     wellsky_service=self.wellsky,
@@ -577,7 +600,10 @@ class GigiRingCentralBot:
         # --- Daily shift confirmations (GAP 5) ---
         self.daily_confirmation = None
         try:
-            from gigi.daily_confirmation_service import DailyConfirmationService, DAILY_CONFIRMATION_ENABLED
+            from gigi.daily_confirmation_service import (
+                DAILY_CONFIRMATION_ENABLED,
+                DailyConfirmationService,
+            )
             if DAILY_CONFIRMATION_ENABLED:
                 self.daily_confirmation = DailyConfirmationService(
                     wellsky_service=self.wellsky,
@@ -592,7 +618,10 @@ class GigiRingCentralBot:
         # --- Morning briefing via Telegram (7 AM MT) ---
         self.morning_briefing = None
         try:
-            from gigi.morning_briefing_service import MorningBriefingService, MORNING_BRIEFING_ENABLED
+            from gigi.morning_briefing_service import (
+                MORNING_BRIEFING_ENABLED,
+                MorningBriefingService,
+            )
             if MORNING_BRIEFING_ENABLED:
                 self.morning_briefing = MorningBriefingService()
                 logger.info("Morning briefing service ENABLED")
@@ -752,7 +781,7 @@ class GigiRingCentralBot:
                     msg += f" The last scheduled caregiver was {last['caregiver']} ({last['start']} - {last['end']})."
                 if next_info:
                     msg += f" The next scheduled caregiver is {next_info['caregiver']} starting {next_info['start']}."
-                msg += f" The schedule does not show a caregiver assigned right now — this may be a gap in the scheduling system rather than actual missing coverage."
+                msg += " The schedule does not show a caregiver assigned right now — this may be a gap in the scheduling system rather than actual missing coverage."
             elif next_info:
                 msg = f"The schedule does not show an active shift for {client_full_name} right now."
                 if recent_shifts:
@@ -934,7 +963,7 @@ class GigiRingCentralBot:
                 def on_ws_created(ws):
                     nonlocal ws_backoff
                     ws_backoff = 30  # Reset backoff on successful connection
-                    logger.info(f"📡 WebSocket connection established")
+                    logger.info("📡 WebSocket connection established")
 
                 def on_sub_created(sub):
                     info = sub.get_subscription_info()
@@ -975,7 +1004,7 @@ class GigiRingCentralBot:
                     self.ws_client.create_new_connection(),
                     self.ws_client.create_subscription(event_filters),
                 )
-            except Exception as e:
+            except Exception:
                 logger.error(f"📡 WebSocket failed — reconnecting in {ws_backoff}s")
                 await asyncio.sleep(ws_backoff)
                 ws_backoff = min(ws_backoff * 2, 300)  # Exponential backoff, max 5 min
@@ -1283,6 +1312,22 @@ class GigiRingCentralBot:
             except Exception as e:
                 logger.error(f"Task completion check error: {e}")
 
+            # 8. Ticket watch monitor (every 30th cycle = ~15 min)
+            if not hasattr(self, '_ticket_check_counter'):
+                self._ticket_check_counter = 0
+                self._ticket_monitor = None
+            self._ticket_check_counter += 1
+            if self._ticket_check_counter >= 30:
+                self._ticket_check_counter = 0
+                try:
+                    if self._ticket_monitor is None:
+                        from gigi.ticket_monitor import TicketMonitorService
+                        self._ticket_monitor = TicketMonitorService()
+                    await asyncio.to_thread(self._ticket_monitor.check_watches)
+                    logger.debug("Ticket watch check completed")
+                except Exception as e:
+                    logger.error(f"Ticket monitor error: {e}")
+
         except Exception as e:
             logger.error(f"Error in check_and_act: {e}")
 
@@ -1382,11 +1427,11 @@ class GigiRingCentralBot:
 
         # Reduced lookback for team chats to save quota
         messages = self.rc_service.get_chat_messages(
-            chat["id"], 
+            chat["id"],
             since=datetime.utcnow() - timedelta(minutes=10),
             limit=20
         )
-        
+
         if not messages:
             return
 
@@ -1657,6 +1702,7 @@ class GigiRingCentralBot:
         any client, no encounter/shift needed.
         """
         import re
+
         import psycopg2
 
         db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
@@ -1998,7 +2044,6 @@ class GigiRingCentralBot:
     async def _trigger_shift_filling(self, possible_names: list, caregiver_name: str, reason: str):
         """When a callout is documented, find affected shifts and start filling campaigns."""
         try:
-            import re
             # Try to identify the caregiver who called out
             caregiver_id = None
             cg_name = ""
@@ -2186,7 +2231,9 @@ class GigiRingCentralBot:
                 phone = tool_input.get("phone_number", caller_phone or "")
                 # Use fast SQL lookup (checks all 4 tables: staff, practitioners, patients, family)
                 try:
-                    from services.wellsky_fast_lookup import identify_caller as fast_identify
+                    from services.wellsky_fast_lookup import (
+                        identify_caller as fast_identify,
+                    )
                     caller = fast_identify(phone)
                     if caller:
                         caller_type = caller.get('type', 'unknown')
@@ -2485,6 +2532,19 @@ class GigiRingCentralBot:
                 except Exception as e:
                     logger.error(f"Weather arb status failed: {e}")
                     return json.dumps({"error": f"Weather bots unavailable: {str(e)}"})
+
+            elif tool_name == "watch_tickets":
+                from gigi.ticket_monitor import create_watch
+                result = await asyncio.to_thread(create_watch, tool_input.get("artist", ""), tool_input.get("venue"), tool_input.get("city", "Denver"))
+                return json.dumps(result)
+
+            elif tool_name == "list_ticket_watches":
+                from gigi.ticket_monitor import list_watches
+                return json.dumps(await asyncio.to_thread(list_watches))
+
+            elif tool_name == "remove_ticket_watch":
+                from gigi.ticket_monitor import remove_watch
+                return json.dumps(await asyncio.to_thread(remove_watch, int(tool_input.get("watch_id", 0))))
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})
@@ -3109,7 +3169,9 @@ class GigiRingCentralBot:
                     # Try to identify senders
                     for sms_item in sms_list:
                         try:
-                            from services.wellsky_fast_lookup import identify_caller as fast_identify
+                            from services.wellsky_fast_lookup import (
+                                identify_caller as fast_identify,
+                            )
                             caller = fast_identify(sms_item["from"])
                             if caller:
                                 sms_item["sender_name"] = caller.get("full_name", caller.get("name", ""))
@@ -3158,7 +3220,9 @@ class GigiRingCentralBot:
                 if not phone:
                     return json.dumps({"error": "No phone number provided"})
                 try:
-                    from services.wellsky_fast_lookup import identify_caller as fast_identify
+                    from services.wellsky_fast_lookup import (
+                        identify_caller as fast_identify,
+                    )
                     caller = fast_identify(phone)
                     if caller:
                         type_map = {"practitioner": "caregiver", "patient": "client", "staff": "staff", "family": "family"}
@@ -3328,6 +3392,19 @@ class GigiRingCentralBot:
                 except Exception as e:
                     logger.error(f"Weather arb status failed: {e}")
                     return json.dumps({"error": f"Weather bots unavailable: {str(e)}"})
+
+            elif tool_name == "watch_tickets":
+                from gigi.ticket_monitor import create_watch
+                result = await asyncio.to_thread(create_watch, tool_input.get("artist", ""), tool_input.get("venue"), tool_input.get("city", "Denver"))
+                return json.dumps(result)
+
+            elif tool_name == "list_ticket_watches":
+                from gigi.ticket_monitor import list_watches
+                return json.dumps(await asyncio.to_thread(list_watches))
+
+            elif tool_name == "remove_ticket_watch":
+                from gigi.ticket_monitor import remove_watch
+                return json.dumps(await asyncio.to_thread(remove_watch, int(tool_input.get("watch_id", 0))))
 
             else:
                 return json.dumps({"error": f"Unknown tool: {tool_name}"})

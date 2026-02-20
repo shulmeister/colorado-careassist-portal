@@ -1,10 +1,9 @@
-import os
-import json
 import logging
-import asyncio
+import os
 import uuid
-import requests
 from datetime import datetime
+
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ def send_2fa_text(message: str):
     if not TELEGRAM_BOT_TOKEN:
         logger.error("TELEGRAM_BOT_TOKEN not set - cannot send 2FA")
         return
-    
+
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -80,9 +79,9 @@ class ChiefOfStaffTools:
     async def buy_tickets_request(self, artist: str, venue: str, quantity: int = 2):
         """Initiate ticket purchase and send 2FA confirmation"""
         session_id = str(uuid.uuid4())[:8]
-        
+
         details = f"Buy {quantity} tickets for {artist} at {venue}."
-        
+
         # Save to pending sessions
         pending_sessions[session_id] = {
             "type": "tickets",
@@ -91,10 +90,10 @@ class ChiefOfStaffTools:
             "quantity": quantity,
             "timestamp": datetime.now().isoformat()
         }
-        
+
         # Send 2FA text
         send_2fa_text(f"Gigi is about to buy {quantity} tickets for {artist} at {venue}. Is this okay?")
-        
+
         return {
             "success": True,
             "session_id": session_id,
@@ -105,7 +104,7 @@ class ChiefOfStaffTools:
     async def book_table_request(self, restaurant: str, party_size: int, date: str, time: str):
         """Initiate restaurant reservation and send 2FA confirmation"""
         session_id = str(uuid.uuid4())[:8]
-        
+
         # Save to pending sessions
         pending_sessions[session_id] = {
             "type": "restaurant",
@@ -115,10 +114,10 @@ class ChiefOfStaffTools:
             "time": time,
             "timestamp": datetime.now().isoformat()
         }
-        
+
         # Send 2FA text
         send_2fa_text(f"Gigi is booking a table for {party_size} at {restaurant} on {date} at {time}. OK?")
-        
+
         return {
             "success": True,
             "session_id": session_id,
@@ -131,19 +130,40 @@ class ChiefOfStaffTools:
         session = pending_sessions.get(session_id)
         if not session:
             return {"success": False, "error": "Session not found or expired"}
-        
+
         # HERE IS WHERE WE WOULD TRIGGER THE PLAYWRIGHT/BROWSER AUTOMATION
         # For this phase, we'll simulate the successful automation trigger
-        
+
         logger.info(f"CONFIRMED: Executing automation for {session_id}")
-        
+
         # Clean up
         del pending_sessions[session_id]
-        
+
         return {
             "success": True,
             "message": "Excellent. I'm processing that now and will send you the confirmation screenshot once it's done."
         }
+
+    async def watch_tickets(self, artist: str, venue: str = None, city: str = "Denver"):
+        """Create a ticket watch — monitors Ticketmaster/AXS for on-sale dates."""
+        import asyncio
+
+        from gigi.ticket_monitor import create_watch
+        return await asyncio.to_thread(create_watch, artist, venue, city)
+
+    async def list_ticket_watches(self):
+        """List all active ticket watches."""
+        import asyncio
+
+        from gigi.ticket_monitor import list_watches
+        return await asyncio.to_thread(list_watches)
+
+    async def remove_ticket_watch(self, watch_id: int):
+        """Remove a ticket watch."""
+        import asyncio
+
+        from gigi.ticket_monitor import remove_watch
+        return await asyncio.to_thread(remove_watch, int(watch_id))
 
 # Singleton
 cos_tools = ChiefOfStaffTools()
