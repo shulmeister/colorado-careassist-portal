@@ -6945,7 +6945,25 @@ async def create_deal(
         thread.daemon = True
         thread.start()
 
-        return JSONResponse(deal.to_dict(), status_code=status.HTTP_201_CREATED)
+        # Sync new deal to WellSky as prospect in background
+        deal_dict = deal.to_dict()
+
+        def _sync_new_deal_to_wellsky(d):
+            try:
+                _, sync_svc, _ = _get_root_services()
+                success, _, msg = sync_svc.sync_deal_to_prospect(d)
+                if success:
+                    logger.info("WellSky prospect created for deal %s: %s", d.get("id"), msg)
+                else:
+                    logger.warning("WellSky prospect creation skipped for deal %s: %s", d.get("id"), msg)
+            except Exception as _e:
+                logger.warning("WellSky prospect sync error for deal %s: %s", d.get("id"), _e)
+
+        ws_thread = threading.Thread(target=_sync_new_deal_to_wellsky, args=(deal_dict,))
+        ws_thread.daemon = True
+        ws_thread.start()
+
+        return JSONResponse(deal_dict, status_code=status.HTTP_201_CREATED)
     except Exception as e:
         logger.error(f"Error creating deal: {str(e)}", exc_info=True)
         db.rollback()
@@ -7017,6 +7035,30 @@ async def update_deal(
         thread = threading.Thread(target=sync_deal_to_brevo_crm, args=(deal,))
         thread.daemon = True
         thread.start()
+
+        # Sync stage change to WellSky in background
+        if payload.get("stage") and old_stage != deal.stage:
+            _deal_id_str = str(deal.id)
+            _new_stage = deal.stage
+            _user_email = current_user.get("email", "unknown")
+
+            def _sync_stage_to_wellsky(deal_id, new_stage, changed_by):
+                try:
+                    _, sync_svc, _ = _get_root_services()
+                    success, _, msg = sync_svc.sync_deal_stage_change(deal_id, new_stage, changed_by=changed_by)
+                    if success:
+                        logger.info("WellSky prospect stage updated for deal %s -> %s: %s", deal_id, new_stage, msg)
+                    else:
+                        logger.warning("WellSky stage sync skipped for deal %s: %s", deal_id, msg)
+                except Exception as _e:
+                    logger.warning("WellSky stage sync error for deal %s: %s", deal_id, _e)
+
+            ws_thread = threading.Thread(
+                target=_sync_stage_to_wellsky,
+                args=(_deal_id_str, _new_stage, _user_email)
+            )
+            ws_thread.daemon = True
+            ws_thread.start()
 
         return JSONResponse(deal.to_dict())
     except Exception as e:
