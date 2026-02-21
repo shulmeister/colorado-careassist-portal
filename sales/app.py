@@ -6115,7 +6115,7 @@ async def get_recent_activity(limit: int = 20, db: Session = Depends(get_db), cu
 async def get_visits(db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
     """Get all visits (from the database)"""
     try:
-        visits = db.query(Visit).order_by(Visit.visit_date.desc()).all()
+        visits = db.query(Visit).order_by(Visit.visit_date.desc().nullslast()).all()
         response_data = [visit.to_dict() for visit in visits]
         return JSONResponse(response_data)
     except Exception as e:

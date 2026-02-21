@@ -39,23 +39,44 @@ export const HotContacts = () => {
         <h2 className="text-xl font-semibold text-white">
           Hot Contacts
         </h2>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="ml-auto text-muted-foreground"
-                asChild
-              >
-                <Link to="/contacts/create">
-                  <Plus className="w-4 h-4 text-primary" />
-                </Link>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Create contact</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div className="ml-auto flex gap-1">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  asChild
+                >
+                  <Link to="/deals/create">
+                    <Plus className="w-4 h-4 text-green-500" />
+                    <span className="text-xs text-green-500 ml-0.5">Deal</span>
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>New Deal</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                  asChild
+                >
+                  <Link to="/contacts/create">
+                    <Plus className="w-4 h-4 text-primary" />
+                    <span className="text-xs text-primary ml-0.5">Contact</span>
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>New Contact</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
       </div>
       <Card className="py-0">
         <SimpleList<Contact>
