@@ -10941,10 +10941,11 @@ async def start_client_packet(
         )
         db.add(contact)
         db.flush()
-        # Link to deal
-        if not deal.contact_ids:
-            deal.contact_ids = []
-        deal.contact_ids = deal.contact_ids + [contact.id]
+        # Link to deal (contact_ids is a JSON text column)
+        import json as _json
+        existing = _json.loads(deal.contact_ids) if deal.contact_ids else []
+        existing.append(contact.id)
+        deal.contact_ids = _json.dumps(existing)
         db.commit()
         logger.info("Auto-created contact %s for deal %s", contact.id, deal_id)
 
