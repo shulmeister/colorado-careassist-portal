@@ -175,6 +175,7 @@ TOOL_NAMES = [
     "get_pnl_report", "get_balance_sheet", "get_invoice_list",
     "get_cash_position", "get_financial_dashboard",
     "get_subscription_audit",
+    "run_claude_code", "browse_with_claude",
 ]
 
 # Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
@@ -231,6 +232,9 @@ ANTHROPIC_TOOLS = [
     {"name": "get_cash_position", "description": "Get current cash position and runway estimate. Shows cash on hand, monthly net income/burn, and months of runway.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_financial_dashboard", "description": "Get a complete financial snapshot: AR aging, cash position, P&L summary, and invoice overview.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_subscription_audit", "description": "Audit all recurring charges and subscriptions. Groups expenses by vendor, identifies recurring patterns, and shows estimated monthly/annual cost. Use when asked about subscriptions, recurring charges, what we're paying for, or what to cancel.", "input_schema": {"type": "object", "properties": {"months_back": {"type": "integer", "description": "How many months of history to analyze (default: 6)"}}, "required": []}},
+    # === CLAUDE CODE TOOLS ===
+    {"name": "run_claude_code", "description": "Execute a code/infrastructure task using Claude Code on the Mac Mini. Use for: fixing bugs, editing files, investigating errors, checking logs, running tests, restarting services, git operations, deploying changes. Claude Code autonomously reads/writes files and runs commands. Returns the result directly (synchronous, no polling needed). PREFER THIS over create_claude_task for immediate results.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What to do. Be specific — include error messages, file paths, expected behavior."}, "directory": {"type": "string", "description": "Project: careassist (default/staging), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard, qbo-dashboard. Or full path."}, "model": {"type": "string", "description": "'sonnet' (default, fast) or 'opus' (complex tasks)."}}, "required": ["prompt"]}},
+    {"name": "browse_with_claude", "description": "Browse a website using Claude Code + Chrome. Can read pages, fill forms, click buttons, extract data, navigate multi-page flows. Much more capable than browse_webpage. Use for checking websites, reading content, web UI interactions, form automation.", "input_schema": {"type": "object", "properties": {"task": {"type": "string", "description": "What to do in the browser. Be specific."}, "url": {"type": "string", "description": "Target URL (optional if task includes it)."}}, "required": ["task"]}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -343,6 +347,11 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="get_subscription_audit", description="Audit recurring charges/subscriptions by vendor. Shows what you're paying for.",
             parameters=genai_types.Schema(type="OBJECT", properties={"months_back": _s("INTEGER", "Months of history (default 6)")})),
+        # === CLAUDE CODE TOOLS ===
+        genai_types.FunctionDeclaration(name="run_claude_code", description="Execute a code/infrastructure task using Claude Code on the Mac Mini. Fixes bugs, edits files, checks logs, runs tests, restarts services, git operations. Returns result directly (synchronous). PREFER over create_claude_task.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"prompt": _s("string", "What to do. Be specific — include error messages, file paths, expected behavior."), "directory": _s("string", "Project: careassist (default), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard."), "model": _s("string", "sonnet (default) or opus (complex tasks).")}, required=["prompt"])),
+        genai_types.FunctionDeclaration(name="browse_with_claude", description="Browse a website using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data. More capable than browse_webpage.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"task": _s("string", "What to do in the browser. Be specific."), "url": _s("string", "Target URL (optional if task includes it).")}, required=["task"])),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -406,6 +415,9 @@ OPENAI_TOOLS = [
     _oai_tool("get_cash_position", "Cash on hand and runway estimate.", {}),
     _oai_tool("get_financial_dashboard", "Complete financial snapshot: AR, cash, P&L, invoices.", {}),
     _oai_tool("get_subscription_audit", "Audit recurring charges/subscriptions by vendor.", {"months_back": {"type": "integer", "description": "Months of history (default 6)"}}),
+    # === CLAUDE CODE TOOLS ===
+    _oai_tool("run_claude_code", "Execute a code/infrastructure task using Claude Code on the Mac Mini. Returns result directly (synchronous). PREFER over create_claude_task.", {"prompt": {"type": "string", "description": "What to do"}, "directory": {"type": "string", "description": "Project alias or path"}, "model": {"type": "string", "description": "sonnet (default) or opus"}}, ["prompt"]),
+    _oai_tool("browse_with_claude", "Browse a website using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data.", {"task": {"type": "string", "description": "What to do in browser"}, "url": {"type": "string", "description": "Target URL"}}, ["task"]),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -477,11 +489,12 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - search_emails: Search Jason's Gmail.
 - get_wellsky_clients/caregivers: Look up client or caregiver info.
 - get_wellsky_shifts: Look up today's shifts, who's working, shift hours. USE THIS for any shift question.
-- get_polybot_status: Elite Trading paper-mode Polybot status.
-- get_weather_arb_status: Weather Sniper Bot (Polymarket, LIVE real money). Auto-snipes slam-dunk US temp markets at 11:00 UTC daily. Also shows Kalshi bot.
+- get_weather_arb_status: Weather/trading bot status. Kalshi is the ONLY trading bot that matters — focus on Kalshi P&L and positions. Do NOT mention Polymarket or Polybot unless Jason explicitly asks about them.
 - web_search: General knowledge, flight prices, travel info.
-- browse_webpage: Browse any URL and extract its text content (for deep research, reading articles).
-- take_screenshot: Screenshot any webpage (saves to ~/logs/screenshots/).
+- run_claude_code: Execute code/infra tasks DIRECTLY using Claude Code. Fixes bugs, edits files, checks logs, runs tests, restarts services, git ops. Returns result immediately (synchronous). PREFER THIS over create_claude_task. Directories: careassist (staging, default), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard, qbo-dashboard.
+- browse_with_claude: Browse websites using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data. PREFER THIS over browse_webpage.
+- browse_webpage: (Legacy) Browse any URL and extract text content. Use browse_with_claude instead for better results.
+- take_screenshot: (Legacy) Screenshot any webpage. Use browse_with_claude instead.
 - save_memory / recall_memories / forget_memory: Long-term memory management.
 - get_morning_briefing: Full daily briefing (weather, calendar, shifts, emails, ski, alerts).
 - get_ar_report: QuickBooks accounts receivable aging report (outstanding invoices, overdue amounts).
@@ -508,10 +521,10 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - **NEVER HALLUCINATE TOOLS or troubleshooting steps:** You can ONLY use the tools listed above. NEVER invent tools, CLI commands, bash commands, or any command not in your tool list. NEVER suggest "setup steps", "configuration needed", or "needs firewall check". If a tool returns partial data, relay what you got. If a tool fails, say it's temporarily unavailable. Do NOT fabricate explanations for why something failed.
 - **NEVER REFORMAT TOOL OUTPUT:** When `get_morning_briefing` returns a briefing, send it EXACTLY as returned. Do NOT add "SETUP ISSUES" sections, troubleshooting advice, TODO lists, or any commentary. The briefing is COMPLETE — relay it verbatim.
 - **Shifts:** If asked about shifts, hours, who's working, staffing — ALWAYS use `get_wellsky_shifts` FIRST. Do NOT search emails, memories, or the web instead.
-- **Trading Bots:** If asked about weather bots, Polymarket, Kalshi, trading — use `get_weather_arb_status`. If asked about Polybot/Elite Trading — use `get_polybot_status`.
+- **Trading Bots:** If asked about trading, bots, weather bots, Kalshi — use `get_weather_arb_status`. Kalshi is the ONLY trading bot Jason cares about. Focus on Kalshi P&L and positions. Do NOT mention Polymarket, Polybot, or paper trading unless Jason explicitly asks about them.
 - **OUTBOUND COMMUNICATION (CRITICAL — NEVER VIOLATE):** NEVER send SMS, emails, or messages to ANYONE without EXPLICIT confirmation from Jason. If Jason says "let me see what you'd send" or "show me the draft" — that means SHOW the text, do NOT send it. Only send when Jason explicitly says "send it", "go ahead and text them", "send that to X". NEVER use create_claude_task to send messages — Claude Code is NOT allowed to send SMS/email/calls. If Jason wants to send a message, ask: "Here's the draft. Want me to send it now?" and WAIT for confirmation.
-- **Code Fixes (CRITICAL):** When Jason asks you to fix something, debug a problem, investigate an issue, update code, check why something isn't working, or make any changes to a codebase — ALWAYS use `create_claude_task` IMMEDIATELY. This dispatches work to Claude Code running on the Mac Mini. Claude Code can read/edit files, run commands, restart services, and deploy fixes autonomously. Write a DETAILED description explaining: what's broken, error messages if any, which project/files are involved, and what the expected behavior should be. Set priority to 'urgent' for broken services, 'high' for important issues, 'normal' for routine tasks. After creating the task, tell Jason the task number. Claude Code picks up tasks within 30 seconds and you'll both get a Telegram notification when it's done. Use `check_claude_task` to check progress. NEVER use create_claude_task to send messages, texts, or emails — only for code/infrastructure work.
-- **Working directories for tasks:** careassist-unified=/Users/shulmeister/mac-mini-apps/careassist-unified, elite-trading=/Users/shulmeister/mac-mini-apps/elite-trading-mcp, website=/Users/shulmeister/mac-mini-apps/coloradocareassist, hesed=/Users/shulmeister/mac-mini-apps/hesedhomecare. Default is careassist-unified if unsure.
+- **Code Fixes (CRITICAL):** When Jason asks you to fix something, debug a problem, investigate an issue, update code, check why something isn't working, or make any changes to a codebase — ALWAYS use `run_claude_code` IMMEDIATELY. This invokes Claude Code directly on the Mac Mini and returns the result within 2 minutes (synchronous). Claude Code can read/edit files, run commands, restart services, and deploy fixes autonomously. Write a DETAILED prompt explaining: what's broken, error messages if any, which project/files are involved, and what the expected behavior should be. Set directory to the right project alias. Only use `create_claude_task` (async queue) as a fallback if run_claude_code times out. NEVER use run_claude_code or create_claude_task to send messages, texts, or emails — only for code/infrastructure work.
+- **Working directories:** careassist (staging, default), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard, qbo-dashboard.
 
 # Response Style
 - Concise, confident, executive summary style. Short answers.
@@ -1156,19 +1169,17 @@ class GigiTelegramBot:
                 return json.dumps({"query": query, "results": results[:10], "total": len(results)})
 
             elif tool_name == "browse_webpage":
-                from gigi.browser_automation import get_browser
-                browser = get_browser()
+                # Redirect to browse_with_claude (better than old Playwright)
+                from gigi.claude_code_tools import browse_with_claude
                 url = tool_input.get("url", "")
-                extract_links = tool_input.get("extract_links", False)
-                result = await browser.browse_webpage(url, extract_links=extract_links)
+                result = await browse_with_claude(task=f"Navigate to {url} and extract the main text content of the page.", url=url)
                 return json.dumps(result)
 
             elif tool_name == "take_screenshot":
-                from gigi.browser_automation import get_browser
-                browser = get_browser()
+                # Redirect to browse_with_claude (better than old Playwright)
+                from gigi.claude_code_tools import browse_with_claude
                 url = tool_input.get("url", "")
-                full_page = tool_input.get("full_page", False)
-                result = await browser.take_screenshot(url, full_page=full_page)
+                result = await browse_with_claude(task=f"Navigate to {url} and describe what the page looks like and its content.", url=url)
                 return json.dumps(result)
 
             elif tool_name == "get_morning_briefing":
@@ -1260,6 +1271,24 @@ class GigiTelegramBot:
                 from gigi.finance_tools import get_subscription_audit
                 months = tool_input.get("months_back", 6)
                 result = await asyncio.to_thread(get_subscription_audit, months)
+                return json.dumps(result)
+
+            # === CLAUDE CODE TOOLS ===
+            elif tool_name == "run_claude_code":
+                from gigi.claude_code_tools import run_claude_code
+                result = await run_claude_code(
+                    prompt=tool_input.get("prompt", ""),
+                    directory=tool_input.get("directory"),
+                    model=tool_input.get("model"),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "browse_with_claude":
+                from gigi.claude_code_tools import browse_with_claude
+                result = await browse_with_claude(
+                    task=tool_input.get("task", ""),
+                    url=tool_input.get("url"),
+                )
                 return json.dumps(result)
 
             elif tool_name == "get_polybot_status":

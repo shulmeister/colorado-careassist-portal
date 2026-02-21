@@ -641,6 +641,8 @@ ANTHROPIC_TOOLS = [
     {"name": "get_cash_position", "description": "Cash on hand and runway estimate.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_financial_dashboard", "description": "Complete financial snapshot: AR, cash, P&L, invoices.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_subscription_audit", "description": "Audit recurring charges and subscriptions by vendor. Shows what you're paying for monthly and helps find things to cancel.", "input_schema": {"type": "object", "properties": {"months_back": {"type": "integer", "description": "Months of history to analyze (default 6)"}}, "required": []}},
+    # === CLAUDE CODE TOOLS ===
+    {"name": "run_claude_code", "description": "Execute a code/infrastructure task using Claude Code on the Mac Mini. Use for: fixing bugs, editing files, investigating errors, checking logs, running tests, restarting services, git operations. Claude Code reads/writes files and runs commands autonomously. Returns the result directly.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What to do. Be specific — include error messages, file paths, expected behavior."}, "directory": {"type": "string", "description": "Project: careassist (default/staging), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard."}, "model": {"type": "string", "description": "'sonnet' (default, fast) or 'opus' (complex tasks)."}}, "required": ["prompt"]}},
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -1753,6 +1755,16 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             from gigi.finance_tools import get_subscription_audit
             months = tool_input.get("months_back", 6)
             result = await run_sync(get_subscription_audit, months)
+            return json.dumps(result)
+
+        # === CLAUDE CODE TOOLS ===
+        elif tool_name == "run_claude_code":
+            from gigi.claude_code_tools import run_claude_code
+            result = await run_claude_code(
+                prompt=tool_input.get("prompt", ""),
+                directory=tool_input.get("directory"),
+                model=tool_input.get("model"),
+            )
             return json.dumps(result)
 
         else:
