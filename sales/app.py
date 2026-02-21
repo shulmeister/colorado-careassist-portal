@@ -10975,6 +10975,56 @@ async def start_client_packet(
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+# --- Face Sheet → Deal + Contact ---
+
+@app.post("/api/deals/create-from-facesheet")
+async def create_deal_from_facesheet(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Create a contact + deal from parsed face sheet data."""
+    data = await request.json()
+    first_name = data.get("first_name", "").strip()
+    last_name = data.get("last_name", "").strip()
+    if not first_name and not last_name:
+        return JSONResponse({"error": "No name extracted"}, status_code=400)
+
+    full_name = f"{first_name} {last_name}".strip()
+
+    # Create contact
+    contact = Contact(
+        first_name=first_name,
+        last_name=last_name,
+        name=full_name,
+        phone=data.get("phone", ""),
+        address=data.get("city", ""),
+        status="prospect",
+        contact_type="prospect",
+        source="Face Sheet Scan",
+        notes=data.get("description", ""),
+    )
+    db.add(contact)
+    db.flush()
+
+    import json as _json
+    # Create deal
+    deal = Deal(
+        name=full_name,
+        stage="opportunity",
+        amount=0,
+        description=data.get("description", ""),
+        contact_ids=_json.dumps([contact.id]),
+        expected_closing_date=datetime.now() + timedelta(days=30),
+        stage_entered_at=datetime.now(),
+    )
+    db.add(deal)
+    db.commit()
+
+    logger.info("Created deal %s + contact %s from face sheet", deal.id, contact.id)
+    return JSONResponse({"deal_id": deal.id, "contact_id": contact.id, "name": full_name})
+
+
 # --- Deal-Contact Relationships API ---
 
 @app.get("/api/deals/{deal_id}/contacts")
