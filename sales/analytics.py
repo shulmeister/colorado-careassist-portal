@@ -84,7 +84,7 @@ class AnalyticsEngine:
             try:
                 phone_calls_7_days = self.db.query(ActivityLog).filter(
                     ActivityLog.activity_type == "call",
-                    ActivityLog.timestamp >= last_7_days
+                    ActivityLog.created_at >= last_7_days
                 ).count()
             except Exception as e:
                 logger.warning(f"Error getting phone call count: {str(e)}")
@@ -93,57 +93,26 @@ class AnalyticsEngine:
             # === BONUSES (keep for reference) ===
             total_bonuses_earned = self.db.query(func.sum(SalesBonus.bonus_amount)).scalar() or 0.0
 
-            # === WEEKLY KPIs ===
-            start_of_week = now - timedelta(days=now.weekday())
-            start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
-            visits_this_week = self.db.query(Visit).filter(Visit.visit_date >= start_of_week).count()
-            contacts_this_week = self.db.query(Contact).filter(Contact.created_at >= start_of_week).count()
-            companies_this_week = self.db.query(ReferralSource).filter(ReferralSource.created_at >= start_of_week).count()
-            deals_this_week = self.db.query(Lead).filter(Lead.created_at >= start_of_week).count()
-
-            # === YTD KPIs ===
-            year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
-            visits_ytd = self.db.query(Visit).filter(Visit.visit_date >= year_start).count()
-            contacts_ytd = self.db.query(Contact).filter(Contact.created_at >= year_start).count()
-            companies_ytd = self.db.query(ReferralSource).filter(ReferralSource.created_at >= year_start).count()
-            deals_ytd = self.db.query(Lead).filter(Lead.created_at >= year_start).count()
-
-            # === FORECAST REVENUE (sum of active deal amounts) ===
-            from models import Deal
-            forecast_revenue = self.db.query(func.sum(Deal.amount)).filter(
-                Deal.archived_at.is_(None)
-            ).scalar() or 0.0
-
             last_updated = datetime.utcnow().isoformat()
 
             return {
                 # Visits
                 "total_visits": total_visits,
-                "visits_this_week": visits_this_week,
                 "visits_this_month": visits_this_month,
-                "visits_ytd": visits_ytd,
                 "visits_last_30_days": visits_last_30_days,
                 # Contacts
                 "total_contacts": total_contacts,
-                "new_contacts_this_week": contacts_this_week,
                 "new_contacts_this_month": new_contacts_this_month,
-                "new_contacts_ytd": contacts_ytd,
                 "new_contacts_last_7_days": new_contacts_last_7_days,
                 # Companies
                 "total_companies": total_companies,
-                "new_companies_this_week": companies_this_week,
                 "new_companies_this_month": new_companies_this_month,
-                "new_companies_ytd": companies_ytd,
                 "new_companies_last_7_days": new_companies_last_7_days,
                 # Deals
                 "total_deals": total_deals,
                 "active_deals": active_deals,
-                "new_deals_this_week": deals_this_week,
                 "new_deals_this_month": new_deals_this_month,
-                "new_deals_ytd": deals_ytd,
                 "new_deals_last_7_days": new_deals_last_7_days,
-                # Revenue
-                "forecast_revenue": round(forecast_revenue, 2),
                 # Activity KPIs
                 "emails_sent_7_days": emails_sent_7_days,
                 "phone_calls_7_days": phone_calls_7_days,
@@ -392,10 +361,8 @@ class AnalyticsEngine:
                     }
                 })
 
-            # Recent visits (only those with dates)
-            recent_visits = self.db.query(Visit).filter(
-                Visit.visit_date.isnot(None)
-            ).order_by(
+            # Recent visits
+            recent_visits = self.db.query(Visit).order_by(
                 desc(Visit.visit_date)
             ).limit(limit).all()
 
@@ -403,7 +370,7 @@ class AnalyticsEngine:
                 activities.append({
                     "type": "visit",
                     "description": f"Visit to {visit.business_name}",
-                    "date": visit.visit_date.isoformat() if visit.visit_date else "",
+                    "date": visit.visit_date.isoformat(),
                     "details": {
                         "stop": visit.stop_number,
                         "address": visit.address,

@@ -641,6 +641,40 @@ except Exception as e:
 
 app = FastAPI(title="Colorado CareAssist Sales Dashboard", version="2.0.0")
 
+
+@app.on_event("startup")
+async def _startup_sync_call_logs():
+    """Sync RingCentral call logs on startup and every 4 hours."""
+    import asyncio
+    import threading
+
+    def _sync_rc():
+        try:
+            from ringcentral_service import RingCentralService
+            service = RingCentralService()
+            if not service.enabled:
+                return
+            db = SessionLocal()
+            try:
+                count = service.sync_call_logs_to_activities(db, since_minutes=10080)  # Last 7 days
+                logger.info(f"Startup RC sync: {count} calls synced")
+            finally:
+                db.close()
+        except Exception as e:
+            logger.warning(f"Startup RC sync failed: {e}")
+
+    async def _periodic_rc_sync():
+        await asyncio.sleep(60)  # Wait for app to fully start
+        while True:
+            threading.Thread(target=_sync_rc, daemon=True).start()
+            await asyncio.sleep(4 * 3600)  # Every 4 hours
+
+    # Initial sync in background thread
+    threading.Thread(target=_sync_rc, daemon=True).start()
+    # Periodic sync task
+    asyncio.create_task(_periodic_rc_sync())
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "Sales Dashboard"}
