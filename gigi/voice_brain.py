@@ -640,6 +640,7 @@ ANTHROPIC_TOOLS = [
     {"name": "get_invoice_list", "description": "Open/overdue invoices from QuickBooks.", "input_schema": {"type": "object", "properties": {"status": {"type": "string", "description": "Open/Overdue/All (default Open)"}}, "required": []}},
     {"name": "get_cash_position", "description": "Cash on hand and runway estimate.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_financial_dashboard", "description": "Complete financial snapshot: AR, cash, P&L, invoices.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_subscription_audit", "description": "Audit recurring charges and subscriptions by vendor. Shows what you're paying for monthly and helps find things to cancel.", "input_schema": {"type": "object", "properties": {"months_back": {"type": "integer", "description": "Months of history to analyze (default 6)"}}, "required": []}},
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -1746,6 +1747,12 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
         elif tool_name == "get_financial_dashboard":
             from gigi.finance_tools import get_financial_dashboard
             result = await run_sync(get_financial_dashboard)
+            return json.dumps(result)
+
+        elif tool_name == "get_subscription_audit":
+            from gigi.finance_tools import get_subscription_audit
+            months = tool_input.get("months_back", 6)
+            result = await run_sync(get_subscription_audit, months)
             return json.dumps(result)
 
         else:

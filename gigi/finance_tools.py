@@ -152,3 +152,88 @@ def get_financial_dashboard() -> Dict[str, Any]:
         result["invoices_summary"] = {"error": str(e)}
 
     return result
+
+
+def get_subscription_audit(months_back: int = 6) -> Dict[str, Any]:
+    """Audit all recurring charges/subscriptions from QBO purchase history.
+
+    Groups expenses by vendor, identifies recurring patterns, and calculates
+    estimated monthly cost per vendor. Helps find subscriptions to cancel.
+    """
+    qb = _get_qb_service()
+    if not qb:
+        return {"error": "QuickBooks not connected. Visit portal to authorize."}
+
+    result = qb.get_purchases(months_back=months_back)
+    if not result.get("success"):
+        return result
+
+    purchases = result.get("purchases", [])
+
+    # Group by vendor/payee
+    vendor_charges: Dict[str, list] = {}
+    for p in purchases:
+        entity_ref = p.get("EntityRef", {})
+        vendor = entity_ref.get("name", "Unknown")
+        amount = float(p.get("TotalAmt", 0))
+        txn_date = p.get("TxnDate", "")
+
+        # Extract line item descriptions for context
+        descriptions = []
+        for line in p.get("Line", []):
+            desc = line.get("Description", "")
+            if desc:
+                descriptions.append(desc)
+            detail = line.get("AccountBasedExpenseLineDetail", {})
+            acct = detail.get("AccountRef", {}).get("name", "")
+            if acct:
+                descriptions.append(acct)
+
+        if vendor not in vendor_charges:
+            vendor_charges[vendor] = []
+        vendor_charges[vendor].append({
+            "amount": amount,
+            "date": txn_date,
+            "descriptions": descriptions[:3],
+        })
+
+    # Identify recurring vendors (2+ charges in the period)
+    recurring = []
+    one_off = []
+    for vendor, charges in vendor_charges.items():
+        total = sum(c["amount"] for c in charges)
+        avg_per_charge = total / len(charges) if charges else 0
+        est_monthly = total / max(months_back, 1)
+
+        entry = {
+            "vendor": vendor,
+            "charge_count": len(charges),
+            "total_spent": round(total, 2),
+            "avg_per_charge": round(avg_per_charge, 2),
+            "est_monthly": round(est_monthly, 2),
+            "last_charge": max(c["date"] for c in charges) if charges else "",
+            "descriptions": charges[0].get("descriptions", []) if charges else [],
+        }
+
+        if len(charges) >= 2:
+            recurring.append(entry)
+        else:
+            one_off.append(entry)
+
+    # Sort recurring by estimated monthly cost descending
+    recurring.sort(key=lambda x: -x["est_monthly"])
+    one_off.sort(key=lambda x: -x["total_spent"])
+
+    total_recurring_monthly = sum(r["est_monthly"] for r in recurring)
+    total_recurring_annual = total_recurring_monthly * 12
+
+    return {
+        "months_analyzed": months_back,
+        "total_purchases": len(purchases),
+        "recurring_vendors": len(recurring),
+        "one_off_vendors": len(one_off),
+        "est_monthly_recurring": round(total_recurring_monthly, 2),
+        "est_annual_recurring": round(total_recurring_annual, 2),
+        "recurring": recurring[:30],
+        "one_off": one_off[:15],
+    }
