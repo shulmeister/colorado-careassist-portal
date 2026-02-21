@@ -1,5 +1,15 @@
 # Changelog
 
+## Feb 21, 2026
+- Client Portal: WellSky prospect→client lifecycle sync (create_prospect, update_prospect_status, convert_prospect_to_client, demographics meta tags)
+- Sales Dashboard: auto-sync deals to WellSky on create + stage change (background threads, zero latency impact)
+- Sales Dashboard: face sheet scanner on Create Deal card
+- Sales Dashboard: Weekly/Monthly/YTD KPIs + Forecast Revenue on Summary dashboard
+- Sales Dashboard: Deal/Contact buttons on Dashboard, fixed visit dates and activity logs
+- Employee Portal: delete candidate (backend DELETE /admin/cases/{id} + frontend trash icon + confirmation modal)
+- Employee Portal: 26/26 UI tests passing, 53/53 E2E tests passing
+- Employee Portal: initial git commit + pushed to github.com/shulmeister/employee-portal
+
 ## Feb 20, 2026
 - Switched all Gigi channels from Gemini to Anthropic Haiku 4.5
 - Built shadow mode learning pipeline (gigi/learning_pipeline.py)
