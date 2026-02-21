@@ -654,7 +654,7 @@ async def _startup_sync_call_logs():
             service = RingCentralService()
             if not service.enabled:
                 return
-            db = SessionLocal()
+            db = db_manager.SessionLocal()
             try:
                 count = service.sync_call_logs_to_activities(db, since_minutes=10080)  # Last 7 days
                 logger.info(f"Startup RC sync: {count} calls synced")
