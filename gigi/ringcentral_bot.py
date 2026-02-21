@@ -278,6 +278,7 @@ _SMS_EXCLUDE = {
     "generate_social_content", "get_pnl_report", "get_balance_sheet",
     "get_invoice_list", "get_cash_position", "get_financial_dashboard",
     "get_subscription_audit",
+    "run_claude_code", "browse_with_claude",
 }
 
 # Auto-extend SMS tools from Telegram canonical set (ensures tool parity across channels)
