@@ -10928,19 +10928,39 @@ async def start_client_packet(
             contact = db.query(Contact).filter_by(id=contact_id).first()
 
     if not contact:
-        return JSONResponse({"error": "No contact on this deal. Add a contact first."}, status_code=400)
+        # Auto-create contact from deal name
+        name_parts = (deal.name or "Client").strip().split(None, 1)
+        first_name = name_parts[0]
+        last_name = name_parts[1] if len(name_parts) > 1 else ""
+        contact = Contact(
+            first_name=first_name,
+            last_name=last_name,
+            name=deal.name,
+            status="prospect",
+            contact_type="prospect",
+        )
+        db.add(contact)
+        db.flush()
+        # Link to deal
+        if not deal.contact_ids:
+            deal.contact_ids = []
+        deal.contact_ids = deal.contact_ids + [contact.id]
+        db.commit()
+        logger.info("Auto-created contact %s for deal %s", contact.id, deal_id)
 
     import httpx
     try:
         async with httpx.AsyncClient(timeout=15.0) as client_http:
             from auth.jwt import create_token
             admin_token = create_token(current_user.get("email", "sales"), "admin")
+            first = contact.first_name or (contact.name.split()[0] if contact.name else "Client")
+            last = contact.last_name or (contact.name.split()[-1] if contact.name and len(contact.name.split()) > 1 else "")
             resp = await client_http.post(
                 "https://client.coloradocareassist.com/api/client-admin/packets",
                 headers={"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"},
                 json={
-                    "first_name": contact.first_name or contact.name.split()[0] if contact.name else "Client",
-                    "last_name": contact.last_name or (contact.name.split()[-1] if contact.name and len(contact.name.split()) > 1 else ""),
+                    "first_name": first,
+                    "last_name": last,
                     "phone": contact.phone or "",
                     "email": contact.email,
                     "deal_id": str(deal_id),
