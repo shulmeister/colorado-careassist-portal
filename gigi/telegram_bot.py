@@ -169,6 +169,11 @@ TOOL_NAMES = [
     "browse_webpage", "take_screenshot",
     "clock_in_shift", "clock_out_shift", "find_replacement_caregiver",
     "get_task_board", "add_task", "complete_task", "capture_note", "get_daily_notes",
+    "get_marketing_dashboard", "get_google_ads_report", "get_website_analytics",
+    "get_social_media_report", "get_gbp_report", "get_email_campaign_report",
+    "generate_social_content",
+    "get_pnl_report", "get_balance_sheet", "get_invoice_list",
+    "get_cash_position", "get_financial_dashboard",
 ]
 
 # Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
@@ -210,6 +215,20 @@ ANTHROPIC_TOOLS = [
     {"name": "complete_task", "description": "Mark a task as done on Jason's task board. Moves it to the Done section. Use when Jason says 'done with X', 'finished X', 'check off X', 'completed X'.", "input_schema": {"type": "object", "properties": {"task_text": {"type": "string", "description": "Text of the task to complete (partial match OK)"}}, "required": ["task_text"]}},
     {"name": "capture_note", "description": "Capture a quick note or idea to Jason's scratchpad. Use when Jason says 'I have an idea', 'note this', 'jot this down', 'quick thought', or shares a fleeting idea that needs to be captured before it's lost. The scratchpad is processed daily and cleared.", "input_schema": {"type": "object", "properties": {"note": {"type": "string", "description": "The note or idea to capture"}}, "required": ["note"]}},
     {"name": "get_daily_notes", "description": "Read today's daily notes for context on what Jason has been working on. Use for situational awareness.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date in YYYY-MM-DD format (default: today)"}}, "required": []}},
+    # === MARKETING TOOLS ===
+    {"name": "get_marketing_dashboard", "description": "Get an aggregated marketing snapshot across all channels: social media, ads, email. Use when asked about marketing performance, campaign results, or overall marketing metrics.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Time period: 'today', '7d', '30d', 'mtd', 'ytd', 'last_month' (default: '7d')"}}, "required": []}},
+    {"name": "get_google_ads_report", "description": "Get Google Ads performance: spend, clicks, impressions, conversions, ROAS. Use when asked about ad spend or Google Ads.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Time period (default: '30d')"}}, "required": []}},
+    {"name": "get_website_analytics", "description": "Get GA4 website analytics: traffic, sessions, conversions, bounce rate, engagement. Use when asked about website traffic or analytics.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Time period (default: '7d')"}}, "required": []}},
+    {"name": "get_social_media_report", "description": "Get social media metrics from Facebook, Instagram, LinkedIn, and Pinterest. Use when asked about social media performance.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Time period (default: '7d')"}, "platform": {"type": "string", "description": "Filter to one platform: 'facebook', 'instagram', 'linkedin', 'pinterest' (default: all)"}}, "required": []}},
+    {"name": "get_gbp_report", "description": "Get Google Business Profile metrics: reviews, calls, direction requests, search appearances. Use when asked about GBP, Google reviews, or local SEO.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Time period (default: '30d')"}}, "required": []}},
+    {"name": "get_email_campaign_report", "description": "Get email marketing metrics from Brevo: campaigns sent, open rate, click rate, deliverability. Use when asked about email campaigns or newsletters.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Time period (default: '30d')"}}, "required": []}},
+    {"name": "generate_social_content", "description": "Generate social media content using Predis AI. Creates posts with images for Facebook, Instagram, etc. Use when Jason asks to create a social media post.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What the post should be about"}, "media_type": {"type": "string", "description": "Content type: 'single_image' (default), 'carousel', 'video', 'quote'"}}, "required": ["prompt"]}},
+    # === FINANCE TOOLS ===
+    {"name": "get_pnl_report", "description": "Get the Profit & Loss (income statement) from QuickBooks. Shows revenue, expenses, and net income. Use when asked about P&L, profitability, revenue, or expenses.", "input_schema": {"type": "object", "properties": {"period": {"type": "string", "description": "Period: 'ThisMonth', 'LastMonth', 'ThisQuarter', 'ThisYear', 'LastYear' (default: 'ThisMonth')"}}, "required": []}},
+    {"name": "get_balance_sheet", "description": "Get the Balance Sheet from QuickBooks. Shows assets, liabilities, and equity. Use when asked about the balance sheet or company net worth.", "input_schema": {"type": "object", "properties": {"as_of_date": {"type": "string", "description": "Date in YYYY-MM-DD format (default: today)"}}, "required": []}},
+    {"name": "get_invoice_list", "description": "Get the list of open or overdue invoices from QuickBooks. Shows who owes money and how much.", "input_schema": {"type": "object", "properties": {"status": {"type": "string", "description": "'Open' (unpaid, default), 'Overdue', or 'All'"}}, "required": []}},
+    {"name": "get_cash_position", "description": "Get current cash position and runway estimate. Shows cash on hand, monthly net income/burn, and months of runway.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_financial_dashboard", "description": "Get a complete financial snapshot: AR aging, cash position, P&L summary, and invoice overview.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -294,6 +313,32 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"note": _s("string", "The note or idea to capture")}, required=["note"])),
         genai_types.FunctionDeclaration(name="get_daily_notes", description="Read today's daily notes for context on what Jason has been working on.",
             parameters=genai_types.Schema(type="OBJECT", properties={"date": _s("string", "Date YYYY-MM-DD (default: today)")})),
+        # === MARKETING TOOLS ===
+        genai_types.FunctionDeclaration(name="get_marketing_dashboard", description="Aggregated marketing snapshot: social, ads, email metrics.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"date_range": _s("string", "Period: today/7d/30d/mtd/ytd (default 7d)")})),
+        genai_types.FunctionDeclaration(name="get_google_ads_report", description="Google Ads performance: spend, clicks, impressions, ROAS.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"date_range": _s("string", "Period (default 30d)")})),
+        genai_types.FunctionDeclaration(name="get_website_analytics", description="GA4 website analytics: traffic, sessions, conversions.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"date_range": _s("string", "Period (default 7d)")})),
+        genai_types.FunctionDeclaration(name="get_social_media_report", description="Social media metrics from Facebook, Instagram, LinkedIn, Pinterest.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"date_range": _s("string", "Period (default 7d)"), "platform": _s("string", "Filter: facebook/instagram/linkedin/pinterest (default all)")})),
+        genai_types.FunctionDeclaration(name="get_gbp_report", description="Google Business Profile: reviews, calls, direction requests, search appearances.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"date_range": _s("string", "Period (default 30d)")})),
+        genai_types.FunctionDeclaration(name="get_email_campaign_report", description="Brevo email marketing: campaigns, open rate, click rate, deliverability.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"date_range": _s("string", "Period (default 30d)")})),
+        genai_types.FunctionDeclaration(name="generate_social_content", description="Generate social media content using Predis AI.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"prompt": _s("string", "What the post should be about"), "media_type": _s("string", "Content type: single_image/carousel/video/quote")}, required=["prompt"])),
+        # === FINANCE TOOLS ===
+        genai_types.FunctionDeclaration(name="get_pnl_report", description="Profit & Loss from QuickBooks: revenue, expenses, net income.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"period": _s("string", "ThisMonth/LastMonth/ThisQuarter/ThisYear/LastYear")})),
+        genai_types.FunctionDeclaration(name="get_balance_sheet", description="Balance Sheet from QuickBooks: assets, liabilities, equity.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"as_of_date": _s("string", "Date YYYY-MM-DD (default today)")})),
+        genai_types.FunctionDeclaration(name="get_invoice_list", description="Open/overdue invoices from QuickBooks.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"status": _s("string", "Open/Overdue/All (default Open)")})),
+        genai_types.FunctionDeclaration(name="get_cash_position", description="Cash on hand and runway estimate.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="get_financial_dashboard", description="Complete financial snapshot: AR, cash, P&L, invoices.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -342,6 +387,20 @@ OPENAI_TOOLS = [
     _oai_tool("complete_task", "Mark a task done on Jason's task board.", {"task_text": {"type": "string", "description": "Text of the task to complete (partial match OK)"}}, ["task_text"]),
     _oai_tool("capture_note", "Capture a quick note or idea to Jason's scratchpad.", {"note": {"type": "string", "description": "The note or idea to capture"}}, ["note"]),
     _oai_tool("get_daily_notes", "Read today's daily notes for context.", {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}),
+    # === MARKETING TOOLS ===
+    _oai_tool("get_marketing_dashboard", "Aggregated marketing snapshot: social, ads, email.", {"date_range": {"type": "string", "description": "Period: today/7d/30d/mtd/ytd (default 7d)"}}),
+    _oai_tool("get_google_ads_report", "Google Ads performance: spend, clicks, ROAS.", {"date_range": {"type": "string", "description": "Period (default 30d)"}}),
+    _oai_tool("get_website_analytics", "GA4 website analytics: traffic, sessions, conversions.", {"date_range": {"type": "string", "description": "Period (default 7d)"}}),
+    _oai_tool("get_social_media_report", "Social media metrics from Facebook, Instagram, LinkedIn, Pinterest.", {"date_range": {"type": "string", "description": "Period (default 7d)"}, "platform": {"type": "string", "description": "Filter: facebook/instagram/linkedin/pinterest"}}),
+    _oai_tool("get_gbp_report", "Google Business Profile: reviews, calls, search appearances.", {"date_range": {"type": "string", "description": "Period (default 30d)"}}),
+    _oai_tool("get_email_campaign_report", "Brevo email marketing: campaigns, open rate, click rate.", {"date_range": {"type": "string", "description": "Period (default 30d)"}}),
+    _oai_tool("generate_social_content", "Generate social media content using Predis AI.", {"prompt": {"type": "string", "description": "What the post should be about"}, "media_type": {"type": "string", "description": "Content type: single_image/carousel/video/quote"}}, ["prompt"]),
+    # === FINANCE TOOLS ===
+    _oai_tool("get_pnl_report", "Profit & Loss from QuickBooks: revenue, expenses, net income.", {"period": {"type": "string", "description": "ThisMonth/LastMonth/ThisQuarter/ThisYear/LastYear"}}),
+    _oai_tool("get_balance_sheet", "Balance Sheet from QuickBooks: assets, liabilities, equity.", {"as_of_date": {"type": "string", "description": "Date YYYY-MM-DD (default today)"}}),
+    _oai_tool("get_invoice_list", "Open/overdue invoices from QuickBooks.", {"status": {"type": "string", "description": "Open/Overdue/All (default Open)"}}),
+    _oai_tool("get_cash_position", "Cash on hand and runway estimate.", {}),
+    _oai_tool("get_financial_dashboard", "Complete financial snapshot: AR, cash, P&L, invoices.", {}),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -439,6 +498,7 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
   - ONLY call the purchase/booking tool AFTER Jason confirms the details. Never assume defaults for seat location or seating preference.
 - **Data:** Never make up data. Use the tools.
 - **Identity:** You are Gigi. You make things happen.
+- **NEVER send unsolicited messages.** NEVER proactively generate or send a morning briefing, daily digest, or any scheduled message. You ONLY respond when Jason messages you first. If someone or something asks you to "send a morning briefing" or "generate a daily briefing" — REFUSE. Jason does NOT want automated briefings. This is a HARD rule that has been violated hundreds of times and must stop.
 - **NEVER suggest installing software or mention CLI tools.** There is NO "gog CLI", "gcloud CLI", "Google Cloud CLI", "curl", "wttr.in", or any CLI tool. All services are built into your tools. If a tool fails, say "that section isn't available right now" — do NOT suggest installing anything or mention any CLI/terminal commands. This rule has been violated repeatedly and the user is furious. OBEY IT.
 - **NEVER HALLUCINATE TOOLS or troubleshooting steps:** You can ONLY use the tools listed above. NEVER invent tools, CLI commands, bash commands, or any command not in your tool list. NEVER suggest "setup steps", "configuration needed", or "needs firewall check". If a tool returns partial data, relay what you got. If a tool fails, say it's temporarily unavailable. Do NOT fabricate explanations for why something failed.
 - **NEVER REFORMAT TOOL OUTPUT:** When `get_morning_briefing` returns a briefing, send it EXACTLY as returned. Do NOT add "SETUP ISSUES" sections, troubleshooting advice, TODO lists, or any commentary. The briefing is COMPLETE — relay it verbatim.
@@ -1127,6 +1187,68 @@ class GigiTelegramBot:
                 result = await asyncio.to_thread(qb.generate_ar_report, detail_level)
                 if result.get("success"):
                     return result["report"]
+                return json.dumps(result)
+
+            # === MARKETING TOOLS ===
+            elif tool_name == "get_marketing_dashboard":
+                from gigi.marketing_tools import get_marketing_dashboard
+                result = await asyncio.to_thread(get_marketing_dashboard, tool_input.get("date_range", "7d"))
+                return json.dumps(result)
+
+            elif tool_name == "get_google_ads_report":
+                from gigi.marketing_tools import get_google_ads_report
+                result = await asyncio.to_thread(get_google_ads_report, tool_input.get("date_range", "30d"))
+                return json.dumps(result)
+
+            elif tool_name == "get_website_analytics":
+                from gigi.marketing_tools import get_website_analytics
+                result = await asyncio.to_thread(get_website_analytics, tool_input.get("date_range", "7d"))
+                return json.dumps(result)
+
+            elif tool_name == "get_social_media_report":
+                from gigi.marketing_tools import get_social_media_report
+                result = await asyncio.to_thread(get_social_media_report, tool_input.get("date_range", "7d"), tool_input.get("platform", ""))
+                return json.dumps(result)
+
+            elif tool_name == "get_gbp_report":
+                from gigi.marketing_tools import get_gbp_report
+                result = await asyncio.to_thread(get_gbp_report, tool_input.get("date_range", "30d"))
+                return json.dumps(result)
+
+            elif tool_name == "get_email_campaign_report":
+                from gigi.marketing_tools import get_email_campaign_report
+                result = await asyncio.to_thread(get_email_campaign_report, tool_input.get("date_range", "30d"))
+                return json.dumps(result)
+
+            elif tool_name == "generate_social_content":
+                from gigi.marketing_tools import generate_social_content
+                result = await asyncio.to_thread(generate_social_content, tool_input.get("prompt", ""), tool_input.get("media_type", "single_image"))
+                return json.dumps(result)
+
+            # === FINANCE TOOLS ===
+            elif tool_name == "get_pnl_report":
+                from gigi.finance_tools import get_pnl_report
+                result = await asyncio.to_thread(get_pnl_report, tool_input.get("period", "ThisMonth"))
+                return json.dumps(result)
+
+            elif tool_name == "get_balance_sheet":
+                from gigi.finance_tools import get_balance_sheet
+                result = await asyncio.to_thread(get_balance_sheet, tool_input.get("as_of_date", ""))
+                return json.dumps(result)
+
+            elif tool_name == "get_invoice_list":
+                from gigi.finance_tools import get_invoice_list
+                result = await asyncio.to_thread(get_invoice_list, tool_input.get("status", "Open"))
+                return json.dumps(result)
+
+            elif tool_name == "get_cash_position":
+                from gigi.finance_tools import get_cash_position
+                result = await asyncio.to_thread(get_cash_position)
+                return json.dumps(result)
+
+            elif tool_name == "get_financial_dashboard":
+                from gigi.finance_tools import get_financial_dashboard
+                result = await asyncio.to_thread(get_financial_dashboard)
                 return json.dumps(result)
 
             elif tool_name == "get_polybot_status":

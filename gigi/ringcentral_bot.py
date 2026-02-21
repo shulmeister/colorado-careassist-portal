@@ -140,7 +140,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "gemini").lower()
 _DEFAULT_MODELS = {
     "gemini": "gemini-3-flash-preview",
-    "anthropic": "claude-haiku-4-5-20251001",
+    "anthropic": "claude-sonnet-4-20250514",
 }
 LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-3-flash-preview"))
 LLM_MAX_TOKENS = 1024
@@ -271,10 +271,23 @@ SMS_TOOLS = [
     {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
 ]
 
-# NOTE: SMS tools are intentionally limited to operational tools only.
-# Caregivers text this number — they should NOT have access to personal
-# assistant tools (browse_webpage, buy_tickets, stocks, etc.).
-# Only Jason gets full Gigi capability via DM/Telegram/voice.
+# Exclude marketing/finance tools from SMS (caregivers don't need these)
+_SMS_EXCLUDE = {
+    "get_marketing_dashboard", "get_google_ads_report", "get_website_analytics",
+    "get_social_media_report", "get_gbp_report", "get_email_campaign_report",
+    "generate_social_content", "get_pnl_report", "get_balance_sheet",
+    "get_invoice_list", "get_cash_position", "get_financial_dashboard",
+}
+
+# Auto-extend SMS tools from Telegram canonical set (ensures tool parity across channels)
+try:
+    from gigi.telegram_bot import ANTHROPIC_TOOLS as _TELE_TOOLS
+    _sms_names = {t["name"] for t in SMS_TOOLS}
+    for _t in _TELE_TOOLS:
+        if _t["name"] not in _sms_names and _t["name"] not in _SMS_EXCLUDE:
+            SMS_TOOLS.append(_t)
+except ImportError:
+    pass
 
 # Full tool set for Glip DM replies — matches Telegram capabilities
 DM_TOOLS = [
@@ -420,6 +433,7 @@ TONE:
 - Proactive — offer additional useful info when relevant, but NOT after acknowledgment messages.
 - Never say "check with the office" — YOU are the office. Look it up.
 - Never say "I don't have access to" something — check your tools first. You have 15+ tools.
+- NEVER send unsolicited messages. NEVER proactively generate or send a morning briefing, daily digest, or any scheduled message unless explicitly asked by Jason in the current conversation. Jason does NOT want automated briefings.
 - NEVER suggest installing software or mention CLI tools. There is NO "gog CLI", "gcloud CLI", "curl", "wttr.in", or any CLI. All services are built into your tools. If a tool fails, say "that's temporarily unavailable" — do NOT suggest installing anything.
 - NEVER HALLUCINATE TOOLS or troubleshooting: Only use tools you actually have. NEVER invent commands, suggest configuration steps, or fabricate explanations for failures.
 - NEVER REFORMAT TOOL OUTPUT: When get_morning_briefing returns a briefing, relay it as-is. Do NOT add "SETUP ISSUES" sections, troubleshooting, or TODO lists.
@@ -492,7 +506,7 @@ class GigiRingCentralBot:
         self.bot_extension_id = None
         self.startup_time = datetime.utcnow()
         self.reply_history = self._load_reply_history()
-        # LLM for intelligent SMS/DM replies (Gemini preferred to avoid API fees)
+        # LLM for intelligent SMS/DM replies
         self.llm = None
         self.llm_provider = LLM_PROVIDER
         if LLM_PROVIDER == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
@@ -3926,21 +3940,6 @@ class GigiRingCentralBot:
                             logger.info(f"👻 Shadow Mode: Draft SMS to {clean_phone} reported to DM (not sent)")
                         except Exception as e:
                             logger.error(f"Shadow mode DM failed: {e}")
-
-                        # Persist draft to DB for learning pipeline
-                        try:
-                            conn = psycopg2.connect(db_url)
-                            cur = conn.cursor()
-                            cur.execute("""
-                                INSERT INTO gigi_sms_drafts (from_phone, from_name, inbound_text, draft_reply)
-                                VALUES (%s, %s, %s, %s)
-                            """, (clean_phone, sender_name, text, reply))
-                            conn.commit()
-                            conn.close()
-                            logger.info(f"📝 Shadow draft persisted to gigi_sms_drafts for {clean_phone}")
-                        except Exception as e:
-                            logger.error(f"Shadow draft DB persist failed: {e}")
-
                         # NOTE: Do NOT record cooldown for shadow mode — no SMS was actually sent,
                         # so there's no loop risk. Recording cooldown here blocks real inbound SMS.
                         return

@@ -10,7 +10,6 @@ Reuses GigiTelegramBot's execute_tool (600+ lines of tool implementations)
 without duplication. All 19 tools available across all channels.
 """
 
-import asyncio
 import json
 import logging
 from datetime import datetime
@@ -230,8 +229,7 @@ async def _call_anthropic(bot, history, sys_prompt):
 
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
 
-    response = await asyncio.to_thread(
-        bot.llm.messages.create,
+    response = bot.llm.messages.create(
         model=LLM_MODEL, max_tokens=4096,
         system=sys_prompt, tools=ANTHROPIC_TOOLS,
         messages=messages
@@ -266,8 +264,7 @@ async def _call_anthropic(bot, history, sys_prompt):
         messages.append({"role": "assistant", "content": assistant_content})
         messages.append({"role": "user", "content": tool_results})
 
-        response = await asyncio.to_thread(
-            bot.llm.messages.create,
+        response = bot.llm.messages.create(
             model=LLM_MODEL, max_tokens=4096,
             system=sys_prompt, tools=ANTHROPIC_TOOLS,
             messages=messages

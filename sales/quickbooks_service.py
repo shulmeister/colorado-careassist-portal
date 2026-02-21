@@ -4,19 +4,20 @@ QuickBooks Online API integration service.
 Handles customer data fetching and syncing to Brevo.
 """
 
-import os
 import logging
-import requests
-import psycopg2
-from typing import Dict, List, Any, Optional
+import os
 from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
+
+import psycopg2
+import requests
 
 logger = logging.getLogger(__name__)
 
 
 class QuickBooksService:
     """Service for interacting with QuickBooks Online API."""
-    
+
     def __init__(self):
         # Support both QB_* and QUICKBOOKS_* naming conventions
         self.client_id = os.getenv('QB_CLIENT_ID') or os.getenv('QUICKBOOKS_CLIENT_ID')
@@ -25,34 +26,32 @@ class QuickBooksService:
         self.access_token = os.getenv('QB_ACCESS_TOKEN') or os.getenv('QUICKBOOKS_ACCESS_TOKEN')
         self.refresh_token = os.getenv('QB_REFRESH_TOKEN') or os.getenv('QUICKBOOKS_REFRESH_TOKEN')
         self.enabled = bool(self.client_id and self.client_secret and self.realm_id)
-        
+
         self.base_url = "https://sandbox-quickbooks.api.intuit.com" if os.getenv('QUICKBOOKS_SANDBOX') == 'true' else "https://quickbooks.api.intuit.com"
-        self.auth_url = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
-        
+        self.auth_url = "https://appcenter.intuit.com/connect/oauth2" if os.getenv('QUICKBOOKS_SANDBOX') != 'true' else "https://appcenter.intuit.com/connect/oauth2"
+
         if not self.enabled:
             logger.warning("QuickBooks credentials not configured. QuickBooks integration disabled.")
-    
+
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for API requests."""
         if not self.access_token:
             raise ValueError("QuickBooks access token not configured")
-        
+
         return {
             "Accept": "application/json",
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.access_token}"
         }
-    
+
     def refresh_access_token(self) -> Dict[str, Any]:
         """Refresh the QuickBooks access token using refresh token."""
         if not self.refresh_token:
             return {"success": False, "error": "Refresh token not configured"}
-        
+
         try:
-            # Use the full token URL
-            token_url = "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer"
             response = requests.post(
-                token_url,
+                f"{self.auth_url}/token",
                 data={
                     "grant_type": "refresh_token",
                     "refresh_token": self.refresh_token,
@@ -61,14 +60,14 @@ class QuickBooksService:
                 },
                 headers={"Accept": "application/json"}
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
                 self.access_token = data.get('access_token')
                 # Optionally update refresh token if provided
                 if 'refresh_token' in data:
                     self.refresh_token = data.get('refresh_token')
-                
+
                 logger.info("QuickBooks access token refreshed successfully")
                 return {
                     "success": True,
@@ -81,23 +80,23 @@ class QuickBooksService:
                     "success": False,
                     "error": f"Failed to refresh token: {response.status_code} - {response.text}"
                 }
-                
+
         except Exception as e:
             logger.error(f"Error refreshing QuickBooks token: {str(e)}")
             return {"success": False, "error": str(e)}
-    
+
     def test_connection(self) -> Dict[str, Any]:
         """Test the QuickBooks API connection."""
         if not self.enabled:
             return {"success": False, "error": "QuickBooks not configured"}
-        
+
         try:
             # Try to get company info
             response = requests.get(
                 f"{self.base_url}/v3/company/{self.realm_id}/companyinfo/{self.realm_id}",
                 headers=self._get_headers()
             )
-            
+
             if response.status_code == 200:
                 data = response.json()
                 company_info = data.get('CompanyInfo', {})
@@ -126,35 +125,35 @@ class QuickBooksService:
                             "realm_id": self.realm_id,
                             "token_refreshed": True
                         }
-                
+
                 return {"success": False, "error": "Authentication failed. Token may be expired."}
             else:
                 return {"success": False, "error": f"API error: {response.status_code} - {response.text[:200]}"}
-                
+
         except Exception as e:
             logger.error(f"QuickBooks connection test failed: {str(e)}")
             return {"success": False, "error": str(e)}
-    
+
     def get_customers(self, limit: int = 1000, start_position: int = 1) -> Dict[str, Any]:
         """Get all customers from QuickBooks."""
         if not self.enabled:
             return {"success": False, "error": "QuickBooks not configured"}
-        
+
         try:
             all_customers = []
             max_results = min(limit, 1000)  # QuickBooks max is 1000 per query
             position = start_position
-            
+
             while True:
                 # QuickBooks Query API
                 query = f"SELECT * FROM Customer MAXRESULTS {max_results} STARTPOSITION {position}"
-                
+
                 response = requests.get(
                     f"{self.base_url}/v3/company/{self.realm_id}/query",
                     headers=self._get_headers(),
                     params={"query": query}
                 )
-                
+
                 if response.status_code == 401:
                     # Token expired, try to refresh
                     refresh_result = self.refresh_access_token()
@@ -166,77 +165,77 @@ class QuickBooksService:
                         headers=self._get_headers(),
                         params={"query": query}
                     )
-                
+
                 if response.status_code != 200:
                     return {
                         "success": False,
                         "error": f"API error: {response.status_code} - {response.text[:200]}"
                     }
-                
+
                 data = response.json()
                 query_response = data.get('QueryResponse', {})
                 customers = query_response.get('Customer', [])
-                
+
                 # Handle single customer vs list
                 if isinstance(customers, dict):
                     customers = [customers]
-                
+
                 all_customers.extend(customers)
-                
+
                 # Check if there are more results
                 max_results_returned = query_response.get('maxResults', 0)
                 if len(customers) < max_results_returned:
                     break
-                
+
                 position += len(customers)
-                
+
                 if len(all_customers) >= limit:
                     break
-            
+
             return {
                 "success": True,
                 "customers": all_customers,
                 "count": len(all_customers)
             }
-            
+
         except Exception as e:
             logger.error(f"Failed to get QuickBooks customers: {str(e)}")
             return {"success": False, "error": str(e)}
-    
+
     def normalize_customer_data(self, customer: Dict[str, Any]) -> Dict[str, Any]:
         """Normalize QuickBooks customer data for Brevo/CRM."""
         # Extract name
         display_name = customer.get('DisplayName', '')
         given_name = customer.get('GivenName', '')
         family_name = customer.get('FamilyName', '')
-        
+
         # Use GivenName/FamilyName if available, otherwise split DisplayName
         first_name = given_name or ''
         last_name = family_name or ''
-        
+
         if not first_name and not last_name and display_name:
             # Split display name
             parts = display_name.split(' ', 1)
             first_name = parts[0] if parts else ''
             last_name = parts[1] if len(parts) > 1 else ''
-        
+
         # Extract email from PrimaryEmailAddr or EmailAddr
         email = ''
         if customer.get('PrimaryEmailAddr'):
             email = customer.get('PrimaryEmailAddr', {}).get('Address', '').strip()
         elif customer.get('EmailAddr'):
             email = customer.get('EmailAddr', {}).get('Address', '').strip()
-        
+
         # Extract phone
         phone = ''
         if customer.get('PrimaryPhone'):
             phone = customer.get('PrimaryPhone', {}).get('FreeFormNumber', '').strip()
         elif customer.get('Mobile'):
             phone = customer.get('Mobile', {}).get('FreeFormNumber', '').strip()
-        
+
         # Extract company name
         company = customer.get('CompanyName', '') or display_name
-        
+
         # Extract address
         address_parts = []
         if customer.get('BillAddr'):
@@ -252,7 +251,7 @@ class QuickBooksService:
             if addr.get('PostalCode'):
                 address_parts.append(addr.get('PostalCode'))
         address = ', '.join(address_parts) if address_parts else ''
-        
+
         return {
             'qb_id': customer.get('Id'),
             'qb_sync_token': customer.get('SyncToken'),  # For tracking updates
@@ -487,7 +486,7 @@ class QuickBooksService:
                 total_ar = sum(float(inv.get("Balance", 0)) for inv in invoices)
                 overdue = [inv for inv in invoices
                           if inv.get("DueDate") and inv["DueDate"] < datetime.now().strftime("%Y-%m-%d")]
-                lines.append(f"\n--- Summary ---")
+                lines.append("\n--- Summary ---")
                 lines.append(f"Total AR Outstanding: ${total_ar:,.2f}")
                 lines.append(f"Open Invoices: {len(invoices)}")
                 lines.append(f"Overdue Invoices: {len(overdue)}")
@@ -506,4 +505,144 @@ class QuickBooksService:
                         lines.append(f"  {customer}: ${balance:,.2f} (due {due_date})")
 
         return {"success": True, "report": "\n".join(lines)}
+
+    def get_profit_and_loss(self, period: str = "ThisMonth") -> Dict[str, Any]:
+        """Get Profit & Loss report from QBO Reports API.
+
+        period: "ThisMonth", "LastMonth", "ThisQuarter", "ThisYear", "LastYear"
+        """
+        if not self.enabled:
+            return {"success": False, "error": "QuickBooks not configured"}
+
+        try:
+            period_map = {
+                "ThisMonth": "This Month",
+                "LastMonth": "Last Month",
+                "ThisQuarter": "This Fiscal Quarter",
+                "ThisYear": "This Fiscal Year",
+                "LastYear": "Last Fiscal Year",
+            }
+            date_macro = period_map.get(period, "This Month")
+
+            response = self._api_request("GET", "reports/ProfitAndLoss", params={"date_macro": date_macro})
+            if not response or response.status_code != 200:
+                error_text = response.text[:200] if response else "No response"
+                return {"success": False, "error": f"API error: {error_text}"}
+
+            report = response.json()
+            header = report.get("Header", {})
+            rows = report.get("Rows", {}).get("Row", [])
+
+            parsed = {
+                "success": True,
+                "period": date_macro,
+                "start_date": header.get("StartPeriod", ""),
+                "end_date": header.get("EndPeriod", ""),
+            }
+
+            for row in rows:
+                group = row.get("group", "")
+                summary = row.get("Summary", {})
+                cols = summary.get("ColData", [])
+                if len(cols) >= 2:
+                    try:
+                        amount = float(cols[1].get("value", "0"))
+                    except (ValueError, TypeError):
+                        amount = 0
+                    if group == "Income":
+                        parsed["total_income"] = amount
+                    elif group == "Expenses":
+                        parsed["total_expenses"] = amount
+
+                # NetIncome can be at top level or nested
+                if row.get("type") == "Section" and row.get("group") == "NetIncome":
+                    ni_cols = row.get("Summary", {}).get("ColData", [])
+                    if len(ni_cols) >= 2:
+                        try:
+                            parsed["net_income"] = float(ni_cols[1].get("value", "0"))
+                        except (ValueError, TypeError):
+                            pass
+                elif group == "NetIncome" and len(cols) >= 2:
+                    try:
+                        parsed["net_income"] = float(cols[1].get("value", "0"))
+                    except (ValueError, TypeError):
+                        pass
+
+            return parsed
+
+        except Exception as e:
+            logger.error(f"P&L report failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_balance_sheet(self, as_of_date: str = None) -> Dict[str, Any]:
+        """Get Balance Sheet report from QBO Reports API.
+
+        as_of_date: Optional YYYY-MM-DD string. Defaults to today.
+        """
+        if not self.enabled:
+            return {"success": False, "error": "QuickBooks not configured"}
+
+        try:
+            params = {}
+            if as_of_date:
+                params["start_date"] = as_of_date
+                params["end_date"] = as_of_date
+
+            response = self._api_request("GET", "reports/BalanceSheet", params=params)
+            if not response or response.status_code != 200:
+                error_text = response.text[:200] if response else "No response"
+                return {"success": False, "error": f"API error: {error_text}"}
+
+            report = response.json()
+            header = report.get("Header", {})
+            rows = report.get("Rows", {}).get("Row", [])
+
+            parsed = {
+                "success": True,
+                "as_of": header.get("EndPeriod", as_of_date or "today"),
+            }
+
+            cash_total = 0
+            for row in rows:
+                group = row.get("group", "")
+                summary = row.get("Summary", {})
+                cols = summary.get("ColData", [])
+                if len(cols) >= 2:
+                    try:
+                        amount = float(cols[1].get("value", "0"))
+                    except (ValueError, TypeError):
+                        amount = 0
+
+                    if "Asset" in group:
+                        parsed["total_assets"] = amount
+                    elif "Liabilit" in group:
+                        parsed["total_liabilities"] = amount
+                    elif "Equity" in group:
+                        parsed["total_equity"] = amount
+
+                # Look for cash/bank in nested sections
+                section_rows = row.get("Rows", {}).get("Row", [])
+                for sr in section_rows:
+                    sr_group = sr.get("group", "")
+                    sr_header = sr.get("Header", {})
+                    sr_header_cols = sr_header.get("ColData", [])
+                    header_name = sr_header_cols[0].get("value", "").lower() if sr_header_cols else ""
+
+                    if "bank" in sr_group.lower() or "bank" in header_name or "cash" in header_name:
+                        sr_summary = sr.get("Summary", {})
+                        sr_cols = sr_summary.get("ColData", [])
+                        if len(sr_cols) >= 2:
+                            try:
+                                cash_total += float(sr_cols[1].get("value", "0"))
+                            except (ValueError, TypeError):
+                                pass
+
+            if cash_total:
+                parsed["cash_and_equivalents"] = cash_total
+
+            return parsed
+
+        except Exception as e:
+            logger.error(f"Balance sheet failed: {e}")
+            return {"success": False, "error": str(e)}
 
