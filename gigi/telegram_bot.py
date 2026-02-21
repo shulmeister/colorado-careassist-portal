@@ -174,6 +174,7 @@ TOOL_NAMES = [
     "generate_social_content",
     "get_pnl_report", "get_balance_sheet", "get_invoice_list",
     "get_cash_position", "get_financial_dashboard",
+    "get_subscription_audit",
 ]
 
 # Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
@@ -229,6 +230,7 @@ ANTHROPIC_TOOLS = [
     {"name": "get_invoice_list", "description": "Get the list of open or overdue invoices from QuickBooks. Shows who owes money and how much.", "input_schema": {"type": "object", "properties": {"status": {"type": "string", "description": "'Open' (unpaid, default), 'Overdue', or 'All'"}}, "required": []}},
     {"name": "get_cash_position", "description": "Get current cash position and runway estimate. Shows cash on hand, monthly net income/burn, and months of runway.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_financial_dashboard", "description": "Get a complete financial snapshot: AR aging, cash position, P&L summary, and invoice overview.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_subscription_audit", "description": "Audit all recurring charges and subscriptions. Groups expenses by vendor, identifies recurring patterns, and shows estimated monthly/annual cost. Use when asked about subscriptions, recurring charges, what we're paying for, or what to cancel.", "input_schema": {"type": "object", "properties": {"months_back": {"type": "integer", "description": "How many months of history to analyze (default: 6)"}}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -339,6 +341,8 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={})),
         genai_types.FunctionDeclaration(name="get_financial_dashboard", description="Complete financial snapshot: AR, cash, P&L, invoices.",
             parameters=genai_types.Schema(type="OBJECT", properties={})),
+        genai_types.FunctionDeclaration(name="get_subscription_audit", description="Audit recurring charges/subscriptions by vendor. Shows what you're paying for.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"months_back": _s("INTEGER", "Months of history (default 6)")})),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -401,6 +405,7 @@ OPENAI_TOOLS = [
     _oai_tool("get_invoice_list", "Open/overdue invoices from QuickBooks.", {"status": {"type": "string", "description": "Open/Overdue/All (default Open)"}}),
     _oai_tool("get_cash_position", "Cash on hand and runway estimate.", {}),
     _oai_tool("get_financial_dashboard", "Complete financial snapshot: AR, cash, P&L, invoices.", {}),
+    _oai_tool("get_subscription_audit", "Audit recurring charges/subscriptions by vendor.", {"months_back": {"type": "integer", "description": "Months of history (default 6)"}}),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -1249,6 +1254,12 @@ class GigiTelegramBot:
             elif tool_name == "get_financial_dashboard":
                 from gigi.finance_tools import get_financial_dashboard
                 result = await asyncio.to_thread(get_financial_dashboard)
+                return json.dumps(result)
+
+            elif tool_name == "get_subscription_audit":
+                from gigi.finance_tools import get_subscription_audit
+                months = tool_input.get("months_back", 6)
+                result = await asyncio.to_thread(get_subscription_audit, months)
                 return json.dumps(result)
 
             elif tool_name == "get_polybot_status":

@@ -646,3 +646,52 @@ class QuickBooksService:
             logger.error(f"Balance sheet failed: {e}")
             return {"success": False, "error": str(e)}
 
+    def get_purchases(self, months_back: int = 6, limit: int = 1000) -> Dict[str, Any]:
+        """Get purchase/expense transactions from QuickBooks for the last N months."""
+        if not self.enabled:
+            return {"success": False, "error": "QuickBooks not configured"}
+
+        try:
+            cutoff = (datetime.now() - timedelta(days=months_back * 30)).strftime("%Y-%m-%d")
+            query = f"SELECT * FROM Purchase WHERE TxnDate >= '{cutoff}' MAXRESULTS {limit}"
+
+            response = self._api_request("GET", "query", params={"query": query})
+            if not response or response.status_code != 200:
+                error_text = response.text[:200] if response else "No response"
+                return {"success": False, "error": f"API error: {error_text}"}
+
+            data = response.json()
+            purchases = data.get("QueryResponse", {}).get("Purchase", [])
+            if isinstance(purchases, dict):
+                purchases = [purchases]
+
+            return {"success": True, "purchases": purchases, "count": len(purchases)}
+
+        except Exception as e:
+            logger.error(f"Failed to get purchases: {e}")
+            return {"success": False, "error": str(e)}
+
+    def get_vendors(self, limit: int = 500) -> Dict[str, Any]:
+        """Get all vendors from QuickBooks."""
+        if not self.enabled:
+            return {"success": False, "error": "QuickBooks not configured"}
+
+        try:
+            query = f"SELECT * FROM Vendor WHERE Active = true MAXRESULTS {limit}"
+
+            response = self._api_request("GET", "query", params={"query": query})
+            if not response or response.status_code != 200:
+                error_text = response.text[:200] if response else "No response"
+                return {"success": False, "error": f"API error: {error_text}"}
+
+            data = response.json()
+            vendors = data.get("QueryResponse", {}).get("Vendor", [])
+            if isinstance(vendors, dict):
+                vendors = [vendors]
+
+            return {"success": True, "vendors": vendors, "count": len(vendors)}
+
+        except Exception as e:
+            logger.error(f"Failed to get vendors: {e}")
+            return {"success": False, "error": str(e)}
+
