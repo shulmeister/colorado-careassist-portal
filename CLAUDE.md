@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 19, 2026
+**Last Updated:** February 21, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -152,6 +152,41 @@ Five features built for production readiness with clients and employees:
 
 ### Gigi's Constitution (Laws)
 See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
+
+---
+
+## SALES DASHBOARD & WELLSKY LIFECYCLE
+
+**Location:** `sales/` | **Port:** shared via unified_app | **DB:** SQLite (`sales_tracker.db`) + portal PostgreSQL
+
+### WellSky Prospect → Client Lifecycle
+
+The Sales Dashboard is the source of truth for new leads. WellSky is the hub for operational data. They sync automatically:
+
+| Sales Stage | WellSky Status | isClient | Trigger |
+|---|---|---|---|
+| Deal created (any stage) | New Lead (1) | false | `create_deal` route |
+| Qualified | Initial Phone Call (10) | false | stage change |
+| Assessment Scheduled | Assessment Scheduled (20) | false | stage change |
+| Assessment Completed | Assessment Performed (30) | false | stage change |
+| Proposal Sent | Expecting Signature (60) | false | stage change |
+| Closed Won | Ready to Schedule (70) | true | stage change |
+| Closed Lost | Lost | false | stage change |
+
+**Implementation:**
+- `services/sales_wellsky_sync.py` — `SalesWellSkySyncService` (singleton `sales_wellsky_sync`)
+- `services/wellsky_service.py` — `WellSkyProspect`, `ProspectStatus` enum, `create_prospect()`, `update_prospect_status()`
+- `sales/app.py` — `create_deal` fires `sync_deal_to_prospect()` in daemon thread; `update_deal` fires `sync_deal_stage_change()` in daemon thread on stage change
+- Client Portal (`client-portal/backend/services/wellsky_client_adapter.py`) — `create_prospect()`, `update_prospect_status()`, `convert_prospect_to_client()` used when paperwork completes
+
+**All sync is background (daemon threads)** — zero API latency impact. Errors logged as warnings, never surface to caller.
+
+### Sales Dashboard Features (Feb 21, 2026)
+- Face sheet scanner on Create Deal card (AI document parsing → pre-fill fields)
+- Weekly/Monthly/YTD KPIs + Forecast Revenue on Summary dashboard
+- Deal/Contact navigation buttons on Dashboard
+- Stage history tracking (`stage_entered_at` timestamps)
+- Brevo CRM bidirectional sync
 
 ---
 
@@ -323,7 +358,8 @@ careassist-unified/
 │   ├── src/               # Vue.js source (NWS + ECMWF for US, met.no + ECMWF for intl)
 │   └── dist/              # Built SPA (vite build)
 ├── services/              # Shared services
-│   ├── wellsky_service.py # WellSky API integration
+│   ├── wellsky_service.py # WellSky API integration (clients, caregivers, shifts, prospects)
+│   ├── sales_wellsky_sync.py # Sales Dashboard → WellSky prospect lifecycle sync
 │   └── ringcentral_messaging_service.py
 ├── scripts/
 │   ├── health-monitor.sh  # Service health monitoring
