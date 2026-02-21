@@ -626,6 +626,20 @@ ANTHROPIC_TOOLS = [
             "required": []
         }
     },
+    # === MARKETING TOOLS ===
+    {"name": "get_marketing_dashboard", "description": "Get an aggregated marketing snapshot: social media, ads, email metrics.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Period: today/7d/30d/mtd/ytd (default 7d)"}}, "required": []}},
+    {"name": "get_google_ads_report", "description": "Google Ads performance: spend, clicks, impressions, ROAS.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Period (default 30d)"}}, "required": []}},
+    {"name": "get_website_analytics", "description": "GA4 website analytics: traffic, sessions, conversions.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Period (default 7d)"}}, "required": []}},
+    {"name": "get_social_media_report", "description": "Social media metrics from Facebook, Instagram, LinkedIn, Pinterest.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Period (default 7d)"}, "platform": {"type": "string", "description": "Filter: facebook/instagram/linkedin/pinterest (default all)"}}, "required": []}},
+    {"name": "get_gbp_report", "description": "Google Business Profile: reviews, calls, direction requests.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Period (default 30d)"}}, "required": []}},
+    {"name": "get_email_campaign_report", "description": "Brevo email marketing: campaigns, open rate, click rate.", "input_schema": {"type": "object", "properties": {"date_range": {"type": "string", "description": "Period (default 30d)"}}, "required": []}},
+    {"name": "generate_social_content", "description": "Generate social media content using Predis AI.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What the post should be about"}, "media_type": {"type": "string", "description": "Content type: single_image/carousel/video/quote"}}, "required": ["prompt"]}},
+    # === FINANCE TOOLS ===
+    {"name": "get_pnl_report", "description": "Profit & Loss from QuickBooks: revenue, expenses, net income.", "input_schema": {"type": "object", "properties": {"period": {"type": "string", "description": "ThisMonth/LastMonth/ThisQuarter/ThisYear/LastYear"}}, "required": []}},
+    {"name": "get_balance_sheet", "description": "Balance Sheet from QuickBooks: assets, liabilities, equity.", "input_schema": {"type": "object", "properties": {"as_of_date": {"type": "string", "description": "Date YYYY-MM-DD (default today)"}}, "required": []}},
+    {"name": "get_invoice_list", "description": "Open/overdue invoices from QuickBooks.", "input_schema": {"type": "object", "properties": {"status": {"type": "string", "description": "Open/Overdue/All (default Open)"}}, "required": []}},
+    {"name": "get_cash_position", "description": "Cash on hand and runway estimate.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    {"name": "get_financial_dashboard", "description": "Complete financial snapshot: AR, cash, P&L, invoices.", "input_schema": {"type": "object", "properties": {}, "required": []}},
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -1670,6 +1684,68 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 except Exception as e:
                     return {"error": f"Failed: {str(e)}"}
             result = await run_sync(_voice_read_notes)
+            return json.dumps(result)
+
+        # === MARKETING TOOLS ===
+        elif tool_name == "get_marketing_dashboard":
+            from gigi.marketing_tools import get_marketing_dashboard
+            result = await run_sync(get_marketing_dashboard, tool_input.get("date_range", "7d"))
+            return json.dumps(result)
+
+        elif tool_name == "get_google_ads_report":
+            from gigi.marketing_tools import get_google_ads_report
+            result = await run_sync(get_google_ads_report, tool_input.get("date_range", "30d"))
+            return json.dumps(result)
+
+        elif tool_name == "get_website_analytics":
+            from gigi.marketing_tools import get_website_analytics
+            result = await run_sync(get_website_analytics, tool_input.get("date_range", "7d"))
+            return json.dumps(result)
+
+        elif tool_name == "get_social_media_report":
+            from gigi.marketing_tools import get_social_media_report
+            result = await run_sync(get_social_media_report, tool_input.get("date_range", "7d"), tool_input.get("platform", ""))
+            return json.dumps(result)
+
+        elif tool_name == "get_gbp_report":
+            from gigi.marketing_tools import get_gbp_report
+            result = await run_sync(get_gbp_report, tool_input.get("date_range", "30d"))
+            return json.dumps(result)
+
+        elif tool_name == "get_email_campaign_report":
+            from gigi.marketing_tools import get_email_campaign_report
+            result = await run_sync(get_email_campaign_report, tool_input.get("date_range", "30d"))
+            return json.dumps(result)
+
+        elif tool_name == "generate_social_content":
+            from gigi.marketing_tools import generate_social_content
+            result = await run_sync(generate_social_content, tool_input.get("prompt", ""), tool_input.get("media_type", "single_image"))
+            return json.dumps(result)
+
+        # === FINANCE TOOLS ===
+        elif tool_name == "get_pnl_report":
+            from gigi.finance_tools import get_pnl_report
+            result = await run_sync(get_pnl_report, tool_input.get("period", "ThisMonth"))
+            return json.dumps(result)
+
+        elif tool_name == "get_balance_sheet":
+            from gigi.finance_tools import get_balance_sheet
+            result = await run_sync(get_balance_sheet, tool_input.get("as_of_date", ""))
+            return json.dumps(result)
+
+        elif tool_name == "get_invoice_list":
+            from gigi.finance_tools import get_invoice_list
+            result = await run_sync(get_invoice_list, tool_input.get("status", "Open"))
+            return json.dumps(result)
+
+        elif tool_name == "get_cash_position":
+            from gigi.finance_tools import get_cash_position
+            result = await run_sync(get_cash_position)
+            return json.dumps(result)
+
+        elif tool_name == "get_financial_dashboard":
+            from gigi.finance_tools import get_financial_dashboard
+            result = await run_sync(get_financial_dashboard)
             return json.dumps(result)
 
         else:

@@ -271,12 +271,20 @@ SMS_TOOLS = [
     {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
 ]
 
+# Exclude marketing/finance tools from SMS (caregivers don't need these)
+_SMS_EXCLUDE = {
+    "get_marketing_dashboard", "get_google_ads_report", "get_website_analytics",
+    "get_social_media_report", "get_gbp_report", "get_email_campaign_report",
+    "generate_social_content", "get_pnl_report", "get_balance_sheet",
+    "get_invoice_list", "get_cash_position", "get_financial_dashboard",
+}
+
 # Auto-extend SMS tools from Telegram canonical set (ensures tool parity across channels)
 try:
     from gigi.telegram_bot import ANTHROPIC_TOOLS as _TELE_TOOLS
     _sms_names = {t["name"] for t in SMS_TOOLS}
     for _t in _TELE_TOOLS:
-        if _t["name"] not in _sms_names:
+        if _t["name"] not in _sms_names and _t["name"] not in _SMS_EXCLUDE:
             SMS_TOOLS.append(_t)
 except ImportError:
     pass
@@ -425,6 +433,7 @@ TONE:
 - Proactive — offer additional useful info when relevant, but NOT after acknowledgment messages.
 - Never say "check with the office" — YOU are the office. Look it up.
 - Never say "I don't have access to" something — check your tools first. You have 15+ tools.
+- NEVER send unsolicited messages. NEVER proactively generate or send a morning briefing, daily digest, or any scheduled message unless explicitly asked by Jason in the current conversation. Jason does NOT want automated briefings.
 - NEVER suggest installing software or mention CLI tools. There is NO "gog CLI", "gcloud CLI", "curl", "wttr.in", or any CLI. All services are built into your tools. If a tool fails, say "that's temporarily unavailable" — do NOT suggest installing anything.
 - NEVER HALLUCINATE TOOLS or troubleshooting: Only use tools you actually have. NEVER invent commands, suggest configuration steps, or fabricate explanations for failures.
 - NEVER REFORMAT TOOL OUTPUT: When get_morning_briefing returns a briefing, relay it as-is. Do NOT add "SETUP ISSUES" sections, troubleshooting, or TODO lists.
@@ -497,7 +506,7 @@ class GigiRingCentralBot:
         self.bot_extension_id = None
         self.startup_time = datetime.utcnow()
         self.reply_history = self._load_reply_history()
-        # LLM for intelligent SMS/DM replies (Gemini preferred to avoid API fees)
+        # LLM for intelligent SMS/DM replies
         self.llm = None
         self.llm_provider = LLM_PROVIDER
         if LLM_PROVIDER == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
