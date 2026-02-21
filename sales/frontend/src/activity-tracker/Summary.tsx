@@ -3,185 +3,143 @@ import { ActivityNav } from "./ActivityNav";
 import { UploadPanel } from "./UploadPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-type SummaryStats = {
-  // Visits
-  totalVisits: string;
-  visitsThisMonth: string;
-  // Contacts
-  totalContacts: string;
-  newContactsThisMonth: string;
-  newContactsLast7Days: string;
-  // Companies
-  totalCompanies: string;
-  newCompaniesThisMonth: string;
-  // Deals
-  totalDeals: string;
-  activeDeals: string;
-  newDealsThisMonth: string;
-  // Activity
-  emailsSent: string;
-  phoneCalls: string;
-  lastUpdated: string;
-};
-
-const initialStats: SummaryStats = {
-  totalVisits: "-",
-  visitsThisMonth: "-",
-  totalContacts: "-",
-  newContactsThisMonth: "-",
-  newContactsLast7Days: "-",
-  totalCompanies: "-",
-  newCompaniesThisMonth: "-",
-  totalDeals: "-",
-  activeDeals: "-",
-  newDealsThisMonth: "-",
-  emailsSent: "-",
-  phoneCalls: "-",
-  lastUpdated: "-",
-};
+type DashboardData = Record<string, number | string>;
 
 const Summary = () => {
-  const [stats, setStats] = useState<SummaryStats>(initialStats);
+  const [data, setData] = useState<DashboardData>({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSummaryData = async () => {
+    const fetchData = async () => {
       try {
-        const summaryRes = await fetch("api/dashboard/summary", {
-          credentials: "include",
-        });
-        if (!summaryRes.ok) {
-          throw new Error("Failed to fetch summary");
-        }
-        const summary = await summaryRes.json();
-        setStats({
-          totalVisits: Number(summary.total_visits || 0).toLocaleString(),
-          visitsThisMonth: Number(summary.visits_this_month || 0).toLocaleString(),
-          totalContacts: Number(summary.total_contacts || 0).toLocaleString(),
-          newContactsThisMonth: Number(summary.new_contacts_this_month || 0).toLocaleString(),
-          newContactsLast7Days: Number(summary.new_contacts_last_7_days || 0).toLocaleString(),
-          totalCompanies: Number(summary.total_companies || 0).toLocaleString(),
-          newCompaniesThisMonth: Number(summary.new_companies_this_month || 0).toLocaleString(),
-          totalDeals: Number(summary.total_deals || 0).toLocaleString(),
-          activeDeals: Number(summary.active_deals || 0).toLocaleString(),
-          newDealsThisMonth: Number(summary.new_deals_this_month || 0).toLocaleString(),
-          emailsSent: summary.emails_sent_7_days != null
-            ? Number(summary.emails_sent_7_days).toLocaleString()
-            : "-",
-          phoneCalls: summary.phone_calls_7_days != null
-            ? Number(summary.phone_calls_7_days).toLocaleString()
-            : "-",
-          lastUpdated: summary.last_updated || "-",
-        });
-      } catch (error) {
-        console.error("Error fetching summary data:", error);
-        setStats(initialStats);
+        const res = await fetch("api/dashboard/summary", { credentials: "include" });
+        if (res.ok) setData(await res.json());
+      } catch (e) {
+        console.error("Error fetching summary:", e);
+      } finally {
+        setLoading(false);
       }
     };
-
-    fetchSummaryData();
+    fetchData();
   }, []);
+
+  const n = (key: string) => {
+    const v = data[key];
+    return v != null ? Number(v).toLocaleString() : "-";
+  };
+
+  const currency = (key: string) => {
+    const v = data[key];
+    return v != null
+      ? "$" + Number(v).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+      : "-";
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto max-w-7xl py-6 px-4">
+        <ActivityNav />
+        <p className="text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto max-w-7xl py-6 px-4">
       <ActivityNav />
       <h1 className="text-2xl font-semibold mb-6 text-foreground">
-        Sales Activity Dashboard
+        Sales KPI Dashboard
       </h1>
-      
-      {/* Main KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
-        <KPICard 
-          title="Total Visits" 
-          value={stats.totalVisits} 
-          icon="📍"
-          subtitle="All time"
-        />
-        <KPICard 
-          title="Visits This Month" 
-          value={stats.visitsThisMonth} 
-          icon="📊"
-        />
-        <KPICard 
-          title="New Contacts" 
-          value={stats.newContactsThisMonth} 
-          icon="👤"
-          subtitle="This month"
-          highlight
-        />
-        <KPICard 
-          title="New Companies" 
-          value={stats.newCompaniesThisMonth} 
-          icon="🏢"
-          subtitle="This month"
-          highlight
-        />
-        <KPICard 
-          title="New Deals" 
-          value={stats.newDealsThisMonth} 
-          icon="🤝"
-          subtitle="This month"
-          highlight
-        />
-        <KPICard 
-          title="Active Deals" 
-          value={stats.activeDeals} 
-          icon="📈"
-          subtitle="In pipeline"
-        />
-      </div>
 
-      {/* Secondary KPIs */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6">
-        <KPICard 
-          title="Total Contacts" 
-          value={stats.totalContacts} 
-          icon="📇"
-          small
-        />
-        <KPICard 
-          title="Total Companies" 
-          value={stats.totalCompanies} 
-          icon="🏛️"
-          small
-        />
-        <KPICard 
-          title="Total Deals" 
-          value={stats.totalDeals} 
-          icon="💼"
-          small
-        />
-        <KPICard 
-          title="Emails Sent" 
-          value={stats.emailsSent} 
-          icon="📧"
-          subtitle="Last 7 days"
-          small
-        />
-        <KPICard 
-          title="Phone Calls" 
-          value={stats.phoneCalls} 
-          icon="📞"
-          subtitle="Last 7 days"
-          small
-        />
+      {/* Forecast Revenue Banner */}
+      <Card className="mb-6 border-green-500/30 bg-green-500/5">
+        <CardContent className="p-6 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">Pipeline Forecast Revenue</p>
+            <p className="text-4xl font-bold text-green-500 mt-1">{currency("forecast_revenue")}</p>
+            <p className="text-xs text-muted-foreground mt-1">{n("active_deals")} active deals in pipeline</p>
+          </div>
+          <div className="text-6xl opacity-20">$</div>
+        </CardContent>
+      </Card>
+
+      {/* KPI Table: Weekly / Monthly / YTD */}
+      <Card className="mb-6">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Performance KPIs</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left p-3 text-muted-foreground font-medium">Metric</th>
+                <th className="text-right p-3 text-muted-foreground font-medium">This Week</th>
+                <th className="text-right p-3 text-muted-foreground font-medium">This Month</th>
+                <th className="text-right p-3 text-muted-foreground font-medium">YTD</th>
+                <th className="text-right p-3 text-muted-foreground font-medium">All Time</th>
+              </tr>
+            </thead>
+            <tbody>
+              <KPIRow
+                label="Visits"
+                icon="📍"
+                week={n("visits_this_week")}
+                month={n("visits_this_month")}
+                ytd={n("visits_ytd")}
+                total={n("total_visits")}
+              />
+              <KPIRow
+                label="New Contacts"
+                icon="👤"
+                week={n("new_contacts_this_week")}
+                month={n("new_contacts_this_month")}
+                ytd={n("new_contacts_ytd")}
+                total={n("total_contacts")}
+              />
+              <KPIRow
+                label="New Companies"
+                icon="🏢"
+                week={n("new_companies_this_week")}
+                month={n("new_companies_this_month")}
+                ytd={n("new_companies_ytd")}
+                total={n("total_companies")}
+              />
+              <KPIRow
+                label="New Deals"
+                icon="🤝"
+                week={n("new_deals_this_week")}
+                month={n("new_deals_this_month")}
+                ytd={n("new_deals_ytd")}
+                total={n("total_deals")}
+              />
+              <KPIRow
+                label="Active Deals"
+                icon="📈"
+                week=""
+                month=""
+                ytd=""
+                total={n("active_deals")}
+                highlight
+              />
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+
+      {/* Activity KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <MiniKPI title="Emails Sent" value={n("emails_sent_7_days")} sub="Last 7 days" icon="📧" />
+        <MiniKPI title="Phone Calls" value={n("phone_calls_7_days")} sub="Last 7 days" icon="📞" />
+        <MiniKPI title="Visits (30d)" value={n("visits_last_30_days")} sub="Last 30 days" icon="🚗" />
+        <MiniKPI title="Bonuses" value={"$" + n("total_bonuses")} sub="All time" icon="💰" />
       </div>
 
       <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Activity Overview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            Track your sales team's performance with key metrics: visits, new contacts scanned, 
-            companies added, and deals in progress. Use the tabs above to view detailed visits, 
-            manage uploads, or check activity logs.
-          </p>
-          <p className="text-muted-foreground text-xs mt-3">
+        <CardContent className="p-4">
+          <p className="text-muted-foreground text-xs">
             Last updated:{" "}
             <span className="font-medium text-foreground/80">
-              {stats.lastUpdated !== "-" 
-                ? new Date(stats.lastUpdated).toLocaleString() 
-                : "-"}
+              {data.last_updated ? new Date(String(data.last_updated)).toLocaleString() : "-"}
             </span>
           </p>
         </CardContent>
@@ -191,51 +149,60 @@ const Summary = () => {
         <h2 className="text-xl font-semibold mb-2 text-foreground">
           Upload Visits, Receipts, or Business Cards
         </h2>
-        <p className="text-muted-foreground text-sm mb-4">
-          Upload MyWay route PDFs (visits + mileage), time tracking PDFs, receipt photos/PDFs (expenses),
-          or business card photos. We'll parse them automatically and update your tracker and reimbursements.
-        </p>
         <UploadPanel showLegacyLink={false} />
       </div>
     </div>
   );
 };
 
-const KPICard = ({
+const KPIRow = ({
+  label,
+  icon,
+  week,
+  month,
+  ytd,
+  total,
+  highlight,
+}: {
+  label: string;
+  icon: string;
+  week: string;
+  month: string;
+  ytd: string;
+  total: string;
+  highlight?: boolean;
+}) => (
+  <tr className={`border-b last:border-0 ${highlight ? "bg-primary/5" : ""}`}>
+    <td className="p-3 font-medium">
+      <span className="mr-2">{icon}</span>
+      {label}
+    </td>
+    <td className="p-3 text-right font-semibold text-lg">{week || "-"}</td>
+    <td className="p-3 text-right font-semibold text-lg">{month || "-"}</td>
+    <td className="p-3 text-right font-semibold text-lg">{ytd || "-"}</td>
+    <td className="p-3 text-right text-muted-foreground">{total}</td>
+  </tr>
+);
+
+const MiniKPI = ({
   title,
   value,
+  sub,
   icon,
-  subtitle,
-  highlight,
-  small,
 }: {
   title: string;
   value: string;
+  sub: string;
   icon: string;
-  subtitle?: string;
-  highlight?: boolean;
-  small?: boolean;
 }) => (
-  <Card className={`h-full ${highlight ? 'border-primary/50 bg-primary/5' : ''}`}>
-    <CardContent className={small ? "p-3" : "p-4"}>
-      <div className="flex justify-between items-start mb-2">
-        <div className="flex-1">
-          <p className={`text-muted-foreground mb-1 ${small ? 'text-[0.65rem]' : 'text-xs'}`}>
-            {title}
-          </p>
-          {subtitle && (
-            <p className="text-[0.6rem] text-muted-foreground/70">
-              {subtitle}
-            </p>
-          )}
-        </div>
-        <div className={`bg-primary/10 rounded-lg ${small ? 'p-1.5 text-lg' : 'p-2 text-2xl'}`}>
-          {icon}
-        </div>
+  <Card>
+    <CardContent className="p-3">
+      <div className="flex justify-between items-start">
+        <p className="text-xs text-muted-foreground">{title}</p>
+        <span className="text-lg">{icon}</span>
       </div>
-      <p className={`font-bold text-foreground mt-2 ${small ? 'text-xl' : 'text-3xl'}`}>
-        {value}
-      </p>
+      <p className="text-2xl font-bold mt-1">{value}</p>
+      <p className="text-[0.6rem] text-muted-foreground">{sub}</p>
     </CardContent>
   </Card>
 );
