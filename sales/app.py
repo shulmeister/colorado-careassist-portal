@@ -10952,13 +10952,11 @@ async def start_client_packet(
     import httpx
     try:
         async with httpx.AsyncClient(timeout=15.0) as client_http:
-            from auth.jwt import create_token
-            admin_token = create_token(current_user.get("email", "sales"), "admin")
             first = contact.first_name or (contact.name.split()[0] if contact.name else "Client")
             last = contact.last_name or (contact.name.split()[-1] if contact.name and len(contact.name.split()) > 1 else "")
             resp = await client_http.post(
-                "https://client.coloradocareassist.com/api/client-admin/packets",
-                headers={"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"},
+                "http://localhost:3030/api/client-admin/packets",
+                headers={"X-Internal-Key": os.getenv("INTERNAL_API_KEY", "cca-internal-2026"), "Content-Type": "application/json"},
                 json={
                     "first_name": first,
                     "last_name": last,
