@@ -8,11 +8,11 @@ Integrates with the RC bot's check_and_act() polling loop.
 Uses Google API (GoogleService) for calendar and email — NOT the gog CLI.
 """
 
-import os
 import logging
-from datetime import datetime, date, timedelta
-from typing import List, Optional
+import os
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from typing import Optional
 
 try:
     import pytz
@@ -32,7 +32,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-MORNING_BRIEFING_ENABLED = os.getenv("MORNING_BRIEFING_ENABLED", "true").lower() == "true"
+MORNING_BRIEFING_ENABLED = False  # PERMANENTLY DISABLED — user does not want unsolicited briefings
 BRIEFING_HOUR = 7  # 7 AM Mountain
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -327,12 +327,12 @@ class MorningBriefingService:
         """Identify high-leverage business opportunities/recommendations from real data."""
         opps = []
         if not psycopg2: return None
-        
+
         conn = None
         try:
             conn = psycopg2.connect(DATABASE_URL)
             cur = conn.cursor()
-            
+
             # 1. Staffing Efficiency: Find open shifts near existing caregiver shifts (same day, same city)
             cur.execute("""
                 WITH open_shifts AS (
@@ -376,8 +376,8 @@ class MorningBriefingService:
         try:
             from gigi.self_monitor import SelfMonitor
             sm = SelfMonitor()
-            
-            # Use asyncio.run if not already in an event loop, 
+
+            # Use asyncio.run if not already in an event loop,
             # or handle it appropriately for the environment
             import asyncio
             try:
@@ -385,7 +385,7 @@ class MorningBriefingService:
                 # For the briefing service, we'll create a local Gemini client
                 from google import genai
                 llm = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-                
+
                 # Check if we're in a running loop
                 try:
                     loop = asyncio.get_event_loop()
