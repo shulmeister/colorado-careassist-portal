@@ -63,3 +63,4 @@ recruiting/caregivers_list.txt
 *.key
 credentials.json
 service-account*.json
+.claude/worktrees/
