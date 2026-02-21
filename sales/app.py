@@ -10908,6 +10908,54 @@ async def get_stage_duration_analytics(
     return JSONResponse(get_stage_analytics(db))
 
 
+# --- Client Packet Integration ---
+
+@app.post("/api/deals/{deal_id}/start-client-packet")
+async def start_client_packet(
+    deal_id: int,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Create a client packet for a deal's primary contact via the client portal."""
+    deal = db.query(Deal).filter_by(id=deal_id).first()
+    if not deal:
+        raise HTTPException(status_code=404, detail="Deal not found")
+
+    contact = None
+    if deal.contact_ids:
+        contact_id = deal.contact_ids[0] if isinstance(deal.contact_ids, list) else None
+        if contact_id:
+            contact = db.query(Contact).filter_by(id=contact_id).first()
+
+    if not contact:
+        return JSONResponse({"error": "No contact on this deal. Add a contact first."}, status_code=400)
+
+    import httpx
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client_http:
+            from auth.jwt import create_token
+            admin_token = create_token(current_user.get("email", "sales"), "admin")
+            resp = await client_http.post(
+                "https://client.coloradocareassist.com/api/client-admin/packets",
+                headers={"Authorization": f"Bearer {admin_token}", "Content-Type": "application/json"},
+                json={
+                    "first_name": contact.first_name or contact.name.split()[0] if contact.name else "Client",
+                    "last_name": contact.last_name or (contact.name.split()[-1] if contact.name and len(contact.name.split()) > 1 else ""),
+                    "phone": contact.phone or "",
+                    "email": contact.email,
+                    "deal_id": str(deal_id),
+                    "flow_mode": "in_person",
+                },
+            )
+            if resp.status_code == 200:
+                return JSONResponse(resp.json())
+            else:
+                return JSONResponse({"error": f"Portal returned {resp.status_code}"}, status_code=500)
+    except Exception as e:
+        logger.error("Failed to create client packet for deal %s: %s", deal_id, e)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # --- Deal-Contact Relationships API ---
 
 @app.get("/api/deals/{deal_id}/contacts")

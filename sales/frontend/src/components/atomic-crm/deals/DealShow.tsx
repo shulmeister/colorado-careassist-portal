@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { format, isValid } from "date-fns";
-import { Archive, ArchiveRestore } from "lucide-react";
+import { Archive, ArchiveRestore, FileText } from "lucide-react";
 import {
   ShowBase,
   useDataProvider,
@@ -76,6 +77,7 @@ const DealShowContent = () => {
                 </>
               ) : (
                 <>
+                  <ClientPacketButton record={record} />
                   <ArchiveButton record={record} />
                   <EditButton />
                 </>
@@ -255,6 +257,45 @@ const UnarchiveButton = ({ record }: { record: Deal }) => {
     >
       <ArchiveRestore className="w-4 h-4" />
       Send back to the board
+    </Button>
+  );
+};
+
+const ClientPacketButton = ({ record }: { record: Deal }) => {
+  const notify = useNotify();
+  const [loading, setLoading] = useState(false);
+
+  const handleClick = async () => {
+    setLoading(true);
+    try {
+      const resp = await fetch(`/sales/api/deals/${record.id}/start-client-packet`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await resp.json();
+      if (data.packet_url) {
+        window.open(data.packet_url, "_blank");
+        notify("Client packet opened in new tab", { type: "success" });
+      } else {
+        notify(data.error || "Failed to create packet", { type: "error" });
+      }
+    } catch {
+      notify("Failed to create client packet", { type: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Button
+      onClick={handleClick}
+      disabled={loading}
+      size="sm"
+      variant="outline"
+      className="flex items-center gap-2 h-9 text-green-700 border-green-300 hover:bg-green-50"
+    >
+      <FileText className="w-4 h-4" />
+      {loading ? "Creating..." : "Client Packet"}
     </Button>
   );
 };
