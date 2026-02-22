@@ -28,8 +28,22 @@ class AnalyticsEngine:
         try:
             now = datetime.now()
             current_month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            year_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
             last_30_days = now - timedelta(days=30)
             last_7_days = now - timedelta(days=7)
+            # Start of this week (Monday)
+            week_start = now - timedelta(days=now.weekday())
+            week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+
+            # Quarter boundaries for closed deals
+            current_quarter = (now.month - 1) // 3 + 1
+            current_quarter_start = datetime(now.year, (current_quarter - 1) * 3 + 1, 1)
+            if current_quarter == 1:
+                last_quarter_start = datetime(now.year - 1, 10, 1)
+                last_quarter_end = datetime(now.year, 1, 1)
+            else:
+                last_quarter_start = datetime(now.year, (current_quarter - 2) * 3 + 1, 1)
+                last_quarter_end = current_quarter_start
 
             # === VISITS KPIs ===
             total_visits = self.db.query(Visit).count()
@@ -38,6 +52,12 @@ class AnalyticsEngine:
             ).count()
             visits_last_30_days = self.db.query(Visit).filter(
                 Visit.visit_date >= last_30_days
+            ).count()
+            visits_ytd = self.db.query(Visit).filter(
+                Visit.visit_date >= year_start
+            ).count()
+            visits_this_week = self.db.query(Visit).filter(
+                Visit.visit_date >= week_start
             ).count()
 
             # === CONTACTS KPIs ===
@@ -48,6 +68,12 @@ class AnalyticsEngine:
             new_contacts_last_7_days = self.db.query(Contact).filter(
                 Contact.created_at >= last_7_days
             ).count()
+            new_contacts_ytd = self.db.query(Contact).filter(
+                Contact.created_at >= year_start
+            ).count()
+            new_contacts_this_week = self.db.query(Contact).filter(
+                Contact.created_at >= week_start
+            ).count()
 
             # === COMPANIES KPIs ===
             total_companies = self.db.query(ReferralSource).count()
@@ -57,10 +83,15 @@ class AnalyticsEngine:
             new_companies_last_7_days = self.db.query(ReferralSource).filter(
                 ReferralSource.created_at >= last_7_days
             ).count()
+            new_companies_ytd = self.db.query(ReferralSource).filter(
+                ReferralSource.created_at >= year_start
+            ).count()
+            new_companies_this_week = self.db.query(ReferralSource).filter(
+                ReferralSource.created_at >= week_start
+            ).count()
 
             # === DEALS KPIs ===
             total_deals = self.db.query(Lead).count()
-            # Lead.status is "active", "closed_won", or "closed_lost"
             active_deals = self.db.query(Lead).filter(
                 Lead.status == "active"
             ).count()
@@ -70,6 +101,29 @@ class AnalyticsEngine:
             new_deals_last_7_days = self.db.query(Lead).filter(
                 Lead.created_at >= last_7_days
             ).count()
+            new_deals_ytd = self.db.query(Lead).filter(
+                Lead.created_at >= year_start
+            ).count()
+            new_deals_this_week = self.db.query(Lead).filter(
+                Lead.created_at >= week_start
+            ).count()
+
+            # === CLOSED DEALS by quarter (closed_won with closed_at date) ===
+            closed_deals_this_quarter = self.db.query(Lead).filter(
+                Lead.status == "closed_won",
+                Lead.closed_at >= current_quarter_start,
+                Lead.closed_at < current_quarter_start.replace(month=current_quarter_start.month + 3) if current_quarter_start.month <= 9 else datetime(current_quarter_start.year + 1, 1, 1)
+            ).count()
+            closed_deals_last_quarter = self.db.query(Lead).filter(
+                Lead.status == "closed_won",
+                Lead.closed_at >= last_quarter_start,
+                Lead.closed_at < last_quarter_end
+            ).count()
+
+            # Forecast revenue from active deals
+            forecast_revenue = self.db.query(func.sum(Lead.expected_revenue)).filter(
+                Lead.status == "active"
+            ).scalar() or 0.0
 
             # === EMAILS KPI ===
             from models import ActivityLog, EmailCount
@@ -100,19 +154,31 @@ class AnalyticsEngine:
                 "total_visits": total_visits,
                 "visits_this_month": visits_this_month,
                 "visits_last_30_days": visits_last_30_days,
+                "visits_ytd": visits_ytd,
+                "visits_this_week": visits_this_week,
                 # Contacts
                 "total_contacts": total_contacts,
                 "new_contacts_this_month": new_contacts_this_month,
                 "new_contacts_last_7_days": new_contacts_last_7_days,
+                "new_contacts_ytd": new_contacts_ytd,
+                "new_contacts_this_week": new_contacts_this_week,
                 # Companies
                 "total_companies": total_companies,
                 "new_companies_this_month": new_companies_this_month,
                 "new_companies_last_7_days": new_companies_last_7_days,
+                "new_companies_ytd": new_companies_ytd,
+                "new_companies_this_week": new_companies_this_week,
                 # Deals
                 "total_deals": total_deals,
                 "active_deals": active_deals,
                 "new_deals_this_month": new_deals_this_month,
                 "new_deals_last_7_days": new_deals_last_7_days,
+                "new_deals_ytd": new_deals_ytd,
+                "new_deals_this_week": new_deals_this_week,
+                # Closed deals by quarter
+                "closed_deals_this_quarter": closed_deals_this_quarter,
+                "closed_deals_last_quarter": closed_deals_last_quarter,
+                "forecast_revenue": round(forecast_revenue, 0),
                 # Activity KPIs
                 "emails_sent_7_days": emails_sent_7_days,
                 "phone_calls_7_days": phone_calls_7_days,
