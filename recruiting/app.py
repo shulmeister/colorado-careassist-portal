@@ -1,28 +1,26 @@
-from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
-from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-import os
-import zipfile
 import csv
 import io
+import os
+import secrets
 import threading
 import time
+import zipfile
 from datetime import datetime, timedelta
-from textblob import TextBlob
+from functools import wraps
+
+import jinja2
+import requests
 from dotenv import load_dotenv
 from facebook_business import FacebookAdsApi
 from facebook_business.adobjects.ad import Ad
 from facebook_business.adobjects.adaccount import AdAccount
-from facebook_business.adobjects.campaign import Campaign
 from facebook_business.adobjects.adset import AdSet
-import requests
-import secrets
-import hashlib
-import hmac
-from functools import wraps
+from facebook_business.adobjects.campaign import Campaign
+from flask import Flask, jsonify, redirect, request, session
+from flask_cors import CORS
+from flask_login import LoginManager, UserMixin
+from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
-import jinja2
 
 load_dotenv()
 
@@ -41,7 +39,7 @@ def _log_portal_event(description, event_type="info", details=None, icon=None):
         # Determine URL - all services run on localhost (Mac Mini)
         port = os.getenv("PORT", "8765")
         portal_url = os.getenv("PORTAL_URL", f"http://localhost:{port}")
-            
+
         requests.post(
             f"{portal_url}/api/internal/event",
             json={
@@ -110,7 +108,8 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # Import portal auth middleware
-from portal_auth_middleware import check_portal_auth, get_portal_user as get_portal_user_middleware
+from portal_auth_middleware import check_portal_auth
+
 
 # Portal authentication check (now uses middleware)
 # This function is kept for backward compatibility
@@ -150,10 +149,10 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     # Relationship
     assigned_leads = db.relationship('Lead', backref='assigned_user', lazy=True)
-    
+
     def get_id(self):
         return str(self.id)
 
@@ -212,7 +211,7 @@ class AdMetrics(db.Model):
 def create_tables():
     """Create database tables and add default users"""
     db.create_all()
-    
+
     # Add date_received column if it doesn't exist
     try:
         with db.engine.connect() as conn:
@@ -240,7 +239,7 @@ def create_tables():
         print("Ensured facebook_lead_id column exists on lead table")
     except Exception as e:
         print(f"Column facebook_lead_id migration note: {e}")
-    
+
     # Add default users if they don't exist
     if User.query.count() == 0:
         default_users = [
@@ -249,13 +248,13 @@ def create_tables():
             User(name='Cynthia Pointe', email='cynthia@coloradocareassist.com'),
             User(name='Jason Shulman', email='jason@coloradocareassist.com')
         ]
-        
+
         for user in default_users:
             db.session.add(user)
-        
+
         db.session.commit()
         print("Default users created!")
-    
+
     # Add default alert rules
     if AlertRule.query.count() == 0:
         default_rule = AlertRule(
@@ -279,9 +278,9 @@ def index():
 
     try:
         print(f"Rendering Recruiter Dashboard (authenticated via portal: {session.get('portal_user', {}).get('email')})")
-        
+
         # Show main dashboard
-        return '''
+        return r'''
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -494,7 +493,7 @@ def index():
                 gap: 6px;
                 align-items: center;
             }
-            .phone-icon, .text-icon, .email-icon, .goformz-icon {
+            .phone-icon, .text-icon, .email-icon, .ep-icon {
                 cursor: pointer;
                 color: #3b82f6;
                 font-size: 0.9rem;
@@ -506,11 +505,11 @@ def index():
             .text-icon:hover {
                 color: #06b6d4;
             }
-            .goformz-icon {
-                color: #f59e0b;
+            .ep-icon {
+                color: #10b981;
             }
-            .goformz-icon:hover {
-                color: #d97706;
+            .ep-icon:hover {
+                color: #059669;
             }
             .email-icon:hover {
                 color: #8b5cf6;
@@ -1596,6 +1595,8 @@ def index():
                     let rowClass = '';
                     if (lead.status === 'hired') {
                         rowClass = 'current-caregiver';
+                    } else if (lead.status === 'sent_to_ep') {
+                        rowClass = 'current-caregiver';
                     } else if (lead.status === 'not_interested') {
                         rowClass = 'rejected';
                     } else if (notes.toLowerCase().includes('sent application') || 
@@ -1696,16 +1697,17 @@ def index():
                         phoneContainer.appendChild(textIcon);
                     }
                     
-                    // GoFormz icon (always show, not just when phone exists)
-                    const goformzIcon = document.createElement('i');
-                    goformzIcon.className = 'fas fa-file-alt goformz-icon';
-                    goformzIcon.title = 'Send to GoFormz Employee Packet';
-                    goformzIcon.style.marginLeft = lead.phone ? '0' : '8px';
-                    goformzIcon.addEventListener('click', function(e) {
-                        e.stopPropagation();
-                        sendToGoFormz(lead.id, lead.name);
-                    });
-                    phoneContainer.appendChild(goformzIcon);
+                    // Employee Portal icon (send lead to EP for onboarding)
+                    if (lead.phone) {
+                        const epIcon = document.createElement('i');
+                        epIcon.className = 'fas fa-user-plus ep-icon';
+                        epIcon.title = 'Send to Employee Portal';
+                        epIcon.addEventListener('click', function(e) {
+                            e.stopPropagation();
+                            sendToEmployeePortal(lead.id, lead.name);
+                        });
+                        phoneContainer.appendChild(epIcon);
+                    }
                     
                     phoneCell.appendChild(phoneContainer);
                     row.appendChild(phoneCell);
@@ -1723,6 +1725,7 @@ def index():
                         { value: 'new', text: 'New' },
                         { value: 'contacted', text: 'Contacted' },
                         { value: 'interested', text: 'Interested' },
+                        { value: 'sent_to_ep', text: 'Sent to EP' },
                         { value: 'hired', text: 'Hired' },
                         { value: 'not_interested', text: 'Not Interested' }
                     ];
@@ -2002,12 +2005,12 @@ def index():
                 });
             }
 
-            function sendToGoFormz(leadId, leadName) {
-                if (!confirm(`Send ${leadName} to GoFormz Employee Packet?`)) {
+            function sendToEmployeePortal(leadId, leadName) {
+                if (!confirm(`Send "${leadName}" to Employee Portal?\n\nThis will:\n• Create a candidate in the Employee Portal\n• Create a WellSky Applicant\n• Send an onboarding SMS to the candidate`)) {
                     return;
                 }
-                
-                fetch('/recruiting/api/goformz/send-lead', {
+
+                fetch('/recruiting/api/employee-portal/send-lead', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2018,7 +2021,6 @@ def index():
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Show success message
                         const successMsg = document.createElement('div');
                         successMsg.className = 'alert alert-success';
                         successMsg.style.position = 'fixed';
@@ -2030,21 +2032,21 @@ def index():
                         successMsg.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
                         successMsg.style.background = '#10b981';
                         successMsg.style.color = 'white';
-                        successMsg.innerHTML = '<i class="fas fa-check-circle"></i> Successfully sent to GoFormz!';
+                        successMsg.innerHTML = '<i class="fas fa-check-circle"></i> Sent to Employee Portal! Onboarding SMS sent.';
                         document.body.appendChild(successMsg);
-                        
+
                         setTimeout(() => {
                             successMsg.remove();
                         }, 3000);
-                        
-                        loadLeads(); // Refresh to show updated notes
+
+                        loadLeads();
                     } else {
-                        alert('Error sending to GoFormz: ' + (data.error || 'Unknown error'));
+                        alert('Error: ' + (data.error || 'Unknown error'));
                     }
                 })
                 .catch(error => {
-                    console.error('Error sending to GoFormz:', error);
-                    alert('Error sending to GoFormz: ' + error.message);
+                    console.error('Error sending to Employee Portal:', error);
+                    alert('Error sending to Employee Portal: ' + error.message);
                 });
             }
 
@@ -2354,14 +2356,13 @@ def logout():
 @require_auth
 def get_stats():
     total_leads = Lead.query.count()
-    
+
     # New leads = leads added since today (baseline reset)
-    from datetime import timedelta
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     new_leads = Lead.query.filter(Lead.created_at >= today_start).count()
-    
+
     contacted_leads = Lead.query.filter_by(status='contacted').count()
-    
+
     # Calculate "Wants Work" - leads with positive indicators in notes
     wants_work_query = Lead.query.filter(
         db.or_(
@@ -2375,10 +2376,10 @@ def get_stats():
         )
     )
     wants_work_leads = wants_work_query.count()
-    
+
     # Current Caregivers - leads marked as hired (still employed)
     current_caregivers = Lead.query.filter_by(status='hired').count()
-    
+
     return jsonify({
         'total_leads': total_leads,
         'new_leads': new_leads,
@@ -2402,16 +2403,16 @@ def sync_facebook_campaigns():
     """Sync Facebook campaigns with local database"""
     campaigns = get_facebook_campaigns()
     synced_count = 0
-    
+
     # Clear existing campaigns first
     FacebookCampaign.query.delete()
-    
+
     for campaign in campaigns:
         # Only sync "Caregiver Recruitment" campaigns
         campaign_name = campaign.get('name', '')
         if "Caregiver Recruitment" not in campaign_name:
             continue
-            
+
         # Determine region based on campaign name
         campaign_name_lower = campaign_name.lower()
         if 'denver' in campaign_name_lower or 'boulder' in campaign_name_lower:
@@ -2420,7 +2421,7 @@ def sync_facebook_campaigns():
             region = 'colorado_springs_pueblo'
         else:
             region = 'unknown'
-        
+
         # Create new campaign
         new_campaign = FacebookCampaign(
             campaign_id=campaign['id'],
@@ -2430,7 +2431,7 @@ def sync_facebook_campaigns():
         )
         db.session.add(new_campaign)
         synced_count += 1
-    
+
     db.session.commit()
     return synced_count
 
@@ -2439,14 +2440,14 @@ def get_campaign_metrics(campaign_id, days=7):
     try:
         account = AdAccount(f'act_{FACEBOOK_AD_ACCOUNT_ID}')
         campaign = Campaign(campaign_id)
-        
+
         # Get insights for the specified time period
         if days >= 365:  # All time (or 12 months)
             # For all time, go back 13 months to ensure we capture full 12 months
             end_time = datetime.now()
             start_time = end_time - timedelta(days=400)  # ~13 months back
             print(f"Campaign {campaign_id} - Fetching ALL TIME metrics from {start_time.strftime('%Y-%m-%d')} to {end_time.strftime('%Y-%m-%d')}")
-            
+
             try:
                 insights = campaign.get_insights(
                     fields=['spend', 'impressions', 'clicks', 'actions', 'action_values'],
@@ -2468,7 +2469,7 @@ def get_campaign_metrics(campaign_id, days=7):
             end_time = datetime.now()
             start_time = end_time - timedelta(days=days)
             print(f"Campaign {campaign_id} - Fetching {days} DAY metrics from {start_time.strftime('%Y-%m-%d')} to {end_time.strftime('%Y-%m-%d')}")
-            
+
             try:
                 insights = campaign.get_insights(
                     fields=['spend', 'impressions', 'clicks', 'actions', 'action_values'],
@@ -2485,7 +2486,7 @@ def get_campaign_metrics(campaign_id, days=7):
                 import traceback
                 traceback.print_exc()
                 return None
-        
+
         if insights:
             insight = insights[0]
             print(f"Campaign {campaign_id} - Raw Facebook API response: {insight}")
@@ -2493,18 +2494,18 @@ def get_campaign_metrics(campaign_id, days=7):
             impressions = int(insight.get('impressions', 0))
             clicks = int(insight.get('clicks', 0))
             print(f"Campaign {campaign_id} - Parsed spend: {spend}, impressions: {impressions}, clicks: {clicks}")
-            
+
             # Count leads from actions - prioritize the most accurate lead action type
             actions = insight.get('actions', [])
             leads = 0
-            
+
             print(f"Campaign {campaign_id} actions: {actions}")  # Debug log
-            
+
             # Look for the most specific Meta Leads action type first
             for action in actions:
                 action_type = action.get('action_type', '').lower()
                 action_value = int(float(action.get('value', 0)))
-                
+
                 # Prioritize Meta Leads specific actions
                 if 'offsite_complete_registration_add_meta_leads' in action_type:
                     leads = action_value  # Use this as the primary lead count
@@ -2514,24 +2515,24 @@ def get_campaign_metrics(campaign_id, days=7):
                     leads = action_value  # Fallback to generic lead
                     print(f"Using generic lead count: {action_value}")
                     break
-            
+
             # If still no leads, try other Meta Leads variations
             if leads == 0:
                 for action in actions:
                     action_type = action.get('action_type', '').lower()
                     action_value = int(float(action.get('value', 0)))
-                    
+
                     if any(lead_type in action_type for lead_type in ['meta_leads', 'leadgen', 'form']):
                         leads = action_value
                         print(f"Found {action_value} leads from action type: {action_type}")
                         break
-            
+
             # Calculate CPA and ROAS
             cpa = spend / leads if leads > 0 else 0
             roas = (leads * 100) / spend if spend > 0 else 0  # Assuming $100 value per lead
-            
+
             print(f"Campaign {campaign_id} metrics: spend=${spend}, leads={leads}, cpa=${cpa}")
-            
+
             return {
                 'spend': spend,
                 'impressions': impressions,
@@ -2554,14 +2555,14 @@ def toggle_campaign_status(campaign_id, status):
     try:
         campaign = Campaign(campaign_id)
         campaign.api_update(params={'status': status})
-        
+
         # Update local database
         local_campaign = FacebookCampaign.query.filter_by(campaign_id=campaign_id).first()
         if local_campaign:
             local_campaign.status = status
             local_campaign.updated_at = datetime.utcnow()
             db.session.commit()
-        
+
         return True
     except Exception as e:
         print(f"Error toggling campaign status: {e}")
@@ -2572,44 +2573,44 @@ def fetch_facebook_leads():
     try:
         account = AdAccount(f'act_{FACEBOOK_AD_ACCOUNT_ID}')
         leads_added = 0
-        
+
         # Get all campaigns
         campaigns = account.get_campaigns(fields=['id', 'name', 'status'])
         print(f"Found {len(campaigns)} total campaigns")
-        
+
         for campaign in campaigns:
             print(f"Campaign: {campaign['name']} ({campaign['id']}) - Status: {campaign['status']}")
             # Process all campaigns (including PAUSED/ARCHIVED) to import historical leads
             if campaign['status'] in ('ACTIVE', 'PAUSED', 'ARCHIVED'):
                 print(f"Processing campaign: {campaign['name']} (status: {campaign['status']})")
-                
+
                 # Get ad sets for this campaign
                 ad_sets = Campaign(campaign['id']).get_ad_sets(fields=['id', 'name'])
                 print(f"Found {len(ad_sets)} ad sets in campaign {campaign['name']}")
-                
+
                 for ad_set in ad_sets:
                     print(f"Processing ad set: {ad_set['name']} ({ad_set['id']})")
                     # Get ads for this ad set
                     ads = AdSet(ad_set['id']).get_ads(fields=['id', 'name'])
                     print(f"Found {len(ads)} ads in ad set {ad_set['name']}")
-                    
+
                     for ad in ads:
                         print(f"Processing ad: {ad['name']} ({ad['id']})")
                         try:
                             # Get leads for this ad using leads_retrieval permission
                             leads = Ad(ad['id']).get_leads(fields=['id', 'created_time', 'field_data'])
                             print(f"Found {len(leads)} leads in ad {ad['name']}")
-                            
+
                             for lead in leads:
                                 # Process each lead
                                 if process_facebook_lead(lead, campaign['name']):
                                     leads_added += 1
                         except Exception as ad_error:
                             print(f"Error getting leads from ad {ad['id']}: {ad_error}")
-                                
+
         print(f"Successfully added {leads_added} new leads from Facebook")
         return leads_added
-        
+
     except Exception as e:
         print(f"Error fetching Facebook leads: {e}")
         return 0
@@ -2619,53 +2620,53 @@ def fetch_facebook_leads_enhanced():
     try:
         account = AdAccount(f'act_{FACEBOOK_AD_ACCOUNT_ID}')
         leads_added = 0
-        
+
         # Get campaigns with lead generation objectives
         campaigns = account.get_campaigns(fields=['id', 'name', 'status', 'objective'])
         print(f"Found {len(campaigns)} total campaigns")
-        
+
         for campaign in campaigns:
             print(f"Campaign: {campaign['name']} ({campaign['id']}) - Status: {campaign['status']} - Objective: {campaign.get('objective', 'Unknown')}")
-            
+
             # Process all campaigns with lead generation objectives (including PAUSED/ARCHIVED)
             # so historical leads from inactive campaigns are also imported
             if campaign.get('objective') in ['LEAD_GENERATION', 'MESSAGES']:
                 print(f"Processing lead generation campaign: {campaign['name']} (status: {campaign['status']})")
-                
+
                 # Get ad sets for this campaign
                 ad_sets = Campaign(campaign['id']).get_ad_sets(fields=['id', 'name'])
                 print(f"Found {len(ad_sets)} ad sets in campaign {campaign['name']}")
-                
+
                 for ad_set in ad_sets:
                     print(f"Processing ad set: {ad_set['name']} ({ad_set['id']})")
                     # Get ads for this ad set
                     ads = AdSet(ad_set['id']).get_ads(fields=['id', 'name'])
                     print(f"Found {len(ads)} ads in ad set {ad_set['name']}")
-                    
+
                     for ad in ads:
                         print(f"Processing ad: {ad['name']} ({ad['id']})")
                         try:
                             # Get leads for this ad with enhanced fields
                             leads = Ad(ad['id']).get_leads(fields=[
-                                'id', 
-                                'created_time', 
+                                'id',
+                                'created_time',
                                 'field_data',
                                 'ad_id',
                                 'adset_id',
                                 'campaign_id'
                             ])
                             print(f"Found {len(leads)} leads in ad {ad['name']}")
-                            
+
                             for lead in leads:
                                 # Process each lead with enhanced data
                                 if process_facebook_lead_enhanced(lead, campaign['name'], ad['name']):
                                     leads_added += 1
                         except Exception as ad_error:
                             print(f"Error getting leads from ad {ad['id']}: {ad_error}")
-                                
+
         print(f"Successfully added {leads_added} new leads from Facebook")
         return leads_added
-        
+
     except Exception as e:
         print(f"Error fetching Facebook leads: {e}")
         return 0
@@ -2684,11 +2685,11 @@ def process_facebook_lead_enhanced(lead_data, campaign_name, ad_name):
         # Extract lead information from field_data
         field_data = lead_data.get('field_data', [])
         lead_info = {}
-        
+
         for field in field_data:
             field_name = field.get('name', '').lower()
             field_value = field.get('values', [''])[0] if field.get('values') else ''
-            
+
             if 'full_name' in field_name or 'name' in field_name:
                 lead_info['name'] = field_value
             elif 'email' in field_name:
@@ -2701,7 +2702,7 @@ def process_facebook_lead_enhanced(lead_data, campaign_name, ad_name):
                 lead_info['job_title'] = field_value
             elif 'company' in field_name:
                 lead_info['company'] = field_value
-        
+
         # Get lead creation time
         created_time = lead_data.get('created_time', '')
         if created_time:
@@ -2714,7 +2715,7 @@ def process_facebook_lead_enhanced(lead_data, campaign_name, ad_name):
                 lead_info['created_time'] = datetime.utcnow()
         else:
             lead_info['created_time'] = datetime.utcnow()
-        
+
         # Check if lead already exists (by email, phone, or name)
         existing_lead = None
         if lead_info.get('email'):
@@ -2725,7 +2726,7 @@ def process_facebook_lead_enhanced(lead_data, campaign_name, ad_name):
             existing_lead = Lead.query.filter(
                 db.func.lower(Lead.name) == lead_info['name'].lower()
             ).first()
-        
+
         if existing_lead:
             # Backfill facebook id/source if we just matched on email/phone/name
             if facebook_lead_id and not existing_lead.facebook_lead_id:
@@ -2735,11 +2736,11 @@ def process_facebook_lead_enhanced(lead_data, campaign_name, ad_name):
                 db.session.commit()
             print(f"Lead already exists: {lead_info.get('name', 'Unknown')}")
             return False
-        
+
         # Don't add campaign info to notes - notes should be blank for new leads
         # Only include actual message/notes from the lead if they provided one
         notes = lead_info.get('notes', '') if lead_info.get('notes') else ''
-        
+
         # Create new lead
         new_lead = Lead(
             name=lead_info.get('name', 'Facebook Lead'),
@@ -2752,13 +2753,13 @@ def process_facebook_lead_enhanced(lead_data, campaign_name, ad_name):
             source='facebook',
             facebook_lead_id=facebook_lead_id
         )
-        
+
         db.session.add(new_lead)
         db.session.commit()
-        
+
         print(f"Added new Facebook lead: {new_lead.name} from {campaign_name}")
         return True
-        
+
     except Exception as e:
         print(f"Error processing Facebook lead: {e}")
         return False
@@ -2794,7 +2795,7 @@ def toggle_campaign(campaign_id):
     """Toggle campaign on/off"""
     data = request.get_json()
     new_status = data.get('status', 'paused')
-    
+
     if toggle_campaign_status(campaign_id, new_status):
         return jsonify({'success': True})
     else:
@@ -2813,7 +2814,7 @@ def get_campaign_metrics_endpoint(campaign_id):
         else:
             days = int(days_param)
             print(f"API ENDPOINT: Campaign {campaign_id} requested with days={days}")
-        
+
         metrics = get_campaign_metrics(campaign_id, days)
         if metrics:
             return jsonify(metrics)
@@ -2860,7 +2861,7 @@ def fetch_leads_endpoint():
     try:
         leads_added = fetch_facebook_leads_enhanced()
         return jsonify({
-            'success': True, 
+            'success': True,
             'leads_added': leads_added,
             'message': f'Successfully added {leads_added} new leads from Facebook'
         })
@@ -3100,15 +3101,15 @@ def update_lead_dates():
             {"name": "Jill Jantzen", "date": "08/14/2025"},
             {"name": "Sample Lead", "date": "06/17/2025"}
         ]
-        
+
         updated_count = 0
-        
+
         for csv_entry in csv_data:
             # Find matching lead by name (case-insensitive)
             lead = Lead.query.filter(
                 db.func.lower(Lead.name) == csv_entry["name"].lower()
             ).first()
-            
+
             if lead:
                 # Add date to notes if not already present
                 if not lead.notes or "Date:" not in lead.notes:
@@ -3117,15 +3118,15 @@ def update_lead_dates():
                     else:
                         lead.notes = f"Date: {csv_entry['date']}"
                     updated_count += 1
-        
+
         db.session.commit()
-        
+
         return jsonify({
             'success': True,
             'updated_count': updated_count,
             'message': f'Successfully updated {updated_count} leads with dates'
         })
-        
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
@@ -3135,24 +3136,24 @@ def create_lead():
     """Create a new lead"""
     try:
         data = request.get_json()
-        
+
         # Validate required fields
         if not data.get('name') or not data.get('phone'):
             return jsonify({'success': False, 'error': 'Name and phone are required'}), 400
-        
+
         # Check for duplicates
         existing_lead = Lead.query.filter_by(phone=data['phone']).first()
         if not existing_lead:
             existing_lead = Lead.query.filter(
                 db.func.lower(Lead.name) == data['name'].lower()
             ).first()
-        
+
         if existing_lead:
             return jsonify({
                 'success': False,
                 'error': 'A lead with this phone number or name already exists'
             }), 400
-        
+
         # Create new lead
         lead = Lead(
             name=data['name'],
@@ -3163,10 +3164,10 @@ def create_lead():
             priority=data.get('priority', 'medium'),
             assigned_to=None
         )
-        
+
         db.session.add(lead)
         db.session.commit()
-        
+
         # Log to Portal
         try:
             _log_portal_event(
@@ -3177,7 +3178,7 @@ def create_lead():
             )
         except:
             pass
-        
+
         return jsonify({
             'success': True,
             'lead_id': lead.id,
@@ -3199,18 +3200,18 @@ def get_leads():
     per_page = request.args.get('per_page', 50, type=int)
     status_filter = request.args.get('status')
     assigned_filter = request.args.get('assigned_to')
-    
+
     query = Lead.query
-    
+
     if status_filter:
         query = query.filter(Lead.status == status_filter)
     if assigned_filter:
         query = query.filter(Lead.assigned_to == assigned_filter)
-    
+
     leads = query.order_by(Lead.id.desc()).paginate(
         page=page, per_page=per_page, error_out=False
     )
-    
+
     return jsonify({
         'leads': [{
             'id': lead.id,
@@ -3235,17 +3236,17 @@ def get_leads():
 def update_lead(lead_id):
     lead = Lead.query.get_or_404(lead_id)
     data = request.get_json()
-    
+
     if 'notes' in data:
         lead.notes = data['notes']
     if 'status' in data:
         lead.status = data['status']
     if 'assigned_to' in data:
         lead.assigned_to = data['assigned_to']
-    
+
     lead.updated_at = datetime.utcnow()
     db.session.commit()
-    
+
     return jsonify({'success': True})
 
 # One-time notes population from CSV (column D)
@@ -3261,11 +3262,11 @@ def populate_notes_once():
             lead.notes = ''
         db.session.commit()
         print(f"Cleared notes for {len(leads)} leads")
-        
+
         # Step 2: Process CSV data from the uploaded CSV file
         # Read the CSV file that was uploaded
         csv_file_path = '/tmp/caregiver_leads.csv'
-        
+
         # Try to read from a known location or use embedded data
         # For now, we'll process the embedded CSV data
         # CSV format: Name, Email, Phone, Notes (column D)
@@ -3492,23 +3493,23 @@ def populate_notes_once():
             {"name": "Kuilima Lautaha", "email": "fakatoumaulupe5@gmail.com", "phone": "p:+17208292360", "notes": ""},
             {"name": "Kathy Perry", "email": "katzmeow71@yahoo.com", "phone": "p:+17202151255", "notes": ""},
         ]
-        
+
         updated_count = 0
         not_found_count = 0
-        
+
         for entry in csv_data:
             if not entry.get('notes'):
                 continue
-            
+
             name = entry.get('name', '').strip()
             email = entry.get('email', '').strip()
             phone = entry.get('phone', '').strip()
             notes = entry.get('notes', '').strip()
-            
+
             # Clean phone (remove p: prefix)
             if phone.startswith('p:'):
                 phone = phone[2:].strip()
-            
+
             # Find matching lead
             lead = None
             if email:
@@ -3517,15 +3518,15 @@ def populate_notes_once():
                 lead = Lead.query.filter_by(phone=phone).first()
             if not lead and name:
                 lead = Lead.query.filter(db.func.lower(Lead.name) == name.lower()).first()
-            
+
             if lead:
                 lead.notes = notes
                 updated_count += 1
             else:
                 not_found_count += 1
-        
+
         db.session.commit()
-        
+
         return jsonify({
             'success': True,
             'updated_count': updated_count,
@@ -3544,16 +3545,16 @@ def populate_notes_once():
 def upload_leads():
     if 'file' not in request.files:
         return jsonify({'success': False, 'error': 'No file uploaded'})
-    
+
     file = request.files['file']
     if file.filename == '':
         return jsonify({'success': False, 'error': 'No file selected'})
-    
+
     try:
         print(f"Upload received: {file.filename}, content type: {file.content_type}")
-        
+
         results = None
-        
+
         if file.filename.endswith('.zip'):
             with zipfile.ZipFile(file, 'r') as zip_file:
                 for filename in zip_file.namelist():
@@ -3565,7 +3566,7 @@ def upload_leads():
             csv_bytes = file.read()
             csv_content = decode_csv_content(csv_bytes)
             results = process_csv_content(csv_content)
-        
+
         # Handle both old format (int) and new format (dict)
         if isinstance(results, dict):
             leads_added = results['leads_added']
@@ -3578,7 +3579,7 @@ def upload_leads():
             duplicates_skipped = 0
             empty_rows_skipped = 0
             rows_processed = 0
-        
+
         # Build response message
         if leads_added > 0:
             message = f"Successfully added {leads_added} new lead{'s' if leads_added != 1 else ''}!"
@@ -3588,16 +3589,16 @@ def upload_leads():
             message = f"All leads are duplicates - {duplicates_skipped} lead{'s' if duplicates_skipped != 1 else ''} already exist in the database."
         else:
             message = "No leads were added. The file may be empty or in an unrecognized format."
-        
+
         return jsonify({
-            'success': True, 
+            'success': True,
             'leads_added': leads_added,
             'duplicates_skipped': duplicates_skipped,
             'empty_rows_skipped': empty_rows_skipped,
             'rows_processed': rows_processed,
             'message': message
         })
-    
+
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
@@ -3609,7 +3610,7 @@ def upload_leads():
 def decode_csv_content(csv_bytes):
     """Try to decode CSV content with different encodings"""
     encodings = ['utf-8', 'utf-16', 'latin-1', 'cp1252', 'iso-8859-1']
-    
+
     for encoding in encodings:
         try:
             # Try to decode with this encoding
@@ -3618,7 +3619,7 @@ def decode_csv_content(csv_bytes):
             return content
         except UnicodeDecodeError:
             continue
-    
+
     # If all encodings fail, try with error handling
     try:
         return csv_bytes.decode('utf-8', errors='replace')
@@ -3630,44 +3631,44 @@ def process_csv_content(csv_content):
     rows_processed = 0
     duplicates_skipped = 0
     empty_rows_skipped = 0
-    
+
     # Try to detect delimiter
     sample = csv_content[:1024]
     delimiter = '\t' if '\t' in sample else ','
-    
+
     print(f"CSV Processing: Using delimiter '{delimiter}'")
-    
+
     reader = csv.DictReader(io.StringIO(csv_content), delimiter=delimiter)
-    
+
     # Debug: Print column names (only once)
     fieldnames_lower = {}
     if reader.fieldnames:
         print(f"CSV Columns found: {list(reader.fieldnames)}")
         # Create lowercase mapping for case-insensitive lookup
         fieldnames_lower = {k.lower().strip('"').strip("'"): k for k in reader.fieldnames}
-    
+
     for row in reader:
         rows_processed += 1
-        
+
         # Handle different CSV formats
         name = None
         email = None
         phone = None
         created_date_str = None
         notes_parts = []
-        
+
         # Format 1: Facebook Lead Ads export (tab-delimited with "full name", "created_time", etc.)
         # Check for the presence of key columns that indicate this format
         has_full_name = 'full name' in fieldnames_lower or any('full name' in k.lower() for k in (reader.fieldnames or []))
         has_created_time = 'created_time' in fieldnames_lower or any('created_time' in k.lower() for k in (reader.fieldnames or []))
-        
+
         if has_full_name or has_created_time:
             # Get the actual column key (handles quoted headers)
             full_name_key = fieldnames_lower.get('full name') or next((k for k in row.keys() if 'full name' in k.lower()), None)
             created_time_key = fieldnames_lower.get('created_time') or next((k for k in row.keys() if 'created_time' in k.lower()), None)
             email_key = fieldnames_lower.get('email') or 'email'
             phone_key = fieldnames_lower.get('phone') or 'phone'
-            
+
             name = row.get(full_name_key, '') if full_name_key else ''
             email = row.get(email_key, '')
             phone = row.get(phone_key, '')
@@ -3681,9 +3682,9 @@ def process_csv_content(csv_content):
                 phone = str(phone).strip().strip('"').strip("'")
             if created_date_str:
                 created_date_str = str(created_date_str).strip().strip('"').strip("'")
-            
+
             # Don't add campaign info to notes - notes should be blank for new leads
-        
+
         # Format 2: Facebook export format (with Created, Name, Email, etc.)
         elif 'Created' in row and 'Name' in row:
             name = row.get('Name', '').strip()
@@ -3691,7 +3692,7 @@ def process_csv_content(csv_content):
             phone = row.get('Phone', '').strip()
             created_date_str = row.get('Created', '').strip()
             # Don't add source/channel/form info to notes - notes should be blank for new leads
-        
+
         # Format 3: Fallback - try generic name/email/phone columns
         else:
             name = row.get('Name', row.get('name', row.get('full name', ''))).strip()
@@ -3699,16 +3700,16 @@ def process_csv_content(csv_content):
             phone = row.get('Phone', row.get('phone', '')).strip()
             created_date_str = row.get('Created', row.get('created_time', row.get('created', ''))).strip()
             # Don't add notes - notes should be blank for new leads
-        
+
         # Skip empty rows
         if not name and not email and not phone:
             empty_rows_skipped += 1
             continue
-        
+
         # Clean phone number (remove p: prefix if present)
         if phone and phone.startswith('p:'):
             phone = phone[2:].strip()
-        
+
         # Parse the date
         date_received = None
         if created_date_str:
@@ -3723,33 +3724,33 @@ def process_csv_content(csv_content):
                     # Try Facebook date format: "10/23/2025 10:34pm"
                     date_str_clean = created_date_str.replace('pm', '').replace('am', '').strip()
                     date_received = datetime.strptime(date_str_clean, '%m/%d/%Y %H:%M')
-            except Exception as e:
+            except Exception:
                 date_received = None
-        
+
         # Don't add date or any info to notes - notes should be blank for new leads
         notes = ""
-        
+
         # Check if lead already exists (by email, phone, or name)
         existing_lead = None
-        
+
         # First check by email (most reliable)
         if email:
             existing_lead = Lead.query.filter_by(email=email).first()
-        
+
         # If no email match, check by phone
         if not existing_lead and phone:
             existing_lead = Lead.query.filter_by(phone=phone).first()
-        
+
         # If still no match, check by name (case-insensitive)
         if not existing_lead and name:
             existing_lead = Lead.query.filter(
                 db.func.lower(Lead.name) == name.lower()
             ).first()
-        
+
         if existing_lead:
             duplicates_skipped += 1
             continue  # Skip duplicate leads
-            
+
         # Create lead (new leads are never contacted and unowned)
         lead = Lead(
             name=name or 'Unknown',
@@ -3761,13 +3762,13 @@ def process_csv_content(csv_content):
             # date_received=date_received,  # Will add back after fixing database
             assigned_to=None  # Unowned/unassigned
         )
-        
+
         db.session.add(lead)
         leads_added += 1
-    
+
     db.session.commit()
     print(f"CSV Processing Summary: {rows_processed} rows processed, {leads_added} leads added, {duplicates_skipped} duplicates skipped, {empty_rows_skipped} empty rows skipped")
-    
+
     # Return detailed results for better user feedback
     return {
         'leads_added': leads_added,
@@ -3811,12 +3812,12 @@ def delete_user(user_id):
 def update_user(user_id):
     user = User.query.get_or_404(user_id)
     data = request.get_json()
-    
+
     if 'name' in data:
         user.name = data['name']
     if 'email' in data:
         user.email = data['email']
-    
+
     db.session.commit()
     return jsonify({'success': True})
 
@@ -3825,13 +3826,13 @@ def get_beetexting_access_token():
     client_id = os.getenv('BEETEXTING_CLIENT_ID')
     client_secret = os.getenv('BEETEXTING_CLIENT_SECRET')
     api_key = os.getenv('BEETEXTING_API_KEY')
-    
+
     if not all([client_id, client_secret, api_key]):
         raise ValueError('BeeTexting credentials not fully configured. Need CLIENT_ID, CLIENT_SECRET, and API_KEY')
-    
+
     # OAuth 2.0 token endpoint
     token_url = 'https://auth.beetexting.com/oauth2/token/'
-    
+
     # Try client credentials in form body (most common for client_credentials grant)
     # Try without scope first, as some APIs don't require it for client_credentials
     token_data = {
@@ -3839,14 +3840,14 @@ def get_beetexting_access_token():
         'client_id': client_id,
         'client_secret': client_secret
     }
-    
+
     headers = {
         'x-api-key': api_key,
         'Content-Type': 'application/x-www-form-urlencoded',
         'Accept': 'application/json'
     }
-    
-    print(f"Requesting OAuth token from BeeTexting...")
+
+    print("Requesting OAuth token from BeeTexting...")
     # SECURITY: Don't log sensitive credentials
     print(f"Token URL: {token_url}")
 
@@ -3854,13 +3855,13 @@ def get_beetexting_access_token():
 
     print(f"Token response status: {response.status_code}")
     # SECURITY: Don't log full response body as it may contain tokens
-    
+
     if response.status_code == 200:
         token_info = response.json()
         access_token = token_info.get('access_token')
         if not access_token:
             raise Exception(f'No access_token in response: {response.text}')
-        print(f"✅ Token obtained successfully")
+        print("✅ Token obtained successfully")
         return access_token
     else:
         # Parse error response
@@ -3873,7 +3874,7 @@ def get_beetexting_access_token():
                 error_msg += f' - {error_description}'
         except:
             error_msg = error_text
-        
+
         raise Exception(f'Failed to get access token: {response.status_code} - {error_msg}')
 
 @app.route('/api/beetexting/test', methods=['GET'])
@@ -3886,7 +3887,7 @@ def test_beetexting_connection():
         client_secret = os.getenv('BEETEXTING_CLIENT_SECRET')
         api_key = os.getenv('BEETEXTING_API_KEY')
         from_number = os.getenv('BEETEXTING_FROM_NUMBER')
-        
+
         missing = []
         if not client_id:
             missing.append('BEETEXTING_CLIENT_ID')
@@ -3896,18 +3897,18 @@ def test_beetexting_connection():
             missing.append('BEETEXTING_API_KEY')
         if not from_number:
             missing.append('BEETEXTING_FROM_NUMBER')
-        
+
         if missing:
             return jsonify({
                 'success': False,
                 'error': f'Missing environment variables: {", ".join(missing)}'
             }), 400
-        
+
         # Test OAuth token retrieval
         try:
             access_token = get_beetexting_access_token()
             token_preview = access_token[:20] + '...' if len(access_token) > 20 else access_token
-            
+
             return jsonify({
                 'success': True,
                 'message': 'BeeTexting credentials are valid',
@@ -3929,7 +3930,7 @@ def test_beetexting_connection():
                     'from_number': from_number
                 }
             }), 401
-            
+
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -3947,10 +3948,10 @@ def send_beetexting_message():
         phone = data.get('phone')
         message = data.get('message')
         lead_id = data.get('lead_id')
-        
+
         if not phone or not message:
             return jsonify({'success': False, 'error': 'Phone and message are required'}), 400
-        
+
         # Get OAuth access token
         try:
             access_token = get_beetexting_access_token()
@@ -3966,18 +3967,18 @@ def send_beetexting_message():
                 'success': False,
                 'error': f'Authentication failed: {str(e)}'
             }), 500
-        
+
         # Clean phone number (remove non-numeric except +)
         import re
         clean_phone = re.sub(r'[^0-9+]', '', phone)
         if not clean_phone.startswith('+'):
             # Assume US number, add +1
             clean_phone = '+1' + re.sub(r'[^0-9]', '', clean_phone)
-        
+
         # Get API URL and API key
         api_url = os.getenv('BEETEXTING_API_URL', 'https://connect.beetexting.com/prod')
         api_key = os.getenv('BEETEXTING_API_KEY')
-        
+
         # Get sender phone number (from environment - REQUIRED)
         from_number = os.getenv('BEETEXTING_FROM_NUMBER')
         if not from_number:
@@ -3985,14 +3986,14 @@ def send_beetexting_message():
                 'success': False,
                 'error': 'BEETEXTING_FROM_NUMBER environment variable is not set. Please set your authorized sender phone number.'
             }), 400
-        
+
         # Ensure from number is in E.164 format (+1XXXXXXXXXX)
         if not from_number.startswith('+1') or len(from_number) != 12:
             return jsonify({
                 'success': False,
                 'error': f'Invalid FROM number format. Must be E.164 format (+1XXXXXXXXXX). Current: {from_number}'
             }), 400
-        
+
         # Prepare request to BeeTexting API
         # Based on BeeTexting API docs: https://beetexting-connect-openapi.apidog.io/send-sms-21020114e0
         # Requires both x-api-key header AND Bearer token
@@ -4001,14 +4002,14 @@ def send_beetexting_message():
             'Authorization': f'Bearer {access_token}',
             'x-api-key': api_key
         }
-        
+
         # BeeTexting API uses query parameters, not JSON body
         params = {
             'from': from_number,
             'to': clean_phone,
             'text': message
         }
-        
+
         # SECURITY: Don't log tokens or API keys
         print(f"Sending text from {from_number} to {clean_phone}")
 
@@ -4021,10 +4022,10 @@ def send_beetexting_message():
         )
 
         print(f"BeeTexting API response: {response.status_code}")
-        
+
         if response.status_code == 200:
             result = response.json()
-            
+
             # Update lead notes to track the text message
             if lead_id:
                 lead = Lead.query.get(lead_id)
@@ -4033,7 +4034,7 @@ def send_beetexting_message():
                     text_note = f"\n[{timestamp}] Text sent: {message[:50]}..."
                     lead.notes = (lead.notes or '') + text_note
                     db.session.commit()
-            
+
             return jsonify({
                 'success': True,
                 'result': result.get('result', 'Message delivered'),
@@ -4048,12 +4049,12 @@ def send_beetexting_message():
                 error_details = error_json
             except:
                 pass
-            
+
             # Provide more detailed error message with troubleshooting tips
             detailed_error = f'BeeTexting API returned status {response.status_code}'
             if error_msg:
                 detailed_error += f': {error_msg}'
-            
+
             # Add helpful troubleshooting message for 403 errors
             if response.status_code == 403:
                 troubleshooting = (
@@ -4062,14 +4063,14 @@ def send_beetexting_message():
                     "4) API key missing send permissions. Check your BeeTexting dashboard."
                 )
                 detailed_error += f' - {troubleshooting}'
-            
+
             return jsonify({
                 'success': False,
                 'error': f'Failed to send text: {detailed_error}',
                 'status_code': response.status_code,
                 'response': error_msg
             }), response.status_code
-            
+
     except requests.exceptions.RequestException as e:
         return jsonify({
             'success': False,
@@ -4088,21 +4089,21 @@ def get_goformz_access_token():
     """Get OAuth 2.0 access token for GoFormz API"""
     client_id = os.getenv('GOFORMZ_CLIENT_ID')
     client_secret = os.getenv('GOFORMZ_CLIENT_SECRET')
-    
+
     if not all([client_id, client_secret]):
         raise ValueError('GoFormz credentials not configured')
-    
+
     token_url = 'https://accounts.goformz.com/connect/token'
-    
+
     data = {
         'grant_type': 'client_credentials',
         'client_id': client_id,
         'client_secret': client_secret,
         'scope': 'public_api'
     }
-    
+
     response = requests.post(token_url, data=data)
-    
+
     if response.status_code == 200:
         token_data = response.json()
         return token_data.get('access_token')
@@ -4112,14 +4113,14 @@ def get_goformz_access_token():
 def get_goformz_templates(access_token):
     """Get list of GoFormz templates to find Employee and Client Packet IDs"""
     api_url = 'https://api.goformz.com/v2/templates'
-    
+
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json'
     }
-    
+
     response = requests.get(api_url, headers=headers)
-    
+
     if response.status_code == 200:
         return response.json()
     else:
@@ -4128,14 +4129,14 @@ def get_goformz_templates(access_token):
 def get_goformz_users(access_token):
     """Get list of GoFormz users for form assignment"""
     api_url = 'https://api.goformz.com/v2/users'
-    
+
     headers = {
         'Authorization': f'Bearer {access_token}',
         'Content-Type': 'application/json'
     }
-    
+
     response = requests.get(api_url, headers=headers)
-    
+
     if response.status_code == 200:
         return response.json()
     else:
@@ -4158,15 +4159,15 @@ def goformz_template_detail(template_id):
     """Get detailed info about a specific template including field names"""
     try:
         access_token = get_goformz_access_token()
-        
+
         api_url = f'https://api.goformz.com/v2/templates/{template_id}'
         headers = {
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json'
         }
-        
+
         response = requests.get(api_url, headers=headers)
-        
+
         if response.status_code == 200:
             template_detail = response.json()
             return jsonify({'success': True, 'template': template_detail})
@@ -4175,131 +4176,77 @@ def goformz_template_detail(template_id):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/goformz/send-lead', methods=['POST'])
+@app.route('/api/employee-portal/send-lead', methods=['POST'])
 @require_auth
-def send_lead_to_goformz():
-    """Send a lead to GoFormz Employee Packet"""
+def send_lead_to_employee_portal():
+    """Send a recruiting lead to the Employee Portal for onboarding + WellSky."""
     try:
         data = request.get_json()
         lead_id = data.get('lead_id')
-        
+
         if not lead_id:
             return jsonify({'success': False, 'error': 'Lead ID is required'}), 400
-        
-        # Get the lead
+
         lead = Lead.query.get(lead_id)
         if not lead:
             return jsonify({'success': False, 'error': 'Lead not found'}), 404
-        
-        # Get GoFormz access token
-        access_token = get_goformz_access_token()
-        
-        # Get Employee Packet template ID (you'll need to set this in env vars after checking templates)
-        employee_template_id = os.getenv('GOFORMZ_EMPLOYEE_TEMPLATE_ID')
-        
-        if not employee_template_id:
-            # Try to find it automatically
-            templates = get_goformz_templates(access_token)
-            for template in templates:
-                if 'Employee Packet' in template.get('name', ''):
-                    employee_template_id = template.get('id')
-                    break
-            
-            if not employee_template_id:
-                return jsonify({
-                    'success': False,
-                    'error': 'Employee Packet template not found. Please set GOFORMZ_EMPLOYEE_TEMPLATE_ID'
-                }), 400
-        
-        # Get assignment user ID (required by GoFormz)
-        goformz_user_id = os.getenv('GOFORMZ_USER_ID')
-        
-        if not goformz_user_id:
-            # Auto-detect first user
-            try:
-                users = get_goformz_users(access_token)
-                if users and len(users) > 0:
-                    goformz_user_id = users[0].get('id')
-                else:
-                    return jsonify({
-                        'success': False,
-                        'error': 'No GoFormz users found. Please set GOFORMZ_USER_ID environment variable.'
-                    }), 400
-            except Exception as e:
-                return jsonify({
-                    'success': False,
-                    'error': f'Failed to get GoFormz users: {str(e)}'
-                }), 500
-        
-        # Prepare form data - create blank form initially
-        # Field names must match exactly what's in the GoFormz template
-        form_data = {
-            'templateId': employee_template_id,
-            'name': f'CCA EMPLOYEE PACKET - {lead.name}',
-            'assignment': {
-                'type': 'User',
-                'id': goformz_user_id
-            }
-        }
-        
-        # Optional: Try to populate fields if field mapping is provided
-        # You can set GOFORMZ_FIELD_MAPPING as JSON in env vars
-        field_mapping = os.getenv('GOFORMZ_FIELD_MAPPING')
-        if field_mapping:
-            try:
-                import json
-                mapping = json.loads(field_mapping)
-                form_data['fields'] = {}
-                
-                if 'name' in mapping:
-                    form_data['fields'][mapping['name']] = lead.name or ''
-                if 'email' in mapping:
-                    form_data['fields'][mapping['email']] = lead.email or ''
-                if 'phone' in mapping:
-                    form_data['fields'][mapping['phone']] = lead.phone or ''
-                if 'notes' in mapping and lead.notes:
-                    form_data['fields'][mapping['notes']] = lead.notes
-            except:
-                pass  # Skip field mapping if it fails
-        
-        # Create form in GoFormz
-        api_url = 'https://api.goformz.com/v2/formz'
-        headers = {
-            'Authorization': f'Bearer {access_token}',
-            'Content-Type': 'application/json'
-        }
-        
-        response = requests.post(api_url, json=form_data, headers=headers)
-        
-        if response.status_code == 201:
-            result = response.json()
-            form_id = result.get('id')
-            
-            # Update lead notes
-            timestamp = datetime.utcnow().strftime('%m/%d/%Y %H:%M')
-            goformz_note = f"\n[{timestamp}] Sent to GoFormz Employee Packet (ID: {form_id})"
-            lead.notes = (lead.notes or '') + goformz_note
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': 'Lead sent to GoFormz successfully',
-                'form_id': form_id
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'GoFormz API error: {response.text}',
-                'status_code': response.status_code
-            }), response.status_code
-            
+
+        if not lead.phone:
+            return jsonify({'success': False, 'error': 'Lead has no phone number — required for Employee Portal'}), 400
+
+        # Split name into first/last
+        name_parts = (lead.name or '').strip().split(None, 1)
+        first_name = name_parts[0] if name_parts else 'Unknown'
+        last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+        # Call Employee Portal to create candidate (localhost for speed, tunnel for fallback)
+        ep_url = os.getenv('EP_API_URL', 'http://localhost:3020')
+        ep_key = os.getenv('EP_SERVICE_API_KEY', '')
+        resp = requests.post(
+            f'{ep_url}/api/admin/candidates',
+            json={
+                'first_name': first_name,
+                'last_name': last_name,
+                'phone': lead.phone,
+                'email': lead.email or None,
+                'flow_type': 'short',
+            },
+            headers={'X-Service-Key': ep_key},
+            timeout=15,
+        )
+
+        if resp.status_code == 409:
+            return jsonify({'success': False, 'error': 'Candidate already exists in Employee Portal'}), 409
+        if resp.status_code not in (200, 201):
+            return jsonify({'success': False, 'error': f'Employee Portal error: {resp.text[:200]}'}), 502
+
+        result = resp.json()
+
+        # Update lead notes + status
+        timestamp = datetime.utcnow().strftime('%m/%d/%Y %H:%M')
+        ep_note = f"\n[{timestamp}] Sent to Employee Portal (person: {result.get('person_id')}, case: {result.get('case_id')})"
+        lead.notes = (lead.notes or '') + ep_note
+        lead.status = 'sent_to_ep'
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'message': result.get('message', 'Candidate created in Employee Portal'),
+            'person_id': result.get('person_id'),
+            'case_id': result.get('case_id'),
+        })
+
+    except requests.exceptions.RequestException as e:
+        return jsonify({'success': False, 'error': f'Network error calling Employee Portal: {str(e)}'}), 502
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'Error sending to GoFormz: {str(e)}'
-        }), 500
+        return jsonify({'success': False, 'error': f'Error sending to Employee Portal: {str(e)}'}), 500
+
+
+# Legacy GoFormz route — kept for reference, no longer used
+# @app.route('/api/goformz/send-lead', methods=['POST'])
+# def send_lead_to_goformz(): ...
 
 @app.route('/api/alert-rules')
 @require_auth
@@ -4334,7 +4281,7 @@ def auto_fetch_leads_scheduler():
             print(f"AUTO-SCHEDULER: Completed - added {leads_added} leads")
         except Exception as e:
             print(f"AUTO-SCHEDULER ERROR: {e}")
-        
+
         # Wait 1 hour (3600 seconds) before next fetch
         time.sleep(3600)
 
@@ -4368,9 +4315,9 @@ def _get_root_wellsky_services():
     if _root_wellsky_cache:
         return _root_wellsky_cache['wellsky'], _root_wellsky_cache['sync'], _root_wellsky_cache['ApplicantStatus']
 
-    import sys as _sys
-    import os as _os
     import importlib.util
+    import os as _os
+    import sys as _sys
 
     root_dir = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
 
