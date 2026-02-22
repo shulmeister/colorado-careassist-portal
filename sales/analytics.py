@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List
 
@@ -16,6 +17,8 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+PG_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
 
 class AnalyticsEngine:
     """Generate analytics and KPIs for the sales dashboard"""
@@ -108,17 +111,43 @@ class AnalyticsEngine:
                 Lead.created_at >= week_start
             ).count()
 
-            # === CLOSED DEALS by quarter (closed_won with closed_at date) ===
-            closed_deals_this_quarter = self.db.query(Lead).filter(
-                Lead.status == "closed_won",
-                Lead.closed_at >= current_quarter_start,
-                Lead.closed_at < current_quarter_start.replace(month=current_quarter_start.month + 3) if current_quarter_start.month <= 9 else datetime(current_quarter_start.year + 1, 1, 1)
-            ).count()
-            closed_deals_last_quarter = self.db.query(Lead).filter(
-                Lead.status == "closed_won",
-                Lead.closed_at >= last_quarter_start,
-                Lead.closed_at < last_quarter_end
-            ).count()
+            # === NEW CLIENTS by quarter (from WellSky cached_patients — active, isClient=True, deduplicated) ===
+            closed_deals_this_quarter = 0
+            closed_deals_last_quarter = 0
+            try:
+                import psycopg2
+                pg_url = PG_URL
+                if pg_url.startswith("postgresql+psycopg2://"):
+                    pg_url = pg_url.replace("postgresql+psycopg2://", "postgresql://", 1)
+                conn = psycopg2.connect(pg_url)
+                cur = conn.cursor()
+                # Count distinct clients who are active + isClient=True in WellSky.
+                # Deduplicate by first_name + cleaned last_name (strip nicknames/quotes)
+                # to handle WellSky duplicate records for the same person.
+                client_query = """
+                    SELECT COUNT(*) FROM (
+                        SELECT first_name,
+                               REGEXP_REPLACE(last_name, '^"[^"]*"\\s*', '') as clean_last,
+                               MIN(start_date) as earliest_start
+                        FROM cached_patients
+                        WHERE is_active = true
+                          AND start_date IS NOT NULL
+                          AND EXISTS (
+                              SELECT 1 FROM jsonb_array_elements(wellsky_data->'meta'->'tag') t
+                              WHERE t->>'code' = 'isClient' AND t->>'display' = 'True'
+                          )
+                        GROUP BY first_name, REGEXP_REPLACE(last_name, '^"[^"]*"\\s*', '')
+                        HAVING MIN(start_date) >= %s AND MIN(start_date) < %s
+                    ) sub
+                """
+                q_end = datetime(now.year + 1, 1, 1) if current_quarter == 4 else datetime(now.year, current_quarter * 3 + 1, 1)
+                cur.execute(client_query, (current_quarter_start.date(), q_end.date()))
+                closed_deals_this_quarter = cur.fetchone()[0]
+                cur.execute(client_query, (last_quarter_start.date(), last_quarter_end.date()))
+                closed_deals_last_quarter = cur.fetchone()[0]
+                conn.close()
+            except Exception as e:
+                logger.warning(f"Error querying cached_patients for closed deals: {e}")
 
             # Forecast revenue from active deals
             forecast_revenue = self.db.query(func.sum(Lead.expected_revenue)).filter(

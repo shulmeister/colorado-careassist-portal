@@ -2444,6 +2444,183 @@ async def get_sync_status(
 # No redirect needed - the mounted FastAPI app handles /sales/* routes directly
 
 
+# ── Fax (RingCentral) ─────────────────────────────────────────────────────────────
+
+@app.get("/fax", response_class=HTMLResponse)
+async def fax_page(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Fax send/receive page."""
+    import psycopg2
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+    faxes = []
+    # Poll RC for new received faxes on page load
+    try:
+        from services.fax_service import poll_received_faxes
+        await poll_received_faxes()
+    except Exception as e:
+        logger.warning(f"Fax poll on load failed (non-fatal): {e}")
+
+    inbox, sent, outbox = [], [], []
+    try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, direction, rc_message_id, from_number, to_number, status,
+                   page_count, local_path, created_at, error_message
+            FROM fax_log ORDER BY created_at DESC LIMIT 100
+        """)
+        for r in cur.fetchall():
+            f = type('F', (), {
+                'id': r[0], 'direction': r[1], 'rc_message_id': r[2],
+                'from_number': r[3], 'to_number': r[4], 'status': r[5],
+                'page_count': r[6], 'local_path': r[7], 'created_at': r[8],
+                'error_message': r[9],
+            })()
+            if f.direction == 'inbound':
+                inbox.append(f)
+            elif f.status in ('delivered', 'sent'):
+                sent.append(f)
+            else:
+                outbox.append(f)
+        conn.close()
+    except Exception as e:
+        logger.error(f"Error loading fax history: {e}")
+    return templates.TemplateResponse("fax.html", {
+        "request": request, "user": current_user,
+        "inbox": inbox, "sent": sent, "outbox": outbox,
+    })
+
+
+@app.post("/api/fax/send")
+async def api_fax_send(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Send a fax via RingCentral — supports multiple files + cover note."""
+    import uuid as _uuid
+    from pathlib import Path
+
+    form = await request.form()
+    to_number = form.get("to_number", "").strip()
+    cover_note = form.get("cover_note", "").strip()
+    if not to_number:
+        return JSONResponse({"success": False, "error": "Recipient phone number required"}, status_code=400)
+
+    allowed = (".pdf", ".doc", ".docx", ".txt", ".jpg", ".jpeg", ".png", ".tiff", ".tif")
+    fax_dir = Path.home() / "logs" / "faxes" / "outbound"
+    fax_dir.mkdir(parents=True, exist_ok=True)
+
+    # Collect all uploaded files
+    file_paths = []
+    local_paths = []
+    for key in form:
+        if key.startswith("files"):
+            upload = form[key]
+            if hasattr(upload, "filename") and upload.filename:
+                if not any(upload.filename.lower().endswith(ext) for ext in allowed):
+                    return JSONResponse({"success": False, "error": f"Unsupported file: {upload.filename}"}, status_code=400)
+                content = await upload.read()
+                ext = Path(upload.filename).suffix.lower()
+                local_path = fax_dir / f"{_uuid.uuid4().hex}{ext}"
+                local_path.write_bytes(content)
+                local_paths.append(str(local_path))
+                file_paths.append((upload.filename, content))
+
+    if not file_paths and not cover_note:
+        return JSONResponse({"success": False, "error": "Add at least one file or note"}, status_code=400)
+
+    try:
+        from services.fax_service import send_fax
+        result = await send_fax(to=to_number, file_paths=file_paths, cover_note=cover_note)
+        if result.get("success") and local_paths:
+            import psycopg2
+            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+            conn = psycopg2.connect(db_url)
+            cur = conn.cursor()
+            cur.execute("UPDATE fax_log SET local_path = %s WHERE id = %s", (local_paths[0], result.get("log_id")))
+            conn.commit()
+            conn.close()
+        return JSONResponse(result)
+    except Exception as e:
+        logger.error(f"Fax send error: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+@app.get("/api/fax/view/{fax_id}")
+async def api_fax_view(fax_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """View a fax PDF inline (in browser)."""
+    from pathlib import Path
+
+    import psycopg2
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
+    cur.execute("SELECT local_path, direction, from_number, to_number FROM fax_log WHERE id = %s", (fax_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="PDF not available")
+    fax_path = Path(row[0])
+    if not fax_path.exists():
+        raise HTTPException(status_code=404, detail="PDF file missing")
+    filename = f"fax-{row[1]}-{row[2] or row[3]}-{fax_id}.pdf"
+    return Response(
+        content=fax_path.read_bytes(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
+
+
+@app.get("/api/fax/download/{fax_id}")
+async def api_fax_download(fax_id: int, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Download a fax PDF."""
+    from pathlib import Path
+
+    import psycopg2
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
+    cur.execute("SELECT local_path, direction, from_number, to_number FROM fax_log WHERE id = %s", (fax_id,))
+    row = cur.fetchone()
+    conn.close()
+    if not row or not row[0]:
+        raise HTTPException(status_code=404, detail="PDF not available")
+    fax_path = Path(row[0])
+    if not fax_path.exists():
+        raise HTTPException(status_code=404, detail="PDF file missing")
+    filename = f"fax-{row[1]}-{row[2] or row[3]}-{fax_id}.pdf"
+    return Response(
+        content=fax_path.read_bytes(),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/api/fax/list")
+async def api_fax_list(
+    direction: str = None,
+    limit: int = 20,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """List faxes as JSON."""
+    from services.fax_service import list_faxes
+    return JSONResponse(list_faxes(direction=direction, limit=limit))
+
+
+@app.post("/api/fax/poll")
+async def api_fax_poll(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Poll RingCentral for new received faxes and sync to local DB."""
+    try:
+        from services.fax_service import poll_received_faxes
+        new_faxes = await poll_received_faxes()
+        return JSONResponse({"success": True, "new_faxes": len(new_faxes), "faxes": new_faxes})
+    except Exception as e:
+        logger.error(f"Fax poll error: {e}")
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+
+
+# ── End Fax ───────────────────────────────────────────────────────────────────
+
+
 @app.get("/activity-tracker")
 async def activity_tracker_redirect(
     current_user: Dict[str, Any] = Depends(get_current_user)

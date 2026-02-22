@@ -176,6 +176,7 @@ TOOL_NAMES = [
     "get_cash_position", "get_financial_dashboard",
     "get_subscription_audit",
     "run_claude_code", "browse_with_claude",
+    "send_fax", "list_faxes",
 ]
 
 # Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
@@ -235,6 +236,9 @@ ANTHROPIC_TOOLS = [
     # === CLAUDE CODE TOOLS ===
     {"name": "run_claude_code", "description": "Execute a code/infrastructure task using Claude Code on the Mac Mini. Use for: fixing bugs, editing files, investigating errors, checking logs, running tests, restarting services, git operations, deploying changes. Claude Code autonomously reads/writes files and runs commands. Returns the result directly (synchronous, no polling needed). PREFER THIS over create_claude_task for immediate results.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What to do. Be specific — include error messages, file paths, expected behavior."}, "directory": {"type": "string", "description": "Project: careassist (default/staging), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard, qbo-dashboard. Or full path."}, "model": {"type": "string", "description": "'sonnet' (default, fast) or 'opus' (complex tasks)."}}, "required": ["prompt"]}},
     {"name": "browse_with_claude", "description": "Browse a website using Claude Code + Chrome. Can read pages, fill forms, click buttons, extract data, navigate multi-page flows. Much more capable than browse_webpage. Use for checking websites, reading content, web UI interactions, form automation.", "input_schema": {"type": "object", "properties": {"task": {"type": "string", "description": "What to do in the browser. Be specific."}, "url": {"type": "string", "description": "Target URL (optional if task includes it)."}}, "required": ["task"]}},
+    # === FAX TOOLS ===
+    {"name": "send_fax", "description": "Send a fax to a phone number. Provide a publicly accessible URL to a PDF document.", "input_schema": {"type": "object", "properties": {"to": {"type": "string", "description": "Recipient fax number (e.g. 719-555-1234)"}, "media_url": {"type": "string", "description": "Public URL to the PDF document to fax"}}, "required": ["to", "media_url"]}},
+    {"name": "list_faxes", "description": "List recent sent and received faxes.", "input_schema": {"type": "object", "properties": {"direction": {"type": "string", "description": "Filter: inbound, outbound, or all (default)"}, "limit": {"type": "integer", "description": "Max results (default 10)"}}, "required": []}},
 ]
 
 # Gemini-format tools (used when LLM_PROVIDER == "gemini")
@@ -352,6 +356,11 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"prompt": _s("string", "What to do. Be specific — include error messages, file paths, expected behavior."), "directory": _s("string", "Project: careassist (default), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard."), "model": _s("string", "sonnet (default) or opus (complex tasks).")}, required=["prompt"])),
         genai_types.FunctionDeclaration(name="browse_with_claude", description="Browse a website using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data. More capable than browse_webpage.",
             parameters=genai_types.Schema(type="OBJECT", properties={"task": _s("string", "What to do in the browser. Be specific."), "url": _s("string", "Target URL (optional if task includes it).")}, required=["task"])),
+        # === FAX TOOLS ===
+        genai_types.FunctionDeclaration(name="send_fax", description="Send a fax to a phone number. Provide a publicly accessible URL to a PDF document.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"to": _s("string", "Recipient fax number"), "media_url": _s("string", "Public URL to PDF")}, required=["to", "media_url"])),
+        genai_types.FunctionDeclaration(name="list_faxes", description="List recent sent and received faxes.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"direction": _s("string", "inbound, outbound, or all"), "limit": _s("INTEGER", "Max results (default 10)")})),
     ])]
 
 # OpenAI-format tools (used when LLM_PROVIDER == "openai")
@@ -418,6 +427,9 @@ OPENAI_TOOLS = [
     # === CLAUDE CODE TOOLS ===
     _oai_tool("run_claude_code", "Execute a code/infrastructure task using Claude Code on the Mac Mini. Returns result directly (synchronous). PREFER over create_claude_task.", {"prompt": {"type": "string", "description": "What to do"}, "directory": {"type": "string", "description": "Project alias or path"}, "model": {"type": "string", "description": "sonnet (default) or opus"}}, ["prompt"]),
     _oai_tool("browse_with_claude", "Browse a website using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data.", {"task": {"type": "string", "description": "What to do in browser"}, "url": {"type": "string", "description": "Target URL"}}, ["task"]),
+    # === FAX TOOLS ===
+    _oai_tool("send_fax", "Send a fax to a phone number. Provide a publicly accessible URL to a PDF.", {"to": {"type": "string", "description": "Recipient fax number"}, "media_url": {"type": "string", "description": "Public URL to PDF"}}, ["to", "media_url"]),
+    _oai_tool("list_faxes", "List recent sent and received faxes.", {"direction": {"type": "string", "description": "inbound, outbound, or all"}, "limit": {"type": "integer", "description": "Max results (default 10)"}}),
 ]
 
 _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of Staff and personal assistant.
@@ -503,6 +515,8 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - complete_task: Mark a task done (moves to Done section).
 - capture_note: Quick-capture an idea or note to the scratchpad.
 - get_daily_notes: Read today's daily notes for context.
+- send_fax: Send a fax to any phone number (requires a public URL to a PDF).
+- list_faxes: List recent sent and received faxes.
 
 # CRITICAL RULES
 - **Morning Briefing:** ALWAYS use `get_morning_briefing` when asked for a morning briefing, daily digest, or daily summary. Do NOT try to assemble one manually from other tools. Just call the tool and relay the result.
@@ -1288,6 +1302,23 @@ class GigiTelegramBot:
                 result = await browse_with_claude(
                     task=tool_input.get("task", ""),
                     url=tool_input.get("url"),
+                )
+                return json.dumps(result)
+
+            # === FAX TOOLS ===
+            elif tool_name == "send_fax":
+                from services.fax_service import send_fax as _send_fax
+                result = await _send_fax(
+                    to=tool_input.get("to", ""),
+                    media_url=tool_input.get("media_url", ""),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "list_faxes":
+                from services.fax_service import list_faxes as _list_faxes
+                result = _list_faxes(
+                    direction=tool_input.get("direction"),
+                    limit=tool_input.get("limit", 10),
                 )
                 return json.dumps(result)
 

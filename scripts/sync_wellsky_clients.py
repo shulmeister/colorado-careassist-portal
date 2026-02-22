@@ -14,19 +14,19 @@ API approach (per WellSky Connect API docs):
 - Family: GET /relatedperson/{patient_id}/ for each active client
 """
 
-import os
-import sys
 import json
-import string
 import logging
+import os
+import string
+import sys
 from pathlib import Path
 
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 import psycopg2
-from psycopg2.extras import Json
 import requests
+from psycopg2.extras import Json
 
 # Logging
 log_dir = Path.home() / 'logs'
@@ -132,10 +132,37 @@ def sync_patients(token, db):
                 ln = nd.get("family", "")
                 phone, hphone, wphone, email = parse_telecom(res.get("telecom"))
                 addr, city, state, zipcode = parse_address(res.get("address"))
+
+                # Extract WellSky-specific meta fields
+                auth_hours = 0.0
+                payer = ""
+                for tag in res.get("meta", {}).get("tag", []):
+                    if tag.get("code") == "authorizedHoursWeekly":
+                        try: auth_hours = float(tag.get("display", 0))
+                        except: pass
+                    elif tag.get("code") == "payerSource":
+                        payer = tag.get("display", "")
+
+                # Extract start date from extensions first, then fall back to meta.tag[created]
+                start_date = None
+                for ext in res.get("extension", []):
+                    if "startDate" in ext.get("url", ""):
+                        date_str = ext.get("valueDate") or ext.get("valueDateTime")
+                        if date_str:
+                            start_date = date_str.split("T")[0]
+                if not start_date:
+                    for tag in res.get("meta", {}).get("tag", []):
+                        if tag.get("code") == "created":
+                            date_str = tag.get("display", "")
+                            if date_str:
+                                start_date = date_str.split("T")[0]
+                                break
+
                 all_active[res["id"]] = {
                     "fn": fn, "ln": ln, "full": f"{fn} {ln}".strip(),
                     "phone": phone, "hphone": hphone, "wphone": wphone, "email": email,
                     "addr": addr, "city": city, "state": state, "zip": zipcode,
+                    "auth_hours": auth_hours, "payer": payer, "start_date": start_date,
                     "data": res
                 }
         except Exception as e:
@@ -149,16 +176,21 @@ def sync_patients(token, db):
     for pid, d in all_active.items():
         cur.execute("""
             INSERT INTO cached_patients (id,first_name,last_name,full_name,phone,home_phone,work_phone,
-                email,address,city,state,zip_code,status,is_active,wellsky_data,synced_at,updated_at)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',true,%s,NOW(),NOW())
+                email,address,city,state,zip_code,status,is_active,wellsky_data,
+                authorized_hours_weekly, referral_source, start_date, synced_at, updated_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',true,%s,%s,%s,%s,NOW(),NOW())
             ON CONFLICT (id) DO UPDATE SET
                 first_name=EXCLUDED.first_name,last_name=EXCLUDED.last_name,full_name=EXCLUDED.full_name,
                 phone=EXCLUDED.phone,home_phone=EXCLUDED.home_phone,work_phone=EXCLUDED.work_phone,
                 email=EXCLUDED.email,address=EXCLUDED.address,city=EXCLUDED.city,state=EXCLUDED.state,
                 zip_code=EXCLUDED.zip_code,status='ACTIVE',is_active=true,wellsky_data=EXCLUDED.wellsky_data,
+                authorized_hours_weekly=EXCLUDED.authorized_hours_weekly,
+                referral_source=EXCLUDED.referral_source,
+                start_date=EXCLUDED.start_date,
                 synced_at=NOW(),updated_at=NOW()
         """, (pid, d["fn"], d["ln"], d["full"], d["phone"], d["hphone"], d["wphone"],
-              d["email"], d["addr"], d["city"], d["state"], d["zip"], Json(d["data"])))
+              d["email"], d["addr"], d["city"], d["state"], d["zip"], Json(d["data"]),
+              d["auth_hours"], d["payer"], d["start_date"]))
     db.commit()
     return list(all_active.keys())
 
@@ -293,8 +325,9 @@ def sync_appointments(token, db):
 
     # Import WellSky service for proper API access
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from services.wellsky_service import WellSkyService
     from datetime import datetime, timedelta
+
+    from services.wellsky_service import WellSkyService
 
     wellsky = WellSkyService()
     all_appointments = []
@@ -331,7 +364,19 @@ def sync_appointments(token, db):
 
     # Write to database
     cur = db.cursor()
-    cur.execute("DELETE FROM cached_appointments")  # Clear old data
+    # Only delete appointments for the months we are syncing to avoid wiping the whole table
+    for month_no in [prev_month, current_month, next_month]:
+        month_start = datetime.strptime(month_no, "%Y%m")
+        # Find next month start
+        if month_start.month == 12:
+            next_month_start = month_start.replace(year=month_start.year + 1, month=1)
+        else:
+            next_month_start = month_start.replace(month=month_start.month + 1)
+
+        cur.execute("""
+            DELETE FROM cached_appointments 
+            WHERE scheduled_start >= %s AND scheduled_start < %s
+        """, (month_start, next_month_start))
 
     from datetime import datetime as _dt
     from zoneinfo import ZoneInfo
@@ -367,9 +412,21 @@ def sync_appointments(token, db):
             except:
                 sched_end = sched_end_utc - timedelta(hours=7)
 
-        # Use composite ID: {wellsky_id}_{date} — recurring shifts share the same
-        # WellSky appointment ID across months, so we need the date to keep each
-        # occurrence unique (otherwise March overwrites February via ON CONFLICT)
+        # Actual start/end (EVV data)
+        actual_start = None
+        actual_end = None
+        if hasattr(shift, 'clock_in_time') and shift.clock_in_time:
+            try:
+                actual_start = shift.clock_in_time.astimezone(mt).replace(tzinfo=None)
+            except:
+                actual_start = shift.clock_in_time.replace(tzinfo=None) - timedelta(hours=7)
+        if hasattr(shift, 'clock_out_time') and shift.clock_out_time:
+            try:
+                actual_end = shift.clock_out_time.astimezone(mt).replace(tzinfo=None)
+            except:
+                actual_end = shift.clock_out_time.replace(tzinfo=None) - timedelta(hours=7)
+
+        # Use composite ID: {wellsky_id}_{date}
         date_str = str(shift.date) if shift.date else "nodate"
         appt_id = f"{shift.id}_{date_str}"
 
@@ -377,20 +434,23 @@ def sync_appointments(token, db):
             cur.execute("""
                 INSERT INTO cached_appointments
                     (id, patient_id, practitioner_id, scheduled_start, scheduled_end,
-                     status, service_type, wellsky_data, synced_at, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                     actual_start, actual_end, status, service_type, wellsky_data, synced_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
                 ON CONFLICT (id) DO UPDATE SET
                     patient_id = EXCLUDED.patient_id,
                     practitioner_id = EXCLUDED.practitioner_id,
                     scheduled_start = EXCLUDED.scheduled_start,
                     scheduled_end = EXCLUDED.scheduled_end,
+                    actual_start = EXCLUDED.actual_start,
+                    actual_end = EXCLUDED.actual_end,
                     status = EXCLUDED.status,
                     service_type = EXCLUDED.service_type,
                     wellsky_data = EXCLUDED.wellsky_data,
                     synced_at = NOW(),
                     updated_at = NOW()
             """, (appt_id, patient_id, practitioner_id, sched_start, sched_end,
-                  status, "", Json(shift.to_dict() if hasattr(shift, 'to_dict') else {})))
+                  actual_start, actual_end, status, "",
+                  Json(shift.to_dict() if hasattr(shift, 'to_dict') else {})))
             inserted += 1
         except Exception as e:
             failed += 1

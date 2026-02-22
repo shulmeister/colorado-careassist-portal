@@ -641,6 +641,9 @@ ANTHROPIC_TOOLS = [
     {"name": "get_cash_position", "description": "Cash on hand and runway estimate.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_financial_dashboard", "description": "Complete financial snapshot: AR, cash, P&L, invoices.", "input_schema": {"type": "object", "properties": {}, "required": []}},
     {"name": "get_subscription_audit", "description": "Audit recurring charges and subscriptions by vendor. Shows what you're paying for monthly and helps find things to cancel.", "input_schema": {"type": "object", "properties": {"months_back": {"type": "integer", "description": "Months of history to analyze (default 6)"}}, "required": []}},
+    # === FAX TOOLS ===
+    {"name": "send_fax", "description": "Send a fax to a phone number. Provide a publicly accessible URL to a PDF document.", "input_schema": {"type": "object", "properties": {"to": {"type": "string", "description": "Recipient fax number (e.g. 719-555-1234)"}, "media_url": {"type": "string", "description": "Public URL to the PDF document to fax"}}, "required": ["to", "media_url"]}},
+    {"name": "list_faxes", "description": "List recent sent and received faxes.", "input_schema": {"type": "object", "properties": {"direction": {"type": "string", "description": "Filter: inbound, outbound, or all (default)"}, "limit": {"type": "integer", "description": "Max results (default 10)"}}, "required": []}},
     # === CLAUDE CODE TOOLS ===
     {"name": "run_claude_code", "description": "Execute a code/infrastructure task using Claude Code on the Mac Mini. Use for: fixing bugs, editing files, investigating errors, checking logs, running tests, restarting services, git operations. Claude Code reads/writes files and runs commands autonomously. Returns the result directly.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What to do. Be specific — include error messages, file paths, expected behavior."}, "directory": {"type": "string", "description": "Project: careassist (default/staging), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard."}, "model": {"type": "string", "description": "'sonnet' (default, fast) or 'opus' (complex tasks)."}}, "required": ["prompt"]}},
 ]
@@ -1757,6 +1760,23 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             result = await run_sync(get_subscription_audit, months)
             return json.dumps(result)
 
+        # === FAX TOOLS ===
+        elif tool_name == "send_fax":
+            from services.fax_service import send_fax as _send_fax
+            result = await _send_fax(
+                to=tool_input.get("to", ""),
+                media_url=tool_input.get("media_url", ""),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "list_faxes":
+            from services.fax_service import list_faxes as _list_faxes
+            result = _list_faxes(
+                direction=tool_input.get("direction"),
+                limit=tool_input.get("limit", 10),
+            )
+            return json.dumps(result)
+
         # === CLAUDE CODE TOOLS ===
         elif tool_name == "run_claude_code":
             from gigi.claude_code_tools import run_claude_code
@@ -1805,7 +1825,7 @@ async def _maybe_acknowledge(call_info, on_token):
         call_info["acknowledged_thinking"] = True
 
 
-SIDE_EFFECT_TOOLS = {"send_sms", "send_team_message", "send_email", "transfer_call", "report_call_out"}
+SIDE_EFFECT_TOOLS = {"send_sms", "send_team_message", "send_email", "transfer_call", "report_call_out", "send_fax"}
 
 # Dedup: track recent team messages to prevent duplicates
 _recent_team_messages = {}  # message_hash -> timestamp
