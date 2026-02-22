@@ -1242,19 +1242,37 @@ class WellSkyService:
         if self._debug_count <= 5:
             logger.info(f"DEBUG Client {client_id}: status_id={status_id}, is_client={is_client}, active={active}")
 
-        # Determine status
-        # Use multiple signals: is_client meta tag OR active FHIR field
-        # WellSky may use either depending on the record type
+        # Determine status based on multiple signals
         if is_client or active:
-            # If marked as client OR active in FHIR → ACTIVE
             status = ClientStatus.ACTIVE
         else:
-            # Not marked as client and not active = prospect/discharged
             status = ClientStatus.PROSPECT
 
-        # Debug: Show final status for first 5 clients
-        if self._debug_count <= 5:
-            logger.info(f"DEBUG Client {client_id}: Final status={status.value}")
+        # Extract more fields from meta tags (authorized hours, payer source, etc.)
+        authorized_hours = 0.0
+        payer_source = ""
+        for tag in fhir_data.get("meta", {}).get("tag", []):
+            code = tag.get("code", "")
+            display = tag.get("display", "")
+            if code == "authorizedHoursWeekly":
+                try: authorized_hours = float(display)
+                except: pass
+            elif code == "payerSource":
+                payer_source = display
+
+        # Extract dates
+        start_date = None
+        if fhir_data.get("birthDate"): # Using birthDate as placeholder if start_date is missing in some FHIR versions
+             pass
+             
+        # Actual start date is often in extensions or specific tags in WellSky FHIR
+        for ext in fhir_data.get("extension", []):
+            if "startDate" in ext.get("url", ""):
+                try: 
+                    date_str = ext.get("valueDate") or ext.get("valueDateTime")
+                    if date_str:
+                        start_date = dt.fromisoformat(date_str.split("T")[0]).date()
+                except: pass
 
         return WellSkyClient(
             id=client_id,
@@ -1268,6 +1286,9 @@ class WellSkyService:
             phone=phone,
             email=email,
             referral_source=referral_source,
+            payer_source=payer_source,
+            authorized_hours_weekly=authorized_hours,
+            start_date=start_date,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow()
         )
@@ -2379,6 +2400,29 @@ class WellSkyService:
         # Calculate duration
         duration_hours = (shift_end - shift_start).total_seconds() / 3600.0
 
+        # Try to extract names from fhir_data if it's an expanded resource
+        client_name_parts = client_data.get("display", "").split(" ", 1)
+        client_fn = client_name_parts[0] if client_name_parts else ""
+        client_ln = client_name_parts[1] if len(client_name_parts) > 1 else ""
+
+        caregiver_name_parts = caregiver_data.get("display", "").split(" ", 1)
+        caregiver_fn = caregiver_name_parts[0] if caregiver_name_parts else ""
+        caregiver_ln = caregiver_name_parts[1] if len(caregiver_name_parts) > 1 else ""
+
+        # Extract actual times (if this is a completed encounter mapped to appointment)
+        # In WellSky FHIR, actual times often come from the Encounter resource period
+        clock_in = None
+        clock_out = None
+        
+        # Check if there are extensions or linked encounter data for actual times
+        for ext in fhir_data.get("extension", []):
+            if "actualStart" in ext.get("url", ""):
+                try: clock_in = dt.fromisoformat(ext.get("valueDateTime", "").replace("Z", "+00:00"))
+                except: pass
+            if "actualEnd" in ext.get("url", ""):
+                try: clock_out = dt.fromisoformat(ext.get("valueDateTime", "").replace("Z", "+00:00"))
+                except: pass
+
         return WellSkyShift(
             id=shift_id,
             client_id=client_id,
@@ -2388,10 +2432,12 @@ class WellSkyService:
             start_time=shift_start.strftime("%H:%M"),
             end_time=shift_end.strftime("%H:%M"),
             duration_hours=duration_hours,
-            client_first_name="",  # Not in FHIR appointment - need to fetch separately
-            client_last_name="",
-            caregiver_first_name="",  # Not in FHIR appointment - need to fetch separately
-            caregiver_last_name="",
+            clock_in_time=clock_in,
+            clock_out_time=clock_out,
+            client_first_name=client_fn,
+            client_last_name=client_ln,
+            caregiver_first_name=caregiver_fn,
+            caregiver_last_name=caregiver_ln,
             address="",
             city=""
         )

@@ -1,5 +1,15 @@
 # Changelog
 
+## Feb 22, 2026
+- Fax: Full fax integration via RingCentral API (replaces $120/yr Fax.Plus)
+- Fax: Portal page with Inbox/Sent/Outbox tabs, multi-file upload, cover page/note, drag-and-drop page reorder
+- Fax: Inline PDF preview (click any fax row to view without downloading)
+- Fax: Telegram + email notifications on inbound fax
+- Fax: Gigi tools (send_fax, check_fax_status, list_faxes) across Telegram + Voice channels
+- Fax: Both 719-428-3999 and 303-757-1777 can send/receive
+- Fax: Auto-sync outbound status from RingCentral on page load
+- DB: `fax_log` table with `rc_message_id` column
+
 ## Feb 21, 2026
 - Client Portal: WellSky prospect→client lifecycle sync (create_prospect, update_prospect_status, convert_prospect_to_client, demographics meta tags)
 - Sales Dashboard: auto-sync deals to WellSky on create + stage change (background threads, zero latency impact)

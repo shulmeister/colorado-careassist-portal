@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fax - Colorado CareAssist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f172a; color: #e2e8f0; min-height: 100vh; line-height: 1.5;
+        }
+        .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+        .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+        .header h1 { font-size: 22px; font-weight: 700; color: #f1f5f9; }
+        .back-link { color: #60a5fa; text-decoration: none; font-size: 14px; }
+        .back-link:hover { text-decoration: underline; }
+
+        /* Cards */
+        .card {
+            background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+            padding: 20px; margin-bottom: 24px;
+        }
+        .card h2 { font-size: 16px; font-weight: 600; margin-bottom: 16px; color: #f1f5f9; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 1px solid #334155; }
+        .tab {
+            padding: 10px 20px; font-size: 13px; font-weight: 500; color: #94a3b8;
+            cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
+            display: flex; align-items: center; gap: 6px; background: none; border-top: none;
+            border-left: none; border-right: none;
+        }
+        .tab:hover { color: #e2e8f0; }
+        .tab.active { color: #60a5fa; border-bottom-color: #60a5fa; }
+        .tab .count {
+            background: #334155; color: #94a3b8; font-size: 11px; padding: 1px 6px;
+            border-radius: 10px; font-weight: 600;
+        }
+        .tab.active .count { background: rgba(96,165,250,0.15); color: #60a5fa; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Form */
+        .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+        .form-group label { font-size: 12px; color: #94a3b8; font-weight: 500; }
+        .form-group input {
+            background: #0f172a; border: 1px solid #475569; border-radius: 8px;
+            padding: 8px 12px; color: #e2e8f0; font-size: 14px; outline: none;
+        }
+        .form-group input:focus { border-color: #60a5fa; }
+
+        /* Buttons */
+        .btn {
+            background: #3b82f6; color: white; border: none; border-radius: 8px;
+            padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer;
+            white-space: nowrap; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn:hover { background: #2563eb; }
+        .btn:disabled { background: #475569; cursor: not-allowed; }
+        .btn-outline {
+            background: transparent; border: 1px solid #475569; color: #e2e8f0;
+            padding: 8px 16px; font-size: 13px; font-weight: 500; border-radius: 8px;
+            cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .btn-outline:hover { border-color: #60a5fa; color: #60a5fa; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+        .add-row { display: flex; gap: 10px; margin-bottom: 16px; }
+
+        /* Pages list — drag & drop */
+        .pages-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; min-height: 20px; }
+        .page-item {
+            display: flex; align-items: center; gap: 10px;
+            background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 10px 12px;
+            cursor: grab; user-select: none; transition: border-color 0.15s, opacity 0.15s;
+        }
+        .page-item:active { cursor: grabbing; }
+        .page-item.dragging { opacity: 0.4; border-color: #60a5fa; }
+        .page-item.drag-over { border-color: #60a5fa; border-style: dashed; }
+        .page-item .drag-handle {
+            color: #475569; font-size: 14px; flex-shrink: 0; cursor: grab; padding: 0 2px;
+            display: flex; flex-direction: column; gap: 1px; line-height: 1;
+        }
+        .drag-handle::before { content: '⋮⋮'; letter-spacing: -3px; }
+        .page-item .page-icon {
+            width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center;
+            justify-content: center; font-size: 14px; flex-shrink: 0;
+        }
+        .page-icon-file { background: rgba(59,130,246,0.15); color: #93c5fd; }
+        .page-icon-note { background: rgba(168,85,247,0.15); color: #d8b4fe; }
+        .page-item .page-info { flex: 1; min-width: 0; }
+        .page-item .page-name { font-size: 13px; font-weight: 500; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .page-item .page-meta { font-size: 11px; color: #64748b; }
+        .page-item .page-num { font-size: 11px; color: #475569; font-weight: 600; flex-shrink: 0; min-width: 16px; text-align: center; }
+        .page-item .page-remove {
+            background: none; border: none; color: #64748b; cursor: pointer; font-size: 16px;
+            padding: 2px 6px; border-radius: 4px; flex-shrink: 0; line-height: 1;
+        }
+        .page-item .page-remove:hover { color: #ef4444; background: rgba(239,68,68,0.1); }
+        .empty-pages { color: #64748b; font-size: 13px; text-align: center; padding: 16px; }
+        .send-row { display: flex; justify-content: flex-end; }
+
+        /* Status message */
+        .status-msg { margin-top: 12px; padding: 8px 12px; border-radius: 8px; font-size: 13px; display: none; }
+        .status-msg.success { display: block; background: rgba(34,197,94,0.1); border: 1px solid #22c55e; color: #86efac; }
+        .status-msg.error { display: block; background: rgba(239,68,68,0.1); border: 1px solid #ef4444; color: #fca5a5; }
+
+        /* Note modal */
+        .modal-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .modal {
+            background: #1e293b; border: 1px solid #475569; border-radius: 12px;
+            width: 90%; max-width: 560px; padding: 20px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+        }
+        .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #f1f5f9; }
+        .modal textarea {
+            width: 100%; min-height: 200px; background: #0f172a; border: 1px solid #475569;
+            border-radius: 8px; padding: 12px; color: #e2e8f0; font-size: 14px;
+            font-family: inherit; line-height: 1.6; outline: none; resize: vertical;
+        }
+        .modal textarea:focus { border-color: #60a5fa; }
+        .modal textarea::placeholder { color: #475569; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+        .modal .hint { font-size: 11px; color: #64748b; margin-top: 6px; }
+        .hidden { display: none !important; }
+
+        /* History table */
+        .history-card {
+            background: #1e293b; border: 1px solid #334155; border-radius: 12px;
+            overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; }
+        thead th {
+            text-align: left; padding: 8px 16px; font-size: 11px; font-weight: 600;
+            color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em;
+            border-bottom: 1px solid #334155; background: rgba(15,23,42,0.5);
+        }
+        tbody td { padding: 10px 16px; font-size: 13px; border-bottom: 1px solid #1e293b; }
+        tbody tr:hover { background: rgba(51,65,85,0.3); }
+        .badge {
+            display: inline-block; padding: 2px 8px; border-radius: 12px;
+            font-size: 11px; font-weight: 600;
+        }
+        .badge-delivered { background: rgba(34,197,94,0.15); color: #86efac; }
+        .badge-sent { background: rgba(34,197,94,0.15); color: #86efac; }
+        .badge-received { background: rgba(34,197,94,0.15); color: #86efac; }
+        .badge-failed { background: rgba(239,68,68,0.15); color: #fca5a5; }
+        .badge-queued, .badge-sending { background: rgba(250,204,21,0.15); color: #fde68a; }
+        .empty-state { padding: 40px 20px; text-align: center; color: #64748b; font-size: 14px; }
+        .dl-link { color: #60a5fa; text-decoration: none; font-size: 12px; }
+        .dl-link:hover { text-decoration: underline; }
+        .phone { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; }
+
+        /* Clickable rows */
+        tbody tr.clickable { cursor: pointer; }
+        tbody tr.clickable:hover { background: rgba(96,165,250,0.08); }
+
+        /* Preview modal */
+        .preview-backdrop {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 200;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .preview-modal {
+            background: #1e293b; border: 1px solid #475569; border-radius: 12px;
+            width: 90%; max-width: 900px; height: 85vh; display: flex; flex-direction: column;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.6); overflow: hidden;
+        }
+        .preview-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 20px; border-bottom: 1px solid #334155; flex-shrink: 0;
+        }
+        .preview-header h3 { font-size: 15px; font-weight: 600; color: #f1f5f9; margin: 0; }
+        .preview-header .preview-meta { font-size: 12px; color: #94a3b8; }
+        .preview-actions { display: flex; gap: 8px; align-items: center; }
+        .preview-close {
+            background: none; border: none; color: #94a3b8; font-size: 22px;
+            cursor: pointer; padding: 2px 8px; border-radius: 6px; line-height: 1;
+        }
+        .preview-close:hover { color: #e2e8f0; background: rgba(51,65,85,0.5); }
+        .preview-body { flex: 1; overflow: hidden; }
+        .preview-body iframe, .preview-body object {
+            width: 100%; height: 100%; border: none; background: #fff;
+        }
+        .preview-loading {
+            display: flex; align-items: center; justify-content: center;
+            height: 100%; color: #94a3b8; font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Fax <span style="font-size:13px; color:#94a3b8; font-weight:400;">(719) 428-3999</span></h1>
+            <a href="/" class="back-link">Back to Portal</a>
+        </div>
+
+        <!-- Tabs -->
+        <div class="history-card">
+            <div class="tabs">
+                <button class="tab active" data-tab="inbox">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11L2 12v6a2 2 0 002 2h16a2 2 0 002-2v-6l-3.45-6.89A2 2 0 0016.76 4H7.24a2 2 0 00-1.79 1.11z"/></svg>
+                    Inbox <span class="count">{{ inbox|length }}</span>
+                </button>
+                <button class="tab" data-tab="sent">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                    Sent <span class="count">{{ sent|length }}</span>
+                </button>
+                <button class="tab" data-tab="outbox">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/></svg>
+                    Outbox <span class="count">{{ outbox|length }}</span>
+                </button>
+                <button class="tab" data-tab="send">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="5 12 12 5 19 12"/></svg>
+                    Send Fax
+                </button>
+            </div>
+
+            <!-- Inbox -->
+            <div class="tab-panel active" id="panel-inbox">
+                <table>
+                    <thead><tr><th>From</th><th>Pages</th><th>Status</th><th>Date</th><th>PDF</th></tr></thead>
+                    <tbody>
+                    {% if inbox %}
+                        {% for f in inbox %}
+                        <tr class="{{ 'clickable' if f.local_path else '' }}" {% if f.local_path %}onclick="previewFax({{ f.id }}, 'From: {{ f.from_number or "Unknown" }}', '{{ f.page_count or "?" }} pages &middot; {{ f.created_at.strftime("%b %d, %I:%M %p") if f.created_at else "" }}')"{% endif %}>
+                            <td class="phone">{{ f.from_number or '-' }}</td>
+                            <td>{{ f.page_count or '-' }}</td>
+                            <td><span class="badge badge-{{ f.status }}">{{ f.status }}</span></td>
+                            <td style="font-size:12px; color:#94a3b8;">{{ f.created_at.strftime('%b %d, %I:%M %p') if f.created_at else '-' }}</td>
+                            <td>{% if f.local_path %}<a href="/api/fax/download/{{ f.id }}" class="dl-link" onclick="event.stopPropagation()">Download</a>{% else %}-{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="5" class="empty-state">No received faxes</td></tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Sent -->
+            <div class="tab-panel" id="panel-sent">
+                <table>
+                    <thead><tr><th>To</th><th>Pages</th><th>Status</th><th>Date</th><th>PDF</th></tr></thead>
+                    <tbody>
+                    {% if sent %}
+                        {% for f in sent %}
+                        <tr class="{{ 'clickable' if f.local_path else '' }}" {% if f.local_path %}onclick="previewFax({{ f.id }}, 'To: {{ f.to_number or "Unknown" }}', '{{ f.page_count or "?" }} pages &middot; {{ f.created_at.strftime("%b %d, %I:%M %p") if f.created_at else "" }}')"{% endif %}>
+                            <td class="phone">{{ f.to_number or '-' }}</td>
+                            <td>{{ f.page_count or '-' }}</td>
+                            <td><span class="badge badge-{{ f.status }}">{{ f.status }}</span>
+                                {% if f.error_message %}<span style="color:#fca5a5; font-size:11px;"> {{ f.error_message[:40] }}</span>{% endif %}</td>
+                            <td style="font-size:12px; color:#94a3b8;">{{ f.created_at.strftime('%b %d, %I:%M %p') if f.created_at else '-' }}</td>
+                            <td>{% if f.local_path %}<a href="/api/fax/download/{{ f.id }}" class="dl-link" onclick="event.stopPropagation()">Download</a>{% else %}-{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="5" class="empty-state">No sent faxes</td></tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Outbox -->
+            <div class="tab-panel" id="panel-outbox">
+                <table>
+                    <thead><tr><th>To</th><th>Pages</th><th>Status</th><th>Date</th><th></th></tr></thead>
+                    <tbody>
+                    {% if outbox %}
+                        {% for f in outbox %}
+                        <tr class="{{ 'clickable' if f.local_path else '' }}" {% if f.local_path %}onclick="previewFax({{ f.id }}, 'To: {{ f.to_number or "Unknown" }}', '{{ f.page_count or "?" }} pages &middot; {{ f.created_at.strftime("%b %d, %I:%M %p") if f.created_at else "" }}')"{% endif %}>
+                            <td class="phone">{{ f.to_number or '-' }}</td>
+                            <td>{{ f.page_count or '-' }}</td>
+                            <td><span class="badge badge-{{ f.status }}">{{ f.status }}</span>
+                                {% if f.error_message %}<span style="color:#fca5a5; font-size:11px;"> {{ f.error_message[:40] }}</span>{% endif %}</td>
+                            <td style="font-size:12px; color:#94a3b8;">{{ f.created_at.strftime('%b %d, %I:%M %p') if f.created_at else '-' }}</td>
+                            <td>{% if f.local_path %}<a href="/api/fax/download/{{ f.id }}" class="dl-link" onclick="event.stopPropagation()">Download</a>{% else %}-{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="5" class="empty-state">No pending faxes</td></tr>
+                    {% endif %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Send Fax -->
+            <div class="tab-panel" id="panel-send" style="padding: 20px;">
+                <div class="form-group" style="max-width:300px;">
+                    <label>Recipient Fax Number</label>
+                    <input type="tel" id="toNumber" placeholder="(719) 555-1234">
+                </div>
+
+                <div class="add-row">
+                    <button class="btn-outline" id="addFileBtn" type="button">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        Add File
+                    </button>
+                    <button class="btn-outline" id="addNoteBtn" type="button">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Add Note / Cover Page
+                    </button>
+                    <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.txt,.jpg,.jpeg,.png,.tiff,.tif" multiple class="hidden">
+                </div>
+
+                <div id="pagesList" class="pages-list">
+                    <div class="empty-pages" id="emptyPages">Drag and drop to reorder pages. Add a file or note above.</div>
+                </div>
+
+                <div class="send-row">
+                    <button class="btn" id="sendBtn" disabled>
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                        Send Fax
+                    </button>
+                </div>
+                <div id="statusMsg" class="status-msg"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note Modal -->
+    <div id="noteModal" class="modal-backdrop hidden">
+        <div class="modal">
+            <h3>Add Note / Cover Page</h3>
+            <textarea id="noteText" placeholder="Type your cover page message here...&#10;&#10;e.g. Please review the attached clinical notes for patient Gilbert Martinez.&#10;&#10;Thank you,&#10;Colorado CareAssist"></textarea>
+            <div class="hint">This will be rendered as a page with company letterhead.</div>
+            <div class="modal-actions">
+                <button class="btn-outline btn-sm" id="noteCancelBtn">Cancel</button>
+                <button class="btn btn-sm" id="noteConfirmBtn">Add Note</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF Preview Modal -->
+    <div id="previewModal" class="preview-backdrop hidden">
+        <div class="preview-modal">
+            <div class="preview-header">
+                <div>
+                    <h3 id="previewTitle">Fax Preview</h3>
+                    <div class="preview-meta" id="previewMeta"></div>
+                </div>
+                <div class="preview-actions">
+                    <a id="previewDownload" href="#" class="btn-outline btn-sm" style="text-decoration:none;">
+                        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Download
+                    </a>
+                    <button class="preview-close" id="previewCloseBtn">&times;</button>
+                </div>
+            </div>
+            <div class="preview-body" id="previewBody">
+                <div class="preview-loading">Loading PDF...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === PDF PREVIEW ===
+        function previewFax(faxId, title, meta) {
+            const modal = document.getElementById('previewModal');
+            document.getElementById('previewTitle').textContent = title;
+            document.getElementById('previewMeta').innerHTML = meta;
+            document.getElementById('previewDownload').href = `/api/fax/download/${faxId}`;
+            document.getElementById('previewBody').innerHTML = '<div class="preview-loading">Loading PDF...</div>';
+            modal.classList.remove('hidden');
+
+            // Use object tag for PDF — better cross-browser support
+            const obj = document.createElement('object');
+            obj.type = 'application/pdf';
+            obj.data = `/api/fax/view/${faxId}`;
+            obj.style.width = '100%';
+            obj.style.height = '100%';
+            obj.innerHTML = '<div class="preview-loading">Your browser cannot display PDFs inline. <a href="/api/fax/download/' + faxId + '" style="color:#60a5fa;">Download instead</a></div>';
+            document.getElementById('previewBody').innerHTML = '';
+            document.getElementById('previewBody').appendChild(obj);
+        }
+
+        document.getElementById('previewCloseBtn').addEventListener('click', () => {
+            document.getElementById('previewModal').classList.add('hidden');
+            document.getElementById('previewBody').innerHTML = '';
+        });
+        document.getElementById('previewModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('previewModal')) {
+                document.getElementById('previewModal').classList.add('hidden');
+                document.getElementById('previewBody').innerHTML = '';
+            }
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !document.getElementById('previewModal').classList.contains('hidden')) {
+                document.getElementById('previewModal').classList.add('hidden');
+                document.getElementById('previewBody').innerHTML = '';
+            }
+        });
+
+        // === TABS ===
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+            });
+        });
+
+        // === SEND FAX ===
+        const pages = [];
+        const fileInput = document.getElementById('fileInput');
+        const addFileBtn = document.getElementById('addFileBtn');
+        const addNoteBtn = document.getElementById('addNoteBtn');
+        const pagesList = document.getElementById('pagesList');
+        const emptyPages = document.getElementById('emptyPages');
+        const sendBtn = document.getElementById('sendBtn');
+        const statusMsg = document.getElementById('statusMsg');
+        const noteModal = document.getElementById('noteModal');
+        const noteText = document.getElementById('noteText');
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // === DRAG & DROP REORDER ===
+        let dragIdx = null;
+
+        function renderPages() {
+            pagesList.querySelectorAll('.page-item').forEach(el => el.remove());
+            emptyPages.style.display = pages.length === 0 ? '' : 'none';
+            sendBtn.disabled = pages.length === 0;
+
+            pages.forEach((p, i) => {
+                const item = document.createElement('div');
+                item.className = 'page-item';
+                item.draggable = true;
+                item.dataset.idx = i;
+                const isNote = p.type === 'note';
+                const iconClass = isNote ? 'page-icon-note' : 'page-icon-file';
+                const icon = isNote ? '&#9998;' : '&#128196;';
+                const meta = isNote
+                    ? `Cover page &middot; ${p.text.length} chars`
+                    : formatSize(p.file.size);
+                item.innerHTML = `
+                    <span class="drag-handle"></span>
+                    <span class="page-num">${i + 1}</span>
+                    <div class="page-icon ${iconClass}">${icon}</div>
+                    <div class="page-info">
+                        <div class="page-name">${p.name}</div>
+                        <div class="page-meta">${meta}</div>
+                    </div>
+                    <button class="page-remove" data-idx="${i}" title="Remove">&times;</button>
+                `;
+
+                // Drag events
+                item.addEventListener('dragstart', (e) => {
+                    dragIdx = i;
+                    item.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                item.addEventListener('dragend', () => {
+                    item.classList.remove('dragging');
+                    pagesList.querySelectorAll('.page-item').forEach(el => el.classList.remove('drag-over'));
+                    dragIdx = null;
+                });
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    item.classList.add('drag-over');
+                });
+                item.addEventListener('dragleave', () => item.classList.remove('drag-over'));
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    item.classList.remove('drag-over');
+                    const dropIdx = parseInt(item.dataset.idx);
+                    if (dragIdx !== null && dragIdx !== dropIdx) {
+                        const [moved] = pages.splice(dragIdx, 1);
+                        pages.splice(dropIdx, 0, moved);
+                        renderPages();
+                    }
+                });
+
+                pagesList.appendChild(item);
+            });
+
+            pagesList.querySelectorAll('.page-remove').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    pages.splice(parseInt(btn.dataset.idx), 1);
+                    renderPages();
+                });
+            });
+        }
+
+        // Add File
+        addFileBtn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+            for (const f of fileInput.files) {
+                pages.push({ type: 'file', name: f.name, file: f });
+            }
+            fileInput.value = '';
+            renderPages();
+        });
+
+        // Add Note
+        addNoteBtn.addEventListener('click', () => {
+            noteText.value = '';
+            noteModal.classList.remove('hidden');
+            setTimeout(() => noteText.focus(), 100);
+        });
+        document.getElementById('noteCancelBtn').addEventListener('click', () => noteModal.classList.add('hidden'));
+        noteModal.addEventListener('click', (e) => { if (e.target === noteModal) noteModal.classList.add('hidden'); });
+        document.getElementById('noteConfirmBtn').addEventListener('click', () => {
+            const text = noteText.value.trim();
+            if (!text) return;
+            const existingIdx = pages.findIndex(p => p.type === 'note');
+            if (existingIdx >= 0) pages.splice(existingIdx, 1);
+            pages.unshift({ type: 'note', name: 'Cover Page / Note', text: text });
+            noteModal.classList.add('hidden');
+            renderPages();
+        });
+
+        // Send
+        sendBtn.addEventListener('click', async () => {
+            const toNumber = document.getElementById('toNumber').value.trim();
+            if (!toNumber) { alert('Enter a recipient fax number'); return; }
+            if (pages.length === 0) return;
+
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = 'Sending...';
+            statusMsg.className = 'status-msg';
+            statusMsg.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('to_number', toNumber);
+
+            const note = pages.find(p => p.type === 'note');
+            if (note) formData.append('cover_note', note.text);
+
+            // Add files in page order (skip notes)
+            let fileIdx = 0;
+            pages.filter(p => p.type === 'file').forEach(p => {
+                formData.append(`files[${fileIdx}]`, p.file, p.name);
+                fileIdx++;
+            });
+
+            try {
+                const resp = await fetch('/api/fax/send', { method: 'POST', body: formData, credentials: 'include' });
+                const data = await resp.json();
+                if (data.success) {
+                    statusMsg.className = 'status-msg success';
+                    statusMsg.textContent = `Fax queued! ID: ${data.fax_id}`;
+                    statusMsg.style.display = 'block';
+                    pages.length = 0;
+                    renderPages();
+                    document.getElementById('toNumber').value = '';
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    statusMsg.className = 'status-msg error';
+                    statusMsg.textContent = `Error: ${data.error}`;
+                    statusMsg.style.display = 'block';
+                }
+            } catch (err) {
+                statusMsg.className = 'status-msg error';
+                statusMsg.textContent = `Network error: ${err.message}`;
+                statusMsg.style.display = 'block';
+            } finally {
+                sendBtn.disabled = pages.length === 0;
+                sendBtn.innerHTML = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg> Send Fax`;
+            }
+        });
+    </script>
+</body>
+</html>

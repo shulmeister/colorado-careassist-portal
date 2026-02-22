@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 21, 2026
+**Last Updated:** February 22, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -80,8 +80,9 @@ This is the **unified platform** for Colorado Care Assist, containing:
 
 ### Gigi's Core Capabilities
 - **WellSky Integration**: Full CRUD on Patients, Practitioners, Appointments, Encounters, DocumentReferences, Subscriptions, ProfileTags, and RelatedPersons. Clock in/out, task logs, shift search, and webhook event subscriptions. See `docs/WELLSKY_HOME_CONNECT_API_REFERENCE.md` for complete endpoint reference.
-- **RingCentral**: SMS, voice, team messaging, DMs, inbound SMS monitoring
+- **RingCentral**: SMS, voice, team messaging, DMs, inbound SMS monitoring, fax send/receive
 - **Google Workspace**: Calendar, email (read/write)
+- **Fax**: Send/receive via RingCentral API (free with RingEX). Portal page with Inbox/Sent/Outbox tabs, multi-file upload, cover page/note, drag-and-drop page reorder, inline PDF preview. Gigi tools: `send_fax`, `check_fax_status`, `list_faxes`. Telegram + email alerts on inbound fax. Numbers: 719-428-3999, 303-757-1777.
 - **Auto-Documentation**: Syncs RC messages → WellSky client notes
 - **After-Hours Coverage**: Autonomous SMS/voice handling
 - **Morning Briefing**: Daily 7 AM Telegram message with weather, calendar, shifts, emails, alerts
@@ -360,6 +361,7 @@ careassist-unified/
 ├── services/              # Shared services
 │   ├── wellsky_service.py # WellSky API integration (clients, caregivers, shifts, prospects)
 │   ├── sales_wellsky_sync.py # Sales Dashboard → WellSky prospect lifecycle sync
+│   ├── fax_service.py     # RingCentral fax send/receive/poll (replaces Fax.Plus)
 │   └── ringcentral_messaging_service.py
 ├── scripts/
 │   ├── health-monitor.sh  # Service health monitoring

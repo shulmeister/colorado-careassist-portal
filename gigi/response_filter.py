@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 BANNED_PHRASES = [
     "gog cli",
     "gog client",
+    "gog",
     "gcloud cli",
     "gcloud",
     "google cloud cli",
