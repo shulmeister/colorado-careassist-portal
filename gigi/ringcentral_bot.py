@@ -2790,7 +2790,7 @@ class GigiRingCentralBot:
 
         if RC_MEMORY_AVAILABLE and _rc_memory_system:
             try:
-                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=5)
+                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=15)
                 if memories:
                     memory_lines = [f"- {m.content} ({m.category})" for m in memories]
                     system += "\n\nYour Saved Memories:\n" + "\n".join(memory_lines)
@@ -2808,7 +2808,7 @@ class GigiRingCentralBot:
 
         # Inject cross-channel context if this is Jason
         if clean_phone in ("3074598220",):
-            xc = self.conversation_store.get_cross_channel_summary("jason", "sms", limit=5, hours=4)
+            xc = self.conversation_store.get_cross_channel_summary("jason", "sms", limit=5, hours=24)
             if xc:
                 system += xc
 
@@ -2863,12 +2863,24 @@ class GigiRingCentralBot:
 
         if RC_MEMORY_AVAILABLE and _rc_memory_system:
             try:
-                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=10)
+                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=25)
                 if memories:
                     memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
                     system += "\n\nYour Saved Memories:\n" + "\n".join(memory_lines)
             except Exception:
                 pass
+
+        # Inject cross-channel context (what Jason discussed on other channels recently)
+        try:
+            xc = self.conversation_store.get_cross_channel_summary("jason", "dm", limit=5, hours=24)
+            if xc:
+                system += xc
+            # Long-term conversation history (summaries from past 30 days)
+            ltc = self.conversation_store.get_long_term_context("jason", days=30)
+            if ltc:
+                system += ltc
+        except Exception:
+            pass
 
         # Inject elite team context if triggered
         try:

@@ -14,9 +14,9 @@ Memory types and decay rates:
 - TEMPORARY: 50% per day (archives after 48hrs)
 """
 
+import logging
 import os
 import sys
-import logging
 
 # Load env vars
 env_path = os.path.expanduser("~/.gigi-env")
@@ -52,12 +52,12 @@ def main():
         logger.info(f"Archived {archived} memories below threshold")
     logger.info(f"Memory decay complete. {len(after)} active memories remain.")
 
-    # Prune old conversations (>72 hours)
+    # Prune old conversations (>7 days, summarizes before deleting)
     try:
         from gigi.conversation_store import ConversationStore
         cs = ConversationStore()
-        pruned = cs.prune_old(max_age_hours=72)
-        logger.info(f"Conversation prune: removed {pruned} messages older than 72h")
+        pruned = cs.prune_old(max_age_hours=168)
+        logger.info(f"Conversation prune: removed {pruned} messages older than 168h (7 days)")
     except Exception as e:
         logger.warning(f"Conversation prune failed: {e}")
 

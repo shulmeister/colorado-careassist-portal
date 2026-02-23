@@ -5965,23 +5965,8 @@ async def retell_function_call(function_name: str, request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# =============================================================================
-# Gigi Brain Dashboard (Control Panel)
-# =============================================================================
-
-@app.get("/dashboard", response_class=HTMLResponse)
-@app.get("/dashboard/{tab}", response_class=HTMLResponse)
-async def gigi_dashboard(request: Request, tab: str = "issues"):
-    """Gigi Brain Dashboard - control panel for the AI."""
-    valid_tabs = ["issues", "schedule", "knowledge", "escalations", "users", "reports", "calls", "simulations", "settings"]
-    if tab not in valid_tabs:
-        tab = "issues"
-    return templates.TemplateResponse("gigi_dashboard.html", {
-        "request": request,
-        "active_tab": tab,
-        "user": {"email": "admin@coloradocareassist.com", "name": "Admin"}  # TODO: Get from auth
-    })
-
+# NOTE: Gigi dashboard is served by portal_app.py at /gigi/dashboard/* (with auth).
+# Removed duplicate unauthenticated route here.
 
 # =============================================================================
 # Health & Status Endpoints

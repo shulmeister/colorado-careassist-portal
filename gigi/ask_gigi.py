@@ -57,7 +57,7 @@ def _build_system_prompt(channel: str, conversation_store=None, user_message=Non
     # Inject relevant memories
     if MEMORY_AVAILABLE and _memory_system:
         try:
-            memories = _memory_system.query_memories(min_confidence=0.5, limit=10)
+            memories = _memory_system.query_memories(min_confidence=0.5, limit=25)
             if memories:
                 memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
                 parts.append("\n# Your Saved Memories\n" + "\n".join(memory_lines))
@@ -67,9 +67,13 @@ def _build_system_prompt(channel: str, conversation_store=None, user_message=Non
     # Inject cross-channel context
     if conversation_store:
         try:
-            xc = conversation_store.get_cross_channel_summary("jason", channel, limit=5, hours=4)
+            xc = conversation_store.get_cross_channel_summary("jason", channel, limit=5, hours=24)
             if xc:
                 parts.append(xc)
+            # Long-term conversation history (summaries from past 30 days)
+            ltc = conversation_store.get_long_term_context("jason", days=30)
+            if ltc:
+                parts.append(ltc)
         except Exception as e:
             logger.warning(f"Cross-channel context failed: {e}")
 

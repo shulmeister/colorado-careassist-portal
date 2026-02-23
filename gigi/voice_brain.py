@@ -82,6 +82,32 @@ except Exception as e:
     MEMORY_AVAILABLE = False
     logger.warning(f"Memory system not available: {e}")
 
+# Conversation store for cross-channel awareness + voice persistence
+try:
+    from gigi.conversation_store import ConversationStore
+    _voice_store = ConversationStore()
+    VOICE_STORE_AVAILABLE = True
+    logger.info("Conversation store initialized for voice brain")
+except Exception as e:
+    _voice_store = None
+    VOICE_STORE_AVAILABLE = False
+    logger.warning(f"Conversation store not available for voice: {e}")
+
+# Map known phone numbers to user IDs
+PHONE_TO_USER = {
+    "6039971495": "jason",
+    "+16039971495": "jason",
+}
+
+def _phone_to_user_id(from_number: str) -> str:
+    """Map a phone number to a user_id for conversation storage."""
+    if not from_number:
+        return "unknown"
+    digits = "".join(c for c in from_number if c.isdigit())
+    if digits.startswith("1") and len(digits) == 11:
+        digits = digits[1:]
+    return PHONE_TO_USER.get(digits, PHONE_TO_USER.get(from_number, digits))
+
 try:
     from gigi.mode_detector import ModeDetector
     mode_detector = ModeDetector()
@@ -646,6 +672,10 @@ ANTHROPIC_TOOLS = [
     {"name": "list_faxes", "description": "List recent sent and received faxes.", "input_schema": {"type": "object", "properties": {"direction": {"type": "string", "description": "Filter: inbound, outbound, or all (default)"}, "limit": {"type": "integer", "description": "Max results (default 10)"}}, "required": []}},
     # === CLAUDE CODE TOOLS ===
     {"name": "run_claude_code", "description": "Execute a code/infrastructure task using Claude Code on the Mac Mini. Use for: fixing bugs, editing files, investigating errors, checking logs, running tests, restarting services, git operations. Claude Code reads/writes files and runs commands autonomously. Returns the result directly.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What to do. Be specific — include error messages, file paths, expected behavior."}, "directory": {"type": "string", "description": "Project: careassist (default/staging), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard."}, "model": {"type": "string", "description": "'sonnet' (default, fast) or 'opus' (complex tasks)."}}, "required": ["prompt"]}},
+    # === TRAVEL TOOLS ===
+    {"name": "search_flights", "description": "Search real-time flight prices and availability. Returns airlines, prices, times, stops, and booking links. ALWAYS use this for flight queries — never use web_search for flights.", "input_schema": {"type": "object", "properties": {"origin": {"type": "string", "description": "Departure city or IATA code (e.g. Denver or DEN)"}, "destination": {"type": "string", "description": "Arrival city or IATA code (e.g. Honolulu or HNL)"}, "departure_date": {"type": "string", "description": "Departure date YYYY-MM-DD"}, "return_date": {"type": "string", "description": "Return date YYYY-MM-DD (omit for one-way)"}, "adults": {"type": "integer", "description": "Number of adult passengers (default 1)"}, "max_stops": {"type": "integer", "description": "Max stops: 0=direct only, 1=1 stop max (default 1)"}}, "required": ["origin", "destination", "departure_date"]}},
+    {"name": "search_hotels", "description": "Search hotel prices and availability. Returns hotel names, prices, ratings, and booking links.", "input_schema": {"type": "object", "properties": {"city": {"type": "string", "description": "City name"}, "checkin": {"type": "string", "description": "Check-in date YYYY-MM-DD"}, "checkout": {"type": "string", "description": "Check-out date YYYY-MM-DD"}, "guests": {"type": "integer", "description": "Number of guests (default 2)"}, "max_price": {"type": "integer", "description": "Max price per night in cents (e.g. 20000 = $200)"}}, "required": ["city", "checkin", "checkout"]}},
+    {"name": "search_car_rentals", "description": "Search car rental prices and availability.", "input_schema": {"type": "object", "properties": {"pickup_location": {"type": "string", "description": "Pickup city or airport"}, "pickup_date": {"type": "string", "description": "Pickup date YYYY-MM-DD"}, "dropoff_date": {"type": "string", "description": "Dropoff date YYYY-MM-DD"}, "dropoff_location": {"type": "string", "description": "Different dropoff location (optional)"}, "car_class": {"type": "string", "description": "Car class: economy, compact, midsize, full-size, SUV, luxury (optional)"}}, "required": ["pickup_location", "pickup_date", "dropoff_date"]}},
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -771,8 +801,8 @@ DO NOT transfer if you can handle it with your tools. Caregivers asking about sh
 """
 
 
-def _build_voice_system_prompt():
-    """Build the system prompt with dynamic context: date, memories, mode."""
+def _build_voice_system_prompt(caller_id: str = None):
+    """Build the system prompt with dynamic context: date, memories, mode, cross-channel."""
     parts = [_VOICE_SYSTEM_PROMPT_BASE]
 
     # Current date/time
@@ -789,12 +819,25 @@ def _build_voice_system_prompt():
     # Inject relevant memories
     if MEMORY_AVAILABLE and memory_system:
         try:
-            memories = memory_system.query_memories(min_confidence=0.5, limit=10)
+            memories = memory_system.query_memories(min_confidence=0.5, limit=25)
             if memories:
                 memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
                 parts.append("\n# Your Saved Memories\n" + "\n".join(memory_lines))
         except Exception as e:
             logger.warning(f"Memory injection failed: {e}")
+
+    # Inject cross-channel context (what this user discussed on other channels recently)
+    if VOICE_STORE_AVAILABLE and _voice_store and caller_id:
+        try:
+            xc = _voice_store.get_cross_channel_summary(caller_id, "voice", limit=5, hours=24)
+            if xc:
+                parts.append(xc)
+            # Long-term conversation history (summaries from past 14 days — shorter for voice to save tokens)
+            ltc = _voice_store.get_long_term_context(caller_id, days=14)
+            if ltc:
+                parts.append(ltc)
+        except Exception as e:
+            logger.warning(f"Cross-channel context failed: {e}")
 
     return "\n".join(parts)
 
@@ -1787,6 +1830,41 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             )
             return json.dumps(result)
 
+        # === TRAVEL TOOLS ===
+        elif tool_name == "search_flights":
+            from gigi.travel_tools import search_flights
+            result = await search_flights(
+                origin=tool_input.get("origin", ""),
+                destination=tool_input.get("destination", ""),
+                departure_date=tool_input.get("departure_date", ""),
+                return_date=tool_input.get("return_date"),
+                adults=tool_input.get("adults", 1),
+                max_stops=tool_input.get("max_stops", 1),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_hotels":
+            from gigi.travel_tools import search_hotels
+            result = await search_hotels(
+                city=tool_input.get("city", ""),
+                checkin=tool_input.get("checkin", ""),
+                checkout=tool_input.get("checkout", ""),
+                guests=tool_input.get("guests", 2),
+                max_price=tool_input.get("max_price"),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_car_rentals":
+            from gigi.travel_tools import search_car_rentals
+            result = await search_car_rentals(
+                pickup_location=tool_input.get("pickup_location", ""),
+                pickup_date=tool_input.get("pickup_date", ""),
+                dropoff_date=tool_input.get("dropoff_date", ""),
+                dropoff_location=tool_input.get("dropoff_location"),
+                car_class=tool_input.get("car_class"),
+            )
+            return json.dumps(result)
+
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -1808,7 +1886,9 @@ SLOW_TOOLS = {
     "web_search", "search_concerts", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
-    "deep_research"
+    "deep_research",
+    "search_flights", "search_hotels", "search_car_rentals",
+    "book_table_request", "buy_tickets_request", "confirm_purchase",
 }
 
 async def _maybe_acknowledge(call_info, on_token):
@@ -1907,6 +1987,10 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None, on_t
     call_id = call_info.get("call_id") if call_info else None
     is_simulation = call_id and (call_id.startswith("sim_") or call_id.startswith("test_"))
 
+    # Identify the caller for cross-channel context + persistence
+    from_number = call_info.get("from_number") if call_info else None
+    caller_id = _phone_to_user_id(from_number)
+
     # Convert Retell transcript to simple text messages
     messages = []
     for turn in transcript:
@@ -1917,6 +2001,19 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None, on_t
                 messages[-1]["content"] += " " + content
             else:
                 messages.append({"role": role, "content": content})
+
+    # Prepend recent voice conversation history from previous calls
+    if VOICE_STORE_AVAILABLE and _voice_store and caller_id != "unknown":
+        try:
+            prev_voice = _voice_store.get_recent(caller_id, "voice", limit=6)
+            if prev_voice:
+                # Only prepend if there's actual user speech in this call
+                # (to avoid bloating the greeting-only turn)
+                has_user_speech = any(m.get("role") == "user" for m in messages)
+                if has_user_speech and prev_voice:
+                    messages = prev_voice + messages
+        except Exception as e:
+            logger.warning(f"Failed to load voice history: {e}")
 
     # Generate greeting if no user messages yet
     if not messages or (len(messages) == 1 and messages[0]["role"] == "assistant"):
@@ -1930,17 +2027,33 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None, on_t
     try:
         import time as _time
         _t0 = _time.time()
-        logger.info(f"[voice] generate_response called, provider={LLM_PROVIDER}, messages={len(messages)}, last_user={messages[-1]['content'][:80] if messages else 'none'}")
+        logger.info(f"[voice] generate_response called, provider={LLM_PROVIDER}, caller={caller_id}, messages={len(messages)}, last_user={messages[-1]['content'][:80] if messages else 'none'}")
 
         if LLM_PROVIDER == "gemini":
-            text, transfer = await _generate_gemini(messages, call_info, on_token, call_id, is_simulation, on_tool_event)
+            text, transfer = await _generate_gemini(messages, call_info, on_token, call_id, is_simulation, on_tool_event, caller_id)
         elif LLM_PROVIDER == "openai":
-            text, transfer = await _generate_openai(messages, call_info, on_token, call_id, is_simulation, on_tool_event)
+            text, transfer = await _generate_openai(messages, call_info, on_token, call_id, is_simulation, on_tool_event, caller_id)
         else:
-            text, transfer = await _generate_anthropic(messages, call_info, on_token, call_id, is_simulation, on_tool_event)
+            text, transfer = await _generate_anthropic(messages, call_info, on_token, call_id, is_simulation, on_tool_event, caller_id)
 
         _elapsed = round(_time.time() - _t0, 2)
         logger.info(f"[voice] response generated in {_elapsed}s: {(text or '')[:100]}")
+
+        # Persist the user's last utterance + Gigi's response to conversation store
+        if VOICE_STORE_AVAILABLE and _voice_store and caller_id != "unknown":
+            try:
+                # Find the last user message from this turn's transcript
+                user_utterance = None
+                for turn in reversed(transcript):
+                    if turn.get("role") == "user" and turn.get("content", "").strip():
+                        user_utterance = turn["content"].strip()
+                        break
+                if user_utterance:
+                    _voice_store.append(caller_id, "voice", "user", user_utterance)
+                if text:
+                    _voice_store.append(caller_id, "voice", "assistant", text)
+            except Exception as e:
+                logger.warning(f"Failed to persist voice conversation: {e}")
 
         if call_info:
             call_info["acknowledged_thinking"] = False
@@ -1954,11 +2067,12 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None, on_t
 # ═══════════════════════════════════════════════════════════
 # ANTHROPIC PROVIDER
 # ═══════════════════════════════════════════════════════════
-async def _generate_anthropic(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None):
+async def _generate_anthropic(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None, caller_id=None):
     transfer_number = None
+    system_prompt = _build_voice_system_prompt(caller_id=caller_id)
     response = await llm_client.messages.create(
         model=LLM_MODEL, max_tokens=300,
-        system=_build_voice_system_prompt(), tools=ANTHROPIC_TOOLS,
+        system=system_prompt, tools=ANTHROPIC_TOOLS,
         messages=messages
     )
 
@@ -1983,7 +2097,7 @@ async def _generate_anthropic(messages, call_info, on_token, call_id, is_simulat
 
         response = await llm_client.messages.create(
             model=LLM_MODEL, max_tokens=300,
-            system=_build_voice_system_prompt(), tools=ANTHROPIC_TOOLS,
+            system=system_prompt, tools=ANTHROPIC_TOOLS,
             messages=messages
         )
 
@@ -1996,7 +2110,7 @@ async def _generate_anthropic(messages, call_info, on_token, call_id, is_simulat
 # ═══════════════════════════════════════════════════════════
 # GEMINI PROVIDER
 # ═══════════════════════════════════════════════════════════
-async def _generate_gemini(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None):
+async def _generate_gemini(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None, caller_id=None):
     import time as _time
     transfer_number = None
 
@@ -2007,7 +2121,7 @@ async def _generate_gemini(messages, call_info, on_token, call_id, is_simulation
         contents.append(genai_types.Content(role=role, parts=[genai_types.Part(text=m["content"])]))
 
     config = genai_types.GenerateContentConfig(
-        system_instruction=_build_voice_system_prompt(),
+        system_instruction=_build_voice_system_prompt(caller_id=caller_id),
         tools=GEMINI_TOOLS,
     )
 
@@ -2094,10 +2208,10 @@ async def _generate_gemini(messages, call_info, on_token, call_id, is_simulation
 # ═══════════════════════════════════════════════════════════
 # OPENAI PROVIDER
 # ═══════════════════════════════════════════════════════════
-async def _generate_openai(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None):
+async def _generate_openai(messages, call_info, on_token, call_id, is_simulation, on_tool_event=None, caller_id=None):
     transfer_number = None
 
-    oai_messages = [{"role": "system", "content": _build_voice_system_prompt()}]
+    oai_messages = [{"role": "system", "content": _build_voice_system_prompt(caller_id=caller_id)}]
     for m in messages:
         oai_messages.append({"role": m["role"], "content": m["content"]})
 

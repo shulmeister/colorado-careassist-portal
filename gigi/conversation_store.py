@@ -5,9 +5,9 @@ Replaces per-handler in-memory dicts and JSON files with PostgreSQL,
 enabling conversation continuity across Telegram, SMS, DM, and Team Chat.
 """
 
-import os
 import logging
-from typing import List, Dict, Optional
+import os
+from typing import Dict, List, Optional
 
 try:
     import psycopg2
@@ -204,11 +204,33 @@ class ConversationStore:
         except Exception as e:
             logger.error("Failed to clear channel conversations: %s", e)
 
-    def prune_old(self, max_age_hours: int = 72):
-        """Delete messages older than max_age_hours. Called by memory decay cron."""
+    def prune_old(self, max_age_hours: int = 168):
+        """Delete messages older than max_age_hours (default 7 days). Called by memory decay cron.
+
+        Before deleting, summarizes each day's conversations for long-term retention.
+        """
         try:
             conn = self._get_connection()
             try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    # Find distinct user/channel/date combos that are about to be pruned
+                    cur.execute(
+                        "SELECT DISTINCT user_id, channel, created_at::date AS conv_date "
+                        "FROM gigi_conversations "
+                        "WHERE created_at < NOW() - make_interval(hours => %s)",
+                        (max_age_hours,)
+                    )
+                    to_summarize = [dict(r) for r in cur.fetchall()]
+
+                # Summarize each day before deletion
+                for item in to_summarize:
+                    try:
+                        self.summarize_day(item["user_id"], item["channel"], item["conv_date"])
+                    except Exception as e:
+                        logger.warning("Failed to summarize %s/%s/%s: %s",
+                                       item["user_id"], item["channel"], item["conv_date"], e)
+
+                # Now delete the old messages
                 with conn.cursor() as cur:
                     cur.execute(
                         "DELETE FROM gigi_conversations "
@@ -218,10 +240,161 @@ class ConversationStore:
                     deleted = cur.rowcount
                 conn.commit()
                 if deleted:
-                    logger.info("Pruned %d old conversation messages", deleted)
+                    logger.info("Pruned %d old conversation messages (after summarizing)", deleted)
+
+                # Also prune old summaries (keep 90 days)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM gigi_conversation_summaries "
+                        "WHERE summary_date < CURRENT_DATE - 90"
+                    )
+                    pruned_summaries = cur.rowcount
+                conn.commit()
+                if pruned_summaries:
+                    logger.info("Pruned %d old conversation summaries (>90 days)", pruned_summaries)
+
                 return deleted
             finally:
                 conn.close()
         except Exception as e:
             logger.error("Failed to prune old conversations: %s", e)
             return 0
+
+    def summarize_day(self, user_id: str, channel: str, conv_date):
+        """Summarize a day's conversations into 3-5 bullets using Haiku.
+
+        Stored in gigi_conversation_summaries for long-term context.
+        Skips if summary already exists for this user/channel/date.
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    # Check if summary already exists
+                    cur.execute(
+                        "SELECT id FROM gigi_conversation_summaries "
+                        "WHERE user_id = %s AND channel = %s AND summary_date = %s",
+                        (user_id, channel, conv_date)
+                    )
+                    if cur.fetchone():
+                        return  # Already summarized
+
+                    # Fetch all messages for this day
+                    cur.execute(
+                        "SELECT role, content, created_at "
+                        "FROM gigi_conversations "
+                        "WHERE user_id = %s AND channel = %s AND created_at::date = %s "
+                        "ORDER BY created_at",
+                        (user_id, channel, conv_date)
+                    )
+                    messages = [dict(r) for r in cur.fetchall()]
+
+                if not messages:
+                    return
+
+                # Build conversation text for summarization
+                conv_text = ""
+                for m in messages:
+                    ts = m["created_at"]
+                    time_str = ts.strftime("%-I:%M %p") if hasattr(ts, "strftime") else ""
+                    conv_text += f"[{time_str}] {m['role']}: {m['content']}\n"
+
+                # Truncate to avoid huge API calls
+                if len(conv_text) > 8000:
+                    conv_text = conv_text[:8000] + "\n... (truncated)"
+
+                # Use Haiku to summarize
+                summary = self._call_haiku_for_summary(conv_text, channel, conv_date)
+                if not summary:
+                    # Fallback: just note the count
+                    summary = f"{len(messages)} messages exchanged."
+
+                # Extract basic topics from summary
+                topics = []
+                for keyword in summary.lower().split():
+                    if len(keyword) > 5 and keyword.isalpha():
+                        topics.append(keyword)
+                topics = list(set(topics))[:5]
+
+                # Insert summary
+                conn2 = self._get_connection()
+                try:
+                    with conn2.cursor() as cur:
+                        cur.execute(
+                            "INSERT INTO gigi_conversation_summaries "
+                            "(user_id, channel, summary_date, summary, message_count, topics) "
+                            "VALUES (%s, %s, %s, %s, %s, %s) "
+                            "ON CONFLICT (user_id, channel, summary_date) DO NOTHING",
+                            (user_id, channel, conv_date, summary, len(messages), topics)
+                        )
+                    conn2.commit()
+                    logger.info("Summarized %s/%s/%s: %d messages", user_id, channel, conv_date, len(messages))
+                finally:
+                    conn2.close()
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.error("Failed to summarize day %s/%s/%s: %s", user_id, channel, conv_date, e)
+
+    def _call_haiku_for_summary(self, conv_text: str, channel: str, conv_date) -> Optional[str]:
+        """Call Claude Haiku to produce a conversation summary."""
+        try:
+            import anthropic
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                return None
+            client = anthropic.Anthropic(api_key=api_key)
+            response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=300,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"Summarize this {channel} conversation from {conv_date} into 3-5 bullet points. "
+                        f"Focus on: decisions made, requests, action items, key topics discussed. "
+                        f"Be concise (1 line per bullet). Do NOT include greetings or pleasantries.\n\n"
+                        f"{conv_text}"
+                    )
+                }]
+            )
+            return response.content[0].text.strip()
+        except Exception as e:
+            logger.warning("Haiku summarization failed: %s", e)
+            return None
+
+    def get_long_term_context(self, user_id: str, days: int = 30) -> Optional[str]:
+        """Get conversation summaries from recent days for long-term context injection.
+
+        Returns a formatted string of recent daily summaries across all channels.
+        """
+        try:
+            conn = self._get_connection()
+            try:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute(
+                        "SELECT channel, summary_date, summary "
+                        "FROM gigi_conversation_summaries "
+                        "WHERE user_id = %s AND summary_date >= CURRENT_DATE - %s "
+                        "ORDER BY summary_date DESC",
+                        (user_id, days)
+                    )
+                    rows = [dict(r) for r in cur.fetchall()]
+
+                if not rows:
+                    return None
+
+                lines = []
+                for r in rows:
+                    date_str = r["summary_date"].strftime("%b %d") if hasattr(r["summary_date"], "strftime") else str(r["summary_date"])
+                    # Compact format: one line per day per channel
+                    summary_oneline = r["summary"].replace("\n", " ").strip()
+                    if len(summary_oneline) > 200:
+                        summary_oneline = summary_oneline[:200] + "..."
+                    lines.append(f"- [{date_str}, {r['channel']}] {summary_oneline}")
+
+                return "\n## Conversation History (Recent Days):\n" + "\n".join(lines)
+            finally:
+                conn.close()
+        except Exception as e:
+            logger.error("Failed to get long-term context: %s", e)
+            return None
