@@ -86,7 +86,7 @@ class SimulationRunner:
         self.llm_model = os.getenv("SIMULATION_LLM_MODEL", "gemini-2.0-flash")
 
         # Voice Brain WebSocket URL — use current server's port
-        ws_port = os.getenv("PORT", "8768")
+        ws_port = os.getenv("PORT", "8767")
         self.ws_url = f"ws://localhost:{ws_port}/llm-websocket/{call_id}"
 
         logger.info(f"[Sim {call_id}] Initialized for scenario: {scenario['name']} -> {self.ws_url}")
