@@ -587,11 +587,7 @@ ANTHROPIC_TOOLS = [
             "required": ["watch_id"]
         }
     },
-    {
-        "name": "get_morning_briefing",
-        "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. Use when asked for a briefing or daily summary.",
-        "input_schema": {"type": "object", "properties": {}, "required": []}
-    },
+    # get_morning_briefing REMOVED — morning briefing permanently deleted
     {
         "name": "get_polybot_status",
         "description": "Get Elite Trading paper-mode Polybot status.",
@@ -1638,11 +1634,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 logger.error(f"Deep research failed: {e}")
                 return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
 
-        elif tool_name == "get_morning_briefing":
-            from gigi.morning_briefing_service import MorningBriefingService
-            svc = MorningBriefingService()
-            briefing = await run_sync(svc.generate_briefing)
-            return briefing if isinstance(briefing, str) else json.dumps(briefing)
+        # get_morning_briefing REMOVED — morning briefing permanently deleted
 
         elif tool_name == "get_polybot_status":
             try:
