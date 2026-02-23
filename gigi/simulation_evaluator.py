@@ -142,11 +142,21 @@ EXPECTED BEHAVIORS:
 TRANSCRIPT:
 {transcript_text}
 
-Please evaluate the agent's performance on a 0-100 scale based on:
-1. Did the agent demonstrate the expected behaviors?
-2. Was the conversation professional and helpful?
-3. Did the agent stay on track and avoid loops?
-4. Was the resolution appropriate for the scenario?
+IMPORTANT CONTEXT: The agent is connected to a LIVE database with real client/caregiver data. If the agent provides specific names, times, or details that don't perfectly match what the simulated caller describes, this is due to real vs simulated data differences — do NOT penalize the agent for accurate data retrieval. Focus on whether the agent followed the correct PROCESS and used appropriate tools.
+
+Please evaluate the agent's performance on a 0-100 scale using these guidelines:
+- 85-100: Agent followed correct procedures, used appropriate tools, and handled the call professionally
+- 70-84: Agent mostly followed procedures with minor issues (missed empathy, slightly verbose)
+- 50-69: Agent attempted the right approach but had notable execution problems
+- 25-49: Agent failed to follow key procedures or made the situation significantly worse
+- 0-24: Complete failure — wrong approach entirely or harmful behavior
+
+Evaluate based on:
+1. Did the agent follow the correct Standard Operating Procedure for this caller type?
+2. Did the agent use the right tools (lookup, transfer, report)?
+3. Was the agent professional, empathetic where needed, and concise?
+4. Did the agent avoid unnecessary loops and move toward resolution?
+5. Was the outcome reasonable given the scenario?
 
 Provide your response in JSON format:
 {{
