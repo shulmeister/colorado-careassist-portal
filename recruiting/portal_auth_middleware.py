@@ -2,11 +2,12 @@
 Portal Authentication Middleware for Flask
 Validates requests are coming from the portal via shared secret or portal token
 """
+import logging
 import os
 from functools import wraps
-from flask import request, jsonify, session
+
+from flask import request, session
 from itsdangerous import URLSafeTimedSerializer
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -29,25 +30,25 @@ def verify_portal_token():
     """Verify portal session token from query parameter"""
     portal_token = request.args.get("portal_token")
     portal_user_email = request.args.get("portal_user_email")
-    
+
     logger.info(f"Portal token check: token present={bool(portal_token)}, email={portal_user_email}")
-    
+
     if not portal_token:
         logger.debug("No portal_token in query params")
         return None
-    
+
     try:
         # Use APP_SECRET_KEY - same key portal_auth.py uses to sign session tokens
         serializer = URLSafeTimedSerializer(APP_SECRET_KEY)
         session_data = serializer.loads(portal_token, max_age=3600 * 24)  # 24 hours
-        
+
         logger.info(f"Portal token validated successfully for: {session_data.get('email')}")
-        
+
         # Validate email matches if provided (but don't fail if not provided)
         if portal_user_email and session_data.get("email") != portal_user_email:
             logger.warning(f"Email mismatch: token={session_data.get('email')}, param={portal_user_email}")
             # Still return the session data - email mismatch isn't critical
-        
+
         return session_data
     except Exception as e:
         logger.error(f"Invalid portal token: {str(e)}")
@@ -76,7 +77,20 @@ def check_portal_auth():
         logger.info(f"Portal auth verified via token for: {token_data.get('email')}")
         return True
 
-    logger.debug("Portal auth check failed - no valid header, token, or session")
+    # Check session_token cookie (shared with portal/sales via same APP_SECRET_KEY)
+    session_token = request.cookies.get("session_token")
+    if session_token and APP_SECRET_KEY:
+        try:
+            serializer = URLSafeTimedSerializer(APP_SECRET_KEY)
+            session_data = serializer.loads(session_token, max_age=3600 * 24)
+            session['portal_user'] = session_data
+            session['portal_authenticated'] = True
+            logger.info(f"Portal auth verified via session_token cookie for: {session_data.get('email')}")
+            return True
+        except Exception as e:
+            logger.debug(f"session_token cookie invalid: {e}")
+
+    logger.debug("Portal auth check failed - no valid header, token, session, or cookie")
     return False
 
 def portal_auth_required(f):
@@ -89,12 +103,12 @@ def portal_auth_required(f):
         # If request is from portal (has secret or valid token), allow it
         if check_portal_auth():
             return f(*args, **kwargs)
-        
+
         # For direct access (development), show login page
         # In production, you might want to block this
         from flask import redirect, url_for
         return redirect(url_for('login'))
-    
+
     return decorated_function
 
 def get_portal_user():
@@ -102,7 +116,7 @@ def get_portal_user():
     # Check session first (set by token validation)
     if session.get('portal_user'):
         return session['portal_user']
-    
+
     # Fall back to headers
     return {
         'email': request.headers.get('X-Portal-User-Email', 'user@coloradocareassist.com'),

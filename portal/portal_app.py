@@ -332,7 +332,13 @@ async def auth_callback(request: Request, code: str = None, state: str = None, e
         result = await oauth_manager.handle_callback(code, state or "", request=request)
 
         # Create response with session cookie
-        response = RedirectResponse(url="/", status_code=302)
+        # Check for return_to cookie (set by sales/recruiting when redirecting to portal login)
+        return_to = request.cookies.get("_return_to", "/")
+        # Only allow relative paths to prevent open redirect
+        if not return_to.startswith("/"):
+            return_to = "/"
+        response = RedirectResponse(url=return_to, status_code=302)
+        response.delete_cookie("_return_to")
         response.set_cookie(
             key="session_token",
             value=result["session_token"],

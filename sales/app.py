@@ -852,8 +852,10 @@ async def get_current_user_info(current_user: Dict[str, Any] = Depends(get_curre
 async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
     """Serve the React CRM app"""
     if not current_user:
-        # Redirect to login if not authenticated
-        return RedirectResponse(url="/sales/auth/login")
+        # Redirect to portal login (shared session cookie) with return_to
+        response = RedirectResponse(url="/auth/login")
+        response.set_cookie("_return_to", "/sales/", path="/", max_age=300, httponly=True, secure=True, samesite="lax")
+        return response
 
     # Serve React app
     frontend_index = os.path.join(os.path.dirname(__file__), "frontend", "dist", "index.html")
@@ -11721,7 +11723,9 @@ async def spa_catchall(
         return _serve_static(full_path)
 
     if not current_user:
-        return RedirectResponse(url="/sales/auth/login")
+        response = RedirectResponse(url="/auth/login")
+        response.set_cookie("_return_to", "/sales/", path="/", max_age=300, httponly=True, secure=True, samesite="lax")
+        return response
 
     # Serve React app index.html for all non-API routes
     frontend_index = os.path.join(frontend_dist, "index.html")

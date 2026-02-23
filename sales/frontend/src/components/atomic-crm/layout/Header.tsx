@@ -11,7 +11,7 @@ import { useUserMenu } from "@/hooks/user-menu-context";
 import { useConfigurationContext } from "../root/ConfigurationContext";
 
 const Header = () => {
-  const portalUrl = "/";
+  const portalUrl = "https://portal.coloradocareassist.com";
   const { darkModeLogo, lightModeLogo, title } = useConfigurationContext();
   const location = useLocation();
 
