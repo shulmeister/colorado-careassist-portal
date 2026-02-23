@@ -2955,19 +2955,26 @@ class WellSkyService:
         content_type: str,
         data_base64: str,
         description: str = "",
-        date: str = None
+        date: str = None,
+        filename: str = "",
     ) -> Tuple[bool, Any]:
         """
         Upload/create a document attached to a patient profile.
-        POST /v1/documentreference/
+        POST /v1/documentReferences/
+
+        WellSky allowed MIME types: text/plain, application/msword,
+        application/vnd.openxmlformats-officedocument.wordprocessingml.document,
+        application/pdf, image/png, image/jpeg, image/gif, image/bmp.
+        Max content size: 10MB.
 
         Args:
-            patient_id: WellSky patient/client ID
-            document_type: Type code (e.g. "clinical-note", "care-plan", "assessment")
+            patient_id: WellSky patient/client ID (Person ID)
+            document_type: Human-readable type (e.g. "Facesheet", "Referral", "Clinical Note")
             content_type: MIME type (e.g. "application/pdf", "image/jpeg", "text/plain")
             data_base64: Base64-encoded document content
             description: Human-readable description
             date: ISO date when document was created (default: now)
+            filename: Original filename (e.g. "facesheet.pdf")
         """
         if self.is_mock_mode:
             logger.info(f"Mock: Created document for patient {patient_id}")
@@ -2976,24 +2983,33 @@ class WellSkyService:
         if date is None:
             date = datetime.utcnow().isoformat() + "Z"
 
-        endpoint = "documentreference/"
+        endpoint = "documentReferences/"
         doc_data = {
             "resourceType": "DocumentReference",
-            "subject": {"reference": f"Patient/{patient_id}"},
             "type": {
-                "coding": [{"code": document_type, "display": document_type}]
+                "text": document_type or "Document",
             },
-            "description": description,
-            "date": date,
-            "content": [
-                {
-                    "attachment": {
-                        "contentType": content_type,
-                        "data": data_base64
-                    }
+            "securityLabel": [{}],
+            "content": {
+                "attachment": {
+                    "contentType": content_type,
+                    "data": data_base64,
                 }
-            ]
+            },
+            "context": {
+                "related": [
+                    {"reference": f"Person/{patient_id}"}
+                ]
+            },
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": str(self.agency_id)}
+                ]
+            },
         }
+
+        if filename:
+            doc_data["content"]["attachment"]["title"] = filename
 
         success, response = self._make_request("POST", endpoint, data=doc_data)
         if success:
@@ -3023,10 +3039,11 @@ class WellSkyService:
 
         success, response = self.create_document_reference(
             patient_id=patient_id,
-            document_type="clinical-note",
+            document_type="Clinical Note",
             content_type="text/plain",
             data_base64=data_b64,
             description=title[:200],
+            filename=f"clinical_note_{timestamp.replace(' ', '_').replace(':', '')}.txt",
         )
 
         if success:
@@ -3047,7 +3064,7 @@ class WellSkyService:
         if self.is_mock_mode:
             return True, {"resourceType": "DocumentReference", "id": document_id}
 
-        endpoint = f"documentreference/{document_id}/"
+        endpoint = f"documentReferences/{document_id}/"
         success, response = self._make_request("GET", endpoint)
         if success:
             logger.info(f"Got DocumentReference {document_id}")
@@ -3115,7 +3132,7 @@ class WellSkyService:
         if self.is_mock_mode:
             return True, {"success": True}
 
-        endpoint = f"documentreference/{document_id}/"
+        endpoint = f"documentReferences/{document_id}/"
         data = {"resourceType": "DocumentReference"}
         if description is not None:
             data["description"] = description
@@ -3144,7 +3161,7 @@ class WellSkyService:
         if self.is_mock_mode:
             return True, {"success": True}
 
-        endpoint = f"documentreference/{document_id}/"
+        endpoint = f"documentReferences/{document_id}/"
         success, response = self._make_request("DELETE", endpoint)
         if success:
             logger.info(f"Deleted DocumentReference {document_id}")
