@@ -1,29 +1,26 @@
 """
-Colorado CareAssist - Unified Portal (v3.0)
-Portal + sales dashboard + recruiter dashboard in ONE app.
-Gigi runs independently via gigi_app.py on port 8767 (prod) / 8768 (staging).
+Colorado CareAssist - Portal (v4.0)
+Portal only. Sales, Recruiting, and Gigi run as independent services.
 
 Architecture:
 - /                    → Full Portal app (with all tools, analytics, etc)
-- /sales/*             → Sales CRM (FastAPI) - mounted inside portal
-- /recruiting/*        → Recruiter dashboard (Flask) - mounted inside portal
 - /payroll             → Payroll converter
 - /gigi/dashboard/*    → Gigi admin dashboard (portal auth, reads Gigi DB)
 - /api/gigi/*          → Gigi admin API (portal auth)
 
-NOTE: All other /gigi/* routes (webhooks, ask-gigi, shadow, health) and
-/llm-websocket/* are served by gigi_app.py. Cloudflare path-based routing
-handles the split transparently.
+Independent services (own ports, own LaunchAgents):
+- gigi_app.py          → Gigi AI (8767/8768)
+- sales_app.py         → Sales CRM (8769/8770)
+- recruiting_app.py    → Recruiting (8771/8772)
+
+Cloudflare path-based routing handles the split transparently.
 """
 import os
 import sys
 
-# CRITICAL: Force local PostgreSQL for ALL database connections
-# This must happen BEFORE any module imports that read DATABASE_URL
+# CRITICAL: Force local PostgreSQL before any module imports
 _LOCAL_DB = os.getenv('DATABASE_URL', 'postgresql://careassist@localhost:5432/careassist')
 os.environ['DATABASE_URL'] = _LOCAL_DB
-os.environ['SALES_DATABASE_URL'] = _LOCAL_DB
-os.environ['RECRUITING_DATABASE_URL'] = _LOCAL_DB
 
 # CRITICAL: Set up Python path BEFORE any other imports
 # This ensures all submodules can find services, gigi, etc.
@@ -80,95 +77,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 logger.info("✅ Security headers middleware added")
 
-# Now mount sales and recruiting into the portal app
-from fastapi.middleware.wsgi import WSGIMiddleware
-
-# ==================== MOUNT SALES DASHBOARD ====================
-# Set DATABASE_URL for sales dashboard
-if os.getenv("SALES_DATABASE_URL"):
-    os.environ["DATABASE_URL"] = os.getenv("SALES_DATABASE_URL")
-    logger.info("✅ Set DATABASE_URL for sales dashboard")
-
-sales_path = os.path.join(os.path.dirname(__file__), "sales")
-saved_services_modules = {}
-if os.path.exists(sales_path):
-    try:
-        # Save AND REMOVE root-level services modules before loading sales
-        # Sales has its own services/ directory, so we need to clear the cache
-        # to let sales import its own services modules, then restore root's after
-        for mod_name in list(sys.modules.keys()):
-            if mod_name == 'services' or mod_name.startswith('services.'):
-                saved_services_modules[mod_name] = sys.modules.pop(mod_name)  # pop removes from cache
-        logger.info(f"✅ Saved and cleared {len(saved_services_modules)} services modules from cache")
-
-        # Add sales path to front of sys.path for the services imports
-        if sales_path in sys.path:
-            sys.path.remove(sales_path)
-        sys.path.insert(0, sales_path)
-        logger.info(f"✅ Added sales path: {sales_path}")
-
-        # Import sales app
-        sales_app_file = os.path.join(sales_path, "app.py")
-        spec = importlib.util.spec_from_file_location("sales_app", sales_app_file)
-        sales_module = importlib.util.module_from_spec(spec)
-
-        # Set __file__ explicitly for the module so path detection works
-        sales_module.__file__ = sales_app_file
-
-        # Register the module before loading so submodule imports work
-        sys.modules["sales_app"] = sales_module
-
-        spec.loader.exec_module(sales_module)
-        sales_app = sales_module.app
-
-        # Mount Sales as a sub-application (FastAPI apps don't have .router attribute)
-        app.mount("/sales", sales_app)
-
-        logger.info("✅ Mounted Sales Dashboard at /sales")
-    except Exception as e:
-        logger.error(f"❌ Failed to mount sales dashboard: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-    finally:
-        # ALWAYS restore root path and services modules, even if sales failed
-        if _ROOT_PATH in sys.path:
-            sys.path.remove(_ROOT_PATH)
-        sys.path.insert(0, _ROOT_PATH)
-
-        # Restore root services modules (especially services.marketing.*) for portal's use
-        if saved_services_modules:
-            sys.modules.update(saved_services_modules)
-            logger.info(f"✅ Restored {len(saved_services_modules)} root services modules to cache")
-else:
-    logger.warning("⚠️  Sales dashboard not found")
-
-# ==================== MOUNT RECRUITER DASHBOARD ====================
-try:
-    # Set DATABASE_URL for recruiting dashboard
-    if os.getenv("RECRUITING_DATABASE_URL"):
-        os.environ["DATABASE_URL"] = os.getenv("RECRUITING_DATABASE_URL")
-        logger.info("✅ Set DATABASE_URL for recruiting dashboard")
-
-    recruiter_path = os.path.join(os.path.dirname(__file__), "recruiting")
-    if os.path.exists(recruiter_path):
-        sys.path.insert(0, recruiter_path)
-        logger.info(f"✅ Added recruiting path: {recruiter_path}")
-
-        # Import Flask app
-        spec = importlib.util.spec_from_file_location("recruiting_app", os.path.join(recruiter_path, "app.py"))
-        recruiting_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(recruiting_module)
-        flask_app = recruiting_module.app
-
-        # Mount Flask app using WSGI middleware
-        app.mount("/recruiting", WSGIMiddleware(flask_app))
-        logger.info("✅ Mounted Recruiter Dashboard at /recruiting")
-    else:
-        logger.warning("⚠️  Recruiter dashboard not found")
-except Exception as e:
-    logger.error(f"❌ Failed to mount recruiter dashboard: {e}")
-    import traceback
-    logger.error(traceback.format_exc())
+# NOTE: Sales and Recruiting now run as independent services:
+# - sales_app.py on port 8769 (prod) / 8770 (staging)
+# - recruiting_app.py on port 8771 (prod) / 8772 (staging)
+# Cloudflare path-based routing handles /sales/* and /recruiting/* transparently.
 
 # ==================== ADD PAYROLL CONVERTER ====================
 from fastapi.responses import FileResponse
@@ -210,7 +122,7 @@ for route in app.routes:
         logger.info(f"Route (other): {route}")
 logger.info("=========================")
 
-logger.info("✅ Portal app configured with sales, recruiting, and payroll")
+logger.info("✅ Portal app configured (sales + recruiting run as independent services)")
 
 if __name__ == "__main__":
     import uvicorn

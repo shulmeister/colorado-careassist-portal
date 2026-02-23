@@ -1,22 +1,24 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 22, 2026
+**Last Updated:** February 23, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
 
 ## PROJECT OVERVIEW
 
-This is the **unified platform** for Colorado Care Assist, containing:
+This is the **platform** for Colorado Care Assist. Each major component runs as an independent service:
 
-| Component | Description | Location |
-|-----------|-------------|----------|
-| **Portal** | Main web dashboard with 26+ tiles | `/portal/` |
-| **Gigi AI** | Chief of Staff AI (voice, SMS, Telegram, scheduling) | `/gigi/` |
-| **Sales Dashboard** | CRM for sales tracking | `/sales/` |
-| **Recruiting** | Caregiver recruiting dashboard | `/recruiting/` |
+| Component | Entry Point | Prod Port | Staging Port | Description |
+|-----------|-------------|-----------|--------------|-------------|
+| **Portal** | `unified_app.py` | 8765 | 8766 | Main web dashboard with 26+ tiles |
+| **Gigi AI** | `gigi_app.py` | 8767 | 8768 | Voice, SMS, Telegram, scheduling |
+| **Sales** | `sales_app.py` | 8769 | 8770 | Sales CRM dashboard |
+| **Recruiting** | `recruiting_app.py` | 8771 | 8772 | Caregiver recruiting dashboard |
 
-**Note:** PowderPulse was split out to a standalone service on port 3003 (Feb 14, 2026). Source still lives in `/powderpulse/` but runs independently via `powderpulse/server.py`. Portal `/powderpulse` redirects to `powderpulse.coloradocareassist.com`.
+Each service has its own LaunchAgent, process, and port. Cloudflare path-based routing sends `/sales/*` → Sales, `/recruiting/*` → Recruiting, `/gigi/*` → Gigi, everything else → Portal.
+
+**Note:** PowderPulse runs as a standalone service on port 3003. Portal `/powderpulse` redirects to `powderpulse.coloradocareassist.com`.
 
 ### Related Repositories & Standalone Services
 
@@ -249,8 +251,12 @@ Auto-snipes slam-dunk Polymarket temperature markets at daily market open:
 |---------|------|-------------|-----|
 | **Production Portal** | 8765 | com.coloradocareassist.gigi-unified | portal.coloradocareassist.com |
 | **Production Gigi** | 8767 | com.coloradocareassist.gigi-server | portal.coloradocareassist.com/gigi/* |
+| **Production Sales** | 8769 | com.coloradocareassist.sales-server | portal.coloradocareassist.com/sales/* |
+| **Production Recruiting** | 8771 | com.coloradocareassist.recruiting-server | portal.coloradocareassist.com/recruiting/* |
 | **Staging Portal** | 8766 | com.coloradocareassist.staging | staging.coloradocareassist.com |
 | **Staging Gigi** | 8768 | com.coloradocareassist.gigi-server-staging | staging.coloradocareassist.com/gigi/* |
+| **Staging Sales** | 8770 | com.coloradocareassist.sales-server-staging | staging.coloradocareassist.com/sales/* |
+| **Staging Recruiting** | 8772 | com.coloradocareassist.recruiting-server-staging | staging.coloradocareassist.com/recruiting/* |
 | Main Website | 3000 | com.coloradocareassist.website | coloradocareassist.com |
 | Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare | hesedhomecare.org |
 | Elite Trading | 3002 | com.coloradocareassist.elite-trading | elitetrading.coloradocareassist.com |
@@ -277,10 +283,12 @@ Auto-snipes slam-dunk Polymarket temperature markets at daily market open:
 
 ### Staging vs Production
 
-| Environment | Directory | Port | URL | Branch |
-|-------------|-----------|------|-----|--------|
-| **Production** | `~/mac-mini-apps/careassist-unified/` | 8765 | portal.coloradocareassist.com | `main` |
-| **Staging** | `~/mac-mini-apps/careassist-staging/` | 8766 | staging.coloradocareassist.com | `staging` |
+| Service | Prod Dir | Prod Port | Staging Dir | Staging Port |
+|---------|----------|-----------|-------------|--------------|
+| Portal | `careassist-unified/` | 8765 | `careassist-staging/` | 8766 |
+| Gigi | `careassist-unified/` | 8767 | `careassist-staging/` | 8768 |
+| Sales | `careassist-unified/` | 8769 | `careassist-staging/` | 8770 |
+| Recruiting | `careassist-unified/` | 8771 | `careassist-staging/` | 8772 |
 
 **CRITICAL: NEVER edit production directly. All development happens on staging first.**
 
@@ -328,8 +336,10 @@ All credentials are in `~/.gigi-env` and duplicated in LaunchAgent plists.
 ```
 careassist-unified/
 ├── CLAUDE.md              # This file - main reference
-├── unified_app.py         # Entry point - mounts portal, sales, recruiting
-├── gigi_app.py            # Standalone Gigi service (port 8767/8768)
+├── unified_app.py         # Portal entry point (portal only, port 8765/8766)
+├── gigi_app.py            # Gigi standalone entry point (port 8767/8768)
+├── sales_app.py           # Sales standalone entry point (port 8769/8770)
+├── recruiting_app.py      # Recruiting standalone entry point (port 8771/8772)
 ├── portal/                # Portal web app (FastAPI)
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
