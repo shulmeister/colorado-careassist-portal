@@ -259,7 +259,7 @@ SMS_TOOLS = [
     {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
     {"name": "forget_memory", "description": "Archive a memory that is no longer relevant.", "input_schema": {"type": "object", "properties": {"memory_id": {"type": "string"}}, "required": ["memory_id"]}},
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back (default 30)"}}, "required": ["query"]}},
-    {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    # get_morning_briefing REMOVED — morning briefing permanently deleted
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
     {"name": "clock_in_shift", "description": "Clock a caregiver into their shift in WellSky. Use when a caregiver texts that they forgot to clock in. Look up their shift first with get_wellsky_shifts.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
     {"name": "clock_out_shift", "description": "Clock a caregiver out of their shift in WellSky. Use when a caregiver texts that they forgot to clock out. Look up their shift first with get_wellsky_shifts.", "input_schema": {"type": "object", "properties": {"appointment_id": {"type": "string", "description": "Shift/appointment ID from WellSky"}, "caregiver_name": {"type": "string", "description": "Caregiver name"}, "notes": {"type": "string", "description": "Optional notes"}}, "required": ["appointment_id"]}},
@@ -314,7 +314,7 @@ DM_TOOLS = [
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back (default 30)"}}, "required": ["query"]}},
     {"name": "browse_webpage", "description": "Browse a webpage and extract its text content. Use for research, reading articles, checking websites.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links (default false)"}}, "required": ["url"]}},
     {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
-    {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing, daily digest, or daily summary.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    # get_morning_briefing REMOVED — morning briefing permanently deleted
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto, macro outlook, etc. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze"}}, "required": ["question"]}},
     {"name": "get_weather_arb_status", "description": "Get weather trading bots: Weather Sniper Bot (Polymarket, LIVE, auto-snipes US temp markets at daily open) and Kalshi bot. Shows sniper status, forecasts, orders, P&L, positions.", "input_schema": {"type": "object", "properties": {}, "required": []}},
@@ -436,9 +436,9 @@ TONE:
 - Never say "check with the office" — YOU are the office. Look it up.
 - Never say "I don't have access to" something — check your tools first. You have 15+ tools.
 - NEVER send unsolicited messages. NEVER proactively generate or send a morning briefing, daily digest, or any scheduled message unless explicitly asked by Jason in the current conversation. Jason does NOT want automated briefings.
-- NEVER suggest installing software or mention CLI tools. If a tool fails, say "that's temporarily unavailable" — do NOT suggest installing anything.
-- NEVER HALLUCINATE TOOLS or troubleshooting: Only use tools you actually have. NEVER invent commands or suggest configuration steps.
-- NEVER REFORMAT TOOL OUTPUT: When get_morning_briefing returns a briefing, relay it as-is.
+- NEVER suggest installing software or mention CLI tools. There is NO "gog CLI", "gcloud CLI", "curl", "wttr.in", or any CLI. All services are built into your tools. If a tool fails, say "that's temporarily unavailable" — do NOT suggest installing anything.
+- NEVER HALLUCINATE TOOLS or troubleshooting: Only use tools you actually have. NEVER invent commands, suggest configuration steps, or fabricate explanations for failures.
+- NEVER REFORMAT TOOL OUTPUT: When a tool returns data, relay it as-is. Do NOT add troubleshooting or TODO lists.
 - OUTBOUND MESSAGES: NEVER send SMS/texts to external contacts without explicit confirmation from Jason. Show the draft first, wait for approval.
 - NO sycophantic language: never say "locked in", "inner circle", "absolutely", "on it boss". Be direct and real.
 - NEVER start with "Great question!" or "I'd be happy to help!" — just answer.
@@ -600,20 +600,7 @@ class GigiRingCentralBot:
         except Exception as e:
             logger.warning(f"Daily confirmation service not available: {e}")
 
-        # --- Morning briefing via Telegram (7 AM MT) ---
-        self.morning_briefing = None
-        try:
-            from gigi.morning_briefing_service import (
-                MORNING_BRIEFING_ENABLED,
-                MorningBriefingService,
-            )
-            if MORNING_BRIEFING_ENABLED:
-                self.morning_briefing = MorningBriefingService()
-                logger.info("Morning briefing service ENABLED")
-            else:
-                logger.info("Morning briefing service disabled")
-        except Exception as e:
-            logger.warning(f"Morning briefing service not available: {e}")
+        # Morning briefing permanently deleted — no init needed
 
         # Task completion tracking (last notified task ID)
         self._last_notified_task_id = self._load_last_notified_task_id()
@@ -1332,14 +1319,7 @@ class GigiRingCentralBot:
                 except Exception as e:
                     logger.error(f"Daily confirmation error: {e}")
 
-            # 6. Morning briefing — DISABLED (user request: no unsolicited messages)
-            # if self.morning_briefing:
-            #     try:
-            #         sent = self.morning_briefing.check_and_send()
-            #         if sent:
-            #             logger.info("Morning briefing sent to Jason via Telegram")
-            #     except Exception as e:
-            #         logger.error(f"Morning briefing error: {e}")
+            # Morning briefing permanently deleted
 
             # 7. Claude Code task completion notifications — DISABLED (user request: no unsolicited messages)
             # try:
@@ -2531,10 +2511,7 @@ class GigiRingCentralBot:
                 results = ml.search_logs(query, days_back=days_back)
                 return json.dumps({"query": query, "results": results[:10], "total": len(results)})
 
-            elif tool_name == "get_morning_briefing":
-                from gigi.morning_briefing_service import MorningBriefingService
-                svc = MorningBriefingService()
-                return svc.generate_briefing()
+            # get_morning_briefing REMOVED — morning briefing permanently deleted
 
             elif tool_name == "get_ar_report":
                 from sales.quickbooks_service import QuickBooksService
@@ -3654,10 +3631,7 @@ class GigiRingCentralBot:
                 result = await browse_with_claude(task=f"Navigate to {url} and take a screenshot. Describe what the page looks like.", url=url)
                 return json.dumps(result)
 
-            elif tool_name == "get_morning_briefing":
-                from gigi.morning_briefing_service import MorningBriefingService
-                svc = MorningBriefingService()
-                return svc.generate_briefing()
+            # get_morning_briefing REMOVED — morning briefing permanently deleted
 
             elif tool_name == "get_ar_report":
                 from sales.quickbooks_service import QuickBooksService

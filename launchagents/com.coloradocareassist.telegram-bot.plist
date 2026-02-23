@@ -7,8 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
-        <string>/Users/shulmeister/mac-mini-apps/careassist-unified/gigi/telegram_bot.py</string>
+        <string>/Users/shulmeister/mac-mini-apps/careassist-unified/scripts/run-telegram-bot.sh</string>
     </array>
 
     <key>WorkingDirectory</key>

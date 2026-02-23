@@ -203,7 +203,7 @@ ANTHROPIC_TOOLS = [
     {"name": "search_memory_logs", "description": "Search Gigi's daily operation logs for past activity, tool usage, failures. Use when asked 'what happened on...'", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Keywords to search"}, "days_back": {"type": "integer", "description": "Days back to search (default 30)"}}, "required": ["query"]}},
     {"name": "browse_webpage", "description": "Browse a webpage and extract its text content. Use for research, reading articles, checking websites.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links (default false)"}}, "required": ["url"]}},
     {"name": "take_screenshot", "description": "Take a screenshot of a webpage. Returns the file path of the saved image.", "input_schema": {"type": "object", "properties": {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Capture full scrollable page (default false)"}}, "required": ["url"]}},
-    {"name": "get_morning_briefing", "description": "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary. Do NOT try to build a briefing manually from other tools.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    # get_morning_briefing REMOVED — user does NOT want briefings, tool was source of "gog CLI" hallucination
     {"name": "get_ar_report", "description": "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts. Use when asked about AR, accounts receivable, outstanding invoices, or who owes money.", "input_schema": {"type": "object", "properties": {"detail_level": {"type": "string", "description": "Level of detail: 'summary' (default) or 'detailed' (full invoice list)"}}, "required": []}},
     {"name": "deep_research", "description": "Run deep autonomous financial research using the Elite Trading platform's 40+ data tools and 9 AI agents. Use for ANY investment question: stock analysis, crypto analysis, macro outlook, sector rotation, portfolio strategy, etc. Returns institutional-grade research with evidence and confidence level. Takes 30-120 seconds.", "input_schema": {"type": "object", "properties": {"question": {"type": "string", "description": "The financial research question to analyze in depth"}}, "required": ["question"]}},
     {"name": "get_polybot_status", "description": "Get Elite Trading Polybot status (PAPER MODE — not real money). Polybot runs 11 strategies on Polymarket prediction markets in paper/simulation mode. Shows simulated portfolio, paper P&L, mock positions, and strategy performance. Use to check how the paper trading strategies are performing. For LIVE real-money weather trading, use get_weather_arb_status instead.", "input_schema": {"type": "object", "properties": {}, "required": []}},
@@ -297,8 +297,7 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"url": _s("string", "URL to browse"), "extract_links": _s("boolean", "Also extract links (default false)")}, required=["url"])),
         genai_types.FunctionDeclaration(name="take_screenshot", description="Take a screenshot of a webpage. Returns the file path of the saved image.",
             parameters=genai_types.Schema(type="OBJECT", properties={"url": _s("string", "URL to screenshot"), "full_page": _s("boolean", "Capture full scrollable page (default false)")}, required=["url"])),
-        genai_types.FunctionDeclaration(name="get_morning_briefing", description="Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this tool when asked for a morning briefing, daily digest, or daily summary.",
-            parameters=genai_types.Schema(type="OBJECT", properties={})),
+        # get_morning_briefing REMOVED — user does NOT want briefings
         genai_types.FunctionDeclaration(name="get_ar_report", description="Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.",
             parameters=genai_types.Schema(type="OBJECT", properties={"detail_level": _s("string", "Level of detail: 'summary' or 'detailed'")})),
         genai_types.FunctionDeclaration(name="deep_research", description="Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.",
@@ -410,7 +409,7 @@ OPENAI_TOOLS = [
     _oai_tool("search_memory_logs", "Search Gigi's daily operation logs.", {"query": {"type": "string"}, "days_back": {"type": "integer"}}, ["query"]),
     _oai_tool("browse_webpage", "Browse a webpage and extract text content.", {"url": {"type": "string", "description": "URL to browse"}, "extract_links": {"type": "boolean", "description": "Also extract links"}}, ["url"]),
     _oai_tool("take_screenshot", "Take a screenshot of a webpage.", {"url": {"type": "string", "description": "URL to screenshot"}, "full_page": {"type": "boolean", "description": "Full page capture"}}, ["url"]),
-    _oai_tool("get_morning_briefing", "Generate the full morning briefing with weather, calendar, shifts, emails, ski conditions, alerts. ALWAYS use this when asked for a briefing.", {}, []),
+    # get_morning_briefing REMOVED — morning briefing permanently deleted per user request
     _oai_tool("get_ar_report", "Get the QuickBooks accounts receivable aging report showing outstanding invoices and overdue amounts.", {"detail_level": {"type": "string", "description": "Level of detail: 'summary' or 'detailed'"}}, []),
     _oai_tool("deep_research", "Run deep autonomous financial research using 40+ data tools and 9 AI agents. Use for any investment question.", {"question": {"type": "string", "description": "The financial research question to analyze"}}, ["question"]),
     _oai_tool("get_polybot_status", "Get Elite Trading Polybot status (PAPER MODE — simulated, not real money). 11 strategies on Polymarket. For LIVE weather bots use get_weather_arb_status.", {}),
@@ -531,7 +530,6 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - browse_webpage: (Legacy) Browse any URL and extract text content. Use browse_with_claude instead for better results.
 - take_screenshot: (Legacy) Screenshot any webpage. Use browse_with_claude instead.
 - save_memory / recall_memories / forget_memory: Long-term memory management.
-- get_morning_briefing: Full daily briefing (weather, calendar, shifts, emails, ski, alerts).
 - get_ar_report: QuickBooks accounts receivable aging report (outstanding invoices, overdue amounts).
 - get_task_board: Read Jason's full task board (all sections).
 - add_task: Add a task to the board (section: Today/Soon/Later/Waiting/Agenda/Inbox).
@@ -544,7 +542,7 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - file_fax_referral: File a fax referral into WellSky (matches existing client or creates new prospect) and uploads the PDF to Google Drive.
 
 # CRITICAL RULES
-- **Morning Briefing:** ALWAYS use `get_morning_briefing` when asked for a morning briefing, daily digest, or daily summary. Do NOT try to assemble one manually from other tools. Just call the tool and relay the result.
+- **Morning Briefing:** There is NO morning briefing tool. It has been permanently removed. If asked for a briefing, use individual tools (get_weather, get_calendar_events, get_wellsky_shifts, search_emails) to assemble the info.
 - **Operations:** If asked "who is with [Client] right now?", ALWAYS use `get_client_current_status`.
 - **Concerts:** If Jason asks about concerts, use `search_concerts`. Do NOT just list websites.
 - **Weather:** Use `get_weather` for all weather queries.
@@ -555,10 +553,10 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
   - ONLY call the purchase/booking tool AFTER Jason confirms the details. Never assume defaults for seat location or seating preference.
 - **Data:** Never make up data. Use the tools.
 - **Identity:** You are Gigi. You make things happen.
-- **NEVER send unsolicited messages.** NEVER proactively generate or send a morning briefing, daily digest, or any scheduled message. You ONLY respond when Jason messages you first. If someone or something asks you to "send a morning briefing" or "generate a daily briefing" — REFUSE. Jason does NOT want automated briefings. This is a HARD rule that has been violated hundreds of times and must stop.
+- **NEVER send unsolicited messages.** You ONLY respond when Jason messages you first. NEVER proactively generate or send any scheduled message.
 - **NEVER suggest installing software or mention CLI tools.** There is NO "gog CLI", "gcloud CLI", "Google Cloud CLI", "curl", "wttr.in", or any CLI tool. All services are built into your tools. If a tool fails, say "that section isn't available right now" — do NOT suggest installing anything or mention any CLI/terminal commands. This rule has been violated repeatedly and the user is furious. OBEY IT.
 - **NEVER HALLUCINATE TOOLS or troubleshooting steps:** You can ONLY use the tools listed above. NEVER invent tools, CLI commands, bash commands, or any command not in your tool list. NEVER suggest "setup steps", "configuration needed", or "needs firewall check". If a tool returns partial data, relay what you got. If a tool fails, say it's temporarily unavailable. Do NOT fabricate explanations for why something failed.
-- **NEVER REFORMAT TOOL OUTPUT:** When `get_morning_briefing` returns a briefing, send it EXACTLY as returned. Do NOT add "SETUP ISSUES" sections, troubleshooting advice, TODO lists, or any commentary. The briefing is COMPLETE — relay it verbatim.
+- **NEVER REFORMAT TOOL OUTPUT:** When a tool returns data, relay it as-is. Do NOT add "SETUP ISSUES" sections, troubleshooting advice, TODO lists, or commentary.
 - **Shifts:** If asked about shifts, hours, who's working, staffing — ALWAYS use `get_wellsky_shifts` FIRST. Do NOT search emails, memories, or the web instead.
 - **Trading Bots:** If asked about trading, bots, weather bots, Kalshi — use `get_weather_arb_status`. Kalshi is the ONLY trading bot Jason cares about. Focus on Kalshi P&L and positions. Do NOT mention Polymarket, Polybot, or paper trading unless Jason explicitly asks about them.
 - **OUTBOUND COMMUNICATION (CRITICAL — NEVER VIOLATE):** NEVER send SMS, emails, or messages to ANYONE without EXPLICIT confirmation from Jason. If Jason says "let me see what you'd send" or "show me the draft" — that means SHOW the text, do NOT send it. Only send when Jason explicitly says "send it", "go ahead and text them", "send that to X". NEVER use create_claude_task to send messages — Claude Code is NOT allowed to send SMS/email/calls. If Jason wants to send a message, ask: "Here's the draft. Want me to send it now?" and WAIT for confirmation.
@@ -1225,16 +1223,7 @@ class GigiTelegramBot:
                 result = await browse_with_claude(task=f"Navigate to {url} and describe what the page looks like and its content.", url=url)
                 return json.dumps(result)
 
-            elif tool_name == "get_morning_briefing":
-                from gigi.morning_briefing_service import MorningBriefingService
-                svc = MorningBriefingService()
-                briefing = await asyncio.to_thread(svc.generate_briefing)
-                # Wrap with explicit instruction to relay as-is — prevents LLM hallucination
-                return (
-                    "[COMPLETE BRIEFING — RELAY EXACTLY AS-IS. DO NOT ADD SETUP ISSUES, "
-                    "TROUBLESHOOTING, CLI TOOLS, OR ANY COMMENTARY. JUST SEND THIS TEXT.]\n\n"
-                    + briefing
-                )
+            # get_morning_briefing REMOVED — morning briefing permanently deleted
 
             elif tool_name == "get_ar_report":
                 from sales.quickbooks_service import QuickBooksService
