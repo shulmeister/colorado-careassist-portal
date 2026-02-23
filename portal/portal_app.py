@@ -2727,6 +2727,24 @@ async def go_recruiting(
     return RedirectResponse(url=redirect_url, status_code=302)
 
 
+@app.get("/go/employee-portal")
+async def go_employee_portal(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Redirect to employee portal admin"""
+    return RedirectResponse(url="https://employee.coloradocareassist.com/admin", status_code=302)
+
+
+@app.get("/go/client-portal")
+async def go_client_portal(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Redirect to client portal admin"""
+    return RedirectResponse(url="https://client.coloradocareassist.com/admin", status_code=302)
+
+
 @app.get("/go/sales")
 async def go_sales(
     request: Request,
@@ -7719,6 +7737,7 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
 <body>
     <div class="container">
         <div class="header">
+            <a href="/" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 10px;">&larr; Back to Portal</a>
             <h1>VA Plan of Care Generator</h1>
             <p>Convert VA Form 10-7080 to Home Health Certification and Plan of Care (485)</p>
             <p style="font-size: 13px; margin-top: 10px;">Must submit within 5 days | Contact: Tamatha.Anding@va.gov (naming)</p>
@@ -8771,6 +8790,7 @@ async def va_rfs_converter(
 <body>
     <div class="container">
         <div class="header">
+            <a href="/" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 10px;">&larr; Back to Portal</a>
             <h1>🏥 VA RFS Converter</h1>
             <p>Convert VA Form 10-7080, Referral Face Sheets & Contact Sheets to VA Form 10-10172 RFS</p>
             <p style="font-size: 12px; margin-top: 5px; opacity: 0.85;">Request for Service • Re-authorizations • New Referrals</p>
