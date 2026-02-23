@@ -2,8 +2,7 @@
 Gigi Self-Monitor - Weekly Self-Audit System
 
 Analyzes Gigi's own operational metrics and generates a report.
-Designed to run weekly (e.g., Sunday night) or be called from the
-morning briefing service on Mondays.
+Designed to run weekly (e.g., Sunday night).
 
 Metrics collected:
 - Failure rate (from gigi_failure_log)
@@ -11,8 +10,8 @@ Metrics collected:
 - Shift coverage (from cached_appointments)
 """
 
-import os
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
@@ -228,7 +227,7 @@ class SelfMonitor:
 
     def get_briefing_section(self) -> Optional[str]:
         """
-        Generate a formatted text block for the Monday morning briefing.
+        Generate a formatted text block for the weekly audit report.
 
         Returns:
             Formatted string, or None if no meaningful data.

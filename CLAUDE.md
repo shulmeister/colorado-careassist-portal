@@ -35,7 +35,7 @@ Each service has its own LaunchAgent, process, and port. Cloudflare path-based r
 | `status-dashboard` | 3012 | status.coloradocareassist.com | Infrastructure status dashboard |
 | `gigi-menubar` | - | - | macOS menu bar app (SwiftUI) |
 | `gigi-backend-cca` | - | - | Legacy backend reference |
-| `clawd` | - | - | Gigi config, elite teams, knowledge base |
+| `clawd` | - | - | Gigi config |
 
 ---
 
@@ -352,7 +352,7 @@ careassist-unified/
 │   ├── mode_detector.py   # 8-mode auto-detection (focus, crisis, travel, etc.)
 │   ├── failure_handler.py # 10 failure protocols + meltdown detection
 │   ├── pattern_detector.py # Repeated failure + trend detection
-│   ├── self_monitor.py    # Weekly self-audit (Monday morning briefing)
+│   ├── self_monitor.py    # Weekly self-audit
 │   ├── memory_logger.py   # Daily markdown journal at ~/.gigi-memory/
 │   ├── clock_reminder_service.py    # SMS clock in/out reminders to caregivers
 │   ├── daily_confirmation_service.py # 2 PM shift confirmation SMS to caregivers

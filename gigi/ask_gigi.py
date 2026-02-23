@@ -77,17 +77,6 @@ def _build_system_prompt(channel: str, conversation_store=None, user_message=Non
         except Exception as e:
             logger.warning(f"Cross-channel context failed: {e}")
 
-    # Inject elite team context if triggered
-    if user_message:
-        try:
-            from gigi.elite_teams import detect_team, get_team_context
-            team_key = detect_team(user_message)
-            if team_key:
-                parts.append(get_team_context(team_key))
-                logger.info(f"Elite team activated via {channel}: {team_key}")
-        except Exception:
-            pass
-
     return "\n".join(parts)
 
 
@@ -113,7 +102,7 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
     # Store user message
     store.append(user_id, channel, "user", text)
 
-    # Build system prompt with cross-channel context + elite team detection
+    # Build system prompt with cross-channel context
     sys_prompt = _build_system_prompt(channel, store, user_message=text)
 
     # Get conversation history for this channel

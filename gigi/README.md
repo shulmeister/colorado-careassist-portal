@@ -25,7 +25,7 @@ Gigi is Colorado Care Assist's AI Chief of Staff. She operates across 6+ channel
 |------|---------|
 | `voice_brain.py` | Retell Custom LLM WebSocket handler (multi-provider, 25 tools) |
 | `telegram_bot.py` | Telegram bot (multi-provider, 22 tools) |
-| `ringcentral_bot.py` | RC polling loop — SMS, DM, Team Chat, clock reminders, daily confirmations, morning briefing |
+| `ringcentral_bot.py` | RC polling loop — SMS, DM, Team Chat, clock reminders, daily confirmations |
 | `main.py` | Retell webhooks, `/api/ask-gigi`, `/webhook/imessage` |
 | `ask_gigi.py` | Generic ask-gigi function (reuses telegram tools, no code duplication) |
 | `browser_automation.py` | Playwright headless Chromium (browse + screenshot) |
@@ -33,10 +33,9 @@ Gigi is Colorado Care Assist's AI Chief of Staff. She operates across 6+ channel
 | `memory_system.py` | Long-term memory (save/recall/forget via PostgreSQL `gigi_memories`) |
 | `mode_detector.py` | 8-mode auto-detection (focus, crisis, travel, etc.) |
 | `failure_handler.py` | 10 failure protocols + DB-based meltdown detection |
-| `pattern_detector.py` | Repeated failure + trend detection for morning briefing |
-| `self_monitor.py` | Weekly self-audit (Monday morning briefing) |
+| `pattern_detector.py` | Repeated failure + trend detection |
+| `self_monitor.py` | Weekly self-audit |
 | `memory_logger.py` | Daily markdown journal at `~/.gigi-memory/` |
-| `morning_briefing_service.py` | 7 AM daily briefing via Telegram |
 | `google_service.py` | Google Calendar + Gmail API (OAuth2) |
 | `CONSTITUTION.md` | Gigi's 10 non-negotiable operating laws |
 
@@ -53,7 +52,7 @@ All handlers support Gemini, Anthropic, and OpenAI. Configured via:
 - **Mode Detector** — 8 operating modes, injected into system prompts
 - **Failure Handler** — 10 protocols, DB-based meltdown detection (3 failures in 5 min)
 - **Pattern Detector** — Tool failure trends, open shifts, memory conflicts, drift
-- **Self-Monitor** — Weekly audit (Monday briefing), failure stats, memory health
+- **Self-Monitor** — Weekly audit, failure stats, memory health
 - **Memory Logger** — Daily markdown journal, searchable via `search_memory_logs` tool
 - **Constitutional Preamble** — 10 Operating Laws injected into ALL system prompts
 

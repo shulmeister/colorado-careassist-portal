@@ -2906,16 +2906,6 @@ class GigiRingCentralBot:
         except Exception:
             pass
 
-        # Inject elite team context if triggered
-        try:
-            from gigi.elite_teams import detect_team, get_team_context
-            team_key = detect_team(text)
-            if team_key:
-                system += get_team_context(team_key)
-                logger.info(f"Elite team activated in DM: {team_key}")
-        except Exception:
-            pass
-
         # Retrieve DM conversation history from PostgreSQL (user message stored after LLM success)
         dm_user_id = f"dm_{chat_id}"
         conv_history = self.conversation_store.get_recent(
