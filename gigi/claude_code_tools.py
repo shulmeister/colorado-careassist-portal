@@ -50,6 +50,19 @@ SAFETY_PROMPT = """SAFETY CONSTRAINTS (non-negotiable):
 - Prefer staging over production unless the prompt explicitly says 'production'.
 - When done, provide a clear summary of what you did and the result."""
 
+BROWSER_CREDENTIAL_PROMPT = """CREDENTIAL ACCESS (1Password CLI):
+You have access to the 1Password CLI (`op`) for logging into websites on Jason's behalf.
+To retrieve credentials for any site:
+  op item get "<site name>" --fields username,password --format json
+Examples:
+  op item get "United Airlines" --fields username,password --format json
+  op item get "Hertz" --fields username,password --format json
+  op item get "OpenTable" --fields username,password --format json
+  op item get "Delta Airlines" --fields username,password --format json
+You can also search: op item list --categories Login | grep -i "<keyword>"
+Use these credentials to log into sites when the task requires authentication.
+NEVER display or echo passwords in output — use them only for form input."""
+
 
 def _resolve_directory(directory: Optional[str]) -> str:
     """Resolve a directory alias or path to an absolute path."""
@@ -179,6 +192,7 @@ async def browse_with_claude(
     if url:
         parts.append(f"\nTarget URL: {url}")
     parts.append("\nUse the Chrome browser to complete this task.")
+    parts.append(BROWSER_CREDENTIAL_PROMPT)
     parts.append(SAFETY_PROMPT)
 
     return await _run_cli(

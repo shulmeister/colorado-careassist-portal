@@ -8,6 +8,8 @@
 # LaunchAgent: com.coloradocareassist.health-monitor (runs every 5 minutes)
 # =============================================================================
 
+export PATH="/usr/sbin:/usr/bin:/bin:/opt/homebrew/bin:$PATH"
+
 # Check if running on macOS
 if [[ "$(uname)" != "Darwin" ]]; then
     echo "ERROR: This script is designed for macOS only."
@@ -21,7 +23,7 @@ STATUS_FILE="$HOME/logs/health-status.json"
 TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-8508806105:AAExZ25ZN19X3xjBQAZ3Q9fHgAQmWWklX8U}"
 TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID:-8215335898}"
 ALERT_COOLDOWN_FILE="$HOME/logs/.alert-cooldown"
-COOLDOWN_MINUTES=30
+COOLDOWN_MINUTES=120
 
 # Ensure log directory exists
 mkdir -p "$HOME/logs"
@@ -66,11 +68,8 @@ mark_alert_sent() {
 }
 
 send_telegram_alert() {
-    local message="$1"
-    curl -sf -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        -d "chat_id=${TELEGRAM_CHAT_ID}" \
-        -d "text=${message}" \
-        -d "parse_mode=HTML" > /dev/null 2>&1 || true
+    # Telegram notifications disabled — alerts still logged to ~/logs/health-alerts.log
+    :
 }
 
 # =============================================================================
@@ -96,7 +95,6 @@ check_and_restart_service() {
 
         if lsof -i ":$port" -P 2>/dev/null | grep -q LISTEN; then
             log "$service_name restarted successfully"
-            send_telegram_alert "✅ $service_name recovered and is now running"
             echo "recovered"
         else
             alert "$service_name FAILED to restart!"
@@ -146,7 +144,6 @@ check_postgres() {
         sleep 5
         if /opt/homebrew/opt/postgresql@17/bin/pg_isready -q 2>/dev/null; then
             log "PostgreSQL restarted successfully"
-            send_telegram_alert "✅ PostgreSQL recovered and is now running"
             echo "recovered"
         else
             alert "PostgreSQL FAILED to restart!"
@@ -167,7 +164,6 @@ check_cloudflare_tunnel() {
         sleep 5
         if pgrep -f "cloudflared" > /dev/null; then
             log "Cloudflare Tunnel restarted successfully"
-            send_telegram_alert "✅ Cloudflare Tunnel recovered"
             echo "recovered"
         else
             alert "Cloudflare Tunnel FAILED to restart!"
@@ -206,10 +202,12 @@ STATUS_TELEGRAM=$(check_telegram_bot)
 STATUS_POSTGRES=$(check_postgres)
 STATUS_CLOUDFLARE=$(check_cloudflare_tunnel)
 STATUS_PORTAL=$(check_and_restart_service "Portal (gigi-unified)" "com.coloradocareassist.gigi-unified" "http://localhost:8765/health" 8765)
+STATUS_GIGI=$(check_and_restart_service "Gigi Server" "com.coloradocareassist.gigi-server" "http://localhost:8767/gigi/health" 8767)
 STATUS_WEBSITE=$(check_and_restart_service "Main Website" "com.coloradocareassist.website" "" 3000)
 STATUS_HESED=$(check_and_restart_service "Hesed Home Care" "com.coloradocareassist.hesedhomecare" "" 3001)
 STATUS_ELITE=$(check_and_restart_service "Elite Trading" "com.coloradocareassist.elite-trading" "http://localhost:3002/health" 3002)
 STATUS_POWDER=$(check_and_restart_service "PowderPulse" "com.coloradocareassist.powderpulse" "" 3003)
+STATUS_FITNESS=$(check_and_restart_service "Fitness Dashboard" "com.coloradocareassist.fitness-dashboard" "http://localhost:3040/health" 3040)
 
 # Check APIs
 STATUS_WELLSKY=$(check_api "WellSky" "https://connect.clearcareonline.com")
@@ -229,10 +227,12 @@ cat > "$STATUS_FILE" << EOF
   "timestamp": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
   "services": {
     "portal": "$STATUS_PORTAL",
+    "gigi_server": "$STATUS_GIGI",
     "website": "$STATUS_WEBSITE",
     "hesed": "$STATUS_HESED",
     "elite_trading": "$STATUS_ELITE",
     "powderpulse": "$STATUS_POWDER",
+    "fitness_dashboard": "$STATUS_FITNESS",
     "telegram_bot": "$STATUS_TELEGRAM",
     "postgres": "$STATUS_POSTGRES",
     "cloudflare": "$STATUS_CLOUDFLARE"

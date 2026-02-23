@@ -3,15 +3,13 @@ Apple Contacts Lookup via Mac Node
 Queries Apple Contacts on Jason's Mac for caller ID
 """
 
-import requests
 import logging
-from typing import Optional, Dict
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# Gateway/node configuration
-GATEWAY_URL = "https://gateway.clawd.io"  # Adjust if needed
-MAC_NODE_ID = "46b7c9e5761d01f5737fc755e0a925b28ef1ea324426e8c8b32a000a1ca92cfc"
+# NOTE: Previously referenced gateway.clawd.io which was never set up.
+# Apple Contacts lookup runs locally via osascript (no gateway needed).
 
 def lookup_contact_by_phone(phone: str, gateway_token: Optional[str] = None) -> Optional[Dict]:
     """
@@ -28,7 +26,7 @@ def lookup_contact_by_phone(phone: str, gateway_token: Optional[str] = None) -> 
     try:
         # Clean phone number - extract last 10 digits
         clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
-        
+
         # Format for AppleScript search (various formats)
         search_formats = [
             f"({clean_phone[:3]}) {clean_phone[3:6]}-{clean_phone[6:]}",
@@ -36,7 +34,7 @@ def lookup_contact_by_phone(phone: str, gateway_token: Optional[str] = None) -> 
             f"+1{clean_phone}",
             clean_phone
         ]
-        
+
         # AppleScript to search contacts
         applescript = f"""
 tell application "Contacts"
@@ -79,18 +77,18 @@ tell application "Contacts"
     end if
 end tell
 """
-        
+
         # Execute via node (you'll need to implement the actual node call)
         # For now, this is a placeholder that would call the Mac node
         # TODO: Integrate with clawdbot node API
-        
+
         logger.info(f"Looking up {clean_phone} in Apple Contacts via Mac node")
-        
+
         # Placeholder response - in production this would query the Mac node
         # The actual implementation would use the nodes API or exec command
-        
+
         return None  # Not implemented yet - need Mac node connection
-        
+
     except Exception as e:
         logger.error(f"Apple Contacts lookup failed: {e}")
         return None

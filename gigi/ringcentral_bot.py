@@ -2790,7 +2790,7 @@ class GigiRingCentralBot:
 
         if RC_MEMORY_AVAILABLE and _rc_memory_system:
             try:
-                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=5)
+                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=15)
                 if memories:
                     memory_lines = [f"- {m.content} ({m.category})" for m in memories]
                     system += "\n\nYour Saved Memories:\n" + "\n".join(memory_lines)
@@ -2808,7 +2808,7 @@ class GigiRingCentralBot:
 
         # Inject cross-channel context if this is Jason
         if clean_phone in ("3074598220",):
-            xc = self.conversation_store.get_cross_channel_summary("jason", "sms", limit=5, hours=4)
+            xc = self.conversation_store.get_cross_channel_summary("jason", "sms", limit=5, hours=24)
             if xc:
                 system += xc
 
@@ -2863,12 +2863,24 @@ class GigiRingCentralBot:
 
         if RC_MEMORY_AVAILABLE and _rc_memory_system:
             try:
-                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=10)
+                memories = _rc_memory_system.query_memories(min_confidence=0.5, limit=25)
                 if memories:
                     memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
                     system += "\n\nYour Saved Memories:\n" + "\n".join(memory_lines)
             except Exception:
                 pass
+
+        # Inject cross-channel context (what Jason discussed on other channels recently)
+        try:
+            xc = self.conversation_store.get_cross_channel_summary("jason", "dm", limit=5, hours=24)
+            if xc:
+                system += xc
+            # Long-term conversation history (summaries from past 30 days)
+            ltc = self.conversation_store.get_long_term_context("jason", days=30)
+            if ltc:
+                system += ltc
+        except Exception:
+            pass
 
         # Inject elite team context if triggered
         try:
@@ -3534,19 +3546,17 @@ class GigiRingCentralBot:
                 return json.dumps({"query": query, "results": results[:10], "total": len(results)})
 
             elif tool_name == "browse_webpage":
-                from gigi.browser_automation import get_browser
-                browser = get_browser()
+                # Redirect to browse_with_claude (replaces old Playwright path)
+                from gigi.claude_code_tools import browse_with_claude
                 url = tool_input.get("url", "")
-                extract_links = tool_input.get("extract_links", False)
-                result = await browser.browse_webpage(url, extract_links=extract_links)
+                result = await browse_with_claude(task=f"Navigate to {url} and extract the main text content of the page.", url=url)
                 return json.dumps(result)
 
             elif tool_name == "take_screenshot":
-                from gigi.browser_automation import get_browser
-                browser = get_browser()
+                # Redirect to browse_with_claude (replaces old Playwright path)
+                from gigi.claude_code_tools import browse_with_claude
                 url = tool_input.get("url", "")
-                full_page = tool_input.get("full_page", False)
-                result = await browser.take_screenshot(url, full_page=full_page)
+                result = await browse_with_claude(task=f"Navigate to {url} and take a screenshot. Describe what the page looks like.", url=url)
                 return json.dumps(result)
 
             elif tool_name == "get_morning_briefing":
