@@ -14,9 +14,10 @@ This sales dashboard is part of the **Colorado CareAssist Unified Portal**. The 
 
 - `/` → Portal hub (main landing page)
 - `/sales` → Sales Dashboard (this app)
-- `/gigi` → Gigi AI voice assistant
 - `/recruiting` → Recruiter dashboard
 - `/marketing` → Marketing dashboard
+
+**Note:** Gigi AI now runs as a standalone service (`gigi_app.py` on port 8767) and is no longer mounted inside unified_app.py.
 
 Everything deploys together to the `careassist-unified` Mac Mini app.
 
@@ -381,13 +382,13 @@ The sales dashboard will be available at:
 - https://portal.coloradocareassist.com/sales/
 - https://portal.coloradocareassist.com/sales/ (if custom domain configured)
 
-**Important**: The Procfile at the repository root uses `unified_app.py` which mounts the sales app at `/sales`.
+**Important**: The Procfile at the repository root uses `unified_app.py` which mounts the sales app at `/sales`. Note: Gigi no longer runs inside unified_app.py — it runs as a standalone service via `gigi_app.py` on port 8767.
 
 ## Project Structure
 
 ```
 colorado-careassist-portal/
-├── unified_app.py         # Main entry point (mounts all apps)
+├── unified_app.py         # Main entry point (mounts portal, sales, recruiting)
 ├── portal/                # Portal hub app
 ├── gigi/                  # Gigi AI voice assistant
 └── sales/                 # Sales Dashboard (this directory)

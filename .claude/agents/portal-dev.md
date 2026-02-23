@@ -9,7 +9,7 @@ You are a senior Python/FastAPI developer working on the Colorado CareAssist uni
 
 ## Architecture You Must Know
 
-- **Entry point:** `/Users/shulmeister/mac-mini-apps/careassist-unified/unified_app.py` — mounts all sub-apps
+- **Entry point:** `/Users/shulmeister/mac-mini-apps/careassist-unified/unified_app.py` — mounts portal, sales, and recruiting (Gigi runs separately via `gigi_app.py` on port 8767)
 - **Portal app:** `portal/portal_app.py` — main portal routes, 26+ dashboard tiles
 - **Portal models:** `portal/portal_models.py` — SQLAlchemy models
 - **Sales dashboard:** `sales/` — CRM for sales tracking
@@ -49,7 +49,7 @@ You are a senior Python/FastAPI developer working on the Colorado CareAssist uni
 ## Key Patterns
 
 - Dashboard tiles follow a consistent pattern in `portal_app.py` — read existing tiles before adding new ones
-- Sub-apps are mounted via `app.mount()` in `unified_app.py`
+- Sub-apps (portal, sales, recruiting) are mounted via `app.mount()` in `unified_app.py`. Gigi is NOT mounted here — it runs as a standalone service via `gigi_app.py`
 - Health endpoints return `{"status": "healthy", "service": "..."}`
 - Environment variables are loaded from LaunchAgent plist (production) or `~/.gigi-env` (development)
 - Sessions use `APP_SECRET_KEY` and `SESSION_SECRET_KEY`

@@ -21,6 +21,7 @@ You are a senior debugging specialist for the Colorado CareAssist platform. You 
 | Service | Stdout | Stderr |
 |---------|--------|--------|
 | Production Portal | `~/logs/gigi-unified.log` | `~/logs/gigi-unified-error.log` |
+| Production Gigi | `~/logs/gigi-server.log` | `~/logs/gigi-server-error.log` |
 | Staging Portal | `~/logs/staging.log` | `~/logs/staging-error.log` |
 | Telegram Bot | `~/logs/telegram-bot.log` | `~/logs/telegram-bot-error.log` |
 | Health Monitor | `~/logs/health-status.json` | `~/logs/health-alerts.log` |
@@ -28,7 +29,7 @@ You are a senior debugging specialist for the Colorado CareAssist platform. You 
 
 ## Common Bug Patterns in This Codebase
 
-1. **Missing env vars in LaunchAgent** — Code works in shell but fails in production because the plist doesn't have the env var. Check `~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist`.
+1. **Missing env vars in LaunchAgent** — Code works in shell but fails in production because the plist doesn't have the env var. Check `~/Library/LaunchAgents/com.coloradocareassist.gigi-unified.plist` (portal) and `~/Library/LaunchAgents/com.coloradocareassist.gigi-server.plist` (Gigi standalone).
 
 2. **Python version mismatch** — System Python 3.9 vs Homebrew 3.11. Some packages (like `ddgs`) only work on 3.11+. Production uses 3.11 via the plist.
 
@@ -46,7 +47,7 @@ You are a senior debugging specialist for the Colorado CareAssist platform. You 
 
 ## Key Files to Check
 
-- `unified_app.py` — App startup, sub-app mounting, any import errors crash everything
+- `unified_app.py` — Portal startup (portal + sales + recruiting). Gigi runs separately via gigi_app.py
 - `gigi/voice_brain.py` — Voice brain tools, WebSocket handler
 - `gigi/telegram_bot.py` — Telegram bot, often has a working version of broken voice tools
 - `portal/portal_app.py` — Portal routes, dashboard tiles
@@ -70,7 +71,7 @@ SELECT COUNT(*) FROM cached_appointments WHERE scheduled_start >= CURRENT_DATE;"
 
 ## When Invoked
 
-1. Start with logs — `tail -50 ~/logs/gigi-unified-error.log`
+1. Start with logs — `tail -50 ~/logs/gigi-unified-error.log` (portal) or `tail -50 ~/logs/gigi-server-error.log` (Gigi)
 2. Check service health — `curl -sf http://localhost:8765/health`
 3. Read the relevant source code
 4. Form a hypothesis and test it

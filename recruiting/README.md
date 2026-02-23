@@ -506,7 +506,7 @@ Proprietary - Colorado CareAssist © 2025-2026
 
 **Technical Issues**:
 - Email: jason@coloradocareassist.com
-- Check Mac Mini logs: `tail -f ~/logs/gigi-unified.log -a careassist-unified | grep recruiting`
+- Check Mac Mini logs: `tail -f ~/logs/gigi-unified.log | grep recruiting` (portal logs). Note: Gigi logs are now separate at `~/logs/gigi-server.log` and `~/logs/gigi-server-error.log`.
 
 **Facebook API Issues**:
 - Meta Developer Support: https://developers.facebook.com/support/

@@ -1,13 +1,19 @@
 """
 Colorado CareAssist - Unified Portal (v3.0)
-Consolidates portal hub + sales dashboard + recruiter dashboard into ONE app
+Portal + sales dashboard + recruiter dashboard in ONE app.
+Gigi runs independently via gigi_app.py on port 8767 (prod) / 8768 (staging).
 
 Architecture:
 - /                    → Full Portal app (with all tools, analytics, etc)
 - /sales/*             → Sales CRM (FastAPI) - mounted inside portal
 - /recruiting/*        → Recruiter dashboard (Flask) - mounted inside portal
 - /payroll             → Payroll converter
-- /gigi/*              → Gigi AI Agent (Retell) - voice assistant
+- /gigi/dashboard/*    → Gigi admin dashboard (portal auth, reads Gigi DB)
+- /api/gigi/*          → Gigi admin API (portal auth)
+
+NOTE: All other /gigi/* routes (webhooks, ask-gigi, shadow, health) and
+/llm-websocket/* are served by gigi_app.py. Cloudflare path-based routing
+handles the split transparently.
 """
 import os
 import sys
