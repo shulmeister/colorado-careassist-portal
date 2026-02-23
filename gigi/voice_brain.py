@@ -766,9 +766,12 @@ When someone calls and gives a name, follow these procedures:
    → Use transfer_call to Jason IMMEDIATELY. Do NOT give medical advice.
    → If caller seems in danger, tell them to call 911.
 
-7. PROSPECT calling about services (not in system):
-   → Do NOT look them up. Do NOT transfer.
-   → Explain services, give pricing info, collect name and number, set callback expectation.
+7. PROSPECT / new caller asking about services:
+   → Do NOT transfer. Do NOT look them up. Handle the inquiry YOURSELF.
+   → Answer their questions about services and pricing directly.
+   → Collect their name, phone number, and care needs.
+   → Set callback expectation: "Someone from our team will call you back."
+   → Even if they sound urgent, do NOT transfer a prospect — just be helpful and set expectations.
 
 8. CAREGIVER running late (NOT calling out):
    → Use get_wellsky_caregivers to look them up by name (ALWAYS — even if they say they're just late).

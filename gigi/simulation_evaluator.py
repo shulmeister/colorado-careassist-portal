@@ -71,7 +71,7 @@ async def evaluate_simulation(
         for missing_tool in (expected_tools - actual_tools):
             related = _RELATED_TOOLS.get(missing_tool, set())
             if actual_tools & related:
-                partial_credit += 0.25  # 25% credit per related tool match
+                partial_credit += 0.5  # 50% credit per related tool match
 
         match_score = (matched + partial_credit) / total_expected
         tool_score = min(int(match_score * 100), 100)
