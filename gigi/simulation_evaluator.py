@@ -95,6 +95,10 @@ async def evaluate_simulation(
         transcript=transcript
     )
 
+    # If correct tools were used, behavior floor is 50 (prevent harsh evaluator outliers)
+    if tool_score >= 90 and behavior_score < 50:
+        behavior_score = 50
+
     # Overall Score: Weighted average (tools 40%, behavior 60%)
     overall_score = int(tool_score * 0.4 + behavior_score * 0.6)
 
@@ -147,9 +151,11 @@ IMPORTANT CONTEXT: The agent is connected to a LIVE database with real client/ca
 Please evaluate the agent's performance on a 0-100 scale using these guidelines:
 - 85-100: Agent followed correct procedures, used appropriate tools, and handled the call professionally
 - 70-84: Agent mostly followed procedures with minor issues (missed empathy, slightly verbose)
-- 50-69: Agent attempted the right approach but had notable execution problems
-- 25-49: Agent failed to follow key procedures or made the situation significantly worse
-- 0-24: Complete failure — wrong approach entirely or harmful behavior
+- 55-69: Agent attempted the right approach but had notable execution problems
+- 40-54: Agent missed key procedures or provided poor customer service
+- 0-39: ONLY for serious failures — agent was rude, gave dangerous advice, or completely ignored the caller
+
+IMPORTANT: If the agent maintained professional tone and attempted to help, score should be at LEAST 50. Scores below 40 should be reserved for genuinely harmful or completely incompetent responses. An agent that is brief or abrupt but still helpful should score 55-70, not below 40.
 
 Evaluate based on:
 1. Did the agent follow the correct Standard Operating Procedure for this caller type?
