@@ -231,7 +231,7 @@ SMS_TOOLS = [
     },
     {
         "name": "log_call_out",
-        "description": "Log a caregiver call-out in WellSky and create an urgent admin task for coverage.",
+        "description": "Log a caregiver call-out as a Care Alert in WellSky and create a coverage task.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -306,7 +306,7 @@ DM_TOOLS = [
     {"name": "search_emails", "description": "Search Jason's Gmail.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Gmail search query"}, "max_results": {"type": "integer"}}, "required": []}},
     {"name": "check_recent_sms", "description": "Check recent inbound SMS text messages across ALL company lines (307-459-8220, 719-428-3999). Shows texts from caregivers, clients, and anyone else who texted in.", "input_schema": {"type": "object", "properties": {"hours": {"type": "integer", "description": "How many hours back to look (default 12, max 48)"}, "from_phone": {"type": "string", "description": "Filter by sender phone number (optional)"}}, "required": []}},
     {"name": "send_sms", "description": "Send an SMS text message from the company number (307-459-8220) to any phone number.", "input_schema": {"type": "object", "properties": {"to_phone": {"type": "string", "description": "Phone number to text (e.g., +13035551234)"}, "message": {"type": "string", "description": "The SMS message to send (keep under 300 chars)"}}, "required": ["to_phone", "message"]}},
-    {"name": "log_call_out", "description": "Log a caregiver call-out in WellSky and create an urgent admin task for coverage. Use when a caregiver reports they can't make their shift.", "input_schema": {"type": "object", "properties": {"caregiver_id": {"type": "string", "description": "The caregiver's WellSky ID"}, "caregiver_name": {"type": "string", "description": "The caregiver's name"}, "reason": {"type": "string", "description": "Reason for the call-out (e.g., 'sick', 'emergency', 'car trouble')"}, "shift_date": {"type": "string", "description": "Date of the shift (YYYY-MM-DD, defaults to today)"}}, "required": ["caregiver_id", "caregiver_name", "reason"]}},
+    {"name": "log_call_out", "description": "Log a caregiver call-out as a Care Alert in WellSky and create a coverage task. Use when a caregiver reports they can't make their shift.", "input_schema": {"type": "object", "properties": {"caregiver_id": {"type": "string", "description": "The caregiver's WellSky ID"}, "caregiver_name": {"type": "string", "description": "The caregiver's name"}, "reason": {"type": "string", "description": "Reason for the call-out (e.g., 'sick', 'emergency', 'car trouble')"}, "shift_date": {"type": "string", "description": "Date of the shift (YYYY-MM-DD, defaults to today)"}}, "required": ["caregiver_id", "caregiver_name", "reason"]}},
     {"name": "identify_caller", "description": "Look up who a phone number belongs to. Checks caregiver, client, staff, and family records in WellSky.", "input_schema": {"type": "object", "properties": {"phone_number": {"type": "string", "description": "Phone number to look up"}}, "required": ["phone_number"]}},
     {"name": "save_memory", "description": "Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred, assumed, or fabricated information.", "input_schema": {"type": "object", "properties": {"content": {"type": "string", "description": "The EXACT fact or preference stated by the user. Quote their words, don't embellish."}, "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"}, "importance": {"type": "string", "description": "high/medium/low"}}, "required": ["content", "category"]}},
     {"name": "recall_memories", "description": "Search long-term memory for saved preferences, facts, or instructions.", "input_schema": {"type": "object", "properties": {"category": {"type": "string"}, "search_text": {"type": "string"}}, "required": []}},
@@ -420,7 +420,7 @@ COMMON SCENARIOS:
 KEY CAPABILITIES:
 - You CAN see incoming text messages via check_recent_sms — you monitor ALL company lines: 307-459-8220, 719-428-3999, and 303-757-1777.
 - You CAN send text messages via send_sms — you can text caregivers, clients, or anyone.
-- You CAN log call-outs and create urgent admin tasks in WellSky.
+- You CAN log call-outs as Care Alerts in WellSky and create coverage tasks for escalation.
 - You CAN clock caregivers in and out of shifts via clock_in_shift and clock_out_shift.
 - You CAN find replacement caregivers when someone calls out via find_replacement_caregiver.
 - You CAN look up any phone number to identify who it belongs to.
@@ -1733,8 +1733,8 @@ class GigiRingCentralBot:
         """QA/Manager Logic: Document ALL care-related communications in WellSky.
 
         HEALTHCARE RULE: If a client or caregiver is mentioned, it gets documented.
-        Uses DocumentReference API (clinical-note) as PRIMARY WellSky path — works for
-        any client, no encounter/shift needed.
+        Uses encounter TaskLog API to create Care Alerts on the WellSky Dashboard.
+        Falls back to local PostgreSQL logging if no encounter found.
         """
         import re
 
@@ -1908,7 +1908,7 @@ class GigiRingCentralBot:
             return  # Skip non-care-related messages with no identified people
 
         # =====================================================================
-        # 5. Document to WellSky via DocumentReference API + PostgreSQL backup
+        # 5. Document to WellSky via encounter TaskLog (Care Alerts) + PostgreSQL backup
         # =====================================================================
         wellsky_doc_id = None
         wellsky_synced = False
@@ -2422,18 +2422,65 @@ class GigiRingCentralBot:
                 reason = tool_input.get("reason", "not specified")
                 shift_date = tool_input.get("shift_date", date.today().isoformat())
 
-                self.wellsky.create_admin_task(
-                    title=f"CALL-OUT: {caregiver_name} - {reason}",
-                    description=(
-                        f"Caregiver {caregiver_name} called out via SMS.\n"
-                        f"Reason: {reason}\n"
-                        f"Shift date: {shift_date}\n"
-                        f"ACTION: Find coverage immediately."
-                    ),
-                    priority="urgent",
-                    related_caregiver_id=caregiver_id
+                note_title = f"CALL-OUT: {caregiver_name} - {reason}"
+                note_body = (
+                    f"Via SMS\n"
+                    f"Caregiver: {caregiver_name}\n"
+                    f"Reason: {reason}\n"
+                    f"Shift date: {shift_date}\n"
+                    f"ACTION: Find coverage immediately."
                 )
-                return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name}. Admin task created."})
+
+                # 1. Care Alert: TaskLog on encounter (shows in Care Alerts on Dashboard)
+                # 2. Admin Task: escalation for coverage (shows in Tasks on Dashboard)
+                logged_to = "local only"
+                shift_client_id = None
+                try:
+                    shifts = self.wellsky.get_shifts(
+                        caregiver_id=caregiver_id,
+                        date_from=date.today(),
+                        date_to=date.today()
+                    )
+                    for s in (shifts or []):
+                        sid = getattr(s, 'client_id', None) or (s.get('client_id') if isinstance(s, dict) else None)
+                        if sid:
+                            shift_client_id = str(sid)
+                            cname = getattr(s, 'client_name', None) or (s.get('client') if isinstance(s, dict) else None)
+                            if cname:
+                                note_title = f"CALL-OUT: {caregiver_name} - {reason} — {cname} shift"
+                            break
+
+                    if shift_client_id:
+                        success, result_msg = self.wellsky.add_note_to_client(
+                            client_id=shift_client_id,
+                            note=note_body,
+                            note_type="callout",
+                            source="gigi_manager",
+                            title=note_title
+                        )
+                        if success and "WellSky" in str(result_msg):
+                            logged_to = "WellSky Care Alert"
+                        else:
+                            logged_to = "local (no encounter found)"
+                    else:
+                        logger.info(f"No shifts today for {caregiver_name} — call-out logged locally")
+                except Exception as e:
+                    logger.warning(f"Call-out schedule lookup failed: {e}")
+
+                # Escalation task for coverage (separate from the Care Alert)
+                try:
+                    self.wellsky.create_admin_task(
+                        title=f"COVERAGE NEEDED: {note_title}",
+                        description=note_body,
+                        priority="urgent",
+                        related_client_id=shift_client_id,
+                        related_caregiver_id=caregiver_id
+                    )
+                    logged_to += " + Task"
+                except Exception as e:
+                    logger.warning(f"Call-out admin task creation failed: {e}")
+
+                return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name} ({logged_to})."})
 
             elif tool_name == "save_memory":
                 if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
@@ -3458,18 +3505,66 @@ class GigiRingCentralBot:
                 caregiver_name = tool_input.get("caregiver_name", "Unknown")
                 reason = tool_input.get("reason", "not specified")
                 shift_date = tool_input.get("shift_date", date.today().isoformat())
-                self.wellsky.create_admin_task(
-                    title=f"CALL-OUT: {caregiver_name} - {reason}",
-                    description=(
-                        f"Caregiver {caregiver_name} called out.\n"
-                        f"Reason: {reason}\n"
-                        f"Shift date: {shift_date}\n"
-                        f"ACTION: Find coverage immediately."
-                    ),
-                    priority="urgent",
-                    related_caregiver_id=caregiver_id
+
+                note_title = f"CALL-OUT: {caregiver_name} - {reason}"
+                note_body = (
+                    f"Via Team Chat\n"
+                    f"Caregiver: {caregiver_name}\n"
+                    f"Reason: {reason}\n"
+                    f"Shift date: {shift_date}\n"
+                    f"ACTION: Find coverage immediately."
                 )
-                return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name}. Admin task created."})
+
+                # 1. Care Alert: TaskLog on encounter (shows in Care Alerts on Dashboard)
+                # 2. Admin Task: escalation for coverage (shows in Tasks on Dashboard)
+                logged_to = "local only"
+                shift_client_id = None
+                try:
+                    shifts = self.wellsky.get_shifts(
+                        caregiver_id=caregiver_id,
+                        date_from=date.today(),
+                        date_to=date.today()
+                    )
+                    for s in (shifts or []):
+                        sid = getattr(s, 'client_id', None) or (s.get('client_id') if isinstance(s, dict) else None)
+                        if sid:
+                            shift_client_id = str(sid)
+                            cname = getattr(s, 'client_name', None) or (s.get('client') if isinstance(s, dict) else None)
+                            if cname:
+                                note_title = f"CALL-OUT: {caregiver_name} - {reason} — {cname} shift"
+                            break
+
+                    if shift_client_id:
+                        success, result_msg = self.wellsky.add_note_to_client(
+                            client_id=shift_client_id,
+                            note=note_body,
+                            note_type="callout",
+                            source="gigi_manager",
+                            title=note_title
+                        )
+                        if success and "WellSky" in str(result_msg):
+                            logged_to = "WellSky Care Alert"
+                        else:
+                            logged_to = "local (no encounter found)"
+                    else:
+                        logger.info(f"No shifts today for {caregiver_name} — call-out logged locally")
+                except Exception as e:
+                    logger.warning(f"Call-out schedule lookup failed: {e}")
+
+                # Escalation task for coverage (separate from the Care Alert)
+                try:
+                    self.wellsky.create_admin_task(
+                        title=f"COVERAGE NEEDED: {note_title}",
+                        description=note_body,
+                        priority="urgent",
+                        related_client_id=shift_client_id,
+                        related_caregiver_id=caregiver_id
+                    )
+                    logged_to += " + Task"
+                except Exception as e:
+                    logger.warning(f"Call-out admin task creation failed: {e}")
+
+                return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name} ({logged_to})."})
 
             elif tool_name == "identify_caller":
                 phone = tool_input.get("phone_number", "")

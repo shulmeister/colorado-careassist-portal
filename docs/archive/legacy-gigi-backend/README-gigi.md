@@ -22,7 +22,7 @@ Status: staged (not live)
 - Clocks caregivers in/out of shifts
 - Reports call-outs and triggers coverage finding
 - Provides schedule information
-- Creates WellSky admin task + care alert for clock-in/out issues
+- Creates WellSky Care Alerts (TaskLog on encounter) + escalation Tasks (AdminTask) for issues
 
 ## Architecture
 

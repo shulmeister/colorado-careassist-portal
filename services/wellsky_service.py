@@ -552,12 +552,11 @@ class WellSkyService:
 
             response = requests.post(
                 auth_url,
-                json={
+                data={
+                    "grant_type": "client_credentials",
                     "client_id": self.api_key,
                     "client_secret": self.api_secret,
-                    "grant_type": "client_credentials",
                 },
-                headers={"Content-Type": "application/json"},
                 timeout=30
             )
 
@@ -602,7 +601,7 @@ class WellSkyService:
         url = f"{self.base_url}/{endpoint_clean}/"
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
+            "Content-Type": "application/fhir+json",
         }
 
         # Add agencyId to query params (required by WellSky API)
@@ -643,11 +642,11 @@ class WellSkyService:
         """Standard auth headers for WellSky requests."""
         token = self._get_access_token()
         if not token:
-            return {"Content-Type": "application/json"}
+            return {"Content-Type": "application/fhir+json"}
         return {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Content-Type": "application/fhir+json",
+            "Accept": "application/fhir+json"
         }
 
 
@@ -1264,11 +1263,11 @@ class WellSkyService:
         start_date = None
         if fhir_data.get("birthDate"): # Using birthDate as placeholder if start_date is missing in some FHIR versions
              pass
-             
+
         # Actual start date is often in extensions or specific tags in WellSky FHIR
         for ext in fhir_data.get("extension", []):
             if "startDate" in ext.get("url", ""):
-                try: 
+                try:
                     date_str = ext.get("valueDate") or ext.get("valueDateTime")
                     if date_str:
                         start_date = dt.fromisoformat(date_str.split("T")[0]).date()
@@ -2413,7 +2412,7 @@ class WellSkyService:
         # In WellSky FHIR, actual times often come from the Encounter resource period
         clock_in = None
         clock_out = None
-        
+
         # Check if there are extensions or linked encounter data for actual times
         for ext in fhir_data.get("extension", []):
             if "actualStart" in ext.get("url", ""):
@@ -4407,39 +4406,236 @@ class WellSkyService:
         if sales_rep:
             params["sales_rep"] = sales_rep
 
-        success, data = self._make_request("GET", "/prospects", params=params)
+        # WellSky FHIR: prospects are patients with isClient=false
+        success, data = self._make_request("GET", "/patients", params=params)
 
-        if success and "prospects" in data:
-            return [self._parse_prospect(p) for p in data["prospects"]]
+        if success:
+            entries = data.get("entry", [])
+            return [self._parse_prospect_from_fhir(e.get("resource", e)) for e in entries if e]
         return []
 
     def get_prospect(self, prospect_id: str) -> Optional[WellSkyProspect]:
-        """Get a single prospect by ID"""
+        """Get a single prospect by ID (WellSky Patient)"""
         if self.is_mock_mode:
             return self._mock_prospects.get(prospect_id)
 
-        success, data = self._make_request("GET", f"/prospects/{prospect_id}")
+        success, data = self._make_request("GET", f"/patients/{prospect_id}")
 
         if success:
-            return self._parse_prospect(data)
+            return self._parse_prospect_from_fhir(data)
         return None
 
     def get_prospect_by_sales_deal_id(self, deal_id: str) -> Optional[WellSkyProspect]:
-        """Find prospect by Sales Dashboard deal ID"""
+        """Find prospect by Sales Dashboard deal ID.
+
+        NOTE: WellSky FHIR API does not support custom field search.
+        This cannot be done via the API — would need local DB lookup.
+        """
         if self.is_mock_mode:
             for prospect in self._mock_prospects.values():
                 if prospect.sales_dashboard_deal_id == deal_id:
                     return prospect
             return None
 
-        success, data = self._make_request(
-            "GET", "/prospects",
-            params={"sales_dashboard_deal_id": deal_id}
-        )
-
-        if success and data.get("prospects"):
-            return self._parse_prospect(data["prospects"][0])
+        logger.warning(f"get_prospect_by_sales_deal_id({deal_id}) — not supported via WellSky FHIR API")
         return None
+
+    PROSPECT_STATUS_TO_WELLSKY = {
+        "new": "1",                    # New Lead
+        "contacted": "10",             # Initial Phone Call
+        "assessment_scheduled": "20",  # Assessment Scheduled
+        "assessment_completed": "30",  # Assessment Performed
+        "proposal_sent": "60",         # Expecting Client Signature
+        "negotiating": "60",           # Expecting Client Signature
+        "won": "70",                   # Ready to Schedule Care
+        "lost": "1",                   # Keep as New Lead (mark via notes)
+        "on_hold": "1",               # Keep as New Lead (mark via notes)
+    }
+
+    def _prospect_to_fhir_patient(self, prospect_data: Dict[str, Any]) -> Dict:
+        """Convert prospect data to a FHIR Patient resource for WellSky."""
+        status = prospect_data.get("status", "new")
+        status_code = self.PROSPECT_STATUS_TO_WELLSKY.get(status, "1")
+        is_client = (status == "won")
+
+        patient = {
+            "resourceType": "Patient",
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": self.agency_id},
+                    {"code": "isClient", "display": "true" if is_client else "false"},
+                    {"code": "status", "display": status_code},
+                ]
+            },
+            "name": [{
+                "family": prospect_data.get("last_name", ""),
+                "given": [prospect_data.get("first_name", "")],
+            }],
+            "telecom": [],
+            "address": [],
+        }
+
+        if prospect_data.get("phone"):
+            patient["telecom"].append({"system": "phone", "value": prospect_data["phone"], "use": "mobile"})
+        if prospect_data.get("email"):
+            patient["telecom"].append({"system": "email", "value": prospect_data["email"]})
+        if prospect_data.get("address"):
+            patient["address"].append({
+                "line": [prospect_data["address"]],
+                "city": prospect_data.get("city", ""),
+                "state": prospect_data.get("state", "CO"),
+                "postalCode": prospect_data.get("zip_code", ""),
+            })
+
+        notes_parts = []
+        if prospect_data.get("referral_source"):
+            notes_parts.append(f"Referral: {prospect_data['referral_source']}")
+        if prospect_data.get("payer_type"):
+            notes_parts.append(f"Payer: {prospect_data['payer_type']}")
+        if prospect_data.get("notes"):
+            notes_parts.append(prospect_data["notes"])
+        if prospect_data.get("sales_dashboard_deal_id"):
+            notes_parts.append(f"Sales Deal ID: {prospect_data['sales_dashboard_deal_id']}")
+        if notes_parts:
+            patient["meta"]["tag"].append({"code": "notes", "display": " | ".join(notes_parts)})
+
+        return patient
+
+    def _prospect_updates_to_fhir(self, prospect_id: str, updates: Dict[str, Any]) -> Dict:
+        """Convert prospect updates to FHIR Patient update payload."""
+        status = updates.get("status", "new")
+        status_code = self.PROSPECT_STATUS_TO_WELLSKY.get(status, "1")
+        is_client = (status == "won")
+
+        return {
+            "resourceType": "Patient",
+            "id": prospect_id,
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": self.agency_id},
+                    {"code": "isClient", "display": "true" if is_client else "false"},
+                    {"code": "status", "display": status_code},
+                ]
+            },
+        }
+
+    def _applicant_to_fhir_practitioner(self, applicant_data: Dict[str, Any]) -> Dict:
+        """Convert applicant data to a FHIR Practitioner resource for WellSky."""
+        practitioner = {
+            "resourceType": "Practitioner",
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": self.agency_id},
+                ]
+            },
+            "name": [{
+                "family": applicant_data.get("last_name", ""),
+                "given": [applicant_data.get("first_name", "")],
+            }],
+            "telecom": [],
+            "address": [],
+        }
+
+        if applicant_data.get("phone"):
+            practitioner["telecom"].append({"system": "phone", "value": applicant_data["phone"], "use": "mobile"})
+        if applicant_data.get("email"):
+            practitioner["telecom"].append({"system": "email", "value": applicant_data["email"]})
+        if applicant_data.get("address"):
+            practitioner["address"].append({
+                "line": [applicant_data["address"]],
+                "city": applicant_data.get("city", ""),
+                "state": applicant_data.get("state", "CO"),
+                "postalCode": applicant_data.get("zip_code", ""),
+            })
+
+        notes_parts = []
+        if applicant_data.get("source"):
+            notes_parts.append(f"Source: {applicant_data['source']}")
+        if applicant_data.get("position_applied"):
+            notes_parts.append(f"Position: {applicant_data['position_applied']}")
+        if applicant_data.get("notes"):
+            notes_parts.append(applicant_data["notes"])
+        if applicant_data.get("recruiting_dashboard_lead_id"):
+            notes_parts.append(f"Recruiting Lead ID: {applicant_data['recruiting_dashboard_lead_id']}")
+        if notes_parts:
+            practitioner["meta"]["tag"].append({"code": "notes", "display": " | ".join(notes_parts)})
+
+        return practitioner
+
+    def _applicant_updates_to_fhir(self, applicant_id: str, updates: Dict[str, Any]) -> Dict:
+        """Convert applicant updates to FHIR Practitioner update payload."""
+        return {
+            "resourceType": "Practitioner",
+            "id": applicant_id,
+            "meta": {
+                "tag": [
+                    {"code": "agencyId", "display": self.agency_id},
+                ]
+            },
+        }
+
+    def _parse_prospect_from_fhir(self, data: Dict) -> Optional[WellSkyProspect]:
+        """Parse a FHIR Patient resource into a WellSkyProspect."""
+        try:
+            ws_id = str(data.get("id", ""))
+            names = data.get("name", [{}])
+            name = names[0] if names else {}
+            first_name = (name.get("given", [""])[0] if name.get("given") else "")
+            last_name = name.get("family", "")
+
+            phone, email = "", ""
+            for tc in data.get("telecom", []):
+                if tc.get("system") == "phone" and not phone:
+                    phone = tc.get("value", "")
+                elif tc.get("system") == "email" and not email:
+                    email = tc.get("value", "")
+
+            addr = data.get("address", [{}])
+            address_obj = addr[0] if addr else {}
+            address = (address_obj.get("line", [""])[0] if address_obj.get("line") else "")
+
+            return WellSkyProspect(
+                id=ws_id,
+                first_name=first_name,
+                last_name=last_name,
+                status=ProspectStatus.NEW,
+                phone=phone,
+                email=email,
+                address=address,
+                city=address_obj.get("city", ""),
+                state=address_obj.get("state", ""),
+            )
+        except Exception as e:
+            logger.error(f"Error parsing FHIR Patient as prospect: {e}")
+            return None
+
+    def _parse_applicant_from_fhir(self, data: Dict) -> Optional[WellSkyApplicant]:
+        """Parse a FHIR Practitioner resource into a WellSkyApplicant."""
+        try:
+            ws_id = str(data.get("id", ""))
+            names = data.get("name", [{}])
+            name = names[0] if names else {}
+            first_name = (name.get("given", [""])[0] if name.get("given") else "")
+            last_name = name.get("family", "")
+
+            phone, email = "", ""
+            for tc in data.get("telecom", []):
+                if tc.get("system") == "phone" and not phone:
+                    phone = tc.get("value", "")
+                elif tc.get("system") == "email" and not email:
+                    email = tc.get("value", "")
+
+            return WellSkyApplicant(
+                id=ws_id,
+                first_name=first_name,
+                last_name=last_name,
+                status=ApplicantStatus.NEW,
+                phone=phone,
+                email=email,
+            )
+        except Exception as e:
+            logger.error(f"Error parsing FHIR Practitioner as applicant: {e}")
+            return None
 
     def create_prospect(self, prospect_data: Dict[str, Any]) -> Optional[WellSkyProspect]:
         """
@@ -4475,10 +4671,25 @@ class WellSkyService:
             logger.info(f"Mock: Created prospect {prospect_id} ({prospect.full_name})")
             return prospect
 
-        success, data = self._make_request("POST", "/prospects", data=prospect_data)
+        # Build FHIR Patient resource (isClient=false for prospects)
+        fhir_patient = self._prospect_to_fhir_patient(prospect_data)
+        success, data = self._make_request("POST", "/patients", data=fhir_patient)
 
         if success:
-            return self._parse_prospect(data)
+            ws_id = str(data.get("id", ""))
+            logger.info(f"Created WellSky prospect (patient) {ws_id} for {prospect_data.get('first_name')} {prospect_data.get('last_name')}")
+            return WellSkyProspect(
+                id=ws_id,
+                first_name=prospect_data.get("first_name", ""),
+                last_name=prospect_data.get("last_name", ""),
+                status=ProspectStatus(prospect_data.get("status", "new")),
+                phone=prospect_data.get("phone", ""),
+                email=prospect_data.get("email", ""),
+                address=prospect_data.get("address", ""),
+                city=prospect_data.get("city", ""),
+                state=prospect_data.get("state", "CO"),
+                sales_dashboard_deal_id=prospect_data.get("sales_dashboard_deal_id"),
+            )
         return None
 
     def update_prospect(
@@ -4502,10 +4713,13 @@ class WellSkyService:
             logger.info(f"Mock: Updated prospect {prospect_id}")
             return prospect
 
-        success, data = self._make_request("PUT", f"/prospects/{prospect_id}", data=updates)
+        # Build partial FHIR Patient update with status tag
+        fhir_update = self._prospect_updates_to_fhir(prospect_id, updates)
+        success, data = self._make_request("PUT", f"/patients/{prospect_id}", data=fhir_update)
 
         if success:
-            return self._parse_prospect(data)
+            logger.info(f"Updated WellSky prospect (patient) {prospect_id}")
+            return self._parse_prospect(data) if data else None
         return None
 
     def update_prospect_status(
@@ -4644,38 +4858,38 @@ class WellSkyService:
         if recruiter:
             params["recruiter"] = recruiter
 
-        success, data = self._make_request("GET", "/applicants", params=params)
+        # WellSky FHIR: applicants are practitioners
+        success, data = self._make_request("GET", "/practitioners", params=params)
 
-        if success and "applicants" in data:
-            return [self._parse_applicant(a) for a in data["applicants"]]
+        if success:
+            entries = data.get("entry", [])
+            return [self._parse_applicant_from_fhir(e.get("resource", e)) for e in entries if e]
         return []
 
     def get_applicant(self, applicant_id: str) -> Optional[WellSkyApplicant]:
-        """Get a single applicant by ID"""
+        """Get a single applicant by ID (WellSky Practitioner)"""
         if self.is_mock_mode:
             return self._mock_applicants.get(applicant_id)
 
-        success, data = self._make_request("GET", f"/applicants/{applicant_id}")
+        success, data = self._make_request("GET", f"/practitioners/{applicant_id}")
 
         if success:
-            return self._parse_applicant(data)
+            return self._parse_applicant_from_fhir(data)
         return None
 
     def get_applicant_by_recruiting_lead_id(self, lead_id: str) -> Optional[WellSkyApplicant]:
-        """Find applicant by Recruiting Dashboard lead ID"""
+        """Find applicant by Recruiting Dashboard lead ID.
+
+        NOTE: WellSky FHIR API does not support custom field search.
+        This cannot be done via the API — would need local DB lookup.
+        """
         if self.is_mock_mode:
             for applicant in self._mock_applicants.values():
                 if applicant.recruiting_dashboard_lead_id == lead_id:
                     return applicant
             return None
 
-        success, data = self._make_request(
-            "GET", "/applicants",
-            params={"recruiting_dashboard_lead_id": lead_id}
-        )
-
-        if success and data.get("applicants"):
-            return self._parse_applicant(data["applicants"][0])
+        logger.warning(f"get_applicant_by_recruiting_lead_id({lead_id}) — not supported via WellSky FHIR API")
         return None
 
     def create_applicant(self, applicant_data: Dict[str, Any]) -> Optional[WellSkyApplicant]:
@@ -4715,10 +4929,22 @@ class WellSkyService:
             logger.info(f"Mock: Created applicant {applicant_id} ({applicant.full_name})")
             return applicant
 
-        success, data = self._make_request("POST", "/applicants", data=applicant_data)
+        # Build FHIR Practitioner resource
+        fhir_practitioner = self._applicant_to_fhir_practitioner(applicant_data)
+        success, data = self._make_request("POST", "/practitioners", data=fhir_practitioner)
 
         if success:
-            return self._parse_applicant(data)
+            ws_id = str(data.get("id", ""))
+            logger.info(f"Created WellSky applicant (practitioner) {ws_id} for {applicant_data.get('first_name')} {applicant_data.get('last_name')}")
+            return WellSkyApplicant(
+                id=ws_id,
+                first_name=applicant_data.get("first_name", ""),
+                last_name=applicant_data.get("last_name", ""),
+                status=ApplicantStatus(applicant_data.get("status", "new")),
+                phone=applicant_data.get("phone", ""),
+                email=applicant_data.get("email", ""),
+                recruiting_dashboard_lead_id=applicant_data.get("recruiting_dashboard_lead_id"),
+            )
         return None
 
     def update_applicant(
@@ -4742,10 +4968,13 @@ class WellSkyService:
             logger.info(f"Mock: Updated applicant {applicant_id}")
             return applicant
 
-        success, data = self._make_request("PUT", f"/applicants/{applicant_id}", data=updates)
+        # Build partial FHIR Practitioner update
+        fhir_update = self._applicant_updates_to_fhir(applicant_id, updates)
+        success, data = self._make_request("PUT", f"/practitioners/{applicant_id}", data=fhir_update)
 
         if success:
-            return self._parse_applicant(data)
+            logger.info(f"Updated WellSky applicant (practitioner) {applicant_id}")
+            return self._parse_applicant(data) if data else None
         return None
 
     def update_applicant_status(

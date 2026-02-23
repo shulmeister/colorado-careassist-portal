@@ -22,8 +22,8 @@
 - Financial data tools (stocks, crypto via Alpha Vantage)
 - **WellSky integration** (FULLY OPERATIONAL):
   - Shift updates (mark open, assign, cancel)
-  - Care Alerts (add notes to client/caregiver)
-  - **Admin Tasks** (create coverage/issue tasks) ← NEW!
+  - Care Alerts via TaskLog on encounters (add notes to client profile → Dashboard Care Alerts)
+  - Admin Tasks for escalations (coverage needed, client issues → Dashboard Tasks)
   - Caregiver/client lookups
   - Schedule queries
 - **RingCentral integration**:
@@ -248,16 +248,16 @@ python memory_cli.py audit <memory_id>
   - RingCentral limits Team Messaging webhooks to 7 days max
   - Add to Mac Mini Scheduler: Daily 3am run `python gigi/renew_team_webhook.py`
 
-### WellSky Task Integration ✅ (NEW - Autonomous Mode)
-- **Call-out workflow** now creates WellSky admin task for finding replacement
-  - Task priority: URGENT
-  - Assigned to scheduler (if WELLSKY_SCHEDULER_USER_ID configured)
-  - Linked to client record
-  - Includes shift details, caregiver name, reason
-- **Client issue workflow** now creates WellSky admin task
+### WellSky Documentation Integration ✅ (Updated Feb 22)
+- **Call-out workflow** creates BOTH:
+  1. Care Alert (TaskLog on encounter) — visible in Dashboard Care Alerts
+  2. Admin Task for coverage escalation — visible in Dashboard Tasks
+  - Caregiver → schedule → client → encounter chain for proper routing
+- **Client issue workflow** creates Admin Task for follow-up
   - Task priority based on issue severity (urgent/high/normal)
   - Assigned to care manager (if WELLSKY_CARE_MANAGER_USER_ID configured)
   - Requires follow-up call within 30 minutes
+- **General documentation** (late notices, comments, etc.) creates Care Alerts only (no task)
 - **WellSky API verified working**
   - Fixed WELLSKY_API_URL (was wrong, now `https://connect.clearcareonline.com/v1`)
   - Authentication: ✅ Working
