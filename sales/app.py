@@ -748,7 +748,7 @@ async def auth_callback(request: Request, code: str = None, error: str = None):
         result = await oauth_manager.handle_callback(code, "")
 
         # Create response with session cookie
-        response = RedirectResponse(url="/", status_code=302)
+        response = RedirectResponse(url="/sales/", status_code=302)
         response.set_cookie(
             key="session_token",
             value=result["session_token"],
@@ -853,7 +853,7 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
     """Serve the React CRM app"""
     if not current_user:
         # Redirect to login if not authenticated
-        return RedirectResponse(url="/auth/login")
+        return RedirectResponse(url="/sales/auth/login")
 
     # Serve React app
     frontend_index = os.path.join(os.path.dirname(__file__), "frontend", "dist", "index.html")
@@ -863,7 +863,7 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
 
     # Fallback to old Jinja2 template if React build doesn't exist
     logger.warning(f"⚠️  React frontend not found at {frontend_index}, redirecting to /legacy")
-    return RedirectResponse(url="/legacy")
+    return RedirectResponse(url="/sales/legacy")
 
 @app.post("/upload")
 async def upload_file(
@@ -11647,6 +11647,44 @@ async def get_wellsky_prospects(
 
 # SPA catch-all route - must be last!
 # This catches all routes and serves the React app for client-side routing
+# ==================== API ROUTE ALIASES ====================
+# Convenience aliases so common short paths resolve correctly.
+# MUST be defined before the SPA catch-all route below.
+
+@app.get("/api/companies")
+async def api_companies_alias(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    range: Optional[str] = Query(default=None),
+    sort: Optional[str] = Query(default=None),
+    order: Optional[str] = Query(default=None),
+    q: Optional[str] = Query(default=None),
+    size: Optional[List[str]] = Query(default=None),
+    sector: Optional[List[str]] = Query(default=None),
+    sales_id: Optional[int] = Query(default=None),
+    filter: Optional[str] = Query(default=None),
+):
+    return await admin_get_companies(request, db, current_user, range, sort, order, q, size, sector, sales_id, filter)
+
+
+@app.get("/api/summary")
+async def api_summary_alias(db: Session = Depends(get_db), current_user: Dict[str, Any] = Depends(get_current_user)):
+    return await get_dashboard_summary(db, current_user)
+
+
+@app.get("/api/activities")
+async def api_activities_alias(
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    company_id: Optional[int] = None,
+    contact_id: Optional[int] = None,
+    deal_id: Optional[int] = None,
+):
+    return await get_activity_logs(db, current_user, company_id, contact_id, deal_id)
+
+
+# ==================== SPA CATCH-ALL (must be last) ====================
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def spa_catchall(
     request: Request,
@@ -11683,7 +11721,7 @@ async def spa_catchall(
         return _serve_static(full_path)
 
     if not current_user:
-        return RedirectResponse(url="/auth/login")
+        return RedirectResponse(url="/sales/auth/login")
 
     # Serve React app index.html for all non-API routes
     frontend_index = os.path.join(frontend_dist, "index.html")

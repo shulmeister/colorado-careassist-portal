@@ -6063,6 +6063,14 @@ async def health_check():
     return health
 
 
+@app.get("/api/status")
+async def api_status():
+    """Service status endpoint (alias for /health with additional context)."""
+    health = await health_check()
+    health["endpoint"] = "/api/status"
+    return health
+
+
 @app.get("/")
 async def root():
     """Root endpoint with agent info."""
