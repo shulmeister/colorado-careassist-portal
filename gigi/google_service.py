@@ -1,6 +1,5 @@
-import os
-import json
 import logging
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -19,9 +18,9 @@ try:
 except ImportError:
     pass
 
+from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
-from google.auth.transport.requests import Request
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +58,7 @@ class GoogleService:
     def _get_service(self, name, version):
         if not self._creds:
             return None
-            
+
         if not self._creds.valid:
             if self._creds.expired and self._creds.refresh_token:
                 try:
@@ -74,14 +73,14 @@ class GoogleService:
         try:
             service = self._get_service('gmail', 'v1')
             if not service: return []
-            
+
             # If searching for personal stuff, look for the forward label
             if "personal" in query.lower() or "shulmeister" in query.lower():
                 query = f"({query}) OR label:\"Gigi's Inbox\""
-                
+
             results = service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
             messages = results.get('messages', [])
-            
+
             detailed_messages = []
             for msg in messages:
                 m = service.users().messages().get(userId='me', id=msg['id']).execute()
@@ -123,7 +122,7 @@ class GoogleService:
                         orderBy='startTime'
                     ).execute()
                     events = events_result.get('items', [])
-                    
+
                     for event in events:
                         start = event['start'].get('dateTime', event['start'].get('date'))
                         all_events.append({
@@ -132,7 +131,7 @@ class GoogleService:
                             "location": event.get('location', 'N/A'),
                             "calendar": cal.get('summaryOverride', cal.get('summary'))
                         })
-            
+
             all_events.sort(key=lambda x: x['start'])
             return all_events[:max_results]
         except Exception as e:
@@ -164,6 +163,66 @@ class GoogleService:
         except Exception as e:
             logger.error(f"Send email error: {e}")
             return False
+
+    # ── Google Drive ──────────────────────────────────────────────────────
+
+    def drive_upload_file(self, file_bytes: bytes, filename: str, folder_id: str,
+                          mime_type: str = "application/pdf") -> dict | None:
+        """Upload a file to Google Drive (as Jason's account). Returns {id, name, webViewLink, url}."""
+        try:
+            service = self._get_service('drive', 'v3')
+            if not service:
+                logger.error("Drive service not available")
+                return None
+
+            import io
+
+            from googleapiclient.http import MediaIoBaseUpload
+
+            metadata = {'name': filename, 'parents': [folder_id]}
+            media = MediaIoBaseUpload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=True)
+            created = service.files().create(
+                body=metadata, media_body=media,
+                fields='id, name, webViewLink',
+            ).execute()
+            logger.info(f"Uploaded {filename} to Drive folder {folder_id} (id={created.get('id')})")
+            return {
+                "id": created.get("id"),
+                "name": created.get("name"),
+                "webViewLink": created.get("webViewLink"),
+                "url": f"https://drive.google.com/file/d/{created.get('id')}/view",
+            }
+        except Exception as e:
+            logger.error(f"Drive upload error: {e}")
+            return None
+
+    def drive_get_or_create_folder(self, parent_id: str, folder_name: str) -> str | None:
+        """Find or create a subfolder in Google Drive. Returns folder ID."""
+        try:
+            service = self._get_service('drive', 'v3')
+            if not service:
+                return None
+
+            query = (
+                f"'{parent_id}' in parents and "
+                f"name = '{folder_name}' and "
+                f"mimeType = 'application/vnd.google-apps.folder' and "
+                f"trashed = false"
+            )
+            results = service.files().list(q=query, spaces='drive', fields='files(id, name)').execute()
+            files = results.get('files', [])
+            if files:
+                return files[0]['id']
+
+            folder = service.files().create(
+                body={'name': folder_name, 'mimeType': 'application/vnd.google-apps.folder', 'parents': [parent_id]},
+                fields='id',
+            ).execute()
+            logger.info(f"Created Drive folder '{folder_name}' in {parent_id}")
+            return folder.get('id')
+        except Exception as e:
+            logger.error(f"Drive folder error: {e}")
+            return None
 
 # Singleton instance
 google_service = GoogleService()
