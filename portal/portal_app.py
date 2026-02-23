@@ -24,13 +24,6 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
-# Rate limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
-
 from portal_auth import get_current_user, get_current_user_optional, oauth_manager
 from portal_database import db_manager, get_db
 from portal_models import (
@@ -48,6 +41,12 @@ from services.marketing.metrics_service import (
     get_social_metrics,
 )
 from services.search_service import search_service
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
 
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
@@ -3076,7 +3075,7 @@ async def api_operations_hours_breakdown(
             WHERE scheduled_start >= NOW() - INTERVAL '90 days'
               AND scheduled_end IS NOT NULL
         """)
-        total_scheduled = round(cur.fetchone()[0], 1)
+        total_scheduled = round(float(cur.fetchone()[0]), 1)
 
         # Actual hours worked (completed shifts with clock-in/out)
         cur.execute("""
@@ -3085,7 +3084,7 @@ async def api_operations_hours_breakdown(
             WHERE actual_start IS NOT NULL AND actual_end IS NOT NULL
               AND actual_start >= NOW() - INTERVAL '90 days'
         """)
-        total_actual = round(cur.fetchone()[0], 1)
+        total_actual = round(float(cur.fetchone()[0]), 1)
 
         # Weekly breakdown (last 4 weeks)
         cur.execute("""
@@ -3096,7 +3095,7 @@ async def api_operations_hours_breakdown(
               AND scheduled_end IS NOT NULL
             GROUP BY week ORDER BY week
         """)
-        weekly = [{"week": row[0].isoformat(), "hours": round(row[1], 1)} for row in cur.fetchall()]
+        weekly = [{"week": row[0].isoformat(), "hours": round(float(row[1]), 1)} for row in cur.fetchall()]
 
         cur.close()
         conn.close()
@@ -3104,7 +3103,7 @@ async def api_operations_hours_breakdown(
         return JSONResponse({
             "total_scheduled_hours": total_scheduled,
             "total_actual_hours": total_actual,
-            "utilization_rate": round((total_actual / total_scheduled * 100) if total_scheduled > 0 else 0, 1),
+            "utilization_rate": round(float((total_actual / total_scheduled * 100) if total_scheduled > 0 else 0), 1),
             "weekly_breakdown": weekly,
             "wellsky_connected": True,
         })
