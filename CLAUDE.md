@@ -83,7 +83,7 @@ This is the **unified platform** for Colorado Care Assist, containing:
 - **RingCentral**: SMS, voice, team messaging, DMs, inbound SMS monitoring, fax send/receive
 - **Google Workspace**: Calendar, email (read/write)
 - **Fax**: Send/receive via RingCentral API (free with RingEX). Portal page with Inbox/Sent/Outbox tabs, multi-file upload, cover page/note, drag-and-drop page reorder, inline PDF preview. Gigi tools: `send_fax`, `check_fax_status`, `list_faxes`. Telegram + email alerts on inbound fax. Numbers: 719-428-3999, 303-757-1777.
-- **Auto-Documentation**: Syncs RC messages → WellSky client notes
+- **Auto-Documentation**: Syncs RC messages → WellSky Care Alerts (TaskLog) + escalation Tasks (AdminTask)
 - **After-Hours Coverage**: Autonomous SMS/voice handling
 - **Morning Briefing**: Daily 7 AM Telegram message with weather, calendar, shifts, emails, alerts
 
