@@ -2618,6 +2618,18 @@ async def api_fax_poll(current_user: Dict[str, Any] = Depends(get_current_user))
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
+@app.post("/api/fax/retry-wellsky")
+async def api_fax_retry_wellsky(current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Retry WellSky uploads for faxes that failed to upload."""
+    try:
+        from services.fax_service import retry_wellsky_uploads
+        result = retry_wellsky_uploads()
+        return JSONResponse(result)
+    except Exception as e:
+        logger.error(f"WellSky retry error: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
 # ── End Fax ───────────────────────────────────────────────────────────────────
 
 

@@ -822,6 +822,14 @@ async def file_fax_referral(fax_id: int) -> dict:
                 if success:
                     ws_doc_id = ws_resp.get("id", "unknown") if isinstance(ws_resp, dict) else "unknown"
                     result["wellsky_document_id"] = ws_doc_id
+                    # Persist WellSky doc ID
+                    _conn = _db()
+                    try:
+                        _cur = _conn.cursor()
+                        _cur.execute("UPDATE fax_log SET wellsky_doc_id = %s WHERE id = %s", (ws_doc_id, fax_id))
+                        _conn.commit()
+                    finally:
+                        _conn.close()
                     logger.info(f"Uploaded fax {fax_id} to WellSky DocumentReference {ws_doc_id} for patient {filed_to}")
                 else:
                     result["wellsky_upload_error"] = str(ws_resp)
@@ -894,3 +902,82 @@ async def file_fax_referral(fax_id: int) -> dict:
         conn.close()
 
     return result
+
+
+def retry_wellsky_uploads() -> dict:
+    """Retry WellSky DocumentReference uploads for faxes that were filed but failed to upload.
+
+    Finds faxes with filed_to set but no wellsky_doc_id, and attempts the upload.
+    """
+    import base64 as _b64
+
+    from services.wellsky_service import wellsky_service
+
+    conn = _db()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, filed_to, local_path, parsed_data
+            FROM fax_log
+            WHERE filed_to IS NOT NULL
+              AND wellsky_doc_id IS NULL
+              AND local_path IS NOT NULL
+            ORDER BY id
+        """)
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    results = {"attempted": 0, "succeeded": 0, "failed": 0, "details": []}
+
+    for fax_id, filed_to, local_path, parsed_data in rows:
+        results["attempted"] += 1
+        try:
+            if not Path(local_path).exists():
+                results["failed"] += 1
+                results["details"].append({"fax_id": fax_id, "error": "PDF not found"})
+                continue
+
+            pdf_b64 = _b64.b64encode(Path(local_path).read_bytes()).decode("utf-8")
+
+            doc_type = "fax"
+            patient_name = "unknown"
+            description = ""
+            if parsed_data and isinstance(parsed_data, dict):
+                doc_type = parsed_data.get("document_type", "fax")
+                patient_name = parsed_data.get("patient", {}).get("name", "unknown").replace(" ", "_")
+                description = parsed_data.get("summary", "")[:200]
+
+            ws_type_map = {"facesheet": "Facesheet", "referral": "Referral", "authorization": "Authorization"}
+            ws_doc_type = ws_type_map.get(doc_type, "Fax Document")
+            ws_filename = f"{patient_name}_{doc_type}.pdf"
+
+            success, ws_resp = wellsky_service.create_document_reference(
+                patient_id=str(filed_to),
+                document_type=ws_doc_type,
+                content_type="application/pdf",
+                data_base64=pdf_b64,
+                description=description,
+                filename=ws_filename,
+            )
+
+            if success:
+                ws_doc_id = ws_resp.get("id", "unknown") if isinstance(ws_resp, dict) else "unknown"
+                conn2 = _db()
+                try:
+                    cur2 = conn2.cursor()
+                    cur2.execute("UPDATE fax_log SET wellsky_doc_id = %s WHERE id = %s", (ws_doc_id, fax_id))
+                    conn2.commit()
+                finally:
+                    conn2.close()
+                results["succeeded"] += 1
+                results["details"].append({"fax_id": fax_id, "wellsky_doc_id": ws_doc_id})
+                logger.info(f"Retry: uploaded fax {fax_id} to WellSky DocumentReference {ws_doc_id}")
+            else:
+                results["failed"] += 1
+                results["details"].append({"fax_id": fax_id, "error": str(ws_resp)[:200]})
+        except Exception as e:
+            results["failed"] += 1
+            results["details"].append({"fax_id": fax_id, "error": str(e)[:200]})
+
+    return results
