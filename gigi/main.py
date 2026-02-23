@@ -160,7 +160,7 @@ except Exception as e:
 
 # NOTE: RC bot runs as standalone LaunchAgent, NOT inside the portal process.
 # Removed module-level GigiRingCentralBot() — it was unused dead code causing
-# a heavy init side effect (RC auth, WellSky init, morning briefing service). (Feb 11, 2026)
+# a heavy init side effect (RC auth, WellSky init). (Feb 11, 2026)
 
 # Import Partial Availability Parser for nuanced call-out handling
 try:

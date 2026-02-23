@@ -2,7 +2,6 @@
 Gigi Pattern Detector
 
 Analyzes various data sources for repeating friction and anomalies.
-Returns a summary suitable for inclusion in the morning briefing message.
 
 Checks:
 - Repeated tool failures (same tool failing 3+ times in 7 days)
@@ -12,10 +11,9 @@ Checks:
 - Memory drift (active memories with confidence < 0.4)
 """
 
-import os
 import logging
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional
+import os
+from typing import Dict, List, Optional
 
 try:
     import psycopg2
@@ -222,7 +220,7 @@ class PatternDetector:
 
     def get_briefing_section(self) -> Optional[str]:
         """
-        Format detected patterns into a readable text block for the morning briefing.
+        Format detected patterns into a readable text block.
 
         Returns:
             A formatted string section, or None if no patterns were found.

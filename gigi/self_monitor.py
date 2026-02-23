@@ -2,8 +2,7 @@
 Gigi Self-Monitor - Weekly Self-Audit System
 
 Analyzes Gigi's own operational metrics and generates a report.
-Designed to run weekly (e.g., Sunday night) or be called from the
-morning briefing service on Mondays.
+Designed to run weekly (e.g., Sunday night).
 
 Metrics collected:
 - Failure rate (from gigi_failure_log)
@@ -11,8 +10,8 @@ Metrics collected:
 - Shift coverage (from cached_appointments)
 """
 
-import os
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
@@ -52,7 +51,7 @@ class VibeMonitor:
             return {"score": 100, "drift_detected": False, "critique": ["No recent responses to audit"]}
 
         history_text = "\n---\n".join(assistant_msgs[:10])
-        
+
         prompt = f"""You are a harsh communication critic for a high-performance Executive Office. 
 Audit these AI assistant responses sent to the CEO (Jason).
 
@@ -81,7 +80,7 @@ Output ONLY a JSON object:
                 model=model.name,
                 contents=prompt
             )
-            
+
             import json
             # Clean potential markdown from JSON
             raw_text = response.text.strip().replace("```json", "").replace("```", "")
@@ -291,7 +290,7 @@ class SelfMonitor:
 
     async def get_briefing_section(self, llm_client=None) -> Optional[str]:
         """
-        Generate a formatted text block for the Monday morning briefing.
+        Generate a formatted text block for the weekly audit report.
         """
         audit = self.run_audit()
         return self._format_briefing(audit, llm_client=llm_client)
@@ -299,7 +298,7 @@ class SelfMonitor:
     def _format_briefing(self, audit: Dict, llm_client=None) -> Optional[str]:
         """Synchronous formatter for audit results."""
         import asyncio
-        
+
         # Check if we have any meaningful data at all
         mem = audit["memory"]
         fail = audit["failures"]
@@ -330,7 +329,7 @@ class SelfMonitor:
                 except RuntimeError:
                     # Already in a loop
                     vibe = {"score": "N/A", "drift_detected": False}
-                
+
                 score = vibe.get("score", 0)
                 status = "HEALTHY" if not vibe.get("drift_detected") else "DRIFT DETECTED"
                 lines.append(f"  Vibe: {score}/100 - {status}")

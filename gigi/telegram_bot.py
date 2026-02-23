@@ -575,7 +575,7 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 
 
 def _build_telegram_system_prompt(conversation_store=None, user_message=None):
-    """Build the system prompt with dynamic context: date, memories, mode, cross-channel, elite teams."""
+    """Build the system prompt with dynamic context: date, memories, mode, cross-channel."""
     parts = [_TELEGRAM_SYSTEM_PROMPT_BASE]
 
     # Current date/time
@@ -611,17 +611,6 @@ def _build_telegram_system_prompt(conversation_store=None, user_message=None):
                 parts.append(ltc)
         except Exception as e:
             logger.warning(f"Cross-channel context failed: {e}")
-
-    # Inject elite team context if triggered
-    if user_message:
-        try:
-            from gigi.elite_teams import detect_team, get_team_context
-            team_key = detect_team(user_message)
-            if team_key:
-                parts.append(get_team_context(team_key))
-                logger.info(f"Elite team activated: {team_key}")
-        except Exception as e:
-            logger.warning(f"Elite team detection failed: {e}")
 
     return "\n".join(parts)
 
