@@ -48,16 +48,41 @@ async def evaluate_simulation(
         }
     """
 
-    # Tool Score: Simple matching
+    # Tool Score: Matching with partial credit for related tools
     expected_tools = set(scenario.get("expected_tools", []))
     actual_tools = set(tools_used)
 
+    # Related tool groups — using a related tool earns partial credit
+    _RELATED_TOOLS = {
+        "get_wellsky_clients": {"get_wellsky_caregivers", "get_client_current_status", "get_wellsky_shifts"},
+        "get_wellsky_caregivers": {"get_wellsky_clients", "get_wellsky_shifts"},
+        "get_client_current_status": {"get_wellsky_clients", "get_wellsky_shifts"},
+        "get_wellsky_shifts": {"get_wellsky_clients", "get_wellsky_caregivers"},
+    }
+    # Lookup-only tools (don't penalize for proactive use)
+    _LOOKUP_TOOLS = {"get_wellsky_clients", "get_wellsky_caregivers", "get_client_current_status", "get_wellsky_shifts"}
+
     if expected_tools:
-        tool_match_ratio = len(expected_tools & actual_tools) / len(expected_tools)
-        tool_score = int(tool_match_ratio * 100)
+        matched = len(expected_tools & actual_tools)
+        total_expected = len(expected_tools)
+
+        # Give partial credit for related tools used instead of expected ones
+        partial_credit = 0.0
+        for missing_tool in (expected_tools - actual_tools):
+            related = _RELATED_TOOLS.get(missing_tool, set())
+            if actual_tools & related:
+                partial_credit += 0.25  # 25% credit per related tool match
+
+        match_score = (matched + partial_credit) / total_expected
+        tool_score = min(int(match_score * 100), 100)
     else:
-        # No tools expected
-        tool_score = 100 if not actual_tools else 50
+        # No tools expected — only penalize action tools, not lookups
+        if not actual_tools:
+            tool_score = 100
+        elif actual_tools <= _LOOKUP_TOOLS:
+            tool_score = 85  # Proactive lookup is fine
+        else:
+            tool_score = 50  # Action tools used when none expected
 
     tools_missing = list(expected_tools - actual_tools)
     tools_extra = list(actual_tools - expected_tools)
