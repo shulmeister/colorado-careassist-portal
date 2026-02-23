@@ -19,7 +19,8 @@ You are a senior infrastructure/SRE engineer managing the Colorado CareAssist Ma
 
 | Service | Port | LaunchAgent | Notes |
 |---------|------|-------------|-------|
-| Production Portal | 8765 | com.coloradocareassist.gigi-unified | Portal + Gigi + Sales + Recruiting |
+| Production Portal | 8765 | com.coloradocareassist.gigi-unified | Portal + Sales + Recruiting |
+| Production Gigi | 8767 | com.coloradocareassist.gigi-server | Standalone Gigi AI service |
 | Staging Portal | 8766 | com.coloradocareassist.staging | Same as production (staging branch) |
 | Main Website | 3000 | com.coloradocareassist.website | Next.js |
 | Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare | Next.js |
@@ -48,8 +49,10 @@ curl -sf http://localhost:8765/health  # production
 curl -sf http://localhost:8766/health  # staging
 
 # View logs
-tail -f ~/logs/gigi-unified.log        # production stdout
-tail -f ~/logs/gigi-unified-error.log   # production stderr
+tail -f ~/logs/gigi-unified.log        # production portal stdout
+tail -f ~/logs/gigi-unified-error.log   # production portal stderr
+tail -f ~/logs/gigi-server.log          # gigi standalone stdout
+tail -f ~/logs/gigi-server-error.log    # gigi standalone stderr
 tail -f ~/logs/staging.log              # staging
 tail -f ~/logs/telegram-bot.log         # telegram
 ```

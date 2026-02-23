@@ -63,7 +63,7 @@ This is the **unified platform** for Colorado Care Assist, containing:
 | **Menu Bar** | SwiftUI → ask-gigi API | `ask_gigi.py` | 32 tools | Working |
 
 ### Ask-Gigi API (Feb 8 — Foundation for Apple integrations)
-- **Endpoint:** `POST /api/ask-gigi` (mounted at `/gigi/api/ask-gigi` via unified_app)
+- **Endpoint:** `POST /gigi/api/ask-gigi` (served by gigi_app.py on port 8767)
 - **Auth:** Bearer token via `GIGI_API_TOKEN` env var
 - **Module:** `gigi/ask_gigi.py` — reuses GigiTelegramBot.execute_tool (no duplication)
 - **All channels that use ask_gigi.py** get the same 32 tools (all Telegram tools)
@@ -158,7 +158,7 @@ See `gigi/CONSTITUTION.md` for the 10 non-negotiable operating principles.
 
 ## SALES DASHBOARD & WELLSKY LIFECYCLE
 
-**Location:** `sales/` | **Port:** shared via unified_app | **DB:** SQLite (`sales_tracker.db`) + portal PostgreSQL
+**Location:** `sales/` | **Port:** 8765 (portal) | **DB:** SQLite (`sales_tracker.db`) + portal PostgreSQL
 
 ### WellSky Prospect → Client Lifecycle
 
@@ -248,7 +248,9 @@ Auto-snipes slam-dunk Polymarket temperature markets at daily market open:
 | Service | Port | LaunchAgent | URL |
 |---------|------|-------------|-----|
 | **Production Portal** | 8765 | com.coloradocareassist.gigi-unified | portal.coloradocareassist.com |
+| **Production Gigi** | 8767 | com.coloradocareassist.gigi-server | portal.coloradocareassist.com/gigi/* |
 | **Staging Portal** | 8766 | com.coloradocareassist.staging | staging.coloradocareassist.com |
+| **Staging Gigi** | 8768 | com.coloradocareassist.gigi-server-staging | staging.coloradocareassist.com/gigi/* |
 | Main Website | 3000 | com.coloradocareassist.website | coloradocareassist.com |
 | Hesed Home Care | 3001 | com.coloradocareassist.hesedhomecare | hesedhomecare.org |
 | Elite Trading | 3002 | com.coloradocareassist.elite-trading | elitetrading.coloradocareassist.com |
@@ -326,7 +328,8 @@ All credentials are in `~/.gigi-env` and duplicated in LaunchAgent plists.
 ```
 careassist-unified/
 ├── CLAUDE.md              # This file - main reference
-├── unified_app.py         # Entry point - mounts portal, gigi, sales, recruiting
+├── unified_app.py         # Entry point - mounts portal, sales, recruiting
+├── gigi_app.py            # Standalone Gigi service (port 8767/8768)
 ├── portal/                # Portal web app (FastAPI)
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
@@ -387,6 +390,8 @@ launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.coloradocareassist.<servi
 
 # View logs
 tail -f ~/logs/gigi-unified.log
+tail -f ~/logs/gigi-server.log        # Gigi standalone service
+tail -f ~/logs/gigi-server-error.log  # Gigi error log
 tail -f ~/logs/telegram-bot.log
 
 # Database access
@@ -395,6 +400,7 @@ tail -f ~/logs/telegram-bot.log
 # Test health endpoints
 curl -s http://localhost:8765/health
 curl -s https://portal.coloradocareassist.com/health
+curl -s http://localhost:8767/gigi/health    # Gigi standalone health
 ```
 
 ---
