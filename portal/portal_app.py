@@ -2727,6 +2727,24 @@ async def go_recruiting(
     return RedirectResponse(url=redirect_url, status_code=302)
 
 
+@app.get("/go/employee-portal")
+async def go_employee_portal(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Redirect to employee portal admin"""
+    return RedirectResponse(url="https://employee.coloradocareassist.com/admin", status_code=302)
+
+
+@app.get("/go/client-portal")
+async def go_client_portal(
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Redirect to client portal admin"""
+    return RedirectResponse(url="https://client.coloradocareassist.com/admin", status_code=302)
+
+
 @app.get("/go/sales")
 async def go_sales(
     request: Request,
@@ -3081,7 +3099,7 @@ async def api_operations_hours_breakdown(
             WHERE scheduled_start >= NOW() - INTERVAL '90 days'
               AND scheduled_end IS NOT NULL
         """)
-        total_scheduled = round(cur.fetchone()[0], 1)
+        total_scheduled = round(float(cur.fetchone()[0]), 1)
 
         # Actual hours worked (completed shifts with clock-in/out)
         cur.execute("""
@@ -3090,7 +3108,7 @@ async def api_operations_hours_breakdown(
             WHERE actual_start IS NOT NULL AND actual_end IS NOT NULL
               AND actual_start >= NOW() - INTERVAL '90 days'
         """)
-        total_actual = round(cur.fetchone()[0], 1)
+        total_actual = round(float(cur.fetchone()[0]), 1)
 
         # Weekly breakdown (last 4 weeks)
         cur.execute("""
@@ -3101,7 +3119,7 @@ async def api_operations_hours_breakdown(
               AND scheduled_end IS NOT NULL
             GROUP BY week ORDER BY week
         """)
-        weekly = [{"week": row[0].isoformat(), "hours": round(row[1], 1)} for row in cur.fetchall()]
+        weekly = [{"week": row[0].isoformat(), "hours": round(float(row[1]), 1)} for row in cur.fetchall()]
 
         cur.close()
         conn.close()
@@ -3109,7 +3127,7 @@ async def api_operations_hours_breakdown(
         return JSONResponse({
             "total_scheduled_hours": total_scheduled,
             "total_actual_hours": total_actual,
-            "utilization_rate": round((total_actual / total_scheduled * 100) if total_scheduled > 0 else 0, 1),
+            "utilization_rate": round(float((total_actual / total_scheduled * 100) if total_scheduled > 0 else 0), 1),
             "weekly_breakdown": weekly,
             "wellsky_connected": True,
         })
@@ -7719,6 +7737,7 @@ async def va_plan_of_care(current_user: Dict[str, Any] = Depends(get_current_use
 <body>
     <div class="container">
         <div class="header">
+            <a href="/" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 10px;">&larr; Back to Portal</a>
             <h1>VA Plan of Care Generator</h1>
             <p>Convert VA Form 10-7080 to Home Health Certification and Plan of Care (485)</p>
             <p style="font-size: 13px; margin-top: 10px;">Must submit within 5 days | Contact: Tamatha.Anding@va.gov (naming)</p>
@@ -8771,6 +8790,7 @@ async def va_rfs_converter(
 <body>
     <div class="container">
         <div class="header">
+            <a href="/" style="color: rgba(255,255,255,0.7); text-decoration: none; font-size: 13px; display: inline-block; margin-bottom: 10px;">&larr; Back to Portal</a>
             <h1>🏥 VA RFS Converter</h1>
             <p>Convert VA Form 10-7080, Referral Face Sheets & Contact Sheets to VA Form 10-10172 RFS</p>
             <p style="font-size: 12px; margin-top: 5px; opacity: 0.85;">Request for Service • Re-authorizations • New Referrals</p>
