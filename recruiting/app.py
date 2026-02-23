@@ -272,9 +272,12 @@ def index():
     # Validate portal token and set up session for API calls
     # This must happen before rendering so AJAX calls can use the session
     if not check_portal_auth():
-        # If accessed directly without portal token, redirect to portal
+        # Redirect to portal login with return_to cookie (shared session cookie)
+        from flask import make_response
         portal_url = os.getenv("PORTAL_URL", "https://portal.coloradocareassist.com")
-        return redirect(f"{portal_url}/auth/login?next=/recruiting")
+        resp = make_response(redirect(f"{portal_url}/auth/login"))
+        resp.set_cookie("_return_to", "/recruiting/", path="/", max_age=300, httponly=True, secure=True, samesite="Lax")
+        return resp
 
     try:
         print(f"Rendering Recruiter Dashboard (authenticated via portal: {session.get('portal_user', {}).get('email')})")
