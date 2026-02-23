@@ -2284,6 +2284,7 @@ async def admin_get_tag(
 @app.get("/admin/dealNotes")
 async def admin_get_deal_notes(
     request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user),
     deal_id: Optional[int] = Query(default=None),
     sort: Optional[str] = Query(default=None),
     order: Optional[str] = Query(default=None),
@@ -2297,6 +2298,7 @@ async def admin_get_deal_notes(
 @app.get("/admin/contactNotes")
 async def admin_get_contact_notes(
     request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user),
     contact_id: Optional[int] = Query(default=None),
     sort: Optional[str] = Query(default=None),
     order: Optional[str] = Query(default=None),
