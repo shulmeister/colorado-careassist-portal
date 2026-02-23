@@ -832,7 +832,7 @@ async def file_fax_referral(fax_id: int) -> dict:
             logger.error(f"WellSky document upload failed: {e}")
             result["wellsky_upload_error"] = str(e)
 
-    # 4) Upload copy to Google Drive
+    # 4) Upload copy to Google Drive (using Jason's OAuth, not service account)
     gdrive_url = None
     try:
         local_path_row = None
@@ -847,42 +847,36 @@ async def file_fax_referral(fax_id: int) -> dict:
             conn.close()
 
         if local_path_row and Path(local_path_row).exists():
-            from sales.google_drive_service import GoogleDriveService
-            gdrive = GoogleDriveService()
+            faxes_folder_id = os.getenv("GOOGLE_DRIVE_FAXES_FOLDER_ID", "")
+            if faxes_folder_id:
+                from gigi.google_service import google_service as gsvc
 
-            if gdrive.enabled:
-                faxes_folder_id = os.getenv("GOOGLE_DRIVE_FAXES_FOLDER_ID", "")
-                if faxes_folder_id:
-                    pdf_bytes = Path(local_path_row).read_bytes()
-                    # Build organized filename
-                    name_part = f"{last_name}_{first_name}" if last_name else full_name.replace(" ", "_")
-                    date_str = datetime.now().strftime("%Y-%m-%d")
-                    month_folder = datetime.now().strftime("%Y-%m")
-                    safe_name = f"{name_part}_{date_str}_{doc_type}.pdf"
+                pdf_bytes = Path(local_path_row).read_bytes()
+                name_part = f"{last_name}_{first_name}" if last_name else full_name.replace(" ", "_")
+                date_str = datetime.now().strftime("%Y-%m-%d")
+                month_folder = datetime.now().strftime("%Y-%m")
+                safe_name = f"{name_part}_{date_str}_{doc_type}.pdf"
 
-                    # Get or create Inbound subfolder
-                    inbound_id = gdrive.create_folder_if_not_exists(faxes_folder_id, "Inbound")
-                    if inbound_id:
-                        # Get or create monthly subfolder
-                        month_id = gdrive.create_folder_if_not_exists(inbound_id, month_folder)
-                        target_folder = month_id or inbound_id
-                    else:
-                        target_folder = faxes_folder_id
-
-                    upload_result = gdrive.upload_file(
-                        file_bytes=pdf_bytes,
-                        filename=safe_name,
-                        folder_id=target_folder,
-                        mime_type="application/pdf",
-                    )
-                    if upload_result:
-                        gdrive_url = upload_result.get("webViewLink") or upload_result.get("url")
-                        result["gdrive_url"] = gdrive_url
-                        result["gdrive_filename"] = safe_name
+                # Get or create Inbound/YYYY-MM subfolder
+                inbound_id = gsvc.drive_get_or_create_folder(faxes_folder_id, "Inbound")
+                if inbound_id:
+                    month_id = gsvc.drive_get_or_create_folder(inbound_id, month_folder)
+                    target_folder = month_id or inbound_id
                 else:
-                    result["gdrive_note"] = "GOOGLE_DRIVE_FAXES_FOLDER_ID not configured"
+                    target_folder = faxes_folder_id
+
+                upload_result = gsvc.drive_upload_file(
+                    file_bytes=pdf_bytes,
+                    filename=safe_name,
+                    folder_id=target_folder,
+                    mime_type="application/pdf",
+                )
+                if upload_result:
+                    gdrive_url = upload_result.get("webViewLink") or upload_result.get("url")
+                    result["gdrive_url"] = gdrive_url
+                    result["gdrive_filename"] = safe_name
             else:
-                result["gdrive_note"] = "Google Drive service not enabled"
+                result["gdrive_note"] = "GOOGLE_DRIVE_FAXES_FOLDER_ID not configured"
     except Exception as e:
         logger.error(f"Google Drive upload failed: {e}")
         result["gdrive_error"] = str(e)
