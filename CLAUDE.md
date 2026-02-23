@@ -72,11 +72,11 @@ Each service has its own LaunchAgent, process, and port. Cloudflare path-based r
 - **Cross-channel context:** API messages visible from Telegram/SMS and vice versa
 
 ### Tool Sets
-**Telegram tools (32):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_morning_briefing`, `get_ar_report`, `get_polybot_status`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
+**Telegram tools (32):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_ar_report`, `get_polybot_status`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
 
-**Voice tools (33):** All Telegram tools minus browser/morning_briefing/get_polybot_status, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
+**Voice tools (33):** All Telegram tools minus browser/get_polybot_status, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
 
-**RC SMS tools (15):** `get_client_current_status`, `identify_caller`, `get_wellsky_shifts`, `get_wellsky_clients`, `get_wellsky_caregivers`, `log_call_out`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `get_morning_briefing`, `get_ar_report`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
+**RC SMS tools (15):** `get_client_current_status`, `identify_caller`, `get_wellsky_shifts`, `get_wellsky_clients`, `get_wellsky_caregivers`, `log_call_out`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `get_ar_report`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
 
 **RC DM/Team Chat tools (31):** Full Telegram-like set including browser tools + `check_recent_sms`, `send_sms`, `log_call_out`, `identify_caller`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
 
@@ -87,7 +87,6 @@ Each service has its own LaunchAgent, process, and port. Cloudflare path-based r
 - **Fax**: Send/receive via RingCentral API (free with RingEX). Portal page with Inbox/Sent/Outbox tabs, multi-file upload, cover page/note, drag-and-drop page reorder, inline PDF preview. Gigi tools: `send_fax`, `check_fax_status`, `list_faxes`. Telegram + email alerts on inbound fax. Numbers: 719-428-3999, 303-757-1777.
 - **Auto-Documentation**: Syncs RC messages → WellSky Care Alerts (TaskLog) + escalation Tasks (AdminTask)
 - **After-Hours Coverage**: Autonomous SMS/voice handling
-- **Morning Briefing**: Daily 7 AM Telegram message with weather, calendar, shifts, emails, alerts
 
 ### Gigi Multi-LLM Provider (Feb 7)
 All 3 handlers (`telegram_bot.py`, `voice_brain.py`, `ringcentral_bot.py`) + `ask_gigi.py` support 3 providers.
@@ -130,7 +129,6 @@ Five features built for production readiness with clients and employees:
 ### Scheduled Outbound Messages
 | Message | Time | Channel | Target | Env Flag |
 |---------|------|---------|--------|----------|
-| **Morning Briefing** | 7:00 AM MT | Telegram | Jason | `MORNING_BRIEFING_ENABLED` |
 | **Clock In/Out Reminders** | Every 5 min (business hours) | SMS | Caregivers | `CLOCK_REMINDER_ENABLED` |
 | **Shift Confirmations** | 2:00 PM MT | SMS | Caregivers | `DAILY_CONFIRMATION_ENABLED` |
 | **Ticket Watch Alerts** | As needed (15 min polls) | Telegram | Jason | Always on (if watches exist) |
@@ -356,7 +354,6 @@ careassist-unified/
 │   ├── pattern_detector.py # Repeated failure + trend detection
 │   ├── self_monitor.py    # Weekly self-audit (Monday morning briefing)
 │   ├── memory_logger.py   # Daily markdown journal at ~/.gigi-memory/
-│   ├── morning_briefing_service.py  # 7 AM daily briefing via Telegram
 │   ├── clock_reminder_service.py    # SMS clock in/out reminders to caregivers
 │   ├── daily_confirmation_service.py # 2 PM shift confirmation SMS to caregivers
 │   ├── ticket_monitor.py  # Ticketmaster + Bandsintown polling, Telegram alerts
