@@ -1,3 +1,14 @@
+"""
+Gigi Voice Brain Simulation Runner
+
+Runs all 14 test scenarios against the voice brain and reports pass/fail.
+Sources env vars from ~/.gigi-env for ANTHROPIC_API_KEY (behavior evaluation)
+and GEMINI_API_KEY (simulated caller generation).
+
+Usage:
+    python3 scripts/run_gigi_simulations.py           # Run against staging (8768)
+    PORT=8767 python3 scripts/run_gigi_simulations.py  # Run against production
+"""
 import asyncio
 import os
 import sys
@@ -7,9 +18,29 @@ root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
-# Mock some env vars if missing
+# Source env vars from ~/.gigi-env if keys are missing
+_GIGI_ENV = os.path.expanduser("~/.gigi-env")
+if os.path.exists(_GIGI_ENV):
+    with open(_GIGI_ENV) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            # Skip 'export ' prefix
+            if line.startswith("export "):
+                line = line[7:]
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip("'").strip('"')
+            # Only set if not already in environment
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+# Set defaults
 os.environ.setdefault("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
 os.environ.setdefault("GIGI_LLM_MODEL", "claude-haiku-4-5-20251001")
+# Default to staging gigi port
+os.environ.setdefault("PORT", "8768")
 
 from gigi.simulation_service import launch_simulation
 
@@ -66,7 +97,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Brian Kline, 52, son of a client",
         "goal": "Make a complaint about caregiver leaving early, demand accountability",
         "personality": "Angry and protective, says 'This is neglect' and threatens to call the state",
-        "expected_tools": ["get_wellsky_clients"],
+        "expected_tools": ["get_wellsky_clients", "transfer_call"],
         "expected_behavior": [
             "Agent does not get defensive",
             "Agent acknowledges concern once and moves to action",
@@ -141,7 +172,7 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Linda Martinez, 74, active client",
         "goal": "Complain about inconsistent service, get assurance something will change",
         "personality": "Angry but not abusive, says 'If this happens again, we're done'",
-        "expected_tools": ["get_wellsky_clients"],
+        "expected_tools": ["get_wellsky_clients", "transfer_call"],
         "expected_behavior": [
             "Agent acknowledges frustration once and stays calm",
             "Agent looks up client and escalates or transfers",
@@ -228,26 +259,35 @@ GIGI_TEST_SCENARIOS = [
 
 async def run_all():
     gemini_api_key = os.getenv("GEMINI_API_KEY")
-    if not gemini_api_key:
-        print("❌ GEMINI_API_KEY not found in environment. Cannot run simulations.")
-        return
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY")
 
-    print(f"🚀 Launching {len(GIGI_TEST_SCENARIOS)} Gigi simulations...")
+    if not gemini_api_key:
+        print("GEMINI_API_KEY not found in environment. Cannot run simulations.")
+        return
+    if not anthropic_key:
+        print("WARNING: ANTHROPIC_API_KEY not found — behavior scores will default to 50/100")
+    else:
+        print("ANTHROPIC_API_KEY found (behavior evaluation enabled)")
+
+    port = os.getenv("PORT", "8768")
+    print(f"Target: ws://localhost:{port}/llm-websocket/...")
+    print(f"Launching {len(GIGI_TEST_SCENARIOS)} Gigi simulations...")
+
     sim_ids = []
     for scenario in GIGI_TEST_SCENARIOS:
         print(f"  - Starting: {scenario['name']}")
         try:
-            sim_id = await launch_simulation(scenario, launched_by="CLI_Full_Test", gemini_api_key=gemini_api_key)
+            sim_id = await launch_simulation(scenario, launched_by="CLI_Full_Test")
             sim_ids.append((sim_id, scenario['name']))
         except Exception as e:
-            print(f"  ❌ Failed to launch {scenario['name']}: {e}")
+            print(f"  Failed to launch {scenario['name']}: {e}")
 
     if not sim_ids:
-        print("❌ No simulations launched.")
+        print("No simulations launched.")
         return
 
-    print(f"\n✅ {len(sim_ids)} simulations launched.")
-    print("Waiting for them to complete (this takes ~1-2 minutes per simulation)...")
+    print(f"\n{len(sim_ids)} simulations launched.")
+    print("Waiting for completion (1-2 min per simulation)...")
 
     import psycopg2
     db_url = os.environ["DATABASE_URL"]
@@ -284,8 +324,9 @@ async def run_all():
             print(f"Database connection failed: {e}. Retrying in 15s...")
 
 
-    print("\n🏆 Final Simulation Results:")
-    print("-" * 60)
+    print("\n" + "=" * 60)
+    print("FINAL SIMULATION RESULTS")
+    print("=" * 60)
 
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
@@ -294,20 +335,30 @@ async def run_all():
     sql = "SELECT id, scenario_name, status, overall_score, tool_score, behavior_score FROM gigi_simulations WHERE id IN ({}) ORDER BY id".format(placeholders)
     cur.execute(sql, ids)
 
+    pass_count = 0
+    fail_count = 0
     for row in cur.fetchall():
-        status_indicator = "✅" if row[3] and row[3] >= 70 else "⚠️" if row[3] and row[3] >= 50 else "❌"
+        status_indicator = "PASS" if row[3] and row[3] >= 70 else "WARN" if row[3] and row[3] >= 50 else "FAIL"
         if row[2] == "failed":
-            status_indicator = "💀"
+            status_indicator = "CRASH"
 
-        print(f"ID {row[0]}: {row[1]} {status_indicator}")
-        print(f"  Status:         {row[2]}")
-        print(f"  Overall Score:  {row[3] if row[3] is not None else 'N/A'}/100")
-        print(f"  Tool Score:     {row[4] if row[4] is not None else 'N/A'}/100")
-        print(f"  Behavior Score: {row[5] if row[5] is not None else 'N/A'}/100")
-        print("-" * 30)
+        if row[3] and row[3] >= 70:
+            pass_count += 1
+        else:
+            fail_count += 1
+
+        print(f"[{status_indicator:5s}] {row[1]}: overall={row[3]}/100 (tool={row[4]}, behavior={row[5]})")
 
     cur.close()
     conn.close()
+
+    total_run = pass_count + fail_count
+    rate = (pass_count / total_run * 100) if total_run else 0
+    print(f"\n{'=' * 60}")
+    print(f"PASS RATE: {pass_count}/{total_run} = {rate:.1f}%")
+    target = "PASSED" if rate >= 85 else "BELOW TARGET (85%)"
+    print(f"TARGET: {target}")
+    print(f"{'=' * 60}")
 
 if __name__ == "__main__":
     asyncio.run(run_all())

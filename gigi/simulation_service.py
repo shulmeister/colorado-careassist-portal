@@ -23,8 +23,8 @@ import websockets
 
 # Gemini SDK (new style)
 try:
-    import google.generativeai as genai
-    from google.generativeai.types import GenerationConfig
+    from google import genai
+    from google.genai import types as genai_types
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -62,7 +62,7 @@ def capture_simulation_tool_call(call_id: str, tool_name: str, tool_input: dict,
 class SimulationRunner:
     """Manages a single simulation run"""
 
-    def __init__(self, simulation_id: int, scenario: Dict, call_id: str, launched_by: str, gemini_api_key: Optional[str] = None):
+    def __init__(self, simulation_id: int, scenario: Dict, call_id: str, launched_by: str):
         self.simulation_id = simulation_id
         self.scenario = scenario
         self.call_id = call_id
@@ -76,19 +76,17 @@ class SimulationRunner:
 
         # Configure Gemini (new SDK)
         if not GENAI_AVAILABLE:
-            raise ValueError("google.generativeai SDK not installed — cannot run simulations")
-
-        api_key = gemini_api_key or os.getenv("GEMINI_API_KEY")
-        if not api_key:
+            raise ValueError("google.genai SDK not installed — cannot run simulations")
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
             raise ValueError("GEMINI_API_KEY not set")
 
-        genai.configure(api_key=api_key)
-        # Always use Gemini for simulated caller generation (independent of Gigi's LLM provider)
-        self.llm_model_name = os.getenv("SIMULATION_LLM_MODEL", "gemini-2.0-flash")
-        self.llm = genai.GenerativeModel(self.llm_model_name)
+        self.llm = genai.Client(api_key=gemini_api_key)
+        # Always use Gemini for simulated caller (independent of Gigi's LLM provider)
+        self.llm_model = os.getenv("SIMULATION_LLM_MODEL", "gemini-2.0-flash")
 
         # Voice Brain WebSocket URL — use current server's port
-        ws_port = os.getenv("PORT", "8765")
+        ws_port = os.getenv("PORT", "8768")
         self.ws_url = f"ws://localhost:{ws_port}/llm-websocket/{call_id}"
 
         logger.info(f"[Sim {call_id}] Initialized for scenario: {scenario['name']} -> {self.ws_url}")
@@ -196,13 +194,15 @@ CONVERSATION SO FAR:
 YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
         try:
-            config = GenerationConfig(
+            config = genai_types.GenerateContentConfig(
                 max_output_tokens=300,
                 temperature=0.4,
             )
-            response = await self.llm.generate_content_async(
+            response = await asyncio.to_thread(
+                self.llm.models.generate_content,
+                model=self.llm_model,
                 contents=prompt,
-                generation_config=config,
+                config=config,
             )
 
             if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
@@ -500,7 +500,7 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
             conn.close()
 
 
-async def launch_simulation(scenario: Dict, launched_by: str, gemini_api_key: Optional[str] = None) -> int:
+async def launch_simulation(scenario: Dict, launched_by: str) -> int:
     """
     Launch a new simulation (returns simulation_id immediately).
     The simulation runs asynchronously in the background.
@@ -509,7 +509,7 @@ async def launch_simulation(scenario: Dict, launched_by: str, gemini_api_key: Op
     call_id = f"sim_{uuid.uuid4().hex[:16]}"
 
     # Create database record
-    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
     try:
         cur = conn.cursor()
@@ -535,7 +535,7 @@ async def launch_simulation(scenario: Dict, launched_by: str, gemini_api_key: Op
         conn.close()
 
     # Launch async runner
-    runner = SimulationRunner(simulation_id, scenario, call_id, launched_by, gemini_api_key=gemini_api_key)
+    runner = SimulationRunner(simulation_id, scenario, call_id, launched_by)
     ACTIVE_SIMULATIONS[call_id] = runner
 
     # Run in background
