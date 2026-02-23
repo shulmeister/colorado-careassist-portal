@@ -800,7 +800,15 @@ async def file_fax_referral(fax_id: int) -> dict:
                 pdf_b64 = _b64.b64encode(pdf_bytes_ws).decode("utf-8")
 
                 ws_description = f"Fax {doc_type} from {parsed.get('from_number', 'unknown')} — {parsed.get('summary', '')[:200]}"
-                ws_doc_type = doc_type if doc_type in ("facesheet", "referral", "authorization") else "clinical-note"
+                # Human-readable type name for WellSky
+                ws_type_map = {
+                    "facesheet": "Facesheet",
+                    "referral": "Referral",
+                    "authorization": "Authorization",
+                }
+                ws_doc_type = ws_type_map.get(doc_type, "Fax Document")
+                patient_name = result.get("patient_name", "unknown").replace(" ", "_")
+                ws_filename = f"{patient_name}_{doc_type}.pdf"
 
                 success, ws_resp = wellsky_service.create_document_reference(
                     patient_id=str(filed_to),
@@ -808,6 +816,7 @@ async def file_fax_referral(fax_id: int) -> dict:
                     content_type="application/pdf",
                     data_base64=pdf_b64,
                     description=ws_description,
+                    filename=ws_filename,
                 )
                 if success:
                     ws_doc_id = ws_resp.get("id", "unknown") if isinstance(ws_resp, dict) else "unknown"
