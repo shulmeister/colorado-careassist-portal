@@ -3030,21 +3030,24 @@ class WellSkyService:
             date = datetime.utcnow().isoformat() + "Z"
 
         endpoint = "documentReferences/"
+        attachment = {
+            "contentType": content_type,
+            "data": data_base64,
+        }
+        if filename:
+            attachment["title"] = filename
+
         doc_data = {
             "resourceType": "DocumentReference",
             "type": {
                 "text": document_type or "Document",
             },
-            "securityLabel": [{}],
-            "content": {
-                "attachment": {
-                    "contentType": content_type,
-                    "data": data_base64,
-                }
-            },
+            "content": [
+                {"attachment": attachment}
+            ],
             "context": {
                 "related": [
-                    {"reference": f"Person/{patient_id}"}
+                    {"ref": f"Person/{patient_id}"}
                 ]
             },
             "meta": {
@@ -3053,9 +3056,6 @@ class WellSkyService:
                 ]
             },
         }
-
-        if filename:
-            doc_data["content"]["attachment"]["title"] = filename
 
         success, response = self._make_request("POST", endpoint, data=doc_data)
         if success:

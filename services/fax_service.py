@@ -449,8 +449,8 @@ async def _download_rc_attachment(uri: str, token: str) -> str:
         return ""
 
 
-def list_faxes(direction: str = None, limit: int = 20) -> list:
-    """List faxes from the database."""
+def list_faxes(direction: str = None, limit: int = 20) -> dict:
+    """List faxes from the database. Returns dict with 'faxes' list."""
     conn = _db()
     try:
         cur = conn.cursor()
@@ -468,7 +468,7 @@ def list_faxes(direction: str = None, limit: int = 20) -> list:
                 FROM fax_log ORDER BY created_at DESC LIMIT %s
             """, (limit,))
         rows = cur.fetchall()
-        return [
+        faxes = [
             {
                 "id": r[0], "direction": r[1], "fax_id": r[2],
                 "from": r[3], "to": r[4], "status": r[5],
@@ -478,6 +478,7 @@ def list_faxes(direction: str = None, limit: int = 20) -> list:
             }
             for r in rows
         ]
+        return {"faxes": faxes, "count": len(faxes)}
     finally:
         conn.close()
 
