@@ -670,6 +670,8 @@ ANTHROPIC_TOOLS = [
     # === FAX TOOLS ===
     {"name": "send_fax", "description": "Send a fax to a phone number. Provide a publicly accessible URL to a PDF document.", "input_schema": {"type": "object", "properties": {"to": {"type": "string", "description": "Recipient fax number (e.g. 719-555-1234)"}, "media_url": {"type": "string", "description": "Public URL to the PDF document to fax"}}, "required": ["to", "media_url"]}},
     {"name": "list_faxes", "description": "List recent sent and received faxes.", "input_schema": {"type": "object", "properties": {"direction": {"type": "string", "description": "Filter: inbound, outbound, or all (default)"}, "limit": {"type": "integer", "description": "Max results (default 10)"}}, "required": []}},
+    {"name": "read_fax", "description": "Read and AI-parse a received fax. Scans the PDF to identify document type (facesheet, referral, authorization) and extract patient info, insurance, referral source.", "input_schema": {"type": "object", "properties": {"fax_id": {"type": "integer", "description": "Fax ID from list_faxes results"}}, "required": ["fax_id"]}},
+    {"name": "file_fax_referral", "description": "File a fax referral: parses the fax, matches to existing WellSky client or creates a new prospect, and uploads the PDF to Google Drive.", "input_schema": {"type": "object", "properties": {"fax_id": {"type": "integer", "description": "Fax ID to file"}}, "required": ["fax_id"]}},
     # === CLAUDE CODE TOOLS ===
     {"name": "run_claude_code", "description": "Execute a code/infrastructure task using Claude Code on the Mac Mini. Use for: fixing bugs, editing files, investigating errors, checking logs, running tests, restarting services, git operations. Claude Code reads/writes files and runs commands autonomously. Returns the result directly.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What to do. Be specific — include error messages, file paths, expected behavior."}, "directory": {"type": "string", "description": "Project: careassist (default/staging), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard."}, "model": {"type": "string", "description": "'sonnet' (default, fast) or 'opus' (complex tasks)."}}, "required": ["prompt"]}},
     # === TRAVEL TOOLS ===
@@ -1820,6 +1822,16 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             )
             return json.dumps(result)
 
+        elif tool_name == "read_fax":
+            from services.fax_service import read_fax as _read_fax
+            result = await _read_fax(fax_id=int(tool_input.get("fax_id", 0)))
+            return json.dumps(result)
+
+        elif tool_name == "file_fax_referral":
+            from services.fax_service import file_fax_referral as _file_fax
+            result = await _file_fax(fax_id=int(tool_input.get("fax_id", 0)))
+            return json.dumps(result)
+
         # === CLAUDE CODE TOOLS ===
         elif tool_name == "run_claude_code":
             from gigi.claude_code_tools import run_claude_code
@@ -1905,7 +1917,7 @@ async def _maybe_acknowledge(call_info, on_token):
         call_info["acknowledged_thinking"] = True
 
 
-SIDE_EFFECT_TOOLS = {"send_sms", "send_team_message", "send_email", "transfer_call", "report_call_out", "send_fax"}
+SIDE_EFFECT_TOOLS = {"send_sms", "send_team_message", "send_email", "transfer_call", "report_call_out", "send_fax", "file_fax_referral"}
 
 # Dedup: track recent team messages to prevent duplicates
 _recent_team_messages = {}  # message_hash -> timestamp

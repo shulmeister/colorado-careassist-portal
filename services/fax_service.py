@@ -492,3 +492,356 @@ def _normalize_phone(phone: str) -> str:
     if phone.startswith("+"):
         return phone
     return f"+{digits}"
+
+
+# ---------------------------------------------------------------------------
+# Gemini config for fax parsing
+# ---------------------------------------------------------------------------
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+
+FAX_PARSE_PROMPT = """Analyze this fax document and extract structured information.
+
+First, classify the document type as one of:
+- "facesheet" — Patient face sheet from a hospital, nursing home, or VA facility
+- "referral" — Physician or facility referral for home care services
+- "authorization" — Insurance or VA authorization for care hours
+- "other" — Any other type of fax
+
+Then extract ALL available information into this JSON structure:
+{
+    "document_type": "facesheet|referral|authorization|other",
+    "patient": {
+        "first_name": "",
+        "last_name": "",
+        "full_name": "",
+        "date_of_birth": "YYYY-MM-DD or null",
+        "phone": "",
+        "address": "",
+        "city": "",
+        "state": "",
+        "zip": ""
+    },
+    "insurance": {
+        "payer": "",
+        "payer_type": "medicare|medicaid|va|private|ltc_insurance|other",
+        "member_id": "",
+        "group_number": ""
+    },
+    "referral_source": {
+        "facility_name": "",
+        "physician_name": "",
+        "phone": "",
+        "fax": ""
+    },
+    "diagnosis": [],
+    "medications": [],
+    "care_needs": "",
+    "authorization": {
+        "auth_number": "",
+        "hours_weekly": null,
+        "start_date": "",
+        "end_date": "",
+        "service_type": ""
+    },
+    "emergency_contact": {
+        "name": "",
+        "phone": "",
+        "relationship": ""
+    },
+    "summary": "One paragraph natural language summary of what this fax is about"
+}
+
+Return ONLY valid JSON. No markdown, no explanation. Fill in what you can find, leave empty strings for missing fields."""
+
+
+def _call_gemini_for_fax(pdf_bytes: bytes) -> dict:
+    """Parse a fax PDF using Gemini Vision API. Returns parsed data dict."""
+    import base64
+    import json
+
+    if not GEMINI_API_KEY:
+        return {"error": "No Gemini API key configured"}
+
+    b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+
+    for model in GEMINI_MODELS:
+        try:
+            resp = httpx.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                headers={
+                    "x-goog-api-key": GEMINI_API_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "contents": [{
+                        "parts": [
+                            {"text": FAX_PARSE_PROMPT},
+                            {"inline_data": {"mime_type": "application/pdf", "data": b64}},
+                        ]
+                    }]
+                },
+                timeout=60.0,
+            )
+
+            if resp.status_code == 404:
+                continue
+            if resp.status_code != 200:
+                logger.warning(f"Gemini {model} returned {resp.status_code}: {resp.text[:300]}")
+                continue
+
+            data = resp.json()
+            text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            if not text:
+                continue
+
+            # Extract JSON from response
+            import re
+            text = text.strip()
+            text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
+            text = re.sub(r"^```\s*", "", text)
+            text = re.sub(r"```$", "", text.strip())
+
+            parsed = json.loads(text)
+            logger.info(f"Gemini ({model}) successfully parsed fax document")
+            return parsed
+
+        except json.JSONDecodeError:
+            logger.warning(f"Gemini {model} returned non-JSON response")
+            continue
+        except Exception as e:
+            logger.debug(f"Gemini {model} failed: {e}")
+            continue
+
+    return {"error": "All Gemini models failed to parse fax"}
+
+
+async def read_fax(fax_id: int) -> dict:
+    """Read and AI-parse a fax PDF. Returns document type + structured data."""
+    import json
+
+    conn = _db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT local_path, from_number, page_count, created_at, parsed_data FROM fax_log WHERE id = %s",
+            (fax_id,),
+        )
+        row = cur.fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return {"error": f"Fax ID {fax_id} not found"}
+
+    local_path, from_number, page_count, created_at, cached_parsed = row
+
+    # Return cached parse if available
+    if cached_parsed:
+        result = cached_parsed if isinstance(cached_parsed, dict) else json.loads(cached_parsed)
+        result["fax_id"] = fax_id
+        result["from"] = from_number
+        result["pages"] = page_count
+        result["cached"] = True
+        return result
+
+    if not local_path or not Path(local_path).exists():
+        return {"error": f"No PDF file available for fax ID {fax_id}"}
+
+    # Read and parse
+    pdf_bytes = Path(local_path).read_bytes()
+    parsed = _call_gemini_for_fax(pdf_bytes)
+
+    if "error" not in parsed:
+        # Cache the parsed result
+        conn = _db()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE fax_log SET parsed_data = %s WHERE id = %s",
+                (json.dumps(parsed), fax_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    parsed["fax_id"] = fax_id
+    parsed["from"] = from_number
+    parsed["pages"] = page_count
+    parsed["created_at"] = created_at.isoformat() if created_at else None
+    return parsed
+
+
+async def file_fax_referral(fax_id: int) -> dict:
+    """Parse fax, match/create WellSky prospect, upload PDF to Google Drive."""
+
+    # 1) Parse the fax
+    parsed = await read_fax(fax_id)
+    if "error" in parsed:
+        return parsed
+
+    doc_type = parsed.get("document_type", "other")
+    patient = parsed.get("patient", {})
+    first_name = patient.get("first_name", "").strip()
+    last_name = patient.get("last_name", "").strip()
+    full_name = patient.get("full_name", "").strip()
+    referral = parsed.get("referral_source", {})
+    insurance = parsed.get("insurance", {})
+
+    if not last_name and not full_name:
+        return {"error": "Could not extract patient name from fax", "parsed": parsed}
+
+    result = {
+        "fax_id": fax_id,
+        "document_type": doc_type,
+        "patient_name": full_name or f"{first_name} {last_name}".strip(),
+        "summary": parsed.get("summary", ""),
+    }
+
+    # 2) Search cached_patients for existing ACTIVE client match
+    conn = _db()
+    try:
+        cur = conn.cursor()
+        search_last = last_name.lower() if last_name else full_name.split()[-1].lower()
+        search_first = first_name.lower() if first_name else (full_name.split()[0].lower() if full_name else "")
+
+        # Priority 1: Exact first+last name match on active clients
+        best = None
+        if search_first and search_last:
+            cur.execute(
+                "SELECT id, full_name, first_name, last_name FROM cached_patients "
+                "WHERE is_active = true AND lower(first_name) = %s AND lower(last_name) = %s LIMIT 1",
+                (search_first, search_last),
+            )
+            row = cur.fetchone()
+            if row:
+                best = row
+
+        # Priority 2: Last name match on active clients only
+        if not best:
+            cur.execute(
+                "SELECT id, full_name, first_name, last_name FROM cached_patients "
+                "WHERE is_active = true AND lower(last_name) = %s ORDER BY full_name LIMIT 5",
+                (search_last,),
+            )
+            matches = cur.fetchall()
+            if matches:
+                # If multiple active clients share the last name, prefer first-name match
+                for m in matches:
+                    if m[2] and m[2].lower() == search_first:
+                        best = m
+                        break
+                if not best:
+                    best = matches[0]
+    finally:
+        conn.close()
+
+    if best:
+        result["action"] = "matched_client"
+        result["client"] = {"id": best[0], "name": best[1]}
+        filed_to = str(best[0])
+    else:
+        # Create WellSky prospect
+        try:
+            from services.wellsky_service import wellsky_service
+
+            prospect_data = {
+                "first_name": first_name or full_name.split()[0] if full_name else "",
+                "last_name": last_name or (full_name.split()[-1] if full_name else ""),
+                "phone": patient.get("phone", ""),
+                "address": patient.get("address", ""),
+                "city": patient.get("city", ""),
+                "state": patient.get("state", "CO"),
+                "zip_code": patient.get("zip", ""),
+                "referral_source": referral.get("facility_name", "") or referral.get("physician_name", ""),
+                "payer_type": insurance.get("payer_type", ""),
+                "care_needs": [parsed.get("care_needs", "")] if parsed.get("care_needs") else [],
+                "notes": f"Filed from fax (ID {fax_id}). {parsed.get('summary', '')}",
+            }
+
+            auth_info = parsed.get("authorization", {})
+            if auth_info.get("hours_weekly"):
+                prospect_data["estimated_hours_weekly"] = float(auth_info["hours_weekly"])
+
+            prospect = wellsky_service.create_prospect(prospect_data)
+            if prospect:
+                result["action"] = "created_prospect"
+                result["prospect"] = {"id": prospect.id, "name": prospect.full_name}
+                filed_to = prospect.id
+            else:
+                result["action"] = "prospect_creation_failed"
+                filed_to = None
+        except Exception as e:
+            logger.error(f"WellSky prospect creation failed: {e}")
+            result["action"] = "prospect_creation_failed"
+            result["wellsky_error"] = str(e)
+            filed_to = None
+
+    # 3) Upload to Google Drive
+    gdrive_url = None
+    try:
+        local_path_row = None
+        conn = _db()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT local_path FROM fax_log WHERE id = %s", (fax_id,))
+            row = cur.fetchone()
+            if row:
+                local_path_row = row[0]
+        finally:
+            conn.close()
+
+        if local_path_row and Path(local_path_row).exists():
+            from sales.google_drive_service import GoogleDriveService
+            gdrive = GoogleDriveService()
+
+            if gdrive.enabled:
+                faxes_folder_id = os.getenv("GOOGLE_DRIVE_FAXES_FOLDER_ID", "")
+                if faxes_folder_id:
+                    pdf_bytes = Path(local_path_row).read_bytes()
+                    # Build organized filename
+                    name_part = f"{last_name}_{first_name}" if last_name else full_name.replace(" ", "_")
+                    date_str = datetime.now().strftime("%Y-%m-%d")
+                    month_folder = datetime.now().strftime("%Y-%m")
+                    safe_name = f"{name_part}_{date_str}_{doc_type}.pdf"
+
+                    # Get or create Inbound subfolder
+                    inbound_id = gdrive.create_folder_if_not_exists(faxes_folder_id, "Inbound")
+                    if inbound_id:
+                        # Get or create monthly subfolder
+                        month_id = gdrive.create_folder_if_not_exists(inbound_id, month_folder)
+                        target_folder = month_id or inbound_id
+                    else:
+                        target_folder = faxes_folder_id
+
+                    upload_result = gdrive.upload_file(
+                        file_bytes=pdf_bytes,
+                        filename=safe_name,
+                        folder_id=target_folder,
+                        mime_type="application/pdf",
+                    )
+                    if upload_result:
+                        gdrive_url = upload_result.get("webViewLink") or upload_result.get("url")
+                        result["gdrive_url"] = gdrive_url
+                        result["gdrive_filename"] = safe_name
+                else:
+                    result["gdrive_note"] = "GOOGLE_DRIVE_FAXES_FOLDER_ID not configured"
+            else:
+                result["gdrive_note"] = "Google Drive service not enabled"
+    except Exception as e:
+        logger.error(f"Google Drive upload failed: {e}")
+        result["gdrive_error"] = str(e)
+
+    # 4) Update fax_log with filing info
+    conn = _db()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE fax_log SET filed_to = %s, gdrive_url = %s, filed_at = NOW() WHERE id = %s",
+            (filed_to, gdrive_url, fax_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    return result

@@ -176,7 +176,7 @@ TOOL_NAMES = [
     "get_cash_position", "get_financial_dashboard",
     "get_subscription_audit",
     "run_claude_code", "browse_with_claude",
-    "send_fax", "list_faxes",
+    "send_fax", "list_faxes", "read_fax", "file_fax_referral",
     "search_flights", "search_hotels", "search_car_rentals",
 ]
 
@@ -240,6 +240,8 @@ ANTHROPIC_TOOLS = [
     # === FAX TOOLS ===
     {"name": "send_fax", "description": "Send a fax to a phone number. Provide a publicly accessible URL to a PDF document.", "input_schema": {"type": "object", "properties": {"to": {"type": "string", "description": "Recipient fax number (e.g. 719-555-1234)"}, "media_url": {"type": "string", "description": "Public URL to the PDF document to fax"}}, "required": ["to", "media_url"]}},
     {"name": "list_faxes", "description": "List recent sent and received faxes.", "input_schema": {"type": "object", "properties": {"direction": {"type": "string", "description": "Filter: inbound, outbound, or all (default)"}, "limit": {"type": "integer", "description": "Max results (default 10)"}}, "required": []}},
+    {"name": "read_fax", "description": "Read and AI-parse a received fax. Scans the PDF with AI to identify document type (facesheet, referral, authorization) and extract patient info, insurance, referral source, diagnosis. Use the fax 'id' from list_faxes.", "input_schema": {"type": "object", "properties": {"fax_id": {"type": "integer", "description": "Fax ID from list_faxes results"}}, "required": ["fax_id"]}},
+    {"name": "file_fax_referral", "description": "File a fax referral: parses the fax, matches to existing WellSky client or creates a new prospect, and uploads the PDF to Google Drive. Use after read_fax confirms it's a referral/facesheet.", "input_schema": {"type": "object", "properties": {"fax_id": {"type": "integer", "description": "Fax ID to file"}}, "required": ["fax_id"]}},
     {"name": "search_flights", "description": "Search real-time flight prices and availability. Returns airlines, prices, times, stops, and booking links. ALWAYS use this for flight queries — never use web_search for flights.", "input_schema": {"type": "object", "properties": {"origin": {"type": "string", "description": "Departure city or IATA code (e.g. Denver or DEN)"}, "destination": {"type": "string", "description": "Arrival city or IATA code (e.g. Honolulu or HNL)"}, "departure_date": {"type": "string", "description": "Departure date YYYY-MM-DD"}, "return_date": {"type": "string", "description": "Return date YYYY-MM-DD (omit for one-way)"}, "adults": {"type": "integer", "description": "Number of adult passengers (default 1)"}, "max_stops": {"type": "integer", "description": "Max stops: 0=direct only, 1=1 stop max (default 1)"}}, "required": ["origin", "destination", "departure_date"]}},
     {"name": "search_hotels", "description": "Search hotel prices and availability. Returns hotel names, prices, ratings, and booking links.", "input_schema": {"type": "object", "properties": {"city": {"type": "string", "description": "City name"}, "checkin": {"type": "string", "description": "Check-in date YYYY-MM-DD"}, "checkout": {"type": "string", "description": "Check-out date YYYY-MM-DD"}, "guests": {"type": "integer", "description": "Number of guests (default 2)"}, "max_price": {"type": "integer", "description": "Max price per night in cents (e.g. 20000 = $200)"}}, "required": ["city", "checkin", "checkout"]}},
     {"name": "search_car_rentals", "description": "Search car rental prices and availability.", "input_schema": {"type": "object", "properties": {"pickup_location": {"type": "string", "description": "Pickup city or airport"}, "pickup_date": {"type": "string", "description": "Pickup date YYYY-MM-DD"}, "dropoff_date": {"type": "string", "description": "Dropoff date YYYY-MM-DD"}, "dropoff_location": {"type": "string", "description": "Different dropoff location (optional)"}, "car_class": {"type": "string", "description": "Car class: economy, compact, midsize, full-size, SUV, luxury (optional)"}}, "required": ["pickup_location", "pickup_date", "dropoff_date"]}},
@@ -365,6 +367,10 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"to": _s("string", "Recipient fax number"), "media_url": _s("string", "Public URL to PDF")}, required=["to", "media_url"])),
         genai_types.FunctionDeclaration(name="list_faxes", description="List recent sent and received faxes.",
             parameters=genai_types.Schema(type="OBJECT", properties={"direction": _s("string", "inbound, outbound, or all"), "limit": _s("INTEGER", "Max results (default 10)")})),
+        genai_types.FunctionDeclaration(name="read_fax", description="Read and AI-parse a received fax PDF. Identifies document type and extracts patient info, insurance, referral source.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"fax_id": _s("INTEGER", "Fax ID from list_faxes")}, required=["fax_id"])),
+        genai_types.FunctionDeclaration(name="file_fax_referral", description="File a fax referral: parse, match/create WellSky client or prospect, upload to Google Drive.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"fax_id": _s("INTEGER", "Fax ID to file")}, required=["fax_id"])),
         # === TRAVEL TOOLS ===
         genai_types.FunctionDeclaration(name="search_flights", description="Search real-time flight prices. ALWAYS use this for flight queries.",
             parameters=genai_types.Schema(type="OBJECT", properties={"origin": _s("string", "Departure city or IATA code"), "destination": _s("string", "Arrival city or IATA code"), "departure_date": _s("string", "YYYY-MM-DD"), "return_date": _s("string", "Return YYYY-MM-DD (omit for one-way)"), "adults": _s("INTEGER", "Number of adults"), "max_stops": _s("INTEGER", "0=direct, 1=1 stop max")}, required=["origin", "destination", "departure_date"])),
@@ -441,6 +447,8 @@ OPENAI_TOOLS = [
     # === FAX TOOLS ===
     _oai_tool("send_fax", "Send a fax to a phone number. Provide a publicly accessible URL to a PDF.", {"to": {"type": "string", "description": "Recipient fax number"}, "media_url": {"type": "string", "description": "Public URL to PDF"}}, ["to", "media_url"]),
     _oai_tool("list_faxes", "List recent sent and received faxes.", {"direction": {"type": "string", "description": "inbound, outbound, or all"}, "limit": {"type": "integer", "description": "Max results (default 10)"}}),
+    _oai_tool("read_fax", "Read and AI-parse a received fax PDF. Identifies document type and extracts patient info.", {"fax_id": {"type": "integer", "description": "Fax ID from list_faxes"}}, ["fax_id"]),
+    _oai_tool("file_fax_referral", "File a fax referral: parse, match/create WellSky prospect, upload to Google Drive.", {"fax_id": {"type": "integer", "description": "Fax ID to file"}}, ["fax_id"]),
     # === TRAVEL TOOLS ===
     _oai_tool("search_flights", "Search real-time flight prices. ALWAYS use for flight queries.", {"origin": {"type": "string", "description": "Departure city or IATA"}, "destination": {"type": "string", "description": "Arrival city or IATA"}, "departure_date": {"type": "string", "description": "YYYY-MM-DD"}, "return_date": {"type": "string", "description": "Return YYYY-MM-DD"}, "adults": {"type": "integer", "description": "Adults"}, "max_stops": {"type": "integer", "description": "0=direct, 1=1 stop max"}}, ["origin", "destination", "departure_date"]),
     _oai_tool("search_hotels", "Search hotel prices and availability.", {"city": {"type": "string", "description": "City"}, "checkin": {"type": "string", "description": "YYYY-MM-DD"}, "checkout": {"type": "string", "description": "YYYY-MM-DD"}, "guests": {"type": "integer", "description": "Guests"}, "max_price": {"type": "integer", "description": "Max price/night cents"}}, ["city", "checkin", "checkout"]),
@@ -532,6 +540,8 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - get_daily_notes: Read today's daily notes for context.
 - send_fax: Send a fax to any phone number (requires a public URL to a PDF).
 - list_faxes: List recent sent and received faxes.
+- read_fax: Scan/read a received fax with AI — identifies if it's a facesheet, referral, or authorization and extracts patient info, insurance, referral source. Use the id from list_faxes.
+- file_fax_referral: File a fax referral into WellSky (matches existing client or creates new prospect) and uploads the PDF to Google Drive.
 
 # CRITICAL RULES
 - **Morning Briefing:** ALWAYS use `get_morning_briefing` when asked for a morning briefing, daily digest, or daily summary. Do NOT try to assemble one manually from other tools. Just call the tool and relay the result.
@@ -1339,6 +1349,16 @@ class GigiTelegramBot:
                     direction=tool_input.get("direction"),
                     limit=tool_input.get("limit", 10),
                 )
+                return json.dumps(result)
+
+            elif tool_name == "read_fax":
+                from services.fax_service import read_fax as _read_fax
+                result = await _read_fax(fax_id=int(tool_input.get("fax_id", 0)))
+                return json.dumps(result)
+
+            elif tool_name == "file_fax_referral":
+                from services.fax_service import file_fax_referral as _file_fax
+                result = await _file_fax(fax_id=int(tool_input.get("fax_id", 0)))
                 return json.dumps(result)
 
             # === TRAVEL TOOLS ===

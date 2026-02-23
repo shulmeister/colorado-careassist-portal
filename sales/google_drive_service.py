@@ -1,24 +1,24 @@
-import os
 import io
+import json
 import logging
-import requests
-from typing import Optional, Tuple, List, Dict, Any
+import os
+import re
+from typing import Any, Dict, List, Optional, Tuple
+
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-import json
-import re
 
 logger = logging.getLogger(__name__)
 
 class GoogleDriveService:
     """Service for interacting with Google Drive API"""
-    
+
     def __init__(self):
         self.creds = None
         self.service = None
         self.enabled = False
-        
+
         try:
             # Check for service account key in environment variable
             creds_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_KEY')
@@ -26,7 +26,7 @@ class GoogleDriveService:
                 creds_dict = json.loads(creds_json)
                 self.creds = service_account.Credentials.from_service_account_info(
                     creds_dict,
-                    scopes=['https://www.googleapis.com/auth/drive.readonly']
+                    scopes=['https://www.googleapis.com/auth/drive']
                 )
                 self.service = build('drive', 'v3', credentials=self.creds)
                 self.enabled = True
@@ -35,7 +35,7 @@ class GoogleDriveService:
                 logger.warning("GOOGLE_SERVICE_ACCOUNT_KEY not found. Google Drive service disabled.")
         except Exception as e:
             logger.error(f"Failed to initialize Google Drive service: {str(e)}")
-    
+
     def download_file_from_url(self, url: str) -> Optional[Tuple[bytes, str, dict]]:
         """
         Download a file from a Google Drive URL
@@ -44,13 +44,13 @@ class GoogleDriveService:
         if not self.enabled:
             logger.error("Google Drive service is not enabled")
             return None
-            
+
         try:
             file_id = self._extract_file_id(url)
             if not file_id:
                 logger.error(f"Could not extract file ID from URL: {url}")
                 return None
-                
+
             # Get file metadata
             file_metadata = self.service.files().get(
                 fileId=file_id,
@@ -69,18 +69,18 @@ class GoogleDriveService:
             )
             file_io = io.BytesIO()
             downloader = MediaIoBaseDownload(file_io, request)
-            
+
             done = False
             while done is False:
                 status, done = downloader.next_chunk()
                 # logger.debug(f"Download {int(status.progress() * 100)}%.")
-                
+
             return file_io.getvalue(), filename, file_metadata
-            
+
         except Exception as e:
             logger.error(f"Error downloading file from Drive: {str(e)}")
             return None
-            
+
     def _extract_file_id(self, url: str) -> Optional[str]:
         """Extract Google Drive file ID from URL"""
         # Patterns for Drive URLs
@@ -89,12 +89,12 @@ class GoogleDriveService:
             r'drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)',
             r'docs\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)'
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, url)
             if match:
                 return match.group(1)
-                
+
         return None
 
     def _extract_folder_id(self, url: str) -> Optional[str]:
@@ -130,10 +130,10 @@ class GoogleDriveService:
         """Internal recursive file listing."""
         if depth > 5:  # Prevent infinite recursion
             return []
-        
+
         try:
             all_files = []
-            
+
             # First, get image files in this folder
             if image_only:
                 query = f"'{folder_id}' in parents and trashed = false and (mimeType contains 'image/')"
@@ -217,4 +217,84 @@ class GoogleDriveService:
             return file_io.getvalue(), filename, file_metadata
         except Exception as e:
             logger.error(f"Error downloading file {file_id}: {e}")
+            return None
+
+    def upload_file(self, file_bytes: bytes, filename: str, folder_id: str,
+                    mime_type: str = "application/pdf") -> Optional[Dict[str, Any]]:
+        """Upload a file to Google Drive.
+
+        Returns dict with id, name, webViewLink on success, or None on failure.
+        """
+        if not self.enabled:
+            logger.error("Google Drive service is not enabled")
+            return None
+
+        try:
+            from googleapiclient.http import MediaIoBaseUpload as _Upload
+
+            file_metadata = {
+                'name': filename,
+                'parents': [folder_id],
+            }
+            media = _Upload(io.BytesIO(file_bytes), mimetype=mime_type, resumable=True)
+
+            created = self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, name, webViewLink',
+                supportsAllDrives=True,
+            ).execute()
+
+            logger.info(f"Uploaded {filename} to Drive folder {folder_id} (id={created.get('id')})")
+            return {
+                "id": created.get("id"),
+                "name": created.get("name"),
+                "webViewLink": created.get("webViewLink"),
+                "url": f"https://drive.google.com/file/d/{created.get('id')}/view",
+            }
+        except Exception as e:
+            logger.error(f"Error uploading file to Drive: {e}")
+            return None
+
+    def create_folder_if_not_exists(self, parent_id: str, folder_name: str) -> Optional[str]:
+        """Find or create a subfolder. Returns the folder ID."""
+        if not self.enabled:
+            return None
+
+        try:
+            # Check if folder already exists
+            query = (
+                f"'{parent_id}' in parents and "
+                f"name = '{folder_name}' and "
+                f"mimeType = 'application/vnd.google-apps.folder' and "
+                f"trashed = false"
+            )
+            results = self.service.files().list(
+                q=query,
+                spaces='drive',
+                fields='files(id, name)',
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True,
+            ).execute()
+
+            files = results.get('files', [])
+            if files:
+                return files[0]['id']
+
+            # Create the folder
+            folder_metadata = {
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [parent_id],
+            }
+            folder = self.service.files().create(
+                body=folder_metadata,
+                fields='id',
+                supportsAllDrives=True,
+            ).execute()
+
+            logger.info(f"Created Drive folder '{folder_name}' in {parent_id} (id={folder.get('id')})")
+            return folder.get('id')
+        except Exception as e:
+            logger.error(f"Error creating folder '{folder_name}': {e}")
             return None

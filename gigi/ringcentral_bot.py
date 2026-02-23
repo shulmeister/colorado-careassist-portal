@@ -3546,19 +3546,17 @@ class GigiRingCentralBot:
                 return json.dumps({"query": query, "results": results[:10], "total": len(results)})
 
             elif tool_name == "browse_webpage":
-                from gigi.browser_automation import get_browser
-                browser = get_browser()
+                # Redirect to browse_with_claude (replaces old Playwright path)
+                from gigi.claude_code_tools import browse_with_claude
                 url = tool_input.get("url", "")
-                extract_links = tool_input.get("extract_links", False)
-                result = await browser.browse_webpage(url, extract_links=extract_links)
+                result = await browse_with_claude(task=f"Navigate to {url} and extract the main text content of the page.", url=url)
                 return json.dumps(result)
 
             elif tool_name == "take_screenshot":
-                from gigi.browser_automation import get_browser
-                browser = get_browser()
+                # Redirect to browse_with_claude (replaces old Playwright path)
+                from gigi.claude_code_tools import browse_with_claude
                 url = tool_input.get("url", "")
-                full_page = tool_input.get("full_page", False)
-                result = await browser.take_screenshot(url, full_page=full_page)
+                result = await browse_with_claude(task=f"Navigate to {url} and take a screenshot. Describe what the page looks like.", url=url)
                 return json.dumps(result)
 
             elif tool_name == "get_morning_briefing":
