@@ -2388,6 +2388,11 @@ def get_stats():
         'current_caregivers': current_caregivers
     })
 
+@app.route('/health')
+def recruiting_health():
+    return jsonify({"status": "ok", "service": "recruiting-dashboard"})
+
+
 # Facebook API Functions
 def get_facebook_campaigns():
     """Fetch campaigns from Facebook Ads API"""
