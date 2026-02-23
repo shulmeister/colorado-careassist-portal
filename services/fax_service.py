@@ -777,7 +777,52 @@ async def file_fax_referral(fax_id: int) -> dict:
             result["wellsky_error"] = str(e)
             filed_to = None
 
-    # 3) Upload to Google Drive
+    # 3) Upload PDF to WellSky DocumentReference (so it appears in client's Files tab)
+    if filed_to:
+        try:
+            import base64 as _b64
+
+            from services.wellsky_service import wellsky_service
+
+            local_path_ws = None
+            conn = _db()
+            try:
+                cur = conn.cursor()
+                cur.execute("SELECT local_path FROM fax_log WHERE id = %s", (fax_id,))
+                ws_row = cur.fetchone()
+                if ws_row:
+                    local_path_ws = ws_row[0]
+            finally:
+                conn.close()
+
+            if local_path_ws and Path(local_path_ws).exists():
+                pdf_bytes_ws = Path(local_path_ws).read_bytes()
+                pdf_b64 = _b64.b64encode(pdf_bytes_ws).decode("utf-8")
+
+                ws_description = f"Fax {doc_type} from {parsed.get('from_number', 'unknown')} — {parsed.get('summary', '')[:200]}"
+                ws_doc_type = doc_type if doc_type in ("facesheet", "referral", "authorization") else "clinical-note"
+
+                success, ws_resp = wellsky_service.create_document_reference(
+                    patient_id=str(filed_to),
+                    document_type=ws_doc_type,
+                    content_type="application/pdf",
+                    data_base64=pdf_b64,
+                    description=ws_description,
+                )
+                if success:
+                    ws_doc_id = ws_resp.get("id", "unknown") if isinstance(ws_resp, dict) else "unknown"
+                    result["wellsky_document_id"] = ws_doc_id
+                    logger.info(f"Uploaded fax {fax_id} to WellSky DocumentReference {ws_doc_id} for patient {filed_to}")
+                else:
+                    result["wellsky_upload_error"] = str(ws_resp)
+                    logger.error(f"WellSky DocumentReference upload failed for fax {fax_id}: {ws_resp}")
+            else:
+                result["wellsky_upload_error"] = "PDF file not found on disk"
+        except Exception as e:
+            logger.error(f"WellSky document upload failed: {e}")
+            result["wellsky_upload_error"] = str(e)
+
+    # 4) Upload copy to Google Drive
     gdrive_url = None
     try:
         local_path_row = None
@@ -832,7 +877,7 @@ async def file_fax_referral(fax_id: int) -> dict:
         logger.error(f"Google Drive upload failed: {e}")
         result["gdrive_error"] = str(e)
 
-    # 4) Update fax_log with filing info
+    # 5) Update fax_log with filing info
     conn = _db()
     try:
         cur = conn.cursor()
