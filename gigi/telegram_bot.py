@@ -256,6 +256,10 @@ ANTHROPIC_TOOLS = [
     # === KNOWLEDGE GRAPH TOOLS ===
     {"name": "update_knowledge_graph", "description": "Update Gigi's knowledge graph — add or remove entities (people, organizations, places, things), relations between them, and observations (facts) about them. Use to build structured knowledge about the world: who works where, who cares for whom, what tools connect to what. The graph complements flat memories with relationship-aware storage.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "add_entities | add_relations | add_observations | delete_entities | delete_relations | delete_observations"}, "entities": {"type": "array", "description": "For add_entities: list of {name, entityType, observations[]}", "items": {"type": "object", "properties": {"name": {"type": "string"}, "entityType": {"type": "string", "description": "person, caregiver, client, organization, place, software, service, etc."}, "observations": {"type": "array", "items": {"type": "string"}}}, "required": ["name", "entityType"]}}, "relations": {"type": "array", "description": "For add_relations/delete_relations: list of {from, to, relationType}", "items": {"type": "object", "properties": {"from": {"type": "string"}, "to": {"type": "string"}, "relationType": {"type": "string", "description": "Active voice: owns, works_for, cares_for, lives_in, manages, uses, etc."}}, "required": ["from", "to", "relationType"]}}, "observations": {"type": "array", "description": "For add_observations/delete_observations: list of {entityName, contents[]}", "items": {"type": "object", "properties": {"entityName": {"type": "string"}, "contents": {"type": "array", "items": {"type": "string"}}}, "required": ["entityName", "contents"]}}, "entity_names": {"type": "array", "description": "For delete_entities: names to remove", "items": {"type": "string"}}}, "required": ["action"]}},
     {"name": "query_knowledge_graph", "description": "Query Gigi's knowledge graph to find entities, their observations, and relationships. Use to answer questions about who does what, who's connected to whom, and what you know about a person/place/thing.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "search (by keyword) | open_nodes (by exact names) | read_graph (full dump)"}, "query": {"type": "string", "description": "Search text — matches entity names, types, and observations (for search action)"}, "names": {"type": "array", "description": "Exact entity names to retrieve (for open_nodes action)", "items": {"type": "string"}}}, "required": ["action"]}},
+    # === GOOGLE MAPS TOOLS ===
+    {"name": "get_directions", "description": "Get driving directions, distance, and travel time between two locations. Use for 'how far is X from Y?', 'directions to...', caregiver-to-client commute estimates. Supports driving, transit, walking, bicycling.", "input_schema": {"type": "object", "properties": {"origin": {"type": "string", "description": "Start address or place name (e.g. '123 Main St, Aurora, CO' or 'Denver International Airport')"}, "destination": {"type": "string", "description": "End address or place name"}, "mode": {"type": "string", "description": "Travel mode: driving (default), transit, walking, bicycling"}}, "required": ["origin", "destination"]}},
+    {"name": "geocode_address", "description": "Geocode an address to get coordinates, or validate/normalize an address. Returns formatted address, latitude, longitude, city, state, zip.", "input_schema": {"type": "object", "properties": {"address": {"type": "string", "description": "Address to geocode (e.g. '123 Main St, Denver, CO')"}}, "required": ["address"]}},
+    {"name": "search_nearby_places", "description": "Find nearby places of a given type around a location. Use for 'find pharmacies near Mrs. Johnson', 'hospitals near this address', 'grocery stores in Aurora'. Supports: pharmacy, hospital, doctor, grocery, restaurant, gas station, bank, post office, park, gym, dentist, church, school, police, fire station, and more.", "input_schema": {"type": "object", "properties": {"location": {"type": "string", "description": "Address or place name to search around"}, "place_type": {"type": "string", "description": "Type of place — pharmacy, hospital, doctor, grocery, restaurant, gas station, bank, etc."}, "radius_miles": {"type": "integer", "description": "Search radius in miles (default 5, max 31)"}}, "required": ["location", "place_type"]}},
     # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
     {"name": "query_workspace", "description": "Query Google Workspace admin data using GAM. READ-ONLY — can look up users, groups, domains, devices, reports. Cannot create, update, delete, or modify anything. Examples: 'info user jacob@coloradocareassist.com', 'print users', 'print groups', 'info domain', 'report users'.", "input_schema": {"type": "object", "properties": {"command": {"type": "string", "description": "GAM command WITHOUT the leading 'gam'. Examples: 'info user jason@coloradocareassist.com', 'print users fields name,email,suspended', 'print groups', 'info domain', 'report users parameters accounts:last_login_time'. Only read commands (info, print, show, report, check) are allowed."}}, "required": ["command"]}},
     # === FAX TOOLS ===
@@ -411,6 +415,13 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"action": _s("string", "add_entities|add_relations|add_observations|delete_entities|delete_relations|delete_observations"), "entities": _s("string", "JSON array of {name, entityType, observations[]}"), "relations": _s("string", "JSON array of {from, to, relationType}"), "observations": _s("string", "JSON array of {entityName, contents[]}"), "entity_names": _s("string", "JSON array of entity names to delete")}, required=["action"])),
         genai_types.FunctionDeclaration(name="query_knowledge_graph", description="Query knowledge graph for entities, relations, observations.",
             parameters=genai_types.Schema(type="OBJECT", properties={"action": _s("string", "search|open_nodes|read_graph"), "query": _s("string", "Search text"), "names": _s("string", "JSON array of entity names")}, required=["action"])),
+        # === GOOGLE MAPS TOOLS ===
+        genai_types.FunctionDeclaration(name="get_directions", description="Get driving directions, distance, and travel time between two locations.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"origin": _s("string", "Start address or place name"), "destination": _s("string", "End address or place name"), "mode": _s("string", "driving|transit|walking|bicycling")}, required=["origin", "destination"])),
+        genai_types.FunctionDeclaration(name="geocode_address", description="Geocode an address to get coordinates, validate, and normalize.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"address": _s("string", "Address to geocode")}, required=["address"])),
+        genai_types.FunctionDeclaration(name="search_nearby_places", description="Find nearby places (pharmacy, hospital, grocery, restaurant, etc.) around a location.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"location": _s("string", "Address or place name"), "place_type": _s("string", "pharmacy|hospital|doctor|grocery|restaurant|gas_station|bank|etc."), "radius_miles": _s("INTEGER", "Search radius in miles (default 5)")}, required=["location", "place_type"])),
         # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
         genai_types.FunctionDeclaration(name="query_workspace", description="Query Google Workspace admin data (READ-ONLY). Look up users, groups, domains, reports. Examples: 'info user jacob@coloradocareassist.com', 'print users', 'print groups'.",
             parameters=genai_types.Schema(type="OBJECT", properties={"command": _s("string", "GAM command WITHOUT leading 'gam'. Only read commands allowed.")}, required=["command"])),
@@ -504,6 +515,10 @@ OPENAI_TOOLS = [
     # === KNOWLEDGE GRAPH TOOLS ===
     _oai_tool("update_knowledge_graph", "Update knowledge graph: add/remove entities, relations, observations.", {"action": {"type": "string", "description": "add_entities|add_relations|add_observations|delete_entities|delete_relations|delete_observations"}, "entities": {"type": "array", "description": "For add_entities", "items": {"type": "object"}}, "relations": {"type": "array", "description": "For add/delete_relations", "items": {"type": "object"}}, "observations": {"type": "array", "description": "For add/delete_observations", "items": {"type": "object"}}, "entity_names": {"type": "array", "description": "For delete_entities", "items": {"type": "string"}}}, ["action"]),
     _oai_tool("query_knowledge_graph", "Query knowledge graph for entities, relations, observations.", {"action": {"type": "string", "description": "search|open_nodes|read_graph"}, "query": {"type": "string", "description": "Search text"}, "names": {"type": "array", "description": "Entity names to retrieve", "items": {"type": "string"}}}, ["action"]),
+    # === GOOGLE MAPS TOOLS ===
+    _oai_tool("get_directions", "Get driving directions, distance, and travel time between two locations.", {"origin": {"type": "string", "description": "Start address or place name"}, "destination": {"type": "string", "description": "End address or place name"}, "mode": {"type": "string", "description": "driving|transit|walking|bicycling"}}, ["origin", "destination"]),
+    _oai_tool("geocode_address", "Geocode an address to get coordinates, validate, and normalize.", {"address": {"type": "string", "description": "Address to geocode"}}, ["address"]),
+    _oai_tool("search_nearby_places", "Find nearby places around a location.", {"location": {"type": "string", "description": "Address or place name"}, "place_type": {"type": "string", "description": "pharmacy|hospital|doctor|grocery|restaurant|gas_station|bank|etc."}, "radius_miles": {"type": "integer", "description": "Search radius in miles (default 5)"}}, ["location", "place_type"]),
     # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
     _oai_tool("query_workspace", "Query Google Workspace admin data (READ-ONLY). Look up users, groups, domains, reports. Examples: 'info user jacob@coloradocareassist.com', 'print users', 'print groups'.", {"command": {"type": "string", "description": "GAM command WITHOUT leading 'gam'. Only read commands allowed."}}, ["command"]),
     # === FAX TOOLS ===
@@ -597,6 +612,9 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - take_screenshot: (Legacy) Screenshot any webpage. Use browse_with_claude instead.
 - save_memory / recall_memories / forget_memory: Long-term memory management (flat facts).
 - update_knowledge_graph / query_knowledge_graph: Structured knowledge graph — entities (people, orgs, places), relations (owns, works_for, cares_for), and observations (facts about entities). Use to record WHO does WHAT and HOW things connect. Use query_knowledge_graph to look up relationships. Graph complements flat memories — use save_memory for preferences/instructions, knowledge graph for entities and connections.
+- get_directions: Google Maps directions, distance, and travel time between two locations. Use for caregiver-to-client commute estimates, "how far is X from Y?", and route planning. Returns distance in miles, duration in minutes, step-by-step directions, and a Google Maps link.
+- geocode_address: Geocode any address to get coordinates (lat/lng), normalized address, city, state, zip. Use to validate addresses or get coordinates for proximity calculations.
+- search_nearby_places: Find pharmacies, hospitals, grocery stores, restaurants, etc. near any address. Useful for client context — "what pharmacy is closest to Mrs. Johnson?"
 - get_ar_report: QuickBooks accounts receivable aging report (outstanding invoices, overdue amounts).
 - get_task_board: Read Jason's full task board (all sections).
 - add_task: Add a task to the board (section: Today/Soon/Later/Waiting/Agenda/Inbox).
@@ -1521,6 +1539,32 @@ class GigiTelegramBot:
                     action=tool_input.get("action", ""),
                     query=tool_input.get("query"),
                     names=tool_input.get("names"),
+                )
+                return json.dumps(result)
+
+            # === GOOGLE MAPS TOOLS ===
+            elif tool_name == "get_directions":
+                from gigi.maps_tools import get_directions
+                result = await get_directions(
+                    origin=tool_input.get("origin", ""),
+                    destination=tool_input.get("destination", ""),
+                    mode=tool_input.get("mode", "driving"),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "geocode_address":
+                from gigi.maps_tools import geocode_address
+                result = await geocode_address(
+                    address=tool_input.get("address", ""),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "search_nearby_places":
+                from gigi.maps_tools import search_nearby_places
+                result = await search_nearby_places(
+                    location=tool_input.get("location", ""),
+                    place_type=tool_input.get("place_type", ""),
+                    radius_miles=int(tool_input.get("radius_miles", 5)),
                 )
                 return json.dumps(result)
 
