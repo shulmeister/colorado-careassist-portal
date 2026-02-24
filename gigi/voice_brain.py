@@ -217,12 +217,28 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
-        "name": "search_concerts",
-        "description": "Find upcoming concerts in Denver or other cities for specific artists or venues.",
+        "name": "search_events",
+        "description": "Search events on Ticketmaster: concerts, sports (Avalanche, Nuggets, Broncos), theater, comedy. Returns structured event data with dates, venues, prices, and ticket links.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "query": {"type": "string", "description": "Search query (artist, venue, or city)"}
+                "query": {"type": "string", "description": "Artist, team, or event keyword"},
+                "city": {"type": "string", "description": "City name (default Denver)"},
+                "state": {"type": "string", "description": "State code (default CO)"},
+                "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (default today)"},
+                "end_date": {"type": "string", "description": "End date YYYY-MM-DD (default 30 days out)"},
+                "limit": {"type": "integer", "description": "Max events to return (default 10)"}
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "search_concerts",
+        "description": "Alias for search_events — prefer search_events instead.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"}
             },
             "required": ["query"]
         }
@@ -997,10 +1013,21 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
 
             return json.dumps({"error": "Weather service temporarily unavailable"})
 
+        elif tool_name == "search_events":
+            from gigi.chief_of_staff_tools import cos_tools
+            result = await cos_tools.search_events(
+                query=tool_input.get("query", ""),
+                city=tool_input.get("city", "Denver"),
+                state=tool_input.get("state", "CO"),
+                start_date=tool_input.get("start_date"),
+                end_date=tool_input.get("end_date"),
+                limit=tool_input.get("limit", 10),
+            )
+            return json.dumps(result)
+
         elif tool_name == "search_concerts":
             from gigi.chief_of_staff_tools import cos_tools
-            query = tool_input.get("query", "")
-            result = await cos_tools.search_concerts(query=query)
+            result = await cos_tools.search_concerts(query=tool_input.get("query", ""))
             return json.dumps(result)
 
         elif tool_name == "buy_tickets_request":
@@ -2124,7 +2151,7 @@ SLOW_TOOLS = {
     "search_wellsky_clients", "search_wellsky_caregivers",
     "get_wellsky_client_details", "search_google_drive",
     "get_wellsky_shifts", "get_client_current_status",
-    "web_search", "search_concerts", "search_emails",
+    "web_search", "search_events", "search_concerts", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
     "deep_research",

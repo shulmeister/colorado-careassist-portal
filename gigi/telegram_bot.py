@@ -160,7 +160,7 @@ logger = logging.getLogger("gigi_telegram")
 
 # Internal tool list (provider-agnostic) used by execute_tool
 TOOL_NAMES = [
-    "search_concerts", "buy_tickets_request", "book_table_request",
+    "search_events", "search_concerts", "buy_tickets_request", "book_table_request",
     "get_client_current_status", "get_calendar_events", "search_emails",
     "get_weather", "get_wellsky_clients", "get_wellsky_caregivers",
     "get_wellsky_shifts", "web_search", "get_stock_price", "get_crypto_price",
@@ -186,7 +186,8 @@ TOOL_NAMES = [
 
 # Anthropic-format tools (used when LLM_PROVIDER == "anthropic")
 ANTHROPIC_TOOLS = [
-    {"name": "search_concerts", "description": "Find upcoming concerts.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search query"}}, "required": ["query"]}},
+    {"name": "search_events", "description": "Search events on Ticketmaster: concerts, sports (Avalanche, Nuggets, Broncos), theater, comedy. Returns structured event data with dates, venues, prices, and ticket links. Use this for ANY event search.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Artist, team, or event keyword (e.g. 'Colorado Avalanche', 'Phish', 'comedy')"}, "city": {"type": "string", "description": "City name (default Denver)"}, "state": {"type": "string", "description": "State code (default CO)"}, "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (default today)"}, "end_date": {"type": "string", "description": "End date YYYY-MM-DD (default 30 days out)"}, "limit": {"type": "integer", "description": "Max events to return (default 10)"}}, "required": ["query"]}},
+    {"name": "search_concerts", "description": "Alias for search_events — prefer search_events instead.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search query"}}, "required": ["query"]}},
     {"name": "buy_tickets_request", "description": "Buy concert tickets (requires 2FA).", "input_schema": {"type": "object", "properties": {"artist": {"type": "string"}, "venue": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["artist", "venue"]}},
     {"name": "book_table_request", "description": "Book a restaurant reservation (requires 2FA).", "input_schema": {"type": "object", "properties": {"restaurant": {"type": "string"}, "party_size": {"type": "integer"}, "date": {"type": "string"}, "time": {"type": "string"}}, "required": ["restaurant", "party_size", "date", "time"]}},
     {"name": "get_client_current_status", "description": "Check who is with a client right now.", "input_schema": {"type": "object", "properties": {"client_name": {"type": "string", "description": "Name of the client"}}, "required": ["client_name"]}},
@@ -680,11 +681,23 @@ class GigiTelegramBot:
     async def execute_tool(self, tool_name: str, tool_input: dict) -> str:
         """Execute a tool and return the result as a string"""
         try:
-            if tool_name == "search_concerts":
+            if tool_name == "search_events":
                 if not cos_tools:
                     return json.dumps({"error": "Chief of Staff tools not available."})
-                query = tool_input.get("query", "")
-                result = await cos_tools.search_concerts(query=query)
+                result = await cos_tools.search_events(
+                    query=tool_input.get("query", ""),
+                    city=tool_input.get("city", "Denver"),
+                    state=tool_input.get("state", "CO"),
+                    start_date=tool_input.get("start_date"),
+                    end_date=tool_input.get("end_date"),
+                    limit=tool_input.get("limit", 10),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "search_concerts":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                result = await cos_tools.search_concerts(query=tool_input.get("query", ""))
                 return json.dumps(result)
 
             elif tool_name == "buy_tickets_request":
