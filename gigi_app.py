@@ -18,6 +18,16 @@ _ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 if _ROOT_PATH not in sys.path:
     sys.path.insert(0, _ROOT_PATH)
 
+# GlitchTip error tracking
+import sentry_sdk
+
+_GLITCHTIP_DSNS = {
+    "staging": "https://96ddd9f19326418d93ee050f5002cca8@glitchtip.coloradocareassist.com/4",
+    "production": "https://7dae58e430164ba2810f99f6e329d1f2@glitchtip.coloradocareassist.com/3",
+}
+_ENV = "staging" if os.getenv("STAGING") else "production"
+sentry_sdk.init(dsn=_GLITCHTIP_DSNS[_ENV], traces_sample_rate=0.1, environment=_ENV)
+
 import logging
 
 from fastapi import FastAPI, WebSocket
@@ -95,7 +105,6 @@ async def diag_rc_status():
     from datetime import datetime, timedelta
 
     import requests
-
     from gigi.ringcentral_bot import GigiRingCentralBot
     bot = GigiRingCentralBot()
     token = bot.rc_service._get_access_token()
