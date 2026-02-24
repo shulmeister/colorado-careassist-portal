@@ -294,9 +294,9 @@ class PwaSyncCorsMiddleware:
             # For POST, let request through but inject CORS header in response
             async def send_with_cors(message):
                 if message["type"] == "http.response.start":
-                    headers = dict(message.get("headers", []))
-                    headers[b"access-control-allow-origin"] = b"*"
-                    message["headers"] = list(headers.items())
+                    headers = list(message.get("headers", []))
+                    headers.append((b"access-control-allow-origin", b"*"))
+                    message["headers"] = headers
                 await send(message)
             await self.app(scope, receive, send_with_cors)
             return
