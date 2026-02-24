@@ -310,5 +310,100 @@ class ChiefOfStaffTools:
         from gigi.ticket_monitor import remove_watch
         return await asyncio.to_thread(remove_watch, int(watch_id))
 
+    async def explore_national_parks(self, action: str = "parks", query: str = None,
+                                     park_code: str = None, state: str = None, limit: int = 5):
+        """Search the National Park Service API. Actions: parks, campgrounds, alerts,
+        thingstodo, visitorcenters, events, tours, webcams, amenities, fees."""
+        import httpx
+
+        api_key = os.environ.get("NPS_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "NPS_API_KEY not configured"}
+
+        base = "https://developer.nps.gov/api/v1"
+        params = {"api_key": api_key, "limit": min(limit, 20)}
+
+        if park_code:
+            params["parkCode"] = park_code
+        if state:
+            params["stateCode"] = state
+        if query and action == "parks":
+            params["q"] = query
+
+        # Map action to endpoint
+        endpoints = {
+            "parks": "parks", "campgrounds": "campgrounds", "alerts": "alerts",
+            "thingstodo": "thingstodo", "visitorcenters": "visitorcenters",
+            "events": "events", "tours": "tours", "webcams": "webcams",
+            "amenities": "amenities", "fees": "feespasses",
+        }
+        endpoint = endpoints.get(action)
+        if not endpoint:
+            return {"success": False, "error": f"Unknown action '{action}'. Use: {', '.join(endpoints.keys())}"}
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(f"{base}/{endpoint}", params=params)
+                if resp.status_code != 200:
+                    return {"success": False, "error": f"NPS API returned {resp.status_code}"}
+
+                data = resp.json()
+                items = data.get("data", [])
+                total = data.get("total", "0")
+
+                if action == "parks":
+                    results = [{"name": p.get("fullName", ""), "code": p.get("parkCode", ""),
+                                "description": p.get("description", "")[:200], "state": p.get("states", ""),
+                                "activities": [a["name"] for a in p.get("activities", [])[:8]],
+                                "url": p.get("url", ""),
+                                "directions": p.get("directionsInfo", "")[:150],
+                                "fees": [{"title": f.get("title", ""), "cost": f.get("cost", "")} for f in p.get("entranceFees", [])[:3]],
+                                } for p in items]
+                elif action == "campgrounds":
+                    results = [{"name": c.get("name", ""), "description": c.get("description", "")[:150],
+                                "total_sites": c.get("campsites", {}).get("totalSites", ""),
+                                "reservable": c.get("reservationInfo", "")[:100],
+                                "fees": [f.get("cost", "") for f in c.get("fees", [])],
+                                "amenities": {k: v for k, v in c.get("amenities", {}).items() if v and v not in ("0", "", "No")},
+                                "url": c.get("reservationUrl") or c.get("url", ""),
+                                } for c in items]
+                elif action == "alerts":
+                    results = [{"title": a.get("title", ""), "category": a.get("category", ""),
+                                "description": a.get("description", "")[:200],
+                                "url": a.get("url", "")} for a in items]
+                elif action == "thingstodo":
+                    results = [{"title": t.get("title", ""), "description": t.get("shortDescription", "")[:150],
+                                "activities": [a["name"] for a in t.get("activities", [])[:5]],
+                                "duration": t.get("duration", ""), "url": t.get("url", "")} for t in items]
+                elif action == "visitorcenters":
+                    results = [{"name": v.get("name", ""), "description": v.get("description", "")[:150],
+                                "directions": v.get("directionsInfo", "")[:100],
+                                "url": v.get("url", "")} for v in items]
+                elif action == "events":
+                    results = [{"title": e.get("title", ""), "date": e.get("dateStart", ""),
+                                "time": e.get("times", [{}])[0].get("timeStart", "") if e.get("times") else "",
+                                "description": e.get("description", "")[:150],
+                                "location": e.get("location", ""), "fee": e.get("feeInfo", "")} for e in items]
+                elif action == "tours":
+                    results = [{"title": t.get("title", ""), "description": t.get("description", "")[:150],
+                                "duration": t.get("duration", ""),
+                                "activities": [a["name"] for a in t.get("activities", [])[:5]]} for t in items]
+                elif action == "webcams":
+                    results = [{"title": w.get("title", ""), "description": w.get("description", "")[:100],
+                                "url": w.get("url", ""), "status": w.get("status", "")} for w in items]
+                elif action == "amenities":
+                    results = [{"name": a.get("name", ""), "parks": [p.get("parkCode", "") for p in a.get("parks", [])[:5]]} for a in items]
+                elif action == "fees":
+                    results = items[:limit]
+                else:
+                    results = items[:limit]
+
+                return {"success": True, "action": action, "total": total, "count": len(results),
+                        "park_code": park_code, "results": results}
+
+        except Exception as e:
+            logger.error(f"NPS API failed: {e}")
+            return {"success": False, "error": str(e)}
+
 # Singleton
 cos_tools = ChiefOfStaffTools()
