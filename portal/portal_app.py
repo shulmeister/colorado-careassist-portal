@@ -2807,12 +2807,12 @@ async def sync_incident_report(request: Request):
             data.get("other2_name", ""), data.get("other2_role", ""),
             data.get("other3_name", ""), data.get("other3_role", ""),
             data.get("witness_description", ""),
-            data.get("resulted_in_injury", ""),
+            data.get("resulted_in_injury") or data.get("radio_resulted_in_injury", ""),
             data.get("injury_description", ""),
             data.get("supervisor_comments", ""),
-            data.get("was_preventable", ""),
+            data.get("was_preventable") or data.get("radio_was_preventable", ""),
             data.get("corrective_actions", ""),
-            data.get("reported_to_external", ""),
+            data.get("reported_to_external") or data.get("radio_reported_to_external", ""),
             data.get("external_agency_name", ""),
             data.get("external_reported_by", ""),
             data.get("external_reported_role", ""),
@@ -2833,6 +2833,23 @@ async def sync_incident_report(request: Request):
         try:
             from gigi.google_service import google_service
             if google_service._creds:
+                def _fmt_time(t):
+                    """Convert 24-hour 'HH:MM' to '12:MM AM/PM'."""
+                    if not t or t == "N/A":
+                        return "N/A"
+                    try:
+                        h, m = t.split(":")[:2]
+                        h = int(h)
+                        suffix = "AM" if h < 12 else "PM"
+                        h = h % 12 or 12
+                        return f"{h}:{m} {suffix}"
+                    except Exception:
+                        return t
+
+                def _get_radio(key):
+                    """Get radio value — handles both 'key' and legacy 'radio_key' format."""
+                    return data.get(key) or data.get(f"radio_{key}") or ""
+
                 date_str = incident_date or "unknown"
                 employee_str = data.get("employee_name", "").strip()
                 lines = [
@@ -2844,8 +2861,8 @@ async def sync_incident_report(request: Request):
                     "",
                     "INCIDENT",
                     "-" * 30,
-                    f"1. Date: {incident_date or 'N/A'}  Time: {data.get('incident_time', 'N/A')}",
-                    f"2. Reported Date: {data.get('reported_date', 'N/A')}  Time: {data.get('reported_time', 'N/A')}",
+                    f"1. Date: {incident_date or 'N/A'}  Time: {_fmt_time(data.get('incident_time', 'N/A'))}",
+                    f"2. Reported Date: {data.get('reported_date', 'N/A')}  Time: {_fmt_time(data.get('reported_time', 'N/A'))}",
                     f"3. Reported by: {data.get('reported_by_name', 'N/A')} ({data.get('reported_by_role', 'N/A')})",
                     f"4. Reported to: {data.get('reported_to_name', 'N/A')} ({data.get('reported_to_role', 'N/A')})",
                     f"5. Location: {data.get('location', 'N/A')}",
@@ -2859,9 +2876,9 @@ async def sync_incident_report(request: Request):
                 lines += [
                     "7. Witness Description:",
                     f"   {data.get('witness_description', 'N/A')}",
-                    f"8. Resulted in injury: {data.get('resulted_in_injury', 'N/A')}",
+                    f"8. Resulted in injury: {_get_radio('resulted_in_injury') or 'N/A'}",
                 ]
-                if data.get("resulted_in_injury") == "Yes":
+                if _get_radio("resulted_in_injury") == "Yes":
                     lines.append(f"   Injury: {data.get('injury_description', 'N/A')}")
                 lines += [
                     "",
@@ -2869,14 +2886,14 @@ async def sync_incident_report(request: Request):
                     "-" * 30,
                     "9. Supervisor Comments:",
                     f"   {data.get('supervisor_comments', 'N/A')}",
-                    f"10. Preventable: {data.get('was_preventable', 'N/A')}",
+                    f"10. Preventable: {_get_radio('was_preventable') or 'N/A'}",
                 ]
-                if data.get("was_preventable") == "Yes":
+                if _get_radio("was_preventable") == "Yes":
                     lines.append(f"    Corrective Actions: {data.get('corrective_actions', 'N/A')}")
                 lines += [
-                    f"11. Reported to External Agency: {data.get('reported_to_external', 'N/A')}",
+                    f"11. Reported to External Agency: {_get_radio('reported_to_external') or 'N/A'}",
                 ]
-                if data.get("reported_to_external") == "Yes":
+                if _get_radio("reported_to_external") == "Yes":
                     lines += [
                         f"    Agency: {data.get('external_agency_name', 'N/A')}",
                         f"    Reported by: {data.get('external_reported_by', 'N/A')} ({data.get('external_reported_role', 'N/A')})",

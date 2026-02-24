@@ -293,15 +293,16 @@ const RADIOS = ['resulted_in_injury','was_preventable','reported_to_external'];
 function getData() {
     const d = {};
     INPUTS.forEach(id => { const el=document.getElementById(id); if(el) d[id]=el.value; });
-    RADIOS.forEach(name => { const el=document.querySelector('input[name="'+name+'"]:checked'); d['radio_'+name] = el ? el.value : ''; });
+    RADIOS.forEach(name => { const el=document.querySelector('input[name="'+name+'"]:checked'); d[name] = el ? el.value : ''; });
     return d;
 }
 
 function setData(d) {
     INPUTS.forEach(id => { const el=document.getElementById(id); if(el && d[id]!==undefined) el.value=d[id]; });
     RADIOS.forEach(name => {
-        if(d['radio_'+name]) {
-            const el=document.querySelector('input[name="'+name+'"][value="'+d['radio_'+name]+'"]');
+        const val = d[name] || d['radio_'+name];
+        if(val) {
+            const el=document.querySelector('input[name="'+name+'"][value="'+val+'"]');
             if(el) el.checked=true;
         }
     });
