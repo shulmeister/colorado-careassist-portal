@@ -335,6 +335,24 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
+        "name": "search_nytimes",
+        "description": "Search the New York Times — top stories, article search, best sellers, most popular. For current news, market-moving stories, book lists, trending topics.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "top_stories, search, best_sellers, best_seller_lists, or most_popular"},
+                "query": {"type": "string", "description": "Search keywords or popularity type (viewed/emailed/shared)"},
+                "section": {"type": "string", "description": "News section: home, world, politics, business, technology, science, sports, arts, etc."},
+                "period": {"type": "integer", "description": "Days for most_popular: 1, 7, or 30"},
+                "begin_date": {"type": "string", "description": "Start date YYYY-MM-DD (for search)"},
+                "end_date": {"type": "string", "description": "End date YYYY-MM-DD (for search)"},
+                "list_name": {"type": "string", "description": "Best seller list: hardcover-fiction, hardcover-nonfiction, etc."},
+                "limit": {"type": "integer", "description": "Max results (default 5)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
         "name": "get_client_current_status",
         "description": "Check who is with a client right now. Returns current caregiver, shift times, and status.",
         "input_schema": {
@@ -1158,6 +1176,20 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 subject=tool_input.get("subject"),
                 isbn=tool_input.get("isbn"),
                 filter_type=tool_input.get("filter_type"),
+                limit=tool_input.get("limit", 5),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_nytimes":
+            from gigi.chief_of_staff_tools import cos_tools
+            result = await cos_tools.search_nytimes(
+                action=tool_input.get("action", "top_stories"),
+                query=tool_input.get("query"),
+                section=tool_input.get("section", "home"),
+                period=tool_input.get("period", 1),
+                begin_date=tool_input.get("begin_date"),
+                end_date=tool_input.get("end_date"),
+                list_name=tool_input.get("list_name"),
                 limit=tool_input.get("limit", 5),
             )
             return json.dumps(result)
@@ -2266,7 +2298,7 @@ SLOW_TOOLS = {
     "search_wellsky_clients", "search_wellsky_caregivers",
     "get_wellsky_client_details", "search_google_drive",
     "get_wellsky_shifts", "get_client_current_status",
-    "web_search", "search_events", "search_concerts", "explore_national_parks", "explore_art", "search_phish", "search_books", "search_emails",
+    "web_search", "search_events", "search_concerts", "explore_national_parks", "explore_art", "search_phish", "search_books", "search_nytimes", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
     "deep_research",

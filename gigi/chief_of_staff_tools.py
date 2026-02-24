@@ -654,5 +654,147 @@ class ChiefOfStaffTools:
             logger.error(f"Google Books API failed: {e}")
             return {"success": False, "error": str(e)}
 
+    async def search_nytimes(self, action: str = "top_stories", query: str = None,
+                             section: str = "home", period: int = 1,
+                             begin_date: str = None, end_date: str = None,
+                             list_name: str = None, limit: int = 5):
+        """Search NYTimes APIs: top stories, article search, best sellers, most popular."""
+        import httpx
+
+        api_key = os.environ.get("NYT_API_KEY", "")
+        if not api_key:
+            return {"success": False, "error": "NYT_API_KEY not configured"}
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+
+                if action == "top_stories":
+                    # Sections: home, world, us, politics, business, technology, science, health, sports, arts, opinion, etc.
+                    valid_sections = ["home", "world", "us", "politics", "business", "technology",
+                                     "science", "health", "sports", "arts", "books", "movies",
+                                     "theater", "opinion", "fashion", "food", "travel", "magazine", "realestate"]
+                    sec = section.lower() if section else "home"
+                    if sec not in valid_sections:
+                        sec = "home"
+                    resp = await client.get(f"https://api.nytimes.com/svc/topstories/v2/{sec}.json",
+                                           params={"api-key": api_key})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Top Stories API returned {resp.status_code}"}
+                    data = resp.json()
+                    articles = []
+                    for r in data.get("results", [])[:limit]:
+                        articles.append({
+                            "title": r.get("title", ""),
+                            "abstract": r.get("abstract", ""),
+                            "section": r.get("section", ""),
+                            "byline": r.get("byline", ""),
+                            "published": r.get("published_date", "")[:10],
+                            "url": r.get("url", ""),
+                        })
+                    return {"success": True, "action": "top_stories", "section": sec,
+                            "count": len(articles), "articles": articles}
+
+                elif action == "search":
+                    if not query:
+                        return {"success": False, "error": "Provide a query for article search"}
+                    params = {"q": query, "api-key": api_key, "sort": "newest"}
+                    if begin_date:
+                        params["begin_date"] = begin_date.replace("-", "")
+                    if end_date:
+                        params["end_date"] = end_date.replace("-", "")
+                    resp = await client.get("https://api.nytimes.com/svc/search/v2/articlesearch.json",
+                                           params=params)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Article Search API returned {resp.status_code}"}
+                    data = resp.json()
+                    meta = data.get("response", {}).get("meta", {})
+                    articles = []
+                    for doc in data.get("response", {}).get("docs", [])[:limit]:
+                        articles.append({
+                            "title": doc.get("headline", {}).get("main", ""),
+                            "abstract": doc.get("abstract", ""),
+                            "lead": (doc.get("lead_paragraph") or "")[:200],
+                            "section": doc.get("section_name", ""),
+                            "byline": doc.get("byline", {}).get("original", "") if isinstance(doc.get("byline"), dict) else "",
+                            "published": doc.get("pub_date", "")[:10],
+                            "url": doc.get("web_url", ""),
+                            "type": doc.get("document_type", ""),
+                        })
+                    return {"success": True, "action": "search", "query": query,
+                            "total_hits": meta.get("hits", 0), "count": len(articles),
+                            "articles": articles}
+
+                elif action == "best_sellers":
+                    # Get current best seller list
+                    list_slug = list_name or "hardcover-fiction"
+                    resp = await client.get(
+                        f"https://api.nytimes.com/svc/books/v3/lists/current/{list_slug}.json",
+                        params={"api-key": api_key})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Books API returned {resp.status_code}. Try: hardcover-fiction, hardcover-nonfiction, paperback-nonfiction, young-adult-hardcover, series-books"}
+                    data = resp.json()
+                    results = data.get("results", {})
+                    books = []
+                    for b in results.get("books", [])[:limit]:
+                        books.append({
+                            "rank": b.get("rank"),
+                            "title": b.get("title", ""),
+                            "author": b.get("author", ""),
+                            "description": b.get("description", ""),
+                            "publisher": b.get("publisher", ""),
+                            "weeks_on_list": b.get("weeks_on_list", 0),
+                            "buy_links": [{"name": l.get("name", ""), "url": l.get("url", "")}
+                                         for l in b.get("buy_links", [])[:3]],
+                        })
+                    return {"success": True, "action": "best_sellers",
+                            "list_name": results.get("display_name", list_slug),
+                            "date": results.get("bestsellers_date", ""),
+                            "count": len(books), "books": books}
+
+                elif action == "best_seller_lists":
+                    resp = await client.get("https://api.nytimes.com/svc/books/v3/lists/names.json",
+                                           params={"api-key": api_key})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Lists API returned {resp.status_code}"}
+                    data = resp.json()
+                    lists = [{"name": r.get("display_name", ""), "slug": r.get("list_name_encoded", ""),
+                              "frequency": r.get("updated", ""), "oldest": r.get("oldest_published_date", ""),
+                              "newest": r.get("newest_published_date", "")}
+                             for r in data.get("results", [])[:min(limit, 20)]]
+                    return {"success": True, "action": "best_seller_lists",
+                            "count": len(lists), "lists": lists}
+
+                elif action == "most_popular":
+                    # type: viewed, emailed, shared; period: 1, 7, 30
+                    pop_type = query or "viewed"
+                    if pop_type not in ("viewed", "emailed", "shared"):
+                        pop_type = "viewed"
+                    p = period if period in (1, 7, 30) else 1
+                    resp = await client.get(
+                        f"https://api.nytimes.com/svc/mostpopular/v2/{pop_type}/{p}.json",
+                        params={"api-key": api_key})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Most Popular API returned {resp.status_code}"}
+                    data = resp.json()
+                    articles = []
+                    for r in data.get("results", [])[:limit]:
+                        articles.append({
+                            "title": r.get("title", ""),
+                            "abstract": r.get("abstract", ""),
+                            "section": r.get("section", ""),
+                            "byline": r.get("byline", ""),
+                            "published": r.get("published_date", ""),
+                            "url": r.get("url", ""),
+                        })
+                    return {"success": True, "action": "most_popular", "type": pop_type,
+                            "period_days": p, "count": len(articles), "articles": articles}
+
+                else:
+                    return {"success": False, "error": f"Unknown action '{action}'. Use: top_stories, search, best_sellers, best_seller_lists, most_popular"}
+
+        except Exception as e:
+            logger.error(f"NYTimes API failed: {e}")
+            return {"success": False, "error": str(e)}
+
 # Singleton
 cos_tools = ChiefOfStaffTools()
