@@ -140,17 +140,19 @@
         state.isLoading = true;
 
         try {
-            const [summary, clients, openShifts, mvLatest] = await Promise.all([
+            const [summary, clients, openShifts, mvLatest, irData] = await Promise.all([
                 fetchAPI('/summary'),
                 fetchAPI('/clients'),
                 fetchAPI('/open-shifts'),
                 fetchMVLatest(),
+                fetchIRData(),
             ]);
 
             state.summary = summary;
             state.clients = clients?.clients || [];
             state.openShifts = openShifts?.shifts || [];
             state.mvLatest = mvLatest || {};
+            state.irByClient = irData || {};
 
             updateDashboard();
             loadHoursBreakdown();
@@ -169,6 +171,26 @@
             return data.by_id || {};
         } catch (e) {
             console.error('MV latest fetch error:', e);
+            return {};
+        }
+    }
+
+    async function fetchIRData() {
+        try {
+            const response = await fetch('/api/incident-reports');
+            if (!response.ok) return {};
+            const data = await response.json();
+            const reports = data.reports || data || [];
+            const byClient = {};
+            (reports || []).forEach(r => {
+                const cid = r.client_id;
+                if (!cid) return;
+                if (!byClient[cid]) byClient[cid] = [];
+                byClient[cid].push(r);
+            });
+            return byClient;
+        } catch (e) {
+            console.error('IR fetch error:', e);
             return {};
         }
     }
@@ -333,9 +355,16 @@
                 mvCellHtml = `<a href="${mvUrl}" target="_blank" class="mv-add-btn" onclick="event.stopPropagation()" title="New Monitoring Visit">+MV</a>`;
             }
 
-            // IR button: always show +IR (opens incident form pre-filled with client)
+            // IR column: show count + latest date if reports exist, always include +IR link
             const irUrl = `/incident?client=${encodeURIComponent(client.name)}&client_id=${encodeURIComponent(client.id)}`;
-            const irCellHtml = `<a href="${irUrl}" target="_blank" class="ir-add-btn" onclick="event.stopPropagation()" title="New Incident Report">+IR</a>`;
+            const clientIRs = (state.irByClient || {})[client.id] || [];
+            let irCellHtml;
+            if (clientIRs.length > 0) {
+                const latestDate = clientIRs[0].incident_date ? formatDate(clientIRs[0].incident_date) : '';
+                irCellHtml = `<span class="ir-count" title="${clientIRs.length} incident report(s)">${clientIRs.length}</span> <span style="font-size:11px;color:#94a3b8">${latestDate}</span> <a href="${irUrl}" target="_blank" class="ir-add-btn" onclick="event.stopPropagation()" title="New Incident Report">+</a>`;
+            } else {
+                irCellHtml = `<a href="${irUrl}" target="_blank" class="ir-add-btn" onclick="event.stopPropagation()" title="New Incident Report">+IR</a>`;
+            }
 
             html += `
                 <tr class="client-row" data-client-id="${client.id}" onclick="toggleClientDetail('${client.id}')" style="cursor:pointer">
@@ -381,6 +410,20 @@
                                     <div style="color:#94a3b8; font-size:12px;">${escapeHtml(client.notes) || 'No notes'}</div>
                                 </div>
                             </div>
+                            ${clientIRs.length > 0 ? `
+                            <div class="detail-block">
+                                <div class="detail-block-title" style="color:#ef4444">Incident Reports (${clientIRs.length})</div>
+                                <div class="detail-block-content">
+                                    ${clientIRs.map(ir => `
+                                        <div style="margin-bottom:8px; padding:6px 8px; background:rgba(239,68,68,0.06); border-radius:4px; border-left:3px solid #ef4444;">
+                                            <div style="font-weight:600; font-size:13px;">${formatDate(ir.incident_date)}${ir.incident_time ? ' at ' + ir.incident_time : ''}</div>
+                                            <div style="font-size:12px; color:#94a3b8;">By: ${escapeHtml(ir.employee_name || 'Unknown')} &bull; ${escapeHtml(ir.resulted_in_injury === 'Yes' ? 'Injury reported' : 'No injury')}</div>
+                                            ${ir.witness_description ? `<div style="font-size:12px; margin-top:4px;">${escapeHtml(ir.witness_description).substring(0, 150)}${ir.witness_description.length > 150 ? '...' : ''}</div>` : ''}
+                                            ${ir.google_drive_link ? `<a href="${ir.google_drive_link}" target="_blank" style="font-size:11px; color:#3b82f6; text-decoration:none;" onclick="event.stopPropagation()">View Full Report ↗</a>` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>` : ''}
                         </div>
                     </td>
                 </tr>
