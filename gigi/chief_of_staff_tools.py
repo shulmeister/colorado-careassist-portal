@@ -796,5 +796,199 @@ class ChiefOfStaffTools:
             logger.error(f"NYTimes API failed: {e}")
             return {"success": False, "error": str(e)}
 
+    async def search_f1(self, action: str = "standings", query: str = None,
+                        year: int = None, round_num: int = None, limit: int = 10):
+        """Search F1 API — standings, race results, schedules, drivers, teams, circuits. No key needed."""
+        import httpx
+
+        base = "https://f1api.dev/api"
+
+        def _driver(d):
+            return {"name": f"{d.get('name','')} {d.get('surname','')}", "number": d.get("number"),
+                    "short": d.get("shortName", ""), "nationality": d.get("nationality", "")}
+
+        def _team(t):
+            return {"name": t.get("teamName", ""), "country": t.get("country", ""),
+                    "wcc": t.get("constructorsChampionships", 0), "wdc": t.get("driversChampionships", 0)}
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+
+                if action == "standings" or action == "drivers_championship":
+                    yr = year or "current"
+                    resp = await client.get(f"{base}/{yr}/drivers-championship")
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Standings API returned {resp.status_code}"}
+                    data = resp.json()
+                    standings = []
+                    for s in data.get("drivers_championship", [])[:limit]:
+                        standings.append({
+                            "position": s.get("position"), "points": s.get("points"),
+                            "wins": s.get("wins", 0), "driver": _driver(s.get("driver", {})),
+                            "team": s.get("team", {}).get("teamName", ""),
+                        })
+                    return {"success": True, "action": "drivers_championship",
+                            "season": data.get("season"), "count": len(standings), "standings": standings}
+
+                elif action == "constructors_championship":
+                    yr = year or "current"
+                    resp = await client.get(f"{base}/{yr}/constructors-championship")
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Constructors API returned {resp.status_code}"}
+                    data = resp.json()
+                    standings = []
+                    for s in data.get("constructors_championship", [])[:limit]:
+                        standings.append({
+                            "position": s.get("position"), "points": s.get("points"),
+                            "wins": s.get("wins", 0), "team": _team(s.get("team", {})),
+                        })
+                    return {"success": True, "action": "constructors_championship",
+                            "season": data.get("season"), "count": len(standings), "standings": standings}
+
+                elif action == "next_race":
+                    resp = await client.get(f"{base}/current/next")
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Next race API returned {resp.status_code}"}
+                    data = resp.json()
+                    races = data.get("race", [])
+                    if not races:
+                        return {"success": True, "action": "next_race", "message": "No upcoming race scheduled"}
+                    r = races[0]
+                    sched = r.get("schedule", {})
+                    circuit = r.get("circuit", {})
+                    return {"success": True, "action": "next_race", "season": data.get("season"),
+                            "round": data.get("round"), "race": {
+                                "name": r.get("raceName", ""),
+                                "date": sched.get("race", {}).get("date", ""),
+                                "time_utc": sched.get("race", {}).get("time", ""),
+                                "qualifying": sched.get("qualy", {}).get("date", ""),
+                                "fp1": sched.get("fp1", {}).get("date", ""),
+                                "circuit": circuit.get("circuitName", ""),
+                                "city": circuit.get("city", ""),
+                                "country": circuit.get("country", ""),
+                            }}
+
+                elif action == "last_race" or action == "race_results":
+                    if year and round_num:
+                        url = f"{base}/{year}/{round_num}/race"
+                    else:
+                        url = f"{base}/current/last/race"
+                    resp = await client.get(url)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Race results API returned {resp.status_code}"}
+                    data = resp.json()
+                    race_info = data.get("races", {})
+                    results = []
+                    for r in race_info.get("results", [])[:limit]:
+                        results.append({
+                            "position": r.get("position"), "grid": r.get("grid"),
+                            "points": r.get("points"), "time": r.get("time", ""),
+                            "fast_lap": r.get("fastLap", ""),
+                            "driver": _driver(r.get("driver", {})),
+                            "team": r.get("team", {}).get("teamName", ""),
+                            "retired": r.get("retired"),
+                        })
+                    return {"success": True, "action": "race_results",
+                            "race": race_info.get("raceName", ""),
+                            "date": race_info.get("date", ""),
+                            "circuit": race_info.get("circuit", {}).get("circuitName", ""),
+                            "season": data.get("season"), "round": race_info.get("round"),
+                            "count": len(results), "results": results}
+
+                elif action == "qualifying":
+                    if year and round_num:
+                        url = f"{base}/{year}/{round_num}/qualy"
+                    else:
+                        url = f"{base}/current/last/qualy"
+                    resp = await client.get(url)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Qualifying API returned {resp.status_code}"}
+                    data = resp.json()
+                    race_info = data.get("races", {})
+                    results = []
+                    for r in race_info.get("results", [])[:limit]:
+                        results.append({
+                            "position": r.get("position"), "q1": r.get("q1", ""),
+                            "q2": r.get("q2", ""), "q3": r.get("q3", ""),
+                            "driver": _driver(r.get("driver", {})),
+                            "team": r.get("team", {}).get("teamName", ""),
+                        })
+                    return {"success": True, "action": "qualifying",
+                            "race": race_info.get("raceName", ""),
+                            "count": len(results), "results": results}
+
+                elif action == "schedule":
+                    yr = year or "current"
+                    resp = await client.get(f"{base}/{yr}/races")
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Schedule API returned {resp.status_code}"}
+                    data = resp.json()
+                    races = []
+                    for r in data.get("races", [])[:limit]:
+                        sched = r.get("schedule", {})
+                        circuit = r.get("circuit", {})
+                        races.append({
+                            "round": r.get("round"), "name": r.get("raceName", ""),
+                            "date": sched.get("race", {}).get("date", ""),
+                            "circuit": circuit.get("circuitName", ""),
+                            "city": circuit.get("city", ""),
+                            "country": circuit.get("country", ""),
+                        })
+                    return {"success": True, "action": "schedule", "season": data.get("season"),
+                            "count": len(races), "races": races}
+
+                elif action == "drivers":
+                    yr = year or "current"
+                    resp = await client.get(f"{base}/{yr}/drivers")
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Drivers API returned {resp.status_code}"}
+                    data = resp.json()
+                    drivers = [_driver(d) for d in data.get("drivers", [])[:limit]]
+                    return {"success": True, "action": "drivers", "season": data.get("season"),
+                            "count": len(drivers), "drivers": drivers}
+
+                elif action == "driver" and query:
+                    # Search by name
+                    resp = await client.get(f"{base}/drivers/search", params={"q": query})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Driver search returned {resp.status_code}"}
+                    data = resp.json()
+                    drivers = [_driver(d) for d in data.get("drivers", [])[:limit]]
+                    return {"success": True, "action": "driver_search", "query": query,
+                            "count": len(drivers), "drivers": drivers}
+
+                elif action == "teams":
+                    yr = year or "current"
+                    resp = await client.get(f"{base}/{yr}/teams")
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Teams API returned {resp.status_code}"}
+                    data = resp.json()
+                    teams = [_team(t) for t in data.get("teams", [])[:limit]]
+                    return {"success": True, "action": "teams", "season": data.get("season"),
+                            "count": len(teams), "teams": teams}
+
+                elif action == "circuits":
+                    resp = await client.get(f"{base}/circuits", params={"limit": min(limit, 30)})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Circuits API returned {resp.status_code}"}
+                    data = resp.json()
+                    circuits = []
+                    for c in data.get("circuits", [])[:limit]:
+                        circuits.append({
+                            "name": c.get("circuitName", ""), "id": c.get("circuitId", ""),
+                            "city": c.get("city", ""), "country": c.get("country", ""),
+                            "length": c.get("circuitLength", ""), "corners": c.get("corners"),
+                            "lap_record": c.get("lapRecord", ""),
+                        })
+                    return {"success": True, "action": "circuits",
+                            "count": len(circuits), "circuits": circuits}
+
+                else:
+                    return {"success": False, "error": f"Unknown action '{action}'. Use: standings, constructors_championship, next_race, last_race, race_results, qualifying, schedule, drivers, driver, teams, circuits"}
+
+        except Exception as e:
+            logger.error(f"F1 API failed: {e}")
+            return {"success": False, "error": str(e)}
+
 # Singleton
 cos_tools = ChiefOfStaffTools()
