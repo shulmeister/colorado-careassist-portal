@@ -279,6 +279,7 @@ _SMS_EXCLUDE = {
     "get_invoice_list", "get_cash_position", "get_financial_dashboard",
     "get_subscription_audit",
     "run_claude_code", "browse_with_claude",
+    "query_workspace",
 }
 
 # Auto-extend SMS tools from Telegram canonical set (ensures tool parity across channels)
@@ -329,6 +330,8 @@ DM_TOOLS = [
     {"name": "complete_task", "description": "Mark a task done on Jason's task board.", "input_schema": {"type": "object", "properties": {"task_text": {"type": "string", "description": "Text of the task to complete (partial match OK)"}}, "required": ["task_text"]}},
     {"name": "capture_note", "description": "Capture a quick note or idea to Jason's scratchpad.", "input_schema": {"type": "object", "properties": {"note": {"type": "string", "description": "The note or idea to capture"}}, "required": ["note"]}},
     {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
+    # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
+    {"name": "query_workspace", "description": "Query Google Workspace admin data using GAM. READ-ONLY — can look up users, groups, domains, devices, reports. Cannot create, update, delete, or modify anything. Examples: 'info user jacob@coloradocareassist.com', 'print users', 'print groups', 'info domain', 'report users'.", "input_schema": {"type": "object", "properties": {"command": {"type": "string", "description": "GAM command WITHOUT the leading 'gam'. Examples: 'info user jason@coloradocareassist.com', 'print users fields name,email,suspended', 'print groups', 'info domain', 'report users parameters accounts:last_login_time'. Only read commands (info, print, show, report, check) are allowed."}}, "required": ["command"]}},
 ]
 
 # Auto-extend DM tools from Telegram canonical set (ensures tool parity across channels)
@@ -3886,6 +3889,14 @@ class GigiRingCentralBot:
                     except Exception as e:
                         return {"error": f"Failed: {str(e)}"}
                 return json.dumps(await asyncio.to_thread(_dm_read_notes))
+
+            # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
+            elif tool_name == "query_workspace":
+                from gigi.gam_tools import query_workspace
+                result = await query_workspace(
+                    command=tool_input.get("command", ""),
+                )
+                return json.dumps(result)
 
             else:
                 # Delegate to Telegram bot for shared tools not natively handled

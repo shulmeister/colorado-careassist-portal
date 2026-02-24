@@ -20,13 +20,13 @@ Or via Mac Mini (Local):
     mac-mini run python scripts/auto_scan_drive.py --app careassist-unified
 """
 
+import logging
 import os
 import sys
 import time
-import logging
 from datetime import datetime
-from typing import List, Dict, Any, Optional
 from pathlib import Path
+from typing import Any, Dict
 
 # Load environment variables from ~/.gigi-env FIRST
 env_file = Path.home() / '.gigi-env'
@@ -126,8 +126,9 @@ def get_processed_file_ids(db, folder_type: str) -> set:
 def mark_file_processed(db, drive_file_id: str, filename: str, folder_type: str,
                         result_type: str, result_id: int = None, error_message: str = None):
     """Mark a file as processed"""
-    from models import ProcessedDriveFile
     from sqlalchemy.exc import IntegrityError
+
+    from models import ProcessedDriveFile
 
     try:
         record = ProcessedDriveFile(
@@ -150,9 +151,9 @@ def process_business_card(db, content: bytes, filename: str, file_id: str, user_
     """Process a business card image and create Contact + Company + Activity log"""
     if not user_email:
         user_email = user_email
-    from models import Contact, ReferralSource, ProcessedDriveFile
-    from ai_document_parser import ai_parser
     from activity_logger import ActivityLogger
+    from ai_document_parser import ai_parser
+    from models import Contact, ReferralSource
 
     result = ai_parser.parse_business_card(content, filename)
 
@@ -290,9 +291,9 @@ def process_myway_pdf(db, content: bytes, filename: str, file_id: str, user_emai
     """Process a MyWay route PDF and create Visits + Mileage entry + Activity logs"""
     if not user_email:
         user_email = DEFAULT_USER
-    from models import Visit, FinancialEntry, ReferralSource, Contact
-    from ai_document_parser import ai_parser
     from activity_logger import ActivityLogger
+    from ai_document_parser import ai_parser
+    from models import Contact, FinancialEntry, ReferralSource, Visit
 
     result = ai_parser.parse_myway_pdf(content, filename)
 
@@ -443,8 +444,8 @@ def process_expense_receipt(db, content: bytes, filename: str, file_id: str, dri
     """Process an expense receipt and create Expense entry"""
     if not user_email:
         user_email = DEFAULT_USER
-    from models import Expense
     from ai_document_parser import ai_parser
+    from models import Expense
 
     result = ai_parser.parse_receipt(content, filename)
 
@@ -506,7 +507,7 @@ def scan_folder(db, drive_service, folder_id: str, folder_type: str) -> Dict[str
     folder_url = f"https://drive.google.com/drive/folders/{folder_id}"
 
     # Determine if we need images only or all files
-    image_only = folder_type.startswith('business_cards') or folder_type == 'expenses'
+    image_only = folder_type.startswith('business_cards')
 
     files = drive_service.list_files_in_folder(folder_url, image_only=image_only, recursive=True)
     logger.info(f"Found {len(files)} files in folder")

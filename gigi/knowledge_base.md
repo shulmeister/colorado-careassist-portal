@@ -7,7 +7,7 @@ Colorado Care Assist is a non-medical home care agency serving seniors and peopl
 - Main Office: Colorado Springs
 - Phone Numbers: 719-428-3999, 303-757-1777
 - Business Hours: Monday-Friday, 8:00 AM - 5:00 PM Mountain Time
-- After-Hours: Gigi AI handles calls outside business hours
+- Gigi AI: Available 24/7 across all channels (voice, SMS, Telegram, DM, API). Handles caregiver and client interactions around the clock.
 
 ---
 
