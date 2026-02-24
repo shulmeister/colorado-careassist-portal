@@ -286,6 +286,37 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
+        "name": "explore_art",
+        "description": "Search and explore artworks from museums worldwide. Search by artist, style, period, or get a random artwork.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "search, detail, or random"},
+                "query": {"type": "string", "description": "Artist, style, or subject (e.g. Monet, impressionism)"},
+                "artwork_id": {"type": "integer", "description": "Artwork ID (for detail action)"},
+                "art_type": {"type": "string", "description": "painting, sculpture, drawing, photograph, etc."},
+                "origin": {"type": "string", "description": "Country (e.g. France, Japan)"},
+                "limit": {"type": "integer", "description": "Max results 1-10 (default 5)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "search_phish",
+        "description": "Search the Phish.in archive — shows, setlists, songs, tours, venues with audio. Get setlists for any date, look up song stats, or browse tours.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "shows, show (specific date), song, songs, tours, or venues"},
+                "date": {"type": "string", "description": "Show date YYYY-MM-DD (for show action)"},
+                "query": {"type": "string", "description": "Song name or search text"},
+                "song_slug": {"type": "string", "description": "Song slug (e.g. tweezer)"},
+                "limit": {"type": "integer", "description": "Max results (default 5)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
         "name": "get_client_current_status",
         "description": "Check who is with a client right now. Returns current caregiver, shift times, and status.",
         "input_schema": {
@@ -1069,6 +1100,32 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 query=tool_input.get("query"),
                 park_code=tool_input.get("park_code"),
                 state=tool_input.get("state"),
+                limit=tool_input.get("limit", 5),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "explore_art":
+            from gigi.chief_of_staff_tools import cos_tools
+            result = await cos_tools.explore_art(
+                action=tool_input.get("action", "search"),
+                query=tool_input.get("query"),
+                artwork_id=tool_input.get("artwork_id"),
+                art_type=tool_input.get("art_type"),
+                origin=tool_input.get("origin"),
+                material=tool_input.get("material"),
+                earliest_year=tool_input.get("earliest_year"),
+                latest_year=tool_input.get("latest_year"),
+                limit=tool_input.get("limit", 5),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_phish":
+            from gigi.chief_of_staff_tools import cos_tools
+            result = await cos_tools.search_phish(
+                action=tool_input.get("action", "shows"),
+                query=tool_input.get("query"),
+                date=tool_input.get("date"),
+                song_slug=tool_input.get("song_slug"),
                 limit=tool_input.get("limit", 5),
             )
             return json.dumps(result)
@@ -2177,7 +2234,7 @@ SLOW_TOOLS = {
     "search_wellsky_clients", "search_wellsky_caregivers",
     "get_wellsky_client_details", "search_google_drive",
     "get_wellsky_shifts", "get_client_current_status",
-    "web_search", "search_events", "search_concerts", "explore_national_parks", "search_emails",
+    "web_search", "search_events", "search_concerts", "explore_national_parks", "explore_art", "search_phish", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
     "deep_research",

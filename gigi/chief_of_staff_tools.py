@@ -405,5 +405,158 @@ class ChiefOfStaffTools:
             logger.error(f"NPS API failed: {e}")
             return {"success": False, "error": str(e)}
 
+    async def explore_art(self, action: str = "search", query: str = None, artwork_id: int = None,
+                          art_type: str = None, origin: str = None, material: str = None,
+                          earliest_year: int = None, latest_year: int = None, limit: int = 5):
+        """Search and explore artworks via ArtSearch API. Actions: search, detail, random."""
+        import httpx
+
+        api_key = os.environ.get("ARTSEARCH_API_KEY")
+        if not api_key:
+            return {"success": False, "error": "ARTSEARCH_API_KEY not configured"}
+
+        base = "https://api.artsearch.io/artworks"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                if action == "random":
+                    resp = await client.get(f"{base}/random", params={"api-key": api_key})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"ArtSearch API returned {resp.status_code}"}
+                    a = resp.json()
+                    return {"success": True, "action": "random", "artwork": {
+                        "id": a.get("id"), "title": a.get("title", ""), "author": a.get("author", "Unknown"),
+                        "image": a.get("image", ""), "start_date": a.get("start_date"),
+                        "end_date": a.get("end_date"), "types": a.get("art_types", []),
+                        "description": a.get("description", ""),
+                    }}
+
+                elif action == "detail" and artwork_id:
+                    resp = await client.get(f"{base}/{artwork_id}", params={"api-key": api_key})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Artwork {artwork_id} not found"}
+                    a = resp.json()
+                    return {"success": True, "action": "detail", "artwork": {
+                        "id": a.get("id"), "title": a.get("title", ""), "author": a.get("author", "Unknown"),
+                        "image": a.get("image", ""), "start_date": a.get("start_date"),
+                        "end_date": a.get("end_date"), "types": a.get("art_types", []),
+                        "description": a.get("description", ""),
+                    }}
+
+                else:  # search
+                    params = {"api-key": api_key, "number": min(limit, 10)}
+                    if query:
+                        params["query"] = query[:300]
+                    if art_type:
+                        params["type"] = art_type
+                    if origin:
+                        params["origin"] = origin
+                    if material:
+                        params["material"] = material
+                    if earliest_year:
+                        params["earliest-start-date"] = earliest_year
+                    if latest_year:
+                        params["latest-start-date"] = latest_year
+
+                    resp = await client.get(base, params=params)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"ArtSearch API returned {resp.status_code}"}
+                    data = resp.json()
+                    artworks = [{"id": a.get("id"), "title": a.get("title", ""), "image": a.get("image", "")}
+                                for a in data.get("artworks", [])]
+                    return {"success": True, "action": "search", "total": data.get("available", 0),
+                            "count": len(artworks), "artworks": artworks}
+
+        except Exception as e:
+            logger.error(f"ArtSearch API failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def search_phish(self, action: str = "shows", query: str = None,
+                           date: str = None, song_slug: str = None, limit: int = 5):
+        """Search Phish.in API for shows, songs, setlists, tours, and venues. No API key needed."""
+        import httpx
+
+        base = "https://phish.in/api/v2"
+        headers = {"Accept": "application/json"}
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                if action == "show" and date:
+                    # Get specific show with full setlist + tracks
+                    resp = await client.get(f"{base}/shows/{date}", headers=headers)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Show {date} not found"}
+                    s = resp.json().get("show", resp.json())
+                    tracks = [{"position": t.get("position"), "title": t.get("title", ""),
+                               "duration_min": round(t.get("duration", 0) / 60000, 1),
+                               "set": t.get("set_name", ""), "mp3": t.get("mp3_url", "")}
+                              for t in s.get("tracks", [])]
+                    return {"success": True, "action": "show", "show": {
+                        "date": s.get("date"), "venue": s.get("venue_name", ""),
+                        "location": s.get("venue", {}).get("location", ""),
+                        "tour": s.get("tour_name", ""), "taper_notes": (s.get("taper_notes") or "")[:300],
+                        "tracks": tracks, "album_zip": s.get("album_zip_url", ""),
+                    }}
+
+                elif action == "song" and (song_slug or query):
+                    slug = song_slug or query.lower().replace(" ", "-")
+                    resp = await client.get(f"{base}/songs/{slug}", headers=headers)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Song '{slug}' not found"}
+                    s = resp.json().get("song", resp.json())
+                    return {"success": True, "action": "song", "song": {
+                        "title": s.get("title", ""), "slug": s.get("slug", ""),
+                        "times_played": s.get("tracks_count", 0),
+                        "original": s.get("original", True),
+                    }}
+
+                elif action == "songs":
+                    params = {"per_page": min(limit, 20), "sort": "title:asc"}
+                    if query:
+                        params["filter"] = query
+                    resp = await client.get(f"{base}/songs", headers=headers, params=params)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Songs API returned {resp.status_code}"}
+                    songs = [{"title": s.get("title", ""), "slug": s.get("slug", ""),
+                              "times_played": s.get("tracks_count", 0)}
+                             for s in resp.json().get("songs", [])]
+                    return {"success": True, "action": "songs", "count": len(songs), "songs": songs}
+
+                elif action == "tours":
+                    resp = await client.get(f"{base}/tours", headers=headers, params={"per_page": min(limit, 20)})
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Tours API returned {resp.status_code}"}
+                    tours = [{"name": t.get("name", ""), "shows_count": t.get("shows_count", 0),
+                              "starts_on": t.get("starts_on", ""), "ends_on": t.get("ends_on", "")}
+                             for t in resp.json().get("tours", [])]
+                    return {"success": True, "action": "tours", "count": len(tours), "tours": tours}
+
+                elif action == "venues":
+                    params = {"per_page": min(limit, 20), "sort": "shows_count:desc"}
+                    resp = await client.get(f"{base}/venues", headers=headers, params=params)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Venues API returned {resp.status_code}"}
+                    venues = [{"name": v.get("name", ""), "location": v.get("location", ""),
+                               "shows_count": v.get("shows_count", 0)}
+                              for v in resp.json().get("venues", [])]
+                    return {"success": True, "action": "venues", "count": len(venues), "venues": venues}
+
+                else:  # shows (default)
+                    params = {"per_page": min(limit, 20), "sort": "date:desc"}
+                    resp = await client.get(f"{base}/shows", headers=headers, params=params)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Shows API returned {resp.status_code}"}
+                    shows = [{"date": s.get("date", ""), "venue": s.get("venue_name", ""),
+                              "location": s.get("venue", {}).get("location", ""),
+                              "tour": s.get("tour_name", ""),
+                              "duration_min": round(s.get("duration", 0) / 60000),
+                              "tracks_count": len(s.get("tracks", [])) if "tracks" in s else None}
+                             for s in resp.json().get("shows", [])]
+                    return {"success": True, "action": "shows", "count": len(shows), "shows": shows}
+
+        except Exception as e:
+            logger.error(f"Phish.in API failed: {e}")
+            return {"success": False, "error": str(e)}
+
 # Singleton
 cos_tools = ChiefOfStaffTools()
