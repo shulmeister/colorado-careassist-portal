@@ -279,6 +279,9 @@ _SMS_EXCLUDE = {
     "get_invoice_list", "get_cash_position", "get_financial_dashboard",
     "get_subscription_audit",
     "run_claude_code", "browse_with_claude",
+    "run_terminal",
+    "sequential_thinking", "get_thinking_summary",
+    "update_knowledge_graph", "query_knowledge_graph",
     "query_workspace",
 }
 
