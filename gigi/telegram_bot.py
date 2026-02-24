@@ -141,9 +141,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 # GIGI_LLM_MODEL: model name override (auto-detected from provider if not set)
 LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "gemini").lower()
 _DEFAULT_MODELS = {
-    "gemini": "gemini-3-flash-preview",  # override with GIGI_LLM_MODEL env var
-    "anthropic": "claude-sonnet-4-5-20250929",
-    "openai": "gpt-5.1",
+    "gemini": "gemini-2.5-flash-preview-05-20",
+    "anthropic": "claude-haiku-4-5-20251001",
+    "openai": "gpt-4o-mini",
 }
 LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-3-flash-preview"))
 
@@ -2244,15 +2244,29 @@ class GigiTelegramBot:
 
             try:
                 # Dispatch to the right provider (300s timeout to allow run_claude_code)
-                if LLM_PROVIDER == "gemini":
-                    final_text = await asyncio.wait_for(
-                        self._call_gemini(user_id, update), timeout=300.0)
-                elif LLM_PROVIDER == "openai":
-                    final_text = await asyncio.wait_for(
-                        self._call_openai(user_id, update), timeout=300.0)
-                else:
-                    final_text = await asyncio.wait_for(
-                        self._call_anthropic(user_id, update), timeout=300.0)
+                # Fallback chain: primary provider → anthropic haiku on rate limit
+                final_text = None
+                used_provider = LLM_PROVIDER
+                try:
+                    if LLM_PROVIDER == "gemini":
+                        final_text = await asyncio.wait_for(
+                            self._call_gemini(user_id, update), timeout=300.0)
+                    elif LLM_PROVIDER == "openai":
+                        final_text = await asyncio.wait_for(
+                            self._call_openai(user_id, update), timeout=300.0)
+                    else:
+                        final_text = await asyncio.wait_for(
+                            self._call_anthropic(user_id, update), timeout=300.0)
+                except Exception as e:
+                    err_str = str(e).lower()
+                    is_rate_limit = any(k in err_str for k in ("429", "resource_exhausted", "rate_limit", "quota"))
+                    if is_rate_limit and LLM_PROVIDER != "anthropic":
+                        logger.warning(f"{LLM_PROVIDER} rate limited, falling back to anthropic: {e}")
+                        used_provider = "anthropic (fallback)"
+                        final_text = await asyncio.wait_for(
+                            self._call_anthropic(user_id, update), timeout=300.0)
+                    else:
+                        raise
 
                 if not final_text:
                     final_text = "I processed your request but have no text response. Please try again."
@@ -2263,6 +2277,9 @@ class GigiTelegramBot:
 
                 # Store assistant response in shared conversation store
                 self.conversation_store.append("jason", "telegram", "assistant", final_text)
+
+                if used_provider != LLM_PROVIDER:
+                    logger.info(f"Response served via {used_provider}")
 
                 # Send response (split if too long for Telegram)
                 if len(final_text) > 4000:

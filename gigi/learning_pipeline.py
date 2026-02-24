@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 DB_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
 RINGCENTRAL_SERVER = os.getenv("RINGCENTRAL_SERVER_URL", "https://platform.ringcentral.com")
-ANALYSIS_MODEL = "claude-sonnet-4-6-20250514"
+ANALYSIS_MODEL = "claude-haiku-4-5-20251001"
 
 # How far back to look for staff replies (minutes after Gigi's draft)
 PAIRING_WINDOW_MINUTES = 60

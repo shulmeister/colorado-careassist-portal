@@ -109,12 +109,22 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
     history = store.get_recent(user_id, channel, limit=20)
 
     try:
-        if LLM_PROVIDER == "gemini":
-            response_text = await _call_gemini(bot, history, sys_prompt)
-        elif LLM_PROVIDER == "openai":
-            response_text = await _call_openai(bot, history, sys_prompt)
-        else:
-            response_text = await _call_anthropic(bot, history, sys_prompt)
+        # Fallback chain: primary provider → anthropic haiku on rate limit
+        try:
+            if LLM_PROVIDER == "gemini":
+                response_text = await _call_gemini(bot, history, sys_prompt)
+            elif LLM_PROVIDER == "openai":
+                response_text = await _call_openai(bot, history, sys_prompt)
+            else:
+                response_text = await _call_anthropic(bot, history, sys_prompt)
+        except Exception as e:
+            err_str = str(e).lower()
+            is_rate_limit = any(k in err_str for k in ("429", "resource_exhausted", "rate_limit", "quota"))
+            if is_rate_limit and LLM_PROVIDER != "anthropic":
+                logger.warning(f"Ask-Gigi {LLM_PROVIDER} rate limited, falling back to anthropic: {e}")
+                response_text = await _call_anthropic(bot, history, sys_prompt)
+            else:
+                raise
     except Exception as e:
         logger.error(f"Ask-Gigi LLM error ({LLM_PROVIDER}): {e}", exc_info=True)
         response_text = f"Sorry, I hit an error: {str(e)}"

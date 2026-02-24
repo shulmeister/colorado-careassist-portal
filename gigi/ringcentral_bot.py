@@ -139,8 +139,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "gemini").lower()
 _DEFAULT_MODELS = {
-    "gemini": "gemini-3-flash-preview",
-    "anthropic": "claude-sonnet-4-20250514",
+    "gemini": "gemini-2.5-flash-preview-05-20",
+    "anthropic": "claude-haiku-4-5-20251001",
 }
 LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-3-flash-preview"))
 LLM_MAX_TOKENS = 1024
@@ -2844,14 +2844,27 @@ class GigiRingCentralBot:
                 system += xc
 
         try:
-            if self.llm_provider == "gemini":
-                final_text = await self._call_gemini(system, conv_history, GEMINI_SMS_TOOLS,
-                                                     lambda name, inp: self._execute_sms_tool(name, inp, caller_phone=phone),
-                                                     "SMS")
-            else:
-                final_text = await self._call_anthropic(system, conv_history, SMS_TOOLS,
-                                                        lambda name, inp: self._execute_sms_tool(name, inp, caller_phone=phone),
-                                                        "SMS")
+            # Fallback chain: primary provider → anthropic haiku on rate limit
+            final_text = None
+            try:
+                if self.llm_provider == "gemini":
+                    final_text = await self._call_gemini(system, conv_history, GEMINI_SMS_TOOLS,
+                                                         lambda name, inp: self._execute_sms_tool(name, inp, caller_phone=phone),
+                                                         "SMS")
+                else:
+                    final_text = await self._call_anthropic(system, conv_history, SMS_TOOLS,
+                                                            lambda name, inp: self._execute_sms_tool(name, inp, caller_phone=phone),
+                                                            "SMS")
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = any(k in err_str for k in ("429", "resource_exhausted", "rate_limit", "quota"))
+                if is_rate_limit and self.llm_provider != "anthropic":
+                    logger.warning(f"SMS {self.llm_provider} rate limited, falling back to anthropic: {e}")
+                    final_text = await self._call_anthropic(system, conv_history, SMS_TOOLS,
+                                                            lambda name, inp: self._execute_sms_tool(name, inp, caller_phone=phone),
+                                                            "SMS")
+                else:
+                    raise
 
             if not final_text:
                 final_text = "Thanks for your message. I'll have the office follow up with you shortly."
@@ -2923,14 +2936,27 @@ class GigiRingCentralBot:
         conv_history.append({"role": "user", "content": text})
 
         try:
-            if self.llm_provider == "gemini":
-                final_text = await self._call_gemini(system, conv_history, GEMINI_DM_TOOLS,
-                                                     lambda name, inp: self._execute_dm_tool(name, inp),
-                                                     "DM")
-            else:
-                final_text = await self._call_anthropic(system, conv_history, DM_TOOLS,
-                                                        lambda name, inp: self._execute_dm_tool(name, inp),
-                                                        "DM")
+            # Fallback chain: primary provider → anthropic haiku on rate limit
+            final_text = None
+            try:
+                if self.llm_provider == "gemini":
+                    final_text = await self._call_gemini(system, conv_history, GEMINI_DM_TOOLS,
+                                                         lambda name, inp: self._execute_dm_tool(name, inp),
+                                                         "DM")
+                else:
+                    final_text = await self._call_anthropic(system, conv_history, DM_TOOLS,
+                                                            lambda name, inp: self._execute_dm_tool(name, inp),
+                                                            "DM")
+            except Exception as e:
+                err_str = str(e).lower()
+                is_rate_limit = any(k in err_str for k in ("429", "resource_exhausted", "rate_limit", "quota"))
+                if is_rate_limit and self.llm_provider != "anthropic":
+                    logger.warning(f"DM {self.llm_provider} rate limited, falling back to anthropic: {e}")
+                    final_text = await self._call_anthropic(system, conv_history, DM_TOOLS,
+                                                            lambda name, inp: self._execute_dm_tool(name, inp),
+                                                            "DM")
+                else:
+                    raise
 
             if not final_text:
                 final_text = "I checked our records but couldn't find the specific information. Please text or call the office for assistance."
