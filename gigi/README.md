@@ -1,43 +1,68 @@
 # Gigi - AI Chief of Staff
 
-Gigi operates across 6+ channels with 15-33 tools per channel, backed by PostgreSQL memory and self-monitoring subsystems.
+Gigi is Colorado Care Assist's AI Chief of Staff. She operates across 6+ channels with 22-25 tools per channel, backed by PostgreSQL memory, cross-channel conversation persistence, and self-monitoring subsystems.
 
-> **Full reference:** See `CLAUDE.md` at the repo root.
+> **Primary reference:** See `CLAUDE.md` at the repo root for full architecture, tool lists, and operational details.
+
+---
 
 ## Channels
 
 | Channel | Handler | Tools | Status |
 |---------|---------|-------|--------|
-| **Voice** (307-459-8220) | `voice_brain.py` | 33 | Working |
-| **SMS** (307-459-8220) | `ringcentral_bot.py` | 15 | Working |
-| **DM / Team Chat** | `ringcentral_bot.py` | 31 | Working |
-| **Telegram** | `telegram_bot.py` | 32 | Working |
-| **Ask-Gigi API** | `ask_gigi.py` | 32 | Working |
-| **Apple Shortcuts / Siri** | `ask_gigi.py` | 32 | Working |
-| **iMessage** | `main.py` + `ask_gigi.py` | 32 | Code Done |
-| **Menu Bar** | `ask_gigi.py` | 32 | Working |
-
-**Note:** SMS tools are intentionally limited to operational tools only. Only Jason gets full Gigi capability via DM/Telegram/voice.
-
-## LLM Provider
-
-- **Production:** `anthropic` / `claude-haiku-4-5-20251001`
-- All handlers support Gemini, Anthropic, and OpenAI via `GIGI_LLM_PROVIDER` + `GIGI_LLM_MODEL`
+| **Voice** (307-459-8220) | `voice_brain.py` | 25 | Working |
+| **SMS** (307-459-8220) | `ringcentral_bot.py` | 11 | Working |
+| **DM / Team Chat** | `ringcentral_bot.py` | 22 | Working |
+| **Telegram** | `telegram_bot.py` | 22 | Working |
+| **Ask-Gigi API** | `ask_gigi.py` | 22 | Working |
+| **Apple Shortcuts / Siri** | `ask_gigi.py` | 22 | Working |
+| **iMessage** | `main.py` + `ask_gigi.py` | 22 | Code Done |
+| **Menu Bar** | `ask_gigi.py` | 22 | Working |
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `voice_brain.py` | Retell Custom LLM WebSocket handler |
-| `telegram_bot.py` | Telegram bot (canonical tool definitions) |
-| `ringcentral_bot.py` | SMS/DM/Team Chat polling, scheduled messages |
-| `main.py` | Retell webhooks, ask-gigi API, iMessage webhook |
-| `ask_gigi.py` | Generic ask-gigi (reuses telegram tools) |
-| `learning_pipeline.py` | Shadow mode learning (pairs drafts with staff replies) |
-| `memory_system.py` | Long-term memory (save/recall/forget) |
-| `conversation_store.py` | PostgreSQL conversation persistence |
-| `CONSTITUTION.md` | 10 non-negotiable operating laws |
+| `voice_brain.py` | Retell Custom LLM WebSocket handler (multi-provider, 25 tools) |
+| `telegram_bot.py` | Telegram bot (multi-provider, 22 tools) |
+| `ringcentral_bot.py` | RC polling loop — SMS, DM, Team Chat, clock reminders, daily confirmations |
+| `main.py` | Retell webhooks, `/api/ask-gigi`, `/webhook/imessage` |
+| `ask_gigi.py` | Generic ask-gigi function (reuses telegram tools, no code duplication) |
+| `browser_automation.py` | Playwright headless Chromium (browse + screenshot) |
+| `conversation_store.py` | PostgreSQL conversation persistence (all channels) |
+| `memory_system.py` | Long-term memory (save/recall/forget via PostgreSQL `gigi_memories`) |
+| `mode_detector.py` | 8-mode auto-detection (focus, crisis, travel, etc.) |
+| `failure_handler.py` | 10 failure protocols + DB-based meltdown detection |
+| `pattern_detector.py` | Repeated failure + trend detection |
+| `self_monitor.py` | Weekly self-audit |
+| `memory_logger.py` | Daily markdown journal at `~/.gigi-memory/` |
+| `google_service.py` | Google Calendar + Gmail API (OAuth2) |
+| `CONSTITUTION.md` | Gigi's 10 non-negotiable operating laws |
+
+## Multi-LLM Provider
+
+All handlers support Gemini, Anthropic, and OpenAI. Configured via:
+- `GIGI_LLM_PROVIDER=gemini` (default)
+- `GIGI_LLM_MODEL=gemini-3-flash-preview` (default)
+
+## Subsystems
+
+- **Memory System** — PostgreSQL `gigi_memories` + audit log, with confidence decay
+- **Conversation Store** — PostgreSQL `gigi_conversations`, cross-channel context injection
+- **Mode Detector** — 8 operating modes, injected into system prompts
+- **Failure Handler** — 10 protocols, DB-based meltdown detection (3 failures in 5 min)
+- **Pattern Detector** — Tool failure trends, open shifts, memory conflicts, drift
+- **Self-Monitor** — Weekly audit, failure stats, memory health
+- **Memory Logger** — Daily markdown journal, searchable via `search_memory_logs` tool
+- **Constitutional Preamble** — 10 Operating Laws injected into ALL system prompts
+
+## Security
+
+- All services bind `127.0.0.1`, exposed only via Cloudflare Tunnel
+- iMessage webhook requires BlueBubbles password parameter
+- Retell webhook uses SDK `verify()` (never custom HMAC)
+- Voice brain blocks side-effect tools during test/simulation calls
 
 ---
 
-*See `CLAUDE.md` for full architecture, credentials, and procedures.*
+*For full details, tool lists, API credentials, and operational procedures, see `CLAUDE.md`.*

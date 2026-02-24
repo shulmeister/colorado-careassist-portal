@@ -6554,7 +6554,7 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
             received_secret = request.headers.get("X-Webhook-Secret", "")
             if received_secret != sms_secret:
                 logger.warning("Inbound SMS webhook: Invalid or missing webhook secret")
-                return SMSResponse(reply_text="", reply_sent=False, error="Unauthorized")
+                return SMSResponse(success=False, reply_text="", reply_sent=False, error="Unauthorized")
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
 
     # FORCE REPLY for now to ensure reliability, ignoring office hours gates

@@ -588,9 +588,9 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - get_wellsky_shifts: Look up today's shifts, who's working, shift hours. USE THIS for any shift question.
 - get_weather_arb_status: Weather/trading bot status. Kalshi is the ONLY trading bot that matters — focus on Kalshi P&L and positions. Do NOT mention Polymarket or Polybot unless Jason explicitly asks about them.
 - web_search: General knowledge, flight prices, travel info.
+- run_terminal: Execute a shell command INSTANTLY on the Mac Mini. FREE (no API cost). Use for quick checks: tail logs, launchctl status, git status/log, ls, ps, lsof, disk usage, kill+restart a service. PREFER THIS for simple commands. Use run_claude_code only when you need AI reasoning (multi-step fixes, code edits, debugging).
 - run_claude_code: Execute code/infra tasks DIRECTLY using Claude Code. Fixes bugs, edits files, checks logs, runs tests, restarts services, git ops. Returns result immediately (synchronous). PREFER THIS over create_claude_task. Directories: careassist (staging, default), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard, qbo-dashboard.
 - browse_with_claude: Browse websites using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data. PREFER THIS over browse_webpage.
-- run_terminal: Execute a shell command INSTANTLY on the Mac Mini. FREE (no API cost). Use for quick checks: tail logs, launchctl status, git status/log, ls, ps, lsof, disk usage, kill+restart a service. PREFER THIS for simple commands. Use run_claude_code only when you need AI reasoning (multi-step fixes, code edits, debugging).
 - sequential_thinking: Think through complex problems step by step BEFORE acting. Use for debugging, investigations, planning. Supports revision (rethink earlier steps) and branching (explore hypotheses). ALWAYS think first on complex tasks.
 - get_thinking_summary: Review the full chain of reasoning steps.
 - browse_webpage: (Legacy) Browse any URL and extract text content. Use browse_with_claude instead for better results.

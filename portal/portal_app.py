@@ -24,10 +24,18 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
 from portal_auth import get_current_user, get_current_user_optional, oauth_manager
 from portal_database import db_manager, get_db
 from portal_models import (
     BrevoWebhookEvent,
+    GigiInteractionFeedback,
     PortalTool,
     ToolClick,
     UserSession,
@@ -40,12 +48,6 @@ from services.marketing.metrics_service import (
     get_social_metrics,
 )
 from services.search_service import search_service
-
-# Rate limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
 
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
@@ -318,29 +320,6 @@ async def auth_callback(request: Request, code: str = None, state: str = None, e
         # SECURITY: Pass state for CSRF validation
         result = await oauth_manager.handle_callback(code, state or "", request=request)
 
-        # ── SSO relay: redirect back to satellite app with signed token ──
-        sso_return_to = request.session.pop("_sso_return_to", None)
-        if sso_return_to:
-            from urllib.parse import urlencode, urlparse
-            # Re-validate the return_to origin (defense in depth)
-            parsed = urlparse(sso_return_to)
-            origin = f"{parsed.scheme}://{parsed.netloc}"
-            if origin in _SSO_ALLOWED_ORIGINS:
-                # Sign user data with APP_SECRET_KEY (shared with satellite apps)
-                user_info = result.get("user", {})
-                sso_token = _SSO_SERIALIZER.dumps({
-                    "email": user_info.get("email", ""),
-                    "name": user_info.get("name", ""),
-                    "picture": user_info.get("picture", ""),
-                    "domain": user_info.get("email", "").split("@")[-1] if "@" in user_info.get("email", "") else "",
-                })
-                separator = "&" if "?" in sso_return_to else "?"
-                redirect_url = f"{sso_return_to}{separator}{urlencode({'token': sso_token})}"
-                logger.info(f"SSO relay: authenticated {user_info.get('email')} → {origin}")
-                return RedirectResponse(url=redirect_url, status_code=302)
-            else:
-                logger.warning(f"SSO relay: blocked return origin {origin} in callback")
-
         # Create response with session cookie
         # Check for return_to cookie (set by sales/recruiting when redirecting to portal login)
         return_to = request.cookies.get("_return_to", "/")
@@ -387,44 +366,6 @@ async def get_current_user_info(current_user: Dict[str, Any] = Depends(get_curre
             "domain": current_user.get("domain")
         }
     }
-
-# ── SSO Relay for satellite apps (QBO Dashboard, etc.) ──────────────
-# Satellite apps that can't register their own Google OAuth redirect URI
-# redirect here. We authenticate via Google OAuth (which has a registered
-# redirect URI for portal), then redirect back with a signed token.
-# Both portal and satellites share APP_SECRET_KEY so tokens are interoperable.
-_SSO_ALLOWED_ORIGINS = {
-    "https://qbo.coloradocareassist.com",
-    "https://staging.coloradocareassist.com",
-}
-_SSO_SERIALIZER = URLSafeTimedSerializer(os.getenv("APP_SECRET_KEY", ""))
-
-
-@app.get("/sso/login")
-async def sso_login(request: Request, return_to: str = ""):
-    """SSO relay: authenticate via Google OAuth and redirect back to caller with signed token."""
-    if not return_to:
-        return JSONResponse({"error": "return_to parameter required"}, status_code=400)
-
-    # Validate return_to is an allowed origin
-    from urllib.parse import urlparse
-    parsed = urlparse(return_to)
-    origin = f"{parsed.scheme}://{parsed.netloc}"
-    if origin not in _SSO_ALLOWED_ORIGINS:
-        logger.warning(f"SSO relay: blocked return_to origin {origin}")
-        return JSONResponse({"error": f"Origin not allowed: {origin}"}, status_code=403)
-
-    # Store return_to in session so /auth/callback can redirect back
-    request.session["_sso_return_to"] = return_to
-
-    # Redirect to Google OAuth (portal has a registered redirect URI)
-    try:
-        auth_url = oauth_manager.get_authorization_url(request=request)
-        return RedirectResponse(url=auth_url)
-    except Exception as e:
-        logger.error(f"SSO login error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Authentication service unavailable")
-
 
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
@@ -2652,12 +2593,14 @@ async def sync_monitoring_visit(request: Request):
                 filename = f"MV {client_name} {safe_date}.txt"
 
                 # Find or create "Monitoring Visits" folder in Drive root
+                # Use a known parent folder or root
                 root_folder_id = os.getenv("GOOGLE_DRIVE_MV_FOLDER_ID", "root")
                 folder_id = google_service.drive_get_or_create_folder(root_folder_id, "Monitoring Visits")
                 if folder_id:
                     result = google_service.drive_upload_file(file_bytes, filename, folder_id, "text/plain")
                     if result:
                         google_drive_link = result.get("url") or result.get("webViewLink")
+                        # Update the DB record with the drive link
                         cur2 = conn.cursor()
                         cur2.execute("UPDATE monitoring_visits SET google_drive_link = %s WHERE local_id = %s",
                                      (google_drive_link, local_id))
@@ -2704,6 +2647,7 @@ async def get_latest_monitoring_visits():
         cur.close()
         conn.close()
 
+        # Build lookup by client_id and by name (for matching)
         by_id = {}
         by_name = {}
         for r in rows:
@@ -2738,6 +2682,7 @@ async def get_monitoring_visits(client_id: str = None):
         cur.close()
         conn.close()
 
+        # Serialize dates
         visits = []
         for r in rows:
             visit = dict(r)
@@ -4284,7 +4229,7 @@ async def api_operations_summary(
         """)
         open_shifts = cur.fetchone()[0]
 
-        # At-risk clients (no visits in last 14 days among clients with recent history)
+        # At-risk clients (no visits in last 14 days among active clients with history)
         cur.execute("""
             SELECT COUNT(*) FROM cached_patients p
             WHERE p.is_active = true
@@ -4325,6 +4270,7 @@ async def api_operations_summary(
                 if bvp_resp.status_code == 200:
                     bvp = bvp_resp.json()
                     total_hours = bvp.get("total_hours", 0) or 0
+                    # Estimate weekly rate from MTD data
                     from datetime import date
                     today = date.today()
                     days_in_month = (today - today.replace(day=1)).days or 1

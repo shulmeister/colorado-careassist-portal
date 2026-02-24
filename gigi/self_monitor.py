@@ -26,69 +26,6 @@ logger = logging.getLogger(__name__)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
 
-class VibeMonitor:
-    """Audits Gigi's tone and behavioral drift using an LLM critic."""
-
-    def __init__(self, database_url: str = None):
-        self.database_url = database_url or DATABASE_URL
-
-    async def run_vibe_check(self, llm_client) -> Dict:
-        """
-        Analyze recent conversations for 'AI smell', verbosity, and sycophancy.
-        Returns a score and specific critique points.
-        """
-        try:
-            from gigi.conversation_store import ConversationStore
-            store = ConversationStore(self.database_url)
-            # Fetch 20 most recent assistant responses from Jason
-            msgs = store.get_recent(user_id="jason", limit=20)
-            assistant_msgs = [m["content"] for m in msgs if m["role"] == "assistant"]
-        except Exception as e:
-            logger.error(f"Vibe check could not fetch messages: {e}")
-            return {"score": 0, "drift_detected": True, "critique": ["Failed to fetch history"]}
-
-        if not assistant_msgs:
-            return {"score": 100, "drift_detected": False, "critique": ["No recent responses to audit"]}
-
-        history_text = "\n---\n".join(assistant_msgs[:10])
-
-        prompt = f"""You are a harsh communication critic for a high-performance Executive Office. 
-Audit these AI assistant responses sent to the CEO (Jason).
-
-CRITERIA:
-1. AI SMELL: Hedging, filler, 'I'd be happy to help', 'Great question'.
-2. SYCOPHANCY: Excessive 'boss', 'absolutely', 'on it', 'fam'.
-3. VERBOSITY: Taking 100 words to say what fits in 10.
-4. TONE: Does it sound like a focused human Chief of Staff (Direct, Warm, Professional)?
-
-RESPONSES TO AUDIT:
-{history_text}
-
-Output ONLY a JSON object:
-{{
-  "score": 0-100,
-  "drift_detected": true/false,
-  "critique": ["point 1", "point 2"],
-  "recommendation": "One sentence fix"
-}}"""
-
-        try:
-            # Use the provided genai client
-            model = llm_client.models.get("gemini-3-flash-preview")
-            response = await asyncio.to_thread(
-                llm_client.models.generate_content,
-                model=model.name,
-                contents=prompt
-            )
-
-            import json
-            # Clean potential markdown from JSON
-            raw_text = response.text.strip().replace("```json", "").replace("```", "")
-            return json.loads(raw_text)
-        except Exception as e:
-            logger.error(f"LLM Vibe check failed: {e}")
-            return {"score": 50, "drift_detected": False, "critique": [f"Audit failed: {str(e)}"]}
-
 class SelfMonitor:
     """Weekly self-audit for Gigi's operational health."""
 
@@ -288,16 +225,14 @@ class SelfMonitor:
 
         return result
 
-    async def get_audit_report(self, llm_client=None) -> Optional[str]:
+    def get_audit_report(self) -> Optional[str]:
         """
         Generate a formatted text block for the weekly audit report.
+
+        Returns:
+            Formatted string, or None if no meaningful data.
         """
         audit = self.run_audit()
-        return self._format_audit_report(audit, llm_client=llm_client)
-
-    def _format_audit_report(self, audit: Dict, llm_client=None) -> Optional[str]:
-        """Synchronous formatter for audit results."""
-        import asyncio
 
         # Check if we have any meaningful data at all
         mem = audit["memory"]
@@ -318,25 +253,6 @@ class SelfMonitor:
             header_dates = period
 
         lines = [f"WEEKLY SELF-AUDIT ({header_dates})"]
-
-        # Vibe Check (if LLM provided)
-        if llm_client:
-            try:
-                # This is a bit of a hack to call async from potentially sync context
-                # but it works if we manage the loop correctly
-                try:
-                    vibe = asyncio.run(self.run_vibe_check(llm_client))
-                except RuntimeError:
-                    # Already in a loop
-                    vibe = {"score": "N/A", "drift_detected": False}
-
-                score = vibe.get("score", 0)
-                status = "HEALTHY" if not vibe.get("drift_detected") else "DRIFT DETECTED"
-                lines.append(f"  Vibe: {score}/100 - {status}")
-                if vibe.get("drift_detected") and vibe.get("recommendation"):
-                    lines.append(f"    Fix: {vibe['recommendation']}")
-            except Exception:
-                pass
 
         # Memory line
         confidence_pct = round(mem["avg_confidence"] * 100)
