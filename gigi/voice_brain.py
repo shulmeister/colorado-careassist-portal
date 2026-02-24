@@ -2551,7 +2551,11 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None, on_t
             caller_result = await execute_tool("lookup_caller", {"phone_number": call_info["from_number"]})
             caller_data = json.loads(caller_result)
             if caller_data.get("found"):
-                return f"Hi {caller_data.get('name', '')}, this is Gigi with Colorado Care Assist. How can I help you?", None
+                caller_name = caller_data.get("name", "")
+                # Jason gets a casual greeting — he owns the company, no need for corporate intro
+                if caller_name.lower().startswith("jason"):
+                    return "Hey Jason, what's going on?", None
+                return f"Hi {caller_name}, this is Gigi with Colorado Care Assist. How can I help you?", None
         return "Hi, this is Gigi with Colorado Care Assist. How can I help you?", None
 
     try:

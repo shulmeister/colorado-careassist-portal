@@ -284,6 +284,10 @@ _SMS_EXCLUDE = {
     "update_knowledge_graph", "query_knowledge_graph",
     "get_directions", "geocode_address", "search_nearby_places",
     "query_workspace",
+    # Travel booking tools have complex array schemas that break Gemini tool conversion
+    "book_flight", "book_hotel", "book_transfer", "confirm_flight_price",
+    "search_flights", "search_hotels", "search_transfers", "search_activities",
+    "get_flight_status", "get_booking_details", "search_destinations",
 }
 
 # Auto-extend SMS tools from Telegram canonical set (ensures tool parity across channels)
@@ -363,8 +367,19 @@ if GEMINI_AVAILABLE:
         """Auto-generate Gemini tool declarations from Anthropic-format tools."""
         decls = []
         for t in tools_list:
-            props = {k: _gs(v.get("type", "string"), v.get("description", k))
-                     for k, v in t["input_schema"]["properties"].items()}
+            props = {}
+            for k, v in t["input_schema"]["properties"].items():
+                ptype = v.get("type", "string")
+                desc = v.get("description", k)
+                if ptype == "array":
+                    # Gemini requires items for array types
+                    props[k] = genai_types.Schema(type="ARRAY", description=desc,
+                                                   items=genai_types.Schema(type="STRING"))
+                elif ptype == "object":
+                    # Gemini needs properties for object types — use generic string
+                    props[k] = genai_types.Schema(type="OBJECT", description=desc)
+                else:
+                    props[k] = _gs(ptype, desc)
             req = t["input_schema"].get("required", [])
             decls.append(genai_types.FunctionDeclaration(
                 name=t["name"], description=t["description"],
@@ -493,14 +508,21 @@ KEY CAPABILITIES:
 - You CAN identify who is texting using identify_caller with their phone number.
 - You have the FULL Gigi tool set: weather, web search, concerts, stocks, crypto, calendar, email, task board, notes, memory, research, trading bots, ticket watches, AR reports, browsing, and more.
 
+IDENTITY RULES (CRITICAL):
+- NEVER introduce yourself or say "This is Gigi" in SMS replies. The person already knows who you are — they texted this number.
+- NEVER say "the AI Operations Manager" or "AI assistant" — just reply naturally like a real person would.
+- NEVER use canned corporate responses like "I've logged this for the team" or "someone will follow up with you as soon as possible" unless you actually used a tool to log something specific.
+- Match the energy of the message. If someone says "Thanks" or "Ok", reply with something equally brief like "You're welcome!" or just a thumbs up. Don't turn a one-word acknowledgment into a paragraph.
+
 TONE:
-- Friendly, professional, concise
+- Friendly, professional, concise — like texting a coworker, not writing an email
 - Plain language (many caregivers speak English as a second language)
 - OK to use abbreviations (Mon, Tue, etc.)
 - NEVER suggest installing software or mention CLI tools. If a tool fails, say "temporarily unavailable."
 - NEVER HALLUCINATE TOOLS or troubleshooting: Only use tools you have. NEVER invent commands or suggest configuration steps.
 - OUTBOUND SMS: NEVER send texts to contacts without explicit confirmation from the requester. Show the draft first.
 - NO sycophantic language. Be direct and real.
+- NEVER start with "Thanks for your message!" — just respond to what they said.
 
 Today is {current_date}.
 The caller's phone number is {caller_phone}.
@@ -4000,7 +4022,7 @@ class GigiRingCentralBot:
             elif "help" in lower_text or "shift" in lower_text or "question" in lower_text:
                 reply = "Got it. I've notified the care team that you need assistance. Someone will get back to you shortly."
             else:
-                reply = "Thanks for your message! This is Gigi, the AI Operations Manager. I've logged this for the team, and someone will follow up with you as soon as possible."
+                reply = "Got it, thanks for letting us know. Someone from the team will follow up shortly."
 
         # --- SEMANTIC LOOP DETECTION ---
         if reply and reply_method == "sms" and phone:
