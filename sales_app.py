@@ -19,6 +19,16 @@ _ROOT_PATH = os.path.dirname(os.path.abspath(__file__))
 if _ROOT_PATH not in sys.path:
     sys.path.insert(0, _ROOT_PATH)
 
+# GlitchTip error tracking
+import sentry_sdk
+
+_GLITCHTIP_DSNS = {
+    "staging": "https://8bd3aa017e064238a0613f2e94452bb6@glitchtip.coloradocareassist.com/6",
+    "production": "https://d711a88a64564398a2bbe14abba08edb@glitchtip.coloradocareassist.com/5",
+}
+_ENV = "staging" if os.getenv("STAGING") else "production"
+sentry_sdk.init(dsn=_GLITCHTIP_DSNS[_ENV], traces_sample_rate=0.1, environment=_ENV)
+
 import logging
 
 from fastapi import FastAPI
