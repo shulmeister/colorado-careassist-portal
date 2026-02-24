@@ -9,6 +9,7 @@ Tables: gigi_kg_entities, gigi_kg_relations
 All functions are ASYNC. All functions return dicts.
 """
 
+import json
 import logging
 import os
 from typing import Optional
@@ -280,6 +281,37 @@ def _read_graph() -> dict:
 import asyncio
 
 
+def _parse_list_param(value):
+    """Parse a parameter that may be a JSON string or already a list.
+
+    Handles four cases:
+    1. value is a JSON string of a list → parse outer, then parse any string items
+    2. value is a list of JSON strings (some LLMs serialize sub-objects) → parse each item
+    3. value is already a list of dicts → return as-is
+    4. value is a JSON string that is not a list → return None
+    """
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            if not isinstance(parsed, list):
+                return None
+            value = parsed  # fall through to item-by-item parsing below
+        except (json.JSONDecodeError, ValueError):
+            return None
+    if isinstance(value, list):
+        result = []
+        for item in value:
+            if isinstance(item, str):
+                try:
+                    result.append(json.loads(item))
+                except (json.JSONDecodeError, ValueError):
+                    result.append(item)  # keep as-is; will fail with a clearer error downstream
+            else:
+                result.append(item)
+        return result
+    return value
+
+
 async def update_knowledge_graph(
     action: str,
     entities: Optional[list] = None,
@@ -290,6 +322,13 @@ async def update_knowledge_graph(
 ) -> dict:
     """Write to the knowledge graph. Returns result dict."""
     action = (action or "").strip().lower()
+
+    # Gemini passes array params as JSON strings — parse them back to lists
+    entities = _parse_list_param(entities)
+    relations = _parse_list_param(relations)
+    observations = _parse_list_param(observations)
+    entity_names = _parse_list_param(entity_names)
+    deletions = _parse_list_param(deletions)
 
     if action == "add_entities":
         if not entities:
@@ -338,6 +377,7 @@ async def query_knowledge_graph(
 ) -> dict:
     """Read from the knowledge graph. Returns result dict."""
     action = (action or "").strip().lower()
+    names = _parse_list_param(names)
 
     if action == "search":
         if not query:

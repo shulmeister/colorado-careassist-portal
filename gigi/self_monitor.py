@@ -225,7 +225,7 @@ class SelfMonitor:
 
         return result
 
-    def get_briefing_section(self) -> Optional[str]:
+    def get_audit_report(self) -> Optional[str]:
         """
         Generate a formatted text block for the weekly audit report.
 
@@ -305,8 +305,8 @@ if __name__ == "__main__":
     shifts = audit["shifts"]
     print(f"\nShifts: {shifts['total']} total, {shifts['open']} open, {shifts['fill_rate']}% filled")
 
-    print("\n--- Briefing Section ---")
-    section = monitor.get_briefing_section()
+    print("\n--- Audit Report ---")
+    section = monitor.get_audit_report()
     if section:
         print(section)
     else:

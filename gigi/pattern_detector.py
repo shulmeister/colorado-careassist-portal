@@ -218,7 +218,7 @@ class PatternDetector:
 
         return patterns
 
-    def get_briefing_section(self) -> Optional[str]:
+    def get_pattern_report(self) -> Optional[str]:
         """
         Format detected patterns into a readable text block.
 
@@ -266,8 +266,8 @@ if __name__ == "__main__":
     else:
         print("  No patterns detected.")
 
-    print("\n--- Briefing Section ---")
-    section = detector.get_briefing_section()
+    print("\n--- Pattern Report ---")
+    section = detector.get_pattern_report()
     if section:
         print(section)
     else:

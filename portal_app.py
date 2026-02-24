@@ -1,27 +1,28 @@
-from fastapi import FastAPI, HTTPException, Request, Depends, status, Query
+import logging
+import os
+from datetime import date, datetime, timedelta
+from datetime import date as date_cls
+from typing import Any, Dict, Optional
+from urllib.parse import quote_plus, urlencode
+
+import httpx
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from sqlalchemy.orm import Session
-import os
-import logging
-from typing import List, Dict, Any, Optional
-from datetime import datetime, timedelta, date as date_cls
-import httpx
-from urllib.parse import urlencode, quote_plus, urljoin
-from portal_auth import oauth_manager, get_current_user, get_current_user_optional
-from portal_database import get_db, db_manager
-from portal_models import PortalTool, Base, UserSession, ToolClick, Voucher, BrevoWebhookEvent
+from itsdangerous import URLSafeTimedSerializer
+from portal_auth import get_current_user, get_current_user_optional, oauth_manager
+from portal_database import get_db
+from portal_models import BrevoWebhookEvent, PortalTool, ToolClick, UserSession, Voucher
 from services.marketing.metrics_service import (
-    get_social_metrics,
     get_ads_metrics,
     get_email_metrics,
+    get_social_metrics,
 )
-from dotenv import load_dotenv
-from datetime import date
-from itsdangerous import URLSafeTimedSerializer
+from sqlalchemy.orm import Session
 
 # Load environment variables
 load_dotenv()
@@ -58,6 +59,7 @@ ACTIVITY_TRACKER_URL = os.getenv(
 )
 
 import secrets as _secrets
+
 PORTAL_SECRET = os.getenv("PORTAL_SECRET")
 if not PORTAL_SECRET:
     PORTAL_SECRET = _secrets.token_urlsafe(32)
@@ -76,8 +78,10 @@ except Exception as e:
     logger.error(f"❌ Failed to load Gigi voice functions: {e}")
 
 # Add session middleware for OAuth state management
-from starlette.middleware.sessions import SessionMiddleware
 import secrets
+
+from starlette.middleware.sessions import SessionMiddleware
+
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET_KEY", secrets.token_urlsafe(32)))
 
 # Add security middleware
@@ -91,7 +95,7 @@ app.add_middleware(
 
 # Add trusted host middleware
 app.add_middleware(
-    TrustedHostMiddleware, 
+    TrustedHostMiddleware,
     allowed_hosts=["localhost", "127.0.0.1", "portal.coloradocareassist.com"]
 )
 
@@ -111,19 +115,32 @@ async def login():
         raise HTTPException(status_code=500, detail="Authentication service unavailable")
 
 @app.get("/auth/callback")
-async def auth_callback(request: Request, code: str = None, error: str = None):
-    """Handle Google OAuth callback"""
+async def auth_callback(request: Request, code: str = None, error: str = None, state: str = ""):
+    """Handle Google OAuth callback — supports both portal login and SSO relay."""
+    # Check if this is an SSO relay callback
+    sso_return_to = request.session.pop("sso_return_to", "")
+
     if error:
+        if sso_return_to:
+            return RedirectResponse(url=f"{sso_return_to}?error={error}")
         logger.error(f"OAuth error: {error}")
         raise HTTPException(status_code=400, detail=f"Authentication failed: {error}")
-    
+
     if not code:
+        if sso_return_to:
+            return RedirectResponse(url=f"{sso_return_to}?error=no_code")
         raise HTTPException(status_code=400, detail="Authorization code not provided")
-    
+
     try:
-        result = await oauth_manager.handle_callback(code, "")
-        
-        # Create response with session cookie
+        result = await oauth_manager.handle_callback(code, state, request)
+
+        if sso_return_to:
+            # SSO relay: redirect back to the calling app with a signed token
+            token = result["session_token"]
+            sep = "&" if "?" in sso_return_to else "?"
+            return RedirectResponse(url=f"{sso_return_to}{sep}token={token}", status_code=302)
+
+        # Normal portal login: set session cookie and redirect to homepage
         response = RedirectResponse(url="/", status_code=302)
         response.set_cookie(
             key="session_token",
@@ -133,10 +150,13 @@ async def auth_callback(request: Request, code: str = None, error: str = None):
             secure=True,  # HTTPS required in production
             samesite="lax"
         )
-        
+
         return response
-        
+
     except Exception as e:
+        if sso_return_to:
+            logger.error(f"SSO callback error: {e}")
+            return RedirectResponse(url=f"{sso_return_to}?error=auth_failed")
         logger.error(f"Callback error: {str(e)}")
         raise HTTPException(status_code=400, detail=f"Authentication failed: {str(e)}")
 
@@ -146,7 +166,7 @@ async def logout(request: Request):
     session_token = request.cookies.get("session_token")
     if session_token:
         oauth_manager.logout(session_token)
-    
+
     response = JSONResponse({"success": True, "message": "Logged out successfully"})
     response.delete_cookie("session_token")
     return response
@@ -164,13 +184,43 @@ async def get_current_user_info(current_user: Dict[str, Any] = Depends(get_curre
         }
     }
 
+
+# ── SSO Relay — Cross-domain auth for sub-apps (QBO, etc.) ─────────
+# Allows apps on other subdomains to authenticate via portal's Google OAuth.
+# Flow: app → /auth/sso?return_to=URL → Google OAuth → /auth/callback → app/auth/verify?token=XXX
+
+_SSO_ALLOWED_ORIGINS = {
+    "https://qbo.coloradocareassist.com",
+    "https://employee.coloradocareassist.com",
+    "https://client.coloradocareassist.com",
+    "https://trading.coloradocareassist.com",
+}
+
+
+@app.get("/sso/login")
+async def auth_sso_start(request: Request, return_to: str = ""):
+    """Start SSO relay — redirect to Google OAuth, then back to the calling app."""
+    from urllib.parse import urlparse
+    parsed = urlparse(return_to)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    if not return_to or origin not in _SSO_ALLOWED_ORIGINS:
+        return JSONResponse({"error": "Invalid or missing return_to URL"}, status_code=400)
+
+    # Store the return URL in session so we can redirect back after OAuth
+    request.session["sso_return_to"] = return_to
+
+    # Reuse the portal's Google OAuth flow (callback will check sso_return_to in session)
+    auth_url = oauth_manager.get_authorization_url(request)
+    return RedirectResponse(url=auth_url)
+
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = Depends(get_current_user_optional)):
     """Serve the main portal page"""
     if not current_user:
         # Redirect to login if not authenticated
         return RedirectResponse(url="/auth/login")
-    
+
     ringcentral_config = {
         "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
         "client_id": RINGCENTRAL_EMBED_CLIENT_ID,
@@ -196,11 +246,11 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
         params["enableGlip"] = "true"        # Enable Chat/Glip tab
         params["disableGlip"] = "false"      # Make sure Glip is not disabled
         params["disableConferences"] = "true"  # Disable video/meetings
-        
+
         # ALWAYS USE DARK THEME - DO NOT CHANGE
         params["theme"] = "dark"             # Force dark theme to match portal design
         params["_t"] = str(int(time.time()))  # Cache buster to force theme reload
-        
+
         ringcentral_config["query_string"] = urlencode(params)
 
     response = templates.TemplateResponse("portal.html", {
@@ -225,7 +275,7 @@ async def get_tools(
         tools = db.query(PortalTool).filter(
             PortalTool.is_active == True
         ).order_by(PortalTool.display_order, PortalTool.name).all()
-        
+
         return JSONResponse({
             "success": True,
             "tools": [tool.to_dict() for tool in tools]
@@ -243,10 +293,10 @@ async def create_tool(
     """Create new tool (admin only)"""
     try:
         data = await request.json()
-        
+
         # Check if user is admin (for now, allow all authenticated users)
         # In production, you might want to add an admin check
-        
+
         tool = PortalTool(
             name=data.get("name"),
             url=data.get("url"),
@@ -256,13 +306,13 @@ async def create_tool(
             display_order=data.get("display_order", 0),
             is_active=data.get("is_active", True)
         )
-        
+
         db.add(tool)
         db.commit()
         db.refresh(tool)
-        
+
         logger.info(f"Created tool: {tool.name}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Tool created successfully",
@@ -283,11 +333,11 @@ async def update_tool(
     """Update tool (admin only)"""
     try:
         data = await request.json()
-        
+
         tool = db.query(PortalTool).filter(PortalTool.id == tool_id).first()
         if not tool:
             raise HTTPException(status_code=404, detail="Tool not found")
-        
+
         # Update fields
         if "name" in data:
             tool.name = data.get("name")
@@ -303,13 +353,13 @@ async def update_tool(
             tool.display_order = data.get("display_order")
         if "is_active" in data:
             tool.is_active = data.get("is_active")
-        
+
         tool.updated_at = datetime.utcnow()
         db.commit()
         db.refresh(tool)
-        
+
         logger.info(f"Updated tool: {tool.name}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Tool updated successfully",
@@ -333,13 +383,13 @@ async def delete_tool(
         tool = db.query(PortalTool).filter(PortalTool.id == tool_id).first()
         if not tool:
             raise HTTPException(status_code=404, detail="Tool not found")
-        
+
         tool_name = tool.name
         db.delete(tool)
         db.commit()
-        
+
         logger.info(f"Deleted tool: {tool_name}")
-        
+
         return JSONResponse({
             "success": True,
             "message": "Tool deleted successfully"
@@ -354,15 +404,16 @@ async def delete_tool(
 @app.get("/favicon.ico")
 async def favicon():
     """Serve favicon"""
-    from fastapi.responses import FileResponse, Response
     import os
-    
+
+    from fastapi.responses import FileResponse
+
     favicon_path = "static/favicon.ico"
     if os.path.exists(favicon_path):
         response = FileResponse(favicon_path)
         response.headers["Cache-Control"] = "public, max-age=86400"
         return response
-    
+
     # Fallback to SVG if ICO doesn't exist
     svg_path = "static/favicon.svg"
     if os.path.exists(svg_path):
@@ -371,7 +422,7 @@ async def favicon():
         response = Response(content=content, media_type="image/svg+xml")
         response.headers["Cache-Control"] = "public, max-age=86400"
         return response
-    
+
     return Response(status_code=204)
 
 @app.get("/health")
@@ -391,14 +442,14 @@ async def track_session(
         data = await request.json()
         action = data.get("action")
         duration_seconds = data.get("duration_seconds")
-        
+
         # Get IP address
         ip_address = request.client.host
         if request.headers.get("X-Forwarded-For"):
             ip_address = request.headers.get("X-Forwarded-For").split(",")[0].strip()
-        
+
         user_agent = request.headers.get("User-Agent", "")
-        
+
         if action == "login":
             # Create new session
             session = UserSession(
@@ -411,7 +462,7 @@ async def track_session(
             db.add(session)
             db.commit()
             db.refresh(session)
-            
+
             return JSONResponse({
                 "success": True,
                 "session_id": session.id
@@ -422,7 +473,7 @@ async def track_session(
                 UserSession.user_email == current_user.get("email"),
                 UserSession.logout_time.is_(None)
             ).order_by(UserSession.login_time.desc()).first()
-            
+
             if session:
                 session.logout_time = datetime.utcnow()
                 if duration_seconds:
@@ -432,13 +483,13 @@ async def track_session(
                     duration = (session.logout_time - session.login_time).total_seconds()
                     session.duration_seconds = int(duration)
                 db.commit()
-            
+
             return JSONResponse({
                 "success": True
             })
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
-            
+
     except Exception as e:
         logger.error(f"Error tracking session: {str(e)}")
         db.rollback()
@@ -453,14 +504,14 @@ async def track_click(
     """Track tool click"""
     try:
         data = await request.json()
-        
+
         # Get IP address
         ip_address = request.client.host
         if request.headers.get("X-Forwarded-For"):
             ip_address = request.headers.get("X-Forwarded-For").split(",")[0].strip()
-        
+
         user_agent = request.headers.get("User-Agent", "")
-        
+
         click = ToolClick(
             user_email=current_user.get("email"),
             user_name=current_user.get("name"),
@@ -471,14 +522,14 @@ async def track_click(
             ip_address=ip_address,
             user_agent=user_agent
         )
-        
+
         db.add(click)
         db.commit()
-        
+
         return JSONResponse({
             "success": True
         })
-        
+
     except Exception as e:
         logger.error(f"Error tracking click: {str(e)}")
         db.rollback()
@@ -499,7 +550,7 @@ async def get_weather(
                 "success": False,
                 "error": "Weather API key not configured"
             }, status_code=500)
-        
+
         # Build API URL
         if lat and lon:
             url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}"
@@ -510,10 +561,10 @@ async def get_weather(
                 "success": False,
                 "error": "Please provide a city name, zip code, or coordinates"
             }, status_code=400)
-        
+
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=10.0)
-            
+
             if response.status_code == 200:
                 weather_data = response.json()
                 return JSONResponse({
@@ -530,7 +581,7 @@ async def get_weather(
                     "success": False,
                     "error": "Unable to fetch weather data"
                 }, status_code=response.status_code)
-                
+
     except httpx.TimeoutException:
         return JSONResponse({
             "success": False,
@@ -550,19 +601,19 @@ async def get_analytics_summary(
 ):
     """Get analytics summary"""
     try:
-        from sqlalchemy import func, distinct
-        
+        from sqlalchemy import distinct, func
+
         # Get summary stats
         total_sessions = db.query(func.count(UserSession.id)).scalar() or 0
         total_clicks = db.query(func.count(ToolClick.id)).scalar() or 0
         active_users = db.query(func.count(distinct(UserSession.user_email))).scalar() or 0
-        
+
         # Get recent sessions (last 50)
         sessions = db.query(UserSession).order_by(UserSession.login_time.desc()).limit(50).all()
-        
+
         # Get recent clicks (last 100)
         clicks = db.query(ToolClick).order_by(ToolClick.clicked_at.desc()).limit(100).all()
-        
+
         return JSONResponse({
             "success": True,
             "summary": {
@@ -573,7 +624,7 @@ async def get_analytics_summary(
             "sessions": [session.to_dict() for session in sessions],
             "clicks": [click.to_dict() for click in clicks]
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting analytics summary: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting analytics: {str(e)}")
@@ -592,7 +643,7 @@ async def voucher_list_page(
         "adapter_url": RINGCENTRAL_EMBED_ADAPTER_URL,
         "query_string": ""
     }
-    
+
     if ringcentral_config["enabled"]:
         import time
         params = {
@@ -607,13 +658,13 @@ async def voucher_list_page(
         params["enableGlip"] = "true"        # Enable Chat/Glip tab
         params["disableGlip"] = "false"      # Make sure Glip is not disabled
         params["disableConferences"] = "true"  # Disable video/meetings
-        
+
         # ALWAYS USE DARK THEME - DO NOT CHANGE
         params["theme"] = "dark"             # Force dark theme to match portal design
         params["_t"] = str(int(time.time()))  # Cache buster to force theme reload
-        
+
         ringcentral_config["query_string"] = urlencode(params)
-    
+
     return templates.TemplateResponse("vouchers.html", {
         "request": request,
         "user": current_user,
@@ -630,22 +681,22 @@ async def get_vouchers(
     """Get all vouchers with optional filtering"""
     try:
         query = db.query(Voucher)
-        
+
         # Apply filters if provided
         if client_name:
             query = query.filter(Voucher.client_name.ilike(f"%{client_name}%"))
         if status:
             query = query.filter(Voucher.status.ilike(f"%{status}%"))
-        
+
         # Order by invoice date descending
         vouchers = query.order_by(Voucher.invoice_date.desc()).all()
-        
+
         return JSONResponse({
             "success": True,
             "vouchers": [voucher.to_dict() for voucher in vouchers],
             "total": len(vouchers)
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting vouchers: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting vouchers: {str(e)}")
@@ -659,19 +710,19 @@ async def create_voucher(
     """Create a new voucher"""
     try:
         data = await request.json()
-        
+
         # Parse dates if provided
         voucher_start_date = None
         voucher_end_date = None
         invoice_date = None
-        
+
         if data.get("voucher_start_date"):
             voucher_start_date = datetime.strptime(data["voucher_start_date"], "%Y-%m-%d").date()
         if data.get("voucher_end_date"):
             voucher_end_date = datetime.strptime(data["voucher_end_date"], "%Y-%m-%d").date()
         if data.get("invoice_date"):
             invoice_date = datetime.strptime(data["invoice_date"], "%Y-%m-%d").date()
-        
+
         # Create new voucher
         voucher = Voucher(
             client_name=data["client_name"],
@@ -685,17 +736,17 @@ async def create_voucher(
             voucher_image_url=data.get("voucher_image_url"),
             created_by=current_user.get("email")
         )
-        
+
         db.add(voucher)
         db.commit()
         db.refresh(voucher)
-        
+
         return JSONResponse({
             "success": True,
             "voucher": voucher.to_dict(),
             "message": "Voucher created successfully"
         })
-        
+
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating voucher: {str(e)}")
@@ -711,12 +762,12 @@ async def update_voucher(
     """Update an existing voucher"""
     try:
         voucher = db.query(Voucher).filter(Voucher.id == voucher_id).first()
-        
+
         if not voucher:
             raise HTTPException(status_code=404, detail="Voucher not found")
-        
+
         data = await request.json()
-        
+
         # Update fields
         if "client_name" in data:
             voucher.client_name = data["client_name"]
@@ -736,18 +787,18 @@ async def update_voucher(
             voucher.notes = data["notes"]
         if "voucher_image_url" in data:
             voucher.voucher_image_url = data["voucher_image_url"]
-        
+
         voucher.updated_by = current_user.get("email")
-        
+
         db.commit()
         db.refresh(voucher)
-        
+
         return JSONResponse({
             "success": True,
             "voucher": voucher.to_dict(),
             "message": "Voucher updated successfully"
         })
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -764,18 +815,18 @@ async def delete_voucher(
     """Delete a voucher"""
     try:
         voucher = db.query(Voucher).filter(Voucher.id == voucher_id).first()
-        
+
         if not voucher:
             raise HTTPException(status_code=404, detail="Voucher not found")
-        
+
         db.delete(voucher)
         db.commit()
-        
+
         return JSONResponse({
             "success": True,
             "message": "Voucher deleted successfully"
         })
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -792,16 +843,16 @@ async def trigger_voucher_sync(
     """Manually trigger voucher sync from Google Drive"""
     try:
         from voucher_sync_service import run_sync
-        
+
         logger.info(f"Manual sync triggered by {current_user.get('email')}")
         summary = run_sync(hours_back=hours_back)
-        
+
         return JSONResponse({
             "success": True,
             "summary": summary,
             "message": f"Sync complete. Processed {summary['files_processed']} of {summary['files_found']} files."
         })
-        
+
     except Exception as e:
         logger.error(f"Error in manual sync: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
@@ -818,18 +869,18 @@ async def get_sync_status(
             "sheets_id_configured": bool(os.getenv("GOOGLE_SHEETS_VOUCHER_ID")),
             "ready": False
         }
-        
+
         status["ready"] = all([
             status["drive_folder_configured"],
             status["service_account_configured"],
             status["sheets_id_configured"]
         ])
-        
+
         return JSONResponse({
             "success": True,
             "status": status
         })
-        
+
     except Exception as e:
         logger.error(f"Error getting sync status: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting status: {str(e)}")
@@ -908,10 +959,10 @@ async def recruitment_dashboard_embedded(
         "RECRUITMENT_DASHBOARD_URL",
         "https://portal.coloradocareassist.com/recruiting/"
     )
-    
+
     # Get session token from cookie to pass to dashboard
     session_token = request.cookies.get("session_token", "")
-    
+
     # Append session token as query parameter (Recruiter Dashboard needs to accept this)
     if session_token:
         separator = "&" if "?" in recruitment_dashboard_url else "?"
@@ -923,7 +974,7 @@ async def recruitment_dashboard_embedded(
     else:
         logger.warning("No session token found - Recruiter Dashboard will require login")
         recruitment_url_with_auth = recruitment_dashboard_url
-    
+
     return templates.TemplateResponse("recruitment_embedded.html", {
         "request": request,
         "user": current_user,
@@ -973,11 +1024,11 @@ async def connections_page(
 ):
     """Render the data connections management page."""
     from portal_models import OAuthToken
-    
+
     # Check which services are connected for this user
     user_email = current_user.get("email", "unknown@example.com")
     connected_services = {}
-    
+
     services = ["facebook", "google-ads", "mailchimp", "quickbooks"]
     for service in services:
         token = db.query(OAuthToken).filter(
@@ -986,7 +1037,7 @@ async def connections_page(
             OAuthToken.is_active == True
         ).first()
         connected_services[service] = token is not None
-    
+
     return templates.TemplateResponse("connections.html", {
         "request": request,
         "user": current_user,
@@ -1002,17 +1053,18 @@ async def oauth_initiate(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Initiate OAuth flow for a service"""
-    from services.oauth_manager import oauth_manager
     import secrets
-    
+
+    from services.oauth_manager import oauth_manager
+
     # Generate and store CSRF state token
     state = secrets.token_urlsafe(32)
     request.session[f"oauth_state_{service}"] = state
     request.session["oauth_user_email"] = current_user.get("email")
-    
+
     # Get authorization URL
     auth_url = oauth_manager.get_authorization_url(service, state)
-    
+
     if not auth_url:
         return HTMLResponse(
             content=f"""
@@ -1032,7 +1084,7 @@ async def oauth_initiate(
             """,
             status_code=400
         )
-    
+
     return RedirectResponse(url=auth_url)
 
 
@@ -1046,10 +1098,11 @@ async def oauth_callback(
     db: Session = Depends(get_db)
 ):
     """Handle OAuth callback from service"""
-    from services.oauth_manager import oauth_manager
-    from portal_models import OAuthToken
     from datetime import datetime
-    
+
+    from portal_models import OAuthToken
+    from services.oauth_manager import oauth_manager
+
     # Check for errors
     if error:
         return HTMLResponse(
@@ -1070,7 +1123,7 @@ async def oauth_callback(
             </html>
             """
         )
-    
+
     # Verify state (CSRF protection)
     expected_state = request.session.get(f"oauth_state_{service}")
     if not state or state != expected_state:
@@ -1092,10 +1145,10 @@ async def oauth_callback(
             """,
             status_code=400
         )
-    
+
     # Exchange code for token
     token_data = await oauth_manager.exchange_code_for_token(service, code)
-    
+
     if not token_data:
         return HTMLResponse(
             content="""
@@ -1115,22 +1168,22 @@ async def oauth_callback(
             """,
             status_code=500
         )
-    
+
     # Store token in database
     try:
         user_email = request.session.get("oauth_user_email", "unknown@example.com")
-        
+
         # Parse expires_at
         expires_at = None
         if token_data.get("expires_at"):
             expires_at = datetime.fromisoformat(token_data["expires_at"])
-        
+
         # Check if token already exists for this user/service
         existing_token = db.query(OAuthToken).filter(
             OAuthToken.user_email == user_email,
             OAuthToken.service == service
         ).first()
-        
+
         if existing_token:
             # Update existing token
             existing_token.access_token = token_data.get("access_token")
@@ -1152,12 +1205,12 @@ async def oauth_callback(
                 extra_data=token_data.get("extra_data")
             )
             db.add(new_token)
-        
+
         db.commit()
-        
+
         # Clean up session
         request.session.pop(f"oauth_state_{service}", None)
-        
+
         return HTMLResponse(
             content=f"""
             <html>
@@ -1176,7 +1229,7 @@ async def oauth_callback(
             </html>
             """
         )
-        
+
     except Exception as e:
         logger.error(f"Error storing OAuth token: {e}")
         db.rollback()
@@ -1209,7 +1262,7 @@ async def marketing_dashboard(
     # Compute default date range (last 30 days)
     end_date = datetime.now().date()
     start_date = end_date - timedelta(days=29)
-    
+
     # Wire up RingCentral config for sidebar
     ringcentral_config = {
         "enabled": bool(RINGCENTRAL_EMBED_CLIENT_ID),
@@ -1217,7 +1270,7 @@ async def marketing_dashboard(
         "adapter_url": RINGCENTRAL_EMBED_ADAPTER_URL,
         "query_string": ""
     }
-    
+
     if ringcentral_config["enabled"]:
         import time
         params = {
@@ -1234,7 +1287,7 @@ async def marketing_dashboard(
         params["theme"] = "dark"
         params["_t"] = str(int(time.time()))
         ringcentral_config["query_string"] = urlencode(params)
-    
+
     # Placeholder datasets (will be replaced once APIs are wired)
     placeholder_metrics = {
         "social": {
@@ -1246,7 +1299,7 @@ async def marketing_dashboard(
             "campaigns": []
         }
     }
-    
+
     return templates.TemplateResponse("marketing.html", {
         "request": request,
         "user": current_user,
@@ -1285,15 +1338,15 @@ async def api_marketing_social(
     """Return social performance metrics (placeholder until APIs wired)."""
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
-    
+
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
-    
+
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
+
     data = get_social_metrics(start, end, compare)
-    
+
     return JSONResponse({
         "success": True,
         "range": {
@@ -1314,9 +1367,8 @@ async def google_ads_webhook(request: Request):
     The script runs in Google Ads and POSTs data here periodically.
     """
     import os
-    import json
     from datetime import datetime
-    
+
     # Optional: Verify webhook secret for security
     webhook_secret = os.getenv("GOOGLE_ADS_WEBHOOK_SECRET")
     if webhook_secret:
@@ -1324,16 +1376,16 @@ async def google_ads_webhook(request: Request):
         if received_secret != webhook_secret:
             logger.warning("Google Ads webhook: Invalid secret")
             raise HTTPException(status_code=401, detail="Invalid webhook secret")
-    
+
     try:
         data = await request.json()
         logger.info(f"Google Ads webhook received data from customer {data.get('customer_id')}")
-        
+
         # Store the data (simple in-memory cache for now)
         # In production, you might want to store in database or Redis
         from services.marketing.google_ads_service import google_ads_service
         google_ads_service.cache_script_data(data)
-        
+
         return JSONResponse({
             "status": "success",
             "message": "Data received and cached",
@@ -1354,24 +1406,24 @@ async def api_marketing_ads(
     """Return ads performance metrics from Google Ads Scripts or API."""
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
-    
+
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
-    
+
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
+
     # Try to get data from script cache first, fall back to API
     from services.marketing.google_ads_service import google_ads_service
     script_data = google_ads_service.get_cached_script_data(start, end)
-    
+
     if script_data:
         logger.info("Using Google Ads Script data")
         data = script_data
     else:
         logger.info("No script data available, trying API")
         data = get_ads_metrics(start, end, compare)
-    
+
     return JSONResponse({
         "success": True,
         "range": {
@@ -1395,7 +1447,7 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
     try:
         data = await request.json()
         logger.info(f"Brevo marketing webhook received: {data.get('event', 'unknown')} for {data.get('email', 'unknown')}")
-        
+
         # Extract webhook data
         event_type = data.get("event")
         recipient_email = data.get("email", "").lower().strip()
@@ -1405,11 +1457,11 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
         date_sent_str = data.get("date_sent")
         date_event_str = data.get("date_event")
         click_url = data.get("URL") if event_type == "click" else None
-        
+
         if not recipient_email:
             logger.warning("No email address in Brevo webhook")
             return JSONResponse({"status": "error", "reason": "no email address"})
-        
+
         # Parse dates
         date_sent = None
         date_event = None
@@ -1420,13 +1472,13 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
                 date_event = datetime.strptime(date_event_str, "%Y-%m-%d %H:%M:%S")
         except Exception as e:
             logger.warning(f"Error parsing dates: {e}")
-        
+
         # Check for duplicate webhook events
         if webhook_id:
             existing = db.query(BrevoWebhookEvent).filter(
                 BrevoWebhookEvent.webhook_id == webhook_id
             ).first()
-            
+
             if existing:
                 logger.debug(f"Brevo webhook event already processed: webhook ID {webhook_id}")
                 return JSONResponse({
@@ -1434,7 +1486,7 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
                     "logged": False,
                     "reason": "duplicate"
                 })
-        
+
         # Store metadata as JSON
         import json as json_lib
         metadata = {
@@ -1445,7 +1497,7 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
         }
         if event_type in ["hard_bounce", "soft_bounce", "spam"]:
             metadata["reason"] = data.get("reason")
-        
+
         # Create webhook event record
         webhook_event = BrevoWebhookEvent(
             webhook_id=webhook_id,
@@ -1458,20 +1510,20 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
             click_url=click_url,
             event_metadata=json_lib.dumps(metadata) if metadata else None,
         )
-        
+
         db.add(webhook_event)
         db.commit()
         db.refresh(webhook_event)
-        
+
         logger.info(f"Stored Brevo webhook event: {event_type} for {recipient_email} (campaign {campaign_id})")
-        
+
         return JSONResponse({
             "status": "success",
             "logged": True,
             "event": event_type,
             "webhook_event_id": webhook_event.id
         })
-        
+
     except Exception as e:
         logger.error(f"Error processing Brevo marketing webhook: {e}", exc_info=True)
         db.rollback()
@@ -1512,32 +1564,33 @@ async def api_marketing_website(
     to_date: Optional[str] = Query(None, alias="to")
 ):
     """Return website and GBP metrics from GA4 and Google Business Profile."""
+    import logging
+
     from services.marketing.ga4_service import ga4_service
     from services.marketing.gbp_service import gbp_service
-    import logging
-    
+
     logger = logging.getLogger(__name__)
-    
+
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
-    
+
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
-    
+
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
+
     # Log the request
     logger.info(f"Fetching website metrics from {start} to {end}")
-    
+
     # Fetch GA4 and GBP data
     ga4_data = ga4_service.get_website_metrics(start, end)
     gbp_data = gbp_service.get_gbp_metrics(start, end)
-    
+
     # Log if we're using mock data
     if ga4_data.get("total_users") == 188:
         logger.warning("GA4 returned mock data - check service account permissions")
-    
+
     return JSONResponse({
         "success": True,
         "range": {
@@ -1555,15 +1608,16 @@ async def api_marketing_website(
 @app.get("/api/marketing/test-ga4")
 async def test_ga4_connection():
     """Test GA4 connection and return status."""
-    from services.marketing.ga4_service import ga4_service
     import os
-    
+
+    from services.marketing.ga4_service import ga4_service
+
     status = {
         "service_account_configured": bool(os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")),
         "property_id": os.getenv("GA4_PROPERTY_ID", "445403783"),
         "client_initialized": ga4_service.client is not None,
     }
-    
+
     if ga4_service.client:
         try:
             # Try a simple query
@@ -1576,22 +1630,22 @@ async def test_ga4_connection():
         except Exception as e:
             status["test_query_successful"] = False
             status["error"] = str(e)
-    
+
     return JSONResponse(status)
 
 
 @app.get("/api/marketing/test-predis")
 async def test_predis_connection():
     """Test Predis AI connection and return status."""
+
     from services.marketing.predis_service import predis_service
-    import os
-    
+
     status = {
         "api_key_configured": bool(predis_service.api_key),
         "api_working": False,
         "account_info": None
     }
-    
+
     if predis_service.api_key:
         try:
             # Test API connection
@@ -1600,7 +1654,7 @@ async def test_predis_connection():
             status["account_info"] = account_info
         except Exception as e:
             status["error"] = str(e)
-    
+
     return JSONResponse(status)
 
 
@@ -1608,7 +1662,7 @@ async def test_predis_connection():
 async def get_predis_posts(page: int = 1):
     """Get recent Predis AI generated posts."""
     from services.marketing.predis_service import predis_service
-    
+
     try:
         posts = predis_service.get_recent_creations(page=page)
         return JSONResponse({
@@ -1627,21 +1681,21 @@ async def get_predis_posts(page: int = 1):
 async def generate_predis_content(request: Request):
     """Generate new content using Predis AI."""
     from services.marketing.predis_service import predis_service
-    
+
     try:
         data = await request.json()
         prompt = data.get("prompt", "")
         media_type = data.get("media_type", "single_image")
-        
+
         if not prompt:
             return JSONResponse({
                 "success": False,
                 "error": "Prompt is required"
             }, status_code=400)
-        
+
         result = predis_service.generate_content(prompt=prompt, media_type=media_type)
         return JSONResponse(result)
-        
+
     except Exception as e:
         return JSONResponse({
             "success": False,
@@ -1653,7 +1707,7 @@ async def generate_predis_content(request: Request):
 async def get_predis_templates(page: int = 1):
     """Get Predis AI templates."""
     from services.marketing.predis_service import predis_service
-    
+
     try:
         templates = predis_service.get_templates(page=page)
         return JSONResponse({
@@ -1687,54 +1741,54 @@ async def predis_webhook(request: Request):
     """
     import logging
     logger = logging.getLogger(__name__)
-    
+
     try:
         # Get the raw body for signature verification (if needed)
         body = await request.body()
         data = await request.json()
-        
+
         # Log the webhook event
         event_type = data.get("event", "unknown")
         content_id = data.get("content_id", "unknown")
         logger.info(f"Predis webhook received: {event_type} for content {content_id}")
-        
+
         # Handle different event types
         if event_type == "content_generated":
             # Content was successfully generated
             logger.info(f"Content generated successfully: {content_id}")
             logger.info(f"Media URL: {data.get('media_url')}")
             logger.info(f"Text: {data.get('text', '')[:100]}...")
-            
+
             # TODO: Store in database or notify user
             # TODO: Send to scheduling queue if auto-publish enabled
-            
+
         elif event_type == "content_failed":
             # Content generation failed
             logger.error(f"Content generation failed: {content_id}")
             logger.error(f"Error: {data.get('error', 'Unknown error')}")
-            
+
             # TODO: Notify user of failure
             # TODO: Retry logic if appropriate
-            
+
         elif event_type == "content_published":
             # Content was published to social media
             logger.info(f"Content published: {content_id}")
             logger.info(f"Platform: {data.get('platform', 'unknown')}")
             logger.info(f"Post URL: {data.get('post_url', '')}")
-            
+
             # TODO: Update analytics
             # TODO: Track performance
-            
+
         else:
             logger.warning(f"Unknown webhook event type: {event_type}")
-        
+
         # Return success response
         return JSONResponse({
             "success": True,
             "message": f"Webhook processed for event: {event_type}",
             "content_id": content_id
         })
-        
+
     except Exception as e:
         logger.error(f"Predis webhook error: {e}")
         return JSONResponse({
@@ -1746,9 +1800,9 @@ async def predis_webhook(request: Request):
 @app.get("/api/marketing/test-gbp")
 async def test_gbp_connection():
     """Test GBP connection and return status."""
+
     from services.marketing.gbp_service import gbp_service
-    import os
-    
+
     status = {
         "oauth_configured": bool(gbp_service.client_id and gbp_service.client_secret),
         "access_token_available": bool(gbp_service.access_token),
@@ -1756,14 +1810,14 @@ async def test_gbp_connection():
         "location_ids": gbp_service.location_ids,
         "service_initialized": bool(gbp_service.access_token),
     }
-    
+
     if gbp_service.access_token:
         try:
             # Try to get accounts and locations
             accounts = gbp_service.get_accounts()
             status["accounts_accessible"] = len(accounts)
             status["accounts"] = accounts[:3]  # First 3 accounts
-            
+
             # Try to get locations - prefer LOCATION_GROUP accounts (these have business locations)
             locations = []
             location_group_accounts = [a for a in accounts if a.get('type') == 'LOCATION_GROUP']
@@ -1773,11 +1827,11 @@ async def test_gbp_connection():
                 locations.extend(account_locations[:3])  # First 3 locations per account
             status["locations_accessible"] = len(locations)
             status["locations"] = locations
-            
+
         except Exception as e:
             status["locations_accessible"] = 0
             status["error"] = str(e)
-    
+
     return JSONResponse(status)
 
 
@@ -1798,58 +1852,59 @@ async def api_marketing_engagement(
     - LinkedIn
     - Google Business Profile (calls, directions)
     """
+    import logging
+
     from services.marketing.ga4_service import ga4_service
     from services.marketing.gbp_service import gbp_service
-    from services.marketing.pinterest_service import pinterest_service
     from services.marketing.linkedin_service import linkedin_service
-    import logging
-    
+    from services.marketing.pinterest_service import pinterest_service
+
     logger = logging.getLogger(__name__)
-    
+
     # Date range
     end_default = datetime.utcnow().date()
     start_default = end_default - timedelta(days=29)
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
-    
+
     if start > end:
         raise HTTPException(status_code=400, detail="'from' date must be before 'to' date.")
-    
+
     days = (end - start).days + 1
-    
+
     # Fetch data from all sources
     try:
         # GA4 data for traffic sources
         ga4_data = ga4_service.get_website_metrics(start, end)
-        
+
         # Get social metrics
         social_data = get_social_metrics(start, end, None)
-        
-        # Get ads metrics  
+
+        # Get ads metrics
         ads_data = get_ads_metrics(start, end, None)
-        
+
         # GBP for calls/directions
         gbp_data = gbp_service.get_gbp_metrics(start, end)
-        
+
         # Pinterest metrics
         pinterest_data = pinterest_service.get_user_metrics(start, end)
-        
+
         # LinkedIn metrics
         linkedin_data = linkedin_service.get_metrics(start, end)
-        
+
     except Exception as e:
         logger.error(f"Error fetching engagement data: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    
+
     # Build attribution breakdown - where are engagements coming from?
     attribution = {
         "by_source": [],
         "by_type": []
     }
-    
+
     # Calculate engagement by source
     sources = []
-    
+
     # Facebook/Instagram (only if real data)
     fb_engagement = 0
     fb_likes = 0
@@ -1870,7 +1925,7 @@ async def api_marketing_engagement(
                 "followers": fb_likes,
                 "type": "social"
             })
-    
+
     # Google Ads - conversions as engagement (only if real data, not placeholder)
     google_conversions = 0
     google_clicks = 0
@@ -1888,7 +1943,7 @@ async def api_marketing_engagement(
                     "conversions": google_conversions,
                     "type": "paid"
                 })
-    
+
     # GA4 - organic traffic
     organic_sessions = 0
     direct_sessions = 0
@@ -1898,7 +1953,7 @@ async def api_marketing_engagement(
         organic_sessions = sessions_by_source.get("google", 0)
         direct_sessions = sessions_by_source.get("direct", 0)
         referral_sessions = sessions_by_source.get("fb", 0) + sessions_by_source.get("l.facebook.com", 0)
-        
+
         sources.append({
             "source": "Organic Search",
             "icon": "🌐",
@@ -1911,7 +1966,7 @@ async def api_marketing_engagement(
             "engagements": direct_sessions,
             "type": "direct"
         })
-    
+
     # GBP - calls and actions
     gbp_calls = 0
     gbp_directions = 0
@@ -1930,7 +1985,7 @@ async def api_marketing_engagement(
                 "website_clicks": gbp_website,
                 "type": "local"
             })
-    
+
     # Pinterest
     pinterest_engagement = 0
     if pinterest_data and not pinterest_data.get("is_placeholder"):
@@ -1947,7 +2002,7 @@ async def api_marketing_engagement(
                 "clicks": pinterest_data.get("clicks", 0),
                 "type": "social"
             })
-    
+
     # LinkedIn
     linkedin_engagement = 0
     if linkedin_data and not linkedin_data.get("is_placeholder"):
@@ -1959,11 +2014,11 @@ async def api_marketing_engagement(
                 "engagements": linkedin_engagement,
                 "type": "social"
             })
-    
+
     # Sort by engagement count
     sources.sort(key=lambda x: x.get("engagements", 0), reverse=True)
     attribution["by_source"] = sources
-    
+
     # Build engagement by type (only real data)
     type_breakdown = [
         {"type": "Organic Search", "icon": "🔍", "value": organic_sessions, "color": "#3b82f6"},
@@ -1975,19 +2030,19 @@ async def api_marketing_engagement(
     if google_clicks > 0:
         type_breakdown.insert(0, {"type": "Paid Ads", "icon": "💰", "value": google_clicks, "color": "#22c55e"})
     attribution["by_type"] = [t for t in type_breakdown if t["value"] > 0]
-    
+
     # Track which sources are using placeholder data
     placeholder_sources = []
     if ads_data and ads_data.get("google_ads", {}).get("is_placeholder"):
         placeholder_sources.append("Google Ads")
     if social_is_placeholder:
         placeholder_sources.append("Facebook/Instagram")
-    
+
     # Calculate totals
     total_engagements = sum(s.get("engagements", 0) for s in sources)
     total_conversions = google_conversions
     total_calls = gbp_calls
-    
+
     # Build daily trend from GA4 data
     daily_trend = []
     if ga4_data and ga4_data.get("users_over_time"):
@@ -1996,14 +2051,14 @@ async def api_marketing_engagement(
                 "date": entry.get("date"),
                 "engagements": entry.get("users", 0),
             })
-    
+
     # Add social chart data if available
     if social_data and social_data.get("post_overview", {}).get("chart"):
         for i, entry in enumerate(social_data["post_overview"]["chart"]):
             if i < len(daily_trend):
                 daily_trend[i]["social"] = entry.get("engagement", 0)
                 daily_trend[i]["engagements"] += entry.get("engagement", 0)
-    
+
     return JSONResponse({
         "success": True,
         "range": {
@@ -2056,20 +2111,21 @@ async def api_marketing_pinterest(
     
     Returns pin performance, saves, clicks, and engagement data.
     """
-    from services.marketing.pinterest_service import pinterest_service
     from datetime import date, timedelta
-    
+
+    from services.marketing.pinterest_service import pinterest_service
+
     # Default to last 30 days
     if to_date:
         end = date.fromisoformat(to_date)
     else:
         end = date.today()
-    
+
     if from_date:
         start = date.fromisoformat(from_date)
     else:
         start = end - timedelta(days=30)
-    
+
     try:
         data = pinterest_service.get_user_metrics(start, end)
         return JSONResponse({
@@ -2092,14 +2148,15 @@ async def api_marketing_pinterest(
 @app.get("/api/marketing/test-pinterest")
 async def test_pinterest_connection():
     """Test Pinterest connection and return status."""
-    from services.marketing.pinterest_service import pinterest_service
     import os
-    
+
+    from services.marketing.pinterest_service import pinterest_service
+
     status = {
         "access_token_configured": bool(os.getenv("PINTEREST_ACCESS_TOKEN")),
         "app_id": os.getenv("PINTEREST_APP_ID"),
     }
-    
+
     if pinterest_service._is_configured():
         try:
             user = pinterest_service.get_user_account()
@@ -2155,8 +2212,8 @@ async def pinterest_oauth_callback(
     error: Optional[str] = None,
 ):
     """Pinterest OAuth callback - exchange code for access token."""
-    import os
     import base64
+    import os
 
     if error:
         return JSONResponse({
@@ -2227,20 +2284,21 @@ async def api_marketing_linkedin(
 
     Returns post performance, impressions, clicks, and engagement data.
     """
-    from services.marketing.linkedin_service import linkedin_service
     from datetime import date, timedelta
-    
+
+    from services.marketing.linkedin_service import linkedin_service
+
     # Default to last 30 days
     if to_date:
         end = date.fromisoformat(to_date)
     else:
         end = date.today()
-    
+
     if from_date:
         start = date.fromisoformat(from_date)
     else:
         start = end - timedelta(days=30)
-    
+
     try:
         data = linkedin_service.get_metrics(start, end)
         return JSONResponse({
@@ -2263,15 +2321,16 @@ async def api_marketing_linkedin(
 @app.get("/api/marketing/test-linkedin")
 async def test_linkedin_connection():
     """Test LinkedIn connection and return status."""
-    from services.marketing.linkedin_service import linkedin_service
     import os
-    
+
+    from services.marketing.linkedin_service import linkedin_service
+
     status = {
         "client_id_configured": bool(os.getenv("LINKEDIN_CLIENT_ID")),
         "access_token_configured": bool(os.getenv("LINKEDIN_ACCESS_TOKEN")),
         "organization_id": os.getenv("LINKEDIN_ORGANIZATION_ID"),
     }
-    
+
     if linkedin_service._is_configured():
         try:
             profile = linkedin_service.get_profile()
@@ -2295,7 +2354,7 @@ async def test_linkedin_connection():
     else:
         status["connection_successful"] = False
         status["error"] = "LinkedIn credentials not configured"
-    
+
     return JSONResponse(status)
 
 
@@ -2313,24 +2372,24 @@ async def linkedin_oauth_callback(
     We exchange it for an access token.
     """
     from services.marketing.linkedin_service import linkedin_service
-    
+
     if error:
         return JSONResponse({
             "success": False,
             "error": error,
             "error_description": error_description,
         })
-    
+
     if not code:
         return JSONResponse({
             "success": False,
             "error": "No authorization code received",
         })
-    
+
     # Exchange code for token
     redirect_uri = "https://portal.coloradocareassist.com/api/linkedin/callback"
     token_data = linkedin_service.exchange_code_for_token(code, redirect_uri)
-    
+
     if token_data and "access_token" in token_data:
         # Return the token (user needs to set it as env var)
         return JSONResponse({
@@ -2404,8 +2463,9 @@ async def api_marketing_tiktok(
 @app.get("/api/marketing/test-tiktok")
 async def test_tiktok_connection():
     """Test TikTok connection and return status."""
-    from services.marketing.tiktok_service import tiktok_service
     import os
+
+    from services.marketing.tiktok_service import tiktok_service
 
     status = {
         "client_key_configured": bool(os.getenv("TIKTOK_CLIENT_KEY")),
@@ -2438,15 +2498,15 @@ async def gbp_oauth_start():
     Start GBP OAuth flow. Returns URL to redirect user to.
     """
     from services.marketing.gbp_service import gbp_service
-    
+
     oauth_url = gbp_service.get_oauth_url()
-    
+
     if not oauth_url:
         return JSONResponse({
             "success": False,
             "error": "GBP OAuth not configured. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET.",
         })
-    
+
     return JSONResponse({
         "success": True,
         "oauth_url": oauth_url,
@@ -2467,22 +2527,22 @@ async def gbp_oauth_callback(
     We exchange it for access and refresh tokens.
     """
     from services.marketing.gbp_service import gbp_service
-    
+
     if error:
         return JSONResponse({
             "success": False,
             "error": error,
         })
-    
+
     if not code:
         return JSONResponse({
             "success": False,
             "error": "No authorization code received",
         })
-    
+
     # Exchange code for tokens
     token_data = gbp_service.exchange_code_for_tokens(code)
-    
+
     if token_data.get("success"):
         # Return the tokens (user needs to set them as env vars)
         return JSONResponse({
@@ -2507,14 +2567,14 @@ async def gbp_status():
     Check GBP connection status and available locations.
     """
     from services.marketing.gbp_service import gbp_service
-    
+
     status = {
         "oauth_configured": bool(gbp_service.client_id and gbp_service.client_secret),
         "authenticated": bool(gbp_service.access_token),
         "has_refresh_token": bool(gbp_service.refresh_token),
         "configured_locations": gbp_service.location_ids,
     }
-    
+
     if not status["oauth_configured"]:
         status["error"] = "Missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET"
         status["oauth_url"] = None
@@ -2527,7 +2587,7 @@ async def gbp_status():
             accounts = gbp_service.get_accounts()
             status["accounts"] = len(accounts)
             status["account_names"] = [a.get("accountName", a.get("name")) for a in accounts]
-            
+
             # Try to get locations
             all_locations = []
             for account in accounts:
@@ -2539,18 +2599,18 @@ async def gbp_status():
                         "title": loc.get("title") or loc.get("storefrontAddress", {}).get("addressLines", [0]) if loc.get("storefrontAddress") else "Unknown",
                         "address": loc.get("storefrontAddress", {}).get("addressLines", []) if loc.get("storefrontAddress") else []
                     })
-            
+
             # Also show configured location IDs
             if gbp_service.location_ids:
                 status["configured_location_ids"] = gbp_service.location_ids
                 status["using_configured_locations"] = True
-            
+
             status["locations"] = all_locations
             status["total_locations_found"] = len(all_locations)
-            
+
         except Exception as e:
             status["error"] = f"Error fetching accounts: {str(e)}"
-    
+
     return JSONResponse(status)
 
 
@@ -2607,7 +2667,7 @@ async def quickbooks_callback(
         <p>Error: {error}</p>
         </body></html>
         """)
-    
+
     if not code or not realmId:
         return HTMLResponse("""
         <html><body style="font-family: sans-serif; padding: 40px;">
@@ -2615,10 +2675,10 @@ async def quickbooks_callback(
         <p>Authorization code or realm ID not provided.</p>
         </body></html>
         """)
-    
+
     # Exchange code for tokens
     import base64
-    
+
     if not QB_CLIENT_ID or not QB_CLIENT_SECRET:
         return HTMLResponse(f"""
         <html><body style="font-family: sans-serif; padding: 40px;">
@@ -2632,9 +2692,9 @@ Realm ID: {realmId}
         </pre>
         </body></html>
         """)
-    
+
     auth_header = base64.b64encode(f"{QB_CLIENT_ID}:{QB_CLIENT_SECRET}".encode()).decode()
-    
+
     async with httpx.AsyncClient() as client:
         resp = await client.post(
             "https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer",
@@ -2648,7 +2708,7 @@ Realm ID: {realmId}
                 "redirect_uri": QB_REDIRECT_URI
             }
         )
-    
+
     if resp.status_code != 200:
         return HTMLResponse(f"""
         <html><body style="font-family: sans-serif; padding: 40px;">
@@ -2657,12 +2717,12 @@ Realm ID: {realmId}
         <pre>{resp.text}</pre>
         </body></html>
         """)
-    
+
     tokens = resp.json()
     access_token = tokens.get("access_token", "")
     refresh_token = tokens.get("refresh_token", "")
     expires_in = tokens.get("expires_in", 3600)
-    
+
     # Display tokens for manual copy to local CLI
     return HTMLResponse(f"""
     <html><body style="font-family: sans-serif; padding: 40px; max-width: 800px;">
