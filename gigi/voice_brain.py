@@ -2552,8 +2552,9 @@ async def generate_response(transcript: List[Dict], call_info: Dict = None, on_t
             caller_data = json.loads(caller_result)
             if caller_data.get("found"):
                 caller_name = caller_data.get("name", "")
-                # Jason gets a casual greeting — he owns the company, no need for corporate intro
-                if caller_name.lower().startswith("jason"):
+                # Jason gets a casual greeting — match by phone number, not name
+                from_digits = ''.join(filter(str.isdigit, call_info.get("from_number", "")))
+                if from_digits.endswith("6039971495"):
                     return "Hey Jason, what's going on?", None
                 return f"Hi {caller_name}, this is Gigi with Colorado Care Assist. How can I help you?", None
         return "Hi, this is Gigi with Colorado Care Assist. How can I help you?", None
