@@ -282,6 +282,7 @@ _SMS_EXCLUDE = {
     "run_terminal",
     "sequential_thinking", "get_thinking_summary",
     "update_knowledge_graph", "query_knowledge_graph",
+    "get_directions", "geocode_address", "search_nearby_places",
     "query_workspace",
 }
 
