@@ -34,43 +34,104 @@ class ChiefOfStaffTools:
     def __init__(self):
         pass
 
-    async def search_concerts(self, query: str = ""):
-        """Search upcoming concerts using real web search"""
+    async def search_events(self, query: str = "", city: str = "Denver", state: str = "CO",
+                           start_date: str = None, end_date: str = None, limit: int = 10):
+        """Search events on Ticketmaster: concerts, sports, theater, comedy."""
+        from datetime import timedelta
+
+        import httpx
+
+        api_key = os.environ.get("TICKETMASTER_API_KEY")
+        if not api_key:
+            logger.error("TICKETMASTER_API_KEY not configured")
+            return {"success": False, "error": "Ticketmaster API not configured"}
+
         if not query:
-            query = "upcoming concerts Denver Colorado"
+            query = "all"
 
-        search_query = f"{query} concerts tickets 2026"
+        # Default date range: today through next 30 days
+        now = datetime.now()
+        if not start_date:
+            start_dt = now.strftime("%Y-%m-%dT00:00:00Z")
+        else:
+            start_dt = f"{start_date}T00:00:00Z"
 
-        # Try Brave Search first
+        if not end_date:
+            end_dt = (now + timedelta(days=30)).strftime("%Y-%m-%dT23:59:59Z")
+        else:
+            end_dt = f"{end_date}T23:59:59Z"
+
+        params = {
+            "apikey": api_key,
+            "city": city,
+            "stateCode": state,
+            "startDateTime": start_dt,
+            "endDateTime": end_dt,
+            "size": min(limit, 20),
+            "sort": "date,asc",
+        }
+        if query.lower() not in ("all", "events", "anything", ""):
+            params["keyword"] = query
+
         try:
-            import httpx
-            brave_api_key = os.environ.get("BRAVE_API_KEY")
-            if brave_api_key:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    resp = await client.get(
-                        "https://api.search.brave.com/res/v1/web/search",
-                        headers={"X-Subscription-Token": brave_api_key},
-                        params={"q": search_query, "count": 5},
-                    )
-                    if resp.status_code == 200:
-                        results = resp.json().get("web", {}).get("results", [])
-                        if results:
-                            matches = [{"title": r.get("title", ""), "snippet": r.get("description", ""), "url": r.get("url", "")} for r in results[:5]]
-                            return {"success": True, "query": query, "matches": matches}
-        except Exception as e:
-            logger.warning(f"Brave concert search failed: {e}")
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get("https://app.ticketmaster.com/discovery/v2/events.json", params=params)
+                if resp.status_code != 200:
+                    logger.error(f"Ticketmaster API error: {resp.status_code}")
+                    return {"success": False, "error": f"Ticketmaster API returned {resp.status_code}"}
 
-        # Fallback: DuckDuckGo
-        try:
-            from ddgs import DDGS
-            results = DDGS().text(search_query, max_results=5)
-            if results:
-                matches = [{"title": r.get("title", ""), "snippet": r.get("body", ""), "url": r.get("href", "")} for r in results]
-                return {"success": True, "query": query, "matches": matches}
-        except Exception as e:
-            logger.warning(f"DDG concert search failed: {e}")
+                data = resp.json()
+                embedded = data.get("_embedded")
+                if not embedded or "events" not in embedded:
+                    return {"success": True, "events": [], "count": 0, "query": query, "city": city}
 
-        return {"success": False, "error": "Concert search temporarily unavailable"}
+                events = []
+                for ev in embedded["events"][:limit]:
+                    name = ev.get("name", "Unknown Event")
+                    event_date = ev.get("dates", {}).get("start", {}).get("localDate", "TBA")
+                    event_time = ev.get("dates", {}).get("start", {}).get("localTime", "")
+                    try:
+                        dt = datetime.strptime(event_date, "%Y-%m-%d")
+                        formatted_date = dt.strftime("%A, %B %d")
+                    except Exception:
+                        formatted_date = event_date
+
+                    venues = ev.get("_embedded", {}).get("venues", [])
+                    venue_name = venues[0].get("name", "Venue TBA") if venues else "Venue TBA"
+
+                    price_range = ""
+                    price_ranges = ev.get("priceRanges", [])
+                    if price_ranges:
+                        mn = price_ranges[0].get("min", 0)
+                        mx = price_ranges[0].get("max", 0)
+                        if mn and mx:
+                            price_range = f"${mn:.0f}-${mx:.0f}"
+                        elif mn:
+                            price_range = f"from ${mn:.0f}"
+
+                    status = ev.get("dates", {}).get("status", {}).get("code", "")
+                    url = ev.get("url", "")
+
+                    events.append({
+                        "name": name,
+                        "date": formatted_date,
+                        "raw_date": event_date,
+                        "time": event_time,
+                        "venue": venue_name,
+                        "price_range": price_range,
+                        "url": url,
+                        "status": status,
+                    })
+
+                return {"success": True, "events": events, "count": len(events), "query": query, "city": city}
+
+        except Exception as e:
+            logger.error(f"Ticketmaster search failed: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def search_concerts(self, query: str = ""):
+        """Search concerts — wrapper for search_events."""
+        return await self.search_events(query=query if query else "concerts")
 
     async def buy_tickets_request(self, artist: str, venue: str, quantity: int = 2):
         """Search for real ticket availability, then send 2FA with actual options."""
