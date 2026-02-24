@@ -248,6 +248,14 @@ ANTHROPIC_TOOLS = [
     # === CLAUDE CODE TOOLS ===
     {"name": "run_claude_code", "description": "Execute a code/infrastructure task using Claude Code on the Mac Mini. Use for: fixing bugs, editing files, investigating errors, checking logs, running tests, restarting services, git operations, deploying changes. Claude Code autonomously reads/writes files and runs commands. Returns the result directly (synchronous, no polling needed). PREFER THIS over create_claude_task for immediate results.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What to do. Be specific — include error messages, file paths, expected behavior."}, "directory": {"type": "string", "description": "Project: careassist (default/staging), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard, qbo-dashboard. Or full path."}, "model": {"type": "string", "description": "'sonnet' (default, fast) or 'opus' (complex tasks)."}}, "required": ["prompt"]}},
     {"name": "browse_with_claude", "description": "Browse a website using Claude Code + Chrome. Can read pages, fill forms, click buttons, extract data, navigate multi-page flows. Much more capable than browse_webpage. Use for checking websites, reading content, web UI interactions, form automation.", "input_schema": {"type": "object", "properties": {"task": {"type": "string", "description": "What to do in the browser. Be specific."}, "url": {"type": "string", "description": "Target URL (optional if task includes it)."}}, "required": ["task"]}},
+    # === TERMINAL TOOLS ===
+    {"name": "run_terminal", "description": "Execute a shell command directly on the Mac Mini via headless terminal. INSTANT and FREE — no API cost. Use for quick commands: checking logs (tail), service status (launchctl list), git operations (git status/log/diff), file checks (ls, cat), restarting services (kill + KeepAlive), disk usage, process checks (ps, lsof). For complex multi-step tasks that need AI reasoning, use run_claude_code instead.", "input_schema": {"type": "object", "properties": {"command": {"type": "string", "description": "Shell command to execute (e.g. 'tail -20 ~/logs/gigi-server.log', 'launchctl list | grep careassist', 'git -C ~/mac-mini-apps/careassist-unified status')"}, "timeout": {"type": "integer", "description": "Timeout in seconds (default 30, max 120)"}}, "required": ["command"]}},
+    # === THINKING TOOLS ===
+    {"name": "sequential_thinking", "description": "Think through a complex problem step by step. Use for investigations, debugging, planning, or any multi-step reasoning. Each call is one thought in a chain. You can revise earlier thoughts or branch into alternative hypotheses. ALWAYS use this before diving into complex tasks — think first, act second.", "input_schema": {"type": "object", "properties": {"thought": {"type": "string", "description": "Your current thinking step — what you're considering, analyzing, or concluding"}, "thought_number": {"type": "integer", "description": "Current thought step number (start at 1)"}, "total_thoughts": {"type": "integer", "description": "Estimated total thoughts needed (can increase later)"}, "next_thought_needed": {"type": "boolean", "description": "Whether you need another thinking step after this one"}, "is_revision": {"type": "boolean", "description": "Set true if you're reconsidering an earlier thought"}, "revises_thought": {"type": "integer", "description": "Which thought number you're revising"}, "branch_from_thought": {"type": "integer", "description": "Thought number to branch from (for exploring alternative hypotheses)"}, "branch_id": {"type": "string", "description": "Label for this branch (e.g. 'dns-issue', 'db-bottleneck')"}}, "required": ["thought", "thought_number", "total_thoughts", "next_thought_needed"]}},
+    {"name": "get_thinking_summary", "description": "Get the full chain of sequential thoughts for the current investigation. Shows all reasoning steps, revisions, and branches.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    # === KNOWLEDGE GRAPH TOOLS ===
+    {"name": "update_knowledge_graph", "description": "Update Gigi's knowledge graph — add or remove entities (people, organizations, places, things), relations between them, and observations (facts) about them. Use to build structured knowledge about the world: who works where, who cares for whom, what tools connect to what. The graph complements flat memories with relationship-aware storage.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "add_entities | add_relations | add_observations | delete_entities | delete_relations | delete_observations"}, "entities": {"type": "array", "description": "For add_entities: list of {name, entityType, observations[]}", "items": {"type": "object", "properties": {"name": {"type": "string"}, "entityType": {"type": "string", "description": "person, caregiver, client, organization, place, software, service, etc."}, "observations": {"type": "array", "items": {"type": "string"}}}, "required": ["name", "entityType"]}}, "relations": {"type": "array", "description": "For add_relations/delete_relations: list of {from, to, relationType}", "items": {"type": "object", "properties": {"from": {"type": "string"}, "to": {"type": "string"}, "relationType": {"type": "string", "description": "Active voice: owns, works_for, cares_for, lives_in, manages, uses, etc."}}, "required": ["from", "to", "relationType"]}}, "observations": {"type": "array", "description": "For add_observations/delete_observations: list of {entityName, contents[]}", "items": {"type": "object", "properties": {"entityName": {"type": "string"}, "contents": {"type": "array", "items": {"type": "string"}}}, "required": ["entityName", "contents"]}}, "entity_names": {"type": "array", "description": "For delete_entities: names to remove", "items": {"type": "string"}}}, "required": ["action"]}},
+    {"name": "query_knowledge_graph", "description": "Query Gigi's knowledge graph to find entities, their observations, and relationships. Use to answer questions about who does what, who's connected to whom, and what you know about a person/place/thing.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "search (by keyword) | open_nodes (by exact names) | read_graph (full dump)"}, "query": {"type": "string", "description": "Search text — matches entity names, types, and observations (for search action)"}, "names": {"type": "array", "description": "Exact entity names to retrieve (for open_nodes action)", "items": {"type": "string"}}}, "required": ["action"]}},
     # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
     {"name": "query_workspace", "description": "Query Google Workspace admin data using GAM. READ-ONLY — can look up users, groups, domains, devices, reports. Cannot create, update, delete, or modify anything. Examples: 'info user jacob@coloradocareassist.com', 'print users', 'print groups', 'info domain', 'report users'.", "input_schema": {"type": "object", "properties": {"command": {"type": "string", "description": "GAM command WITHOUT the leading 'gam'. Examples: 'info user jason@coloradocareassist.com', 'print users fields name,email,suspended', 'print groups', 'info domain', 'report users parameters accounts:last_login_time'. Only read commands (info, print, show, report, check) are allowed."}}, "required": ["command"]}},
     # === FAX TOOLS ===
@@ -390,6 +398,19 @@ if GEMINI_AVAILABLE:
             parameters=genai_types.Schema(type="OBJECT", properties={"prompt": _s("string", "What to do. Be specific — include error messages, file paths, expected behavior."), "directory": _s("string", "Project: careassist (default), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard."), "model": _s("string", "sonnet (default) or opus (complex tasks).")}, required=["prompt"])),
         genai_types.FunctionDeclaration(name="browse_with_claude", description="Browse a website using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data. More capable than browse_webpage.",
             parameters=genai_types.Schema(type="OBJECT", properties={"task": _s("string", "What to do in the browser. Be specific."), "url": _s("string", "Target URL (optional if task includes it).")}, required=["task"])),
+        # === TERMINAL TOOLS ===
+        genai_types.FunctionDeclaration(name="run_terminal", description="Execute a shell command directly on the Mac Mini. Instant, free. Use for logs, service status, git, file checks.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"command": _s("string", "Shell command to execute"), "timeout": _s("INTEGER", "Timeout in seconds (default 30)")}, required=["command"])),
+        # === THINKING TOOLS ===
+        genai_types.FunctionDeclaration(name="sequential_thinking", description="Think through a complex problem step by step. Use for investigations, debugging, planning.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"thought": _s("string", "Current thinking step"), "thought_number": _s("INTEGER", "Step number"), "total_thoughts": _s("INTEGER", "Estimated total"), "next_thought_needed": _s("BOOLEAN", "Need more thinking"), "is_revision": _s("BOOLEAN", "Reconsidering earlier thought"), "revises_thought": _s("INTEGER", "Which thought to revise"), "branch_from_thought": _s("INTEGER", "Branch point"), "branch_id": _s("string", "Branch label")}, required=["thought", "thought_number", "total_thoughts", "next_thought_needed"])),
+        genai_types.FunctionDeclaration(name="get_thinking_summary", description="Get the full chain of sequential thoughts.",
+            parameters=genai_types.Schema(type="OBJECT", properties={})),
+        # === KNOWLEDGE GRAPH TOOLS ===
+        genai_types.FunctionDeclaration(name="update_knowledge_graph", description="Update knowledge graph: add/remove entities, relations, observations. Use JSON strings for complex params.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"action": _s("string", "add_entities|add_relations|add_observations|delete_entities|delete_relations|delete_observations"), "entities": _s("string", "JSON array of {name, entityType, observations[]}"), "relations": _s("string", "JSON array of {from, to, relationType}"), "observations": _s("string", "JSON array of {entityName, contents[]}"), "entity_names": _s("string", "JSON array of entity names to delete")}, required=["action"])),
+        genai_types.FunctionDeclaration(name="query_knowledge_graph", description="Query knowledge graph for entities, relations, observations.",
+            parameters=genai_types.Schema(type="OBJECT", properties={"action": _s("string", "search|open_nodes|read_graph"), "query": _s("string", "Search text"), "names": _s("string", "JSON array of entity names")}, required=["action"])),
         # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
         genai_types.FunctionDeclaration(name="query_workspace", description="Query Google Workspace admin data (READ-ONLY). Look up users, groups, domains, reports. Examples: 'info user jacob@coloradocareassist.com', 'print users', 'print groups'.",
             parameters=genai_types.Schema(type="OBJECT", properties={"command": _s("string", "GAM command WITHOUT leading 'gam'. Only read commands allowed.")}, required=["command"])),
@@ -475,6 +496,14 @@ OPENAI_TOOLS = [
     # === CLAUDE CODE TOOLS ===
     _oai_tool("run_claude_code", "Execute a code/infrastructure task using Claude Code on the Mac Mini. Returns result directly (synchronous). PREFER over create_claude_task.", {"prompt": {"type": "string", "description": "What to do"}, "directory": {"type": "string", "description": "Project alias or path"}, "model": {"type": "string", "description": "sonnet (default) or opus"}}, ["prompt"]),
     _oai_tool("browse_with_claude", "Browse a website using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data.", {"task": {"type": "string", "description": "What to do in browser"}, "url": {"type": "string", "description": "Target URL"}}, ["task"]),
+    # === TERMINAL TOOLS ===
+    _oai_tool("run_terminal", "Execute a shell command directly on the Mac Mini. Instant, free. Use for logs, service status, git, file checks.", {"command": {"type": "string", "description": "Shell command to execute"}, "timeout": {"type": "integer", "description": "Timeout in seconds (default 30)"}}, ["command"]),
+    # === THINKING TOOLS ===
+    _oai_tool("sequential_thinking", "Think through a complex problem step by step.", {"thought": {"type": "string", "description": "Current thinking step"}, "thought_number": {"type": "integer", "description": "Step number"}, "total_thoughts": {"type": "integer", "description": "Estimated total"}, "next_thought_needed": {"type": "boolean", "description": "Need more thinking"}, "is_revision": {"type": "boolean", "description": "Reconsidering earlier thought"}, "revises_thought": {"type": "integer", "description": "Which thought to revise"}, "branch_from_thought": {"type": "integer", "description": "Branch point"}, "branch_id": {"type": "string", "description": "Branch label"}}, ["thought", "thought_number", "total_thoughts", "next_thought_needed"]),
+    _oai_tool("get_thinking_summary", "Get the full chain of sequential thoughts.", {}),
+    # === KNOWLEDGE GRAPH TOOLS ===
+    _oai_tool("update_knowledge_graph", "Update knowledge graph: add/remove entities, relations, observations.", {"action": {"type": "string", "description": "add_entities|add_relations|add_observations|delete_entities|delete_relations|delete_observations"}, "entities": {"type": "array", "description": "For add_entities", "items": {"type": "object"}}, "relations": {"type": "array", "description": "For add/delete_relations", "items": {"type": "object"}}, "observations": {"type": "array", "description": "For add/delete_observations", "items": {"type": "object"}}, "entity_names": {"type": "array", "description": "For delete_entities", "items": {"type": "string"}}}, ["action"]),
+    _oai_tool("query_knowledge_graph", "Query knowledge graph for entities, relations, observations.", {"action": {"type": "string", "description": "search|open_nodes|read_graph"}, "query": {"type": "string", "description": "Search text"}, "names": {"type": "array", "description": "Entity names to retrieve", "items": {"type": "string"}}}, ["action"]),
     # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
     _oai_tool("query_workspace", "Query Google Workspace admin data (READ-ONLY). Look up users, groups, domains, reports. Examples: 'info user jacob@coloradocareassist.com', 'print users', 'print groups'.", {"command": {"type": "string", "description": "GAM command WITHOUT leading 'gam'. Only read commands allowed."}}, ["command"]),
     # === FAX TOOLS ===
@@ -561,9 +590,13 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - web_search: General knowledge, flight prices, travel info.
 - run_claude_code: Execute code/infra tasks DIRECTLY using Claude Code. Fixes bugs, edits files, checks logs, runs tests, restarts services, git ops. Returns result immediately (synchronous). PREFER THIS over create_claude_task. Directories: careassist (staging, default), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard, qbo-dashboard.
 - browse_with_claude: Browse websites using Claude Code + Chrome. Read pages, fill forms, click buttons, extract data. PREFER THIS over browse_webpage.
+- run_terminal: Execute a shell command INSTANTLY on the Mac Mini. FREE (no API cost). Use for quick checks: tail logs, launchctl status, git status/log, ls, ps, lsof, disk usage, kill+restart a service. PREFER THIS for simple commands. Use run_claude_code only when you need AI reasoning (multi-step fixes, code edits, debugging).
+- sequential_thinking: Think through complex problems step by step BEFORE acting. Use for debugging, investigations, planning. Supports revision (rethink earlier steps) and branching (explore hypotheses). ALWAYS think first on complex tasks.
+- get_thinking_summary: Review the full chain of reasoning steps.
 - browse_webpage: (Legacy) Browse any URL and extract text content. Use browse_with_claude instead for better results.
 - take_screenshot: (Legacy) Screenshot any webpage. Use browse_with_claude instead.
-- save_memory / recall_memories / forget_memory: Long-term memory management.
+- save_memory / recall_memories / forget_memory: Long-term memory management (flat facts).
+- update_knowledge_graph / query_knowledge_graph: Structured knowledge graph — entities (people, orgs, places), relations (owns, works_for, cares_for), and observations (facts about entities). Use to record WHO does WHAT and HOW things connect. Use query_knowledge_graph to look up relationships. Graph complements flat memories — use save_memory for preferences/instructions, knowledge graph for entities and connections.
 - get_ar_report: QuickBooks accounts receivable aging report (outstanding invoices, overdue amounts).
 - get_task_board: Read Jason's full task board (all sections).
 - add_task: Add a task to the board (section: Today/Soon/Later/Waiting/Agenda/Inbox).
@@ -1437,6 +1470,57 @@ class GigiTelegramBot:
                 result = await browse_with_claude(
                     task=tool_input.get("task", ""),
                     url=tool_input.get("url"),
+                )
+                return json.dumps(result)
+
+            # === TERMINAL TOOLS ===
+            elif tool_name == "run_terminal":
+                from gigi.terminal_tools import run_terminal
+                result = await run_terminal(
+                    command=tool_input.get("command", ""),
+                    timeout=min(tool_input.get("timeout", 30), 120),
+                )
+                return json.dumps(result)
+
+            # === THINKING TOOLS ===
+            elif tool_name == "sequential_thinking":
+                from gigi.sequential_thinking import sequential_thinking
+                result = await sequential_thinking(
+                    thought=tool_input.get("thought", ""),
+                    thought_number=tool_input.get("thought_number", 1),
+                    total_thoughts=tool_input.get("total_thoughts", 1),
+                    next_thought_needed=tool_input.get("next_thought_needed", False),
+                    is_revision=tool_input.get("is_revision", False),
+                    revises_thought=tool_input.get("revises_thought"),
+                    branch_from_thought=tool_input.get("branch_from_thought"),
+                    branch_id=tool_input.get("branch_id"),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "get_thinking_summary":
+                from gigi.sequential_thinking import get_thinking_summary
+                result = await get_thinking_summary()
+                return json.dumps(result)
+
+            # === KNOWLEDGE GRAPH TOOLS ===
+            elif tool_name == "update_knowledge_graph":
+                from gigi.knowledge_graph import update_knowledge_graph
+                result = await update_knowledge_graph(
+                    action=tool_input.get("action", ""),
+                    entities=tool_input.get("entities"),
+                    relations=tool_input.get("relations"),
+                    observations=tool_input.get("observations"),
+                    entity_names=tool_input.get("entity_names"),
+                    deletions=tool_input.get("deletions"),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "query_knowledge_graph":
+                from gigi.knowledge_graph import query_knowledge_graph
+                result = await query_knowledge_graph(
+                    action=tool_input.get("action", ""),
+                    query=tool_input.get("query"),
+                    names=tool_input.get("names"),
                 )
                 return json.dumps(result)
 
