@@ -12,17 +12,12 @@
     const state = {
         summary: null,
         clients: [],
-        carePlans: [],
         openShifts: [],
-        atRiskClients: [],
-        isLoading: false,
-        // Gigi state
-        gigiSettings: {
-            sms_autoreply: false,
-            operations_sms: false,
-        },
-        gigiActivity: [],
         callOuts: [],
+        isLoading: false,
+        clientSortField: 'name',
+        clientSortAsc: true,
+        clientFilter: '',
     };
 
     // Initialize on DOM ready
@@ -43,14 +38,17 @@
                 const tabId = link.getAttribute('data-tab');
                 if (!tabId) return;
 
-                // Update active states
                 sidebarLinks.forEach((l) => l.classList.remove('active'));
                 link.classList.add('active');
 
-                // Show corresponding tab
                 tabSections.forEach((section) => {
                     section.classList.toggle('active', section.id === `tab-${tabId}`);
                 });
+
+                // Load call-outs when switching to shifts tab
+                if (tabId === 'shifts') {
+                    fetchCallOuts();
+                }
             });
         });
     }
@@ -77,7 +75,6 @@
             },
         };
 
-        // Shifts bar chart
         const shiftsCtx = document.getElementById('shiftsChart');
         if (shiftsCtx) {
             charts.shifts = new Chart(shiftsCtx, {
@@ -109,20 +106,18 @@
             });
         }
 
-        // Client status doughnut chart
         const clientStatusCtx = document.getElementById('clientStatusChart');
         if (clientStatusCtx) {
             charts.clientStatus = new Chart(clientStatusCtx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Active', 'On Hold', 'At Risk', 'Pending'],
+                    labels: ['Low Risk', 'Medium Risk', 'High Risk'],
                     datasets: [{
-                        data: [0, 0, 0, 0],
+                        data: [0, 0, 0],
                         backgroundColor: [
                             'rgba(34, 197, 94, 0.8)',
-                            'rgba(59, 130, 246, 0.8)',
-                            'rgba(239, 68, 68, 0.8)',
                             'rgba(245, 158, 11, 0.8)',
+                            'rgba(239, 68, 68, 0.8)',
                         ],
                         borderWidth: 0,
                     }],
@@ -144,21 +139,18 @@
         state.isLoading = true;
 
         try {
-            const [summary, clients, carePlans, openShifts, atRisk] = await Promise.all([
+            const [summary, clients, openShifts] = await Promise.all([
                 fetchAPI('/summary'),
                 fetchAPI('/clients'),
-                fetchAPI('/care-plans'),
                 fetchAPI('/open-shifts'),
-                fetchAPI('/at-risk'),
             ]);
 
             state.summary = summary;
             state.clients = clients?.clients || [];
-            state.carePlans = carePlans?.care_plans || [];
             state.openShifts = openShifts?.shifts || [];
-            state.atRiskClients = atRisk?.clients || [];
 
             updateDashboard();
+            loadHoursBreakdown();
         } catch (error) {
             console.error('Failed to fetch data:', error);
         } finally {
@@ -183,9 +175,7 @@
         updateKPIs();
         updateCharts();
         updateClientsTable();
-        updateCarePlansTable();
         updateShiftsTable();
-        updateAtRiskTable();
         updateWellSkyBanner();
     }
 
@@ -197,9 +187,33 @@
         setKPI('kpi-active-clients', s.active_clients || 0);
         setKPI('kpi-active-caregivers', s.active_caregivers || 0);
         setKPI('kpi-open-shifts', s.open_shifts || 0, s.open_shifts > 5 ? 'warning' : '');
-        setKPI('kpi-evv-rate', `${s.evv_compliance || 0}%`, s.evv_compliance < 85 ? 'warning' : 'positive');
-        setKPI('kpi-plans-due', s.plans_due_review || 0, s.plans_due_review > 3 ? 'warning' : '');
+
+        const weeklyHrs = s.weekly_hours || 0;
+        setKPI('kpi-weekly-hours', weeklyHrs.toLocaleString());
+        const goalEl = document.getElementById('kpi-hours-goal');
+        if (goalEl) {
+            const pct = s.hours_pct_goal || 0;
+            goalEl.textContent = `${pct}% of 10k goal`;
+        }
+
+        const prof = s.profitability || {};
+        if (prof.profit_per_hour != null) {
+            setKPI('kpi-profit-per-hour', `$${prof.profit_per_hour.toFixed(2)}`, 'positive');
+        }
+        const profPctEl = document.getElementById('kpi-profit-pct');
+        if (profPctEl && prof.profit_pct != null) {
+            profPctEl.textContent = `${prof.profit_pct}% margin`;
+        }
+
         setKPI('kpi-at-risk', s.at_risk_clients || 0, s.at_risk_clients > 0 ? 'negative' : 'positive');
+
+        // Profitability detail cards
+        if (prof.revenue_per_hour != null) setKPI('kpi-revenue-per-hour', `$${prof.revenue_per_hour.toFixed(2)}`);
+        if (prof.payroll_per_hour != null) setKPI('kpi-payroll-per-hour', `$${prof.payroll_per_hour.toFixed(2)}`);
+        if (prof.profit_per_hour != null) setKPI('kpi-profit-per-hour-detail', `$${prof.profit_per_hour.toFixed(2)}`, 'positive');
+        if (prof.total_billing_mtd != null) setKPI('kpi-billing-mtd', `$${Math.round(prof.total_billing_mtd).toLocaleString()}`);
+        if (prof.total_payroll_mtd != null) setKPI('kpi-payroll-mtd', `$${Math.round(prof.total_payroll_mtd).toLocaleString()}`);
+        if (prof.total_profit_mtd != null) setKPI('kpi-profit-mtd', `$${Math.round(prof.total_profit_mtd).toLocaleString()}`, 'positive');
     }
 
     function setKPI(id, value, className = '') {
@@ -212,7 +226,6 @@
 
     // Update charts
     function updateCharts() {
-        // Update shifts chart with weekly data
         if (charts.shifts && state.summary?.shifts_by_day) {
             const shiftData = state.summary.shifts_by_day;
             charts.shifts.data.datasets[0].data = shiftData.scheduled || [0, 0, 0, 0, 0, 0, 0];
@@ -220,81 +233,158 @@
             charts.shifts.update();
         }
 
-        // Update client status chart
         if (charts.clientStatus && state.clients.length > 0) {
-            const statusCounts = { active: 0, on_hold: 0, at_risk: 0, pending: 0 };
-            state.clients.forEach((client) => {
-                const status = (client.status || 'active').toLowerCase().replace(' ', '_');
-                if (statusCounts.hasOwnProperty(status)) {
-                    statusCounts[status]++;
-                } else {
-                    statusCounts.active++;
-                }
+            let low = 0, med = 0, high = 0;
+            state.clients.forEach((c) => {
+                if (c.risk_score >= 50) high++;
+                else if (c.risk_score >= 25) med++;
+                else low++;
             });
-            charts.clientStatus.data.datasets[0].data = [
-                statusCounts.active,
-                statusCounts.on_hold,
-                statusCounts.at_risk,
-                statusCounts.pending,
-            ];
+            charts.clientStatus.data.datasets[0].data = [low, med, high];
             charts.clientStatus.update();
         }
     }
 
-    // Update clients table
+    // ============================================
+    // CLIENTS TABLE WITH EXPAND/COLLAPSE & SORTING
+    // ============================================
+
+    function getFilteredSortedClients() {
+        let clients = [...state.clients];
+
+        // Filter
+        if (state.clientFilter) {
+            const q = state.clientFilter.toLowerCase();
+            clients = clients.filter(c =>
+                (c.name || '').toLowerCase().includes(q) ||
+                (c.caregivers || []).some(cg => cg.toLowerCase().includes(q))
+            );
+        }
+
+        // Sort
+        const field = state.clientSortField;
+        const asc = state.clientSortAsc;
+        clients.sort((a, b) => {
+            let va, vb;
+            switch (field) {
+                case 'name': va = (a.name || '').toLowerCase(); vb = (b.name || '').toLowerCase(); break;
+                case 'status': va = a.status || ''; vb = b.status || ''; break;
+                case 'hours': va = a.actual_hours_weekly || 0; vb = b.actual_hours_weekly || 0; break;
+                case 'profitability': va = a.profitability_pct ?? -999; vb = b.profitability_pct ?? -999; break;
+                case 'mv_date': va = a.mv_date || ''; vb = b.mv_date || ''; break;
+                case 'care_plan_review': va = a.care_plan_review_date || ''; vb = b.care_plan_review_date || ''; break;
+                case 'last_visit': va = a.last_visit || ''; vb = b.last_visit || ''; break;
+                case 'risk': va = a.risk_score || 0; vb = b.risk_score || 0; break;
+                default: va = (a.name || '').toLowerCase(); vb = (b.name || '').toLowerCase();
+            }
+            if (va < vb) return asc ? -1 : 1;
+            if (va > vb) return asc ? 1 : -1;
+            return 0;
+        });
+
+        return clients;
+    }
+
     function updateClientsTable() {
         const tbody = document.getElementById('clients-table-body');
         if (!tbody) return;
 
-        if (state.clients.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">👥</div>No clients found</td></tr>';
+        const clients = getFilteredSortedClients();
+
+        if (clients.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="icon">👥</div>No clients found</td></tr>';
             return;
         }
 
-        tbody.innerHTML = state.clients.map((client) => {
+        let html = '';
+        clients.forEach((client) => {
             const riskClass = getRiskClass(client.risk_score);
-            return `
-                <tr>
+            const profClass = client.profitability_pct != null
+                ? (client.profitability_pct >= 30 ? 'profit-positive' : client.profitability_pct >= 0 ? 'profit-neutral' : 'profit-negative')
+                : 'profit-neutral';
+            const hoursDisplay = client.authorized_hours_weekly
+                ? `${client.actual_hours_weekly}/${client.authorized_hours_weekly}`
+                : `${client.actual_hours_weekly || '--'}`;
+
+            html += `
+                <tr class="client-row" data-client-id="${client.id}" onclick="toggleClientDetail(${client.id})" style="cursor:pointer">
+                    <td><button class="expand-btn" id="expand-btn-${client.id}">&#9654;</button></td>
                     <td><strong>${escapeHtml(client.name)}</strong></td>
                     <td><span class="status-badge status-${getStatusClass(client.status)}">${client.status || 'Active'}</span></td>
-                    <td>${client.hours_per_week || '--'}</td>
-                    <td>${escapeHtml(client.payer || 'N/A')}</td>
+                    <td>${hoursDisplay}</td>
+                    <td class="${profClass}">${client.profitability_pct != null ? client.profitability_pct + '%' : '--'}</td>
+                    <td>${formatDate(client.mv_date)}</td>
+                    <td>${formatDate(client.care_plan_review_date)}</td>
+                    <td>${formatDate(client.last_visit)}</td>
                     <td>
                         <div class="risk-score ${riskClass}">
-                            <div class="risk-bar"><div class="risk-fill" style="width: ${client.risk_score || 0}%"></div></div>
-                            <span>${client.risk_score || 0}</span>
+                            <div class="risk-bar"><div class="risk-fill" style="width: ${Math.min(client.risk_score || 0, 100)}%"></div></div>
+                            <span>${client.risk_label || 'Low'}</span>
                         </div>
                     </td>
-                    <td>${formatDate(client.last_visit)}</td>
+                </tr>
+                <tr class="client-detail-row" id="detail-${client.id}" style="display:none">
+                    <td colspan="9">
+                        <div class="client-detail">
+                            <div class="detail-block">
+                                <div class="detail-block-title">Care Plan</div>
+                                <div class="detail-block-content">${escapeHtml(client.care_plan_summary) || 'No care plan data available'}</div>
+                            </div>
+                            <div class="detail-block">
+                                <div class="detail-block-title">Authorized Hours & Schedule</div>
+                                <div class="detail-block-content">
+                                    <div><strong>Authorized:</strong> ${client.authorized_hours_weekly || '--'} hrs/week</div>
+                                    <div><strong>Actual (7d):</strong> ${client.actual_hours_weekly || 0} hrs</div>
+                                    <div><strong>Start Date:</strong> ${formatDate(client.start_date)}</div>
+                                </div>
+                            </div>
+                            <div class="detail-block">
+                                <div class="detail-block-title">Caregivers & Notes</div>
+                                <div class="detail-block-content">
+                                    <div style="margin-bottom: 8px;">
+                                        ${(client.caregivers || []).length > 0
+                                            ? client.caregivers.map(cg => `<span class="caregiver-tag">${escapeHtml(cg)}</span>`).join('')
+                                            : '<span style="color:#64748b">No caregivers assigned</span>'}
+                                    </div>
+                                    <div style="color:#94a3b8; font-size:12px;">${escapeHtml(client.notes) || 'No notes'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
                 </tr>
             `;
-        }).join('');
+        });
+
+        tbody.innerHTML = html;
     }
 
-    // Update care plans table
-    function updateCarePlansTable() {
-        const tbody = document.getElementById('care-plans-table-body');
-        if (!tbody) return;
+    // Toggle client detail row
+    window.toggleClientDetail = function(clientId) {
+        const detailRow = document.getElementById(`detail-${clientId}`);
+        const expandBtn = document.getElementById(`expand-btn-${clientId}`);
+        if (!detailRow) return;
 
-        if (state.carePlans.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><div class="icon">📋</div>No care plans due for review</td></tr>';
-            return;
+        const isVisible = detailRow.style.display !== 'none';
+        detailRow.style.display = isVisible ? 'none' : 'table-row';
+        if (expandBtn) expandBtn.classList.toggle('expanded', !isVisible);
+    };
+
+    // Sort clients by column
+    window.sortClients = function(field) {
+        if (state.clientSortField === field) {
+            state.clientSortAsc = !state.clientSortAsc;
+        } else {
+            state.clientSortField = field;
+            state.clientSortAsc = true;
         }
+        updateClientsTable();
+    };
 
-        tbody.innerHTML = state.carePlans.map((plan) => {
-            const daysUntil = plan.days_until_review || 0;
-            const urgencyClass = daysUntil <= 7 ? 'danger' : daysUntil <= 14 ? 'warning' : 'info';
-            return `
-                <tr>
-                    <td><strong>${escapeHtml(plan.client_name)}</strong></td>
-                    <td><span class="status-badge status-${urgencyClass}">${plan.status || 'Active'}</span></td>
-                    <td>${formatDate(plan.review_date)}</td>
-                    <td><span class="status-badge status-${urgencyClass}">${daysUntil} days</span></td>
-                    <td>${plan.authorized_hours || '--'} hrs/week</td>
-                </tr>
-            `;
-        }).join('');
-    }
+    // Filter clients by search
+    window.filterClients = function(query) {
+        state.clientFilter = query;
+        updateClientsTable();
+    };
 
     // Update shifts table
     function updateShiftsTable() {
@@ -320,223 +410,10 @@
         }).join('');
     }
 
-    // Update at-risk table
-    function updateAtRiskTable() {
-        const tbody = document.getElementById('at-risk-table-body');
-        if (!tbody) return;
-
-        if (state.atRiskClients.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="empty-state"><div class="icon">🎉</div>No at-risk clients!</td></tr>';
-            return;
-        }
-
-        tbody.innerHTML = state.atRiskClients.map((client) => {
-            const riskClass = getRiskClass(client.risk_score);
-            return `
-                <tr>
-                    <td><strong>${escapeHtml(client.name)}</strong></td>
-                    <td>
-                        <div class="risk-score ${riskClass}">
-                            <div class="risk-bar"><div class="risk-fill" style="width: ${client.risk_score || 0}%"></div></div>
-                            <span>${client.risk_score || 0}</span>
-                        </div>
-                    </td>
-                    <td>${(client.risk_factors || []).map(f => `<span class="status-badge status-warning">${escapeHtml(f)}</span>`).join(' ')}</td>
-                    <td>${(client.recommendations || []).map(r => `<div>• ${escapeHtml(r)}</div>`).join('')}</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    // Update WellSky connection banner
-    function updateWellSkyBanner() {
-        const banner = document.getElementById('wellskyBanner');
-        if (!banner || !state.summary) return;
-
-        if (state.summary.wellsky_connected) {
-            banner.classList.add('connected');
-            banner.innerHTML = `
-                <span class="icon">✅</span>
-                <span class="text">Connected to WellSky - Live data</span>
-            `;
-        } else {
-            banner.classList.remove('connected');
-            banner.innerHTML = `
-                <span class="icon">⏳</span>
-                <span class="text">Using mock data - WellSky API not connected</span>
-            `;
-        }
-    }
-
-    // Helper functions
-    function escapeHtml(text) {
-        if (!text) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    function formatDate(dateStr) {
-        if (!dateStr) return '--';
-        const date = new Date(dateStr);
-        if (isNaN(date.getTime())) return dateStr;
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-
-    function getRiskClass(score) {
-        if (!score) return 'risk-low';
-        if (score >= 60) return 'risk-high';
-        if (score >= 40) return 'risk-medium';
-        return 'risk-low';
-    }
-
-    function getStatusClass(status) {
-        if (!status) return 'active';
-        const s = status.toLowerCase();
-        if (s === 'active') return 'active';
-        if (s === 'on hold' || s === 'on_hold') return 'info';
-        if (s === 'at risk' || s === 'at_risk') return 'danger';
-        if (s === 'pending') return 'warning';
-        return 'active';
-    }
-
-    // Global refresh function
-    window.refreshData = function () {
-        fetchAllData();
-    };
-
     // ============================================
-    // GIGI AI AGENT CONTROL FUNCTIONS
+    // CALL-OUT LOG (merged into Shifts tab)
     // ============================================
 
-    // Fetch Gigi settings from API
-    async function fetchGigiSettings() {
-        try {
-            const response = await fetch('/api/gigi/settings');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            state.gigiSettings = data;
-            updateGigiToggles();
-            updateGigiStatus();
-        } catch (error) {
-            console.error('Failed to fetch Gigi settings:', error);
-        }
-    }
-
-    // Toggle a Gigi setting
-    window.toggleGigiSetting = async function(setting, enabled) {
-        const toggle = document.getElementById(`gigi-${setting.replace('_', '-')}`);
-        const originalState = toggle ? toggle.checked : !enabled;
-
-        try {
-            const response = await fetch('/api/gigi/settings', {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ [setting]: enabled }),
-            });
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-            const data = await response.json();
-            state.gigiSettings = data.settings;
-
-            // Show success notification
-            showNotification(`Gigi ${setting.replace('_', ' ')} ${enabled ? 'enabled' : 'disabled'}`, 'success');
-            updateGigiStatus();
-        } catch (error) {
-            console.error('Failed to update Gigi setting:', error);
-            // Revert toggle on error
-            if (toggle) toggle.checked = originalState;
-            showNotification('Failed to update setting', 'error');
-        }
-    };
-
-    // Update toggle states from current settings
-    function updateGigiToggles() {
-        const smsToggle = document.getElementById('toggle-sms-autoreply');
-        const opsToggle = document.getElementById('toggle-ops-sms');
-
-        if (smsToggle) smsToggle.checked = state.gigiSettings.sms_autoreply;
-        if (opsToggle) opsToggle.checked = state.gigiSettings.operations_sms;
-    }
-
-    // Update Gigi status displays
-    function updateGigiStatus() {
-        // Update status indicator
-        const statusIndicator = document.getElementById('gigi-status-indicator');
-        const statusText = document.getElementById('gigi-status-text');
-
-        const anyEnabled = state.gigiSettings.sms_autoreply || state.gigiSettings.operations_sms;
-
-        if (statusIndicator) {
-            statusIndicator.classList.toggle('online', anyEnabled);
-            statusIndicator.classList.toggle('offline', !anyEnabled);
-        }
-        if (statusText) {
-            statusText.textContent = anyEnabled ? 'Active' : 'Disabled';
-        }
-
-        // Update WellSky status
-        const wellskyStatus = document.getElementById('wellsky-status');
-        const wellskyApiStatus = document.getElementById('wellsky-api-status');
-        if (wellskyStatus && state.gigiSettings) {
-            if (state.gigiSettings.wellsky_connected) {
-                wellskyStatus.classList.add('online');
-                wellskyStatus.classList.remove('partial', 'offline');
-                wellskyStatus.querySelector('span:last-child').textContent = 'Connected';
-                if (wellskyApiStatus) wellskyApiStatus.textContent = 'Live WellSky API connection';
-            } else {
-                wellskyStatus.classList.add('partial');
-                wellskyStatus.classList.remove('online', 'offline');
-                wellskyStatus.querySelector('span:last-child').textContent = 'Mock Mode';
-                if (wellskyApiStatus) wellskyApiStatus.textContent = 'Using mock data for testing';
-            }
-        }
-    }
-
-    // Fetch Gigi activity log
-    async function fetchGigiActivity() {
-        try {
-            const response = await fetch('/api/gigi/activity?limit=10');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            state.gigiActivity = data.activities || [];
-            updateGigiActivityTable();
-        } catch (error) {
-            console.error('Failed to fetch Gigi activity:', error);
-        }
-    }
-
-    // Update Gigi activity log
-    function updateGigiActivityTable() {
-        const activityLog = document.getElementById('gigi-activity-log');
-        if (!activityLog) return;
-
-        if (state.gigiActivity.length === 0) {
-            activityLog.innerHTML = '<div class="empty-state"><div class="icon">📭</div>No recent activity</div>';
-            return;
-        }
-
-        activityLog.innerHTML = state.gigiActivity.map((activity) => {
-            const typeIcon = getActivityIcon(activity.type);
-            const statusClass = activity.status === 'success' ? 'success' : activity.status === 'failed' ? 'error' : 'warning';
-            return `
-                <div class="activity-item">
-                    <div class="activity-icon">${typeIcon}</div>
-                    <div class="activity-content">
-                        <div class="activity-title">${escapeHtml(activity.type.replace('_', ' '))}</div>
-                        <div class="activity-desc">${escapeHtml(activity.description)}</div>
-                    </div>
-                    <div class="activity-meta">
-                        <span class="status-badge status-${statusClass}">${activity.status}</span>
-                        <span class="activity-time">${formatDateTime(activity.timestamp)}</span>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    // Fetch call-out log
     async function fetchCallOuts() {
         try {
             const response = await fetch('/api/gigi/callouts?limit=20');
@@ -546,10 +423,12 @@
             updateCallOutsTable();
         } catch (error) {
             console.error('Failed to fetch call-outs:', error);
+            // Show empty state on error
+            const tbody = document.getElementById('callouts-table-body');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">✅</div>No recent call-outs</td></tr>';
         }
     }
 
-    // Update call-outs table
     function updateCallOutsTable() {
         const tbody = document.getElementById('callouts-table-body');
         if (!tbody) return;
@@ -575,19 +454,68 @@
         }).join('');
     }
 
-    // Helper functions for Gigi
-    function getActivityIcon(type) {
-        const icons = {
-            'sms_received': '📨',
-            'sms_sent': '📤',
-            'voice_call': '📞',
-            'callout': '🚨',
-            'clock_in': '🟢',
-            'clock_out': '🔴',
-            'shift_update': '📋',
-            'error': '⚠️',
-        };
-        return icons[type] || '📝';
+    // Update WellSky connection banner
+    function updateWellSkyBanner() {
+        const banner = document.getElementById('wellskyBanner');
+        if (!banner || !state.summary) return;
+
+        if (state.summary.wellsky_connected) {
+            banner.classList.add('connected');
+            banner.innerHTML = `
+                <span class="icon">✅</span>
+                <span class="text">Connected to WellSky - Live data</span>
+            `;
+        } else {
+            banner.classList.remove('connected');
+            banner.innerHTML = `
+                <span class="icon">⏳</span>
+                <span class="text">Using mock data - WellSky API not connected</span>
+            `;
+        }
+    }
+
+    // Load hours breakdown data
+    async function loadHoursBreakdown() {
+        try {
+            const data = await fetchAPI('/hours-breakdown');
+            if (!data) return;
+
+            if (data.weekly) {
+                setKPI('weekly-total-hours', data.weekly.total_hours || 0);
+                setKPI('weekly-shifts', data.weekly.shifts || 0);
+                setKPI('weekly-clients', data.weekly.clients || 0);
+                setKPI('weekly-avg-client', data.weekly.avg_per_client ? `${data.weekly.avg_per_client} hrs` : '--');
+            }
+            if (data.monthly) {
+                setKPI('monthly-total-hours', data.monthly.total_hours || 0);
+                setKPI('monthly-shifts', data.monthly.shifts || 0);
+                setKPI('monthly-clients', data.monthly.clients || 0);
+                setKPI('monthly-avg-client', data.monthly.avg_per_client ? `${data.monthly.avg_per_client} hrs` : '--');
+            }
+            if (data.quarterly) {
+                setKPI('quarterly-total-hours', data.quarterly.total_hours || 0);
+                setKPI('quarterly-shifts', data.quarterly.shifts || 0);
+                setKPI('quarterly-clients', data.quarterly.clients || 0);
+                setKPI('quarterly-avg-client', data.quarterly.avg_per_client ? `${data.quarterly.avg_per_client} hrs` : '--');
+            }
+        } catch (error) {
+            console.error('Failed to load hours breakdown:', error);
+        }
+    }
+
+    // Helper functions
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatDate(dateStr) {
+        if (!dateStr) return '--';
+        const date = new Date(dateStr);
+        if (isNaN(date.getTime())) return dateStr;
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
 
     function formatDateTime(dateStr) {
@@ -595,83 +523,30 @@
         const date = new Date(dateStr);
         if (isNaN(date.getTime())) return dateStr;
         return date.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
+            month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true
         });
     }
 
-    function showNotification(message, type = 'info') {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.innerHTML = `
-            <span class="notification-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
-            <span class="notification-message">${escapeHtml(message)}</span>
-        `;
-
-        // Add to page
-        document.body.appendChild(notification);
-
-        // Animate in
-        setTimeout(() => notification.classList.add('show'), 10);
-
-        // Remove after delay
-        setTimeout(() => {
-            notification.classList.remove('show');
-            setTimeout(() => notification.remove(), 300);
-        }, 3000);
+    function getRiskClass(score) {
+        if (!score) return 'risk-low';
+        if (score >= 50) return 'risk-high';
+        if (score >= 25) return 'risk-medium';
+        return 'risk-low';
     }
 
-    // Global Gigi refresh functions
-    window.refreshGigiActivity = function() {
-        fetchGigiActivity();
-    };
-
-    window.refreshCallOuts = function() {
-        fetchCallOuts();
-    };
-
-    // Load Gigi data when tab is activated
-    function loadGigiData() {
-        fetchGigiSettings();
-        fetchGigiActivity();
+    function getStatusClass(status) {
+        if (!status) return 'active';
+        const s = status.toLowerCase();
+        if (s === 'active') return 'active';
+        if (s === 'on hold' || s === 'on_hold') return 'info';
+        if (s === 'at risk' || s === 'at_risk') return 'danger';
+        if (s === 'pending') return 'warning';
+        return 'active';
     }
 
-    function loadCallOutData() {
-        fetchCallOuts();
-    }
-
-    // Extend tab navigation to load data on tab switch
-    const originalInitTabNavigation = initTabNavigation;
-    initTabNavigation = function() {
-        const sidebarLinks = Array.from(document.querySelectorAll('.sidebar-link'));
-        const tabSections = Array.from(document.querySelectorAll('.tab-content'));
-
-        sidebarLinks.forEach((link) => {
-            link.addEventListener('click', (event) => {
-                event.preventDefault();
-                const tabId = link.getAttribute('data-tab');
-                if (!tabId) return;
-
-                // Update active states
-                sidebarLinks.forEach((l) => l.classList.remove('active'));
-                link.classList.add('active');
-
-                // Show corresponding tab
-                tabSections.forEach((section) => {
-                    section.classList.toggle('active', section.id === `tab-${tabId}`);
-                });
-
-                // Load data for specific tabs
-                if (tabId === 'gigi') {
-                    loadGigiData();
-                } else if (tabId === 'callouts') {
-                    loadCallOutData();
-                }
-            });
-        });
-    };
+    // Global functions
+    window.refreshData = function () { fetchAllData(); };
+    window.loadHoursBreakdown = loadHoursBreakdown;
+    window.refreshCallOuts = function() { fetchCallOuts(); };
 })();

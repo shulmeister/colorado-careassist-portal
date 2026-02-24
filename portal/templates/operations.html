@@ -764,6 +764,74 @@
             background: rgba(239, 68, 68, 0.15);
             color: #f87171;
         }
+
+        /* Client expandable detail row */
+        .client-detail-row td {
+            padding: 0 !important;
+            border-bottom: 1px solid #334155;
+        }
+
+        .client-detail {
+            padding: 16px 24px;
+            background: #0f172a;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .detail-block {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 12px;
+        }
+
+        .detail-block-title {
+            font-size: 10px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .detail-block-content {
+            font-size: 13px;
+            color: #e5e7eb;
+            line-height: 1.6;
+        }
+
+        .caregiver-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 4px;
+            font-size: 11px;
+            color: #93c5fd;
+            margin: 2px 4px 2px 0;
+        }
+
+        .expand-btn {
+            background: none;
+            border: none;
+            color: #64748b;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 4px;
+            transition: transform 0.2s;
+        }
+
+        .expand-btn.expanded {
+            transform: rotate(90deg);
+        }
+
+        .data-table th[style*="cursor"] { user-select: none; }
+        .data-table th[style*="cursor"]:hover { color: #f8fafc; }
+
+        .profit-positive { color: #22c55e; }
+        .profit-negative { color: #ef4444; }
+        .profit-neutral { color: #94a3b8; }
     </style>
 </head>
 <body>
@@ -783,21 +851,8 @@
                 <a class="sidebar-link" data-tab="clients">
                     <span class="icon">👥</span> Clients
                 </a>
-                <a class="sidebar-link" data-tab="care-plans">
-                    <span class="icon">📋</span> Care Plans
-                </a>
                 <a class="sidebar-link" data-tab="shifts">
                     <span class="icon">📅</span> Shifts & Coverage
-                </a>
-                <a class="sidebar-link" data-tab="at-risk">
-                    <span class="icon">⚠️</span> At-Risk Clients
-                </a>
-                <div class="sidebar-divider"></div>
-                <a class="sidebar-link" data-tab="gigi">
-                    <span class="icon">🤖</span> Gigi AI Agent
-                </a>
-                <a class="sidebar-link" data-tab="callouts">
-                    <span class="icon">📞</span> Call-Out Log
                 </a>
             </nav>
         </aside>
@@ -837,12 +892,14 @@
                         <div class="kpi-value" id="kpi-open-shifts">--</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">EVV Compliance</div>
-                        <div class="kpi-value" id="kpi-evv-rate">--%</div>
+                        <div class="kpi-label">Weekly Hours</div>
+                        <div class="kpi-value" id="kpi-weekly-hours">--</div>
+                        <div class="kpi-change" id="kpi-hours-goal">-- % of 10k goal</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Plans Due Review</div>
-                        <div class="kpi-value" id="kpi-plans-due">--</div>
+                        <div class="kpi-label">Profit / Hour</div>
+                        <div class="kpi-value positive" id="kpi-profit-per-hour">--</div>
+                        <div class="kpi-change" id="kpi-profit-pct">-- % margin</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">At-Risk Clients</div>
@@ -850,49 +907,66 @@
                     </div>
                 </div>
 
+                <!-- Profitability Section -->
+                <div class="data-section" style="margin-bottom: 20px;">
+                    <div class="section-header">
+                        <span class="section-title">Hourly Profitability (MTD)</span>
+                    </div>
+                    <div style="padding: 16px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Revenue / Hour</div>
+                                <div class="kpi-value" id="kpi-revenue-per-hour">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Payroll / Hour</div>
+                                <div class="kpi-value" id="kpi-payroll-per-hour">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Profit / Hour</div>
+                                <div class="kpi-value positive" id="kpi-profit-per-hour-detail">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Gross Billing MTD</div>
+                                <div class="kpi-value" id="kpi-billing-mtd">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Payroll MTD</div>
+                                <div class="kpi-value" id="kpi-payroll-mtd">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Profit MTD</div>
+                                <div class="kpi-value positive" id="kpi-profit-mtd">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Hours Breakdown Section -->
                 <div class="data-section" style="margin-bottom: 20px;">
                     <div class="section-header">
-                        <span class="section-title">📊 Hours Tracking - Billing & Payroll</span>
-                        <button class="btn btn-secondary" onclick="loadHoursBreakdown()">↻ Refresh</button>
-                    </div>
-
-                    <!-- Info banner for WellSky data access -->
-                    <div style="margin: 16px; padding: 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">ℹ️</span>
-                            <div style="flex: 1;">
-                                <div style="font-size: 13px; font-weight: 600; color: #93c5fd; margin-bottom: 4px;">
-                                    Hours Data Configuration
-                                </div>
-                                <div style="font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                                    Currently accessing WellSky FHIR appointments API. If no data appears, hours may be available through WellSky Analytics/Reporting API.
-                                    The screenshots you provided show WellSky has analytics data - we may need to access it through a different endpoint.
-                                </div>
-                            </div>
-                        </div>
+                        <span class="section-title">Hours Tracking (Scheduled Shifts)</span>
+                        <button class="btn btn-secondary" onclick="loadHoursBreakdown()">Refresh</button>
                     </div>
 
                     <div style="padding: 20px;">
                         <!-- Weekly Hours -->
                         <div style="margin-bottom: 24px;">
                             <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-                                📅 Last 7 Days
+                                Last 7 Days
                             </h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-label">Scheduled Hours</div>
                                     <div class="kpi-value" id="weekly-total-hours">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Billing Hours</div>
-                                    <div class="kpi-value" id="weekly-billing-total">--</div>
-                                    <div class="kpi-change" id="weekly-billing-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Shifts</div>
+                                    <div class="kpi-value" id="weekly-shifts">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Payroll Hours</div>
-                                    <div class="kpi-value" id="weekly-payroll-total">--</div>
-                                    <div class="kpi-change" id="weekly-payroll-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Clients Served</div>
+                                    <div class="kpi-value" id="weekly-clients">--</div>
                                 </div>
                                 <div class="kpi-card">
                                     <div class="kpi-label">Avg Per Client</div>
@@ -904,22 +978,20 @@
                         <!-- Monthly Hours -->
                         <div style="margin-bottom: 24px;">
                             <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-                                📆 Last 30 Days
+                                Last 30 Days
                             </h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-label">Scheduled Hours</div>
                                     <div class="kpi-value" id="monthly-total-hours">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Billing Hours</div>
-                                    <div class="kpi-value" id="monthly-billing-total">--</div>
-                                    <div class="kpi-change" id="monthly-billing-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Shifts</div>
+                                    <div class="kpi-value" id="monthly-shifts">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Payroll Hours</div>
-                                    <div class="kpi-value" id="monthly-payroll-total">--</div>
-                                    <div class="kpi-change" id="monthly-payroll-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Clients Served</div>
+                                    <div class="kpi-value" id="monthly-clients">--</div>
                                 </div>
                                 <div class="kpi-card">
                                     <div class="kpi-label">Avg Per Client</div>
@@ -931,22 +1003,20 @@
                         <!-- Quarterly Hours -->
                         <div>
                             <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-                                📈 Last 90 Days (Quarterly)
+                                Last 90 Days
                             </h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-label">Scheduled Hours</div>
                                     <div class="kpi-value" id="quarterly-total-hours">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Billing Hours</div>
-                                    <div class="kpi-value" id="quarterly-billing-total">--</div>
-                                    <div class="kpi-change" id="quarterly-billing-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Shifts</div>
+                                    <div class="kpi-value" id="quarterly-shifts">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Payroll Hours</div>
-                                    <div class="kpi-value" id="quarterly-payroll-total">--</div>
-                                    <div class="kpi-change" id="quarterly-payroll-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Clients Served</div>
+                                    <div class="kpi-value" id="quarterly-clients">--</div>
                                 </div>
                                 <div class="kpi-card">
                                     <div class="kpi-label">Avg Per Client</div>
@@ -978,49 +1048,32 @@
                 <div class="data-section">
                     <div class="section-header">
                         <span class="section-title">Active Clients</span>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="text" id="client-search" placeholder="Search clients..." style="background: #0f172a; border: 1px solid #475569; border-radius: 6px; padding: 6px 12px; color: #e5e7eb; font-size: 12px; width: 200px;" oninput="filterClients(this.value)">
+                        </div>
                     </div>
-                    <table class="data-table">
+                    <table class="data-table" id="clients-table">
                         <thead>
                             <tr>
-                                <th>Client Name</th>
-                                <th>Status</th>
-                                <th>Hours/Week</th>
-                                <th>Payer</th>
-                                <th>Risk Score</th>
-                                <th>Last Visit</th>
+                                <th style="width: 30px;"></th>
+                                <th style="cursor:pointer" onclick="sortClients('name')">Client Name</th>
+                                <th style="cursor:pointer" onclick="sortClients('status')">Status</th>
+                                <th style="cursor:pointer" onclick="sortClients('hours')">Hours/Week</th>
+                                <th style="cursor:pointer" onclick="sortClients('profitability')">Profit %</th>
+                                <th style="cursor:pointer" onclick="sortClients('mv_date')">MV Date</th>
+                                <th style="cursor:pointer" onclick="sortClients('care_plan_review')">Care Plan Review</th>
+                                <th style="cursor:pointer" onclick="sortClients('last_visit')">Last Visit</th>
+                                <th style="cursor:pointer" onclick="sortClients('risk')">Risk</th>
                             </tr>
                         </thead>
                         <tbody id="clients-table-body">
-                            <tr><td colspan="6" class="loading"><div class="spinner"></div> Loading clients...</td></tr>
+                            <tr><td colspan="9" class="loading"><div class="spinner"></div> Loading clients...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <!-- Care Plans Tab -->
-            <div class="tab-content" id="tab-care-plans">
-                <div class="data-section">
-                    <div class="section-header">
-                        <span class="section-title">Care Plans Due for Review</span>
-                    </div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Client</th>
-                                <th>Plan Status</th>
-                                <th>Review Date</th>
-                                <th>Days Until Review</th>
-                                <th>Authorized Hours</th>
-                            </tr>
-                        </thead>
-                        <tbody id="care-plans-table-body">
-                            <tr><td colspan="5" class="loading"><div class="spinner"></div> Loading care plans...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Shifts Tab -->
+            <!-- Shifts & Coverage Tab -->
             <div class="tab-content" id="tab-shifts">
                 <div class="data-section">
                     <div class="section-header">
@@ -1042,177 +1095,26 @@
                         </tbody>
                     </table>
                 </div>
-            </div>
 
-            <!-- At-Risk Tab -->
-            <div class="tab-content" id="tab-at-risk">
-                <div class="data-section">
+                <!-- Call-Out Log (merged into Shifts tab) -->
+                <div class="data-section" style="margin-top: 16px;">
                     <div class="section-header">
-                        <span class="section-title">At-Risk Clients (Score > 40)</span>
-                    </div>
-                    <table class="data-table">
-                        <thead>
-                            <tr>
-                                <th>Client</th>
-                                <th>Risk Score</th>
-                                <th>Primary Factors</th>
-                                <th>Recommendations</th>
-                            </tr>
-                        </thead>
-                        <tbody id="at-risk-table-body">
-                            <tr><td colspan="4" class="loading"><div class="spinner"></div> Loading at-risk clients...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Gigi AI Agent Tab -->
-            <div class="tab-content" id="tab-gigi">
-                <!-- Gigi Status Banner -->
-                <div class="gigi-status-banner">
-                    <div class="gigi-avatar">🤖</div>
-                    <div class="gigi-info">
-                        <div class="gigi-name">Gigi - After-Hours AI Agent</div>
-                        <div class="gigi-desc">Handles caregiver call-outs, client inquiries, and SMS automation</div>
-                    </div>
-                    <div class="status-indicator" id="gigi-status-indicator">
-                        <span class="status-dot"></span>
-                        <span id="gigi-status-text">Loading...</span>
-                    </div>
-                </div>
-
-                <!-- Control Panels -->
-                <div class="control-panel">
-                    <!-- SMS Auto-Reply Control -->
-                    <div class="control-card highlight">
-                        <div class="control-card-header">
-                            <div class="control-card-title">
-                                <span class="icon">💬</span> SMS Auto-Reply
-                            </div>
-                        </div>
-                        <div class="control-card-desc">
-                            When enabled, Gigi automatically replies to inbound SMS messages with AI-generated responses.
-                        </div>
-                        <div class="control-row">
-                            <div class="control-label">
-                                <span class="control-label-title">Enable Auto-Reply</span>
-                                <span class="control-label-desc">Responds to all inbound texts via RingCentral</span>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="toggle-sms-autoreply" onchange="toggleGigiSetting('sms_autoreply', this.checked)">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Operations SMS Control -->
-                    <div class="control-card highlight">
-                        <div class="control-card-header">
-                            <div class="control-card-title">
-                                <span class="icon">📢</span> Call-Out Notifications
-                            </div>
-                        </div>
-                        <div class="control-card-desc">
-                            When enabled, Gigi sends SMS notifications when processing caregiver call-outs (manager alerts, replacement blasts).
-                        </div>
-                        <div class="control-row">
-                            <div class="control-label">
-                                <span class="control-label-title">Enable Operations SMS</span>
-                                <span class="control-label-desc">Sends SMS for call-outs and coverage alerts</span>
-                            </div>
-                            <label class="toggle-switch">
-                                <input type="checkbox" id="toggle-ops-sms" onchange="toggleGigiSetting('operations_sms', this.checked)">
-                                <span class="toggle-slider"></span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Voice Agent Status -->
-                    <div class="control-card">
-                        <div class="control-card-header">
-                            <div class="control-card-title">
-                                <span class="icon">📞</span> Voice Agent (Retell AI)
-                            </div>
-                            <div class="status-indicator online" id="retell-status">
-                                <span class="status-dot"></span>
-                                <span>Active</span>
-                            </div>
-                        </div>
-                        <div class="control-card-desc">
-                            Handles inbound calls on 719-428-3999 and 303-757-1777. Identifies callers, processes call-outs, and logs client issues.
-                        </div>
-                        <div class="control-row">
-                            <div class="control-label">
-                                <span class="control-label-title">Primary Line</span>
-                                <span class="control-label-desc">719-428-3999</span>
-                            </div>
-                            <span class="status-badge status-active">Active</span>
-                        </div>
-                        <div class="control-row">
-                            <div class="control-label">
-                                <span class="control-label-title">On-Call Manager Line</span>
-                                <span class="control-label-desc">303-757-1777</span>
-                            </div>
-                            <span class="status-badge status-active">Active</span>
-                        </div>
-                    </div>
-
-                    <!-- WellSky Integration -->
-                    <div class="control-card">
-                        <div class="control-card-header">
-                            <div class="control-card-title">
-                                <span class="icon">🔗</span> WellSky Integration
-                            </div>
-                            <div class="status-indicator partial" id="wellsky-status">
-                                <span class="status-dot"></span>
-                                <span>Mock Mode</span>
-                            </div>
-                        </div>
-                        <div class="control-card-desc">
-                            Enables Gigi to look up shifts, clock caregivers in/out, and process call-outs directly in the scheduling system.
-                        </div>
-                        <div class="control-row">
-                            <div class="control-label">
-                                <span class="control-label-title">API Status</span>
-                                <span class="control-label-desc" id="wellsky-api-status">Using mock data for testing</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Recent Activity -->
-                <div class="data-section">
-                    <div class="section-header">
-                        <span class="section-title">Recent Gigi Activity</span>
-                        <button class="btn btn-secondary" onclick="refreshGigiActivity()">↻ Refresh</button>
-                    </div>
-                    <div class="activity-log" id="gigi-activity-log">
-                        <div class="loading"><div class="spinner"></div> Loading activity...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Call-Out Log Tab -->
-            <div class="tab-content" id="tab-callouts">
-                <div class="data-section">
-                    <div class="section-header">
-                        <span class="section-title">Recent Call-Outs</span>
+                        <span class="section-title">Call-Out Log</span>
                         <button class="btn btn-secondary" onclick="refreshCallOuts()">↻ Refresh</button>
                     </div>
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Caregiver</th>
-                                <th>Client/Shift</th>
-                                <th>Reason</th>
-                                <th>Reported Via</th>
                                 <th>Time</th>
+                                <th>Caregiver</th>
+                                <th>Client</th>
+                                <th>Shift Date</th>
+                                <th>Reason</th>
                                 <th>Status</th>
                             </tr>
                         </thead>
                         <tbody id="callouts-table-body">
-                            <tr><td colspan="7" class="loading"><div class="spinner"></div> Loading call-outs...</td></tr>
+                            <tr><td colspan="6" class="loading"><div class="spinner"></div> Loading call-outs...</td></tr>
                         </tbody>
                     </table>
                 </div>
