@@ -160,7 +160,7 @@ logger = logging.getLogger("gigi_telegram")
 
 # Internal tool list (provider-agnostic) used by execute_tool
 TOOL_NAMES = [
-    "search_events", "search_concerts", "buy_tickets_request", "book_table_request", "explore_national_parks", "explore_art", "search_phish", "search_books",
+    "search_events", "search_concerts", "buy_tickets_request", "book_table_request", "explore_national_parks", "explore_art", "search_phish", "search_books", "search_nytimes",
     "get_client_current_status", "get_calendar_events", "search_emails",
     "get_weather", "get_wellsky_clients", "get_wellsky_caregivers",
     "get_wellsky_shifts", "web_search", "get_stock_price", "get_crypto_price",
@@ -194,6 +194,7 @@ ANTHROPIC_TOOLS = [
     {"name": "explore_art", "description": "Search and explore artworks from museums worldwide. Search by artist, style, period, type, or get a random artwork. Returns titles, images, dates, and descriptions.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'search' (find artworks), 'detail' (get full info by ID), or 'random' (surprise me)"}, "query": {"type": "string", "description": "Search text — artist name, style, subject (e.g. 'Monet', 'impressionism', 'landscape')"}, "artwork_id": {"type": "integer", "description": "Artwork ID (for detail action)"}, "art_type": {"type": "string", "description": "Filter: painting, sculpture, drawing, photograph, print, textile, ceramic, etc."}, "origin": {"type": "string", "description": "Country or region (e.g. 'France', 'Japan', 'Italy')"}, "material": {"type": "string", "description": "Material filter (e.g. 'canvas', 'bronze', 'oil_paint', 'marble')"}, "earliest_year": {"type": "integer", "description": "Earliest creation year"}, "latest_year": {"type": "integer", "description": "Latest creation year"}, "limit": {"type": "integer", "description": "Max results 1-10 (default 5)"}}, "required": ["action"]}},
     {"name": "search_phish", "description": "Search the Phish.in archive — shows, setlists, songs, tours, venues with audio recordings. Get setlists for any date, look up how many times a song was played, find recent shows, or browse tours/venues.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'shows' (recent/all shows), 'show' (specific date setlist+tracks), 'song' (song stats), 'songs' (browse songs), 'tours', or 'venues'"}, "date": {"type": "string", "description": "Show date YYYY-MM-DD (for 'show' action)"}, "query": {"type": "string", "description": "Song name or search text"}, "song_slug": {"type": "string", "description": "Song slug (e.g. 'tweezer', 'you-enjoy-myself')"}, "limit": {"type": "integer", "description": "Max results (default 5)"}}, "required": ["action"]}},
     {"name": "search_books", "description": "Search Google Books for book recommendations, reviews, and details. Find books by title, author, subject, or ISBN. Get ratings, descriptions, page counts, and preview links.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'search' (find books) or 'detail' (full info by book ID)"}, "query": {"type": "string", "description": "Search text — title, topic, keywords (e.g. 'best sci-fi novels', 'leadership books')"}, "author": {"type": "string", "description": "Filter by author name"}, "subject": {"type": "string", "description": "Filter by subject/category (e.g. 'fiction', 'business', 'history')"}, "isbn": {"type": "string", "description": "Search by ISBN"}, "book_id": {"type": "string", "description": "Google Books volume ID (for detail action)"}, "filter_type": {"type": "string", "description": "'ebooks', 'free-ebooks', or 'paid-ebooks'"}, "limit": {"type": "integer", "description": "Max results 1-20 (default 5)"}}, "required": ["action"]}},
+    {"name": "search_nytimes", "description": "Search the New York Times — top stories, article search, best sellers, and most popular articles. Great for current news, market-moving stories, book recommendations, and trending topics.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'top_stories' (today's top news), 'search' (find articles by keyword), 'best_sellers' (NYT best seller list), 'best_seller_lists' (browse available lists), 'most_popular' (most viewed/emailed/shared)"}, "query": {"type": "string", "description": "Search keywords (for 'search' action) or popularity type: 'viewed'/'emailed'/'shared' (for 'most_popular')"}, "section": {"type": "string", "description": "News section for top_stories: home, world, us, politics, business, technology, science, health, sports, arts, books, opinion, travel, food"}, "period": {"type": "integer", "description": "Time period for most_popular: 1, 7, or 30 days"}, "begin_date": {"type": "string", "description": "Start date YYYY-MM-DD (for search)"}, "end_date": {"type": "string", "description": "End date YYYY-MM-DD (for search)"}, "list_name": {"type": "string", "description": "Best seller list slug: hardcover-fiction, hardcover-nonfiction, paperback-nonfiction, young-adult-hardcover, etc."}, "limit": {"type": "integer", "description": "Max results (default 5)"}}, "required": ["action"]}},
     {"name": "get_client_current_status", "description": "Check who is with a client right now.", "input_schema": {"type": "object", "properties": {"client_name": {"type": "string", "description": "Name of the client"}}, "required": ["client_name"]}},
     {"name": "get_calendar_events", "description": "Get upcoming calendar events.", "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "description": "Days to look ahead (1-7)"}}, "required": []}},
     {"name": "search_emails", "description": "Search Jason's Gmail.", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "max_results": {"type": "integer"}}, "required": []}},
@@ -774,6 +775,21 @@ class GigiTelegramBot:
                     subject=tool_input.get("subject"),
                     isbn=tool_input.get("isbn"),
                     filter_type=tool_input.get("filter_type"),
+                    limit=tool_input.get("limit", 5),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "search_nytimes":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                result = await cos_tools.search_nytimes(
+                    action=tool_input.get("action", "top_stories"),
+                    query=tool_input.get("query"),
+                    section=tool_input.get("section", "home"),
+                    period=tool_input.get("period", 1),
+                    begin_date=tool_input.get("begin_date"),
+                    end_date=tool_input.get("end_date"),
+                    list_name=tool_input.get("list_name"),
                     limit=tool_input.get("limit", 5),
                 )
                 return json.dumps(result)
