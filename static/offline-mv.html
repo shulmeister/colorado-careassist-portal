@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="/static/mv-manifest.json">
+<link rel="apple-touch-icon" href="/static/mv-icon-192.svg">
+<title>CCA Monitoring Visit</title>
+<style>
+:root { --bg:#0f172a; --card:#1e293b; --border:#334155; --text:#f1f5f9; --muted:#94a3b8; --accent:#3b82f6; --green:#22c55e; --red:#ef4444; --orange:#f97316; --yellow:#eab308; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px}
+.header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+.header h1{font-size:16px;font-weight:600}
+.status{font-size:11px;padding:3px 8px;border-radius:10px;font-weight:600}
+.status.offline{background:rgba(249,115,22,.15);color:var(--orange)}
+.status.online{background:rgba(34,197,94,.15);color:var(--green)}
+.container{max-width:800px;margin:0 auto;padding:16px 12px}
+.nav{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.nav button{flex:1;min-width:80px;padding:10px 4px;background:0 0;border:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:.2s}
+.nav button.active{background:var(--accent);color:#fff}
+.tab{display:none}.tab.active{display:block}
+.section{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px}
+.section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title.green{color:var(--green)}
+.section-title.orange{color:var(--orange)}
+.section-title.yellow{color:var(--yellow)}
+.row{display:grid;gap:10px;margin-bottom:10px}
+.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:1fr 1fr 1fr}.c4{grid-template-columns:1fr 1fr 1fr 1fr}
+@media(max-width:600px){.c2,.c3,.c4{grid-template-columns:1fr}}
+.fg{display:flex;flex-direction:column}
+.fg label{font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.fg input,.fg select,.fg textarea{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:14px;font-family:inherit;transition:border .2s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--accent)}
+.fg textarea{resize:vertical;min-height:60px}
+.fg select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%2394a3b8' d='M5 7L0 2h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.chk-row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px}
+.chk{display:flex;align-items:center;gap:5px}
+.chk input[type=checkbox],.chk input[type=radio]{width:16px;height:16px;accent-color:var(--accent)}
+.chk label{font-size:13px;color:var(--text);text-transform:none}
+.btn{padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:transparent;color:var(--red);border:1px solid var(--red)}
+.btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-sm{padding:5px 12px;font-size:11px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.saved-item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.saved-item .info{flex:1}.saved-item .name{font-weight:600;font-size:14px}.saved-item .meta{font-size:11px;color:var(--muted);margin-top:2px}
+.saved-item .btns{display:flex;gap:6px}
+.badge{font-size:10px;padding:2px 6px;border-radius:6px;font-weight:600}
+.badge.synced{background:rgba(34,197,94,.15);color:var(--green)}
+.badge.pending{background:rgba(249,115,22,.15);color:var(--orange)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;z-index:1000;display:none;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+.install-banner{background:var(--card);border:1px solid var(--accent);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:none;align-items:center;justify-content:space-between}
+.install-banner.show{display:flex}
+.install-banner span{font-size:13px;color:var(--text)}
+
+/* Rating row styles */
+.rating-row{margin-bottom:12px}
+.rating-label{font-size:13px;font-weight:600;color:var(--text);margin-bottom:6px}
+.rating-options{display:flex;flex-wrap:wrap;gap:6px 14px}
+.rating-options label{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);cursor:pointer}
+.rating-options input[type=radio]{width:14px;height:14px;accent-color:var(--accent)}
+@media(max-width:600px){.rating-options{flex-direction:column;gap:8px}.rating-options label{font-size:13px}}
+
+/* Collapsible second caregiver */
+.cg2-section{display:none}
+.cg2-section.open{display:block}
+.toggle-cg2{margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>CCA Monitoring Visit</h1>
+    <span class="status" id="conn">...</span>
+</div>
+<div class="container">
+    <div class="install-banner" id="install-banner">
+        <span>Install for offline use</span>
+        <button class="btn btn-primary btn-sm" id="install-btn">Install</button>
+    </div>
+    <div class="nav" id="main-nav">
+        <button class="active" onclick="go('form')">New</button>
+        <button onclick="go('saved')">Saved <span id="cnt"></span></button>
+    </div>
+
+    <!-- ========== NEW MONITORING VISIT TAB ========== -->
+    <div class="tab active" id="tab-form">
+
+        <!-- Client Info Section -->
+        <div class="section">
+            <div class="section-title">Client Information</div>
+            <div class="row c3">
+                <div class="fg"><label>Client Name *</label><input id="client_name" required></div>
+                <div class="fg"><label>Visit Date</label><input type="date" id="visit_date"></div>
+                <div class="fg"><label>Submitted By</label><input id="submitted_by" value="Jason Shulman"></div>
+            </div>
+            <input type="hidden" id="client_id" value="">
+        </div>
+
+        <!-- Section A-D: Care Plan Compliance -->
+        <div class="section">
+            <div class="section-title green">Care Plan Compliance</div>
+
+            <div style="margin-bottom:14px">
+                <div class="rating-label">A. Is the care plan being followed?</div>
+                <div class="chk-row">
+                    <div class="chk"><input type="radio" name="care_plan_followed" id="cpf_yes" value="Yes"><label for="cpf_yes">Yes</label></div>
+                    <div class="chk"><input type="radio" name="care_plan_followed" id="cpf_no" value="No"><label for="cpf_no">No</label></div>
+                    <div class="chk"><input type="radio" name="care_plan_followed" id="cpf_partial" value="Partially"><label for="cpf_partial">Partially</label></div>
+                </div>
+            </div>
+
+            <div class="fg" style="margin-bottom:14px">
+                <label>B. Comments about care plan compliance</label>
+                <textarea id="care_plan_comments" rows="3"></textarea>
+            </div>
+
+            <div style="margin-bottom:14px">
+                <div class="rating-label">C. Is the client satisfied with services?</div>
+                <div class="chk-row">
+                    <div class="chk"><input type="radio" name="client_satisfied" id="cs_yes" value="Yes"><label for="cs_yes">Yes</label></div>
+                    <div class="chk"><input type="radio" name="client_satisfied" id="cs_no" value="No"><label for="cs_no">No</label></div>
+                    <div class="chk"><input type="radio" name="client_satisfied" id="cs_partial" value="Partially"><label for="cs_partial">Partially</label></div>
+                </div>
+            </div>
+
+            <div class="fg">
+                <label>D. Comments about satisfaction</label>
+                <textarea id="satisfaction_comments" rows="3"></textarea>
+            </div>
+        </div>
+
+        <!-- Section E-K: Primary Caregiver -->
+        <div class="section">
+            <div class="section-title orange">Primary Caregiver</div>
+            <div class="fg" style="margin-bottom:14px">
+                <label>Caregiver Name</label>
+                <input id="caregiver1_name">
+            </div>
+
+            <div class="rating-row">
+                <div class="rating-label">E. Companionship</div>
+                <div class="rating-options">
+                    <label><input type="radio" name="caregiver1_companionship" value="Outstanding"> Outstanding</label>
+                    <label><input type="radio" name="caregiver1_companionship" value="Very Good"> Very Good</label>
+                    <label><input type="radio" name="caregiver1_companionship" value="Satisfactory"> Satisfactory</label>
+                    <label><input type="radio" name="caregiver1_companionship" value="Below Average"> Below Average</label>
+                    <label><input type="radio" name="caregiver1_companionship" value="Bad or N/A"> Bad / N/A</label>
+                </div>
+            </div>
+
+            <div class="rating-row">
+                <div class="rating-label">F. Housekeeping</div>
+                <div class="rating-options">
+                    <label><input type="radio" name="caregiver1_housekeeping" value="Outstanding"> Outstanding</label>
+                    <label><input type="radio" name="caregiver1_housekeeping" value="Very Good"> Very Good</label>
+                    <label><input type="radio" name="caregiver1_housekeeping" value="Satisfactory"> Satisfactory</label>
+                    <label><input type="radio" name="caregiver1_housekeeping" value="Below Average"> Below Average</label>
+                    <label><input type="radio" name="caregiver1_housekeeping" value="Bad or N/A"> Bad / N/A</label>
+                </div>
+            </div>
+
+            <div class="rating-row">
+                <div class="rating-label">G. Meal Preparation</div>
+                <div class="rating-options">
+                    <label><input type="radio" name="caregiver1_meal_prep" value="Outstanding"> Outstanding</label>
+                    <label><input type="radio" name="caregiver1_meal_prep" value="Very Good"> Very Good</label>
+                    <label><input type="radio" name="caregiver1_meal_prep" value="Satisfactory"> Satisfactory</label>
+                    <label><input type="radio" name="caregiver1_meal_prep" value="Below Average"> Below Average</label>
+                    <label><input type="radio" name="caregiver1_meal_prep" value="Bad or N/A"> Bad / N/A</label>
+                </div>
+            </div>
+
+            <div class="rating-row">
+                <div class="rating-label">H. Personal Care</div>
+                <div class="rating-options">
+                    <label><input type="radio" name="caregiver1_personal_care" value="Outstanding"> Outstanding</label>
+                    <label><input type="radio" name="caregiver1_personal_care" value="Very Good"> Very Good</label>
+                    <label><input type="radio" name="caregiver1_personal_care" value="Satisfactory"> Satisfactory</label>
+                    <label><input type="radio" name="caregiver1_personal_care" value="Below Average"> Below Average</label>
+                    <label><input type="radio" name="caregiver1_personal_care" value="Bad or N/A"> Bad / N/A</label>
+                </div>
+            </div>
+
+            <div class="rating-row">
+                <div class="rating-label">I. Caring</div>
+                <div class="rating-options">
+                    <label><input type="radio" name="caregiver1_caring" value="Outstanding"> Outstanding</label>
+                    <label><input type="radio" name="caregiver1_caring" value="Very Good"> Very Good</label>
+                    <label><input type="radio" name="caregiver1_caring" value="Satisfactory"> Satisfactory</label>
+                    <label><input type="radio" name="caregiver1_caring" value="Below Average"> Below Average</label>
+                    <label><input type="radio" name="caregiver1_caring" value="Bad or N/A"> Bad / N/A</label>
+                </div>
+            </div>
+
+            <div class="rating-row">
+                <div class="rating-label">J. Professional</div>
+                <div class="rating-options">
+                    <label><input type="radio" name="caregiver1_professional" value="Outstanding"> Outstanding</label>
+                    <label><input type="radio" name="caregiver1_professional" value="Very Good"> Very Good</label>
+                    <label><input type="radio" name="caregiver1_professional" value="Satisfactory"> Satisfactory</label>
+                    <label><input type="radio" name="caregiver1_professional" value="Below Average"> Below Average</label>
+                    <label><input type="radio" name="caregiver1_professional" value="Bad or N/A"> Bad / N/A</label>
+                </div>
+            </div>
+
+            <div class="fg" style="margin-top:4px">
+                <label>K. Comments about primary caregiver</label>
+                <textarea id="caregiver1_comments" rows="3"></textarea>
+            </div>
+        </div>
+
+        <!-- Section L-R: Second Caregiver (collapsible) -->
+        <div class="toggle-cg2">
+            <button class="btn btn-outline" id="toggle-cg2-btn" onclick="toggleCg2()">Add Second Caregiver</button>
+        </div>
+
+        <div class="cg2-section" id="cg2-section">
+            <div class="section">
+                <div class="section-title orange">Second Caregiver</div>
+                <div class="fg" style="margin-bottom:14px">
+                    <label>Caregiver Name</label>
+                    <input id="caregiver2_name">
+                </div>
+
+                <div class="rating-row">
+                    <div class="rating-label">L. Companionship</div>
+                    <div class="rating-options">
+                        <label><input type="radio" name="caregiver2_companionship" value="Outstanding"> Outstanding</label>
+                        <label><input type="radio" name="caregiver2_companionship" value="Very Good"> Very Good</label>
+                        <label><input type="radio" name="caregiver2_companionship" value="Satisfactory"> Satisfactory</label>
+                        <label><input type="radio" name="caregiver2_companionship" value="Below Average"> Below Average</label>
+                        <label><input type="radio" name="caregiver2_companionship" value="Bad or N/A"> Bad / N/A</label>
+                    </div>
+                </div>
+
+                <div class="rating-row">
+                    <div class="rating-label">M. Housekeeping</div>
+                    <div class="rating-options">
+                        <label><input type="radio" name="caregiver2_housekeeping" value="Outstanding"> Outstanding</label>
+                        <label><input type="radio" name="caregiver2_housekeeping" value="Very Good"> Very Good</label>
+                        <label><input type="radio" name="caregiver2_housekeeping" value="Satisfactory"> Satisfactory</label>
+                        <label><input type="radio" name="caregiver2_housekeeping" value="Below Average"> Below Average</label>
+                        <label><input type="radio" name="caregiver2_housekeeping" value="Bad or N/A"> Bad / N/A</label>
+                    </div>
+                </div>
+
+                <div class="rating-row">
+                    <div class="rating-label">N. Meal Preparation</div>
+                    <div class="rating-options">
+                        <label><input type="radio" name="caregiver2_meal_prep" value="Outstanding"> Outstanding</label>
+                        <label><input type="radio" name="caregiver2_meal_prep" value="Very Good"> Very Good</label>
+                        <label><input type="radio" name="caregiver2_meal_prep" value="Satisfactory"> Satisfactory</label>
+                        <label><input type="radio" name="caregiver2_meal_prep" value="Below Average"> Below Average</label>
+                        <label><input type="radio" name="caregiver2_meal_prep" value="Bad or N/A"> Bad / N/A</label>
+                    </div>
+                </div>
+
+                <div class="rating-row">
+                    <div class="rating-label">O. Personal Care</div>
+                    <div class="rating-options">
+                        <label><input type="radio" name="caregiver2_personal_care" value="Outstanding"> Outstanding</label>
+                        <label><input type="radio" name="caregiver2_personal_care" value="Very Good"> Very Good</label>
+                        <label><input type="radio" name="caregiver2_personal_care" value="Satisfactory"> Satisfactory</label>
+                        <label><input type="radio" name="caregiver2_personal_care" value="Below Average"> Below Average</label>
+                        <label><input type="radio" name="caregiver2_personal_care" value="Bad or N/A"> Bad / N/A</label>
+                    </div>
+                </div>
+
+                <div class="rating-row">
+                    <div class="rating-label">P. Caring</div>
+                    <div class="rating-options">
+                        <label><input type="radio" name="caregiver2_caring" value="Outstanding"> Outstanding</label>
+                        <label><input type="radio" name="caregiver2_caring" value="Very Good"> Very Good</label>
+                        <label><input type="radio" name="caregiver2_caring" value="Satisfactory"> Satisfactory</label>
+                        <label><input type="radio" name="caregiver2_caring" value="Below Average"> Below Average</label>
+                        <label><input type="radio" name="caregiver2_caring" value="Bad or N/A"> Bad / N/A</label>
+                    </div>
+                </div>
+
+                <div class="rating-row">
+                    <div class="rating-label">Q. Professional</div>
+                    <div class="rating-options">
+                        <label><input type="radio" name="caregiver2_professional" value="Outstanding"> Outstanding</label>
+                        <label><input type="radio" name="caregiver2_professional" value="Very Good"> Very Good</label>
+                        <label><input type="radio" name="caregiver2_professional" value="Satisfactory"> Satisfactory</label>
+                        <label><input type="radio" name="caregiver2_professional" value="Below Average"> Below Average</label>
+                        <label><input type="radio" name="caregiver2_professional" value="Bad or N/A"> Bad / N/A</label>
+                    </div>
+                </div>
+
+                <div class="fg" style="margin-top:4px">
+                    <label>R. Comments about second caregiver</label>
+                    <textarea id="caregiver2_comments" rows="3"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <!-- Overall Comments -->
+        <div class="section">
+            <div class="section-title yellow">Overall</div>
+            <div class="fg">
+                <label>Overall comments / observations</label>
+                <textarea id="overall_comments" rows="4"></textarea>
+            </div>
+        </div>
+
+        <!-- Save / Clear buttons -->
+        <div class="actions">
+            <button class="btn btn-green" onclick="saveMV()">Save Monitoring Visit</button>
+            <button class="btn btn-outline" onclick="clearForm()">Clear All</button>
+        </div>
+    </div>
+
+    <!-- ========== SAVED TAB ========== -->
+    <div class="tab" id="tab-saved">
+        <div id="saved-list"></div>
+        <div class="actions" style="margin-top:12px">
+            <button class="btn btn-primary" onclick="syncAll()" id="sync-btn">Sync All to Portal</button>
+            <button class="btn btn-outline" onclick="exportAll()">Export JSON</button>
+        </div>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// === PWA Install ===
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+let deferredPrompt;
+if (!isStandalone) {
+    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; document.getElementById('install-banner').classList.add('show'); });
+    document.getElementById('install-btn').addEventListener('click', () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => { deferredPrompt = null; document.getElementById('install-banner').classList.remove('show'); });
+    });
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/static/mv-sw.js').catch(e => console.warn('SW:', e));
+
+// === Navigation ===
+function go(tab) {
+    document.querySelectorAll('#main-nav button').forEach((b,i) => b.classList.toggle('active', (i===0&&tab==='form')||(i===1&&tab==='saved')));
+    document.getElementById('tab-form').classList.toggle('active', tab==='form');
+    document.getElementById('tab-saved').classList.toggle('active', tab==='saved');
+    if (tab==='saved') renderSaved();
+}
+
+// === Connection ===
+function updateConn() { const el=document.getElementById('conn'); if(navigator.onLine){el.textContent='Online';el.className='status online'}else{el.textContent='Offline';el.className='status offline'} }
+window.addEventListener('online', updateConn); window.addEventListener('offline', updateConn); updateConn();
+
+// === Toast ===
+function showToast(m) { const t=document.getElementById('toast'); t.textContent=m; t.style.display='block'; setTimeout(()=>t.style.display='none',2500); }
+
+// === Toggle Second Caregiver ===
+let cg2Open = false;
+function toggleCg2() {
+    cg2Open = !cg2Open;
+    document.getElementById('cg2-section').classList.toggle('open', cg2Open);
+    document.getElementById('toggle-cg2-btn').textContent = cg2Open ? 'Remove Second Caregiver' : 'Add Second Caregiver';
+}
+
+// === All Form Fields ===
+const INPUTS = ['client_name','visit_date','submitted_by','client_id','care_plan_comments','satisfaction_comments','caregiver1_name','caregiver1_comments','caregiver2_name','caregiver2_comments','overall_comments'];
+const RADIOS = ['care_plan_followed','client_satisfied','caregiver1_companionship','caregiver1_housekeeping','caregiver1_meal_prep','caregiver1_personal_care','caregiver1_caring','caregiver1_professional','caregiver2_companionship','caregiver2_housekeeping','caregiver2_meal_prep','caregiver2_personal_care','caregiver2_caring','caregiver2_professional'];
+
+function getData() {
+    const d = {};
+    INPUTS.forEach(id => { const el=document.getElementById(id); if(el) d[id]=el.value; });
+    RADIOS.forEach(name => { const el=document.querySelector('input[name="'+name+'"]:checked'); d['radio_'+name] = el ? el.value : ''; });
+    d.cg2_open = cg2Open;
+    return d;
+}
+
+function setData(d) {
+    INPUTS.forEach(id => { const el=document.getElementById(id); if(el && d[id]!==undefined) el.value=d[id]; });
+    RADIOS.forEach(name => { if(d['radio_'+name]) { const el=document.querySelector('input[name="'+name+'"][value="'+d['radio_'+name]+'"]'); if(el) el.checked=true; } });
+    if (d.cg2_open) { cg2Open = false; toggleCg2(); }
+}
+
+function clearForm() {
+    INPUTS.forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    RADIOS.forEach(name => { document.querySelectorAll('input[name="'+name+'"]').forEach(el => el.checked=false); });
+    document.getElementById('visit_date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('submitted_by').value = 'Jason Shulman';
+    document.getElementById('client_id').value = '';
+    if (cg2Open) toggleCg2();
+    currentEditId = null;
+    clearDraft();
+}
+
+// === Storage ===
+const STORAGE_KEY = 'cca_monitoring_visits';
+const DRAFT_KEY = 'cca_mv_draft';
+function getAll() { try { return JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]'); } catch { return []; } }
+function saveAllStorage(list) { localStorage.setItem(STORAGE_KEY, JSON.stringify(list)); updCnt(); }
+function updCnt() { const c=getAll().length; document.getElementById('cnt').textContent = c ? '('+c+')' : ''; }
+
+let currentEditId = null;
+
+// === Auto-save draft to localStorage (every keystroke, debounced) ===
+let draftTimer = null;
+function saveDraft() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+        const d = getData();
+        const hasContent = INPUTS.some(id => { const el=document.getElementById(id); return el && el.value.trim() && id!=='submitted_by' && id!=='visit_date' && id!=='client_id'; });
+        const hasRadio = RADIOS.some(name => d['radio_'+name]);
+        if (hasContent || hasRadio || currentEditId) {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify({ data: d, editId: currentEditId, ts: Date.now() }));
+        }
+    }, 500);
+}
+function clearDraft() { localStorage.removeItem(DRAFT_KEY); }
+function loadDraft() {
+    try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return false;
+        const draft = JSON.parse(raw);
+        if (!draft.data) return false;
+        setData(draft.data);
+        if (draft.editId) currentEditId = draft.editId;
+        return true;
+    } catch { return false; }
+}
+// Listen on all form inputs for auto-save
+document.addEventListener('input', saveDraft);
+document.addEventListener('change', saveDraft);
+
+function saveMV() {
+    const d = getData();
+    const name = d.client_name || '';
+    if (!name.trim()) { alert('Client Name is required.'); return; }
+
+    const list = getAll();
+    if (currentEditId) {
+        const idx = list.findIndex(a => a.id===currentEditId);
+        if (idx>=0) { list[idx].data=d; list[idx].updated_at=new Date().toISOString(); list[idx].synced=false; }
+        currentEditId = null;
+    } else {
+        list.push({ id:'mv_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), data:d, created_at:new Date().toISOString(), updated_at:new Date().toISOString(), synced:false });
+    }
+    saveAllStorage(list);
+    clearDraft();
+    showToast('Monitoring Visit saved');
+    clearForm();
+    // Auto-sync immediately if online
+    if (navigator.onLine) setTimeout(autoSync, 300);
+}
+
+function renderSaved() {
+    const list=getAll(), c=document.getElementById('saved-list');
+    if (!list.length) { c.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No saved monitoring visits.</div>'; return; }
+    c.innerHTML = list.map(a => {
+        const name = a.data.client_name || 'Unnamed';
+        const date = a.data.visit_date || a.created_at.split('T')[0];
+        const badge = a.synced ? '<span class="badge synced">Synced</span>' : '<span class="badge pending">Pending</span>';
+        return '<div class="saved-item"><div class="info"><div class="name">'+name+' '+badge+'</div><div class="meta">'+date+'</div></div><div class="btns"><button class="btn btn-outline btn-sm" onclick="editMV(\''+a.id+'\')">Edit</button><button class="btn btn-red btn-sm" onclick="delMV(\''+a.id+'\')">Del</button></div></div>';
+    }).join('');
+}
+
+function editMV(id) { const a=getAll().find(x=>x.id===id); if(!a) return; clearForm(); setData(a.data); currentEditId=id; go('form'); showToast('Editing: '+(a.data.client_name||'Visit')); }
+function delMV(id) { if(!confirm('Delete?')) return; saveAllStorage(getAll().filter(a=>a.id!==id)); renderSaved(); showToast('Deleted'); }
+
+// === Sync ===
+let syncing = false;
+async function autoSync() {
+    if (syncing || !navigator.onLine) return;
+    const list = getAll(), pending = list.filter(a => !a.synced);
+    if (!pending.length) return;
+    syncing = true;
+    let ok = 0;
+    for (const a of pending) {
+        try {
+            const r = await fetch('/api/monitoring-visits/sync', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(a) });
+            if (r.ok) { a.synced = true; ok++; }
+        } catch(e) { console.error('Sync fail:', a.id, e); }
+    }
+    if (ok > 0) { saveAllStorage(list); showToast('Auto-synced '+ok+' visit'+(ok>1?'s':'')); }
+    syncing = false;
+}
+
+async function syncAll() {
+    if (!navigator.onLine) { alert('No internet. Will auto-sync when back online.'); return; }
+    const list=getAll(), pending=list.filter(a=>!a.synced);
+    if (!pending.length) { showToast('All synced'); return; }
+    const btn=document.getElementById('sync-btn'); btn.disabled=true; btn.textContent='Syncing...';
+    syncing = true;
+    let ok=0;
+    for (const a of pending) {
+        try {
+            const r = await fetch('/api/monitoring-visits/sync', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(a) });
+            if (r.ok) { a.synced=true; ok++; }
+        } catch(e) { console.error('Sync fail:', a.id, e); }
+    }
+    saveAllStorage(list); renderSaved();
+    btn.disabled=false; btn.textContent='Sync All to Portal';
+    syncing = false;
+    showToast('Synced '+ok+'/'+pending.length);
+}
+
+// Auto-sync when internet comes back
+window.addEventListener('online', () => { updateConn(); setTimeout(autoSync, 1000); });
+// Auto-sync every 60 seconds when online
+setInterval(() => { if (navigator.onLine) autoSync(); }, 60000);
+
+function exportAll() {
+    const list=getAll(); if(!list.length){alert('No monitoring visits.');return;}
+    const b=new Blob([JSON.stringify(list,null,2)],{type:'application/json'});
+    const u=URL.createObjectURL(b), a=document.createElement('a');
+    a.href=u; a.download='cca-monitoring-visits-'+new Date().toISOString().split('T')[0]+'.json';
+    a.click(); URL.revokeObjectURL(u);
+    showToast('Exported '+list.length);
+}
+
+// === URL param pre-fill ===
+const params = new URLSearchParams(window.location.search);
+if (params.get('client')) document.getElementById('client_name').value = decodeURIComponent(params.get('client'));
+if (params.get('cg1')) document.getElementById('caregiver1_name').value = decodeURIComponent(params.get('cg1'));
+if (params.get('cg2')) {
+    document.getElementById('caregiver2_name').value = decodeURIComponent(params.get('cg2'));
+    if (!cg2Open) toggleCg2();
+}
+if (params.get('client_id')) {
+    document.getElementById('client_id').value = decodeURIComponent(params.get('client_id'));
+}
+
+// === Init ===
+updCnt();
+// Restore draft if one exists, otherwise set defaults
+if (!loadDraft()) {
+    document.getElementById('visit_date').value = new Date().toISOString().split('T')[0];
+}
+// Auto-sync any pending visits on startup
+if (navigator.onLine) setTimeout(autoSync, 2000);
+</script>
+</body>
+</html>
