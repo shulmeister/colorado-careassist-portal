@@ -11,6 +11,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import urllib.parse
 import urllib.request
 
@@ -104,7 +105,6 @@ def _get_directions(origin: str, destination: str, mode: str) -> dict:
     for step in leg.get("steps", []):
         # Strip HTML tags from instructions
         instruction = step.get("html_instructions", "")
-        import re
         instruction = re.sub(r"<[^>]+>", " ", instruction).strip()
         instruction = re.sub(r"\s+", " ", instruction)
         steps.append({

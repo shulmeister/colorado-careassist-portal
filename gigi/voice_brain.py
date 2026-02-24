@@ -805,6 +805,18 @@ ANTHROPIC_TOOLS = [
     {"name": "manage_transfer", "description": "Cancel a transfer booking by order ID and confirmation number.", "input_schema": {"type": "object", "properties": {"order_id": {"type": "string", "description": "Transfer order ID to cancel"}, "confirm_number": {"type": "string", "description": "Confirmation number from booking"}}, "required": ["order_id", "confirm_number"]}},
     {"name": "search_activities", "description": "Search tours and activities at a destination via Amadeus. Returns tours, excursions, tickets with prices and booking links.", "input_schema": {"type": "object", "properties": {"latitude": {"type": "number", "description": "Location latitude"}, "longitude": {"type": "number", "description": "Location longitude"}, "radius": {"type": "integer", "description": "Search radius in km (default 5)"}}, "required": ["latitude", "longitude"]}},
     {"name": "get_travel_insights", "description": "Get travel market insights: most traveled destinations, most booked, busiest travel periods, recommendations, or trip purpose prediction.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'most_traveled', 'most_booked', 'busiest_period', 'recommendations', or 'trip_purpose'"}, "origin": {"type": "string", "description": "Origin IATA city code (for most_traveled/most_booked/recommendations)"}, "destination": {"type": "string", "description": "Destination IATA city code (for busiest_period)"}, "flight_offer": {"type": "object", "description": "Flight offer object (for trip_purpose prediction)"}}, "required": ["action"]}},
+    # === TERMINAL TOOLS ===
+    {"name": "run_terminal", "description": "Execute a shell command directly on the Mac Mini via headless terminal. INSTANT and FREE. Use for quick commands: checking logs, service status, git operations, file checks.", "input_schema": {"type": "object", "properties": {"command": {"type": "string", "description": "Shell command to execute"}, "timeout": {"type": "integer", "description": "Timeout in seconds (default 30, max 120)"}}, "required": ["command"]}},
+    # === THINKING TOOLS ===
+    {"name": "sequential_thinking", "description": "Think through a complex problem step by step. Use for investigations, debugging, planning.", "input_schema": {"type": "object", "properties": {"thought": {"type": "string", "description": "Current thinking step"}, "thought_number": {"type": "integer", "description": "Step number"}, "total_thoughts": {"type": "integer", "description": "Estimated total"}, "next_thought_needed": {"type": "boolean", "description": "Whether more thinking is needed"}}, "required": ["thought", "thought_number", "total_thoughts", "next_thought_needed"]}},
+    {"name": "get_thinking_summary", "description": "Get the full chain of sequential thoughts for the current investigation.", "input_schema": {"type": "object", "properties": {}, "required": []}},
+    # === KNOWLEDGE GRAPH TOOLS ===
+    {"name": "update_knowledge_graph", "description": "Update the knowledge graph — add or remove entities, relations, and observations.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "add_entities|add_relations|add_observations|delete_entities|delete_relations|delete_observations"}, "entities": {"type": "array", "description": "For add_entities: [{name, entityType, observations[]}]", "items": {"type": "object"}}, "relations": {"type": "array", "description": "For add/delete_relations: [{from, to, relationType}]", "items": {"type": "object"}}, "observations": {"type": "array", "description": "For add_observations: [{entityName, contents[]}]", "items": {"type": "object"}}, "entity_names": {"type": "array", "description": "For delete_entities: names to remove", "items": {"type": "string"}}}, "required": ["action"]}},
+    {"name": "query_knowledge_graph", "description": "Query the knowledge graph for entities, relations, and observations.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "search|open_nodes|read_graph"}, "query": {"type": "string", "description": "Search text"}, "names": {"type": "array", "description": "Entity names to retrieve", "items": {"type": "string"}}}, "required": ["action"]}},
+    # === GOOGLE MAPS TOOLS ===
+    {"name": "get_directions", "description": "Get driving directions, distance, and travel time between two locations. Use for caregiver-to-client commute estimates.", "input_schema": {"type": "object", "properties": {"origin": {"type": "string", "description": "Start address or place name"}, "destination": {"type": "string", "description": "End address or place name"}, "mode": {"type": "string", "description": "driving|transit|walking|bicycling"}}, "required": ["origin", "destination"]}},
+    {"name": "geocode_address", "description": "Geocode an address to get coordinates, validate, and normalize.", "input_schema": {"type": "object", "properties": {"address": {"type": "string", "description": "Address to geocode"}}, "required": ["address"]}},
+    {"name": "search_nearby_places", "description": "Find nearby places (pharmacy, hospital, grocery, restaurant, etc.) around a location.", "input_schema": {"type": "object", "properties": {"location": {"type": "string", "description": "Address or place name"}, "place_type": {"type": "string", "description": "pharmacy|hospital|doctor|grocery|restaurant|gas_station|bank|etc."}, "radius_miles": {"type": "integer", "description": "Search radius in miles (default 5)"}}, "required": ["location", "place_type"]}},
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -2303,6 +2315,79 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 origin=tool_input.get("origin"),
                 destination=tool_input.get("destination"),
                 flight_offer=tool_input.get("flight_offer"),
+            )
+            return json.dumps(result)
+
+        # === TERMINAL TOOLS ===
+        elif tool_name == "run_terminal":
+            from gigi.terminal_tools import run_terminal
+            result = await run_terminal(
+                command=tool_input.get("command", ""),
+                timeout=int(tool_input.get("timeout", 30)),
+            )
+            return json.dumps(result)
+
+        # === THINKING TOOLS ===
+        elif tool_name == "sequential_thinking":
+            from gigi.sequential_thinking import sequential_thinking
+            result = await sequential_thinking(
+                thought=tool_input.get("thought", ""),
+                thought_number=int(tool_input.get("thought_number", 1)),
+                total_thoughts=int(tool_input.get("total_thoughts", 1)),
+                next_thought_needed=bool(tool_input.get("next_thought_needed", False)),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "get_thinking_summary":
+            from gigi.sequential_thinking import get_thinking_summary
+            result = await get_thinking_summary()
+            return json.dumps(result)
+
+        # === KNOWLEDGE GRAPH TOOLS ===
+        elif tool_name == "update_knowledge_graph":
+            from gigi.knowledge_graph import update_knowledge_graph
+            result = await update_knowledge_graph(
+                action=tool_input.get("action", ""),
+                entities=tool_input.get("entities"),
+                relations=tool_input.get("relations"),
+                observations=tool_input.get("observations"),
+                entity_names=tool_input.get("entity_names"),
+                deletions=tool_input.get("deletions"),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "query_knowledge_graph":
+            from gigi.knowledge_graph import query_knowledge_graph
+            result = await query_knowledge_graph(
+                action=tool_input.get("action", ""),
+                query=tool_input.get("query"),
+                names=tool_input.get("names"),
+            )
+            return json.dumps(result)
+
+        # === GOOGLE MAPS TOOLS ===
+        elif tool_name == "get_directions":
+            from gigi.maps_tools import get_directions
+            result = await get_directions(
+                origin=tool_input.get("origin", ""),
+                destination=tool_input.get("destination", ""),
+                mode=tool_input.get("mode", "driving"),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "geocode_address":
+            from gigi.maps_tools import geocode_address
+            result = await geocode_address(
+                address=tool_input.get("address", ""),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_nearby_places":
+            from gigi.maps_tools import search_nearby_places
+            result = await search_nearby_places(
+                location=tool_input.get("location", ""),
+                place_type=tool_input.get("place_type", ""),
+                radius_miles=int(tool_input.get("radius_miles", 5)),
             )
             return json.dumps(result)
 
