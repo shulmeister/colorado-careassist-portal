@@ -160,7 +160,7 @@ logger = logging.getLogger("gigi_telegram")
 
 # Internal tool list (provider-agnostic) used by execute_tool
 TOOL_NAMES = [
-    "search_events", "search_concerts", "buy_tickets_request", "book_table_request",
+    "search_events", "search_concerts", "buy_tickets_request", "book_table_request", "explore_national_parks",
     "get_client_current_status", "get_calendar_events", "search_emails",
     "get_weather", "get_wellsky_clients", "get_wellsky_caregivers",
     "get_wellsky_shifts", "web_search", "get_stock_price", "get_crypto_price",
@@ -190,6 +190,7 @@ ANTHROPIC_TOOLS = [
     {"name": "search_concerts", "description": "Alias for search_events — prefer search_events instead.", "input_schema": {"type": "object", "properties": {"query": {"type": "string", "description": "Search query"}}, "required": ["query"]}},
     {"name": "buy_tickets_request", "description": "Buy concert tickets (requires 2FA).", "input_schema": {"type": "object", "properties": {"artist": {"type": "string"}, "venue": {"type": "string"}, "quantity": {"type": "integer"}}, "required": ["artist", "venue"]}},
     {"name": "book_table_request", "description": "Book a restaurant reservation (requires 2FA).", "input_schema": {"type": "object", "properties": {"restaurant": {"type": "string"}, "party_size": {"type": "integer"}, "date": {"type": "string"}, "time": {"type": "string"}}, "required": ["restaurant", "party_size", "date", "time"]}},
+    {"name": "explore_national_parks", "description": "Search the National Park Service API. Get park info, campgrounds, alerts, things to do, visitor centers, events, tours, webcams, amenities, and fees for any US national park.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "parks, campgrounds, alerts, thingstodo, visitorcenters, events, tours, webcams, amenities, or fees"}, "query": {"type": "string", "description": "Search text (for parks action — e.g. 'Rocky Mountain', 'Yellowstone')"}, "park_code": {"type": "string", "description": "NPS park code (e.g. 'romo', 'yell', 'grca') — filters results to that park"}, "state": {"type": "string", "description": "State code to filter parks (e.g. 'CO', 'CA')"}, "limit": {"type": "integer", "description": "Max results (default 5, max 20)"}}, "required": ["action"]}},
     {"name": "get_client_current_status", "description": "Check who is with a client right now.", "input_schema": {"type": "object", "properties": {"client_name": {"type": "string", "description": "Name of the client"}}, "required": ["client_name"]}},
     {"name": "get_calendar_events", "description": "Get upcoming calendar events.", "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "description": "Days to look ahead (1-7)"}}, "required": []}},
     {"name": "search_emails", "description": "Search Jason's Gmail.", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "max_results": {"type": "integer"}}, "required": []}},
@@ -717,6 +718,18 @@ class GigiTelegramBot:
                 date_val = tool_input.get("date")
                 time_val = tool_input.get("time")
                 result = await cos_tools.book_table_request(restaurant=restaurant, party_size=party_size, date=date_val, time=time_val)
+                return json.dumps(result)
+
+            elif tool_name == "explore_national_parks":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                result = await cos_tools.explore_national_parks(
+                    action=tool_input.get("action", "parks"),
+                    query=tool_input.get("query"),
+                    park_code=tool_input.get("park_code"),
+                    state=tool_input.get("state"),
+                    limit=tool_input.get("limit", 5),
+                )
                 return json.dumps(result)
 
             elif tool_name == "get_client_current_status":

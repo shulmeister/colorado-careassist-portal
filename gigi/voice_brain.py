@@ -271,6 +271,21 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
+        "name": "explore_national_parks",
+        "description": "Search the National Park Service API. Get park info, campgrounds, alerts, things to do, visitor centers, events, tours, webcams, amenities, and fees.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "parks, campgrounds, alerts, thingstodo, visitorcenters, events, tours, webcams, amenities, or fees"},
+                "query": {"type": "string", "description": "Search text (for parks action)"},
+                "park_code": {"type": "string", "description": "NPS park code (e.g. romo, yell, grca)"},
+                "state": {"type": "string", "description": "State code (e.g. CO, CA)"},
+                "limit": {"type": "integer", "description": "Max results (default 5)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
         "name": "get_client_current_status",
         "description": "Check who is with a client right now. Returns current caregiver, shift times, and status.",
         "input_schema": {
@@ -1045,6 +1060,17 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             date_val = tool_input.get("date")
             time_val = tool_input.get("time")
             result = await cos_tools.book_table_request(restaurant=restaurant, party_size=party_size, date=date_val, time=time_val)
+            return json.dumps(result)
+
+        elif tool_name == "explore_national_parks":
+            from gigi.chief_of_staff_tools import cos_tools
+            result = await cos_tools.explore_national_parks(
+                action=tool_input.get("action", "parks"),
+                query=tool_input.get("query"),
+                park_code=tool_input.get("park_code"),
+                state=tool_input.get("state"),
+                limit=tool_input.get("limit", 5),
+            )
             return json.dumps(result)
 
         elif tool_name == "get_client_current_status":
@@ -2151,7 +2177,7 @@ SLOW_TOOLS = {
     "search_wellsky_clients", "search_wellsky_caregivers",
     "get_wellsky_client_details", "search_google_drive",
     "get_wellsky_shifts", "get_client_current_status",
-    "web_search", "search_events", "search_concerts", "search_emails",
+    "web_search", "search_events", "search_concerts", "explore_national_parks", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
     "deep_research",
