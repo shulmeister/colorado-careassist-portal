@@ -24,6 +24,13 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
 from portal_auth import get_current_user, get_current_user_optional, oauth_manager
 from portal_database import db_manager, get_db
 from portal_models import (
@@ -41,12 +48,6 @@ from services.marketing.metrics_service import (
     get_social_metrics,
 )
 from services.search_service import search_service
-
-# Rate limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
 
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
@@ -3513,36 +3514,120 @@ async def api_operations_summary(
 async def api_operations_clients(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get client list from cached data"""
+    """Get active client list with profitability, hours, caregivers, and care plan data"""
     import psycopg2
+    import psycopg2.extras
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     try:
         conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
+        # Active clients with hours, last visit, and caregiver data
         cur.execute("""
-            SELECT p.id, p.full_name, p.first_name, p.last_name, p.status, p.referral_source,
-                   (SELECT MAX(a.scheduled_start) FROM cached_appointments a WHERE a.patient_id = p.id) as last_visit
+            SELECT
+                p.id, p.full_name, p.first_name, p.last_name, p.status,
+                p.authorized_hours_weekly, p.notes, p.wellsky_data, p.start_date,
+                (SELECT MAX(a.scheduled_start) FROM cached_appointments a WHERE a.patient_id = p.id) as last_visit,
+                COALESCE((
+                    SELECT ROUND(SUM(EXTRACT(EPOCH FROM (a.scheduled_end - a.scheduled_start)) / 3600)::numeric, 1)
+                    FROM cached_appointments a
+                    WHERE a.patient_id = p.id
+                      AND a.scheduled_start >= NOW() - INTERVAL '7 days'
+                ), 0) as actual_hours_weekly,
+                (
+                    SELECT ARRAY_AGG(DISTINCT pr.full_name)
+                    FROM cached_appointments a
+                    JOIN cached_practitioners pr ON a.practitioner_id = pr.id
+                    WHERE a.patient_id = p.id
+                      AND a.scheduled_start >= NOW() - INTERVAL '30 days'
+                      AND pr.full_name IS NOT NULL
+                ) as caregiver_names
             FROM cached_patients p
             WHERE p.is_active = true
             ORDER BY p.full_name
         """)
 
-        client_list = []
-        for row in cur.fetchall():
-            name = row[1] or f"{row[2] or ''} {row[3] or ''}".strip() or "Unknown"
-            client_list.append({
-                "id": row[0],
-                "name": name,
-                "status": row[4] or "active",
-                "hours_per_week": None,
-                "payer": row[5] or "N/A",
-                "risk_score": 0,
-                "last_visit": row[6].isoformat() if row[6] else None,
-            })
-
+        rows = cur.fetchall()
         cur.close()
         conn.close()
+
+        # Fetch BvP profitability per client from QBO
+        # BvP names are "Last, First" format; cached_patients are "First Last"
+        bvp_by_client = {}
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                bvp_resp = await client.get("http://localhost:3015/api/billing-payroll?period=mtd")
+                if bvp_resp.status_code == 200:
+                    bvp = bvp_resp.json()
+                    for c in bvp.get("by_client", []):
+                        raw = c["name"].strip().lower()
+                        # Normalize "Last, First" to set of name parts
+                        parts = frozenset(p.strip() for p in raw.replace(",", " ").split() if p.strip())
+                        bvp_by_client[parts] = c
+        except Exception as bvp_err:
+            logger.warning(f"Could not fetch QBO BvP for clients: {bvp_err}")
+
+        client_list = []
+        for row in rows:
+            name = row["full_name"] or f"{row['first_name'] or ''} {row['last_name'] or ''}".strip() or "Unknown"
+            wellsky = row["wellsky_data"] or {}
+
+            # Match BvP profitability by comparing name parts (handles "First Last" vs "Last, First")
+            profit_pct = None
+            name_parts = frozenset(p.strip() for p in name.lower().split() if p.strip())
+            for bvp_parts, bvp_data in bvp_by_client.items():
+                if len(name_parts & bvp_parts) >= 2:  # At least 2 matching name parts
+                    profit_pct = bvp_data.get("profit_pct")
+                    break
+
+            # Calculate risk score based on utilization and visit recency
+            authorized = row["authorized_hours_weekly"] or 0
+            actual = float(row["actual_hours_weekly"] or 0)
+            last_visit = row["last_visit"]
+            risk_score = 0
+
+            if authorized > 0:
+                utilization = actual / authorized
+                if utilization < 0.5:
+                    risk_score += 40
+                elif utilization < 0.75:
+                    risk_score += 20
+
+            if last_visit:
+                from datetime import datetime, timezone
+                days_since = (datetime.now(timezone.utc) - last_visit.replace(tzinfo=timezone.utc)).days if hasattr(last_visit, 'replace') else 999
+                if days_since > 14:
+                    risk_score += 30
+                elif days_since > 7:
+                    risk_score += 15
+
+            risk_label = "High" if risk_score >= 50 else "Medium" if risk_score >= 25 else "Low"
+
+            # Extract MV date and care plan review date from wellsky_data if available
+            mv_date = wellsky.get("mv_date") or wellsky.get("medicaid_verification_date")
+            care_plan_review = wellsky.get("care_plan_review_date") or wellsky.get("plan_review_date")
+            care_plan_summary = wellsky.get("care_plan_summary") or wellsky.get("care_plan") or ""
+
+            caregivers = row["caregiver_names"] or []
+
+            client_list.append({
+                "id": row["id"],
+                "name": name,
+                "status": row["status"] or "Active",
+                "authorized_hours_weekly": authorized,
+                "actual_hours_weekly": actual,
+                "profitability_pct": profit_pct,
+                "mv_date": mv_date,
+                "care_plan_review_date": care_plan_review,
+                "last_visit": last_visit.isoformat() if last_visit else None,
+                "risk_score": risk_score,
+                "risk_label": risk_label,
+                "caregivers": caregivers,
+                "notes": row["notes"] or "",
+                "care_plan_summary": care_plan_summary,
+                "start_date": row["start_date"].isoformat() if row["start_date"] else None,
+            })
+
         return JSONResponse({"clients": client_list})
     except Exception as e:
         logger.error(f"Error getting operations clients: {e}")
