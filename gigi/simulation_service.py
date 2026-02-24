@@ -29,6 +29,13 @@ try:
 except ImportError:
     GENAI_AVAILABLE = False
 
+# Anthropic SDK for simulation caller
+try:
+    import anthropic as anthropic_sdk
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -74,16 +81,25 @@ class SimulationRunner:
         self.error = None
         self.started_at = None
 
-        # Configure Gemini (new SDK)
-        if not GENAI_AVAILABLE:
-            raise ValueError("google.genai SDK not installed — cannot run simulations")
-        gemini_api_key = os.getenv("GEMINI_API_KEY")
-        if not gemini_api_key:
-            raise ValueError("GEMINI_API_KEY not set")
+        # Configure simulation caller LLM
+        self.caller_provider = os.getenv("SIMULATION_CALLER_PROVIDER", "anthropic")
 
-        self.llm = genai.Client(api_key=gemini_api_key)
-        # Always use Gemini for simulated caller (independent of Gigi's LLM provider)
-        self.llm_model = os.getenv("SIMULATION_LLM_MODEL", "gemini-2.0-flash")
+        if self.caller_provider == "anthropic":
+            if not ANTHROPIC_AVAILABLE:
+                raise ValueError("anthropic SDK not installed — cannot run simulations")
+            api_key = os.getenv("ANTHROPIC_API_KEY")
+            if not api_key:
+                raise ValueError("ANTHROPIC_API_KEY not set")
+            self.anthropic_client = anthropic_sdk.Anthropic(api_key=api_key)
+            self.llm_model = os.getenv("SIMULATION_LLM_MODEL", "claude-sonnet-4-20250514")
+        else:
+            if not GENAI_AVAILABLE:
+                raise ValueError("google.genai SDK not installed — cannot run simulations")
+            gemini_api_key = os.getenv("GEMINI_API_KEY")
+            if not gemini_api_key:
+                raise ValueError("GEMINI_API_KEY not set")
+            self.llm = genai.Client(api_key=gemini_api_key)
+            self.llm_model = os.getenv("SIMULATION_LLM_MODEL", "gemini-2.5-flash")
 
         # Voice Brain WebSocket URL — use current server's port
         ws_port = os.getenv("PORT", "8768")
@@ -161,8 +177,8 @@ class SimulationRunner:
             await self._update_db_status("failed", error_message=str(e))
 
     async def _generate_user_response(self) -> str:
-        """Use Gemini to generate realistic user response"""
-        # Determine what the caller should say based on conversation stage
+        """Generate realistic user response using configured LLM provider."""
+        import re
         turn_count = len([t for t in self.transcript if t["role"] == "user"])
 
         if turn_count == 0:
@@ -194,41 +210,60 @@ CONVERSATION SO FAR:
 YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
         try:
-            config = genai_types.GenerateContentConfig(
-                max_output_tokens=300,
-                temperature=0.4,
-            )
-            response = await asyncio.to_thread(
-                self.llm.models.generate_content,
-                model=self.llm_model,
-                contents=prompt,
-                config=config,
-            )
+            if self.caller_provider == "anthropic":
+                text = await self._call_anthropic(prompt)
+            else:
+                text = await self._call_gemini(prompt)
 
-            if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, 'text') and part.text:
-                        text = part.text.strip().strip('"').strip("'")
-                        # Remove stage directions like *sighs* or (pauses)
-                        import re
-                        text = re.sub(r'\*[^*]+\*', '', text).strip()
-                        text = re.sub(r'\([^)]+\)', '', text).strip()
+            if text:
+                text = text.strip().strip('"').strip("'")
+                text = re.sub(r'\*[^*]+\*', '', text).strip()
+                text = re.sub(r'\([^)]+\)', '', text).strip()
 
-                        if len(text.split()) < 3:
-                            # Truly too short — use context fallback
-                            return self._get_context_fallback()
+                if len(text.split()) < 3:
+                    return self._get_context_fallback()
 
-                        # If text doesn't end with punctuation, append a period
-                        if not any(text.rstrip().endswith(p) for p in '.!?'):
-                            text = text.rstrip() + "."
+                if not any(text.rstrip().endswith(p) for p in '.!?'):
+                    text = text.rstrip() + "."
 
-                        return text
+                return text
 
             return self._get_context_fallback()
 
         except Exception as e:
-            logger.error(f"[Sim {self.call_id}] Gemini error: {e}")
+            logger.error(f"[Sim {self.call_id}] Caller LLM error ({self.caller_provider}): {e}")
             return self._get_context_fallback()
+
+    async def _call_anthropic(self, prompt: str) -> Optional[str]:
+        """Call Anthropic API for simulation caller."""
+        response = await asyncio.to_thread(
+            self.anthropic_client.messages.create,
+            model=self.llm_model,
+            max_tokens=300,
+            temperature=0.4,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        if response.content and response.content[0].text:
+            return response.content[0].text
+        return None
+
+    async def _call_gemini(self, prompt: str) -> Optional[str]:
+        """Call Gemini API for simulation caller."""
+        config = genai_types.GenerateContentConfig(
+            max_output_tokens=300,
+            temperature=0.4,
+        )
+        response = await asyncio.to_thread(
+            self.llm.models.generate_content,
+            model=self.llm_model,
+            contents=prompt,
+            config=config,
+        )
+        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+            for part in response.candidates[0].content.parts:
+                if hasattr(part, 'text') and part.text:
+                    return part.text
+        return None
 
     def _get_context_fallback(self) -> str:
         """Generate a context-appropriate fallback when Gemini fails."""

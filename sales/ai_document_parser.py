@@ -14,7 +14,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Gemini models that support PDFs (1.5+ models)
-GEMINI_MODELS = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.5-pro"]
 
 
 class AIDocumentParser:
@@ -138,7 +138,7 @@ Examples:
                         logger.info(f"Gemini identified: {address} → {text}")
                         return text
 
-                except Exception as e:
+                except Exception:
                     continue
 
             return None
@@ -187,7 +187,7 @@ OTHER REQUIREMENTS:
 - Return ONLY valid JSON, no markdown or explanation"""
 
         result = self._call_gemini(pdf_content, prompt, "application/pdf")
-        
+
         if not result.get("success"):
             return {
                 "type": "myway_route",
@@ -197,10 +197,10 @@ OTHER REQUIREMENTS:
                 "mileage": None,
                 "date": None
             }
-        
+
         try:
             data = result["data"]
-            
+
             # Parse date
             pdf_date = None
             if data.get("date"):
@@ -208,7 +208,7 @@ OTHER REQUIREMENTS:
                     pdf_date = datetime.strptime(data["date"], "%Y-%m-%d")
                 except:
                     pass
-            
+
             # Process visits
             visits = []
             for v in data.get("visits", []):
@@ -237,7 +237,7 @@ OTHER REQUIREMENTS:
                     "visit_date": pdf_date
                 }
                 visits.append(visit)
-            
+
             return {
                 "type": "myway_route",
                 "success": True,
@@ -246,7 +246,7 @@ OTHER REQUIREMENTS:
                 "mileage": data.get("total_mileage"),
                 "date": pdf_date
             }
-            
+
         except Exception as e:
             logger.error(f"Error processing MyWay AI response: {e}")
             return {
@@ -260,7 +260,7 @@ OTHER REQUIREMENTS:
 
     def parse_receipt(self, image_content: bytes, filename: str = "") -> Dict[str, Any]:
         """Parse receipt image using AI"""
-        
+
         prompt = """Analyze this receipt image and extract the expense information.
 
 Return a JSON object with this EXACT structure:
@@ -281,16 +281,16 @@ IMPORTANT:
 
         # Detect mime type
         mime_type = self._detect_mime_type(image_content, filename)
-        
+
         result = self._call_gemini(image_content, prompt, mime_type)
-        
+
         if not result.get("success"):
             return {
                 "type": "receipt",
                 "success": False,
                 "error": result.get("error", "AI parsing failed")
             }
-        
+
         try:
             data = result["data"]
             return {
@@ -313,7 +313,7 @@ IMPORTANT:
 
     def parse_business_card(self, image_content: bytes, filename: str = "") -> Dict[str, Any]:
         """Parse business card image using AI"""
-        
+
         prompt = """Analyze this business card image and extract contact information.
 
 Return a JSON object with this EXACT structure:
@@ -338,15 +338,15 @@ IMPORTANT:
 
         # Detect mime type
         mime_type = self._detect_mime_type(image_content, filename)
-        
+
         result = self._call_gemini(image_content, prompt, mime_type)
-        
+
         if not result.get("success"):
             return {
                 "success": False,
                 "error": result.get("error", "AI parsing failed")
             }
-        
+
         try:
             data = result["data"]
             return {
@@ -372,14 +372,14 @@ IMPORTANT:
         """Call Gemini Vision API via REST"""
         if not GEMINI_API_KEY:
             return {"success": False, "error": "No Gemini API key"}
-        
+
         httpx = self._get_httpx()
         if not httpx:
             return {"success": False, "error": "httpx not installed"}
-        
+
         try:
             b64 = base64.b64encode(content).decode("utf-8")
-            
+
             for model in GEMINI_MODELS:
                 try:
                     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -399,21 +399,21 @@ IMPORTANT:
                         },
                         timeout=60.0,  # Longer timeout for PDFs
                     )
-                    
+
                     if resp.status_code == 404:
                         logger.info(f"Gemini model {model} not found, trying next")
                         continue
                     if resp.status_code != 200:
                         logger.warning(f"Gemini {model} returned {resp.status_code}: {resp.text[:300]}")
                         continue
-                    
+
                     data = resp.json()
                     text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                    
+
                     if not text:
                         logger.warning(f"Gemini {model} returned empty text")
                         continue
-                    
+
                     # Parse JSON from response
                     json_data = self._extract_json(text)
                     if json_data:
@@ -422,13 +422,13 @@ IMPORTANT:
                     else:
                         logger.warning(f"Gemini {model} returned non-JSON: {text[:200]}")
                         continue
-                        
+
                 except Exception as model_error:
                     logger.debug(f"Gemini {model} failed: {model_error}")
                     continue
-            
+
             return {"success": False, "error": "All Gemini models failed"}
-            
+
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
             return {"success": False, "error": str(e)}
@@ -437,19 +437,19 @@ IMPORTANT:
         """Extract JSON from AI response text"""
         if not text:
             return None
-        
+
         # Clean up markdown code blocks
         text = text.strip()
         text = re.sub(r"^```json\s*", "", text, flags=re.IGNORECASE)
         text = re.sub(r"^```\s*", "", text)
         text = re.sub(r"```$", "", text.strip())
-        
+
         # Try direct parse
         try:
             return json.loads(text)
         except:
             pass
-        
+
         # Try to find JSON object in text
         match = re.search(r'\{[\s\S]*\}', text)
         if match:
@@ -457,7 +457,7 @@ IMPORTANT:
                 return json.loads(match.group(0))
             except:
                 pass
-        
+
         return None
 
     def _detect_mime_type(self, content: bytes, filename: str) -> str:
@@ -471,7 +471,7 @@ IMPORTANT:
             return "image/png"
         if len(content) > 12 and (content[4:12] == b'ftypheic' or content[4:12] == b'ftypmif1'):
             return "image/heic"
-        
+
         # Fall back to filename
         ext = filename.lower().split('.')[-1] if '.' in filename else ''
         mime_map = {
@@ -482,7 +482,7 @@ IMPORTANT:
             'heic': 'image/heic',
             'heif': 'image/heif'
         }
-        
+
         return mime_map.get(ext, "application/octet-stream")
 
 

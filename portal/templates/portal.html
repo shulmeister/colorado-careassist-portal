@@ -2244,10 +2244,14 @@
             await trackSessionStart();
         });
 
-        // Track session end on page unload
-        window.addEventListener('beforeunload', () => {
-            trackSessionEnd();
-        });
+        // Heartbeat to keep session alive (every 60 seconds)
+        setInterval(() => {
+            fetch('/api/analytics/heartbeat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                credentials: 'include'
+            }).catch(() => {});
+        }, 60000);
 
         // Drag and drop functionality
         let draggedElement = null;
