@@ -14,6 +14,7 @@
         clients: [],
         openShifts: [],
         callOuts: [],
+        mvLatest: {},  // { client_id: "2026-02-23", ... }
         isLoading: false,
         clientSortField: 'name',
         clientSortAsc: true,
@@ -139,15 +140,17 @@
         state.isLoading = true;
 
         try {
-            const [summary, clients, openShifts] = await Promise.all([
+            const [summary, clients, openShifts, mvLatest] = await Promise.all([
                 fetchAPI('/summary'),
                 fetchAPI('/clients'),
                 fetchAPI('/open-shifts'),
+                fetchMVLatest(),
             ]);
 
             state.summary = summary;
             state.clients = clients?.clients || [];
             state.openShifts = openShifts?.shifts || [];
+            state.mvLatest = mvLatest || {};
 
             updateDashboard();
             loadHoursBreakdown();
@@ -155,6 +158,18 @@
             console.error('Failed to fetch data:', error);
         } finally {
             state.isLoading = false;
+        }
+    }
+
+    async function fetchMVLatest() {
+        try {
+            const response = await fetch('/api/monitoring-visits/latest');
+            if (!response.ok) return {};
+            const data = await response.json();
+            return data.by_id || {};
+        } catch (e) {
+            console.error('MV latest fetch error:', e);
+            return {};
         }
     }
 
@@ -292,7 +307,7 @@
         const clients = getFilteredSortedClients();
 
         if (clients.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="empty-state"><div class="icon">👥</div>No clients found</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="empty-state"><div class="icon">👥</div>No clients found</td></tr>';
             return;
         }
 
@@ -306,14 +321,31 @@
                 ? `${client.actual_hours_weekly}/${client.authorized_hours_weekly}`
                 : `${client.actual_hours_weekly || '--'}`;
 
+            // MV Date: show last MV date if exists, otherwise +MV button
+            const mvDate = state.mvLatest[client.id] || client.mv_date;
+            let mvCellHtml;
+            if (mvDate) {
+                mvCellHtml = formatDate(mvDate);
+            } else {
+                const cg1 = (client.caregivers && client.caregivers[0]) ? encodeURIComponent(client.caregivers[0]) : '';
+                const cg2 = (client.caregivers && client.caregivers[1]) ? encodeURIComponent(client.caregivers[1]) : '';
+                const mvUrl = `/mv?client=${encodeURIComponent(client.name)}&client_id=${encodeURIComponent(client.id)}&cg1=${cg1}&cg2=${cg2}`;
+                mvCellHtml = `<a href="${mvUrl}" target="_blank" class="mv-add-btn" onclick="event.stopPropagation()" title="New Monitoring Visit">+MV</a>`;
+            }
+
+            // IR button: always show +IR (opens incident form pre-filled with client)
+            const irUrl = `/incident?client=${encodeURIComponent(client.name)}&client_id=${encodeURIComponent(client.id)}`;
+            const irCellHtml = `<a href="${irUrl}" target="_blank" class="ir-add-btn" onclick="event.stopPropagation()" title="New Incident Report">+IR</a>`;
+
             html += `
-                <tr class="client-row" data-client-id="${client.id}" onclick="toggleClientDetail(${client.id})" style="cursor:pointer">
+                <tr class="client-row" data-client-id="${client.id}" onclick="toggleClientDetail('${client.id}')" style="cursor:pointer">
                     <td><button class="expand-btn" id="expand-btn-${client.id}">&#9654;</button></td>
                     <td><strong>${escapeHtml(client.name)}</strong></td>
                     <td><span class="status-badge status-${getStatusClass(client.status)}">${client.status || 'Active'}</span></td>
                     <td>${hoursDisplay}</td>
                     <td class="${profClass}">${client.profitability_pct != null ? client.profitability_pct + '%' : '--'}</td>
-                    <td>${formatDate(client.mv_date)}</td>
+                    <td>${mvCellHtml}</td>
+                    <td>${irCellHtml}</td>
                     <td>${formatDate(client.care_plan_review_date)}</td>
                     <td>${formatDate(client.last_visit)}</td>
                     <td>
@@ -323,8 +355,8 @@
                         </div>
                     </td>
                 </tr>
-                <tr class="client-detail-row" id="detail-${client.id}" style="display:none">
-                    <td colspan="9">
+                <tr class="client-detail-row" id="detail-${escapeAttr(client.id)}" style="display:none">
+                    <td colspan="10">
                         <div class="client-detail">
                             <div class="detail-block">
                                 <div class="detail-block-title">Care Plan</div>
@@ -509,6 +541,11 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function escapeAttr(text) {
+        if (!text) return '';
+        return String(text).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
     function formatDate(dateStr) {

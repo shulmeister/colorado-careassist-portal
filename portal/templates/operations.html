@@ -832,6 +832,42 @@
         .profit-positive { color: #22c55e; }
         .profit-negative { color: #ef4444; }
         .profit-neutral { color: #94a3b8; }
+
+        .mv-add-btn {
+            display: inline-block;
+            padding: 2px 10px;
+            background: rgba(34, 197, 94, 0.15);
+            color: #22c55e;
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mv-add-btn:hover {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: #22c55e;
+        }
+
+        .ir-add-btn {
+            display: inline-block;
+            padding: 2px 10px;
+            background: rgba(239, 68, 68, 0.15);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ir-add-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: #ef4444;
+        }
     </style>
 </head>
 <body>
@@ -1061,13 +1097,14 @@
                                 <th style="cursor:pointer" onclick="sortClients('hours')">Hours/Week</th>
                                 <th style="cursor:pointer" onclick="sortClients('profitability')">Profit %</th>
                                 <th style="cursor:pointer" onclick="sortClients('mv_date')">MV Date</th>
+                                <th>IR</th>
                                 <th style="cursor:pointer" onclick="sortClients('care_plan_review')">Care Plan Review</th>
                                 <th style="cursor:pointer" onclick="sortClients('last_visit')">Last Visit</th>
                                 <th style="cursor:pointer" onclick="sortClients('risk')">Risk</th>
                             </tr>
                         </thead>
                         <tbody id="clients-table-body">
-                            <tr><td colspan="9" class="loading"><div class="spinner"></div> Loading clients...</td></tr>
+                            <tr><td colspan="10" class="loading"><div class="spinner"></div> Loading clients...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1122,6 +1159,6 @@
         </main>
     </div>
 
-    <script src="/static/js/operations-dashboard.js"></script>
+    <script src="/static/js/operations-dashboard.js?v=4"></script>
 </body>
 </html>

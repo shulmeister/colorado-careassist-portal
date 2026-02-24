@@ -2190,6 +2190,576 @@ async def sync_client_assessment(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# === Monitoring Visits (Offline Form) ===
+
+@app.get("/mv")
+async def mv_page():
+    """Serve the offline-capable monitoring visit form."""
+    from fastapi.responses import FileResponse
+    html_path = os.path.join(_root_dir, "static", "offline-mv.html")
+    return FileResponse(html_path, media_type="text/html")
+
+
+@app.post("/api/monitoring-visits/sync")
+async def sync_monitoring_visit(request: Request):
+    """Receive a synced monitoring visit from the offline form and store in PostgreSQL + Google Drive."""
+    import psycopg2
+    try:
+        payload = await request.json()
+        local_id = payload.get("id", "")
+        data = payload.get("data", {})
+        created_at = payload.get("created_at")
+        updated_at = payload.get("updated_at")
+
+        client_name = data.get("client_name", "").strip()
+        if not client_name:
+            raise HTTPException(status_code=400, detail="client_name is required")
+
+        visit_date = data.get("visit_date") or None
+        submitted_by = data.get("submitted_by", "")
+        client_id_param = data.get("client_id", "")
+
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        # Resolve client_id from name if not provided
+        client_id = client_id_param or None
+        if not client_id:
+            cur.execute("SELECT id FROM cached_patients WHERE LOWER(full_name) = LOWER(%s) LIMIT 1", (client_name,))
+            row = cur.fetchone()
+            if row:
+                client_id = row[0]
+
+        cur.execute("""
+            INSERT INTO monitoring_visits (
+                local_id, client_id, client_name, visit_date, submitted_by,
+                care_plan_followed, care_plan_comments, client_satisfied, satisfaction_comments,
+                caregiver1_name, caregiver1_companionship, caregiver1_housekeeping,
+                caregiver1_meal_prep, caregiver1_personal_care, caregiver1_caring, caregiver1_professional,
+                caregiver1_comments,
+                caregiver2_name, caregiver2_companionship, caregiver2_housekeeping,
+                caregiver2_meal_prep, caregiver2_personal_care, caregiver2_caring, caregiver2_professional,
+                caregiver2_comments,
+                overall_comments, created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s
+            )
+            ON CONFLICT (local_id) DO UPDATE SET
+                client_name = EXCLUDED.client_name,
+                visit_date = EXCLUDED.visit_date,
+                care_plan_followed = EXCLUDED.care_plan_followed,
+                care_plan_comments = EXCLUDED.care_plan_comments,
+                client_satisfied = EXCLUDED.client_satisfied,
+                satisfaction_comments = EXCLUDED.satisfaction_comments,
+                caregiver1_name = EXCLUDED.caregiver1_name,
+                caregiver1_companionship = EXCLUDED.caregiver1_companionship,
+                caregiver1_housekeeping = EXCLUDED.caregiver1_housekeeping,
+                caregiver1_meal_prep = EXCLUDED.caregiver1_meal_prep,
+                caregiver1_personal_care = EXCLUDED.caregiver1_personal_care,
+                caregiver1_caring = EXCLUDED.caregiver1_caring,
+                caregiver1_professional = EXCLUDED.caregiver1_professional,
+                caregiver1_comments = EXCLUDED.caregiver1_comments,
+                caregiver2_name = EXCLUDED.caregiver2_name,
+                caregiver2_companionship = EXCLUDED.caregiver2_companionship,
+                caregiver2_housekeeping = EXCLUDED.caregiver2_housekeeping,
+                caregiver2_meal_prep = EXCLUDED.caregiver2_meal_prep,
+                caregiver2_personal_care = EXCLUDED.caregiver2_personal_care,
+                caregiver2_caring = EXCLUDED.caregiver2_caring,
+                caregiver2_professional = EXCLUDED.caregiver2_professional,
+                caregiver2_comments = EXCLUDED.caregiver2_comments,
+                overall_comments = EXCLUDED.overall_comments,
+                updated_at = EXCLUDED.updated_at
+        """, (
+            local_id, client_id, client_name, visit_date, submitted_by,
+            data.get("care_plan_followed", ""),
+            data.get("care_plan_comments", ""),
+            data.get("client_satisfied", ""),
+            data.get("satisfaction_comments", ""),
+            data.get("caregiver1_name", ""),
+            data.get("caregiver1_companionship", ""),
+            data.get("caregiver1_housekeeping", ""),
+            data.get("caregiver1_meal_prep", ""),
+            data.get("caregiver1_personal_care", ""),
+            data.get("caregiver1_caring", ""),
+            data.get("caregiver1_professional", ""),
+            data.get("caregiver1_comments", ""),
+            data.get("caregiver2_name", ""),
+            data.get("caregiver2_companionship", ""),
+            data.get("caregiver2_housekeeping", ""),
+            data.get("caregiver2_meal_prep", ""),
+            data.get("caregiver2_personal_care", ""),
+            data.get("caregiver2_caring", ""),
+            data.get("caregiver2_professional", ""),
+            data.get("caregiver2_comments", ""),
+            data.get("overall_comments", ""),
+            created_at, updated_at,
+        ))
+        conn.commit()
+
+        # Get the inserted/updated row ID
+        cur.execute("SELECT id FROM monitoring_visits WHERE local_id = %s", (local_id,))
+        mv_row = cur.fetchone()
+        mv_id = mv_row[0] if mv_row else None
+
+        # Upload PDF to Google Drive (best-effort, don't fail the sync)
+        google_drive_link = None
+        try:
+            from gigi.google_service import google_service
+            if google_service._creds:
+                # Build a simple text-based report for Drive
+                date_str = visit_date or "unknown"
+                lines = [
+                    "MONITORING VISIT REPORT",
+                    f"{'='*50}",
+                    f"Client: {client_name}",
+                    f"Date: {date_str}",
+                    f"Submitted By: {submitted_by}",
+                    "",
+                    "CARE PLAN COMPLIANCE",
+                    "-" * 30,
+                    f"Care plan followed: {data.get('care_plan_followed', 'N/A')}",
+                    f"Comments: {data.get('care_plan_comments', 'N/A')}",
+                    f"Client satisfied: {data.get('client_satisfied', 'N/A')}",
+                    f"Satisfaction comments: {data.get('satisfaction_comments', 'N/A')}",
+                    "",
+                    f"PRIMARY CAREGIVER: {data.get('caregiver1_name', 'N/A')}",
+                    "-" * 30,
+                    f"Companionship: {data.get('caregiver1_companionship', 'N/A')}",
+                    f"Housekeeping: {data.get('caregiver1_housekeeping', 'N/A')}",
+                    f"Meal Preparation: {data.get('caregiver1_meal_prep', 'N/A')}",
+                    f"Personal Care: {data.get('caregiver1_personal_care', 'N/A')}",
+                    f"Caring: {data.get('caregiver1_caring', 'N/A')}",
+                    f"Professional: {data.get('caregiver1_professional', 'N/A')}",
+                    f"Comments: {data.get('caregiver1_comments', 'N/A')}",
+                ]
+                cg2_name = data.get("caregiver2_name", "").strip()
+                if cg2_name:
+                    lines += [
+                        "",
+                        f"SECOND CAREGIVER: {cg2_name}",
+                        "-" * 30,
+                        f"Companionship: {data.get('caregiver2_companionship', 'N/A')}",
+                        f"Housekeeping: {data.get('caregiver2_housekeeping', 'N/A')}",
+                        f"Meal Preparation: {data.get('caregiver2_meal_prep', 'N/A')}",
+                        f"Personal Care: {data.get('caregiver2_personal_care', 'N/A')}",
+                        f"Caring: {data.get('caregiver2_caring', 'N/A')}",
+                        f"Professional: {data.get('caregiver2_professional', 'N/A')}",
+                        f"Comments: {data.get('caregiver2_comments', 'N/A')}",
+                    ]
+                lines += [
+                    "",
+                    "OVERALL COMMENTS",
+                    "-" * 30,
+                    f"{data.get('overall_comments', 'N/A')}",
+                ]
+                report_text = "\n".join(lines)
+                file_bytes = report_text.encode("utf-8")
+                safe_date = (visit_date or "unknown").replace("-", "_")
+                filename = f"MV {client_name} {safe_date}.txt"
+
+                # Find or create "Monitoring Visits" folder in Drive root
+                # Use a known parent folder or root
+                root_folder_id = os.getenv("GOOGLE_DRIVE_MV_FOLDER_ID", "root")
+                folder_id = google_service.drive_get_or_create_folder(root_folder_id, "Monitoring Visits")
+                if folder_id:
+                    result = google_service.drive_upload_file(file_bytes, filename, folder_id, "text/plain")
+                    if result:
+                        google_drive_link = result.get("url") or result.get("webViewLink")
+                        # Update the DB record with the drive link
+                        cur2 = conn.cursor()
+                        cur2.execute("UPDATE monitoring_visits SET google_drive_link = %s WHERE local_id = %s",
+                                     (google_drive_link, local_id))
+                        conn.commit()
+                        cur2.close()
+                        logger.info(f"MV uploaded to Drive: {filename} → {google_drive_link}")
+        except Exception as gdrive_err:
+            logger.warning(f"Google Drive upload failed (non-fatal): {gdrive_err}")
+
+        cur.close()
+        conn.close()
+
+        logger.info(f"Synced monitoring visit: {client_name} (local_id={local_id})")
+        return JSONResponse({
+            "success": True,
+            "id": mv_id,
+            "google_drive_link": google_drive_link,
+            "message": f"Monitoring visit for {client_name} synced"
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Monitoring visit sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/monitoring-visits/latest")
+async def get_latest_monitoring_visits():
+    """Return the latest MV date per client for the operations dashboard."""
+    import psycopg2
+    import psycopg2.extras
+    try:
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute("""
+            SELECT client_id, client_name, MAX(visit_date) as last_mv_date
+            FROM monitoring_visits
+            WHERE client_id IS NOT NULL
+            GROUP BY client_id, client_name
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # Build lookup by client_id and by name (for matching)
+        by_id = {}
+        by_name = {}
+        for r in rows:
+            date_str = r["last_mv_date"].isoformat() if r["last_mv_date"] else None
+            if r["client_id"]:
+                by_id[r["client_id"]] = date_str
+            if r["client_name"]:
+                by_name[r["client_name"].lower()] = date_str
+
+        return JSONResponse({"by_id": by_id, "by_name": by_name})
+    except Exception as e:
+        logger.error(f"Latest MV fetch error: {e}")
+        return JSONResponse({"by_id": {}, "by_name": {}})
+
+
+@app.get("/api/monitoring-visits")
+async def get_monitoring_visits(client_id: str = None):
+    """Return all monitoring visits, optionally filtered by client_id."""
+    import psycopg2
+    import psycopg2.extras
+    try:
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if client_id:
+            cur.execute("""
+                SELECT * FROM monitoring_visits WHERE client_id = %s ORDER BY visit_date DESC
+            """, (client_id,))
+        else:
+            cur.execute("SELECT * FROM monitoring_visits ORDER BY visit_date DESC LIMIT 100")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        # Serialize dates
+        visits = []
+        for r in rows:
+            visit = dict(r)
+            for k, v in visit.items():
+                if hasattr(v, 'isoformat'):
+                    visit[k] = v.isoformat()
+            visits.append(visit)
+
+        return JSONResponse({"visits": visits})
+    except Exception as e:
+        logger.error(f"Monitoring visits fetch error: {e}")
+        return JSONResponse({"visits": []})
+
+
+# === Incident Reports (Offline Form) ===
+
+@app.get("/incident")
+async def incident_page():
+    """Serve the offline-capable incident report form."""
+    from fastapi.responses import FileResponse
+    html_path = os.path.join(_root_dir, "static", "offline-incident.html")
+    return FileResponse(html_path, media_type="text/html")
+
+
+@app.post("/api/incident-reports/sync")
+async def sync_incident_report(request: Request):
+    """Receive a synced incident report from the offline form and store in PostgreSQL + Google Drive."""
+    import psycopg2
+    try:
+        payload = await request.json()
+        local_id = payload.get("id", "")
+        data = payload.get("data", {})
+        created_at = payload.get("created_at")
+        updated_at = payload.get("updated_at")
+
+        client_name = data.get("client_name", "").strip()
+        if not client_name:
+            raise HTTPException(status_code=400, detail="client_name is required")
+
+        client_id_param = data.get("client_id", "")
+        client_birth_date = data.get("client_birth_date") or None
+        incident_date = data.get("incident_date") or None
+
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        # Resolve client_id from name if not provided
+        client_id = client_id_param or None
+        if not client_id:
+            cur.execute("SELECT id FROM cached_patients WHERE LOWER(full_name) = LOWER(%s) LIMIT 1", (client_name,))
+            row = cur.fetchone()
+            if row:
+                client_id = row[0]
+
+        cur.execute("""
+            INSERT INTO incident_reports (
+                local_id, client_id, client_name, client_birth_date,
+                incident_date, incident_time, reported_date, reported_time,
+                reported_by_name, reported_by_role, reported_to_name, reported_to_role,
+                location,
+                other1_name, other1_role, other2_name, other2_role, other3_name, other3_role,
+                witness_description, resulted_in_injury, injury_description,
+                supervisor_comments, was_preventable, corrective_actions,
+                reported_to_external, external_agency_name, external_reported_by, external_reported_role,
+                manager_review,
+                submitted_by, employee_name, employee_id,
+                created_at, updated_at
+            ) VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s,
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s, %s,
+                %s,
+                %s, %s, %s,
+                %s, %s
+            )
+            ON CONFLICT (local_id) DO UPDATE SET
+                client_name = EXCLUDED.client_name,
+                client_birth_date = EXCLUDED.client_birth_date,
+                incident_date = EXCLUDED.incident_date,
+                incident_time = EXCLUDED.incident_time,
+                reported_date = EXCLUDED.reported_date,
+                reported_time = EXCLUDED.reported_time,
+                reported_by_name = EXCLUDED.reported_by_name,
+                reported_by_role = EXCLUDED.reported_by_role,
+                reported_to_name = EXCLUDED.reported_to_name,
+                reported_to_role = EXCLUDED.reported_to_role,
+                location = EXCLUDED.location,
+                other1_name = EXCLUDED.other1_name,
+                other1_role = EXCLUDED.other1_role,
+                other2_name = EXCLUDED.other2_name,
+                other2_role = EXCLUDED.other2_role,
+                other3_name = EXCLUDED.other3_name,
+                other3_role = EXCLUDED.other3_role,
+                witness_description = EXCLUDED.witness_description,
+                resulted_in_injury = EXCLUDED.resulted_in_injury,
+                injury_description = EXCLUDED.injury_description,
+                supervisor_comments = EXCLUDED.supervisor_comments,
+                was_preventable = EXCLUDED.was_preventable,
+                corrective_actions = EXCLUDED.corrective_actions,
+                reported_to_external = EXCLUDED.reported_to_external,
+                external_agency_name = EXCLUDED.external_agency_name,
+                external_reported_by = EXCLUDED.external_reported_by,
+                external_reported_role = EXCLUDED.external_reported_role,
+                manager_review = EXCLUDED.manager_review,
+                employee_name = EXCLUDED.employee_name,
+                employee_id = EXCLUDED.employee_id,
+                updated_at = EXCLUDED.updated_at
+        """, (
+            local_id, client_id, client_name, client_birth_date,
+            incident_date, data.get("incident_time", ""),
+            data.get("reported_date") or None, data.get("reported_time", ""),
+            data.get("reported_by_name", ""), data.get("reported_by_role", ""),
+            data.get("reported_to_name", ""), data.get("reported_to_role", ""),
+            data.get("location", ""),
+            data.get("other1_name", ""), data.get("other1_role", ""),
+            data.get("other2_name", ""), data.get("other2_role", ""),
+            data.get("other3_name", ""), data.get("other3_role", ""),
+            data.get("witness_description", ""),
+            data.get("resulted_in_injury", ""),
+            data.get("injury_description", ""),
+            data.get("supervisor_comments", ""),
+            data.get("was_preventable", ""),
+            data.get("corrective_actions", ""),
+            data.get("reported_to_external", ""),
+            data.get("external_agency_name", ""),
+            data.get("external_reported_by", ""),
+            data.get("external_reported_role", ""),
+            data.get("manager_review", ""),
+            data.get("submitted_by", ""),
+            data.get("employee_name", ""),
+            data.get("employee_id", ""),
+            created_at, updated_at,
+        ))
+        conn.commit()
+
+        cur.execute("SELECT id FROM incident_reports WHERE local_id = %s", (local_id,))
+        ir_row = cur.fetchone()
+        ir_id = ir_row[0] if ir_row else None
+
+        # Upload to Google Drive (best-effort)
+        google_drive_link = None
+        try:
+            from gigi.google_service import google_service
+            if google_service._creds:
+                date_str = incident_date or "unknown"
+                employee_str = data.get("employee_name", "").strip()
+                lines = [
+                    "GENERAL INCIDENT REPORT",
+                    f"{'='*50}",
+                    f"Client: {client_name}",
+                    f"Birth Date: {client_birth_date or 'N/A'}",
+                    f"Employee: {employee_str or 'N/A'}",
+                    "",
+                    "INCIDENT",
+                    "-" * 30,
+                    f"1. Date: {incident_date or 'N/A'}  Time: {data.get('incident_time', 'N/A')}",
+                    f"2. Reported Date: {data.get('reported_date', 'N/A')}  Time: {data.get('reported_time', 'N/A')}",
+                    f"3. Reported by: {data.get('reported_by_name', 'N/A')} ({data.get('reported_by_role', 'N/A')})",
+                    f"4. Reported to: {data.get('reported_to_name', 'N/A')} ({data.get('reported_to_role', 'N/A')})",
+                    f"5. Location: {data.get('location', 'N/A')}",
+                    "6. Other Individuals:",
+                ]
+                for i in range(1, 4):
+                    n = data.get(f"other{i}_name", "").strip()
+                    r = data.get(f"other{i}_role", "").strip()
+                    if n:
+                        lines.append(f"   - {n} ({r})")
+                lines += [
+                    "7. Witness Description:",
+                    f"   {data.get('witness_description', 'N/A')}",
+                    f"8. Resulted in injury: {data.get('resulted_in_injury', 'N/A')}",
+                ]
+                if data.get("resulted_in_injury") == "Yes":
+                    lines.append(f"   Injury: {data.get('injury_description', 'N/A')}")
+                lines += [
+                    "",
+                    "INVESTIGATION / FINDINGS",
+                    "-" * 30,
+                    "9. Supervisor Comments:",
+                    f"   {data.get('supervisor_comments', 'N/A')}",
+                    f"10. Preventable: {data.get('was_preventable', 'N/A')}",
+                ]
+                if data.get("was_preventable") == "Yes":
+                    lines.append(f"    Corrective Actions: {data.get('corrective_actions', 'N/A')}")
+                lines += [
+                    f"11. Reported to External Agency: {data.get('reported_to_external', 'N/A')}",
+                ]
+                if data.get("reported_to_external") == "Yes":
+                    lines += [
+                        f"    Agency: {data.get('external_agency_name', 'N/A')}",
+                        f"    Reported by: {data.get('external_reported_by', 'N/A')} ({data.get('external_reported_role', 'N/A')})",
+                    ]
+                lines += [
+                    "12. Manager Review:",
+                    f"   {data.get('manager_review', 'N/A')}",
+                ]
+                report_text = "\n".join(lines)
+                file_bytes = report_text.encode("utf-8")
+                safe_date = (str(incident_date) if incident_date else "unknown").replace("-", "_")
+                filename = f"IR {client_name} {safe_date}.txt"
+
+                hr_folder_id = os.getenv("GOOGLE_DRIVE_HR_FOLDER_ID", "root")
+                ir_folder_id = google_service.drive_get_or_create_folder(hr_folder_id, "Incident Reports")
+                if ir_folder_id:
+                    result = google_service.drive_upload_file(file_bytes, filename, ir_folder_id, "text/plain")
+                    if result:
+                        google_drive_link = result.get("url") or result.get("webViewLink")
+                        cur2 = conn.cursor()
+                        cur2.execute("UPDATE incident_reports SET google_drive_link = %s WHERE local_id = %s",
+                                     (google_drive_link, local_id))
+                        conn.commit()
+                        cur2.close()
+                        logger.info(f"IR uploaded to Drive: {filename} → {google_drive_link}")
+        except Exception as gdrive_err:
+            logger.warning(f"Google Drive IR upload failed (non-fatal): {gdrive_err}")
+
+        cur.close()
+        conn.close()
+
+        logger.info(f"Synced incident report: {client_name} (local_id={local_id})")
+        return JSONResponse({
+            "success": True,
+            "id": ir_id,
+            "google_drive_link": google_drive_link,
+            "message": f"Incident report for {client_name} synced"
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Incident report sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/incident-reports/latest")
+async def get_latest_incident_reports():
+    """Return the latest incident date per client and per employee for dashboard buttons."""
+    import psycopg2
+    import psycopg2.extras
+    try:
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        # By client
+        cur.execute("""
+            SELECT client_id, MAX(incident_date) as last_ir_date
+            FROM incident_reports WHERE client_id IS NOT NULL
+            GROUP BY client_id
+        """)
+        by_client = {r["client_id"]: r["last_ir_date"].isoformat() if r["last_ir_date"] else None for r in cur.fetchall()}
+
+        # By employee
+        cur.execute("""
+            SELECT employee_id, MAX(incident_date) as last_ir_date
+            FROM incident_reports WHERE employee_id IS NOT NULL AND employee_id != ''
+            GROUP BY employee_id
+        """)
+        by_employee = {r["employee_id"]: r["last_ir_date"].isoformat() if r["last_ir_date"] else None for r in cur.fetchall()}
+
+        cur.close()
+        conn.close()
+        return JSONResponse({"by_client": by_client, "by_employee": by_employee})
+    except Exception as e:
+        logger.error(f"Latest IR fetch error: {e}")
+        return JSONResponse({"by_client": {}, "by_employee": {}})
+
+
+@app.get("/api/incident-reports")
+async def get_incident_reports(client_id: str = None, employee_id: str = None):
+    """Return incident reports, optionally filtered."""
+    import psycopg2
+    import psycopg2.extras
+    try:
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        if client_id:
+            cur.execute("SELECT * FROM incident_reports WHERE client_id = %s ORDER BY incident_date DESC", (client_id,))
+        elif employee_id:
+            cur.execute("SELECT * FROM incident_reports WHERE employee_id = %s ORDER BY incident_date DESC", (employee_id,))
+        else:
+            cur.execute("SELECT * FROM incident_reports ORDER BY incident_date DESC LIMIT 100")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        reports = []
+        for r in rows:
+            report = dict(r)
+            for k, v in report.items():
+                if hasattr(v, 'isoformat'):
+                    report[k] = v.isoformat()
+            reports.append(report)
+
+        return JSONResponse({"reports": reports})
+    except Exception as e:
+        logger.error(f"Incident reports fetch error: {e}")
+        return JSONResponse({"reports": []})
+
+
 # Analytics endpoints
 @app.post("/api/analytics/track-session")
 async def track_session(
