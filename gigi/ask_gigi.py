@@ -279,10 +279,6 @@ async def _call_anthropic(bot, history, sys_prompt):
     # Safety net: if Anthropic returned no text after tool calls, force a summary
     if not final and tool_results:
         logger.warning("Ask-Gigi: Anthropic returned no text after tool calls — requesting summary")
-        # Add the final tool response and ask for a text summary without tools
-        summary_messages = messages + [
-            {"role": "assistant", "content": [b for b in response.content if b.type != "text"] if hasattr(response.content[0], 'type') else response.content},
-        ]
         try:
             # One more call WITHOUT tools to force text output
             summary_resp = bot.llm.messages.create(
