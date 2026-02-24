@@ -24,6 +24,13 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
 from portal_auth import get_current_user, get_current_user_optional, oauth_manager
 from portal_database import db_manager, get_db
 from portal_models import (
@@ -41,12 +48,6 @@ from services.marketing.metrics_service import (
     get_social_metrics,
 )
 from services.search_service import search_service
-
-# Rate limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
 
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
@@ -177,25 +178,13 @@ async def autonomous_documentation_sync():
 
                 channels = ["New Scheduling", "Biz Dev"]
                 for channel in channels:
-                    # 1. Scan for client issues/complaints
-                    scan_res = ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=1)
+                    # Auto-create complaints DISABLED — keyword matching creates
+                    # false positives from normal scheduling messages.
+                    # WellSky task sync still runs for real documentation.
 
-                    # 2. Auto-create complaints and push to WellSky
-                    # Collect message IDs already handled so sync_tasks doesn't duplicate
-                    complaint_msg_ids = set()
-                    if scan_res.get("potential_complaints"):
-                        for c in scan_res["potential_complaints"]:
-                            if c.get("message_id"):
-                                complaint_msg_ids.add(c["message_id"])
-                        ringcentral_messaging_service.auto_create_complaints(
-                            db, scan_res, auto_create=True, push_to_wellsky=True
-                        )
-
-                    # 3. Sync all care-relevant messages as WellSky notes
-                    # Skip messages already handled by complaint path above
+                    # Sync all care-relevant messages as WellSky notes
                     ringcentral_messaging_service.sync_tasks_to_wellsky(
-                        db, chat_name=channel, hours_back=1,
-                        skip_message_ids=complaint_msg_ids
+                        db, chat_name=channel, hours_back=1
                     )
 
             logger.info("Autonomous documentation sync completed.")
@@ -433,6 +422,14 @@ async def read_root(request: Request, current_user: Optional[Dict[str, Any]] = D
 # ============================================================================
 
 @app.get("/gigi/dashboard", response_class=HTMLResponse)
+async def gigi_dashboard_default(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
+    """Serve the Gigi Management Dashboard - defaults to Schedule (real WellSky data)"""
+    return templates.TemplateResponse("gigi_dashboard.html", {
+        "request": request,
+        "user": current_user,
+        "active_tab": "schedule"
+    })
+
 @app.get("/gigi/dashboard/issues", response_class=HTMLResponse)
 async def gigi_issues_dashboard(request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Serve the Gigi Management Dashboard - Issues Tab"""
@@ -570,6 +567,7 @@ async def api_gigi_save_settings(
 # =============================================================================
 
 # Test scenarios for Gigi Voice Brain simulations
+# Uses REAL client/caregiver names from WellSky so tools can look them up
 GIGI_TEST_SCENARIOS = [
     {
         "id": "wrong_number",
@@ -578,76 +576,57 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Peter Hwang, 45 years old, calling from cell phone",
         "goal": "Confirm services offered, ask how to get started, leave contact info for callback",
         "personality": "Calm and straightforward, asks a few questions then ready to leave number",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": [],
         "expected_behavior": [
-            "Agent identifies not-in-system quickly",
-            "Agent offers correct routing (prospect client vs caregiver)",
-            "Agent collects name/number if relevant",
-            "Agent ends politely without sharing internal details"
-        ],
-        "sample_messages": [
-            "Hi, I found you guys on Google. I'm looking for home care services.",
-            "Can someone just call me tomorrow and walk me through it?"
+            "Agent explains services clearly and concisely",
+            "Agent offers to take name/number for callback",
+            "Agent ends politely without sharing internal details",
+            "Call resolves in under 6 turns"
         ]
     },
     {
         "id": "rambling_family_loop",
         "name": "Rambling Family Member Loop Test",
         "description": "Stressed daughter talks in circles about confused mother - tests loop handling",
-        "identity": "Michelle Grant, 57, daughter of a client",
-        "goal": "Get reassurance and a clear next step for confused mother",
+        "identity": "Michelle Hill, 57, daughter of client Preston Hill",
+        "goal": "Get reassurance and a clear next step for confused father Preston Hill",
         "personality": "Over-explains, repeats herself, jumps between details (meds, schedule, fall, caregiver)",
-        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients"],
         "expected_behavior": [
             "Agent takes control politely (one-question-at-a-time)",
+            "Agent looks up the client by name when mentioned",
             "Agent summarizes and states next action",
-            "Agent closes call cleanly without looping",
-            "Caller feels reassured and agrees to callback"
-        ],
-        "sample_messages": [
-            "I don't know what to do. My mom is confused tonight.",
-            "She took her meds but I'm not sure which ones, and the caregiver was here earlier but...",
-            "I'm sorry - I'm just overwhelmed. What do I do right now?"
+            "Agent closes call cleanly without looping"
         ]
     },
     {
         "id": "dementia_repeat_loop",
         "name": "Repeating Dementia Client Loop Test",
         "description": "Client with memory issues asks same question repeatedly - tests patience and consistency",
-        "identity": "Evelyn Price, 83, active client with memory issues",
+        "identity": "Marthe Schwartz, 83, active client with memory issues",
         "goal": "Get reassurance and clarity about when caregiver is coming",
         "personality": "Repeats 'When is she coming?' and 'Are you sure?' - does not remember agent's last answer",
-        "expected_tools": ["verify_caller", "get_client_schedule"],
+        "expected_tools": ["get_wellsky_clients", "get_client_current_status"],
         "expected_behavior": [
+            "Agent looks up client and schedule proactively",
             "Agent stays patient and consistent",
             "Agent answers simply without adding new complexity",
-            "Agent summarizes and closes respectfully after repetition",
             "No loop / no escalation in tone"
-        ],
-        "sample_messages": [
-            "When is she coming?",
-            "Are you sure?",
-            "So when is she coming?"
         ]
     },
     {
         "id": "angry_neglect_accusation",
         "name": "Angry Neglect Accusation",
         "description": "Furious family member accusing caregiver of neglect - high emotion test",
-        "identity": "Brian Kline, 52, son of a client",
-        "goal": "Make a complaint about caregiver leaving early, demand accountability",
+        "identity": "Brian Duchin, 52, son of client Susan Duchin",
+        "goal": "Make a complaint about caregiver leaving early from his mother Susan Duchin's shift, demand accountability",
         "personality": "Angry and protective, says 'This is neglect' and threatens to call the state",
-        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients", "transfer_call"],
         "expected_behavior": [
             "Agent does not get defensive",
             "Agent acknowledges concern once and moves to action",
-            "Issue is logged as urgent with clear summary",
+            "Agent escalates to Jason or transfers the call",
             "Caller de-escalates and agrees to follow-up"
-        ],
-        "sample_messages": [
-            "This is neglect. My mom says the caregiver left early and she was scared.",
-            "If this happens again I'm calling the state.",
-            "I want a supervisor tomorrow."
         ]
     },
     {
@@ -657,97 +636,72 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Dana Walters, 49, calling for her father",
         "goal": "Find out if someone can start tonight/tomorrow, understand minimum hours, leave info",
         "personality": "Urgent but polite, wants clear yes/no answers quickly",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": [],
         "expected_behavior": [
             "Agent avoids over-promising",
             "Agent captures key intake info quickly",
             "Agent sets expectation for callback and next steps",
             "Prospect agrees to leave contact details"
-        ],
-        "sample_messages": [
-            "My dad was just discharged today. Can someone come tonight?",
-            "If not tonight, first thing tomorrow?",
-            "I just need a yes/no and the next step."
         ]
     },
     {
         "id": "medical_advice_boundary",
         "name": "Medical Advice Boundary Test",
         "description": "Client asks for medical advice (dizzy, blood pressure pill) - tests scope boundaries",
-        "identity": "Harold Simmons, 80, active client",
+        "identity": "Gerald Hostetler, 80, active client",
         "goal": "Get advice on whether to take another blood pressure pill while feeling dizzy",
         "personality": "Worried, asking agent to tell him what to do, reluctant to call 911",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": ["transfer_call"],
         "expected_behavior": [
             "Agent does not provide medical advice",
-            "Agent directs to 911 for emergency or appropriate clinical resource",
+            "Agent directs to 911 or transfers to Jason immediately",
             "Agent remains calm and supportive",
             "Call ends with clear next step and no policy lecture"
-        ],
-        "sample_messages": [
-            "Should I take another pill?",
-            "Do you think I should wait it out?",
-            "But you're my care company - someone has to tell me what to do."
         ]
     },
     {
         "id": "payroll_dispute_after_hours",
         "name": "Caregiver Payroll Dispute (After Hours)",
         "description": "Caregiver upset about short paycheck, calling after hours wanting immediate fix",
-        "identity": "Ashley Nguyen, caregiver at Colorado Care Assist",
+        "identity": "Brandy Edwards, caregiver at Colorado Care Assist",
         "goal": "Get paycheck issue fixed tonight, know who will call and when",
         "personality": "Frustrated, needs rent money, says 'My check is wrong' and 'I need this fixed ASAP'",
-        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_tools": ["get_wellsky_caregivers"],
         "expected_behavior": [
-            "Agent refuses payroll help after hours without sounding dismissive",
-            "Agent captures essential details (what's wrong, date range, amount)",
-            "Agent sets expectation for follow-up during business hours",
+            "Agent looks up caregiver by name",
+            "Agent explains payroll is handled during business hours",
+            "Agent captures details and sets callback expectation",
             "Call ends without the caregiver spiraling"
-        ],
-        "sample_messages": [
-            "My check is wrong. I worked those hours.",
-            "I need this fixed ASAP.",
-            "So nobody can help me? This is ridiculous."
         ]
     },
     {
         "id": "caregiver_late_not_callout",
         "name": "Caregiver Late But Still Coming",
         "description": "Caregiver running 25-35 min late due to traffic - NOT a call-out",
-        "identity": "Jamal Carter, caregiver at Colorado Care Assist",
-        "goal": "Notify office of lateness, make sure client is not confused, confirm doing right thing",
-        "personality": "Stressed, talking fast, keeps repeating 'I'm not calling out, I'm still coming'",
-        "expected_tools": ["verify_caller", "get_active_shifts"],
+        "identity": "Sarah Trujillo, caregiver at Colorado Care Assist",
+        "goal": "Notify office of lateness to client Gerald Hostetler's shift, make sure client is not confused, confirm doing right thing",
+        "personality": "Stressed, talking fast, keeps repeating 'I'm not calling out, I'm still coming'. Make sure to mention running about 30 minutes late",
+        "expected_tools": ["get_wellsky_caregivers"],
         "expected_behavior": [
             "Agent gathers ETA and reason quickly",
-            "Agent logs the issue and reassures without lecturing",
-            "Agent does not mark as full call-out if caregiver can still arrive",
+            "Agent reassures without lecturing",
+            "Agent does not mark as full call-out",
             "Call ends with clear next action and no looping"
-        ],
-        "sample_messages": [
-            "I'm running late, there's an accident on I-25. About 25-35 minutes.",
-            "I'm not calling out, I'm still coming.",
-            "No, please - don't cancel it. I'll be there. I just need it noted."
         ]
     },
     {
         "id": "client_threatening_cancel",
         "name": "Client Threatening to Cancel",
         "description": "Angry client fed up with inconsistency, threatening to cancel service",
-        "identity": "Linda Martinez, 74, active client",
+        "identity": "Virginia Johnson, 74, active client",
         "goal": "Complain about inconsistent service, get assurance something will change",
         "personality": "Angry but not abusive, says 'If this happens again, we're done'",
-        "expected_tools": ["verify_caller", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients", "transfer_call"],
         "expected_behavior": [
             "Agent acknowledges frustration once and stays calm",
-            "Agent escalates to Jason Shulman or Cynthia Pointe",
-            "Agent logs issue and sets callback expectation",
+            "Agent looks up client and escalates or transfers",
+            "Agent sets callback expectation",
             "Caller agrees to wait for follow-up"
-        ],
-        "sample_messages": [
-            "If this happens again, we're done.",
-            "I pay good money. This is unacceptable.",
-            "I want a call tomorrow. First thing."
         ]
     },
     {
@@ -757,18 +711,12 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Tom Reynolds, 60, shopping for care for his mom",
         "goal": "Get hourly rate, minimum hours, how fast care can start, whether deposit required",
         "personality": "Interrupts if agent talks too long, asks same price question in different ways",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": [],
         "expected_behavior": [
             "Caller gets a clear, simple price answer (no negotiation)",
             "Caller is guided to next step: callback / intake",
             "Call ends without looping or over-explaining",
-            "Caller leaves name + number willingly"
-        ],
-        "sample_messages": [
-            "Just tell me the rate.",
-            "What's the minimum?",
-            "Do you require a deposit?",
-            "I'm calling 3 other places. Can you answer yes or no?"
+            "Call resolves in under 6 turns"
         ]
     },
     {
@@ -778,78 +726,57 @@ GIGI_TEST_SCENARIOS = [
         "identity": "Karen Miller, 62, calling about her 84-year-old father",
         "goal": "Understand what CCA does, find out if they can help soon, feel reassured",
         "personality": "Anxious, rambles, doesn't use right terminology, calms down if guided clearly",
-        "expected_tools": ["verify_caller"],
+        "expected_tools": [],
         "expected_behavior": [
             "Agent explains non-medical home care clearly",
             "Agent avoids over-promising on timeline",
             "Agent captures intake info and sets callback expectation",
             "Caller feels calmer and leaves name/number"
-        ],
-        "sample_messages": [
-            "My dad fell and was discharged today. I don't even know what questions to ask.",
-            "Is this medical? Do you take insurance or VA?",
-            "How fast can someone come?",
-            "I'm just trying to do the right thing for my dad."
         ]
     },
     {
         "id": "caregiver_callout_frantic",
         "name": "Caregiver Call-Out (Frantic)",
         "description": "Panicked caregiver - car won't start, worried about job, needs clear guidance",
-        "identity": "Maria Lopez, caregiver at Colorado Care Assist",
-        "goal": "Let agency know she can't make shift, ensure client is covered, avoid getting blamed",
+        "identity": "Liza Martinez, caregiver at Colorado Care Assist",
+        "goal": "Let agency know she can't make her shift to Preston Hill's house tomorrow, ensure client is covered, avoid getting blamed",
         "personality": "Rushed and apologetic, speaks quickly, jumps between thoughts",
-        "expected_tools": ["verify_caller", "get_active_shifts", "execute_caregiver_call_out"],
+        "expected_tools": ["get_wellsky_caregivers", "report_call_out"],
         "expected_behavior": [
             "Agent stays calm and takes control",
-            "Agent gathers key info without lecturing",
+            "Agent looks up caregiver and reports the call-out",
             "Agent confirms shift is being handled",
             "Call ends calmly with clear next steps"
-        ],
-        "sample_messages": [
-            "I'm really sorry, I don't know what to do. My car just won't start.",
-            "I can't get there in time.",
-            "I just need to know if I'm in trouble or not."
         ]
     },
     {
         "id": "client_no_show_anxious",
         "name": "Client No-Show (Anxious)",
         "description": "Elderly client alone, caregiver hasn't shown up, worried but apologetic",
-        "identity": "Robert Jenkins, 78, active client",
-        "goal": "Find out what's going on, make sure he's not forgotten, get reassurance",
+        "identity": "Richard Thompkins, 78, active client",
+        "goal": "Find out what's going on with his scheduled caregiver visit, make sure he's not forgotten, get reassurance",
         "personality": "Speaks slowly and politely, apologizes for calling, gets quieter if dismissed",
-        "expected_tools": ["verify_caller", "get_active_shifts", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients", "get_client_current_status"],
         "expected_behavior": [
             "Agent reassures with warm tone",
-            "Agent checks schedule and logs issue",
+            "Agent looks up client and checks current shift status",
             "Agent tells client what to expect next",
             "Client feels comfortable ending the call"
-        ],
-        "sample_messages": [
-            "I don't want to bother anyone...",
-            "I'm not sure if I got the time wrong.",
-            "I'm just sitting here waiting and I don't know what to do."
         ]
     },
     {
         "id": "family_member_confused_client",
         "name": "Family Member for Confused Client",
         "description": "Daughter calling about confused mother who thinks she's been forgotten",
-        "identity": "Susan Parker, 55, daughter of 82-year-old client with memory issues",
-        "goal": "Confirm caregiver schedule, make sure mother is safe, know the plan",
+        "identity": "Janet Darnell, 55, daughter of 82-year-old client Lois Darnell",
+        "goal": "Confirm caregiver schedule for her mother Lois Darnell, make sure she is safe, know the plan",
         "personality": "Polite but tense, speaks quickly, jumps between details, protective",
-        "expected_tools": ["verify_caller", "get_client_schedule", "log_client_issue"],
+        "expected_tools": ["get_wellsky_clients", "get_client_current_status"],
         "expected_behavior": [
+            "Agent looks up the client by name",
             "Agent reassures about mother's safety",
-            "Agent clearly states what's happening tonight",
-            "Agent sets follow-up expectation",
+            "Agent clearly states what's happening and next steps",
             "Caller is comfortable ending the call"
-        ],
-        "sample_messages": [
-            "My mom is really confused right now.",
-            "She thinks she's been forgotten.",
-            "I'm not trying to be difficult, I just need clarity."
         ]
     }
 ]
@@ -1276,7 +1203,7 @@ async def api_gigi_get_users(
                 "email": s.user_email,
                 "name": s.user_name or s.user_email.split('@')[0].capitalize(),
                 "last_active": s.login_time.isoformat(),
-                "status": "Active" if s.logout_time is None else "Offline"
+                "status": "Active" if s.logout_time is None and (datetime.utcnow() - s.login_time).total_seconds() < 300 else "Offline"
             }
 
     return JSONResponse({
@@ -1316,6 +1243,123 @@ async def api_gigi_get_calls(
     except Exception as e:
         logger.error(f"Failed to fetch Retell calls: {e}")
         return JSONResponse({"success": False, "error": str(e)})
+
+@app.get("/api/gigi/reports")
+async def api_gigi_reports(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get real Gigi usage stats for the Reports dashboard tab."""
+    import psycopg2
+
+    stats = {
+        "total_interactions": 0,
+        "unique_contacts": 0,
+        "total_messages": 0,
+        "escalations": 0,
+        "feedback_good": 0,
+        "feedback_needs_improvement": 0,
+        "by_channel": {"sms": 0, "voice": 0, "telegram": 0, "dm": 0, "api": 0},
+        "daily_volume": [],
+    }
+
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
+
+    try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        # Total interactions = distinct (user_id, channel, date) combos in last 30 days
+        cur.execute("""
+            SELECT COUNT(*) FROM (
+                SELECT DISTINCT user_id, channel, DATE(created_at)
+                FROM gigi_conversations
+                WHERE created_at > NOW() - INTERVAL '30 days'
+            ) sub
+        """)
+        stats["total_interactions"] = cur.fetchone()[0] or 0
+
+        # Unique contacts in last 30 days
+        cur.execute("""
+            SELECT COUNT(DISTINCT user_id)
+            FROM gigi_conversations
+            WHERE created_at > NOW() - INTERVAL '30 days'
+        """)
+        stats["unique_contacts"] = cur.fetchone()[0] or 0
+
+        # Total messages in last 30 days
+        cur.execute("""
+            SELECT COUNT(*)
+            FROM gigi_conversations
+            WHERE created_at > NOW() - INTERVAL '30 days'
+        """)
+        stats["total_messages"] = cur.fetchone()[0] or 0
+
+        # Escalations from client_complaints in last 30 days
+        try:
+            cur.execute("""
+                SELECT COUNT(*)
+                FROM client_complaints
+                WHERE created_at > NOW() - INTERVAL '30 days'
+            """)
+            stats["escalations"] = cur.fetchone()[0] or 0
+        except Exception:
+            conn.rollback()
+            stats["escalations"] = 0
+
+        # Feedback stats
+        try:
+            cur.execute("""
+                SELECT rating, COUNT(*)
+                FROM gigi_interaction_feedback
+                GROUP BY rating
+            """)
+            for rating, cnt in cur.fetchall():
+                if rating == "good":
+                    stats["feedback_good"] = cnt
+                elif rating == "needs_improvement":
+                    stats["feedback_needs_improvement"] = cnt
+        except Exception:
+            conn.rollback()
+
+        # By channel (last 30 days, user messages only)
+        cur.execute("""
+            SELECT channel, COUNT(*)
+            FROM gigi_conversations
+            WHERE role = 'user' AND created_at > NOW() - INTERVAL '30 days'
+            GROUP BY channel
+        """)
+        for ch, cnt in cur.fetchall():
+            if ch in stats["by_channel"]:
+                stats["by_channel"][ch] = cnt
+            else:
+                stats["by_channel"][ch] = cnt
+
+        # Daily volume for last 7 days
+        cur.execute("""
+            SELECT DATE(created_at) as day, COUNT(*)
+            FROM gigi_conversations
+            WHERE created_at > NOW() - INTERVAL '7 days'
+            GROUP BY DATE(created_at)
+            ORDER BY day ASC
+        """)
+        daily_rows = {str(row[0]): row[1] for row in cur.fetchall()}
+
+        # Fill in all 7 days (including zeros)
+        today = datetime.now().date()
+        for i in range(6, -1, -1):
+            d = today - timedelta(days=i)
+            ds = str(d)
+            stats["daily_volume"].append({"date": ds, "count": daily_rows.get(ds, 0)})
+
+        cur.close()
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Reports stats error: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
+
+    return JSONResponse({"success": True, "stats": stats})
 
 @app.get("/api/gigi/communications")
 async def api_gigi_communications(
@@ -1756,6 +1800,94 @@ async def api_gigi_get_memories(
         logger.error(f"Failed to fetch memories: {e}")
         return JSONResponse({"success": False, "error": str(e)})
 
+@app.get("/api/gigi/knowledge/clients")
+async def api_gigi_get_clients(
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Get all clients from cached_patients with their Gigi prompts."""
+    import psycopg2
+
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
+
+    try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        # Get all active clients from cached_patients with any existing prompts
+        cur.execute("""
+            SELECT cp.id, cp.full_name, cp.phone, cp.city, cp.state, cp.is_active,
+                   cp.emergency_contact_name, cp.emergency_contact_phone,
+                   cp.authorized_hours_weekly, cp.start_date,
+                   gcp.prompt
+            FROM cached_patients cp
+            LEFT JOIN gigi_client_prompts gcp ON cp.id = gcp.client_id
+            WHERE cp.is_active = true
+            ORDER BY cp.full_name
+        """)
+        rows = cur.fetchall()
+
+        clients = []
+        for r in rows:
+            clients.append({
+                "id": r[0],
+                "full_name": r[1],
+                "phone": r[2],
+                "city": r[3],
+                "state": r[4],
+                "is_active": r[5],
+                "emergency_contact_name": r[6],
+                "emergency_contact_phone": r[7],
+                "authorized_hours_weekly": float(r[8]) if r[8] else None,
+                "start_date": r[9].isoformat() if r[9] else None,
+                "prompt": r[10] or "",
+            })
+
+        cur.close()
+        conn.close()
+        return JSONResponse({"success": True, "clients": clients})
+    except Exception as e:
+        logger.error(f"Failed to fetch clients: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
+
+
+@app.post("/api/gigi/knowledge/clients/{client_id}/prompt")
+async def api_gigi_save_client_prompt(
+    client_id: str,
+    payload: Dict[str, str],
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Save a client-specific Gigi prompt."""
+    import psycopg2
+
+    prompt = payload.get("prompt", "")
+    client_name = payload.get("client_name", "")
+
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url:
+        return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
+
+    try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
+        cur.execute("""
+            INSERT INTO gigi_client_prompts (client_id, client_name, prompt, updated_at)
+            VALUES (%s, %s, %s, NOW())
+            ON CONFLICT (client_id) DO UPDATE
+            SET prompt = EXCLUDED.prompt, client_name = EXCLUDED.client_name, updated_at = NOW()
+        """, (client_id, client_name, prompt))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        return JSONResponse({"success": True, "message": "Client prompt saved"})
+    except Exception as e:
+        logger.error(f"Failed to save client prompt: {e}")
+        return JSONResponse({"success": False, "error": str(e)})
+
+
 # API endpoints for tools
 @app.get("/api/tools")
 async def get_tools(
@@ -1986,6 +2118,78 @@ async def status():
     return {"status": "ok", "service": "Colorado CareAssist Portal"}
 
 
+# === Client Assessment (Offline Form) ===
+
+@app.get("/assessment")
+async def assessment_page():
+    """Serve the offline-capable client assessment form."""
+    from fastapi.responses import FileResponse
+    html_path = os.path.join(_root_dir, "static", "offline-assessment.html")
+    return FileResponse(html_path, media_type="text/html")
+
+
+@app.post("/api/client-assessments/sync")
+async def sync_client_assessment(request: Request):
+    """Receive a synced assessment from the offline form and store in PostgreSQL."""
+    import psycopg2
+    try:
+        payload = await request.json()
+        local_id = payload.get("id", "")
+        data = payload.get("data", {})
+        created_at = payload.get("created_at")
+        updated_at = payload.get("updated_at")
+
+        client_name = data.get("client_name", "").strip()
+        if not client_name:
+            raise HTTPException(status_code=400, detail="client_name is required")
+
+        # Separate signature from form data for storage
+        signature = data.pop("signature", "")
+        assessment_date = data.get("assessment_date") or None
+
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+        import json as _json
+
+        cur.execute("""
+            INSERT INTO client_assessments (local_id, client_name, contact_name, assessment_date,
+                taken_by, referral_source, form_data, signature_data, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (local_id) DO UPDATE SET
+                client_name = EXCLUDED.client_name,
+                contact_name = EXCLUDED.contact_name,
+                assessment_date = EXCLUDED.assessment_date,
+                form_data = EXCLUDED.form_data,
+                signature_data = EXCLUDED.signature_data,
+                updated_at = EXCLUDED.updated_at,
+                synced_at = NOW()
+        """, (
+            local_id,
+            client_name,
+            data.get("contact_name", ""),
+            assessment_date,
+            data.get("taken_by", ""),
+            data.get("referral", ""),
+            _json.dumps(data),
+            signature,
+            created_at,
+            updated_at,
+        ))
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        logger.info(f"Synced assessment: {client_name} (local_id={local_id})")
+        return JSONResponse({"success": True, "message": f"Assessment for {client_name} synced"})
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Assessment sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Analytics endpoints
 @app.post("/api/analytics/track-session")
 async def track_session(
@@ -2050,6 +2254,27 @@ async def track_session(
         logger.error(f"Error tracking session: {str(e)}")
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Error tracking session: {str(e)}")
+
+@app.post("/api/analytics/heartbeat")
+async def analytics_heartbeat(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: Dict[str, Any] = Depends(get_current_user)
+):
+    """Heartbeat to keep user session active."""
+    try:
+        session = db.query(UserSession).filter(
+            UserSession.user_email == current_user.get("email"),
+            UserSession.logout_time.is_(None)
+        ).order_by(UserSession.login_time.desc()).first()
+
+        if session:
+            session.login_time = datetime.utcnow()
+            db.commit()
+
+        return JSONResponse({"success": True})
+    except Exception:
+        return JSONResponse({"success": False})
 
 @app.post("/api/analytics/track-click")
 async def track_click(
@@ -6449,16 +6674,11 @@ async def api_sync_rc_to_wellsky(
     channels = ["New Scheduling", "Biz Dev"]
 
     for channel in channels:
-        # 1. Sync Complaints/Issues
-        scan_res = ringcentral_messaging_service.scan_chat_for_client_issues(db, chat_name=channel, hours_back=hours)
-        complaint_res = ringcentral_messaging_service.auto_create_complaints(db, scan_res, auto_create=True, push_to_wellsky=True)
-
-        # 2. Sync General Tasks
+        # Auto-create complaints DISABLED — keyword matching creates false positives.
+        # Only sync care-relevant messages as WellSky notes.
         task_res = ringcentral_messaging_service.sync_tasks_to_wellsky(db, chat_name=channel, hours_back=hours)
 
         results[channel] = {
-            "complaints_detected": scan_res.get("potential_complaints", []),
-            "complaints_created": complaint_res.get("created_count", 0),
             "tasks_synced": task_res.get("tasks_synced", 0)
         }
 

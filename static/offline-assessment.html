@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="/static/assessment-manifest.json">
+<link rel="apple-touch-icon" href="/static/assessment-icon-192.svg">
+<title>CCA Client Assessment</title>
+<style>
+:root { --bg:#0f172a; --card:#1e293b; --border:#334155; --text:#f1f5f9; --muted:#94a3b8; --accent:#3b82f6; --green:#22c55e; --red:#ef4444; --orange:#f97316; --yellow:#eab308; }
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px}
+.header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:100}
+.header h1{font-size:16px;font-weight:600}
+.status{font-size:11px;padding:3px 8px;border-radius:10px;font-weight:600}
+.status.offline{background:rgba(249,115,22,.15);color:var(--orange)}
+.status.online{background:rgba(34,197,94,.15);color:var(--green)}
+.container{max-width:800px;margin:0 auto;padding:16px 12px}
+.nav{display:flex;gap:0;margin-bottom:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;flex-wrap:wrap}
+.nav button{flex:1;min-width:80px;padding:10px 4px;background:0 0;border:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;transition:.2s}
+.nav button.active{background:var(--accent);color:#fff}
+.tab{display:none}.tab.active{display:block}
+.section{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px}
+.section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--accent);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.section-title.green{color:var(--green)}
+.section-title.orange{color:var(--orange)}
+.section-title.yellow{color:var(--yellow)}
+.row{display:grid;gap:10px;margin-bottom:10px}
+.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:1fr 1fr 1fr}.c4{grid-template-columns:1fr 1fr 1fr 1fr}
+@media(max-width:600px){.c2,.c3,.c4{grid-template-columns:1fr}}
+.fg{display:flex;flex-direction:column}
+.fg label{font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:3px}
+.fg input,.fg select,.fg textarea{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:8px 10px;font-size:14px;font-family:inherit;transition:border .2s}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--accent)}
+.fg textarea{resize:vertical;min-height:60px}
+.fg select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath fill='%2394a3b8' d='M5 7L0 2h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.chk-row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px}
+.chk{display:flex;align-items:center;gap:5px}
+.chk input[type=checkbox],.chk input[type=radio]{width:16px;height:16px;accent-color:var(--accent)}
+.chk label{font-size:13px;color:var(--text);text-transform:none}
+.boilerplate{font-size:12px;line-height:1.6;color:var(--muted);margin-bottom:12px}
+.boilerplate b{color:var(--text)}
+.boilerplate ol{padding-left:18px;margin:8px 0}
+.boilerplate table{width:100%;border-collapse:collapse;margin:8px 0;font-size:11px}
+.boilerplate td,.boilerplate th{border:1px solid var(--border);padding:4px 6px;text-align:left}
+.sig-container{position:relative;margin-bottom:8px}
+.sig-toggle{display:flex;gap:0;margin-bottom:6px;border:1px solid var(--border);border-radius:6px;overflow:hidden;width:fit-content}
+.sig-toggle button{padding:4px 14px;background:0 0;border:none;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;transition:.2s}
+.sig-toggle button.active{background:var(--accent);color:#fff}
+.sig-typed-input{width:100%;height:100px;background:rgba(0,0,0,.25);border:2px dashed var(--border);border-radius:6px;color:var(--text);font-family:'Brush Script MT','Segoe Script','Dancing Script',cursive;font-size:32px;padding:10px 16px;display:none;resize:none;outline:none}
+.sig-typed-input:focus{border-color:var(--accent)}
+.sig-typed-input.signed{border-color:var(--green);border-style:solid}
+.sig-canvas{border:2px dashed var(--border);border-radius:6px;background:rgba(0,0,0,.25);cursor:crosshair;touch-action:none;width:100%;height:100px;display:block}
+.sig-canvas.signed{border-color:var(--green);border-style:solid}
+.btn{padding:10px 20px;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;transition:.2s}
+.btn-primary{background:var(--accent);color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-green{background:var(--green);color:#fff}
+.btn-red{background:transparent;color:var(--red);border:1px solid var(--red)}
+.btn-outline{background:transparent;color:var(--muted);border:1px solid var(--border)}
+.btn-sm{padding:5px 12px;font-size:11px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.saved-item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+.saved-item .info{flex:1}.saved-item .name{font-weight:600;font-size:14px}.saved-item .meta{font-size:11px;color:var(--muted);margin-top:2px}
+.saved-item .btns{display:flex;gap:6px}
+.badge{font-size:10px;padding:2px 6px;border-radius:6px;font-weight:600}
+.badge.synced{background:rgba(34,197,94,.15);color:var(--green)}
+.badge.pending{background:rgba(249,115,22,.15);color:var(--orange)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--green);color:#fff;padding:10px 20px;border-radius:8px;font-weight:600;font-size:13px;z-index:1000;display:none;box-shadow:0 4px 20px rgba(0,0,0,.4)}
+.install-banner{background:var(--card);border:1px solid var(--accent);border-radius:10px;padding:12px 16px;margin-bottom:16px;display:none;align-items:center;justify-content:space-between}
+.install-banner.show{display:flex}
+.install-banner span{font-size:13px;color:var(--text)}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>CCA Client Intake</h1>
+    <span class="status" id="conn">...</span>
+</div>
+<div class="container">
+    <div class="install-banner" id="install-banner">
+        <span>Install for offline use</span>
+        <button class="btn btn-primary btn-sm" id="install-btn">Install</button>
+    </div>
+    <div class="nav" id="main-nav">
+        <button class="active" onclick="go('form')">New</button>
+        <button onclick="go('saved')">Saved <span id="cnt"></span></button>
+    </div>
+
+    <!-- ========== NEW ASSESSMENT TAB ========== -->
+    <div class="tab active" id="tab-form">
+        <div class="nav" id="doc-nav">
+            <button class="active" onclick="doc('c01')">1: Assessment</button>
+            <button onclick="doc('c02')">2: Client Info</button>
+            <button onclick="doc('c03')">3: Disclosure</button>
+            <button onclick="doc('c04')">4: Rights</button>
+            <button onclick="doc('c05')">5: Agreement</button>
+            <button onclick="doc('c06')">6: Transport</button>
+        </div>
+
+        <!-- ===== C01: Assessment Form ===== -->
+        <div class="tab active" id="doc-c01">
+            <div class="section">
+                <div class="section-title">C01 — Assessment Form</div>
+                <div class="row c2">
+                    <div class="fg"><label>Contact Name</label><input id="contact_name"></div>
+                    <div class="fg"><label>Telephone</label><input type="tel" id="contact_phone"></div>
+                </div>
+                <div class="row c3">
+                    <div class="fg"><label>Date</label><input type="date" id="assessment_date"></div>
+                    <div class="fg"><label>Taken By</label><input id="taken_by" value="Jason Shulman"></div>
+                    <div class="fg"><label>Referral Source</label><input id="referral"></div>
+                </div>
+                <div class="row c2">
+                    <div class="fg"><label>Client Name</label><input id="client_name"></div>
+                    <div class="fg"><label>Relation to Contact</label><input id="relation_to_contact" placeholder="Daughter, Self, Spouse..."></div>
+                </div>
+                <div class="fg"><label>Current Situation</label><textarea id="current_situation" placeholder="Why are they seeking care? Recent events, discharge, decline..."></textarea></div>
+            </div>
+            <div class="section">
+                <div class="section-title">Assessment</div>
+                <div class="row c3">
+                    <div class="fg"><label>Assessment Date</label><input type="date" id="assessment_date_2"></div>
+                    <div class="fg"><label>Time</label><input type="time" id="assessment_time"></div>
+                    <div class="fg"><label>Address</label><input id="assessment_address"></div>
+                </div>
+                <div class="row c2">
+                    <div class="fg"><label>Diagnosis</label><textarea id="diagnosis" rows="2"></textarea></div>
+                    <div class="fg"><label>Care Goal</label><textarea id="care_goal" rows="2"></textarea></div>
+                </div>
+                <div class="fg"><label>Care Plan</label><textarea id="care_plan" rows="3" placeholder="ADLs, meal prep, medication reminders, companionship, transportation..."></textarea></div>
+            </div>
+            <div class="section">
+                <div class="section-title">Client Preferences &amp; Home</div>
+                <div class="row c2">
+                    <div class="fg"><label>Likes</label><textarea id="likes" rows="2" placeholder="Hobbies, interests..."></textarea></div>
+                    <div class="fg"><label>Dislikes</label><textarea id="dislikes" rows="2"></textarea></div>
+                </div>
+                <div style="margin-bottom:10px">
+                    <label style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted);margin-bottom:4px;display:block">Advanced Directives</label>
+                    <div class="chk-row">
+                        <div class="chk"><input type="checkbox" id="ad_dnr"><label for="ad_dnr">DNR</label></div>
+                        <div class="chk"><input type="checkbox" id="ad_most"><label for="ad_most">MOST</label></div>
+                        <div class="chk"><input type="checkbox" id="ad_poa"><label for="ad_poa">POA</label></div>
+                        <div class="chk"><input type="checkbox" id="ad_mpoa"><label for="ad_mpoa">MPOA</label></div>
+                    </div>
+                </div>
+                <div class="row c4">
+                    <div class="fg"><label>About the Home</label><input id="about_home" placeholder="Stairs, accessibility..."></div>
+                    <div class="fg"><label>Pets</label><select id="pets"><option value="">--</option><option>No</option><option>Yes</option></select></div>
+                    <div class="fg"><label>Smokes</label><select id="smokes"><option value="">--</option><option>No</option><option>Yes</option></select></div>
+                    <div class="fg"><label>Caregiver Pref</label><select id="caregiver_pref"><option value="">--</option><option>Female</option><option>Male</option><option>Either</option></select></div>
+                </div>
+                <div class="fg"><label>Additional Preferences</label><input id="addl_preferences"></div>
+            </div>
+            <div class="section">
+                <div class="section-title">Schedule &amp; Tasks</div>
+                <div class="fg"><label>Proposed Schedule</label><textarea id="proposed_schedule" rows="2" placeholder="Mon/Wed/Fri 9AM-1PM..."></textarea></div>
+                <div class="fg"><label>Required Tasks</label><textarea id="required_tasks" rows="2" placeholder="Bathing, dressing, meal prep, medication reminders..."></textarea></div>
+            </div>
+            <div class="section">
+                <div class="section-title">Plan for Payment</div>
+                <div class="chk-row">
+                    <div class="chk"><input type="radio" name="pay_type" id="pay_private" value="Private Pay"><label for="pay_private">Private Pay</label></div>
+                    <div class="chk"><input type="radio" name="pay_type" id="pay_ltc" value="Long Term Care"><label for="pay_ltc">Long Term Care</label></div>
+                    <div class="chk"><input type="radio" name="pay_type" id="pay_voucher" value="Voucher"><label for="pay_voucher">Voucher</label></div>
+                </div>
+                <div class="row c3">
+                    <div class="fg"><label>Provider / Insurer</label><input id="payment_provider"></div>
+                    <div class="fg"><label>Policy # / Limit</label><input id="payment_policy"></div>
+                    <div class="fg"><label>Bill Rate</label><input id="bill_rate" placeholder="$/hr"></div>
+                </div>
+                <div class="row c2">
+                    <div class="fg"><label>Daily Benefit Maximum</label><input id="daily_benefit_max" placeholder="$"></div>
+                    <div class="fg"><label>Life Benefit Maximum</label><input id="life_benefit_max" placeholder="$"></div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title">Notes</div>
+                <div class="fg"><label>Additional Notes</label><textarea id="c01_notes" rows="3"></textarea></div>
+            </div>
+        </div>
+
+        <!-- ===== C02: Client Information ===== -->
+        <div class="tab" id="doc-c02">
+            <div class="section">
+                <div class="section-title green">C02 — Client Information</div>
+                <div class="row c2">
+                    <div class="fg"><label>Client Name</label><input id="c02_client_name"></div>
+                    <div class="fg"><label>Home Phone</label><input type="tel" id="client_home_phone"></div>
+                </div>
+                <div class="fg"><label>Client Address</label><input id="client_address"></div>
+                <div class="row c2">
+                    <div class="fg"><label>Client Email</label><input type="email" id="client_email"></div>
+                    <div class="fg"><label>Cell Phone</label><input type="tel" id="client_cell_phone"></div>
+                </div>
+                <div class="row c3">
+                    <div class="fg"><label>Birth Date</label><input type="date" id="client_dob"></div>
+                    <div class="fg"><label>Diagnosis</label><input id="c02_diagnosis"></div>
+                    <div class="fg"><label>Referral</label><input id="c02_referral"></div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title green">Contacts</div>
+                <div class="row c2">
+                    <div class="fg"><label>Emergency Contact</label><input id="emergency_contact"></div>
+                    <div class="fg"><label>Cell Phone</label><input type="tel" id="emergency_phone"></div>
+                </div>
+                <div class="row c2">
+                    <div class="fg"><label>Care Contact</label><input id="care_contact"></div>
+                    <div class="fg"><label>Cell Phone</label><input type="tel" id="care_contact_phone"></div>
+                </div>
+                <div class="row c2">
+                    <div class="fg"><label>Other Contact</label><input id="other_contact"></div>
+                    <div class="fg"><label>Cell Phone</label><input type="tel" id="other_contact_phone"></div>
+                </div>
+                <div class="row c2">
+                    <div class="fg"><label>Payer Name</label><input id="payer_name"></div>
+                    <div class="fg"><label>Cell Phone</label><input type="tel" id="payer_phone"></div>
+                </div>
+                <div class="fg"><label>Payer Address</label><input id="payer_address"></div>
+                <div class="fg"><label>Payer Email</label><input type="email" id="payer_email"></div>
+            </div>
+            <div class="section">
+                <div class="section-title green">Payment Method</div>
+                <div class="chk-row">
+                    <div class="chk"><input type="radio" name="c02_pay" id="c02_ach" value="ACH"><label for="c02_ach">Online / ACH</label></div>
+                    <div class="chk"><input type="radio" name="c02_pay" id="c02_card" value="Card"><label for="c02_card">Credit Card / Electronic</label></div>
+                    <div class="chk"><input type="radio" name="c02_pay" id="c02_check" value="Check"><label for="c02_check">Check</label></div>
+                    <div class="chk"><input type="radio" name="c02_pay" id="c02_third" value="Third Party"><label for="c02_third">Third Party Payer</label></div>
+                </div>
+                <div class="boilerplate">
+                    <b>Electronic Transaction:</b> I authorize Colorado CareAssist to initiate an electronic debit against the following account when payment is due. This authority remains in effect until I notify CCA in writing to cancel. I agree to a 3% transaction fee.
+                </div>
+                <div class="row c3">
+                    <div class="fg"><label>Bank Name</label><input id="c02_bank"></div>
+                    <div class="fg"><label>Routing #</label><input id="c02_routing"></div>
+                    <div class="fg"><label>Account #</label><input id="c02_account"></div>
+                </div>
+                <div class="row c4">
+                    <div class="fg"><label>Card #</label><input id="c02_card_num"></div>
+                    <div class="fg"><label>Expires</label><input id="c02_card_exp" placeholder="MM/YY"></div>
+                    <div class="fg"><label>CVC</label><input id="c02_card_cvc"></div>
+                    <div class="fg"><label>Billing Zip</label><input id="c02_card_zip"></div>
+                </div>
+                <div class="boilerplate">Receipts sent to payer via:</div>
+                <div class="chk-row">
+                    <div class="chk"><input type="radio" name="receipt_method" id="receipt_email" value="email"><label for="receipt_email">Email</label></div>
+                    <div class="chk"><input type="radio" name="receipt_method" id="receipt_mail" value="mail"><label for="receipt_mail">U.S. Mail</label></div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title green">Signature</div>
+                <div class="fg"><label>Client or Representative Signature</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c02','draw',this)">Draw</button><button onclick="sigMode('c02','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c02" data-sig="c02"></canvas><textarea class="sig-typed-input" id="sig-typed-c02" data-sig="c02" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c02')">Clear</button>
+                </div>
+                <div class="row c2" style="margin-top:8px">
+                    <div class="fg"><label>Printed Name / Relationship</label><input id="c02_sig_name"></div>
+                    <div class="fg"><label>Date</label><input type="date" id="c02_sig_date"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== C03: Agency Disclosure ===== -->
+        <div class="tab" id="doc-c03">
+            <div class="section">
+                <div class="section-title orange">C03 — Agency Disclosure Notice</div>
+                <div class="boilerplate">
+                    <b>Name of Agency:</b> Colorado CareAssist<br>
+                    <b>Agency Type:</b> Personal Care or Non-Medical<br><br>
+                    Each home care agency is required to provide the consumer information as to the responsibilities of the agency, the home care worker, and the consumer regarding the employment and duties of each.<br><br>
+                    <b>Agency is the employer of record</b> for all staff providing direct care services and is responsible for all items listed below.<br><br>
+                    <table>
+                        <tr><th>Consumer</th><th>Worker</th><th>Agency</th><th>Responsibility</th></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Employer of the home care worker</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Supervision of the home care worker</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Scheduling of the home care worker</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Assignment of duties</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Hiring, firing and discipline</td></tr>
+                        <tr><td>&#10003;</td><td></td><td></td><td>Provision of supplies/materials for services</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Training and qualifications</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Liability for worker in consumer's home</td></tr>
+                    </table>
+                    <table>
+                        <tr><th>Consumer</th><th>Worker</th><th>Agency</th><th>Payment of:</th></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Wages to the home care worker</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Employment taxes</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Social Security taxes</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Unemployment insurance</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>General liability insurance</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Worker's Compensation</td></tr>
+                        <tr><td></td><td></td><td>&#10003;</td><td>Bond Insurance (if provided)</td></tr>
+                    </table>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title orange">Signatures</div>
+                <div class="fg"><label>Consumer or Authorized Representative</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c03_consumer','draw',this)">Draw</button><button onclick="sigMode('c03_consumer','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c03-consumer" data-sig="c03_consumer"></canvas><textarea class="sig-typed-input" id="sig-typed-c03_consumer" data-sig="c03_consumer" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c03_consumer')">Clear</button>
+                </div>
+                <div class="row c2" style="margin-top:8px">
+                    <div class="fg"><label>Printed Name of Consumer</label><input id="c03_consumer_name"></div>
+                    <div class="fg"><label>Date</label><input type="date" id="c03_consumer_date"></div>
+                </div>
+                <div class="row c2" style="margin-top:8px">
+                    <div class="fg"><label>Start of Care Date</label><input type="date" id="c03_start_date"></div>
+                    <div class="fg"><label>Home Care Worker (if applicable)</label><input id="c03_worker_name"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== C04: Consumer Rights ===== -->
+        <div class="tab" id="doc-c04">
+            <div class="section">
+                <div class="section-title yellow">C04 — Written Notice of Home Care Consumer Rights</div>
+                <div class="boilerplate">
+                    As a consumer of home care and services you are entitled to receive notification of the following rights both orally and in writing. <b>You have the right to exercise the following rights without retribution or retaliation from agency staff:</b>
+                    <ol>
+                        <li>Receive written information concerning the agency's policies on advance directives, including a description of applicable state law;</li>
+                        <li>Receive information about the care and services to be furnished, the disciplines that will furnish care, the frequency of proposed visits in advance and receive information about any changes;</li>
+                        <li>Receive care and services without discrimination based upon personal, cultural or ethnic preference, disabilities or whether you have formulated an advance directive;</li>
+                        <li>Authorize a representative to exercise your rights as a consumer of home care;</li>
+                        <li>Be informed of the full name, licensure status, staff position and employer of all persons supplying, staffing or supervising the care and services you receive;</li>
+                        <li>Be informed and participate in planning care and services and receive care from staff who are properly trained and competent;</li>
+                        <li>Refuse treatment within the confines of the law and be informed of the consequences;</li>
+                        <li>Participate in experimental research only upon your voluntary written consent;</li>
+                        <li>Have you and your property treated with respect and be free from neglect, financial exploitation, verbal, physical and psychological abuse;</li>
+                        <li>Be free from involuntary confinement and from physical or chemical restraints;</li>
+                        <li>Be ensured of the confidentiality of all records, communications, and personal information;</li>
+                        <li>Express complaints verbally or in writing about services or care that is or is not furnished.</li>
+                    </ol>
+                    <b>If you believe your rights have been violated you may contact the agency directly:</b><br>
+                    Colorado CareAssist, 1911 11th Street, Floor 2, Boulder CO 80302<br><br>
+                    <b>You may also file a complaint with:</b><br>
+                    Health Facilities and Emergency Medical Services Division, CDPHE<br>
+                    4300 Cherry Creek Drive South, Denver, CO 80246<br>
+                    303-692-2910 or 1-800-842-8826
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title yellow">Signatures</div>
+                <div class="fg"><label>Client or Client's Agent Signature</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c04_client','draw',this)">Draw</button><button onclick="sigMode('c04_client','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c04-client" data-sig="c04_client"></canvas><textarea class="sig-typed-input" id="sig-typed-c04_client" data-sig="c04_client" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c04_client')">Clear</button>
+                </div>
+                <div class="fg" style="margin-top:8px"><label>Date</label><input type="date" id="c04_client_date"></div>
+                <div class="fg" style="margin-top:12px"><label>Agency Representative Signature</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c04_agency','draw',this)">Draw</button><button onclick="sigMode('c04_agency','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c04-agency" data-sig="c04_agency"></canvas><textarea class="sig-typed-input" id="sig-typed-c04_agency" data-sig="c04_agency" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c04_agency')">Clear</button>
+                </div>
+                <div class="fg" style="margin-top:8px"><label>Date</label><input type="date" id="c04_agency_date"></div>
+            </div>
+        </div>
+
+        <!-- ===== C05: Service Agreement ===== -->
+        <div class="tab" id="doc-c05">
+            <div class="section">
+                <div class="section-title">C05 — Service Agreement</div>
+                <div class="row c2">
+                    <div class="fg"><label>Client Name</label><input id="c05_client_name"></div>
+                    <div class="fg"><label>Client Address</label><input id="c05_client_address"></div>
+                </div>
+                <div class="fg"><label>Client or Client's Agent Name</label><input id="c05_agent_name"></div>
+            </div>
+            <div class="section">
+                <div class="section-title">Obligation of Client (Section 2)</div>
+                <div class="row c4">
+                    <div class="fg"><label>Hours/Visit</label><input id="c05_hours" type="number"></div>
+                    <div class="fg"><label>Visits/Week</label><input id="c05_visits" type="number"></div>
+                    <div class="fg"><label>Rate ($)</label><input id="c05_rate"></div>
+                    <div class="fg"><label>Per</label><select id="c05_rate_type"><option value="">--</option><option>Hour</option><option>Day</option></select></div>
+                </div>
+                <div class="fg"><label>Additional Terms</label><textarea id="c05_additional" rows="2"></textarea></div>
+                <div class="row c2">
+                    <div class="fg"><label>Service Period</label><select id="c05_period"><option value="">--</option><option>Semi-Monthly</option><option>Monthly</option></select></div>
+                    <div class="fg"><label>Deposit Amount ($)</label><input id="c05_deposit"></div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title">Release of Healthcare Info (Section 14)</div>
+                <div class="fg"><label>Authorized individuals to exchange health info with CCA</label><textarea id="c05_hipaa_auth" rows="2" placeholder="Names of authorized individuals..."></textarea></div>
+            </div>
+            <div class="section">
+                <div class="section-title">Other (Section 15)</div>
+                <div class="fg"><label>Other terms</label><textarea id="c05_other" rows="2"></textarea></div>
+                <div class="row c3">
+                    <div class="fg"><label>Effective Day</label><input id="c05_eff_day" type="number" placeholder="DD"></div>
+                    <div class="fg"><label>Month</label><input id="c05_eff_month" placeholder="February"></div>
+                    <div class="fg"><label>City, Colorado</label><input id="c05_eff_city" placeholder="Boulder"></div>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title">Signatures</div>
+                <div class="fg"><label>Consumer or Authorized Representative</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c05_consumer','draw',this)">Draw</button><button onclick="sigMode('c05_consumer','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c05-consumer" data-sig="c05_consumer"></canvas><textarea class="sig-typed-input" id="sig-typed-c05_consumer" data-sig="c05_consumer" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c05_consumer')">Clear</button>
+                </div>
+                <div class="fg" style="margin-top:8px"><label>Date</label><input type="date" id="c05_consumer_date"></div>
+                <div class="fg" style="margin-top:12px"><label>Financially Responsible Party</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c05_financial','draw',this)">Draw</button><button onclick="sigMode('c05_financial','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c05-financial" data-sig="c05_financial"></canvas><textarea class="sig-typed-input" id="sig-typed-c05_financial" data-sig="c05_financial" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c05_financial')">Clear</button>
+                </div>
+                <div class="fg" style="margin-top:8px"><label>Date</label><input type="date" id="c05_financial_date"></div>
+                <div class="fg" style="margin-top:12px"><label>Agency Representative</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c05_agency','draw',this)">Draw</button><button onclick="sigMode('c05_agency','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c05-agency" data-sig="c05_agency"></canvas><textarea class="sig-typed-input" id="sig-typed-c05_agency" data-sig="c05_agency" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c05_agency')">Clear</button>
+                </div>
+                <div class="fg" style="margin-top:8px"><label>Date</label><input type="date" id="c05_agency_date"></div>
+            </div>
+        </div>
+
+        <!-- ===== C06: Transportation Waiver ===== -->
+        <div class="tab" id="doc-c06">
+            <div class="section">
+                <div class="section-title orange">C06 — Transportation Liability Waiver</div>
+                <div class="chk-row" style="margin-bottom:12px">
+                    <div class="chk"><input type="radio" name="transport" id="transport_yes" value="authorize"><label for="transport_yes">I <b>request and authorize</b> CCA to transport</label></div>
+                </div>
+                <div class="chk-row" style="margin-bottom:12px">
+                    <div class="chk"><input type="radio" name="transport" id="transport_no" value="decline"><label for="transport_no">I <b>decline and do not authorize</b> CCA to transport</label></div>
+                </div>
+                <div class="fg"><label>Name of Client</label><input id="c06_client_name"></div>
+                <div class="boilerplate" style="margin-top:12px">
+                    I understand that all Personal Care Workers employed by Colorado CareAssist Inc. who are assigned transporting duties are required to have valid drivers' licenses and carry relevant vehicle insurance including Personal Injury Protection.<br><br>
+                    I understand that CCA checks employees' driving records to ensure they are free from infractions.<br><br>
+                    I understand that CCA reviews the currency of employees' driver licenses and motor vehicle insurance coverage but does not perform safety inspections or monitor maintenance on employee-provided or employee-owned vehicles.<br><br>
+                    I understand that CCA does not provide vehicle insurance for employee-owned vehicles.<br><br>
+                    <b>I acknowledge that driving is risky and can result in serious injury or death.</b><br><br>
+                    I assume the risk of riding in motor vehicles of CCA or its employees and I forever discharge and release the Agency and its employees from any and all claims, including their own negligence, which may arise out of the operation of motor vehicles in which I am riding.<br><br>
+                    I acknowledge that I am responsible for my own vehicle insurance during all times that a CCA employee uses my vehicle or any vehicle that I supply.<br><br>
+                    <b>I have read and voluntarily agree to sign this Transportation Liability Waiver.</b>
+                </div>
+            </div>
+            <div class="section">
+                <div class="section-title orange">Signatures</div>
+                <div class="fg"><label>Client or Client's Agent Signature</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c06_client','draw',this)">Draw</button><button onclick="sigMode('c06_client','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c06-client" data-sig="c06_client"></canvas><textarea class="sig-typed-input" id="sig-typed-c06_client" data-sig="c06_client" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c06_client')">Clear</button>
+                </div>
+                <div class="fg" style="margin-top:8px"><label>Date</label><input type="date" id="c06_client_date"></div>
+                <div class="fg" style="margin-top:12px"><label>Agency Representative Signature</label>
+                    <div class="sig-toggle"><button class="active" onclick="sigMode('c06_agency','draw',this)">Draw</button><button onclick="sigMode('c06_agency','type',this)">Type</button></div>
+                    <div class="sig-container"><canvas class="sig-canvas" id="sig-c06-agency" data-sig="c06_agency"></canvas><textarea class="sig-typed-input" id="sig-typed-c06_agency" data-sig="c06_agency" placeholder="Type name to sign..."></textarea></div>
+                    <button class="btn btn-outline btn-sm" onclick="clearSig('c06_agency')">Clear</button>
+                </div>
+                <div class="fg" style="margin-top:8px"><label>Date</label><input type="date" id="c06_agency_date"></div>
+            </div>
+        </div>
+
+        <!-- Save / Clear buttons -->
+        <div class="actions">
+            <button class="btn btn-green" onclick="saveAssessment()">Save Assessment</button>
+            <button class="btn btn-outline" onclick="clearForm()">Clear All</button>
+        </div>
+    </div>
+
+    <!-- ========== SAVED TAB ========== -->
+    <div class="tab" id="tab-saved">
+        <div id="saved-list"></div>
+        <div class="actions" style="margin-top:12px">
+            <button class="btn btn-primary" onclick="syncAll()" id="sync-btn">Sync All to Portal</button>
+            <button class="btn btn-outline" onclick="exportAll()">Export JSON</button>
+        </div>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// === PWA Install ===
+const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+let deferredPrompt;
+if (!isStandalone) {
+    window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredPrompt = e; document.getElementById('install-banner').classList.add('show'); });
+    document.getElementById('install-btn').addEventListener('click', () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then(() => { deferredPrompt = null; document.getElementById('install-banner').classList.remove('show'); });
+    });
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/static/assessment-sw.js').catch(e => console.warn('SW:', e));
+
+// === Navigation ===
+function go(tab) {
+    document.querySelectorAll('#main-nav button').forEach((b,i) => b.classList.toggle('active', (i===0&&tab==='form')||(i===1&&tab==='saved')));
+    document.getElementById('tab-form').classList.toggle('active', tab==='form');
+    document.getElementById('tab-saved').classList.toggle('active', tab==='saved');
+    if (tab==='saved') renderSaved();
+}
+function doc(id) {
+    document.querySelectorAll('#doc-nav button').forEach((b,i) => {
+        const docs = ['c01','c02','c03','c04','c05','c06'];
+        b.classList.toggle('active', docs[i]===id);
+    });
+    ['c01','c02','c03','c04','c05','c06'].forEach(d => document.getElementById('doc-'+d).classList.toggle('active', d===id));
+    setTimeout(initAllCanvases, 50);
+}
+
+// === Connection ===
+function updateConn() { const el=document.getElementById('conn'); if(navigator.onLine){el.textContent='Online';el.className='status online'}else{el.textContent='Offline';el.className='status offline'} }
+window.addEventListener('online', updateConn); window.addEventListener('offline', updateConn); updateConn();
+
+// === Toast ===
+function showToast(m) { const t=document.getElementById('toast'); t.textContent=m; t.style.display='block'; setTimeout(()=>t.style.display='none',2500); }
+
+// === Signature Pads (Pointer Events — works on touch + mouse) ===
+const sigStates = {};
+const sigModes = {}; // 'draw' or 'type' per key
+
+function sigMode(key, mode, btn) {
+    sigModes[key] = mode;
+    const canvas = document.querySelector('[data-sig="'+key+'"].sig-canvas');
+    const typed = document.getElementById('sig-typed-'+key);
+    if (!canvas || !typed) return;
+    btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (mode === 'draw') {
+        canvas.style.display = 'block';
+        typed.style.display = 'none';
+    } else {
+        canvas.style.display = 'none';
+        typed.style.display = 'block';
+        typed.focus();
+    }
+}
+
+function initSigCanvas(canvas) {
+    const key = canvas.dataset.sig;
+    if (!key) return;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (!sigStates[key]) {
+        sigStates[key] = { drawing: false, hasSig: false, ctx, canvas, dpr };
+        canvas.addEventListener('pointerdown', e => startDraw(e, key));
+        canvas.addEventListener('pointermove', e => moveDraw(e, key));
+        canvas.addEventListener('pointerup', () => endDraw(key));
+        canvas.addEventListener('pointerleave', () => endDraw(key));
+        // Setup typed input listener
+        const typed = document.getElementById('sig-typed-'+key);
+        if (typed) typed.addEventListener('input', () => { typed.classList.toggle('signed', typed.value.trim().length > 0); });
+    } else {
+        sigStates[key].ctx = ctx;
+        sigStates[key].dpr = dpr;
+    }
+}
+
+function startDraw(e, key) {
+    e.preventDefault();
+    const s = sigStates[key];
+    s.drawing = true;
+    const r = s.canvas.getBoundingClientRect();
+    s.ctx.beginPath();
+    s.ctx.moveTo(e.clientX - r.left, e.clientY - r.top);
+}
+function moveDraw(e, key) {
+    e.preventDefault();
+    const s = sigStates[key];
+    if (!s.drawing) return;
+    const r = s.canvas.getBoundingClientRect();
+    s.ctx.lineTo(e.clientX - r.left, e.clientY - r.top);
+    s.ctx.stroke();
+    s.hasSig = true;
+    s.canvas.classList.add('signed');
+}
+function endDraw(key) { if (sigStates[key]) sigStates[key].drawing = false; }
+
+function clearSig(key) {
+    const s = sigStates[key];
+    if (s) {
+        s.ctx.clearRect(0, 0, s.canvas.width, s.canvas.height);
+        s.hasSig = false;
+        s.canvas.classList.remove('signed');
+        initSigCanvas(s.canvas);
+    }
+    const typed = document.getElementById('sig-typed-'+key);
+    if (typed) { typed.value = ''; typed.classList.remove('signed'); }
+}
+
+function renderTypedOnCanvas(key) {
+    const typed = document.getElementById('sig-typed-'+key);
+    const s = sigStates[key];
+    if (!typed || !s || !typed.value.trim()) return;
+    initSigCanvas(s.canvas);
+    const w = s.canvas.width / s.dpr, h = s.canvas.height / s.dpr;
+    s.ctx.fillStyle = '#f1f5f9';
+    s.ctx.font = '32px "Brush Script MT","Segoe Script","Dancing Script",cursive';
+    s.ctx.textBaseline = 'middle';
+    s.ctx.fillText(typed.value.trim(), 16, h / 2);
+    s.hasSig = true;
+    s.canvas.classList.add('signed');
+}
+
+function getSigData(key) {
+    // If in type mode and has typed text, render to canvas first
+    if (sigModes[key] === 'type') {
+        const typed = document.getElementById('sig-typed-'+key);
+        if (typed && typed.value.trim()) {
+            renderTypedOnCanvas(key);
+            return sigStates[key].canvas.toDataURL('image/png');
+        }
+        return '';
+    }
+    const s = sigStates[key];
+    return (s && s.hasSig) ? s.canvas.toDataURL('image/png') : '';
+}
+
+function getSigTyped(key) {
+    const typed = document.getElementById('sig-typed-'+key);
+    return typed ? typed.value : '';
+}
+
+function setSigData(key, dataUrl, typedText) {
+    if (typedText) {
+        const typed = document.getElementById('sig-typed-'+key);
+        if (typed) { typed.value = typedText; typed.classList.add('signed'); }
+        // Switch to type mode visually
+        sigModes[key] = 'type';
+        const toggle = document.querySelector('#sig-typed-'+key)?.closest('.fg')?.querySelector('.sig-toggle');
+        if (toggle) {
+            toggle.querySelectorAll('button').forEach((b,i) => b.classList.toggle('active', i===1));
+            const canvas = document.querySelector('[data-sig="'+key+'"].sig-canvas');
+            if (canvas) canvas.style.display = 'none';
+            if (typed) typed.style.display = 'block';
+        }
+        return;
+    }
+    if (!dataUrl) return;
+    const s = sigStates[key];
+    if (!s) return;
+    const img = new Image();
+    img.onload = () => {
+        initSigCanvas(s.canvas);
+        s.ctx.drawImage(img, 0, 0, s.canvas.width / s.dpr, s.canvas.height / s.dpr);
+        s.hasSig = true;
+        s.canvas.classList.add('signed');
+    };
+    img.src = dataUrl;
+}
+
+function initAllCanvases() {
+    document.querySelectorAll('.sig-canvas').forEach(initSigCanvas);
+}
+setTimeout(initAllCanvases, 200);
+window.addEventListener('resize', () => {
+    Object.keys(sigStates).forEach(k => { if (!sigStates[k].hasSig) initSigCanvas(sigStates[k].canvas); });
+});
+
+// === All Form Fields ===
+const INPUTS = [
+    'contact_name','contact_phone','assessment_date','taken_by','referral','client_name','relation_to_contact',
+    'current_situation','assessment_date_2','assessment_time','assessment_address','diagnosis','care_goal',
+    'care_plan','likes','dislikes','about_home','addl_preferences','proposed_schedule','required_tasks',
+    'payment_provider','payment_policy','bill_rate','daily_benefit_max','life_benefit_max','c01_notes',
+    'c02_client_name','client_home_phone','client_address','client_email','client_cell_phone','client_dob',
+    'c02_diagnosis','c02_referral','emergency_contact','emergency_phone','care_contact','care_contact_phone',
+    'other_contact','other_contact_phone','payer_name','payer_phone','payer_address','payer_email',
+    'c02_bank','c02_routing','c02_account','c02_card_num','c02_card_exp','c02_card_cvc','c02_card_zip',
+    'c02_sig_name','c02_sig_date','c03_consumer_name','c03_consumer_date','c03_start_date','c03_worker_name',
+    'c04_client_date','c04_agency_date',
+    'c05_client_name','c05_client_address','c05_agent_name','c05_hours','c05_visits','c05_rate',
+    'c05_additional','c05_deposit','c05_hipaa_auth','c05_other','c05_eff_day','c05_eff_month','c05_eff_city',
+    'c05_consumer_date','c05_financial_date','c05_agency_date',
+    'c06_client_name','c06_client_date','c06_agency_date'
+];
+const CHECKBOXES = ['ad_dnr','ad_most','ad_poa','ad_mpoa'];
+const RADIOS = ['pay_type','c02_pay','receipt_method','transport'];
+const SELECTS = ['pets','smokes','caregiver_pref','c05_rate_type','c05_period'];
+const SIGS = ['c02','c03_consumer','c04_client','c04_agency','c05_consumer','c05_financial','c05_agency','c06_client','c06_agency'];
+
+function getData() {
+    const d = {};
+    INPUTS.forEach(id => { const el=document.getElementById(id); if(el) d[id]=el.value; });
+    CHECKBOXES.forEach(id => { const el=document.getElementById(id); if(el) d[id]=el.checked; });
+    RADIOS.forEach(name => { const el=document.querySelector('input[name="'+name+'"]:checked'); d['radio_'+name] = el ? el.value : ''; });
+    SELECTS.forEach(id => { const el=document.getElementById(id); if(el) d[id]=el.value; });
+    SIGS.forEach(k => { d['sig_'+k] = getSigData(k); d['sigtyped_'+k] = getSigTyped(k); });
+    return d;
+}
+
+function setData(d) {
+    INPUTS.forEach(id => { const el=document.getElementById(id); if(el && d[id]!==undefined) el.value=d[id]; });
+    CHECKBOXES.forEach(id => { const el=document.getElementById(id); if(el && d[id]!==undefined) el.checked=d[id]; });
+    RADIOS.forEach(name => { if(d['radio_'+name]) { const el=document.querySelector('input[name="'+name+'"][value="'+d['radio_'+name]+'"]'); if(el) el.checked=true; } });
+    SELECTS.forEach(id => { const el=document.getElementById(id); if(el && d[id]!==undefined) el.value=d[id]; });
+    setTimeout(() => { initAllCanvases(); setTimeout(() => { SIGS.forEach(k => { if(d['sigtyped_'+k]) setSigData(k, null, d['sigtyped_'+k]); else if(d['sig_'+k]) setSigData(k, d['sig_'+k]); }); }, 100); }, 100);
+}
+
+function clearForm() {
+    INPUTS.forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    CHECKBOXES.forEach(id => { const el=document.getElementById(id); if(el) el.checked=false; });
+    RADIOS.forEach(name => { document.querySelectorAll('input[name="'+name+'"]').forEach(el => el.checked=false); });
+    SELECTS.forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+    SIGS.forEach(k => { clearSig(k); sigModes[k]='draw'; });
+    // Reset all sig toggles to draw mode
+    document.querySelectorAll('.sig-toggle').forEach(t => { t.querySelectorAll('button').forEach((b,i) => b.classList.toggle('active',i===0)); });
+    document.querySelectorAll('.sig-canvas').forEach(c => c.style.display='block');
+    document.querySelectorAll('.sig-typed-input').forEach(t => t.style.display='none');
+    document.getElementById('assessment_date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('taken_by').value = 'Jason Shulman';
+    currentEditId = null;
+    clearDraft();
+    doc('c01');
+}
+
+// === Storage ===
+const SK = 'cca_assessments_v2';
+const DRAFT_KEY = 'cca_draft';
+function getAll() { try { return JSON.parse(localStorage.getItem(SK)||'[]'); } catch { return []; } }
+function saveAllStorage(list) { localStorage.setItem(SK, JSON.stringify(list)); updCnt(); }
+function updCnt() { const c=getAll().length; document.getElementById('cnt').textContent = c ? '('+c+')' : ''; }
+
+let currentEditId = null;
+
+// === Auto-save draft to localStorage (every keystroke, debounced) ===
+let draftTimer = null;
+function saveDraft() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+        const d = getData();
+        const hasContent = INPUTS.some(id => { const el=document.getElementById(id); return el && el.value.trim() && id!=='taken_by' && id!=='assessment_date'; });
+        if (hasContent || currentEditId) {
+            localStorage.setItem(DRAFT_KEY, JSON.stringify({ data: d, editId: currentEditId, ts: Date.now() }));
+        }
+    }, 500);
+}
+function clearDraft() { localStorage.removeItem(DRAFT_KEY); }
+function loadDraft() {
+    try {
+        const raw = localStorage.getItem(DRAFT_KEY);
+        if (!raw) return false;
+        const draft = JSON.parse(raw);
+        if (!draft.data) return false;
+        setData(draft.data);
+        if (draft.editId) currentEditId = draft.editId;
+        return true;
+    } catch { return false; }
+}
+// Listen on all form inputs for auto-save
+document.addEventListener('input', saveDraft);
+document.addEventListener('change', saveDraft);
+
+function saveAssessment() {
+    const d = getData();
+    const name = d.client_name || d.c02_client_name || d.c05_client_name || '';
+    if (!name.trim()) { alert('Client Name is required (C01, C02, or C05).'); return; }
+
+    const list = getAll();
+    if (currentEditId) {
+        const idx = list.findIndex(a => a.id===currentEditId);
+        if (idx>=0) { list[idx].data=d; list[idx].updated_at=new Date().toISOString(); list[idx].synced=false; }
+        currentEditId = null;
+    } else {
+        list.push({ id:'assess_'+Date.now()+'_'+Math.random().toString(36).slice(2,8), data:d, created_at:new Date().toISOString(), updated_at:new Date().toISOString(), synced:false });
+    }
+    saveAllStorage(list);
+    clearDraft();
+    showToast('Assessment saved');
+    clearForm();
+    // Auto-sync immediately if online
+    if (navigator.onLine) setTimeout(autoSync, 300);
+}
+
+function renderSaved() {
+    const list=getAll(), c=document.getElementById('saved-list');
+    if (!list.length) { c.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">No saved assessments.</div>'; return; }
+    c.innerHTML = list.map(a => {
+        const name = a.data.client_name || a.data.c02_client_name || 'Unnamed';
+        const date = a.data.assessment_date || a.created_at.split('T')[0];
+        const badge = a.synced ? '<span class="badge synced">Synced</span>' : '<span class="badge pending">Pending</span>';
+        return '<div class="saved-item"><div class="info"><div class="name">'+name+' '+badge+'</div><div class="meta">'+date+'</div></div><div class="btns"><button class="btn btn-outline btn-sm" onclick="editA(\''+a.id+'\')">Edit</button><button class="btn btn-red btn-sm" onclick="delA(\''+a.id+'\')">Del</button></div></div>';
+    }).join('');
+}
+
+function editA(id) { const a=getAll().find(x=>x.id===id); if(!a) return; clearForm(); setData(a.data); currentEditId=id; go('form'); showToast('Editing: '+(a.data.client_name||'Assessment')); }
+function delA(id) { if(!confirm('Delete?')) return; saveAllStorage(getAll().filter(a=>a.id!==id)); renderSaved(); showToast('Deleted'); }
+
+// === Sync ===
+let syncing = false;
+async function autoSync() {
+    if (syncing || !navigator.onLine) return;
+    const list = getAll(), pending = list.filter(a => !a.synced);
+    if (!pending.length) return;
+    syncing = true;
+    let ok = 0;
+    for (const a of pending) {
+        try {
+            const r = await fetch('/api/client-assessments/sync', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(a) });
+            if (r.ok) { a.synced = true; ok++; }
+        } catch(e) { console.error('Sync fail:', a.id, e); }
+    }
+    if (ok > 0) { saveAllStorage(list); showToast('Auto-synced '+ok+' assessment'+(ok>1?'s':'')); }
+    syncing = false;
+}
+
+async function syncAll() {
+    if (!navigator.onLine) { alert('No internet. Will auto-sync when back online.'); return; }
+    const list=getAll(), pending=list.filter(a=>!a.synced);
+    if (!pending.length) { showToast('All synced'); return; }
+    const btn=document.getElementById('sync-btn'); btn.disabled=true; btn.textContent='Syncing...';
+    syncing = true;
+    let ok=0;
+    for (const a of pending) {
+        try {
+            const r = await fetch('/api/client-assessments/sync', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(a) });
+            if (r.ok) { a.synced=true; ok++; }
+        } catch(e) { console.error('Sync fail:', a.id, e); }
+    }
+    saveAllStorage(list); renderSaved();
+    btn.disabled=false; btn.textContent='Sync All to Portal';
+    syncing = false;
+    showToast('Synced '+ok+'/'+pending.length);
+}
+
+// Auto-sync when internet comes back
+window.addEventListener('online', () => { updateConn(); setTimeout(autoSync, 1000); });
+// Auto-sync every 60 seconds when online
+setInterval(() => { if (navigator.onLine) autoSync(); }, 60000);
+
+function exportAll() {
+    const list=getAll(); if(!list.length){alert('No assessments.');return;}
+    const b=new Blob([JSON.stringify(list,null,2)],{type:'application/json'});
+    const u=URL.createObjectURL(b), a=document.createElement('a');
+    a.href=u; a.download='cca-assessments-'+new Date().toISOString().split('T')[0]+'.json';
+    a.click(); URL.revokeObjectURL(u);
+    showToast('Exported '+list.length);
+}
+
+// === Auto-populate shared fields ===
+const FIELD_SYNC = {
+    'client_name': ['c02_client_name','c05_client_name','c06_client_name','c03_consumer_name'],
+    'client_address': ['c05_client_address'],
+    'assessment_address': ['client_address','c05_client_address'],
+    'diagnosis': ['c02_diagnosis'],
+    'referral': ['c02_referral']
+};
+Object.entries(FIELD_SYNC).forEach(([src, targets]) => {
+    const el = document.getElementById(src);
+    if (!el) return;
+    el.addEventListener('input', () => {
+        targets.forEach(tid => {
+            const t = document.getElementById(tid);
+            if (t && !t.value.trim()) t.value = el.value;
+        });
+    });
+});
+// Also sync c02 fields back to c01 if c01 is empty
+['c02_client_name','c05_client_name'].forEach(src => {
+    const el = document.getElementById(src);
+    if (!el) return;
+    el.addEventListener('input', () => {
+        const cn = document.getElementById('client_name');
+        if (cn && !cn.value.trim()) cn.value = el.value;
+    });
+});
+
+// === Init ===
+updCnt();
+// Restore draft if one exists, otherwise set defaults
+if (!loadDraft()) {
+    document.getElementById('assessment_date').value = new Date().toISOString().split('T')[0];
+}
+// Auto-sync any pending assessments on startup
+if (navigator.onLine) setTimeout(autoSync, 2000);
+</script>
+</body>
+</html>
