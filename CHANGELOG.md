@@ -1,5 +1,20 @@
 # Changelog
 
+## Feb 23, 2026
+- Monitoring Visit Form: Offline PWA form at `/mv` with auto-save drafts and auto-sync
+- Monitoring Visit Form: Service worker + manifest for installable mobile app
+- Monitoring Visit Form: `monitoring_visits` DB table
+- Monitoring Visit Form: POST /api/monitoring-visits/sync (DB + Google Drive upload to "Monitoring Visits" folder)
+- Monitoring Visit Form: GET /api/monitoring-visits/latest and GET /api/monitoring-visits
+- Monitoring Visit Form: +MV button in operations dashboard clients table
+- Incident Report Form: Offline PWA form at `/incident` with 2-section layout (Incident + Investigation/Findings)
+- Incident Report Form: Service worker + manifest for installable mobile app
+- Incident Report Form: `incident_reports` DB table
+- Incident Report Form: POST /api/incident-reports/sync (DB + Google Drive upload to HR/Incident Reports folder)
+- Incident Report Form: GET /api/incident-reports/latest and GET /api/incident-reports
+- Incident Report Form: +IR button in operations dashboard clients table
+- Incident Report Form: +IR button in Employee Portal employee list (EmployeeList.tsx)
+
 ## Feb 22, 2026
 - Fax: Full fax integration via RingCentral API (replaces $120/yr Fax.Plus)
 - Fax: Portal page with Inbox/Sent/Outbox tabs, multi-file upload, cover page/note, drag-and-drop page reorder
