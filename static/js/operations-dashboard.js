@@ -159,6 +159,7 @@
             state.atRiskClients = atRisk?.clients || [];
 
             updateDashboard();
+            loadHoursBreakdown();
         } catch (error) {
             console.error('Failed to fetch data:', error);
         } finally {
@@ -197,9 +198,47 @@
         setKPI('kpi-active-clients', s.active_clients || 0);
         setKPI('kpi-active-caregivers', s.active_caregivers || 0);
         setKPI('kpi-open-shifts', s.open_shifts || 0, s.open_shifts > 5 ? 'warning' : '');
-        setKPI('kpi-evv-rate', `${s.evv_compliance || 0}%`, s.evv_compliance < 85 ? 'warning' : 'positive');
-        setKPI('kpi-plans-due', s.plans_due_review || 0, s.plans_due_review > 3 ? 'warning' : '');
+
+        // Weekly hours + % to goal
+        const weeklyHrs = s.weekly_hours || 0;
+        setKPI('kpi-weekly-hours', weeklyHrs.toLocaleString());
+        const goalEl = document.getElementById('kpi-hours-goal');
+        if (goalEl) {
+            const pct = s.hours_pct_goal || 0;
+            goalEl.textContent = `${pct}% of 10k goal`;
+        }
+
+        // Profit per hour
+        const prof = s.profitability || {};
+        if (prof.profit_per_hour != null) {
+            setKPI('kpi-profit-per-hour', `$${prof.profit_per_hour.toFixed(2)}`, 'positive');
+        }
+        const profPctEl = document.getElementById('kpi-profit-pct');
+        if (profPctEl && prof.profit_pct != null) {
+            profPctEl.textContent = `${prof.profit_pct}% margin`;
+        }
+
         setKPI('kpi-at-risk', s.at_risk_clients || 0, s.at_risk_clients > 0 ? 'negative' : 'positive');
+
+        // Profitability detail cards
+        if (prof.revenue_per_hour != null) {
+            setKPI('kpi-revenue-per-hour', `$${prof.revenue_per_hour.toFixed(2)}`);
+        }
+        if (prof.payroll_per_hour != null) {
+            setKPI('kpi-payroll-per-hour', `$${prof.payroll_per_hour.toFixed(2)}`);
+        }
+        if (prof.profit_per_hour != null) {
+            setKPI('kpi-profit-per-hour-detail', `$${prof.profit_per_hour.toFixed(2)}`, 'positive');
+        }
+        if (prof.total_billing_mtd != null) {
+            setKPI('kpi-billing-mtd', `$${Math.round(prof.total_billing_mtd).toLocaleString()}`);
+        }
+        if (prof.total_payroll_mtd != null) {
+            setKPI('kpi-payroll-mtd', `$${Math.round(prof.total_payroll_mtd).toLocaleString()}`);
+        }
+        if (prof.total_profit_mtd != null) {
+            setKPI('kpi-profit-mtd', `$${Math.round(prof.total_profit_mtd).toLocaleString()}`, 'positive');
+        }
     }
 
     function setKPI(id, value, className = '') {
@@ -400,10 +439,47 @@
         return 'active';
     }
 
+    // Load hours breakdown data
+    async function loadHoursBreakdown() {
+        try {
+            const data = await fetchAPI('/hours-breakdown');
+            if (!data) return;
+
+            // Weekly
+            if (data.weekly) {
+                setKPI('weekly-total-hours', data.weekly.total_hours || 0);
+                setKPI('weekly-shifts', data.weekly.shifts || 0);
+                setKPI('weekly-clients', data.weekly.clients || 0);
+                setKPI('weekly-avg-client', data.weekly.avg_per_client ? `${data.weekly.avg_per_client} hrs` : '--');
+            }
+
+            // Monthly
+            if (data.monthly) {
+                setKPI('monthly-total-hours', data.monthly.total_hours || 0);
+                setKPI('monthly-shifts', data.monthly.shifts || 0);
+                setKPI('monthly-clients', data.monthly.clients || 0);
+                setKPI('monthly-avg-client', data.monthly.avg_per_client ? `${data.monthly.avg_per_client} hrs` : '--');
+            }
+
+            // Quarterly
+            if (data.quarterly) {
+                setKPI('quarterly-total-hours', data.quarterly.total_hours || 0);
+                setKPI('quarterly-shifts', data.quarterly.shifts || 0);
+                setKPI('quarterly-clients', data.quarterly.clients || 0);
+                setKPI('quarterly-avg-client', data.quarterly.avg_per_client ? `${data.quarterly.avg_per_client} hrs` : '--');
+            }
+        } catch (error) {
+            console.error('Failed to load hours breakdown:', error);
+        }
+    }
+
     // Global refresh function
     window.refreshData = function () {
         fetchAllData();
     };
+
+    // Global hours refresh
+    window.loadHoursBreakdown = loadHoursBreakdown;
 
     // ============================================
     // GIGI AI AGENT CONTROL FUNCTIONS

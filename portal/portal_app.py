@@ -3309,30 +3309,31 @@ async def operations_dashboard(
 async def api_operations_hours_breakdown(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get hours breakdown from cached appointment data"""
+    """Get hours breakdown for 7/30/90 day windows from cached appointments + BvP data"""
+    import httpx
     import psycopg2
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
 
-        # Total scheduled hours (last 90 days)
-        cur.execute("""
-            SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (scheduled_end - scheduled_start)) / 3600), 0)
-            FROM cached_appointments
-            WHERE scheduled_start >= NOW() - INTERVAL '90 days'
-              AND scheduled_end IS NOT NULL
-        """)
-        total_scheduled = round(float(cur.fetchone()[0]), 1)
+        def get_hours(interval_sql):
+            cur.execute(f"""
+                SELECT
+                    COALESCE(SUM(EXTRACT(EPOCH FROM (scheduled_end - scheduled_start)) / 3600), 0),
+                    COUNT(DISTINCT patient_id),
+                    COUNT(*)
+                FROM cached_appointments
+                WHERE scheduled_start >= NOW() - INTERVAL '{interval_sql}'
+                  AND scheduled_start < NOW()
+                  AND scheduled_end IS NOT NULL
+            """)
+            row = cur.fetchone()
+            return round(float(row[0]), 1), row[1], row[2]
 
-        # Actual hours worked (completed shifts with clock-in/out)
-        cur.execute("""
-            SELECT COALESCE(SUM(EXTRACT(EPOCH FROM (actual_end - actual_start)) / 3600), 0)
-            FROM cached_appointments
-            WHERE actual_start IS NOT NULL AND actual_end IS NOT NULL
-              AND actual_start >= NOW() - INTERVAL '90 days'
-        """)
-        total_actual = round(float(cur.fetchone()[0]), 1)
+        weekly_hours, weekly_clients, weekly_shifts = get_hours('7 days')
+        monthly_hours, monthly_clients, monthly_shifts = get_hours('30 days')
+        quarterly_hours, quarterly_clients, quarterly_shifts = get_hours('90 days')
 
         # Weekly breakdown (last 4 weeks)
         cur.execute("""
@@ -3343,16 +3344,48 @@ async def api_operations_hours_breakdown(
               AND scheduled_end IS NOT NULL
             GROUP BY week ORDER BY week
         """)
-        weekly = [{"week": row[0].isoformat(), "hours": round(float(row[1]), 1)} for row in cur.fetchall()]
+        weekly_trend = [{"week": row[0].isoformat(), "hours": round(float(row[1]), 1)} for row in cur.fetchall()]
 
         cur.close()
         conn.close()
 
+        # Fetch BvP billing/payroll data from QBO dashboard
+        bvp_data = {}
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                bvp_resp = await client.get("http://localhost:3015/api/billing-payroll?period=mtd")
+                if bvp_resp.status_code == 200:
+                    bvp = bvp_resp.json()
+                    bvp_data = {
+                        "billing_hours": bvp.get("total_hours", 0),
+                        "payroll_hours": bvp.get("total_pay_hours", 0),
+                        "billing_amount": bvp.get("total_gross_billing", 0),
+                        "payroll_amount": bvp.get("total_payroll_amount", 0),
+                    }
+        except Exception:
+            pass
+
         return JSONResponse({
-            "total_scheduled_hours": total_scheduled,
-            "total_actual_hours": total_actual,
-            "utilization_rate": round(float((total_actual / total_scheduled * 100) if total_scheduled > 0 else 0), 1),
-            "weekly_breakdown": weekly,
+            "weekly": {
+                "total_hours": weekly_hours,
+                "clients": weekly_clients,
+                "shifts": weekly_shifts,
+                "avg_per_client": round(weekly_hours / weekly_clients, 1) if weekly_clients > 0 else 0,
+            },
+            "monthly": {
+                "total_hours": monthly_hours,
+                "clients": monthly_clients,
+                "shifts": monthly_shifts,
+                "avg_per_client": round(monthly_hours / monthly_clients, 1) if monthly_clients > 0 else 0,
+            },
+            "quarterly": {
+                "total_hours": quarterly_hours,
+                "clients": quarterly_clients,
+                "shifts": quarterly_shifts,
+                "avg_per_client": round(quarterly_hours / quarterly_clients, 1) if quarterly_clients > 0 else 0,
+            },
+            "weekly_trend": weekly_trend,
+            "bvp": bvp_data,
             "wellsky_connected": True,
         })
     except Exception as e:
@@ -3365,15 +3398,21 @@ async def api_operations_summary(
     days: int = Query(30, ge=1, le=365),
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Get operations dashboard summary metrics from cached data"""
+    """Get operations dashboard summary metrics from cached data + QBO profitability"""
+    import httpx
     import psycopg2
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
 
-        # Active clients
-        cur.execute("SELECT COUNT(*) FROM cached_patients WHERE is_active = true")
+        # Active clients — only count those with appointments in last 90 days
+        cur.execute("""
+            SELECT COUNT(DISTINCT p.id) FROM cached_patients p
+            INNER JOIN cached_appointments a ON a.patient_id = p.id
+            WHERE p.is_active = true
+              AND a.scheduled_start >= NOW() - INTERVAL '90 days'
+        """)
         active_clients = cur.fetchone()[0]
 
         # Active caregivers
@@ -3389,23 +3428,14 @@ async def api_operations_summary(
         """)
         open_shifts = cur.fetchone()[0]
 
-        # EVV compliance (shifts with actual clock-in/out vs total completed in last 30 days)
-        cur.execute("""
-            SELECT
-                COUNT(*) FILTER (WHERE actual_start IS NOT NULL AND actual_end IS NOT NULL) as clocked,
-                COUNT(*) as total
-            FROM cached_appointments
-            WHERE scheduled_start >= NOW() - INTERVAL '%s days'
-              AND scheduled_start < NOW()
-              AND status IN ('fulfilled', 'completed', 'arrived')
-        """, (days,))
-        row = cur.fetchone()
-        evv_compliance = round((row[0] / row[1] * 100) if row[1] > 0 else 0, 1)
-
-        # At-risk clients (no visits in last 14 days)
+        # At-risk clients (no visits in last 14 days among active clients with history)
         cur.execute("""
             SELECT COUNT(*) FROM cached_patients p
             WHERE p.is_active = true
+              AND EXISTS (
+                  SELECT 1 FROM cached_appointments a
+                  WHERE a.patient_id = p.id AND a.scheduled_start >= NOW() - INTERVAL '90 days'
+              )
               AND NOT EXISTS (
                   SELECT 1 FROM cached_appointments a
                   WHERE a.patient_id = p.id
@@ -3429,13 +3459,47 @@ async def api_operations_summary(
         cur.close()
         conn.close()
 
+        # Fetch BvP profitability data from QBO dashboard (localhost:3015)
+        weekly_hours = 0
+        hours_pct_goal = 0
+        profitability = {}
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                bvp_resp = await client.get("http://localhost:3015/api/billing-payroll?period=mtd")
+                if bvp_resp.status_code == 200:
+                    bvp = bvp_resp.json()
+                    total_hours = bvp.get("total_hours", 0) or 0
+                    # Estimate weekly rate from MTD data
+                    from datetime import date
+                    today = date.today()
+                    days_in_month = (today - today.replace(day=1)).days or 1
+                    weeks_elapsed = max(days_in_month / 7.0, 0.5)
+                    weekly_hours = round(total_hours / weeks_elapsed, 0)
+                    hours_pct_goal = round((weekly_hours / 10000) * 100, 1) if weekly_hours > 0 else 0
+                    profitability = {
+                        "revenue_per_hour": bvp.get("billing_per_hour"),
+                        "payroll_per_hour": bvp.get("payroll_per_hour"),
+                        "profit_per_hour": bvp.get("profit_per_hour"),
+                        "profit_pct": bvp.get("profit_pct"),
+                        "total_billing_mtd": bvp.get("total_gross_billing"),
+                        "total_payroll_mtd": bvp.get("total_payroll_amount"),
+                        "total_profit_mtd": bvp.get("total_profit"),
+                        "total_hours_mtd": total_hours,
+                        "clients_served": bvp.get("clients_served"),
+                        "caregivers_active": bvp.get("caregivers_scheduled"),
+                    }
+        except Exception as qbo_err:
+            logger.warning(f"Could not fetch QBO profitability: {qbo_err}")
+
         return JSONResponse({
             "active_clients": active_clients,
             "active_caregivers": active_caregivers,
             "open_shifts": open_shifts,
-            "evv_compliance": evv_compliance,
+            "weekly_hours": weekly_hours,
+            "hours_pct_goal": hours_pct_goal,
             "at_risk_clients": at_risk_clients,
             "plans_due_review": 0,
+            "profitability": profitability,
             "shifts_by_day": {"scheduled": scheduled, "open": [0]*7},
             "wellsky_connected": True,
         })

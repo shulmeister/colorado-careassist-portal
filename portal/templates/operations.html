@@ -837,12 +837,14 @@
                         <div class="kpi-value" id="kpi-open-shifts">--</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">EVV Compliance</div>
-                        <div class="kpi-value" id="kpi-evv-rate">--%</div>
+                        <div class="kpi-label">Weekly Hours</div>
+                        <div class="kpi-value" id="kpi-weekly-hours">--</div>
+                        <div class="kpi-change" id="kpi-hours-goal">-- % of 10k goal</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Plans Due Review</div>
-                        <div class="kpi-value" id="kpi-plans-due">--</div>
+                        <div class="kpi-label">Profit / Hour</div>
+                        <div class="kpi-value positive" id="kpi-profit-per-hour">--</div>
+                        <div class="kpi-change" id="kpi-profit-pct">-- % margin</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">At-Risk Clients</div>
@@ -850,49 +852,66 @@
                     </div>
                 </div>
 
+                <!-- Profitability Section -->
+                <div class="data-section" style="margin-bottom: 20px;">
+                    <div class="section-header">
+                        <span class="section-title">Hourly Profitability (MTD)</span>
+                    </div>
+                    <div style="padding: 16px;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
+                            <div class="kpi-card">
+                                <div class="kpi-label">Revenue / Hour</div>
+                                <div class="kpi-value" id="kpi-revenue-per-hour">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Payroll / Hour</div>
+                                <div class="kpi-value" id="kpi-payroll-per-hour">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Profit / Hour</div>
+                                <div class="kpi-value positive" id="kpi-profit-per-hour-detail">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Gross Billing MTD</div>
+                                <div class="kpi-value" id="kpi-billing-mtd">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Payroll MTD</div>
+                                <div class="kpi-value" id="kpi-payroll-mtd">--</div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-label">Profit MTD</div>
+                                <div class="kpi-value positive" id="kpi-profit-mtd">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Hours Breakdown Section -->
                 <div class="data-section" style="margin-bottom: 20px;">
                     <div class="section-header">
-                        <span class="section-title">📊 Hours Tracking - Billing & Payroll</span>
-                        <button class="btn btn-secondary" onclick="loadHoursBreakdown()">↻ Refresh</button>
-                    </div>
-
-                    <!-- Info banner for WellSky data access -->
-                    <div style="margin: 16px; padding: 12px; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 8px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 18px;">ℹ️</span>
-                            <div style="flex: 1;">
-                                <div style="font-size: 13px; font-weight: 600; color: #93c5fd; margin-bottom: 4px;">
-                                    Hours Data Configuration
-                                </div>
-                                <div style="font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                                    Currently accessing WellSky FHIR appointments API. If no data appears, hours may be available through WellSky Analytics/Reporting API.
-                                    The screenshots you provided show WellSky has analytics data - we may need to access it through a different endpoint.
-                                </div>
-                            </div>
-                        </div>
+                        <span class="section-title">Hours Tracking (Scheduled Shifts)</span>
+                        <button class="btn btn-secondary" onclick="loadHoursBreakdown()">Refresh</button>
                     </div>
 
                     <div style="padding: 20px;">
                         <!-- Weekly Hours -->
                         <div style="margin-bottom: 24px;">
                             <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-                                📅 Last 7 Days
+                                Last 7 Days
                             </h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-label">Scheduled Hours</div>
                                     <div class="kpi-value" id="weekly-total-hours">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Billing Hours</div>
-                                    <div class="kpi-value" id="weekly-billing-total">--</div>
-                                    <div class="kpi-change" id="weekly-billing-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Shifts</div>
+                                    <div class="kpi-value" id="weekly-shifts">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Payroll Hours</div>
-                                    <div class="kpi-value" id="weekly-payroll-total">--</div>
-                                    <div class="kpi-change" id="weekly-payroll-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Clients Served</div>
+                                    <div class="kpi-value" id="weekly-clients">--</div>
                                 </div>
                                 <div class="kpi-card">
                                     <div class="kpi-label">Avg Per Client</div>
@@ -904,22 +923,20 @@
                         <!-- Monthly Hours -->
                         <div style="margin-bottom: 24px;">
                             <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-                                📆 Last 30 Days
+                                Last 30 Days
                             </h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-label">Scheduled Hours</div>
                                     <div class="kpi-value" id="monthly-total-hours">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Billing Hours</div>
-                                    <div class="kpi-value" id="monthly-billing-total">--</div>
-                                    <div class="kpi-change" id="monthly-billing-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Shifts</div>
+                                    <div class="kpi-value" id="monthly-shifts">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Payroll Hours</div>
-                                    <div class="kpi-value" id="monthly-payroll-total">--</div>
-                                    <div class="kpi-change" id="monthly-payroll-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Clients Served</div>
+                                    <div class="kpi-value" id="monthly-clients">--</div>
                                 </div>
                                 <div class="kpi-card">
                                     <div class="kpi-label">Avg Per Client</div>
@@ -931,22 +948,20 @@
                         <!-- Quarterly Hours -->
                         <div>
                             <h4 style="color: #f8fafc; font-size: 14px; font-weight: 600; margin-bottom: 12px;">
-                                📈 Last 90 Days (Quarterly)
+                                Last 90 Days
                             </h4>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px;">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;">
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Total Hours</div>
+                                    <div class="kpi-label">Scheduled Hours</div>
                                     <div class="kpi-value" id="quarterly-total-hours">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Billing Hours</div>
-                                    <div class="kpi-value" id="quarterly-billing-total">--</div>
-                                    <div class="kpi-change" id="quarterly-billing-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Shifts</div>
+                                    <div class="kpi-value" id="quarterly-shifts">--</div>
                                 </div>
                                 <div class="kpi-card">
-                                    <div class="kpi-label">Payroll Hours</div>
-                                    <div class="kpi-value" id="quarterly-payroll-total">--</div>
-                                    <div class="kpi-change" id="quarterly-payroll-split">Regular: -- | OT: --</div>
+                                    <div class="kpi-label">Clients Served</div>
+                                    <div class="kpi-value" id="quarterly-clients">--</div>
                                 </div>
                                 <div class="kpi-card">
                                     <div class="kpi-label">Avg Per Client</div>
