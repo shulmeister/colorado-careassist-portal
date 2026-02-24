@@ -317,6 +317,24 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
+        "name": "search_books",
+        "description": "Search Google Books for book recommendations and details. Find books by title, author, subject, or ISBN. Get ratings, descriptions, and preview links.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "search or detail"},
+                "query": {"type": "string", "description": "Search text — title, topic, keywords"},
+                "author": {"type": "string", "description": "Filter by author name"},
+                "subject": {"type": "string", "description": "Filter by subject/category"},
+                "isbn": {"type": "string", "description": "Search by ISBN"},
+                "book_id": {"type": "string", "description": "Google Books volume ID (for detail)"},
+                "filter_type": {"type": "string", "description": "ebooks, free-ebooks, or paid-ebooks"},
+                "limit": {"type": "integer", "description": "Max results (default 5)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
         "name": "get_client_current_status",
         "description": "Check who is with a client right now. Returns current caregiver, shift times, and status.",
         "input_schema": {
@@ -1126,6 +1144,20 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 query=tool_input.get("query"),
                 date=tool_input.get("date"),
                 song_slug=tool_input.get("song_slug"),
+                limit=tool_input.get("limit", 5),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_books":
+            from gigi.chief_of_staff_tools import cos_tools
+            result = await cos_tools.search_books(
+                action=tool_input.get("action", "search"),
+                query=tool_input.get("query"),
+                book_id=tool_input.get("book_id"),
+                author=tool_input.get("author"),
+                subject=tool_input.get("subject"),
+                isbn=tool_input.get("isbn"),
+                filter_type=tool_input.get("filter_type"),
                 limit=tool_input.get("limit", 5),
             )
             return json.dumps(result)
@@ -2234,7 +2266,7 @@ SLOW_TOOLS = {
     "search_wellsky_clients", "search_wellsky_caregivers",
     "get_wellsky_client_details", "search_google_drive",
     "get_wellsky_shifts", "get_client_current_status",
-    "web_search", "search_events", "search_concerts", "explore_national_parks", "explore_art", "search_phish", "search_emails",
+    "web_search", "search_events", "search_concerts", "explore_national_parks", "explore_art", "search_phish", "search_books", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
     "deep_research",

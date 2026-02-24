@@ -160,7 +160,7 @@ logger = logging.getLogger("gigi_telegram")
 
 # Internal tool list (provider-agnostic) used by execute_tool
 TOOL_NAMES = [
-    "search_events", "search_concerts", "buy_tickets_request", "book_table_request", "explore_national_parks", "explore_art", "search_phish",
+    "search_events", "search_concerts", "buy_tickets_request", "book_table_request", "explore_national_parks", "explore_art", "search_phish", "search_books",
     "get_client_current_status", "get_calendar_events", "search_emails",
     "get_weather", "get_wellsky_clients", "get_wellsky_caregivers",
     "get_wellsky_shifts", "web_search", "get_stock_price", "get_crypto_price",
@@ -193,6 +193,7 @@ ANTHROPIC_TOOLS = [
     {"name": "explore_national_parks", "description": "Search the National Park Service API. Get park info, campgrounds, alerts, things to do, visitor centers, events, tours, webcams, amenities, and fees for any US national park.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "parks, campgrounds, alerts, thingstodo, visitorcenters, events, tours, webcams, amenities, or fees"}, "query": {"type": "string", "description": "Search text (for parks action — e.g. 'Rocky Mountain', 'Yellowstone')"}, "park_code": {"type": "string", "description": "NPS park code (e.g. 'romo', 'yell', 'grca') — filters results to that park"}, "state": {"type": "string", "description": "State code to filter parks (e.g. 'CO', 'CA')"}, "limit": {"type": "integer", "description": "Max results (default 5, max 20)"}}, "required": ["action"]}},
     {"name": "explore_art", "description": "Search and explore artworks from museums worldwide. Search by artist, style, period, type, or get a random artwork. Returns titles, images, dates, and descriptions.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'search' (find artworks), 'detail' (get full info by ID), or 'random' (surprise me)"}, "query": {"type": "string", "description": "Search text — artist name, style, subject (e.g. 'Monet', 'impressionism', 'landscape')"}, "artwork_id": {"type": "integer", "description": "Artwork ID (for detail action)"}, "art_type": {"type": "string", "description": "Filter: painting, sculpture, drawing, photograph, print, textile, ceramic, etc."}, "origin": {"type": "string", "description": "Country or region (e.g. 'France', 'Japan', 'Italy')"}, "material": {"type": "string", "description": "Material filter (e.g. 'canvas', 'bronze', 'oil_paint', 'marble')"}, "earliest_year": {"type": "integer", "description": "Earliest creation year"}, "latest_year": {"type": "integer", "description": "Latest creation year"}, "limit": {"type": "integer", "description": "Max results 1-10 (default 5)"}}, "required": ["action"]}},
     {"name": "search_phish", "description": "Search the Phish.in archive — shows, setlists, songs, tours, venues with audio recordings. Get setlists for any date, look up how many times a song was played, find recent shows, or browse tours/venues.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'shows' (recent/all shows), 'show' (specific date setlist+tracks), 'song' (song stats), 'songs' (browse songs), 'tours', or 'venues'"}, "date": {"type": "string", "description": "Show date YYYY-MM-DD (for 'show' action)"}, "query": {"type": "string", "description": "Song name or search text"}, "song_slug": {"type": "string", "description": "Song slug (e.g. 'tweezer', 'you-enjoy-myself')"}, "limit": {"type": "integer", "description": "Max results (default 5)"}}, "required": ["action"]}},
+    {"name": "search_books", "description": "Search Google Books for book recommendations, reviews, and details. Find books by title, author, subject, or ISBN. Get ratings, descriptions, page counts, and preview links.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'search' (find books) or 'detail' (full info by book ID)"}, "query": {"type": "string", "description": "Search text — title, topic, keywords (e.g. 'best sci-fi novels', 'leadership books')"}, "author": {"type": "string", "description": "Filter by author name"}, "subject": {"type": "string", "description": "Filter by subject/category (e.g. 'fiction', 'business', 'history')"}, "isbn": {"type": "string", "description": "Search by ISBN"}, "book_id": {"type": "string", "description": "Google Books volume ID (for detail action)"}, "filter_type": {"type": "string", "description": "'ebooks', 'free-ebooks', or 'paid-ebooks'"}, "limit": {"type": "integer", "description": "Max results 1-20 (default 5)"}}, "required": ["action"]}},
     {"name": "get_client_current_status", "description": "Check who is with a client right now.", "input_schema": {"type": "object", "properties": {"client_name": {"type": "string", "description": "Name of the client"}}, "required": ["client_name"]}},
     {"name": "get_calendar_events", "description": "Get upcoming calendar events.", "input_schema": {"type": "object", "properties": {"days": {"type": "integer", "description": "Days to look ahead (1-7)"}}, "required": []}},
     {"name": "search_emails", "description": "Search Jason's Gmail.", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}, "max_results": {"type": "integer"}}, "required": []}},
@@ -758,6 +759,21 @@ class GigiTelegramBot:
                     query=tool_input.get("query"),
                     date=tool_input.get("date"),
                     song_slug=tool_input.get("song_slug"),
+                    limit=tool_input.get("limit", 5),
+                )
+                return json.dumps(result)
+
+            elif tool_name == "search_books":
+                if not cos_tools:
+                    return json.dumps({"error": "Chief of Staff tools not available."})
+                result = await cos_tools.search_books(
+                    action=tool_input.get("action", "search"),
+                    query=tool_input.get("query"),
+                    book_id=tool_input.get("book_id"),
+                    author=tool_input.get("author"),
+                    subject=tool_input.get("subject"),
+                    isbn=tool_input.get("isbn"),
+                    filter_type=tool_input.get("filter_type"),
                     limit=tool_input.get("limit", 5),
                 )
                 return json.dumps(result)

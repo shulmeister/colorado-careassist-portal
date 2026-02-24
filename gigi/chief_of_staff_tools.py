@@ -558,5 +558,101 @@ class ChiefOfStaffTools:
             logger.error(f"Phish.in API failed: {e}")
             return {"success": False, "error": str(e)}
 
+    async def search_books(self, action: str = "search", query: str = None,
+                           book_id: str = None, author: str = None, subject: str = None,
+                           isbn: str = None, filter_type: str = None, limit: int = 5):
+        """Search Google Books API for book recommendations, details, and discovery."""
+        import httpx
+
+        api_key = os.environ.get("GOOGLE_BOOKS_API_KEY", "")
+        base = "https://www.googleapis.com/books/v1"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                if action == "detail" and book_id:
+                    # Get specific book details
+                    params = {}
+                    if api_key:
+                        params["key"] = api_key
+                    resp = await client.get(f"{base}/volumes/{book_id}", params=params)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Book not found (ID: {book_id})"}
+                    vol = resp.json().get("volumeInfo", {})
+                    sale = resp.json().get("saleInfo", {})
+                    return {"success": True, "action": "detail", "book": {
+                        "title": vol.get("title", ""),
+                        "authors": vol.get("authors", []),
+                        "publisher": vol.get("publisher", ""),
+                        "published_date": vol.get("publishedDate", ""),
+                        "description": (vol.get("description") or "")[:500],
+                        "page_count": vol.get("pageCount"),
+                        "categories": vol.get("categories", []),
+                        "average_rating": vol.get("averageRating"),
+                        "ratings_count": vol.get("ratingsCount"),
+                        "language": vol.get("language", ""),
+                        "isbn": next((i["identifier"] for i in vol.get("industryIdentifiers", [])
+                                     if i.get("type") == "ISBN_13"), None),
+                        "preview_link": vol.get("previewLink", ""),
+                        "info_link": vol.get("infoLink", ""),
+                        "thumbnail": vol.get("imageLinks", {}).get("thumbnail", ""),
+                        "price": f"${sale['listPrice']['amount']}" if sale.get("listPrice") else None,
+                        "buy_link": sale.get("buyLink", ""),
+                    }}
+
+                else:  # search (default)
+                    # Build search query with special keywords
+                    q_parts = []
+                    if query:
+                        q_parts.append(query)
+                    if author:
+                        q_parts.append(f"inauthor:{author}")
+                    if subject:
+                        q_parts.append(f"subject:{subject}")
+                    if isbn:
+                        q_parts.append(f"isbn:{isbn}")
+                    if not q_parts:
+                        return {"success": False, "error": "Provide query, author, subject, or isbn"}
+
+                    params = {
+                        "q": " ".join(q_parts),
+                        "maxResults": min(limit, 20),
+                        "orderBy": "relevance",
+                    }
+                    if filter_type and filter_type in ("ebooks", "free-ebooks", "paid-ebooks"):
+                        params["filter"] = filter_type
+                    if api_key:
+                        params["key"] = api_key
+
+                    resp = await client.get(f"{base}/volumes", params=params)
+                    if resp.status_code != 200:
+                        return {"success": False, "error": f"Google Books API returned {resp.status_code}"}
+
+                    data = resp.json()
+                    total = data.get("totalItems", 0)
+                    books = []
+                    for item in data.get("items", [])[:limit]:
+                        vol = item.get("volumeInfo", {})
+                        sale = item.get("saleInfo", {})
+                        books.append({
+                            "id": item.get("id", ""),
+                            "title": vol.get("title", ""),
+                            "authors": vol.get("authors", []),
+                            "published_date": vol.get("publishedDate", ""),
+                            "description": (vol.get("description") or "")[:200],
+                            "page_count": vol.get("pageCount"),
+                            "categories": vol.get("categories", []),
+                            "average_rating": vol.get("averageRating"),
+                            "ratings_count": vol.get("ratingsCount"),
+                            "thumbnail": vol.get("imageLinks", {}).get("thumbnail", ""),
+                            "preview_link": vol.get("previewLink", ""),
+                            "price": f"${sale['listPrice']['amount']}" if sale.get("listPrice") else None,
+                        })
+                    return {"success": True, "action": "search", "total_results": total,
+                            "count": len(books), "books": books}
+
+        except Exception as e:
+            logger.error(f"Google Books API failed: {e}")
+            return {"success": False, "error": str(e)}
+
 # Singleton
 cos_tools = ChiefOfStaffTools()
