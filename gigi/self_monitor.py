@@ -288,14 +288,14 @@ class SelfMonitor:
 
         return result
 
-    async def get_briefing_section(self, llm_client=None) -> Optional[str]:
+    async def get_audit_report(self, llm_client=None) -> Optional[str]:
         """
         Generate a formatted text block for the weekly audit report.
         """
         audit = self.run_audit()
-        return self._format_briefing(audit, llm_client=llm_client)
+        return self._format_audit_report(audit, llm_client=llm_client)
 
-    def _format_briefing(self, audit: Dict, llm_client=None) -> Optional[str]:
+    def _format_audit_report(self, audit: Dict, llm_client=None) -> Optional[str]:
         """Synchronous formatter for audit results."""
         import asyncio
 
@@ -389,8 +389,8 @@ if __name__ == "__main__":
     shifts = audit["shifts"]
     print(f"\nShifts: {shifts['total']} total, {shifts['open']} open, {shifts['fill_rate']}% filled")
 
-    print("\n--- Briefing Section ---")
-    section = monitor.get_briefing_section()
+    print("\n--- Audit Report ---")
+    section = monitor.get_audit_report()
     if section:
         print(section)
     else:
