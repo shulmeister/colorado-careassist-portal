@@ -406,6 +406,7 @@ function editIR(id) { const a=getAll().find(x=>x.id===id); if(!a) return; clearF
 function delIR(id) { if(!confirm('Delete?')) return; saveAllStorage(getAll().filter(a=>a.id!==id)); renderSaved(); showToast('Deleted'); }
 
 // === Sync ===
+const SYNC_URL = 'https://portal.coloradocareassist.com/api/incident-reports/sync';
 let syncing = false;
 async function autoSync() {
     if (syncing || !navigator.onLine) return;
@@ -415,7 +416,7 @@ async function autoSync() {
     let ok = 0;
     for (const a of pending) {
         try {
-            const r = await fetch('/api/incident-reports/sync', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(a) });
+            const r = await fetch(SYNC_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(a) });
             if (r.ok) { a.synced = true; ok++; }
         } catch(e) { console.error('Sync fail:', a.id, e); }
     }
@@ -424,22 +425,22 @@ async function autoSync() {
 }
 
 async function syncAll() {
-    if (!navigator.onLine) { alert('No internet. Will auto-sync when back online.'); return; }
+    if (!navigator.onLine) { showToast('No internet — data is saved on this device and will auto-sync when you reconnect.'); return; }
     const list=getAll(), pending=list.filter(a=>!a.synced);
     if (!pending.length) { showToast('All synced'); return; }
     const btn=document.getElementById('sync-btn'); btn.disabled=true; btn.textContent='Syncing...';
     syncing = true;
-    let ok=0;
+    let ok=0, lastErr='';
     for (const a of pending) {
         try {
-            const r = await fetch('/api/incident-reports/sync', { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body:JSON.stringify(a) });
+            const r = await fetch(SYNC_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(a) });
             if (r.ok) { a.synced=true; ok++; }
-        } catch(e) { console.error('Sync fail:', a.id, e); }
+        } catch(e) { lastErr = 'Could not reach portal — check internet connection'; console.error('Sync fail:', a.id, e); }
     }
     saveAllStorage(list); renderSaved();
     btn.disabled=false; btn.textContent='Sync All to Portal';
     syncing = false;
-    showToast('Synced '+ok+'/'+pending.length);
+    if (ok===pending.length) { showToast('Synced '+ok+'/'+pending.length+' — all done!'); } else { showToast('Synced '+ok+'/'+pending.length+' — '+lastErr); }
 }
 
 // Auto-sync when internet comes back

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cca-incident-v1';
+const CACHE_NAME = 'cca-incident-v2';
 const ASSETS = ['/incident', '/static/incident-manifest.json'];
 
 self.addEventListener('install', e => {

@@ -261,6 +261,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# PWA sync CORS middleware — allows offline PWAs to sync from any cached origin.
+# Must be added AFTER CORSMiddleware so it runs BEFORE it (Starlette middleware stack).
+_PWA_SYNC_PATHS = {
+    "/api/client-assessments/sync",
+    "/api/monitoring-visits/sync",
+    "/api/incident-reports/sync",
+}
+
+
+class PwaSyncCorsMiddleware:
+    """Bypass strict CORS for PWA sync endpoints — these need to work from any cached origin."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "http" and scope["path"] in _PWA_SYNC_PATHS:
+            from starlette.responses import Response as StarletteResponse
+            if scope["method"] == "OPTIONS":
+                resp = StarletteResponse(
+                    status_code=204,
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type",
+                        "Access-Control-Max-Age": "86400",
+                    },
+                )
+                await resp(scope, receive, send)
+                return
+            # For POST, let request through but inject CORS header in response
+            async def send_with_cors(message):
+                if message["type"] == "http.response.start":
+                    headers = dict(message.get("headers", []))
+                    headers[b"access-control-allow-origin"] = b"*"
+                    message["headers"] = list(headers.items())
+                await send(message)
+            await self.app(scope, receive, send_with_cors)
+            return
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(PwaSyncCorsMiddleware)
+
 # Add trusted host middleware
 app.add_middleware(
     TrustedHostMiddleware,
@@ -2411,13 +2455,20 @@ async def sync_client_assessment(request: Request):
         conn.close()
 
         logger.info(f"Synced assessment: {client_name} (local_id={local_id})")
-        return JSONResponse({"success": True, "message": f"Assessment for {client_name} synced"})
+        return JSONResponse(
+            {"success": True, "message": f"Assessment for {client_name} synced"},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Assessment sync error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            {"detail": str(e)},
+            status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
 
 
 # === Monitoring Visits (Offline Form) ===
@@ -2614,18 +2665,20 @@ async def sync_monitoring_visit(request: Request):
         conn.close()
 
         logger.info(f"Synced monitoring visit: {client_name} (local_id={local_id})")
-        return JSONResponse({
-            "success": True,
-            "id": mv_id,
-            "google_drive_link": google_drive_link,
-            "message": f"Monitoring visit for {client_name} synced"
-        })
+        return JSONResponse(
+            {"success": True, "id": mv_id, "google_drive_link": google_drive_link,
+             "message": f"Monitoring visit for {client_name} synced"},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Monitoring visit sync error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            {"detail": str(e)}, status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
 
 
 @app.get("/api/monitoring-visits/latest")
@@ -2926,18 +2979,20 @@ async def sync_incident_report(request: Request):
         conn.close()
 
         logger.info(f"Synced incident report: {client_name} (local_id={local_id})")
-        return JSONResponse({
-            "success": True,
-            "id": ir_id,
-            "google_drive_link": google_drive_link,
-            "message": f"Incident report for {client_name} synced"
-        })
+        return JSONResponse(
+            {"success": True, "id": ir_id, "google_drive_link": google_drive_link,
+             "message": f"Incident report for {client_name} synced"},
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
 
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Incident report sync error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        return JSONResponse(
+            {"detail": str(e)}, status_code=500,
+            headers={"Access-Control-Allow-Origin": "*"},
+        )
 
 
 @app.get("/api/incident-reports/latest")

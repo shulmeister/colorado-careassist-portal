@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cca-assessment-v3';
+const CACHE_NAME = 'cca-assessment-v4';
 const ASSETS = ['/assessment', '/static/assessment-manifest.json', '/static/assessment-icon-192.svg', '/static/assessment-icon-512.svg'];
 
 self.addEventListener('install', e => {

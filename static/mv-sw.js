@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cca-mv-v1';
+const CACHE_NAME = 'cca-mv-v2';
 const ASSETS = ['/mv', '/static/mv-manifest.json'];
 
 self.addEventListener('install', e => {
