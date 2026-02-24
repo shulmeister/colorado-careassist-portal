@@ -670,10 +670,28 @@ ANTHROPIC_TOOLS = [
     {"name": "file_fax_referral", "description": "File a fax referral: parses the fax, matches to existing WellSky client or creates a new prospect, and uploads the PDF to Google Drive.", "input_schema": {"type": "object", "properties": {"fax_id": {"type": "integer", "description": "Fax ID to file"}}, "required": ["fax_id"]}},
     # === CLAUDE CODE TOOLS ===
     {"name": "run_claude_code", "description": "Execute a code/infrastructure task using Claude Code on the Mac Mini. Use for: fixing bugs, editing files, investigating errors, checking logs, running tests, restarting services, git operations. Claude Code reads/writes files and runs commands autonomously. Returns the result directly.", "input_schema": {"type": "object", "properties": {"prompt": {"type": "string", "description": "What to do. Be specific — include error messages, file paths, expected behavior."}, "directory": {"type": "string", "description": "Project: careassist (default/staging), production, website, hesed, trading, weather-arb, kalshi, powderpulse, employee-portal, client-portal, status-dashboard."}, "model": {"type": "string", "description": "'sonnet' (default, fast) or 'opus' (complex tasks)."}}, "required": ["prompt"]}},
+    # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
+    {"name": "query_workspace", "description": "Query Google Workspace admin data using GAM. READ-ONLY — can look up users, groups, domains, devices, reports. Cannot create, update, delete, or modify anything. Examples: 'info user jacob@coloradocareassist.com', 'print users', 'print groups', 'info domain', 'report users'.", "input_schema": {"type": "object", "properties": {"command": {"type": "string", "description": "GAM command WITHOUT the leading 'gam'. Examples: 'info user jason@coloradocareassist.com', 'print users fields name,email,suspended', 'print groups', 'info domain', 'report users parameters accounts:last_login_time'. Only read commands (info, print, show, report, check) are allowed."}}, "required": ["command"]}},
     # === TRAVEL TOOLS ===
-    {"name": "search_flights", "description": "Search real-time flight prices and availability. Returns airlines, prices, times, stops, and booking links. ALWAYS use this for flight queries — never use web_search for flights.", "input_schema": {"type": "object", "properties": {"origin": {"type": "string", "description": "Departure city or IATA code (e.g. Denver or DEN)"}, "destination": {"type": "string", "description": "Arrival city or IATA code (e.g. Honolulu or HNL)"}, "departure_date": {"type": "string", "description": "Departure date YYYY-MM-DD"}, "return_date": {"type": "string", "description": "Return date YYYY-MM-DD (omit for one-way)"}, "adults": {"type": "integer", "description": "Number of adult passengers (default 1)"}, "max_stops": {"type": "integer", "description": "Max stops: 0=direct only, 1=1 stop max (default 1)"}}, "required": ["origin", "destination", "departure_date"]}},
-    {"name": "search_hotels", "description": "Search hotel prices and availability. Returns hotel names, prices, ratings, and booking links.", "input_schema": {"type": "object", "properties": {"city": {"type": "string", "description": "City name"}, "checkin": {"type": "string", "description": "Check-in date YYYY-MM-DD"}, "checkout": {"type": "string", "description": "Check-out date YYYY-MM-DD"}, "guests": {"type": "integer", "description": "Number of guests (default 2)"}, "max_price": {"type": "integer", "description": "Max price per night in cents (e.g. 20000 = $200)"}}, "required": ["city", "checkin", "checkout"]}},
-    {"name": "search_car_rentals", "description": "Search car rental prices and availability.", "input_schema": {"type": "object", "properties": {"pickup_location": {"type": "string", "description": "Pickup city or airport"}, "pickup_date": {"type": "string", "description": "Pickup date YYYY-MM-DD"}, "dropoff_date": {"type": "string", "description": "Dropoff date YYYY-MM-DD"}, "dropoff_location": {"type": "string", "description": "Different dropoff location (optional)"}, "car_class": {"type": "string", "description": "Car class: economy, compact, midsize, full-size, SUV, luxury (optional)"}}, "required": ["pickup_location", "pickup_date", "dropoff_date"]}},
+    {"name": "search_flights", "description": "Search real-time flight prices and availability via Amadeus. Returns airlines, prices, times, stops, and booking links. ALWAYS use this for flight queries.", "input_schema": {"type": "object", "properties": {"origin": {"type": "string", "description": "Departure city or IATA code (e.g. Denver or DEN)"}, "destination": {"type": "string", "description": "Arrival city or IATA code (e.g. Honolulu or HNL)"}, "departure_date": {"type": "string", "description": "Departure date YYYY-MM-DD"}, "return_date": {"type": "string", "description": "Return date YYYY-MM-DD (omit for one-way)"}, "adults": {"type": "integer", "description": "Number of adult passengers (default 1)"}, "max_stops": {"type": "integer", "description": "Max stops: 0=direct only, 1=1 stop max (default 1)"}, "travel_class": {"type": "string", "description": "ECONOMY, PREMIUM_ECONOMY, BUSINESS, or FIRST (default ECONOMY)"}}, "required": ["origin", "destination", "departure_date"]}},
+    {"name": "search_hotels", "description": "Search hotel prices and availability via Amadeus. 2-step: resolves city code, then searches hotel offers. Falls back to web search if needed.", "input_schema": {"type": "object", "properties": {"city": {"type": "string", "description": "City name"}, "checkin": {"type": "string", "description": "Check-in date YYYY-MM-DD"}, "checkout": {"type": "string", "description": "Check-out date YYYY-MM-DD"}, "guests": {"type": "integer", "description": "Number of guests (default 2)"}, "max_price": {"type": "integer", "description": "Max price per night in cents (e.g. 20000 = $200)"}}, "required": ["city", "checkin", "checkout"]}},
+    {"name": "search_car_rentals", "description": "Search car rental prices (legacy — calls search_transfers internally).", "input_schema": {"type": "object", "properties": {"pickup_location": {"type": "string", "description": "Pickup city or airport"}, "pickup_date": {"type": "string", "description": "Pickup date YYYY-MM-DD"}, "dropoff_date": {"type": "string", "description": "Dropoff date YYYY-MM-DD"}, "dropoff_location": {"type": "string", "description": "Different dropoff location (optional)"}, "car_class": {"type": "string", "description": "Car class: economy, compact, midsize, full-size, SUV, luxury (optional)"}}, "required": ["pickup_location", "pickup_date", "dropoff_date"]}},
+    {"name": "search_transfers", "description": "Search airport/hotel transfer options via Amadeus Transfer API. Returns private cars, shared shuttles, limos with prices.", "input_schema": {"type": "object", "properties": {"start_location": {"type": "string", "description": "Pickup IATA airport code (e.g. DEN) or address"}, "end_address": {"type": "string", "description": "Drop-off address or hotel name"}, "transfer_date": {"type": "string", "description": "Transfer date YYYY-MM-DD"}, "transfer_time": {"type": "string", "description": "Transfer time HH:MM (24h format)"}, "passengers": {"type": "integer", "description": "Number of passengers (default 1)"}}, "required": ["start_location", "end_address", "transfer_date", "transfer_time"]}},
+    {"name": "get_flight_status", "description": "Get real-time flight status and delay prediction. Provide carrier code + flight number + date.", "input_schema": {"type": "object", "properties": {"carrier_code": {"type": "string", "description": "Airline IATA code (e.g. UA, DL, AA)"}, "flight_number": {"type": "string", "description": "Flight number (e.g. 319)"}, "date": {"type": "string", "description": "Flight date YYYY-MM-DD"}}, "required": ["carrier_code", "flight_number", "date"]}},
+    {"name": "explore_flights", "description": "Explore flight options: inspiration search (where can I fly?), cheapest dates (when is cheapest?), or price analysis (is this price good?). Provide origin only for inspiration; origin+destination for cheapest dates; origin+destination+date for price analysis.", "input_schema": {"type": "object", "properties": {"origin": {"type": "string", "description": "Departure IATA code (e.g. DEN)"}, "destination": {"type": "string", "description": "Destination IATA code (optional — omit for 'where can I fly?')"}, "departure_date": {"type": "string", "description": "Date YYYY-MM-DD (optional — omit for cheapest date search)"}}, "required": ["origin"]}},
+    {"name": "confirm_flight_price", "description": "Confirm the final price of a flight offer and optionally get branded fare upsell options. Call after search_flights.", "input_schema": {"type": "object", "properties": {"flight_offer": {"type": "object", "description": "The flight offer object from search_flights results"}, "include_upsell": {"type": "boolean", "description": "Also return branded fare upgrade options (default false)"}}, "required": ["flight_offer"]}},
+    {"name": "get_seatmap", "description": "Get available seat map for a flight offer. Shows seat layout, availability, and prices.", "input_schema": {"type": "object", "properties": {"flight_offer": {"type": "object", "description": "The flight offer object from search_flights results"}}, "required": ["flight_offer"]}},
+    {"name": "search_flight_availability", "description": "Search flight seat availability by class. Shows how many seats remain in each cabin.", "input_schema": {"type": "object", "properties": {"origin": {"type": "string", "description": "Departure IATA code"}, "destination": {"type": "string", "description": "Arrival IATA code"}, "departure_date": {"type": "string", "description": "Date YYYY-MM-DD"}, "travel_class": {"type": "string", "description": "ECONOMY, PREMIUM_ECONOMY, BUSINESS, or FIRST (default ECONOMY)"}}, "required": ["origin", "destination", "departure_date"]}},
+    {"name": "book_flight", "description": "Book a flight (sandbox mode — test bookings only). Requires confirmed flight offer + traveler details.", "input_schema": {"type": "object", "properties": {"flight_offer": {"type": "object", "description": "Confirmed flight offer from confirm_flight_price"}, "travelers": {"type": "array", "description": "List of traveler objects with name, dateOfBirth, gender, contact info"}}, "required": ["flight_offer", "travelers"]}},
+    {"name": "manage_flight_booking", "description": "Retrieve or cancel a flight booking by PNR/order ID.", "input_schema": {"type": "object", "properties": {"order_id": {"type": "string", "description": "Amadeus order ID or PNR"}, "action": {"type": "string", "description": "'retrieve' or 'cancel' (default retrieve)"}}, "required": ["order_id"]}},
+    {"name": "get_airport_info", "description": "Get airport/city info: search airports, find nearest, get direct routes, or check on-time performance.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'search' (by keyword), 'nearest' (by lat/lon), 'routes' (direct destinations from airport), or 'performance' (on-time stats)"}, "query": {"type": "string", "description": "Search keyword (for 'search'), airport IATA code (for 'routes'/'performance'), or omit for 'nearest'"}, "latitude": {"type": "number", "description": "Latitude (for 'nearest')"}, "longitude": {"type": "number", "description": "Longitude (for 'nearest')"}}, "required": ["action"]}},
+    {"name": "get_airline_info", "description": "Get airline info: code lookup, route network, or check-in links.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'lookup' (by code), 'routes' (where airline flies from airport), or 'checkin' (get check-in URL)"}, "airline_code": {"type": "string", "description": "Airline IATA code (e.g. UA, DL, AA)"}, "airport_code": {"type": "string", "description": "Airport IATA code (for 'routes' action)"}}, "required": ["action", "airline_code"]}},
+    {"name": "get_hotel_ratings", "description": "Get hotel guest sentiment ratings from Amadeus. Shows scores for sleep quality, service, facilities, etc.", "input_schema": {"type": "object", "properties": {"hotel_ids": {"type": "string", "description": "Comma-separated Amadeus hotel IDs (max 3)"}}, "required": ["hotel_ids"]}},
+    {"name": "book_hotel", "description": "Book a hotel room (sandbox mode — test bookings only). Requires offer ID from search_hotels.", "input_schema": {"type": "object", "properties": {"offer_id": {"type": "string", "description": "Hotel offer ID from search_hotels results"}, "guests": {"type": "array", "description": "List of guest objects with name and contact info"}, "payment": {"type": "object", "description": "Payment card details (sandbox — use test card)"}}, "required": ["offer_id", "guests", "payment"]}},
+    {"name": "book_transfer", "description": "Book an airport/hotel transfer (sandbox mode). Requires offer ID from search_transfers.", "input_schema": {"type": "object", "properties": {"offer_id": {"type": "string", "description": "Transfer offer ID from search_transfers results"}, "passengers": {"type": "array", "description": "List of passenger objects with name and contact"}}, "required": ["offer_id"]}},
+    {"name": "manage_transfer", "description": "Cancel a transfer booking by order ID and confirmation number.", "input_schema": {"type": "object", "properties": {"order_id": {"type": "string", "description": "Transfer order ID to cancel"}, "confirm_number": {"type": "string", "description": "Confirmation number from booking"}}, "required": ["order_id", "confirm_number"]}},
+    {"name": "search_activities", "description": "Search tours and activities at a destination via Amadeus. Returns tours, excursions, tickets with prices and booking links.", "input_schema": {"type": "object", "properties": {"latitude": {"type": "number", "description": "Location latitude"}, "longitude": {"type": "number", "description": "Location longitude"}, "radius": {"type": "integer", "description": "Search radius in km (default 5)"}}, "required": ["latitude", "longitude"]}},
+    {"name": "get_travel_insights", "description": "Get travel market insights: most traveled destinations, most booked, busiest travel periods, recommendations, or trip purpose prediction.", "input_schema": {"type": "object", "properties": {"action": {"type": "string", "description": "'most_traveled', 'most_booked', 'busiest_period', 'recommendations', or 'trip_purpose'"}, "origin": {"type": "string", "description": "Origin IATA city code (for most_traveled/most_booked/recommendations)"}, "destination": {"type": "string", "description": "Destination IATA city code (for busiest_period)"}, "flight_offer": {"type": "object", "description": "Flight offer object (for trip_purpose prediction)"}}, "required": ["action"]}},
 ]
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
@@ -797,7 +815,7 @@ If you search for someone and they're not found in the system:
 - Care can often begin within a few days, sometimes sooner
 - Available 7 days a week including holidays
 - After hours: The office is open Monday through Friday 8 AM to 5 PM Mountain Time. After hours, take a message and set callback expectation for next business day.
-- For payroll or billing questions after hours: capture details and promise callback from the office team next business day
+- For payroll or billing questions outside office hours (Mon-Fri 8AM-5PM MT): capture details and promise callback from the office team next business day
 
 # Your Capabilities (use tools when needed)
 - Look up clients, caregivers, and shifts in WellSky
@@ -1902,6 +1920,14 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             )
             return json.dumps(result)
 
+        # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
+        elif tool_name == "query_workspace":
+            from gigi.gam_tools import query_workspace
+            result = await query_workspace(
+                command=tool_input.get("command", ""),
+            )
+            return json.dumps(result)
+
         # === TRAVEL TOOLS ===
         elif tool_name == "search_flights":
             from gigi.travel_tools import search_flights
@@ -1912,6 +1938,7 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return_date=tool_input.get("return_date"),
                 adults=tool_input.get("adults", 1),
                 max_stops=tool_input.get("max_stops", 1),
+                travel_class=tool_input.get("travel_class"),
             )
             return json.dumps(result)
 
@@ -1937,6 +1964,148 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             )
             return json.dumps(result)
 
+        elif tool_name == "search_transfers":
+            from gigi.travel_tools import search_transfers
+            result = await search_transfers(
+                start_location=tool_input.get("start_location", ""),
+                end_address=tool_input.get("end_address", ""),
+                transfer_date=tool_input.get("transfer_date", ""),
+                transfer_time=tool_input.get("transfer_time", ""),
+                passengers=tool_input.get("passengers", 1),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "get_flight_status":
+            from gigi.travel_tools import get_flight_status
+            result = await get_flight_status(
+                carrier_code=tool_input.get("carrier_code", ""),
+                flight_number=tool_input.get("flight_number", ""),
+                date=tool_input.get("date", ""),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "explore_flights":
+            from gigi.travel_tools import explore_flights
+            result = await explore_flights(
+                origin=tool_input.get("origin", ""),
+                destination=tool_input.get("destination"),
+                departure_date=tool_input.get("departure_date"),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "confirm_flight_price":
+            from gigi.travel_tools import confirm_flight_price
+            result = await confirm_flight_price(
+                flight_offer=tool_input.get("flight_offer", {}),
+                include_upsell=tool_input.get("include_upsell", False),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "get_seatmap":
+            from gigi.travel_tools import get_seatmap
+            result = await get_seatmap(
+                flight_offer=tool_input.get("flight_offer", {}),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_flight_availability":
+            from gigi.travel_tools import search_flight_availability
+            result = await search_flight_availability(
+                origin=tool_input.get("origin", ""),
+                destination=tool_input.get("destination", ""),
+                departure_date=tool_input.get("departure_date", ""),
+                travel_class=tool_input.get("travel_class", "ECONOMY"),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "book_flight":
+            from gigi.travel_tools import book_flight
+            result = await book_flight(
+                flight_offer=tool_input.get("flight_offer", {}),
+                travelers=tool_input.get("travelers", []),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "manage_flight_booking":
+            from gigi.travel_tools import manage_flight_booking
+            result = await manage_flight_booking(
+                order_id=tool_input.get("order_id", ""),
+                action=tool_input.get("action", "retrieve"),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "get_airport_info":
+            from gigi.travel_tools import get_airport_info
+            result = await get_airport_info(
+                action=tool_input.get("action", "search"),
+                query=tool_input.get("query"),
+                airport_code=tool_input.get("query"),
+                latitude=tool_input.get("latitude"),
+                longitude=tool_input.get("longitude"),
+                date=tool_input.get("date"),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "get_airline_info":
+            from gigi.travel_tools import get_airline_info
+            result = await get_airline_info(
+                action=tool_input.get("action", "lookup"),
+                airline_code=tool_input.get("airline_code", ""),
+                airport_code=tool_input.get("airport_code"),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "get_hotel_ratings":
+            from gigi.travel_tools import get_hotel_ratings
+            result = await get_hotel_ratings(
+                hotel_ids=tool_input.get("hotel_ids", ""),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "book_hotel":
+            from gigi.travel_tools import book_hotel
+            result = await book_hotel(
+                offer_id=tool_input.get("offer_id", ""),
+                guests=tool_input.get("guests", []),
+                payment=tool_input.get("payment", {}),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "book_transfer":
+            from gigi.travel_tools import book_transfer
+            result = await book_transfer(
+                offer_id=tool_input.get("offer_id", ""),
+                passengers=tool_input.get("passengers", []),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "manage_transfer":
+            from gigi.travel_tools import manage_transfer
+            result = await manage_transfer(
+                order_id=tool_input.get("order_id", ""),
+                confirm_number=tool_input.get("confirm_number", ""),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_activities":
+            from gigi.travel_tools import search_activities
+            result = await search_activities(
+                latitude=tool_input.get("latitude", 0),
+                longitude=tool_input.get("longitude", 0),
+                radius=tool_input.get("radius", 5),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "get_travel_insights":
+            from gigi.travel_tools import get_travel_insights
+            result = await get_travel_insights(
+                action=tool_input.get("action", ""),
+                origin=tool_input.get("origin"),
+                destination=tool_input.get("destination"),
+                flight_offer=tool_input.get("flight_offer"),
+            )
+            return json.dumps(result)
+
         else:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
 
@@ -1959,7 +2128,11 @@ SLOW_TOOLS = {
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
     "deep_research",
-    "search_flights", "search_hotels", "search_car_rentals",
+    "search_flights", "search_hotels", "search_car_rentals", "search_transfers",
+    "get_flight_status", "explore_flights", "confirm_flight_price", "get_seatmap",
+    "search_flight_availability", "book_flight", "manage_flight_booking",
+    "get_airport_info", "get_airline_info", "get_hotel_ratings", "book_hotel",
+    "book_transfer", "manage_transfer", "search_activities", "get_travel_insights",
     "book_table_request", "buy_tickets_request", "confirm_purchase",
 }
 
