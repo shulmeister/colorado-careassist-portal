@@ -165,7 +165,7 @@ async def _call_gemini(bot, history, sys_prompt):
         model=LLM_MODEL, contents=contents, config=config
     )
 
-    max_rounds = 5
+    max_rounds = 10
     fn_response_parts = []
     for tool_round in range(max_rounds):
         function_calls = []
@@ -238,7 +238,8 @@ async def _call_anthropic(bot, history, sys_prompt):
         messages=messages
     )
 
-    max_rounds = 5
+    max_rounds = 10
+    tool_results = []
     for tool_round in range(max_rounds):
         if response.stop_reason != "tool_use":
             break
@@ -273,7 +274,33 @@ async def _call_anthropic(bot, history, sys_prompt):
             messages=messages
         )
 
-    return "".join(b.text for b in response.content if b.type == "text")
+    final = "".join(b.text for b in response.content if b.type == "text")
+
+    # Safety net: if Anthropic returned no text after tool calls, force a summary
+    if not final and tool_results:
+        logger.warning("Ask-Gigi: Anthropic returned no text after tool calls — requesting summary")
+        # Add the final tool response and ask for a text summary without tools
+        summary_messages = messages + [
+            {"role": "assistant", "content": [b for b in response.content if b.type != "text"] if hasattr(response.content[0], 'type') else response.content},
+        ]
+        try:
+            # One more call WITHOUT tools to force text output
+            summary_resp = bot.llm.messages.create(
+                model=LLM_MODEL, max_tokens=4096,
+                system=sys_prompt,
+                messages=messages + [{"role": "user", "content": "Please summarize your analysis in plain text."}],
+            )
+            final = "".join(b.text for b in summary_resp.content if b.type == "text")
+        except Exception as e:
+            logger.warning(f"Summary fallback failed: {e}")
+            # Last resort: return raw tool result
+            last_result = tool_results[-1].get("content", "")
+            try:
+                data = json.loads(last_result)
+                final = json.dumps(data, indent=2, default=str)
+            except (json.JSONDecodeError, TypeError):
+                final = last_result
+    return final
 
 
 async def _call_openai(bot, history, sys_prompt):
@@ -288,7 +315,7 @@ async def _call_openai(bot, history, sys_prompt):
         model=LLM_MODEL, messages=messages, tools=OPENAI_TOOLS
     )
 
-    max_rounds = 5
+    max_rounds = 10
     for tool_round in range(max_rounds):
         choice = response.choices[0]
         if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:

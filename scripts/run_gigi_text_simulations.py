@@ -90,11 +90,11 @@ MCP_TESTS = [
     TestScenario(
         id="mcp-kg-3", name="Knowledge Graph: Add Observation",
         channel="telegram",
-        message="Add an observation to the knowledge graph: the test entity 'Simulation Bot' of type 'test' has observation 'created by text simulation test'",
+        message="Add an observation to the knowledge graph for entity 'Marthe Schwartz': 'simulation test ran successfully on this date'",
         expected_tools=["update_knowledge_graph"],
-        expected_keywords=["added", "observation", "Simulation Bot"],
+        expected_keywords=["added", "observation", "Marthe", "Schwartz"],
         category="mcp",
-        description="Should use update_knowledge_graph to add entity + observation",
+        description="Should use update_knowledge_graph add_observations on an existing entity",
     ),
 
     # Sequential Thinking
@@ -243,7 +243,7 @@ TASK_BOARD_TESTS = [
         channel="imessage",
         message="What's on my task board right now?",
         expected_tools=["get_task_board"],
-        expected_keywords=["task", "board"],
+        expected_keywords=["task", "board", "Today", "Inbox", "Soon"],
         category="general",
     ),
 ]
@@ -267,7 +267,7 @@ TRAVEL_TESTS = [
     TestScenario(
         id="travel-flights-1", name="Flight Search",
         channel="telegram",
-        message="Search for flights from Denver to New York next Friday",
+        message="Search for one-way flights from Denver to New York on March 7, 2026 for 1 adult",
         expected_tools=["search_flights"],
         expected_keywords=["flight", "Denver", "New York"],
         category="entertainment",
