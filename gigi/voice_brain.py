@@ -353,6 +353,21 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
+        "name": "search_f1",
+        "description": "Formula 1 data — standings, race results, qualifying, schedules, drivers, teams. Get championship standings, next race, last race results, or driver/team info.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "description": "standings, constructors_championship, next_race, last_race, race_results, qualifying, schedule, drivers, driver, teams, circuits"},
+                "query": {"type": "string", "description": "Driver name to search (for driver action)"},
+                "year": {"type": "integer", "description": "Season year (default: current)"},
+                "round_num": {"type": "integer", "description": "Race round number"},
+                "limit": {"type": "integer", "description": "Max results (default 10)"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
         "name": "get_client_current_status",
         "description": "Check who is with a client right now. Returns current caregiver, shift times, and status.",
         "input_schema": {
@@ -1191,6 +1206,17 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 end_date=tool_input.get("end_date"),
                 list_name=tool_input.get("list_name"),
                 limit=tool_input.get("limit", 5),
+            )
+            return json.dumps(result)
+
+        elif tool_name == "search_f1":
+            from gigi.chief_of_staff_tools import cos_tools
+            result = await cos_tools.search_f1(
+                action=tool_input.get("action", "standings"),
+                query=tool_input.get("query"),
+                year=tool_input.get("year"),
+                round_num=tool_input.get("round_num"),
+                limit=tool_input.get("limit", 10),
             )
             return json.dumps(result)
 
@@ -2298,7 +2324,7 @@ SLOW_TOOLS = {
     "search_wellsky_clients", "search_wellsky_caregivers",
     "get_wellsky_client_details", "search_google_drive",
     "get_wellsky_shifts", "get_client_current_status",
-    "web_search", "search_events", "search_concerts", "explore_national_parks", "explore_art", "search_phish", "search_books", "search_nytimes", "search_emails",
+    "web_search", "search_events", "search_concerts", "explore_national_parks", "explore_art", "search_phish", "search_books", "search_nytimes", "search_f1", "search_emails",
     "get_wellsky_clients", "get_wellsky_caregivers",
     "get_ar_report",
     "deep_research",
