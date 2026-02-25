@@ -55,15 +55,21 @@ class QuickBooksService:
             return {"success": False, "error": "Refresh token not configured"}
 
         try:
+            # QB requires Basic Auth (base64 clientId:clientSecret), not form body
+            credentials = base64.b64encode(
+                f"{self.client_id}:{self.client_secret}".encode()
+            ).decode()
             response = requests.post(
                 f"{self.auth_url}/token",
                 data={
                     "grant_type": "refresh_token",
                     "refresh_token": self.refresh_token,
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret
                 },
-                headers={"Accept": "application/json"}
+                headers={
+                    "Accept": "application/json",
+                    "Authorization": f"Basic {credentials}",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                }
             )
 
             if response.status_code == 200:
