@@ -50,7 +50,7 @@ class _MCPClient:
             "--timeout-navigation", str(NAV_TIMEOUT * 1000),
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,  # PIPE would block if stderr fills up
             env=os.environ.copy(),
         )
         self._reader_task = asyncio.create_task(self._read_loop())
@@ -79,7 +79,11 @@ class _MCPClient:
             "method": "tools/call",
             "params": {"name": name, "arguments": arguments},
         })
-        result = await asyncio.wait_for(self._pending[req_id], timeout=timeout)
+        try:
+            result = await asyncio.wait_for(self._pending[req_id], timeout=timeout)
+        except asyncio.TimeoutError:
+            self._pending.pop(req_id, None)  # clean up leaked future
+            raise
         return result or {}
 
     async def _write(self, obj: dict):
@@ -129,6 +133,7 @@ class _MCPClient:
             except (asyncio.TimeoutError, Exception):
                 try:
                     self._proc.kill()
+                    await self._proc.wait()  # reap zombie
                 except Exception:
                     pass
 
