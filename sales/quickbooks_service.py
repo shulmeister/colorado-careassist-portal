@@ -32,6 +32,11 @@ class QuickBooksService:
 
         if not self.enabled:
             logger.warning("QuickBooks credentials not configured. QuickBooks integration disabled.")
+            return
+
+        # Auto-load tokens from DB if not in env vars (tokens are persisted there after OAuth)
+        if not (self.access_token and self.refresh_token):
+            self.load_tokens_from_db()
 
     def _get_headers(self) -> Dict[str, str]:
         """Get headers for API requests."""
@@ -64,11 +69,12 @@ class QuickBooksService:
             if response.status_code == 200:
                 data = response.json()
                 self.access_token = data.get('access_token')
-                # Optionally update refresh token if provided
                 if 'refresh_token' in data:
                     self.refresh_token = data.get('refresh_token')
 
-                logger.info("QuickBooks access token refreshed successfully")
+                # Always persist refreshed tokens so they survive restarts
+                self._save_tokens_to_db()
+                logger.info("QuickBooks access token refreshed and saved to DB")
                 return {
                     "success": True,
                     "access_token": self.access_token,

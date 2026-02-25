@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 TICKETMASTER_API_KEY = os.getenv("TICKETMASTER_API_KEY", "")
 BANDSINTOWN_APP_ID = os.getenv("BANDSINTOWN_APP_ID", "gigi_careassist")
+SEATGEEK_CLIENT_ID = os.getenv("SEATGEEK_CLIENT_ID", "")
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
@@ -46,9 +47,13 @@ class TicketMonitorService:
         # Search Ticketmaster
         events = self._search_ticketmaster(artist, city)
 
-        # Search Bandsintown (catches AXS events)
+        # Search Bandsintown (catches some AXS events when registered)
         bit_events = self._search_bandsintown(artist)
         events.extend(bit_events)
+
+        # Search SeatGeek (native AXS inventory — primary AXS source for Colorado)
+        sg_events = self._search_seatgeek(artist, city)
+        events.extend(sg_events)
 
         # Filter by venue if specified
         if venue:
@@ -190,13 +195,19 @@ class TicketMonitorService:
             return []
 
     def _search_bandsintown(self, artist):
-        """Search Bandsintown API (catches AXS events)."""
+        """Search Bandsintown API."""
         try:
             resp = requests.get(
                 f"https://rest.bandsintown.com/artists/{requests.utils.quote(artist)}/events",
                 params={"app_id": BANDSINTOWN_APP_ID},
                 timeout=10,
             )
+            if resp.status_code == 403:
+                logger.warning(
+                    f"Bandsintown 403 for '{artist}' — app_id '{BANDSINTOWN_APP_ID}' not authorized. "
+                    "Register at artists.bandsintown.com or set SEATGEEK_CLIENT_ID for AXS coverage."
+                )
+                return []
             if resp.status_code != 200:
                 return []
             data = resp.json()
@@ -228,6 +239,70 @@ class TicketMonitorService:
             return events
         except Exception as e:
             logger.error(f"Bandsintown search error: {e}")
+            return []
+
+    def _search_seatgeek(self, artist, city="Denver"):
+        """Search SeatGeek API — has native AXS inventory, free with client_id.
+        Register at seatgeek.com/account/developer for a free client_id.
+        Set SEATGEEK_CLIENT_ID env var to enable.
+        """
+        if not SEATGEEK_CLIENT_ID:
+            return []
+        try:
+            # Find performer slug first
+            resp = requests.get(
+                "https://api.seatgeek.com/2/performers",
+                params={"q": artist, "client_id": SEATGEEK_CLIENT_ID},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                logger.warning(f"SeatGeek performers API {resp.status_code} for '{artist}'")
+                return []
+            performers = resp.json().get("performers", [])
+            if not performers:
+                return []
+            slug = performers[0].get("slug", "")
+
+            # Search events for this performer in target city
+            resp = requests.get(
+                "https://api.seatgeek.com/2/events",
+                params={
+                    "performers.slug": slug,
+                    "venue.city": city,
+                    "client_id": SEATGEEK_CLIENT_ID,
+                    "per_page": 10,
+                    "sort": "datetime_local.asc",
+                },
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                logger.warning(f"SeatGeek events API {resp.status_code} for '{artist}'")
+                return []
+
+            events = []
+            for ev in resp.json().get("events", []):
+                venue_obj = ev.get("venue", {})
+                dt_str = ev.get("datetime_local", "")
+                sales = []
+                if ev.get("announce_date"):
+                    sales.append({
+                        "type": "general",
+                        "start_datetime": ev["announce_date"],
+                    })
+                events.append({
+                    "event_id": f"sg_{ev.get('id', '')}",
+                    "name": ev.get("title", ""),
+                    "date": dt_str[:10] if dt_str else "",
+                    "time": dt_str[11:16] if "T" in dt_str else "",
+                    "venue": venue_obj.get("name", ""),
+                    "city": venue_obj.get("city", ""),
+                    "url": ev.get("url", ""),
+                    "source": "seatgeek",
+                    "sales": sales,
+                })
+            return events
+        except Exception as e:
+            logger.error(f"SeatGeek search error: {e}")
             return []
 
     def _send_alert(self, title, event, watch, extra=""):
@@ -356,6 +431,8 @@ def create_watch(artist, venue=None, city="Denver"):
     events = monitor._search_ticketmaster(artist, city)
     bit_events = monitor._search_bandsintown(artist)
     events.extend(bit_events)
+    sg_events = monitor._search_seatgeek(artist, city)
+    events.extend(sg_events)
 
     if venue:
         venue_lower = venue.lower()

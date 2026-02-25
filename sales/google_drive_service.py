@@ -11,6 +11,35 @@ from googleapiclient.http import MediaIoBaseDownload
 
 logger = logging.getLogger(__name__)
 
+
+def _load_google_sa_key():
+    """Load Google service account JSON, bypassing shell JSON mangling.
+
+    When resolved-secrets.env is sourced with `set -a`, bash strips double quotes
+    from the JSON value, producing malformed JSON. This reads the raw line directly.
+    """
+    raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY", "")
+    if raw:
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass
+
+    secrets_path = os.path.expanduser("~/.config/careassist/resolved-secrets.env")
+    try:
+        with open(secrets_path, "r") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if line.startswith("GOOGLE_SERVICE_ACCOUNT_KEY="):
+                    value = line[len("GOOGLE_SERVICE_ACCOUNT_KEY="):]
+                    if len(value) >= 2 and value[0] == "'" and value[-1] == "'":
+                        value = value[1:-1]
+                    return json.loads(value)
+    except Exception as e:
+        logger.warning(f"Could not read Google SA key from secrets file: {e}")
+    return None
+
+
 class GoogleDriveService:
     """Service for interacting with Google Drive API"""
 
@@ -20,10 +49,9 @@ class GoogleDriveService:
         self.enabled = False
 
         try:
-            # Check for service account key in environment variable
-            creds_json = os.getenv('GOOGLE_SERVICE_ACCOUNT_KEY')
-            if creds_json:
-                creds_dict = json.loads(creds_json)
+            # Load service account key (handles shell JSON mangling from set -a sourcing)
+            creds_dict = _load_google_sa_key()
+            if creds_dict:
                 self.creds = service_account.Credentials.from_service_account_info(
                     creds_dict,
                     scopes=['https://www.googleapis.com/auth/drive']
@@ -32,7 +60,7 @@ class GoogleDriveService:
                 self.enabled = True
                 logger.info("Google Drive service initialized successfully")
             else:
-                logger.warning("GOOGLE_SERVICE_ACCOUNT_KEY not found. Google Drive service disabled.")
+                logger.warning("GOOGLE_SERVICE_ACCOUNT_KEY not found or unparseable. Google Drive service disabled.")
         except Exception as e:
             logger.error(f"Failed to initialize Google Drive service: {str(e)}")
 

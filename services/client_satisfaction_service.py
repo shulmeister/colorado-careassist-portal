@@ -12,17 +12,18 @@ Provides functionality for tracking client satisfaction metrics:
 """
 from __future__ import annotations
 
-import os
 import json
 import logging
+import os
 from datetime import date, datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
+
 import gspread
 from google.oauth2.service_account import Credentials
 
 # Import WellSky service for operational data
 try:
-    from services.wellsky_service import wellsky_service, WellSkyClient
+    from services.wellsky_service import WellSkyClient, wellsky_service
 except ImportError:
     wellsky_service = None
     WellSkyClient = None
@@ -32,6 +33,35 @@ logger = logging.getLogger(__name__)
 # Google Sheets configuration for survey responses
 SURVEY_RESPONSES_SHEET_ID = os.getenv("CLIENT_SURVEY_SHEET_ID")
 GOOGLE_SERVICE_ACCOUNT_KEY = os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY")
+
+
+def _load_google_sa_key():
+    """Load Google service account JSON, bypassing shell JSON mangling.
+
+    When resolved-secrets.env is sourced with `set -a`, bash strips double quotes
+    from the JSON value, producing malformed JSON like {type:service_account,...}.
+    This function falls back to reading the raw line from the secrets file directly.
+    """
+    raw = os.getenv("GOOGLE_SERVICE_ACCOUNT_KEY", "")
+    if raw:
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            pass  # Shell mangled the JSON — fall through to file read
+
+    secrets_path = os.path.expanduser("~/.config/careassist/resolved-secrets.env")
+    try:
+        with open(secrets_path, "r") as f:
+            for line in f:
+                line = line.rstrip("\n")
+                if line.startswith("GOOGLE_SERVICE_ACCOUNT_KEY="):
+                    value = line[len("GOOGLE_SERVICE_ACCOUNT_KEY="):]
+                    if len(value) >= 2 and value[0] == "'" and value[-1] == "'":
+                        value = value[1:-1]
+                    return json.loads(value)
+    except Exception as e:
+        logger.warning(f"Could not read Google SA key from secrets file: {e}")
+    return None
 
 
 class ClientSatisfactionService:
@@ -59,8 +89,11 @@ class ClientSatisfactionService:
             return
 
         try:
-            # Parse service account credentials
-            creds_info = json.loads(GOOGLE_SERVICE_ACCOUNT_KEY)
+            # Parse service account credentials (handles shell JSON mangling)
+            creds_info = _load_google_sa_key()
+            if not creds_info:
+                logger.warning("Failed to parse Google service account key")
+                return
             if "private_key" in creds_info:
                 creds_info["private_key"] = creds_info["private_key"].replace("\\n", "\n")
 
@@ -181,7 +214,11 @@ class ClientSatisfactionService:
             Dashboard summary dictionary
         """
         from portal_models import (
-            ClientSurveyResponse, ClientComplaint, QualityVisit, ClientReview, CarePlanStatus
+            CarePlanStatus,
+            ClientComplaint,
+            ClientReview,
+            ClientSurveyResponse,
+            QualityVisit,
         )
 
         start_date = date.today() - timedelta(days=days)
