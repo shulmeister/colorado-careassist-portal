@@ -3703,17 +3703,22 @@ async def api_fax_list(
     limit: int = 20,
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
-    """List faxes as JSON."""
-    from services.fax_service import list_faxes
+    """List faxes as JSON (syncs outbound statuses first)."""
+    from services.fax_service import list_faxes, sync_outbound_statuses
+    try:
+        await sync_outbound_statuses()
+    except Exception:
+        pass  # Non-fatal — still return cached list
     return JSONResponse(list_faxes(direction=direction, limit=limit))
 
 
 @app.post("/api/fax/poll")
 async def api_fax_poll(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Poll RingCentral for new received faxes and sync to local DB."""
+    """Poll RingCentral for new received faxes and update outbound statuses."""
     try:
-        from services.fax_service import poll_received_faxes
+        from services.fax_service import poll_received_faxes, sync_outbound_statuses
         new_faxes = await poll_received_faxes()
+        await sync_outbound_statuses()
         return JSONResponse({"success": True, "new_faxes": len(new_faxes), "faxes": new_faxes})
     except Exception as e:
         logger.error(f"Fax poll error: {e}")
