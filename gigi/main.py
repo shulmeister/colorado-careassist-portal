@@ -2431,7 +2431,7 @@ async def _execute_caregiver_call_out_locked(
 
         if OPERATIONS_SMS_ENABLED:
             # Send to Jason Shulman (ext 101)
-            jason_phone = "+17205550101"  # TODO: Update with actual Jason's number
+            jason_phone = "+16039971495"  # Jason Shulman
             await _send_sms_beetexting(jason_phone, escalation_message)
             logger.critical(f"ESCALATED to Jason ({jason_phone}): {escalation_message}")
 
@@ -2560,7 +2560,7 @@ async def _execute_caregiver_call_out_locked(
         )
 
         if OPERATIONS_SMS_ENABLED:
-            jason_phone = "+17205550101"  # TODO: Update with actual Jason's number
+            jason_phone = "+16039971495"  # Jason Shulman
             await _send_sms_beetexting(jason_phone, escalation_message)
             await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_message)
             logger.critical("ESCALATED notification failure to Jason + on-call manager")
@@ -7141,8 +7141,8 @@ async def _send_imessage_reply(chat_guid: str, text: str):
     """Send a reply via BlueBubbles REST API."""
     import uuid
     try:
-        # BlueBubbles stores GUIDs as "any;-;+1..." but AppleScript needs "iMessage;-;+1..."
-        send_guid = chat_guid.replace("any;-;", "iMessage;-;", 1) if chat_guid.startswith("any;-;") else chat_guid
+        # BlueBubbles API requires "any;-;+1..." format — do NOT convert to "iMessage;-;"
+        send_guid = chat_guid
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{BLUEBUBBLES_URL}/api/v1/message/text",
@@ -7159,7 +7159,7 @@ async def _send_imessage_reply(chat_guid: str, text: str):
             else:
                 logger.error(f"iMessage reply failed ({resp.status_code}): {resp.text}")
     except Exception as e:
-        logger.error(f"iMessage reply error: {e}")
+        logger.error(f"iMessage reply error ({type(e).__name__}): {e}", exc_info=True)
 
 
 @app.post("/webhook/imessage")

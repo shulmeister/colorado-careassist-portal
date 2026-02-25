@@ -137,12 +137,12 @@ VOICE_OUTREACH_ENABLED = os.getenv("VOICE_OUTREACH_ENABLED", "false").lower() ==
 # LLM Provider Configuration — switch via env var (default: gemini to avoid API fees)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "gemini").lower()
+LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "anthropic").lower()
 _DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash-preview-05-20",
     "anthropic": "claude-haiku-4-5-20251001",
 }
-LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "gemini-3-flash-preview"))
+LLM_MODEL = os.getenv("GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "claude-haiku-4-5-20251001"))
 LLM_MAX_TOKENS = 1024
 LLM_MAX_TOOL_ROUNDS = 7
 CONVERSATION_TIMEOUT_MINUTES = 30
@@ -279,6 +279,8 @@ _SMS_EXCLUDE = {
     "get_invoice_list", "get_cash_position", "get_financial_dashboard",
     "get_subscription_audit",
     "run_claude_code", "browse_with_claude",
+    "browse_webpage", "take_screenshot", "deep_research",
+    "get_polybot_status",
     "run_terminal",
     "sequential_thinking", "get_thinking_summary",
     "update_knowledge_graph", "query_knowledge_graph",

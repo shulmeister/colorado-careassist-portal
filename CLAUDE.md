@@ -49,26 +49,28 @@ Each service has its own LaunchAgent, process, and port. Cloudflare path-based r
 
 | Channel | Technology | Handler | Tools | Status |
 |---------|------------|---------|-------|--------|
-| **Voice** | Retell AI Custom LLM | `voice_brain.py` | 38 tools | Working |
-| **SMS** | RC message-store polling | `ringcentral_bot.py` | 15 tools | Working |
-| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | 36 tools | Working |
-| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | 36 tools | Working |
+| **Voice** | Retell AI Custom LLM | `voice_brain.py` | ~92 tools | Working |
+| **SMS** | RC message-store polling | `ringcentral_bot.py` | ~59 tools | Working |
+| **Direct Messages** | RC Glip API polling | `ringcentral_bot.py` | ~94 tools | Working |
+| **Team Chat** | RC Glip API polling | `ringcentral_bot.py` | ~94 tools | Working |
 
 **Other Channels**
 
 | Channel | Technology | Handler | Tools | Status |
 |---------|------------|---------|-------|--------|
-| **Telegram** | Telegram Bot API | `telegram_bot.py` | 37 tools | Working |
-| **Ask-Gigi API** | REST `/api/ask-gigi` | `ask_gigi.py` | 37 tools | Working |
-| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py` | 37 tools | Working |
-| **iMessage** | BlueBubbles webhook | `main.py` → `ask_gigi.py` | 37 tools | Code Done (needs BB GUI setup) |
-| **Menu Bar** | SwiftUI → ask-gigi API | `ask_gigi.py` | 37 tools | Working |
+| **Telegram** | Telegram Bot API | `telegram_bot.py` | ~90 tools | Working |
+| **Ask-Gigi API** | REST `/api/ask-gigi` | `ask_gigi.py` | ~90 tools | Working |
+| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py` | ~90 tools | Working |
+| **iMessage** | BlueBubbles webhook | `main.py` → `ask_gigi.py` | ~90 tools | ✅ Working (Feb 25) |
+| **Menu Bar** | SwiftUI → ask-gigi API | `ask_gigi.py` | ~90 tools | Working |
+
+**Tool Count Note:** Counts are approximate because RC bot auto-extends SMS/DM from Telegram canonical set at runtime minus `_SMS_EXCLUDE`. Run `len(SMS_TOOLS)` / `len(DM_TOOLS)` after import for exact counts.
 
 ### Ask-Gigi API (Feb 8 — Foundation for Apple integrations)
 - **Endpoint:** `POST /gigi/api/ask-gigi` (served by gigi_app.py on port 8767)
 - **Auth:** Bearer token via `GIGI_API_TOKEN` env var
 - **Module:** `gigi/ask_gigi.py` — reuses GigiTelegramBot.execute_tool (no duplication)
-- **All channels that use ask_gigi.py** get the same 37 tools (all Telegram tools)
+- **All channels that use ask_gigi.py** get the same ~90 tools (all Telegram tools)
 - **Cross-channel context:** API messages visible from Telegram/SMS and vice versa
 
 ### Tool Sets
@@ -88,12 +90,13 @@ Each service has its own LaunchAgent, process, and port. Cloudflare path-based r
 - **Auto-Documentation**: Syncs RC messages → WellSky Care Alerts (TaskLog) + escalation Tasks (AdminTask)
 - **After-Hours Coverage**: Autonomous SMS/voice handling
 
-### Gigi Multi-LLM Provider (Feb 7)
+### Gigi Multi-LLM Provider (Updated Feb 25)
 All 3 handlers (`telegram_bot.py`, `voice_brain.py`, `ringcentral_bot.py`) + `ask_gigi.py` support 3 providers.
-- **Config:** `GIGI_LLM_PROVIDER=anthropic` + `GIGI_LLM_MODEL=claude-haiku-4-5-20251001`
+- **Config:** `GIGI_LLM_PROVIDER=anthropic` + `GIGI_LLM_MODEL=claude-haiku-4-5-20251001` in plist env vars
 - **Current production:** Anthropic Haiku 4.5 — all Gigi channels
-- **Default models:** Gemini=`gemini-3-flash-preview`, Anthropic=`claude-haiku-4-5-20251001`, OpenAI=`gpt-5.1`
-- Gemini API: use `Part(text=...)` NOT `Part.from_text(...)` (API changed)
+- **Code defaults (Feb 25):** All 3 handlers now default to `anthropic` (was `gemini`) — safe even without plist
+- **Default models:** Gemini=`gemini-2.5-flash-preview-05-20`, Anthropic=`claude-haiku-4-5-20251001`, OpenAI=`gpt-4o-mini`
+- **CRITICAL:** Plist env vars override code defaults. Always check plists if provider is wrong.
 
 ### Gigi Subsystems (Feb 8 — All Active)
 - **Memory System** (`gigi/memory_system.py`): PostgreSQL `gigi_memories` + `gigi_memory_audit_log`. Tools: save_memory, recall_memories, forget_memory.
