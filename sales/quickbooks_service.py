@@ -4,6 +4,7 @@ QuickBooks Online API integration service.
 Handles customer data fetching and syncing to Brevo.
 """
 
+import base64
 import logging
 import os
 from datetime import datetime, timedelta
