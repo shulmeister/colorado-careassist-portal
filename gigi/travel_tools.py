@@ -211,6 +211,11 @@ async def search_flights(
 
             flights.append(flight)
 
+        if not flights:
+            # Sandbox returns empty data for real dates — fall back to browse
+            logger.warning("Amadeus returned no flights (sandbox limitation?), falling back to browse")
+            return await _browse_flight_search(origin, destination, departure_date, return_date, adults)
+
         return {"success": True, "source": "amadeus", "origin": origin_code, "destination": dest_code, "departure_date": departure_date, "return_date": return_date, "flights": flights, "total_results": len(flights), "currency": currency}
 
     except Exception as e:
@@ -219,17 +224,57 @@ async def search_flights(
 
 
 async def _browse_flight_search(origin, destination, departure_date, return_date, adults) -> dict:
+    """Fallback flight search: Brave Search → Kayak direct URL browse."""
+    # Step 1: Brave Search — fast, always available
+    try:
+        import httpx
+        brave_api_key = os.getenv("BRAVE_API_KEY")
+        if brave_api_key:
+            trip_type = "round trip" if return_date else "one way"
+            query = f"flights {origin} to {destination} {departure_date} {trip_type} cheapest price"
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.search.brave.com/res/v1/web/search",
+                    headers={"X-Subscription-Token": brave_api_key},
+                    params={"q": query, "count": 5}
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+                for r in data.get("web", {}).get("results", [])[:5]:
+                    results.append({
+                        "title": r.get("title"),
+                        "description": r.get("description"),
+                        "url": r.get("url")
+                    })
+                if results:
+                    return {
+                        "success": True,
+                        "source": "brave_search",
+                        "origin": origin,
+                        "destination": destination,
+                        "departure_date": departure_date,
+                        "results": results,
+                        "note": "Web search results — click links for exact real-time pricing"
+                    }
+    except Exception as e:
+        logger.warning(f"Brave flight search failed: {e}")
+
+    # Step 2: Browse Kayak directly — real-time pricing via specific URL
     try:
         from gigi.claude_code_tools import browse_with_claude
+        if return_date:
+            kayak_url = f"https://www.kayak.com/flights/{origin}-{destination}/{departure_date}/{return_date}/{adults}adults"
+        else:
+            kayak_url = f"https://www.kayak.com/flights/{origin}-{destination}/{departure_date}/{adults}adults"
         result = await browse_with_claude(
-            f"Search for flights from {origin} to {destination} departing {departure_date}"
-            + (f" returning {return_date}" if return_date else "")
-            + f" for {adults} adult(s). List the top 5 results with: airline, price, departure time, arrival time, duration, stops, and any booking link."
+            task="Extract the top 5 cheapest flight options shown on this page. For each flight include: airline, total price, departure time, arrival time, duration, and number of stops.",
+            url=kayak_url
         )
-        return {"success": True, "source": "google_flights_browse", "origin": origin, "destination": destination, "results": result}
+        return {"success": True, "source": "kayak_browse", "origin": origin, "destination": destination, "results": result}
     except Exception as e:
         logger.error(f"Browse flight search fallback failed: {e}")
-        return {"success": False, "error": f"Flight search unavailable. Error: {str(e)}"}
+        return {"success": False, "error": f"Flight search unavailable: {str(e)}"}
 
 
 # ============================================================
