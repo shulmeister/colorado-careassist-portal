@@ -37,7 +37,7 @@ _db_pool = None
 def _get_db_pool():
     global _db_pool
     if _db_pool is None:
-        db_url = os.environ.get("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+        db_url = os.environ.get("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         _db_pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=2,
             maxconn=10,
@@ -53,10 +53,12 @@ def _get_conn():
 
 def _put_conn(conn):
     """Return a connection to the pool."""
+    if conn is None:
+        return
     try:
         _get_db_pool().putconn(conn)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to return connection to pool: {e}")
 
 # ============================================================
 # Module-level shared services (initialized once at import)
