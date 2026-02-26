@@ -20,10 +20,12 @@ Usage in Gigi:
     shifts = get_caregiver_shifts(caller['id'])
 """
 
-import os
 import logging
-from typing import Optional, Dict, List, Any
-from datetime import date, timedelta
+import os
+from contextlib import contextmanager
+from datetime import date
+from typing import Any, Dict, List, Optional
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -38,13 +40,16 @@ class WellSkyFastLookup:
     def __init__(self, db_url: Optional[str] = None):
         self.db_url = db_url or os.getenv("DATABASE_URL")
         self.wellsky = WellSkyService()
-        self._db_conn = None
 
+    @contextmanager
     def _get_db_connection(self):
-        """Get or create database connection"""
-        if self._db_conn is None or self._db_conn.closed:
-            self._db_conn = psycopg2.connect(self.db_url)
-        return self._db_conn
+        """Open a short-lived, autocommit connection for a single operation."""
+        conn = psycopg2.connect(self.db_url)
+        conn.autocommit = True  # read-only queries, no transaction needed
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def identify_caller(self, phone_number: str) -> Optional[Dict[str, Any]]:
         """
@@ -57,17 +62,17 @@ class WellSkyFastLookup:
             Dict or None
         """
         try:
-            conn = self._get_db_connection()
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            with self._get_db_connection() as conn:
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-            # Use the fast SQL function (checks staff, practitioners, patients, family)
-            cursor.execute(
-                "SELECT * FROM identify_caller(%s::text)",
-                (phone_number,)
-            )
+                # Use the fast SQL function (checks staff, practitioners, patients, family)
+                cursor.execute(
+                    "SELECT * FROM identify_caller(%s::text)",
+                    (phone_number,)
+                )
 
-            result = cursor.fetchone()
-            cursor.close()
+                result = cursor.fetchone()
+                cursor.close()
 
             if result:
                 caller_type = result['caller_type']
@@ -102,76 +107,76 @@ class WellSkyFastLookup:
 
     def _get_cached_practitioner(self, practitioner_id: str) -> Dict[str, Any]:
         """Get full practitioner details from cache"""
-        conn = self._get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        with self._get_db_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute(
-            """
-            SELECT
-                'practitioner' as type,
-                id, first_name, last_name, full_name,
-                phone, home_phone, work_phone, email,
-                city, state, status, is_hired, is_active,
-                skills, certifications, notes
-            FROM cached_practitioners
-            WHERE id = %s
-            """,
-            (practitioner_id,)
-        )
+            cursor.execute(
+                """
+                SELECT
+                    'practitioner' as type,
+                    id, first_name, last_name, full_name,
+                    phone, home_phone, work_phone, email,
+                    city, state, status, is_hired, is_active,
+                    skills, certifications, notes
+                FROM cached_practitioners
+                WHERE id = %s
+                """,
+                (practitioner_id,)
+            )
 
-        result = cursor.fetchone()
-        cursor.close()
+            result = cursor.fetchone()
+            cursor.close()
 
         return dict(result) if result else None
 
     def _get_cached_patient(self, patient_id: str) -> Dict[str, Any]:
         """Get full patient details from cache"""
-        conn = self._get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        with self._get_db_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute(
-            """
-            SELECT
-                'patient' as type,
-                id, first_name, last_name, full_name,
-                phone, home_phone, work_phone, email,
-                city, state, status, is_active,
-                emergency_contact_name, emergency_contact_phone,
-                notes
-            FROM cached_patients
-            WHERE id = %s
-            """,
-            (patient_id,)
-        )
+            cursor.execute(
+                """
+                SELECT
+                    'patient' as type,
+                    id, first_name, last_name, full_name,
+                    phone, home_phone, work_phone, email,
+                    city, state, status, is_active,
+                    emergency_contact_name, emergency_contact_phone,
+                    notes
+                FROM cached_patients
+                WHERE id = %s
+                """,
+                (patient_id,)
+            )
 
-        result = cursor.fetchone()
-        cursor.close()
+            result = cursor.fetchone()
+            cursor.close()
 
         return dict(result) if result else None
 
     def _get_cached_family_contact(self, contact_id: str) -> Dict[str, Any]:
         """Get full family/emergency contact details from cache"""
-        conn = self._get_db_connection()
-        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        with self._get_db_connection() as conn:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-        cursor.execute(
-            """
-            SELECT
-                'family' as type,
-                rp.id, rp.first_name, rp.last_name, rp.full_name,
-                rp.phone, rp.home_phone, rp.work_phone, rp.email,
-                rp.relationship, rp.is_emergency_contact,
-                rp.is_primary_contact, rp.patient_id,
-                p.full_name as client_name
-            FROM cached_related_persons rp
-            LEFT JOIN cached_patients p ON rp.patient_id = p.id
-            WHERE rp.id = %s
-            """,
-            (contact_id,)
-        )
+            cursor.execute(
+                """
+                SELECT
+                    'family' as type,
+                    rp.id, rp.first_name, rp.last_name, rp.full_name,
+                    rp.phone, rp.home_phone, rp.work_phone, rp.email,
+                    rp.relationship, rp.is_emergency_contact,
+                    rp.is_primary_contact, rp.patient_id,
+                    p.full_name as client_name
+                FROM cached_related_persons rp
+                LEFT JOIN cached_patients p ON rp.patient_id = p.id
+                WHERE rp.id = %s
+                """,
+                (contact_id,)
+            )
 
-        result = cursor.fetchone()
-        cursor.close()
+            result = cursor.fetchone()
+            cursor.close()
 
         if result:
             d = dict(result)
@@ -341,33 +346,33 @@ class WellSkyFastLookup:
             List of caregiver dicts
         """
         try:
-            conn = self._get_db_connection()
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            with self._get_db_connection() as conn:
+                cursor = conn.cursor(cursor_factory=RealDictCursor)
 
-            query = """
-                SELECT
-                    id, first_name, last_name, full_name,
-                    phone, email, city, state,
-                    skills, certifications, notes
-                FROM cached_practitioners
-                WHERE is_hired = true AND is_active = true
-            """
-            params = []
+                query = """
+                    SELECT
+                        id, first_name, last_name, full_name,
+                        phone, email, city, state,
+                        skills, certifications, notes
+                    FROM cached_practitioners
+                    WHERE is_hired = true AND is_active = true
+                """
+                params = []
 
-            if city:
-                query += " AND city ILIKE %s"
-                params.append(f"%{city}%")
+                if city:
+                    query += " AND city ILIKE %s"
+                    params.append(f"%{city}%")
 
-            if skills:
-                # Search in skills JSON array
-                query += " AND skills::jsonb ?| %s"
-                params.append(skills)
+                if skills:
+                    # Search in skills JSON array
+                    query += " AND skills::jsonb ?| %s"
+                    params.append(skills)
 
-            query += " LIMIT 50"
+                query += " LIMIT 50"
 
-            cursor.execute(query, params)
-            results = cursor.fetchall()
-            cursor.close()
+                cursor.execute(query, params)
+                results = cursor.fetchall()
+                cursor.close()
 
             caregivers = [dict(r) for r in results]
 

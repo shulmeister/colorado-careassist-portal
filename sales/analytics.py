@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-PG_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+PG_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
 class AnalyticsEngine:
     """Generate analytics and KPIs for the sales dashboard"""

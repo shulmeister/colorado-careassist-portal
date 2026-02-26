@@ -25,6 +25,8 @@ CHARS_PER_TOKEN = 4
 class ConversationStore:
     """PostgreSQL-backed conversation store with cross-channel awareness."""
 
+    _table_ensured = False
+
     def __init__(self, database_url: Optional[str] = None):
         self.database_url = database_url or DATABASE_URL
         self._ensure_table()
@@ -35,7 +37,9 @@ class ConversationStore:
         return psycopg2.connect(self.database_url)
 
     def _ensure_table(self):
-        """Create the gigi_conversations table if it doesn't exist."""
+        """Create the gigi_conversations table if it doesn't exist. Runs only once per process."""
+        if ConversationStore._table_ensured:
+            return
         try:
             conn = self._get_connection()
             try:
@@ -59,6 +63,7 @@ class ConversationStore:
                         ON gigi_conversations(user_id, created_at DESC)
                     """)
                 conn.commit()
+                ConversationStore._table_ensured = True
             finally:
                 conn.close()
         except Exception as e:

@@ -549,7 +549,7 @@ class GigiRingCentralBot:
             self.llm = genai.Client(api_key=GEMINI_API_KEY)
             logger.info(f"Gemini LLM initialized ({LLM_MODEL}) for SMS/DM replies")
         elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
-            self.llm = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            self.llm = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
             logger.info(f"Anthropic LLM initialized ({LLM_MODEL}) for SMS/DM replies")
         else:
             # Fallback: try Gemini first (free), then Anthropic
@@ -558,7 +558,7 @@ class GigiRingCentralBot:
                 self.llm_provider = "gemini"
                 logger.warning(f"Provider '{LLM_PROVIDER}' not available, falling back to gemini")
             elif ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
-                self.llm = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                self.llm = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
                 self.llm_provider = "anthropic"
                 logger.warning(f"Provider '{LLM_PROVIDER}' not available, falling back to anthropic")
             else:
@@ -2684,8 +2684,7 @@ class GigiRingCentralBot:
         messages = [{"role": m["role"], "content": m["content"]}
                     for m in conv_history if isinstance(m.get("content"), str)]
 
-        response = await asyncio.to_thread(
-            self.llm.messages.create,
+        response = await self.llm.messages.create(
             model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
             system=system_prompt, tools=tools,
             messages=messages
@@ -2723,8 +2722,7 @@ class GigiRingCentralBot:
             messages.append({"role": "assistant", "content": assistant_content})
             messages.append({"role": "user", "content": tool_results})
 
-            response = await asyncio.to_thread(
-                self.llm.messages.create,
+            response = await self.llm.messages.create(
                 model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
                 system=system_prompt, tools=tools,
                 messages=messages
@@ -2737,8 +2735,7 @@ class GigiRingCentralBot:
             logger.info(f"{channel} Anthropic exhausted {tool_round} tool rounds — forcing text summary")
             messages.append({"role": "assistant", "content": [{"type": "text", "text": "Based on the information I've gathered, let me summarize:"}]})
             messages.append({"role": "user", "content": "Please summarize what you found from the tools you just called. Give a direct, complete answer."})
-            summary_response = await asyncio.to_thread(
-                self.llm.messages.create,
+            summary_response = await self.llm.messages.create(
                 model=LLM_MODEL, max_tokens=LLM_MAX_TOKENS,
                 system=system_prompt, messages=messages
             )

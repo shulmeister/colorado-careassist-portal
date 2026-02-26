@@ -61,13 +61,15 @@ export const DealCardContent = ({
           <div className="ml-3">
             <p className="text-sm font-medium mb-2">{deal.name}</p>
             <p className="text-xs text-muted-foreground">
-              {deal.amount.toLocaleString("en-US", {
-                notation: "compact",
-                style: "currency",
-                currency: "USD",
-                currencyDisplay: "narrowSymbol",
-                minimumSignificantDigits: 3,
-              })}
+              {deal.amount != null
+                ? deal.amount.toLocaleString("en-US", {
+                    notation: "compact",
+                    style: "currency",
+                    currency: "USD",
+                    currencyDisplay: "narrowSymbol",
+                    minimumSignificantDigits: 3,
+                  })
+                : "$0"}
               {deal.category ? `, ${deal.category}` : ""}
             </p>
           </div>

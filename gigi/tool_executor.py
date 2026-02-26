@@ -23,7 +23,40 @@ import logging
 import os
 from datetime import date
 
+import psycopg2.pool
+
 logger = logging.getLogger(__name__)
+
+# ============================================================
+# Shared database connection pool (initialized on first use)
+# ============================================================
+
+_db_pool = None
+
+
+def _get_db_pool():
+    global _db_pool
+    if _db_pool is None:
+        db_url = os.environ.get("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+        _db_pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=2,
+            maxconn=10,
+            dsn=db_url
+        )
+    return _db_pool
+
+
+def _get_conn():
+    """Get a pooled database connection."""
+    return _get_db_pool().getconn()
+
+
+def _put_conn(conn):
+    """Return a connection to the pool."""
+    try:
+        _get_db_pool().putconn(conn)
+    except Exception:
+        pass
 
 # ============================================================
 # Module-level shared services (initialized once at import)
@@ -207,11 +240,10 @@ async def execute(tool_name: str, tool_input: dict) -> str:
             def _sync_client_status(name_val):
                 from datetime import datetime
 
-                import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = None
+                cur = None
                 try:
-                    conn = psycopg2.connect(db_url)
+                    conn = _get_conn()
                     cur = conn.cursor()
                     search_lower = f"%{name_val.lower()}%"
                     cur.execute("""
@@ -265,10 +297,13 @@ async def execute(tool_name: str, tool_input: dict) -> str:
                         return {"client": client_full_name, "status": "completed", "message": msg}
                 except Exception as e:
                     logger.error(f"Status check failed: {e}")
+                    if conn:
+                        conn.rollback()
                     return {"error": str(e)}
                 finally:
-                    if conn:
-                        conn.close()
+                    if cur:
+                        cur.close()
+                    _put_conn(conn)
 
             result = await asyncio.to_thread(_sync_client_status, client_name)
             return json.dumps(result)
@@ -334,11 +369,10 @@ async def execute(tool_name: str, tool_input: dict) -> str:
             active_only = tool_input.get("active_only", True)
 
             def _sync_get_clients():
-                import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = None
+                cur = None
                 try:
-                    conn = psycopg2.connect(db_url)
+                    conn = _get_conn()
                     cur = conn.cursor()
                     if search_name:
                         search_lower = f"%{search_name.lower()}%"
@@ -362,10 +396,13 @@ async def execute(tool_name: str, tool_input: dict) -> str:
                     return {"count": len(client_list), "clients": client_list, "search": search_name or "all"}
                 except Exception as e:
                     logger.error(f"Client cache lookup failed: {e}")
+                    if conn:
+                        conn.rollback()
                     return {"error": f"Client lookup failed: {str(e)}"}
                 finally:
-                    if conn:
-                        conn.close()
+                    if cur:
+                        cur.close()
+                    _put_conn(conn)
 
             return json.dumps(await asyncio.to_thread(_sync_get_clients))
 
@@ -374,11 +411,10 @@ async def execute(tool_name: str, tool_input: dict) -> str:
             active_only = tool_input.get("active_only", True)
 
             def _sync_get_caregivers():
-                import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = None
+                cur = None
                 try:
-                    conn = psycopg2.connect(db_url)
+                    conn = _get_conn()
                     cur = conn.cursor()
                     if search_name:
                         search_lower = f"%{search_name.lower()}%"
@@ -406,10 +442,13 @@ async def execute(tool_name: str, tool_input: dict) -> str:
                     return {"count": len(cg_list), "caregivers": cg_list, "search": search_name or "all"}
                 except Exception as e:
                     logger.error(f"Caregiver cache lookup failed: {e}")
+                    if conn:
+                        conn.rollback()
                     return {"error": f"Caregiver lookup failed: {str(e)}"}
                 finally:
-                    if conn:
-                        conn.close()
+                    if cur:
+                        cur.close()
+                    _put_conn(conn)
 
             return json.dumps(await asyncio.to_thread(_sync_get_caregivers))
 
@@ -421,7 +460,6 @@ async def execute(tool_name: str, tool_input: dict) -> str:
             caregiver_id = tool_input.get("caregiver_id")
 
             def _sync_get_shifts():
-                import psycopg2
                 if past_days > 0:
                     from datetime import timedelta as td
                     date_from = date.today() - td(days=past_days)
@@ -430,10 +468,10 @@ async def execute(tool_name: str, tool_input: dict) -> str:
                     from datetime import timedelta as td
                     date_from = date.today()
                     date_to = date.today() + td(days=days)
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = None
+                cur = None
                 try:
-                    conn = psycopg2.connect(db_url)
+                    conn = _get_conn()
                     cur = conn.cursor()
                     conditions = ["a.scheduled_start >= %s", "a.scheduled_start < %s"]
                     params = [date_from, date_to]
@@ -481,10 +519,13 @@ async def execute(tool_name: str, tool_input: dict) -> str:
                             "date_range": f"{date_from.isoformat()} to {date_to.isoformat()}", "shifts": shift_list}
                 except Exception as e:
                     logger.error(f"Error querying cached shifts: {e}")
+                    if conn:
+                        conn.rollback()
                     return {"error": f"Database error: {str(e)}"}
                 finally:
-                    if conn:
-                        conn.close()
+                    if cur:
+                        cur.close()
+                    _put_conn(conn)
 
             return json.dumps(await asyncio.to_thread(_sync_get_shifts))
 
@@ -831,11 +872,11 @@ async def execute(tool_name: str, tool_input: dict) -> str:
             if not title or not description:
                 return json.dumps({"error": "Missing title or description"})
 
-            import psycopg2
             def _sync_create_task():
                 conn = None
+                cur = None
                 try:
-                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
+                    conn = _get_conn()
                     cur = conn.cursor()
                     cur.execute("""
                         INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
@@ -846,21 +887,24 @@ async def execute(tool_name: str, tool_input: dict) -> str:
                     conn.commit()
                     return json.dumps({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
                 except Exception as e:
+                    if conn:
+                        conn.rollback()
                     return json.dumps({"error": f"Failed to create task: {str(e)}"})
                 finally:
-                    if conn:
-                        conn.close()
+                    if cur:
+                        cur.close()
+                    _put_conn(conn)
 
             return await asyncio.to_thread(_sync_create_task)
 
         elif tool_name == "check_claude_task":
             task_id = tool_input.get("task_id")
 
-            import psycopg2
             def _sync_check_task():
                 conn = None
+                cur = None
                 try:
-                    conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
+                    conn = _get_conn()
                     cur = conn.cursor()
                     if task_id:
                         cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (int(task_id),))
@@ -877,10 +921,13 @@ async def execute(tool_name: str, tool_input: dict) -> str:
                         "completed_at": row[6].isoformat() if row[6] else None,
                     })
                 except Exception as e:
+                    if conn:
+                        conn.rollback()
                     return json.dumps({"error": f"Failed to check task: {str(e)}"})
                 finally:
-                    if conn:
-                        conn.close()
+                    if cur:
+                        cur.close()
+                    _put_conn(conn)
 
             return await asyncio.to_thread(_sync_check_task)
 

@@ -27,7 +27,7 @@ from psycopg2.extras import Json, RealDictCursor
 
 logger = logging.getLogger(__name__)
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+DB_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 RINGCENTRAL_SERVER = os.getenv("RINGCENTRAL_SERVER_URL", "https://platform.ringcentral.com")
 ANALYSIS_MODEL = "claude-haiku-4-5-20251001"
 

@@ -98,13 +98,14 @@ except Exception as e:
 
 # Memory system, mode detector, failure handler
 try:
-    from gigi.memory_system import MemorySystem
+    from gigi.memory_system import MemoryStatus, MemorySystem
     _memory_system = MemorySystem()
     MEMORY_AVAILABLE = True
     print("✓ Memory system initialized for Telegram bot")
 except Exception as e:
     _memory_system = None
     MEMORY_AVAILABLE = False
+    MemoryStatus = None
     print(f"⚠️  Memory system not available: {e}")
 
 try:
@@ -582,7 +583,7 @@ def _build_telegram_system_prompt(conversation_store=None, user_message=None):
     # Inject relevant memories
     if MEMORY_AVAILABLE and _memory_system:
         try:
-            memories = _memory_system.query_memories(min_confidence=0.5, limit=25)
+            memories = _memory_system.query_memories(min_confidence=0.5, limit=25, status=MemoryStatus.ACTIVE)
             if memories:
                 memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
                 parts.append("\n# Your Saved Memories\n" + "\n".join(memory_lines))
@@ -605,9 +606,6 @@ def _build_telegram_system_prompt(conversation_store=None, user_message=None):
     return "\n".join(parts)
 
 
-# Legacy reference
-SYSTEM_PROMPT = _build_telegram_system_prompt()
-
 class GigiTelegramBot:
     def __init__(self):
         # Initialize the right LLM client based on GIGI_LLM_PROVIDER
@@ -617,11 +615,11 @@ class GigiTelegramBot:
         elif LLM_PROVIDER == "openai" and OPENAI_AVAILABLE and OPENAI_API_KEY:
             self.llm = openai.OpenAI(api_key=OPENAI_API_KEY)
         elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
-            self.llm = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            self.llm = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
         else:
             # Fallback: try any available provider
             if ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
-                self.llm = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                self.llm = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
                 logger.warning(f"Provider '{LLM_PROVIDER}' not available, falling back to anthropic")
             elif GEMINI_AVAILABLE and GEMINI_API_KEY:
                 self.llm = genai.Client(api_key=GEMINI_API_KEY)
@@ -772,8 +770,7 @@ class GigiTelegramBot:
 
         user_msg = update.message.text if update.message else None
         sys_prompt = _build_telegram_system_prompt(self.conversation_store, user_message=user_msg)
-        response = await asyncio.to_thread(
-            self.llm.messages.create,
+        response = await self.llm.messages.create(
             model=LLM_MODEL, max_tokens=4096,
             system=sys_prompt, tools=ANTHROPIC_TOOLS,
             messages=messages
@@ -789,16 +786,10 @@ class GigiTelegramBot:
             tool_results = []
             assistant_content = []
 
+            # Separate tool_use blocks from text blocks
+            tool_blocks = [block for block in response.content if block.type == "tool_use"]
             for block in response.content:
                 if block.type == "tool_use":
-                    logger.info(f"  Tool: {block.name} input: {block.input}")
-                    result = await self.execute_tool(block.name, block.input)
-                    logger.info(f"  Result: {result[:200]}...")
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": result
-                    })
                     assistant_content.append({
                         "type": "tool_use", "id": block.id,
                         "name": block.name, "input": block.input
@@ -806,12 +797,25 @@ class GigiTelegramBot:
                 elif block.type == "text":
                     assistant_content.append({"type": "text", "text": block.text})
 
+            # Execute all tools in parallel
+            if tool_blocks:
+                logger.info(f"  Executing {len(tool_blocks)} tool(s) in parallel")
+                results = await asyncio.gather(*[
+                    self.execute_tool(block.name, block.input) for block in tool_blocks
+                ])
+                for block, result in zip(tool_blocks, results):
+                    logger.info(f"  Tool: {block.name} result: {result[:200]}...")
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": result
+                    })
+
             messages.append({"role": "assistant", "content": assistant_content})
             messages.append({"role": "user", "content": tool_results})
 
             await update.message.chat.send_action("typing")
-            response = await asyncio.to_thread(
-                self.llm.messages.create,
+            response = await self.llm.messages.create(
                 model=LLM_MODEL, max_tokens=4096,
                 system=sys_prompt, tools=ANTHROPIC_TOOLS,
                 messages=messages

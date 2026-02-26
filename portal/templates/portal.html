@@ -1403,7 +1403,7 @@
 
                 // Internal routes (start with /) should open in same window, external URLs in new tab
                 const isInternalRoute = linkHref.startsWith('/');
-                const targetAttr = isInternalRoute ? '' : 'target="_blank"';
+                const targetAttr = isInternalRoute ? '' : 'target="_blank" rel="noopener noreferrer"';
                 
                 return `
                     <a href="${linkHref}" ${targetAttr} class="tool-card" onclick="trackToolClick(${tool.id}, '${tool.name.replace(/'/g, "\\'")}', '${tool.url.replace(/'/g, "\\'")}'); return true;">

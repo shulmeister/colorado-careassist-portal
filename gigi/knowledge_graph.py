@@ -19,7 +19,7 @@ import psycopg2.extras
 
 logger = logging.getLogger("gigi.knowledge_graph")
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+DB_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 
 
 def _conn():

@@ -24,13 +24,6 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
-# Rate limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
-
 from portal_auth import get_current_user, get_current_user_optional, oauth_manager
 from portal_database import db_manager, get_db
 from portal_models import (
@@ -48,6 +41,12 @@ from services.marketing.metrics_service import (
     get_social_metrics,
 )
 from services.search_service import search_service
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
 
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
@@ -208,18 +207,16 @@ async def startup_event():
         with db_manager.get_session() as db:
             from portal_models import PortalTool
             existing = db.query(PortalTool).filter(PortalTool.name == "Gigi Brain").first()
-            # Also check for old name and update it
-            old_tile = db.query(PortalTool).filter(PortalTool.name == "Gigi Brain").first()
-            if old_tile:
-                old_tile.name = "Gigi Brain"
-                old_tile.description = "AI Scheduling & Issue Management (Issues, Schedule, Escalations)"
+            if existing:
+                existing.url = "/gigi/dashboard"
+                existing.description = "AI Scheduling & Issue Management (Issues, Schedule, Escalations)"
                 db.commit()
-                logger.info("✅ Renamed Gigi Brain to Gigi Brain.")
-            elif not existing:
+                logger.info("Gigi Brain tile updated.")
+            else:
                 tool = PortalTool(
                     name="Gigi Brain",
                     url="/gigi/dashboard",
-                    icon="📅",
+                    icon="🧠",
                     description="AI Scheduling & Issue Management (Issues, Schedule, Escalations)",
                     category="AI Operations",
                     display_order=-1,
@@ -227,11 +224,7 @@ async def startup_event():
                 )
                 db.add(tool)
                 db.commit()
-                logger.info("✅ Created Gigi Brain tool tile.")
-            else:
-                existing.url = "/gigi/dashboard"
-                existing.icon = "🧠"
-                db.commit()
+                logger.info("Gigi Brain tool tile created.")
     except Exception as e:
         logger.error(f"Error ensuring Gigi Brain tile: {e}")
 
@@ -262,7 +255,7 @@ app.add_middleware(
 )
 
 
-# PWA sync CORS middleware — allows offline PWAs to sync from any cached origin.
+# PWA sync CORS middleware — allows offline PWAs to sync from whitelisted origins.
 # Must be added AFTER CORSMiddleware so it runs BEFORE it (Starlette middleware stack).
 _PWA_SYNC_PATHS = {
     "/api/client-assessments/sync",
@@ -270,32 +263,44 @@ _PWA_SYNC_PATHS = {
     "/api/incident-reports/sync",
 }
 
+_PWA_ALLOWED_ORIGINS = {
+    "https://portal.coloradocareassist.com",
+    "https://staging.coloradocareassist.com",
+    "http://localhost:8765",
+    "http://localhost:8766",
+}
+
 
 class PwaSyncCorsMiddleware:
-    """Bypass strict CORS for PWA sync endpoints — these need to work from any cached origin."""
+    """CORS for PWA sync endpoints — restricted to whitelisted origins only."""
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
         if scope["type"] == "http" and scope["path"] in _PWA_SYNC_PATHS:
             from starlette.responses import Response as StarletteResponse
+            # Extract Origin header from request
+            req_headers = dict(scope.get("headers", []))
+            origin = req_headers.get(b"origin", b"").decode()
+            allowed_origin = origin if origin in _PWA_ALLOWED_ORIGINS else ""
+
             if scope["method"] == "OPTIONS":
                 resp = StarletteResponse(
                     status_code=204,
                     headers={
-                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Origin": allowed_origin,
                         "Access-Control-Allow-Methods": "POST, OPTIONS",
                         "Access-Control-Allow-Headers": "Content-Type",
                         "Access-Control-Max-Age": "86400",
-                    },
+                    } if allowed_origin else {},
                 )
                 await resp(scope, receive, send)
                 return
             # For POST, let request through but inject CORS header in response
             async def send_with_cors(message):
-                if message["type"] == "http.response.start":
+                if message["type"] == "http.response.start" and allowed_origin:
                     headers = list(message.get("headers", []))
-                    headers.append((b"access-control-allow-origin", b"*"))
+                    headers.append((b"access-control-allow-origin", allowed_origin.encode()))
                     message["headers"] = headers
                 await send(message)
             await self.app(scope, receive, send_with_cors)
@@ -1249,7 +1254,7 @@ async def api_gigi_claim_issue(
         return JSONResponse({"success": False, "error": f"Already claimed by {issue.claimed_by}"}, status_code=409)
 
     issue.claimed_by = user_name
-    issue.claimed_at = datetime.utcnow()
+    issue.claimed_at = datetime.now(timezone.utc)
     issue.status = "in_progress"
     db.commit()
     return JSONResponse({"success": True, "claimed_by": issue.claimed_by})
@@ -1309,56 +1314,58 @@ async def api_gigi_get_schedule(
 
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
-        cur.execute("""
-            SELECT
-                a.id, a.scheduled_start, a.scheduled_end, a.actual_start, a.actual_end,
-                a.status, a.service_type, a.location_address, a.notes,
-                p.id as client_id, p.full_name as client_name, p.phone as client_phone,
-                pr.id as caregiver_id, pr.full_name as caregiver_name, pr.phone as caregiver_phone
-            FROM cached_appointments a
-            LEFT JOIN cached_patients p ON a.patient_id = p.id
-            LEFT JOIN cached_practitioners pr ON a.practitioner_id = pr.id
-            WHERE a.scheduled_start::date = %s
-            ORDER BY a.scheduled_start
-        """, (target_date.isoformat(),))
+        try:
+            cur.execute("""
+                SELECT
+                    a.id, a.scheduled_start, a.scheduled_end, a.actual_start, a.actual_end,
+                    a.status, a.service_type, a.location_address, a.notes,
+                    p.id as client_id, p.full_name as client_name, p.phone as client_phone,
+                    pr.id as caregiver_id, pr.full_name as caregiver_name, pr.phone as caregiver_phone
+                FROM cached_appointments a
+                LEFT JOIN cached_patients p ON a.patient_id = p.id
+                LEFT JOIN cached_practitioners pr ON a.practitioner_id = pr.id
+                WHERE a.scheduled_start::date = %s
+                ORDER BY a.scheduled_start
+            """, (target_date.isoformat(),))
 
-        rows = cur.fetchall()
-        shifts = []
-        for r in rows:
-            client_full = r[10] or "Unknown Client"
-            client_parts = client_full.split(" ", 1)
-            sched_start = r[1]
-            sched_end = r[2]
-            duration_hours = 0
-            if sched_start and sched_end:
-                delta = sched_end - sched_start
-                duration_hours = delta.total_seconds() / 3600
-                if duration_hours < 0:
-                    duration_hours += 24  # overnight shift
-            shifts.append({
-                "id": r[0],
-                "start_time": sched_start.strftime("%I:%M %p") if sched_start else "TBD",
-                "end_time": sched_end.strftime("%I:%M %p") if sched_end else "TBD",
-                "actual_start": r[3].strftime("%I:%M %p") if r[3] else None,
-                "actual_end": r[4].strftime("%I:%M %p") if r[4] else None,
-                "status": r[5] or "scheduled",
-                "service_type": r[6],
-                "location": r[7],
-                "notes": r[8],
-                "client_id": r[9],
-                "client_name": client_full,
-                "client_first_name": client_parts[0],
-                "client_last_name": client_parts[1] if len(client_parts) > 1 else "",
-                "client_phone": r[11],
-                "caregiver_id": r[12],
-                "caregiver_name": r[13] or "Unassigned",
-                "caregiver_phone": r[14],
-                "duration_hours": round(duration_hours, 1),
-                "city": (r[7] or "").split(",")[0] if r[7] else "CO",
-                "date": target_date.isoformat(),
-            })
-
-        conn.close()
+            rows = cur.fetchall()
+            shifts = []
+            for r in rows:
+                client_full = r[10] or "Unknown Client"
+                client_parts = client_full.split(" ", 1)
+                sched_start = r[1]
+                sched_end = r[2]
+                duration_hours = 0
+                if sched_start and sched_end:
+                    delta = sched_end - sched_start
+                    duration_hours = delta.total_seconds() / 3600
+                    if duration_hours < 0:
+                        duration_hours += 24  # overnight shift
+                shifts.append({
+                    "id": r[0],
+                    "start_time": sched_start.strftime("%I:%M %p") if sched_start else "TBD",
+                    "end_time": sched_end.strftime("%I:%M %p") if sched_end else "TBD",
+                    "actual_start": r[3].strftime("%I:%M %p") if r[3] else None,
+                    "actual_end": r[4].strftime("%I:%M %p") if r[4] else None,
+                    "status": r[5] or "scheduled",
+                    "service_type": r[6],
+                    "location": r[7],
+                    "notes": r[8],
+                    "client_id": r[9],
+                    "client_name": client_full,
+                    "client_first_name": client_parts[0],
+                    "client_last_name": client_parts[1] if len(client_parts) > 1 else "",
+                    "client_phone": r[11],
+                    "caregiver_id": r[12],
+                    "caregiver_name": r[13] or "Unassigned",
+                    "caregiver_phone": r[14],
+                    "duration_hours": round(duration_hours, 1),
+                    "city": (r[7] or "").split(",")[0] if r[7] else "CO",
+                    "date": target_date.isoformat(),
+                })
+        finally:
+            cur.close()
+            conn.close()
 
         return JSONResponse({
             "success": True,
@@ -1477,7 +1484,7 @@ async def api_gigi_get_users(
                 "email": s.user_email,
                 "name": s.user_name or s.user_email.split('@')[0].capitalize(),
                 "last_active": s.login_time.isoformat(),
-                "status": "Active" if s.logout_time is None and (datetime.utcnow() - s.login_time).total_seconds() < 300 else "Offline"
+                "status": "Active" if s.logout_time is None and (datetime.now(timezone.utc) - s.login_time).total_seconds() < 300 else "Offline"
             }
 
     return JSONResponse({
@@ -1540,10 +1547,9 @@ async def api_gigi_reports(
     if not db_url:
         return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
 
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
     try:
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
-
         # Total interactions = distinct (user_id, channel, date) combos in last 30 days
         cur.execute("""
             SELECT COUNT(*) FROM (
@@ -1627,11 +1633,12 @@ async def api_gigi_reports(
             ds = str(d)
             stats["daily_volume"].append({"date": ds, "count": daily_rows.get(ds, 0)})
 
-        cur.close()
-        conn.close()
     except Exception as e:
         logger.warning(f"Reports stats error: {e}")
         return JSONResponse({"success": False, "error": str(e)})
+    finally:
+        cur.close()
+        conn.close()
 
     return JSONResponse({"success": True, "stats": stats})
 
@@ -1695,57 +1702,58 @@ async def api_gigi_communications(
         try:
             conn = psycopg2.connect(db_url)
             cur = conn.cursor()
-            channel_filter = ""
-            params = [limit + offset]
-            if channel and channel != "voice":
-                channel_filter = "AND gc1.channel = %s"
-                params.append(channel)
-            elif channel is None:
-                # All non-voice channels (voice is handled by Retell above)
-                pass
+            try:
+                if channel and channel != "voice":
+                    channel_filter = "AND gc1.channel = %s"
+                    query_params = (channel, limit + offset)
+                else:
+                    # All non-voice channels (voice is handled by Retell above)
+                    channel_filter = ""
+                    query_params = (limit + offset,)
 
-            cur.execute(f"""
-                SELECT
-                    gc1.id as msg_id,
-                    gc1.user_id,
-                    gc1.channel,
-                    gc1.content as user_message,
-                    gc1.created_at as message_time,
-                    gc2_content as gigi_response,
-                    gc2_time as response_time
-                FROM gigi_conversations gc1
-                LEFT JOIN LATERAL (
-                    SELECT content as gc2_content, created_at as gc2_time
-                    FROM gigi_conversations gc2
-                    WHERE gc2.user_id = gc1.user_id
-                      AND gc2.channel = gc1.channel
-                      AND gc2.role = 'assistant'
-                      AND gc2.created_at > gc1.created_at
-                      AND gc2.created_at < gc1.created_at + INTERVAL '10 minutes'
-                    ORDER BY gc2.created_at ASC
-                    LIMIT 1
-                ) sub ON true
-                WHERE gc1.role = 'user'
-                {channel_filter}
-                ORDER BY gc1.created_at DESC
-                LIMIT %s
-            """, params[::-1] if channel and channel != "voice" else params)
+                cur.execute(f"""
+                    SELECT
+                        gc1.id as msg_id,
+                        gc1.user_id,
+                        gc1.channel,
+                        gc1.content as user_message,
+                        gc1.created_at as message_time,
+                        gc2_content as gigi_response,
+                        gc2_time as response_time
+                    FROM gigi_conversations gc1
+                    LEFT JOIN LATERAL (
+                        SELECT content as gc2_content, created_at as gc2_time
+                        FROM gigi_conversations gc2
+                        WHERE gc2.user_id = gc1.user_id
+                          AND gc2.channel = gc1.channel
+                          AND gc2.role = 'assistant'
+                          AND gc2.created_at > gc1.created_at
+                          AND gc2.created_at < gc1.created_at + INTERVAL '10 minutes'
+                        ORDER BY gc2.created_at ASC
+                        LIMIT 1
+                    ) sub ON true
+                    WHERE gc1.role = 'user'
+                    {channel_filter}
+                    ORDER BY gc1.created_at DESC
+                    LIMIT %s
+                """, query_params)
 
-            rows = cur.fetchall()
-            for row in rows:
-                msg_id, user_id, ch, user_msg, msg_time, gigi_resp, resp_time = row
-                items.append({
-                    "id": f"conv_{msg_id}",
-                    "type": ch,
-                    "user_identifier": user_id,
-                    "user_message": (user_msg or "")[:300],
-                    "gigi_response": (gigi_resp or "")[:300],
-                    "timestamp": msg_time.isoformat() if msg_time else None,
-                    "duration": None,
-                    "recording_url": None,
-                })
-            cur.close()
-            conn.close()
+                rows = cur.fetchall()
+                for row in rows:
+                    msg_id, user_id, ch, user_msg, msg_time, gigi_resp, resp_time = row
+                    items.append({
+                        "id": f"conv_{msg_id}",
+                        "type": ch,
+                        "user_identifier": user_id,
+                        "user_message": (user_msg or "")[:300],
+                        "gigi_response": (gigi_resp or "")[:300],
+                        "timestamp": msg_time.isoformat() if msg_time else None,
+                        "duration": None,
+                        "recording_url": None,
+                    })
+            finally:
+                cur.close()
+                conn.close()
         except Exception as e:
             logger.warning(f"Conversation store query error: {e}")
 
@@ -1790,10 +1798,9 @@ async def api_gigi_communication_stats(
     if not db_url:
         return JSONResponse({"success": True, "stats": stats})
 
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
     try:
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
-
         # Total conversations by channel (last 30 days)
         cur.execute("""
             SELECT channel, COUNT(*) FROM gigi_conversations
@@ -1816,10 +1823,11 @@ async def api_gigi_communication_stats(
                 stats["needs_improvement"] = cnt
             stats["reviewed"] += cnt
 
-        cur.close()
-        conn.close()
     except Exception as e:
         logger.warning(f"Communication stats error: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
     return JSONResponse({"success": True, "stats": stats})
 
@@ -2026,7 +2034,8 @@ async def api_gigi_save_sop(
     payload: Dict[str, str],
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Save the Gigi SOP Knowledge Base (markdown)"""
+    """Save the Gigi SOP Knowledge Base (markdown) — admin only"""
+    require_admin(current_user)
     sop_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "gigi", "knowledge_base.md")
     content = payload.get("content")
     if content is None:
@@ -2085,10 +2094,9 @@ async def api_gigi_get_clients(
     if not db_url:
         return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
 
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
     try:
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
-
         # Get all active clients from cached_patients with any existing prompts
         cur.execute("""
             SELECT cp.id, cp.full_name, cp.phone, cp.city, cp.state, cp.is_active,
@@ -2118,12 +2126,13 @@ async def api_gigi_get_clients(
                 "prompt": r[10] or "",
             })
 
-        cur.close()
-        conn.close()
         return JSONResponse({"success": True, "clients": clients})
     except Exception as e:
         logger.error(f"Failed to fetch clients: {e}")
         return JSONResponse({"success": False, "error": str(e)})
+    finally:
+        cur.close()
+        conn.close()
 
 
 @app.post("/api/gigi/knowledge/clients/{client_id}/prompt")
@@ -2142,10 +2151,9 @@ async def api_gigi_save_client_prompt(
     if not db_url:
         return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
 
+    conn = psycopg2.connect(db_url)
+    cur = conn.cursor()
     try:
-        conn = psycopg2.connect(db_url)
-        cur = conn.cursor()
-
         cur.execute("""
             INSERT INTO gigi_client_prompts (client_id, client_name, prompt, updated_at)
             VALUES (%s, %s, %s, NOW())
@@ -2154,12 +2162,13 @@ async def api_gigi_save_client_prompt(
         """, (client_id, client_name, prompt))
 
         conn.commit()
-        cur.close()
-        conn.close()
         return JSONResponse({"success": True, "message": "Client prompt saved"})
     except Exception as e:
         logger.error(f"Failed to save client prompt: {e}")
         return JSONResponse({"success": False, "error": str(e)})
+    finally:
+        cur.close()
+        conn.close()
 
 
 # API endpoints for tools
@@ -2216,7 +2225,8 @@ async def get_activity_stream(
 
 @app.post("/api/internal/event")
 async def log_internal_event(
-    request: Request
+    request: Request,
+    current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Internal endpoint for spokes to log events"""
     try:
@@ -2308,7 +2318,7 @@ async def update_tool(
         if "is_active" in data:
             tool.is_active = data.get("is_active")
 
-        tool.updated_at = datetime.utcnow()
+        tool.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(tool)
 
@@ -2410,6 +2420,8 @@ async def sync_client_assessment(request: Request):
     import json as _json
 
     import psycopg2
+    conn = None
+    cur = None
     try:
         payload = await request.json()
         local_id = payload.get("id", "")
@@ -2605,9 +2617,6 @@ async def sync_client_assessment(request: Request):
         except Exception as ws_err:
             logger.warning(f"WellSky prospect creation failed (non-fatal): {ws_err}")
 
-        cur.close()
-        conn.close()
-
         return JSONResponse(
             {
                 "success": True,
@@ -2628,6 +2637,11 @@ async def sync_client_assessment(request: Request):
             status_code=500,
             headers={"Access-Control-Allow-Origin": "*"},
         )
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 # === Monitoring Visits (Offline Form) ===
@@ -2644,6 +2658,8 @@ async def mv_page():
 async def sync_monitoring_visit(request: Request):
     """Receive a synced monitoring visit from the offline form and store in PostgreSQL + Google Drive."""
     import psycopg2
+    conn = None
+    cur = None
     try:
         payload = await request.json()
         local_id = payload.get("id", "")
@@ -2798,9 +2814,6 @@ async def sync_monitoring_visit(request: Request):
             except Exception as ws_err:
                 logger.warning(f"WellSky Care Alert failed (non-fatal): {ws_err}")
 
-        cur.close()
-        conn.close()
-
         logger.info(f"Synced monitoring visit: {client_name} (local_id={local_id})")
         return JSONResponse(
             {"success": True, "id": mv_id, "google_drive_link": google_drive_link,
@@ -2816,10 +2829,15 @@ async def sync_monitoring_visit(request: Request):
             {"detail": str(e)}, status_code=500,
             headers={"Access-Control-Allow-Origin": "*"},
         )
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 @app.get("/api/monitoring-visits/latest")
-async def get_latest_monitoring_visits():
+async def get_latest_monitoring_visits(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Return the latest MV date per client for the operations dashboard."""
     import psycopg2
     import psycopg2.extras
@@ -2827,15 +2845,17 @@ async def get_latest_monitoring_visits():
         db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute("""
-            SELECT client_id, client_name, MAX(visit_date) as last_mv_date
-            FROM monitoring_visits
-            WHERE client_id IS NOT NULL
-            GROUP BY client_id, client_name
-        """)
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
+        try:
+            cur.execute("""
+                SELECT client_id, client_name, MAX(visit_date) as last_mv_date
+                FROM monitoring_visits
+                WHERE client_id IS NOT NULL
+                GROUP BY client_id, client_name
+            """)
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
 
         # Build lookup by client_id and by name (for matching)
         by_id = {}
@@ -2854,7 +2874,7 @@ async def get_latest_monitoring_visits():
 
 
 @app.get("/api/monitoring-visits")
-async def get_monitoring_visits(client_id: str = None):
+async def get_monitoring_visits(client_id: str = None, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Return all monitoring visits, optionally filtered by client_id."""
     import psycopg2
     import psycopg2.extras
@@ -2862,15 +2882,17 @@ async def get_monitoring_visits(client_id: str = None):
         db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        if client_id:
-            cur.execute("""
-                SELECT * FROM monitoring_visits WHERE client_id = %s ORDER BY visit_date DESC
-            """, (client_id,))
-        else:
-            cur.execute("SELECT * FROM monitoring_visits ORDER BY visit_date DESC LIMIT 100")
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
+        try:
+            if client_id:
+                cur.execute("""
+                    SELECT * FROM monitoring_visits WHERE client_id = %s ORDER BY visit_date DESC
+                """, (client_id,))
+            else:
+                cur.execute("SELECT * FROM monitoring_visits ORDER BY visit_date DESC LIMIT 100")
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
 
         # Serialize dates
         visits = []
@@ -2901,6 +2923,8 @@ async def incident_page():
 async def sync_incident_report(request: Request):
     """Receive a synced incident report from the offline form and store in PostgreSQL + Google Drive."""
     import psycopg2
+    conn = None
+    cur = None
     try:
         payload = await request.json()
         local_id = payload.get("id", "")
@@ -3086,9 +3110,6 @@ async def sync_incident_report(request: Request):
             except Exception as ws_err:
                 logger.warning(f"WellSky incident report sync failed (non-fatal): {ws_err}")
 
-        cur.close()
-        conn.close()
-
         logger.info(f"Synced incident report: {client_name} (local_id={local_id})")
         return JSONResponse(
             {"success": True, "id": ir_id, "google_drive_link": google_drive_link,
@@ -3104,10 +3125,15 @@ async def sync_incident_report(request: Request):
             {"detail": str(e)}, status_code=500,
             headers={"Access-Control-Allow-Origin": "*"},
         )
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 @app.get("/api/incident-reports/latest")
-async def get_latest_incident_reports():
+async def get_latest_incident_reports(current_user: Dict[str, Any] = Depends(get_current_user)):
     """Return the latest incident date per client and per employee for dashboard buttons."""
     import psycopg2
     import psycopg2.extras
@@ -3115,25 +3141,25 @@ async def get_latest_incident_reports():
         db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            # By client
+            cur.execute("""
+                SELECT client_id, MAX(incident_date) as last_ir_date
+                FROM incident_reports WHERE client_id IS NOT NULL
+                GROUP BY client_id
+            """)
+            by_client = {r["client_id"]: r["last_ir_date"].isoformat() if r["last_ir_date"] else None for r in cur.fetchall()}
 
-        # By client
-        cur.execute("""
-            SELECT client_id, MAX(incident_date) as last_ir_date
-            FROM incident_reports WHERE client_id IS NOT NULL
-            GROUP BY client_id
-        """)
-        by_client = {r["client_id"]: r["last_ir_date"].isoformat() if r["last_ir_date"] else None for r in cur.fetchall()}
-
-        # By employee
-        cur.execute("""
-            SELECT employee_id, MAX(incident_date) as last_ir_date
-            FROM incident_reports WHERE employee_id IS NOT NULL AND employee_id != ''
-            GROUP BY employee_id
-        """)
-        by_employee = {r["employee_id"]: r["last_ir_date"].isoformat() if r["last_ir_date"] else None for r in cur.fetchall()}
-
-        cur.close()
-        conn.close()
+            # By employee
+            cur.execute("""
+                SELECT employee_id, MAX(incident_date) as last_ir_date
+                FROM incident_reports WHERE employee_id IS NOT NULL AND employee_id != ''
+                GROUP BY employee_id
+            """)
+            by_employee = {r["employee_id"]: r["last_ir_date"].isoformat() if r["last_ir_date"] else None for r in cur.fetchall()}
+        finally:
+            cur.close()
+            conn.close()
         return JSONResponse({"by_client": by_client, "by_employee": by_employee})
     except Exception as e:
         logger.error(f"Latest IR fetch error: {e}")
@@ -3141,7 +3167,7 @@ async def get_latest_incident_reports():
 
 
 @app.get("/api/incident-reports")
-async def get_incident_reports(client_id: str = None, employee_id: str = None):
+async def get_incident_reports(client_id: str = None, employee_id: str = None, current_user: Dict[str, Any] = Depends(get_current_user)):
     """Return incident reports, optionally filtered."""
     import psycopg2
     import psycopg2.extras
@@ -3149,15 +3175,17 @@ async def get_incident_reports(client_id: str = None, employee_id: str = None):
         db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        if client_id:
-            cur.execute("SELECT * FROM incident_reports WHERE client_id = %s ORDER BY incident_date DESC", (client_id,))
-        elif employee_id:
-            cur.execute("SELECT * FROM incident_reports WHERE employee_id = %s ORDER BY incident_date DESC", (employee_id,))
-        else:
-            cur.execute("SELECT * FROM incident_reports ORDER BY incident_date DESC LIMIT 100")
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
+        try:
+            if client_id:
+                cur.execute("SELECT * FROM incident_reports WHERE client_id = %s ORDER BY incident_date DESC", (client_id,))
+            elif employee_id:
+                cur.execute("SELECT * FROM incident_reports WHERE employee_id = %s ORDER BY incident_date DESC", (employee_id,))
+            else:
+                cur.execute("SELECT * FROM incident_reports ORDER BY incident_date DESC LIMIT 100")
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
 
         reports = []
         for r in rows:
@@ -3198,7 +3226,7 @@ async def track_session(
             session = UserSession(
                 user_email=current_user.get("email"),
                 user_name=current_user.get("name"),
-                login_time=datetime.utcnow(),
+                login_time=datetime.now(timezone.utc),
                 ip_address=ip_address,
                 user_agent=user_agent
             )
@@ -3218,7 +3246,7 @@ async def track_session(
             ).order_by(UserSession.login_time.desc()).first()
 
             if session:
-                session.logout_time = datetime.utcnow()
+                session.logout_time = datetime.now(timezone.utc)
                 if duration_seconds:
                     session.duration_seconds = duration_seconds
                 else:
@@ -3251,9 +3279,8 @@ async def analytics_heartbeat(
             UserSession.logout_time.is_(None)
         ).order_by(UserSession.login_time.desc()).first()
 
-        if session:
-            session.login_time = datetime.utcnow()
-            db.commit()
+        # Do not overwrite login_time — it records when the session started.
+        # A heartbeat only confirms the session is still active.
 
         return JSONResponse({"success": True})
     except Exception:
@@ -3282,7 +3309,7 @@ async def track_click(
             tool_id=data.get("tool_id"),
             tool_name=data.get("tool_name"),
             tool_url=data.get("tool_url"),
-            clicked_at=datetime.utcnow(),
+            clicked_at=datetime.now(timezone.utc),
             ip_address=ip_address,
             user_agent=user_agent
         )
@@ -3676,25 +3703,28 @@ async def fax_page(request: Request, current_user: Dict[str, Any] = Depends(get_
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
-        cur.execute("""
-            SELECT id, direction, rc_message_id, from_number, to_number, status,
-                   page_count, local_path, created_at, error_message
-            FROM fax_log ORDER BY created_at DESC LIMIT 100
-        """)
-        for r in cur.fetchall():
-            f = type('F', (), {
-                'id': r[0], 'direction': r[1], 'rc_message_id': r[2],
-                'from_number': r[3], 'to_number': r[4], 'status': r[5],
-                'page_count': r[6], 'local_path': r[7], 'created_at': r[8],
-                'error_message': r[9],
-            })()
-            if f.direction == 'inbound':
-                inbox.append(f)
-            elif f.status in ('delivered', 'sent'):
-                sent.append(f)
-            else:
-                outbox.append(f)
-        conn.close()
+        try:
+            cur.execute("""
+                SELECT id, direction, rc_message_id, from_number, to_number, status,
+                       page_count, local_path, created_at, error_message
+                FROM fax_log ORDER BY created_at DESC LIMIT 100
+            """)
+            for r in cur.fetchall():
+                f = type('F', (), {
+                    'id': r[0], 'direction': r[1], 'rc_message_id': r[2],
+                    'from_number': r[3], 'to_number': r[4], 'status': r[5],
+                    'page_count': r[6], 'local_path': r[7], 'created_at': r[8],
+                    'error_message': r[9],
+                })()
+                if f.direction == 'inbound':
+                    inbox.append(f)
+                elif f.status in ('delivered', 'sent'):
+                    sent.append(f)
+                else:
+                    outbox.append(f)
+        finally:
+            cur.close()
+            conn.close()
     except Exception as e:
         logger.error(f"Error loading fax history: {e}")
     return templates.TemplateResponse("fax.html", {
@@ -3749,9 +3779,12 @@ async def api_fax_send(
             db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
             conn = psycopg2.connect(db_url)
             cur = conn.cursor()
-            cur.execute("UPDATE fax_log SET local_path = %s WHERE id = %s", (local_paths[0], result.get("log_id")))
-            conn.commit()
-            conn.close()
+            try:
+                cur.execute("UPDATE fax_log SET local_path = %s WHERE id = %s", (local_paths[0], result.get("log_id")))
+                conn.commit()
+            finally:
+                cur.close()
+                conn.close()
         return JSONResponse(result)
     except Exception as e:
         logger.error(f"Fax send error: {e}")
@@ -3767,9 +3800,12 @@ async def api_fax_view(fax_id: int, current_user: Dict[str, Any] = Depends(get_c
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
-    cur.execute("SELECT local_path, direction, from_number, to_number FROM fax_log WHERE id = %s", (fax_id,))
-    row = cur.fetchone()
-    conn.close()
+    try:
+        cur.execute("SELECT local_path, direction, from_number, to_number FROM fax_log WHERE id = %s", (fax_id,))
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
     if not row or not row[0]:
         raise HTTPException(status_code=404, detail="PDF not available")
     fax_path = Path(row[0])
@@ -3792,9 +3828,12 @@ async def api_fax_download(fax_id: int, current_user: Dict[str, Any] = Depends(g
     db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
     cur = conn.cursor()
-    cur.execute("SELECT local_path, direction, from_number, to_number FROM fax_log WHERE id = %s", (fax_id,))
-    row = cur.fetchone()
-    conn.close()
+    try:
+        cur.execute("SELECT local_path, direction, from_number, to_number FROM fax_log WHERE id = %s", (fax_id,))
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
     if not row or not row[0]:
         raise HTTPException(status_code=404, detail="PDF not available")
     fax_path = Path(row[0])
@@ -3864,7 +3903,7 @@ async def activity_tracker_redirect(
         "name": current_user.get("name"),
         "domain": current_user.get("email", "").split("@")[-1] if current_user.get("email") else "",
         "via_portal": True,
-        "login_time": datetime.utcnow().isoformat()
+        "login_time": datetime.now(timezone.utc).isoformat()
     }
 
     portal_token = PORTAL_SSO_SERIALIZER.dumps(token_payload)
@@ -3970,7 +4009,7 @@ async def go_sales(
         "name": current_user.get("name"),
         "domain": current_user.get("email", "").split("@")[-1] if current_user.get("email") else "",
         "via_portal": True,
-        "login_time": datetime.utcnow().isoformat()
+        "login_time": datetime.now(timezone.utc).isoformat()
     }
 
     portal_token = PORTAL_SSO_SERIALIZER.dumps(token_payload)
@@ -4234,6 +4273,7 @@ async def api_wellsky_shifts(
     upcoming: Optional[bool] = None,
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Return shifts from WellSky (supports upcoming + caregiver/client filters)."""
     if wellsky_service is None:
@@ -4309,38 +4349,38 @@ async def api_operations_hours_breakdown(
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
+        try:
+            def get_hours(interval_sql):
+                cur.execute("""
+                    SELECT
+                        COALESCE(SUM(EXTRACT(EPOCH FROM (scheduled_end - scheduled_start)) / 3600), 0),
+                        COUNT(DISTINCT patient_id),
+                        COUNT(*)
+                    FROM cached_appointments
+                    WHERE scheduled_start >= NOW() - INTERVAL %s
+                      AND scheduled_start < NOW()
+                      AND scheduled_end IS NOT NULL
+                """, (interval_sql,))
+                row = cur.fetchone()
+                return round(float(row[0]), 1), row[1], row[2]
 
-        def get_hours(interval_sql):
-            cur.execute(f"""
-                SELECT
-                    COALESCE(SUM(EXTRACT(EPOCH FROM (scheduled_end - scheduled_start)) / 3600), 0),
-                    COUNT(DISTINCT patient_id),
-                    COUNT(*)
+            weekly_hours, weekly_clients, weekly_shifts = get_hours('7 days')
+            monthly_hours, monthly_clients, monthly_shifts = get_hours('30 days')
+            quarterly_hours, quarterly_clients, quarterly_shifts = get_hours('90 days')
+
+            # Weekly breakdown (last 4 weeks)
+            cur.execute("""
+                SELECT DATE_TRUNC('week', scheduled_start) as week,
+                       COALESCE(SUM(EXTRACT(EPOCH FROM (scheduled_end - scheduled_start)) / 3600), 0) as hours
                 FROM cached_appointments
-                WHERE scheduled_start >= NOW() - INTERVAL '{interval_sql}'
-                  AND scheduled_start < NOW()
+                WHERE scheduled_start >= NOW() - INTERVAL '28 days'
                   AND scheduled_end IS NOT NULL
+                GROUP BY week ORDER BY week
             """)
-            row = cur.fetchone()
-            return round(float(row[0]), 1), row[1], row[2]
-
-        weekly_hours, weekly_clients, weekly_shifts = get_hours('7 days')
-        monthly_hours, monthly_clients, monthly_shifts = get_hours('30 days')
-        quarterly_hours, quarterly_clients, quarterly_shifts = get_hours('90 days')
-
-        # Weekly breakdown (last 4 weeks)
-        cur.execute("""
-            SELECT DATE_TRUNC('week', scheduled_start) as week,
-                   COALESCE(SUM(EXTRACT(EPOCH FROM (scheduled_end - scheduled_start)) / 3600), 0) as hours
-            FROM cached_appointments
-            WHERE scheduled_start >= NOW() - INTERVAL '28 days'
-              AND scheduled_end IS NOT NULL
-            GROUP BY week ORDER BY week
-        """)
-        weekly_trend = [{"week": row[0].isoformat(), "hours": round(float(row[1]), 1)} for row in cur.fetchall()]
-
-        cur.close()
-        conn.close()
+            weekly_trend = [{"week": row[0].isoformat(), "hours": round(float(row[1]), 1)} for row in cur.fetchall()]
+        finally:
+            cur.close()
+            conn.close()
 
         # Fetch BvP billing/payroll data from QBO dashboard
         bvp_data = {}
@@ -4398,59 +4438,59 @@ async def api_operations_summary(
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
+        try:
+            # Active clients — only count those with appointments in last 90 days
+            cur.execute("""
+                SELECT COUNT(DISTINCT p.id) FROM cached_patients p
+                INNER JOIN cached_appointments a ON a.patient_id = p.id
+                WHERE p.is_active = true
+                  AND a.scheduled_start >= NOW() - INTERVAL '90 days'
+            """)
+            active_clients = cur.fetchone()[0]
 
-        # Active clients — only count those with appointments in last 90 days
-        cur.execute("""
-            SELECT COUNT(DISTINCT p.id) FROM cached_patients p
-            INNER JOIN cached_appointments a ON a.patient_id = p.id
-            WHERE p.is_active = true
-              AND a.scheduled_start >= NOW() - INTERVAL '90 days'
-        """)
-        active_clients = cur.fetchone()[0]
+            # Active caregivers
+            cur.execute("SELECT COUNT(*) FROM cached_practitioners WHERE is_active = true")
+            active_caregivers = cur.fetchone()[0]
 
-        # Active caregivers
-        cur.execute("SELECT COUNT(*) FROM cached_practitioners WHERE is_active = true")
-        active_caregivers = cur.fetchone()[0]
+            # Open shifts (upcoming appointments with no practitioner or status = 'open'/'pending')
+            cur.execute("""
+                SELECT COUNT(*) FROM cached_appointments
+                WHERE scheduled_start >= NOW()
+                  AND scheduled_start <= NOW() + INTERVAL '14 days'
+                  AND (practitioner_id IS NULL OR status IN ('open', 'pending', 'proposed'))
+            """)
+            open_shifts = cur.fetchone()[0]
 
-        # Open shifts (upcoming appointments with no practitioner or status = 'open'/'pending')
-        cur.execute("""
-            SELECT COUNT(*) FROM cached_appointments
-            WHERE scheduled_start >= NOW()
-              AND scheduled_start <= NOW() + INTERVAL '14 days'
-              AND (practitioner_id IS NULL OR status IN ('open', 'pending', 'proposed'))
-        """)
-        open_shifts = cur.fetchone()[0]
+            # At-risk clients (no visits in last 14 days among active clients with history)
+            cur.execute("""
+                SELECT COUNT(*) FROM cached_patients p
+                WHERE p.is_active = true
+                  AND EXISTS (
+                      SELECT 1 FROM cached_appointments a
+                      WHERE a.patient_id = p.id AND a.scheduled_start >= NOW() - INTERVAL '90 days'
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM cached_appointments a
+                      WHERE a.patient_id = p.id
+                        AND a.scheduled_start >= NOW() - INTERVAL '14 days'
+                  )
+            """)
+            at_risk_clients = cur.fetchone()[0]
 
-        # At-risk clients (no visits in last 14 days among active clients with history)
-        cur.execute("""
-            SELECT COUNT(*) FROM cached_patients p
-            WHERE p.is_active = true
-              AND EXISTS (
-                  SELECT 1 FROM cached_appointments a
-                  WHERE a.patient_id = p.id AND a.scheduled_start >= NOW() - INTERVAL '90 days'
-              )
-              AND NOT EXISTS (
-                  SELECT 1 FROM cached_appointments a
-                  WHERE a.patient_id = p.id
-                    AND a.scheduled_start >= NOW() - INTERVAL '14 days'
-              )
-        """)
-        at_risk_clients = cur.fetchone()[0]
-
-        # Weekly shift data for chart
-        cur.execute("""
-            SELECT EXTRACT(DOW FROM scheduled_start)::int as dow, COUNT(*) as cnt
-            FROM cached_appointments
-            WHERE scheduled_start >= DATE_TRUNC('week', NOW())
-              AND scheduled_start < DATE_TRUNC('week', NOW()) + INTERVAL '7 days'
-            GROUP BY dow ORDER BY dow
-        """)
-        scheduled = [0]*7
-        for row in cur.fetchall():
-            scheduled[row[0]] = row[1]
-
-        cur.close()
-        conn.close()
+            # Weekly shift data for chart
+            cur.execute("""
+                SELECT EXTRACT(DOW FROM scheduled_start)::int as dow, COUNT(*) as cnt
+                FROM cached_appointments
+                WHERE scheduled_start >= DATE_TRUNC('week', NOW())
+                  AND scheduled_start < DATE_TRUNC('week', NOW()) + INTERVAL '7 days'
+                GROUP BY dow ORDER BY dow
+            """)
+            scheduled = [0]*7
+            for row in cur.fetchall():
+                scheduled[row[0]] = row[1]
+        finally:
+            cur.close()
+            conn.close()
 
         # Fetch BvP profitability data from QBO dashboard (localhost:3015)
         weekly_hours = 0
@@ -4513,35 +4553,36 @@ async def api_operations_clients(
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            # Active clients with hours, last visit, and caregiver data
+            cur.execute("""
+                SELECT
+                    p.id, p.full_name, p.first_name, p.last_name, p.status,
+                    p.authorized_hours_weekly, p.notes, p.wellsky_data, p.start_date,
+                    (SELECT MAX(a.scheduled_start) FROM cached_appointments a WHERE a.patient_id = p.id) as last_visit,
+                    COALESCE((
+                        SELECT ROUND(SUM(EXTRACT(EPOCH FROM (a.scheduled_end - a.scheduled_start)) / 3600)::numeric, 1)
+                        FROM cached_appointments a
+                        WHERE a.patient_id = p.id
+                          AND a.scheduled_start >= NOW() - INTERVAL '7 days'
+                    ), 0) as actual_hours_weekly,
+                    (
+                        SELECT ARRAY_AGG(DISTINCT pr.full_name)
+                        FROM cached_appointments a
+                        JOIN cached_practitioners pr ON a.practitioner_id = pr.id
+                        WHERE a.patient_id = p.id
+                          AND a.scheduled_start >= NOW() - INTERVAL '30 days'
+                          AND pr.full_name IS NOT NULL
+                    ) as caregiver_names
+                FROM cached_patients p
+                WHERE p.is_active = true
+                ORDER BY p.full_name
+            """)
 
-        # Active clients with hours, last visit, and caregiver data
-        cur.execute("""
-            SELECT
-                p.id, p.full_name, p.first_name, p.last_name, p.status,
-                p.authorized_hours_weekly, p.notes, p.wellsky_data, p.start_date,
-                (SELECT MAX(a.scheduled_start) FROM cached_appointments a WHERE a.patient_id = p.id) as last_visit,
-                COALESCE((
-                    SELECT ROUND(SUM(EXTRACT(EPOCH FROM (a.scheduled_end - a.scheduled_start)) / 3600)::numeric, 1)
-                    FROM cached_appointments a
-                    WHERE a.patient_id = p.id
-                      AND a.scheduled_start >= NOW() - INTERVAL '7 days'
-                ), 0) as actual_hours_weekly,
-                (
-                    SELECT ARRAY_AGG(DISTINCT pr.full_name)
-                    FROM cached_appointments a
-                    JOIN cached_practitioners pr ON a.practitioner_id = pr.id
-                    WHERE a.patient_id = p.id
-                      AND a.scheduled_start >= NOW() - INTERVAL '30 days'
-                      AND pr.full_name IS NOT NULL
-                ) as caregiver_names
-            FROM cached_patients p
-            WHERE p.is_active = true
-            ORDER BY p.full_name
-        """)
-
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
 
         # Fetch BvP profitability per client from QBO
         # BvP names are "Last, First" format; cached_patients are "First Last"
@@ -4637,31 +4678,31 @@ async def api_operations_care_plans(
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
+        try:
+            # Care plans aren't cached separately — return active clients as plan entries
+            cur.execute("""
+                SELECT p.id, p.full_name, p.first_name, p.last_name, p.start_date
+                FROM cached_patients p
+                WHERE p.is_active = true
+                ORDER BY p.start_date ASC NULLS LAST
+                LIMIT 50
+            """)
 
-        # Care plans aren't cached separately — return active clients as plan entries
-        cur.execute("""
-            SELECT p.id, p.full_name, p.first_name, p.last_name, p.start_date
-            FROM cached_patients p
-            WHERE p.is_active = true
-            ORDER BY p.start_date ASC NULLS LAST
-            LIMIT 50
-        """)
-
-        plan_list = []
-        for row in cur.fetchall():
-            name = row[1] or f"{row[2] or ''} {row[3] or ''}".strip() or "Unknown"
-            plan_list.append({
-                "id": row[0],
-                "client_id": row[0],
-                "client_name": name,
-                "status": "active",
-                "review_date": None,
-                "days_until_review": None,
-                "authorized_hours": None,
-            })
-
-        cur.close()
-        conn.close()
+            plan_list = []
+            for row in cur.fetchall():
+                name = row[1] or f"{row[2] or ''} {row[3] or ''}".strip() or "Unknown"
+                plan_list.append({
+                    "id": row[0],
+                    "client_id": row[0],
+                    "client_name": name,
+                    "status": "active",
+                    "review_date": None,
+                    "days_until_review": None,
+                    "authorized_hours": None,
+                })
+        finally:
+            cur.close()
+            conn.close()
         return JSONResponse({"care_plans": plan_list})
     except Exception as e:
         logger.error(f"Error getting care plans: {e}")
@@ -4679,38 +4720,38 @@ async def api_operations_open_shifts(
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT a.id, a.scheduled_start, a.scheduled_end, a.patient_id, a.status,
+                       a.location_address, p.full_name, p.first_name, p.last_name
+                FROM cached_appointments a
+                LEFT JOIN cached_patients p ON a.patient_id = p.id
+                WHERE a.scheduled_start >= NOW()
+                  AND a.scheduled_start <= NOW() + INTERVAL '%s days'
+                  AND (a.practitioner_id IS NULL OR a.status IN ('open', 'pending', 'proposed'))
+                ORDER BY a.scheduled_start
+            """, (days,))
 
-        cur.execute("""
-            SELECT a.id, a.scheduled_start, a.scheduled_end, a.patient_id, a.status,
-                   a.location_address, p.full_name, p.first_name, p.last_name
-            FROM cached_appointments a
-            LEFT JOIN cached_patients p ON a.patient_id = p.id
-            WHERE a.scheduled_start >= NOW()
-              AND a.scheduled_start <= NOW() + INTERVAL '%s days'
-              AND (a.practitioner_id IS NULL OR a.status IN ('open', 'pending', 'proposed'))
-            ORDER BY a.scheduled_start
-        """, (days,))
-
-        shift_list = []
-        for row in cur.fetchall():
-            client_name = row[6] or f"{row[7] or ''} {row[8] or ''}".strip() or "Unknown"
-            hours = None
-            if row[1] and row[2]:
-                hours = round((row[2] - row[1]).total_seconds() / 3600, 1)
-            shift_list.append({
-                "id": row[0],
-                "date": row[1].date().isoformat() if row[1] else None,
-                "start_time": row[1].strftime("%I:%M %p") if row[1] else None,
-                "end_time": row[2].strftime("%I:%M %p") if row[2] else None,
-                "client_id": row[3],
-                "client_name": client_name,
-                "location": row[5],
-                "hours": hours,
-                "status": "open",
-            })
-
-        cur.close()
-        conn.close()
+            shift_list = []
+            for row in cur.fetchall():
+                client_name = row[6] or f"{row[7] or ''} {row[8] or ''}".strip() or "Unknown"
+                hours = None
+                if row[1] and row[2]:
+                    hours = round((row[2] - row[1]).total_seconds() / 3600, 1)
+                shift_list.append({
+                    "id": row[0],
+                    "date": row[1].date().isoformat() if row[1] else None,
+                    "start_time": row[1].strftime("%I:%M %p") if row[1] else None,
+                    "end_time": row[2].strftime("%I:%M %p") if row[2] else None,
+                    "client_id": row[3],
+                    "client_name": client_name,
+                    "location": row[5],
+                    "hours": hours,
+                    "status": "open",
+                })
+        finally:
+            cur.close()
+            conn.close()
         return JSONResponse({"shifts": shift_list})
     except Exception as e:
         logger.error(f"Error getting open shifts: {e}")
@@ -4728,39 +4769,39 @@ async def api_operations_at_risk(
     try:
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT p.id, p.full_name, p.first_name, p.last_name, p.phone,
+                       MAX(a.scheduled_start) as last_visit,
+                       COUNT(a.id) FILTER (WHERE a.scheduled_start >= NOW() - INTERVAL '30 days') as recent_visits
+                FROM cached_patients p
+                LEFT JOIN cached_appointments a ON a.patient_id = p.id
+                WHERE p.is_active = true
+                GROUP BY p.id, p.full_name, p.first_name, p.last_name, p.phone
+                HAVING MAX(a.scheduled_start) IS NULL
+                   OR MAX(a.scheduled_start) < NOW() - INTERVAL '14 days'
+                ORDER BY MAX(a.scheduled_start) ASC NULLS FIRST
+            """)
 
-        cur.execute("""
-            SELECT p.id, p.full_name, p.first_name, p.last_name, p.phone,
-                   MAX(a.scheduled_start) as last_visit,
-                   COUNT(a.id) FILTER (WHERE a.scheduled_start >= NOW() - INTERVAL '30 days') as recent_visits
-            FROM cached_patients p
-            LEFT JOIN cached_appointments a ON a.patient_id = p.id
-            WHERE p.is_active = true
-            GROUP BY p.id, p.full_name, p.first_name, p.last_name, p.phone
-            HAVING MAX(a.scheduled_start) IS NULL
-               OR MAX(a.scheduled_start) < NOW() - INTERVAL '14 days'
-            ORDER BY MAX(a.scheduled_start) ASC NULLS FIRST
-        """)
+            clients = []
+            for row in cur.fetchall():
+                name = row[1] or f"{row[2] or ''} {row[3] or ''}".strip() or "Unknown"
+                days_since = None
+                if row[5]:
+                    days_since = (datetime.now() - row[5]).days
 
-        clients = []
-        for row in cur.fetchall():
-            name = row[1] or f"{row[2] or ''} {row[3] or ''}".strip() or "Unknown"
-            days_since = None
-            if row[5]:
-                days_since = (datetime.now() - row[5]).days
-
-            clients.append({
-                "id": row[0],
-                "name": name,
-                "phone": row[4],
-                "last_visit": row[5].isoformat() if row[5] else None,
-                "days_since_visit": days_since,
-                "recent_visits": row[6],
-                "risk_score": min(100, (days_since or 30) * 3),
-            })
-
-        cur.close()
-        conn.close()
+                clients.append({
+                    "id": row[0],
+                    "name": name,
+                    "phone": row[4],
+                    "last_visit": row[5].isoformat() if row[5] else None,
+                    "days_since_visit": days_since,
+                    "recent_visits": row[6],
+                    "risk_score": min(100, (days_since or 30) * 3),
+                })
+        finally:
+            cur.close()
+            conn.close()
         return JSONResponse({"clients": clients, "threshold": threshold})
     except Exception as e:
         logger.error(f"Error getting at-risk clients: {e}")
@@ -4786,7 +4827,7 @@ def log_gigi_activity(activity_type: str, description: str, status: str = "succe
     """Log a Gigi activity (called from various Gigi operations)"""
     global _gigi_activity_log
     entry = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "type": activity_type,
         "description": description,
         "status": status,
@@ -4865,7 +4906,7 @@ async def api_gigi_callouts(
     # In production, this would query a call_outs table in the database
     mock_callouts = [
         {
-            "timestamp": (datetime.utcnow() - timedelta(hours=2)).isoformat(),
+            "timestamp": (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat(),
             "caregiver_name": "Maria Garcia",
             "client_name": "Johnson, Robert",
             "shift_date": (date.today()).isoformat(),
@@ -4874,7 +4915,7 @@ async def api_gigi_callouts(
             "status": "covered",
         },
         {
-            "timestamp": (datetime.utcnow() - timedelta(hours=8)).isoformat(),
+            "timestamp": (datetime.now(timezone.utc) - timedelta(hours=8)).isoformat(),
             "caregiver_name": "James Wilson",
             "client_name": "Martinez, Elena",
             "shift_date": (date.today()).isoformat(),
@@ -6050,7 +6091,7 @@ async def oauth_callback(
             existing_token.expires_at = expires_at
             existing_token.scope = token_data.get("scope")
             existing_token.is_active = True
-            existing_token.updated_at = datetime.utcnow()
+            existing_token.updated_at = datetime.now(timezone.utc)
             if extra_data:
                 existing_token.extra_data = extra_data
         else:
@@ -6198,7 +6239,7 @@ async def api_marketing_social(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Return social performance metrics (placeholder until APIs wired)."""
-    end_default = datetime.utcnow().date()
+    end_default = datetime.now(timezone.utc).date()
     start_default = end_default - timedelta(days=29)
 
     start = _parse_date_param(from_date, start_default)
@@ -6254,7 +6295,7 @@ async def google_ads_webhook(request: Request):
             "status": "success",
             "message": "Data received and cached",
             "customer_id": data.get("customer_id"),
-            "received_at": datetime.utcnow().isoformat()
+            "received_at": datetime.now(timezone.utc).isoformat()
         })
     except Exception as e:
         logger.error(f"Error processing Google Ads webhook: {e}")
@@ -6269,7 +6310,7 @@ async def api_marketing_ads(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Return ads performance metrics from Google Ads Scripts or API."""
-    end_default = datetime.utcnow().date()
+    end_default = datetime.now(timezone.utc).date()
     start_default = end_default - timedelta(days=29)
 
     start = _parse_date_param(from_date, start_default)
@@ -6390,7 +6431,7 @@ async def brevo_marketing_webhook(request: Request, db: Session = Depends(get_db
             campaign_id=campaign_id,
             campaign_name=campaign_name,
             date_sent=date_sent,
-            date_event=date_event or datetime.utcnow(),
+            date_event=date_event or datetime.now(timezone.utc),
             click_url=click_url,
             event_metadata=json_lib.dumps(metadata) if metadata else None,
         )
@@ -6421,7 +6462,7 @@ async def api_marketing_email(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Return email marketing metrics (Brevo + Mailchimp) using hybrid model (webhooks + API)."""
-    end_default = datetime.utcnow().date()
+    end_default = datetime.now(timezone.utc).date()
     start_default = end_default - timedelta(days=29)
 
     start = _parse_date_param(from_date, start_default)
@@ -6457,7 +6498,7 @@ async def api_marketing_website(
 
     logger = logging.getLogger(__name__)
 
-    end_default = datetime.utcnow().date()
+    end_default = datetime.now(timezone.utc).date()
     start_default = end_default - timedelta(days=29)
 
     start = _parse_date_param(from_date, start_default)
@@ -6689,7 +6730,7 @@ async def api_marketing_engagement(
     logger = logging.getLogger(__name__)
 
     # Date range
-    end_default = datetime.utcnow().date()
+    end_default = datetime.now(timezone.utc).date()
     start_default = end_default - timedelta(days=29)
     start = _parse_date_param(from_date, start_default)
     end = _parse_date_param(to_date, end_default)
@@ -7686,7 +7727,7 @@ async def get_sms_log(
         access_token = auth_response.json().get("access_token")
 
         # Fetch SMS messages
-        date_from = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        date_from = (datetime.now(timezone.utc) - timedelta(hours=hours)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
         messages_response = requests.get(
             f"{server}/restapi/v1.0/account/~/extension/~/message-store",
@@ -8306,26 +8347,29 @@ async def retell_shift_offer_complete(request: Request):
                 db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
                 conn = psycopg2.connect(db_url)
                 cur = conn.cursor()
-                cur.execute(
-                    "SELECT 1 FROM gigi_dedup_state WHERE key = %s",
-                    (f"retell_call:{call_id}",)
-                )
-                if cur.fetchone():
+                is_duplicate = False
+                try:
+                    cur.execute(
+                        "SELECT 1 FROM gigi_dedup_state WHERE key = %s",
+                        (f"retell_call:{call_id}",)
+                    )
+                    if cur.fetchone():
+                        is_duplicate = True
+                    else:
+                        # Mark as processed in DB (expires after 24h)
+                        cur.execute("""
+                            INSERT INTO gigi_dedup_state (key, value, created_at, expires_at)
+                            VALUES (%s, 'processed', NOW(), NOW() + INTERVAL '24 hours')
+                            ON CONFLICT (key) DO NOTHING
+                        """, (f"retell_call:{call_id}",))
+                        conn.commit()
+                finally:
                     cur.close()
                     conn.close()
+                if is_duplicate:
                     _processed_retell_call_ids.add(call_id)
                     logger.info(f"Duplicate Retell webhook for call_id {call_id} (from DB), ignoring")
                     return JSONResponse({"status": "duplicate", "call_id": call_id})
-
-                # Mark as processed in DB (expires after 24h)
-                cur.execute("""
-                    INSERT INTO gigi_dedup_state (key, value, created_at, expires_at)
-                    VALUES (%s, 'processed', NOW(), NOW() + INTERVAL '24 hours')
-                    ON CONFLICT (key) DO NOTHING
-                """, (f"retell_call:{call_id}",))
-                conn.commit()
-                cur.close()
-                conn.close()
             except Exception as e:
                 logger.warning(f"Retell dedup DB check failed (proceeding): {e}")
 
@@ -8568,7 +8612,7 @@ async def internal_process_sms_response(request: Request):
 #
 
 @app.post("/api/internal/wellsky/notes/client/{client_id}")
-async def internal_add_client_note(client_id: str, request: Request):
+async def internal_add_client_note(client_id: str, request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Add a note to a client's profile in WellSky.
     Called by Gigi AI agent after conversations to document interactions.
@@ -8613,7 +8657,7 @@ async def internal_add_client_note(client_id: str, request: Request):
 
 
 @app.post("/api/internal/wellsky/notes/caregiver/{caregiver_id}")
-async def internal_add_caregiver_note(caregiver_id: str, request: Request):
+async def internal_add_caregiver_note(caregiver_id: str, request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Add a note to a caregiver's profile in WellSky.
     Called by Gigi AI agent to document call-outs, late arrivals, etc.
@@ -8658,7 +8702,7 @@ async def internal_add_caregiver_note(caregiver_id: str, request: Request):
 
 
 @app.get("/api/internal/wellsky/clients/{client_id}/shifts")
-async def internal_get_client_shifts(client_id: str, days: int = 7):
+async def internal_get_client_shifts(client_id: str, days: int = 7, current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Get upcoming shifts for a client.
     Called by Gigi when a client asks about their schedule.
@@ -8697,7 +8741,7 @@ async def internal_get_client_shifts(client_id: str, days: int = 7):
 
 
 @app.put("/api/internal/wellsky/shifts/{shift_id}/assign")
-async def internal_assign_shift(shift_id: str, request: Request):
+async def internal_assign_shift(shift_id: str, request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Assign a caregiver to a shift.
     Called by Gigi when a caregiver accepts a shift offer.
@@ -8741,7 +8785,7 @@ async def internal_assign_shift(shift_id: str, request: Request):
 
 
 @app.put("/api/internal/wellsky/shifts/{shift_id}/cancel")
-async def internal_cancel_shift(shift_id: str, request: Request):
+async def internal_cancel_shift(shift_id: str, request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Cancel a shift.
     Called by Gigi when a client requests to cancel a visit.
@@ -8778,7 +8822,7 @@ async def internal_cancel_shift(shift_id: str, request: Request):
 
 
 @app.post("/api/internal/wellsky/shifts/{shift_id}/late-notification")
-async def internal_late_notification(shift_id: str, request: Request):
+async def internal_late_notification(shift_id: str, request: Request, current_user: Dict[str, Any] = Depends(get_current_user)):
     """
     Notify client that caregiver is running late.
     Called by Gigi when a caregiver reports they're running late.

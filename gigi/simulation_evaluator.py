@@ -242,7 +242,7 @@ Provide your response in JSON format:
 async def generate_simulation_report(simulation_id: int) -> str:
     """Generate a human-readable markdown report for a simulation"""
 
-    db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
     conn = psycopg2.connect(db_url)
     try:
         cur = conn.cursor()

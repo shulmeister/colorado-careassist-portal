@@ -499,13 +499,13 @@
         } catch (error) {
             console.error('Failed to fetch call-outs:', error);
             // Show empty state on error
-            const tbody = document.getElementById('callouts-table-body');
+            const tbody = document.getElementById('call-outs-table-body');
             if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">✅</div>No recent call-outs</td></tr>';
         }
     }
 
     function updateCallOutsTable() {
-        const tbody = document.getElementById('callouts-table-body');
+        const tbody = document.getElementById('call-outs-table-body');
         if (!tbody) return;
 
         if (state.callOuts.length === 0) {
