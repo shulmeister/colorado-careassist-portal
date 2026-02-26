@@ -1034,7 +1034,8 @@ class WellSkyService:
         birth_date: Optional[str] = None,
         active: Optional[bool] = None,
         status_id: Optional[int] = None,
-        is_client: Optional[bool] = None
+        is_client: Optional[bool] = None,
+        notes: Optional[str] = None
     ) -> Tuple[bool, Any]:
         """
         Update an existing patient (client) record.
@@ -1060,6 +1061,7 @@ class WellSkyService:
             active: Active status
             status_id: Status ID (1=New Lead, 80=Care Started, etc.)
             is_client: True for client, False for prospect
+            notes: Free-text notes (stored in meta.tag with code="notes")
         """
         if self.is_mock_mode:
             client = self._mock_clients.get(patient_id)
@@ -1133,11 +1135,13 @@ class WellSkyService:
         if birth_date is not None:
             fhir_patient["birthDate"] = birth_date
 
-        # Meta tags for status/isClient
+        # Meta tags for status/isClient/notes
         if status_id is not None:
             fhir_patient["meta"]["tag"].append({"code": "status", "display": str(status_id)})
         if is_client is not None:
             fhir_patient["meta"]["tag"].append({"code": "isClient", "display": "true" if is_client else "false"})
+        if notes is not None:
+            fhir_patient["meta"]["tag"].append({"code": "notes", "display": notes})
 
         success, response = self._make_request("PUT", f"patients/{patient_id}/", data=fhir_patient)
         if success:
@@ -1160,6 +1164,150 @@ class WellSkyService:
         success, response = self._make_request("DELETE", f"patients/{patient_id}/")
         if success:
             logger.info(f"Deleted patient {patient_id}")
+        return success, response
+
+    # ── Care Plan ──────────────────────────────────────────────────────────
+
+    def get_care_plan_activity_metadata(self, activity_type: str = "ADL") -> Tuple[bool, Any]:
+        """
+        GET /v1/careplan/activity-metadata
+        Fetch available ADL or IADL activity definitions for the agency.
+        activity_type: "ADL" or "IADL"
+        """
+        success, response = self._make_request(
+            "GET",
+            "careplan/activity-metadata",
+            params={"agency_id": self.agency_id, "activity_type": activity_type},
+        )
+        return success, response
+
+    @staticmethod
+    def _build_care_plan_activity(activity_id: str, description: str, status: str = "scheduled") -> dict:
+        """
+        Build a single WellSky CarePlan activity object using the confirmed working format.
+
+        WellSky encodes the activity ID as: coding[{"code": "activityId", "display": "<id>"}]
+        This is non-standard FHIR but is what WellSky's API actually requires.
+
+        Args:
+            activity_id: WellSky activity ID from metadata (e.g. "31542" for Housework)
+            description: Human-readable name (e.g. "Housework")
+            status: One of "scheduled", "not-started", "in-progress", "completed"
+        """
+        return {
+            "detail": {
+                "code": {
+                    "coding": [
+                        {"code": "activityId", "display": str(activity_id)},
+                    ]
+                },
+                "description": description,
+                "status": status,
+            }
+        }
+
+    @staticmethod
+    def build_care_plan_from_text(care_plan_text: str) -> list:
+        """
+        Map free-text care plan description to WellSky IADL activity IDs.
+        Returns a list of activity objects ready for create_care_plan_activities().
+
+        IADL IDs (from GET /v1/careplan/activity-metadata?activity_type=IADL):
+          32514 Encourage Exercise  |  35256 Errands  |  31542 Housework
+          31543 Laundry             |  31544 Medication|  31545 Money, Bills
+          31546 Pet Care            |  31547 Preparing Meals
+          34762 Protective Oversight|  31548 Shopping
+
+        ADL IDs (activity_type=ADL):
+          31536 Ambulation & Transfer | 31537 Bathing    | 31538 Continence
+          31539 Dressing & Grooming   | 31540 Eating     | 31541 Toileting
+        """
+        text_lower = care_plan_text.lower()
+        activities = []
+
+        IADL_MAP = [
+            (["housekeep", "housework", "dishes", "dust", "clean"], "31542", "Housework"),
+            (["laundry", "washing clothes", "ironing"], "31543", "Laundry"),
+            (["errand", "transport", "bus", "taxi", "appointment", "accompany"], "35256", "Errands"),
+            (["medication", "medicine", "med reminders", "pills"], "31544", "Medication"),
+            (["meal", "cooking", "prepari", "food prep"], "31547", "Preparing Meals"),
+            (["supervision", "companionship", "companion", "oversight", "monitor", "safety"], "34762", "Protective Oversight"),
+            (["pet care", "pet", "dog", "cat", "feeding pet"], "31546", "Pet Care"),
+            (["shopping", "grocery", "groceries", "store"], "31548", "Shopping"),
+            (["exercise", "walking", "walk"], "32514", "Encourage Exercise"),
+            (["money", "bills", "finances", "pay"], "31545", "Money, Bills"),
+        ]
+        ADL_MAP = [
+            (["bathing", "shower", "bath"], "31537", "Bathing"),
+            (["dressing", "grooming", "clothes"], "31539", "Dressing & Grooming"),
+            (["eating", "feeding"], "31540", "Eating"),
+            (["toileting", "commode", "toilet"], "31541", "Toileting"),
+            (["ambulation", "transfer", "walking", "mobility", "wheelchair"], "31536", "Ambulation & Transfer"),
+            (["continence", "incontinence", "catheter"], "31538", "Continence"),
+        ]
+
+        seen_ids = set()
+        for keywords, act_id, name in IADL_MAP + ADL_MAP:
+            if any(kw in text_lower for kw in keywords):
+                if act_id not in seen_ids:
+                    seen_ids.add(act_id)
+                    activities.append(
+                        WellSkyService._build_care_plan_activity(act_id, name)
+                    )
+
+        return activities
+
+    def create_care_plan_activities(
+        self, patient_id: str, activities: list, status: str = "active"
+    ) -> Tuple[bool, Any]:
+        """
+        POST /v1/careplan/activity/<patient_id>/
+        Creates CarePlan activities (ADLs/IADLs) for a patient.
+
+        activities: list of activity objects from _build_care_plan_activity() or
+                    build_care_plan_from_text().
+
+        Confirmed working format (discovered 2026-02-25):
+          Each activity: {"detail": {"code": {"coding": [{"code": "activityId", "display": "<id>"}]},
+                          "description": "<name>", "status": "scheduled"}}
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Created care plan activities for patient {patient_id}")
+            return True, {"resourceType": "CarePlan", "status": "success"}
+
+        payload = {
+            "resourceType": "CarePlan",
+            "status": status,
+            "activity": activities,
+        }
+        success, response = self._make_request(
+            "POST", f"careplan/activity/{patient_id}/", data=payload
+        )
+        if success:
+            logger.info(f"Created care plan activities for patient {patient_id} ({len(activities)} items)")
+        else:
+            logger.warning(f"Care plan creation failed for patient {patient_id}: {response}")
+        return success, response
+
+    def update_care_plan_activities(
+        self, patient_id: str, activities: list
+    ) -> Tuple[bool, Any]:
+        """
+        PUT /v1/careplan/activity/<patient_id>/
+        Updates CarePlan activities for a patient.
+        """
+        if self.is_mock_mode:
+            return True, {"resourceType": "CarePlan", "status": "success"}
+
+        payload = {
+            "resourceType": "CarePlan",
+            "activity": activities,
+        }
+        success, response = self._make_request(
+            "PUT", f"careplan/activity/{patient_id}/", data=payload
+        )
+        if success:
+            logger.info(f"Updated care plan activities for patient {patient_id}")
         return success, response
 
     def _parse_fhir_patient(self, fhir_data: Dict) -> WellSkyClient:
@@ -2982,25 +3130,30 @@ class WellSkyService:
         if date is None:
             date = datetime.utcnow().isoformat() + "Z"
 
-        endpoint = "documentReferences/"
-        attachment = {
-            "contentType": content_type,
-            "data": data_base64,
-        }
-        if filename:
-            attachment["title"] = filename
+        # title is REQUIRED by WellSky — use filename or derive from document_type
+        title = filename or f"{document_type or 'document'}.pdf"
 
+        # NOTE: WellSky requires "content" as an Object (NOT an Array — array causes 500).
+        # Also requires "Patient/" not "Person/" in context.related[].ref.
+        # See docs/WELLSKY_DOCUMENT_REFERENCE_DEBUG.md for full debug history.
         doc_data = {
             "resourceType": "DocumentReference",
+            "description": description or document_type,
+            "date": date,
             "type": {
                 "text": document_type or "Document",
+                "coding": [{"code": "clinical-note", "display": "clinical-note"}],
             },
-            "content": [
-                {"attachment": attachment}
-            ],
+            "content": {
+                "attachment": {
+                    "contentType": content_type,
+                    "data": data_base64,
+                    "title": title,
+                }
+            },
             "context": {
                 "related": [
-                    {"ref": f"Person/{patient_id}"}
+                    {"ref": f"Patient/{patient_id}"}
                 ]
             },
             "meta": {
@@ -3010,10 +3163,15 @@ class WellSkyService:
             },
         }
 
-        success, response = self._make_request("POST", endpoint, data=doc_data)
+        success, response = self._make_request("POST", "documentReferences/", data=doc_data)
         if success:
             doc_id = response.get("id", "unknown")
             logger.info(f"Created DocumentReference {doc_id} for patient {patient_id}")
+        else:
+            logger.warning(
+                f"DocumentReference POST failed for patient {patient_id}: {response}. "
+                "WellSky API 500 is a known vendor-side issue — see WELLSKY_DOCUMENT_REFERENCE_DEBUG.md"
+            )
         return success, response
 
     def create_clinical_note(

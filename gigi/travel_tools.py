@@ -1,25 +1,108 @@
 """
-Gigi Travel Tools — Full Amadeus Self-Service API integration.
+Gigi Travel Tools — Amadeus + Sabre flight search with browse fallback.
 
-Uses Amadeus SDK v12.0.0 for flights, hotels, transfers, activities,
-airport/airline info, travel insights, and booking management.
-Falls back to browse_with_claude when API unavailable.
+Strategy:
+  - North America routes (US/CA/MX origin OR destination): try Sabre first, then Amadeus
+  - International routes: try Amadeus first, then Sabre
+  - Both fail: fall back to browse_with_claude
 
-Env vars:
+Sabre Env vars:
+  SABRE_USER_ID         — e.g. V1:xxx:DEVCENTER:EXT
+  SABRE_PASSWORD        — API password
+  SABRE_ENV             — "cert" (default/test) or "prod"
+
+Amadeus Env vars:
   AMADEUS_CLIENT_ID     — API key
   AMADEUS_CLIENT_SECRET — API secret
   AMADEUS_HOSTNAME      — "test" (default/sandbox) or "production"
 """
 
 import asyncio
+import base64
 import logging
 import os
 import re
+import time
 from typing import Optional
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
 _amadeus_client = None
+
+# ── North American IATA country prefixes for routing decisions ──────────────
+_NA_COUNTRIES = {"US", "CA", "MX"}
+
+# Known NA airport → country mapping (top airports; fallback = Amadeus lookup)
+_NA_AIRPORTS = {
+    # US
+    "ATL","LAX","ORD","DFW","DEN","JFK","SFO","SEA","LAS","MCO","EWR","CLT","PHX","MIA",
+    "IAH","BOS","MSP","DTW","FLL","PHL","LGA","BWI","SLC","IAD","MDW","HOU","DCA","SAN",
+    "TPA","PDX","STL","BNA","AUS","MSY","RDU","CLE","SMF","SJC","OAK","MCI","IND","PIT",
+    "CMH","SAT","RSW","DAL","HNL","OGG","JAX","CVG","BDL","MEM","OMA","ABQ","TUL","BOI",
+    # Canada
+    "YYZ","YVR","YUL","YYC","YEG","YOW","YHZ","YWG",
+    # Mexico
+    "MEX","CUN","GDL","MTY","TIJ","SJD","MID","BJX","VER","OAX",
+}
+
+
+def _is_north_america(iata_code: str) -> bool:
+    """Return True if the IATA airport code is in North America."""
+    return (iata_code or "").upper() in _NA_AIRPORTS
+
+
+# ── Sabre OAuth token (V2 double-base64 format) ─────────────────────────────
+
+_sabre_token: Optional[str] = None
+_sabre_token_expiry: float = 0.0
+
+
+async def _get_sabre_token() -> Optional[str]:
+    """Get (or refresh) a Sabre OAuth token."""
+    global _sabre_token, _sabre_token_expiry
+
+    user_id = os.getenv("SABRE_USER_ID", "")
+    password = os.getenv("SABRE_PASSWORD", "")
+    if not user_id or not password:
+        return None
+
+    if _sabre_token and time.time() < _sabre_token_expiry - 60:
+        return _sabre_token
+
+    # Sabre V2 auth: client_id = b64(user_id), client_secret = b64(password)
+    # Authorization = "Basic " + b64(client_id + ":" + client_secret)
+    client_id = base64.b64encode(user_id.encode()).decode()
+    client_secret = base64.b64encode(password.encode()).decode()
+    encoded = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
+
+    sabre_env = os.getenv("SABRE_ENV", "cert")
+    base = "https://api.havail.sabre.com" if sabre_env == "prod" else "https://api.cert.havail.sabre.com"
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                f"{base}/v2/auth/token",
+                headers={
+                    "Authorization": f"Basic {encoded}",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                content="grant_type=client_credentials",
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                _sabre_token = data.get("access_token")
+                expires_in = int(data.get("expires_in", 3600))
+                _sabre_token_expiry = time.time() + expires_in
+                logger.info(f"Sabre token acquired (env: {sabre_env}, expires in {expires_in}s)")
+                return _sabre_token
+            else:
+                logger.error(f"Sabre auth failed: {resp.status_code} {resp.text[:200]}")
+                return None
+    except Exception as e:
+        logger.error(f"Sabre token fetch error: {e}")
+        return None
 
 
 def _get_amadeus():
@@ -114,7 +197,144 @@ async def _resolve_city_code(query: str) -> Optional[str]:
 
 
 # ============================================================
-# FLIGHT SEARCH (upgraded — added travel_class param)
+# SABRE FLIGHT SEARCH (InstaFlights API — North America primary)
+# ============================================================
+
+async def _search_flights_sabre(
+    origin: str,
+    destination: str,
+    departure_date: str,
+    return_date: str = None,
+    adults: int = 1,
+    max_stops: int = None,
+    travel_class: str = None,
+    limit: int = 5,
+    currency: str = "USD",
+) -> Optional[dict]:
+    """Search flights via Sabre InstaFlights API. Returns result dict or None on failure."""
+    token = await _get_sabre_token()
+    if not token:
+        return None
+
+    sabre_env = os.getenv("SABRE_ENV", "cert")
+    base = "https://api.havail.sabre.com" if sabre_env == "prod" else "https://api.cert.havail.sabre.com"
+
+    params = {
+        "origin": origin.upper(),
+        "destination": destination.upper(),
+        "departuredate": departure_date,
+        "passengercount": adults,
+        "limit": min(limit * 2, 50),  # fetch extra, we'll trim
+        "sortby": "totalfare",
+        "order": "asc",
+        "groupedItinerary": "false",
+    }
+    if return_date:
+        params["returndate"] = return_date
+    if max_stops == 0:
+        params["nonstop"] = "true"
+
+    cabin_map = {
+        "ECONOMY": "Y",
+        "PREMIUM_ECONOMY": "S",
+        "BUSINESS": "C",
+        "FIRST": "F",
+        "FIRST_CLASS": "F",
+    }
+    if travel_class:
+        params["cabin"] = cabin_map.get(travel_class.upper(), "Y")
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(
+                f"{base}/v1/shop/flights",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+                params=params,
+            )
+
+        if resp.status_code != 200:
+            logger.warning(f"Sabre InstaFlights {resp.status_code}: {resp.text[:300]}")
+            return None
+
+        data = resp.json()
+        itineraries = data.get("PricedItineraries", []) or []
+        if not itineraries:
+            logger.info("Sabre returned no itineraries")
+            return None
+
+        flights = []
+        for itin in itineraries[:limit]:
+            try:
+                out_leg = itin.get("AirItinerary", {}).get("OriginDestinationOptions", {}).get("OriginDestinationOption", [{}])[0]
+                segments = out_leg.get("FlightSegment", [])
+                if not segments:
+                    continue
+
+                first_seg = segments[0]
+                last_seg = segments[-1]
+                stops = len(segments) - 1
+
+                dep_dt = first_seg.get("DepartureDateTime", "")
+                arr_dt = last_seg.get("ArrivalDateTime", "")
+                carrier = first_seg.get("MarketingAirline", {}).get("Code", "")
+                flight_num = f"{carrier}{first_seg.get('FlightNumber', '')}"
+
+                price_info = (
+                    itin.get("AirItineraryPricingInfo", {})
+                    .get("ItinTotalFare", {})
+                    .get("TotalFare", {})
+                )
+                price_amount = float(price_info.get("Amount", 0))
+                price_currency = price_info.get("CurrencyCode", currency)
+
+                # Duration from elapsed time (minutes)
+                elapsed = out_leg.get("ElapsedTime", 0)
+                if elapsed:
+                    hours, mins = divmod(int(elapsed), 60)
+                    duration_str = f"{hours}h {mins}m" if mins else f"{hours}h"
+                else:
+                    duration_str = "unknown"
+
+                flight = {
+                    "airline": carrier,
+                    "flight_number": flight_num,
+                    "departure_airport": first_seg.get("DepartureAirport", {}).get("LocationCode", origin),
+                    "departure_time": dep_dt,
+                    "arrival_airport": last_seg.get("ArrivalAirport", {}).get("LocationCode", destination),
+                    "arrival_time": arr_dt,
+                    "duration": duration_str,
+                    "stops": "Direct" if stops == 0 else f"{stops} stop{'s' if stops > 1 else ''}",
+                    "price": f"${price_amount:.2f} {price_currency}",
+                    "price_amount": price_amount,
+                    "cabin": "ECONOMY",
+                }
+                flights.append(flight)
+            except Exception as parse_err:
+                logger.debug(f"Sabre itinerary parse error: {parse_err}")
+                continue
+
+        if not flights:
+            return None
+
+        return {
+            "success": True,
+            "source": "sabre",
+            "origin": origin.upper(),
+            "destination": destination.upper(),
+            "departure_date": departure_date,
+            "return_date": return_date,
+            "flights": flights,
+            "total_results": len(flights),
+            "currency": currency,
+        }
+
+    except Exception as e:
+        logger.error(f"Sabre flight search failed: {e}")
+        return None
+
+
+# ============================================================
+# FLIGHT SEARCH (Sabre for North America, Amadeus for international)
 # ============================================================
 
 async def search_flights(
@@ -129,13 +349,48 @@ async def search_flights(
     limit: int = 5,
     currency: str = "USD",
 ) -> dict:
-    """Search flights via Amadeus Flight Offers Search API."""
-    amadeus = _get_amadeus()
-    if not amadeus:
-        return await _browse_flight_search(origin, destination, departure_date, return_date, adults)
-
+    """Search flights — Sabre for North America, Amadeus for international, browse fallback."""
     origin_code = await _resolve_iata(origin) or origin.upper()
     dest_code = await _resolve_iata(destination) or destination.upper()
+
+    na_route = _is_north_america(origin_code) or _is_north_america(dest_code)
+    kwargs = dict(
+        origin=origin_code, destination=dest_code, departure_date=departure_date,
+        return_date=return_date, adults=adults, max_stops=max_stops,
+        travel_class=travel_class, limit=limit, currency=currency,
+    )
+
+    if na_route:
+        # Try Sabre first (stronger North America coverage)
+        result = await _search_flights_sabre(**kwargs)
+        if result:
+            logger.info(f"Sabre hit for NA route {origin_code}→{dest_code}")
+            return result
+        logger.info("Sabre miss — falling back to Amadeus")
+        result = await _search_flights_amadeus(origin_code, dest_code, departure_date, return_date, adults, max_stops, travel_class, limit, currency)
+        if result:
+            return result
+    else:
+        # Try Amadeus first (stronger international coverage)
+        result = await _search_flights_amadeus(origin_code, dest_code, departure_date, return_date, adults, max_stops, travel_class, limit, currency)
+        if result:
+            return result
+        logger.info("Amadeus miss — falling back to Sabre")
+        result = await _search_flights_sabre(**kwargs)
+        if result:
+            return result
+
+    return await _browse_flight_search(origin, destination, departure_date, return_date, adults)
+
+
+async def _search_flights_amadeus(
+    origin_code: str, dest_code: str, departure_date: str, return_date: str,
+    adults: int, max_stops: int, travel_class: str, limit: int, currency: str,
+) -> Optional[dict]:
+    """Search via Amadeus SDK. Returns result dict or None on failure/empty."""
+    amadeus = _get_amadeus()
+    if not amadeus:
+        return None
 
     params = {
         "originLocationCode": origin_code,
@@ -211,11 +466,15 @@ async def search_flights(
 
             flights.append(flight)
 
+        if not flights:
+            logger.warning("Amadeus returned no flights (sandbox/no-data)")
+            return None
+
         return {"success": True, "source": "amadeus", "origin": origin_code, "destination": dest_code, "departure_date": departure_date, "return_date": return_date, "flights": flights, "total_results": len(flights), "currency": currency}
 
     except Exception as e:
         logger.error(f"Amadeus flight search failed: {e}")
-        return await _browse_flight_search(origin, destination, departure_date, return_date, adults)
+        return None
 
 
 async def _browse_flight_search(origin, destination, departure_date, return_date, adults) -> dict:
