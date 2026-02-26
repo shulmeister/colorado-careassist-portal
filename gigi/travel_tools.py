@@ -467,8 +467,9 @@ async def _search_flights_amadeus(
             flights.append(flight)
 
         if not flights:
-            logger.warning("Amadeus returned no flights (sandbox/no-data)")
-            return None
+            # Sandbox returns empty data for real dates — fall back to browse
+            logger.warning("Amadeus returned no flights (sandbox limitation?), falling back to browse")
+            return await _browse_flight_search(origin, destination, departure_date, return_date, adults)
 
         return {"success": True, "source": "amadeus", "origin": origin_code, "destination": dest_code, "departure_date": departure_date, "return_date": return_date, "flights": flights, "total_results": len(flights), "currency": currency}
 
