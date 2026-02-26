@@ -2391,6 +2391,62 @@ def get_stats():
         'current_caregivers': current_caregivers
     })
 
+@app.route('/api/applicants')
+@require_auth
+def get_applicants():
+    """Alias for /api/leads — returns paginated applicant/lead list."""
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    status_filter = request.args.get('status')
+
+    query = Lead.query
+    if status_filter:
+        query = query.filter(Lead.status == status_filter)
+
+    leads = query.order_by(Lead.id.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+
+    return jsonify({
+        'applicants': [{
+            'id': lead.id,
+            'name': lead.name,
+            'email': lead.email,
+            'phone': lead.phone,
+            'notes': lead.notes,
+            'status': lead.status,
+            'priority': lead.priority,
+            'assigned_to': lead.assigned_user.name if lead.assigned_user else None,
+            'created_at': lead.created_at.isoformat(),
+            'updated_at': lead.updated_at.isoformat()
+        } for lead in leads.items],
+        'total': leads.total,
+        'pages': leads.pages,
+        'current_page': leads.page
+    })
+
+
+@app.route('/api/pipeline')
+@require_auth
+def get_pipeline():
+    """Pipeline breakdown — count of leads by status stage."""
+    stages = [
+        ('new', 'New'),
+        ('contacted', 'Contacted'),
+        ('interested', 'Interested'),
+        ('sent_to_ep', 'Sent to EP'),
+        ('hired', 'Hired'),
+        ('not_interested', 'Not Interested'),
+    ]
+    pipeline = []
+    for value, label in stages:
+        count = Lead.query.filter_by(status=value).count()
+        pipeline.append({'stage': value, 'label': label, 'count': count})
+
+    total = Lead.query.count()
+    return jsonify({'pipeline': pipeline, 'total': total})
+
+
 @app.route('/health')
 def recruiting_health():
     return jsonify({"status": "ok", "service": "recruiting-dashboard"})
