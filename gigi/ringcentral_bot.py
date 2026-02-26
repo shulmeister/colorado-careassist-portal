@@ -271,26 +271,29 @@ SMS_TOOLS = [
     {"name": "get_daily_notes", "description": "Read today's daily notes for context.", "input_schema": {"type": "object", "properties": {"date": {"type": "string", "description": "Date YYYY-MM-DD (default: today)"}}, "required": []}},
 ]
 
-# Exclude marketing/finance tools from SMS (caregivers don't need these)
-_SMS_EXCLUDE = {
-    "get_marketing_dashboard", "get_google_ads_report", "get_website_analytics",
-    "get_social_media_report", "get_gbp_report", "get_email_campaign_report",
-    "generate_social_content", "get_pnl_report", "get_balance_sheet",
-    "get_invoice_list", "get_cash_position", "get_financial_dashboard",
-    "get_subscription_audit",
-    "run_claude_code", "browse_with_claude",
-    "browse_webpage", "take_screenshot", "deep_research",
-    "get_polybot_status",
-    "run_terminal",
-    "sequential_thinking", "get_thinking_summary",
-    "update_knowledge_graph", "query_knowledge_graph",
-    "get_directions", "geocode_address", "search_nearby_places",
-    "query_workspace",
-    # Travel booking tools have complex array schemas that break Gemini tool conversion
-    "book_flight", "book_hotel", "book_transfer", "confirm_flight_price",
-    "search_flights", "search_hotels", "search_transfers", "search_activities",
-    "get_flight_status", "get_booking_details", "search_destinations",
-}
+# Exclude marketing/finance tools from SMS — imported from canonical registry
+try:
+    from gigi.tool_registry import SMS_EXCLUDE as _SMS_EXCLUDE
+except ImportError:
+    # Fallback if tool_registry not available yet
+    _SMS_EXCLUDE = {
+        "get_marketing_dashboard", "get_google_ads_report", "get_website_analytics",
+        "get_social_media_report", "get_gbp_report", "get_email_campaign_report",
+        "generate_social_content", "get_pnl_report", "get_balance_sheet",
+        "get_invoice_list", "get_cash_position", "get_financial_dashboard",
+        "get_subscription_audit",
+        "run_claude_code", "browse_with_claude",
+        "browse_webpage", "take_screenshot", "deep_research",
+        "get_polybot_status",
+        "run_terminal",
+        "sequential_thinking", "get_thinking_summary",
+        "update_knowledge_graph", "query_knowledge_graph",
+        "get_directions", "geocode_address", "search_nearby_places",
+        "query_workspace",
+        "book_flight", "book_hotel", "book_transfer", "confirm_flight_price",
+        "search_flights", "search_hotels", "search_transfers", "search_activities",
+        "get_flight_status", "get_booking_details", "search_destinations",
+    }
 
 # Auto-extend SMS tools from Telegram canonical set (ensures tool parity across channels)
 try:
