@@ -612,6 +612,19 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
+        "name": "save_memory",
+        "description": "Save an important operational fact, caregiver pattern, client preference, or instruction to long-term memory. Use when something notable emerges from this call that should be remembered.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "The fact, pattern, or preference to save."},
+                "category": {"type": "string", "description": "Category: scheduling, caregiver, client, operations, communication, general"},
+                "importance": {"type": "string", "description": "How important: high, medium, or low", "enum": ["high", "medium", "low"]}
+            },
+            "required": ["content", "category"]
+        }
+    },
+    {
         "name": "recall_memories",
         "description": "Search your long-term memory for saved preferences, facts, or instructions. Use before asking a question that may have already been answered.",
         "input_schema": {
