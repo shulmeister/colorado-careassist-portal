@@ -10,10 +10,10 @@ Usage:
     python3 tests/test_wellsky_api_coverage.py
 """
 
-import sys
 import os
+import sys
 import traceback
-from datetime import date, datetime, timedelta
+from datetime import date
 
 # Ensure project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -331,7 +331,6 @@ def run_tests():
             document_type="clinical-note",
             content_type="text/plain",
             data_base64=content,
-            description="Test document",
         )
         assert success is True, f"create_document_reference should succeed, got {data}"
         return success, data

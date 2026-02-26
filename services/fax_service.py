@@ -816,7 +816,6 @@ async def file_fax_referral(fax_id: int) -> dict:
                     document_type=ws_doc_type,
                     content_type="application/pdf",
                     data_base64=pdf_b64,
-                    description=ws_description,
                     filename=ws_filename,
                 )
                 if success:
@@ -957,7 +956,6 @@ def retry_wellsky_uploads() -> dict:
                 document_type=ws_doc_type,
                 content_type="application/pdf",
                 data_base64=pdf_b64,
-                description=description,
                 filename=ws_filename,
             )
 

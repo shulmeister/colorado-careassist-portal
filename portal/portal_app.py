@@ -2597,7 +2597,6 @@ async def sync_client_assessment(request: Request):
                                 document_type="Client Assessment",
                                 content_type="application/pdf",
                                 data_base64=pdf_b64,
-                                description=f"CCA Client Assessment - {client_name} - {safe_date}",
                                 filename=f"Assessment_{client_name.replace(' ', '_')}_{safe_date.replace('-', '_')}.pdf",
                             )
                         except Exception as dr_err:

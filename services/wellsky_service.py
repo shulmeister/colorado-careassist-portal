@@ -3116,8 +3116,6 @@ class WellSkyService:
         document_type: str,
         content_type: str,
         data_base64: str,
-        description: str = "",
-        date: str = None,
         filename: str = "",
     ) -> Tuple[bool, Any]:
         """
@@ -3134,16 +3132,11 @@ class WellSkyService:
             document_type: Human-readable type (e.g. "Facesheet", "Referral", "Clinical Note")
             content_type: MIME type (e.g. "application/pdf", "image/jpeg", "text/plain")
             data_base64: Base64-encoded document content
-            description: Human-readable description
-            date: ISO date when document was created (default: now)
             filename: Original filename (e.g. "facesheet.pdf")
         """
         if self.is_mock_mode:
             logger.info(f"Mock: Created document for patient {patient_id}")
             return True, {"resourceType": "DocumentReference", "id": "mock-doc-123"}
-
-        if date is None:
-            date = datetime.utcnow().isoformat() + "Z"
 
         # title is REQUIRED by WellSky — use filename or derive from document_type
         title = filename or f"{document_type or 'document'}.pdf"
@@ -3153,11 +3146,8 @@ class WellSkyService:
         # See docs/WELLSKY_DOCUMENT_REFERENCE_DEBUG.md for full debug history.
         doc_data = {
             "resourceType": "DocumentReference",
-            "description": description or document_type,
-            "date": date,
             "type": {
-                "text": document_type or "Document",
-                "coding": [{"code": "clinical-note", "display": "clinical-note"}],
+                "text": "General",
             },
             "content": {
                 "attachment": {
@@ -3214,7 +3204,6 @@ class WellSkyService:
             document_type="Clinical Note",
             content_type="text/plain",
             data_base64=data_b64,
-            description=title[:200],
             filename=f"clinical_note_{timestamp.replace(' ', '_').replace(':', '')}.txt",
         )
 
