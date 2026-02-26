@@ -504,6 +504,8 @@ cd ~/mac-mini-apps/careassist-staging
 # Then test at https://staging.coloradocareassist.com
 ```
 
+**IMPORTANT:** Code changes are NOT live until staging services restart. If you edited files without running `restart-staging.sh`, you're testing stale code. For individual services, use `launchctl bootout`/`bootstrap` on the specific staging LaunchAgent.
+
 ### Step 3: Commit Changes
 ```bash
 cd ~/mac-mini-apps/careassist-staging
