@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 24, 2026
+**Last Updated:** February 26, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -73,14 +73,30 @@ Each service has its own LaunchAgent, process, and port. Cloudflare path-based r
 - **All channels that use ask_gigi.py** get the same ~90 tools (all Telegram tools)
 - **Cross-channel context:** API messages visible from Telegram/SMS and vice versa
 
+### FastMCP Tool Architecture (Feb 26)
+All Gigi tool definitions and implementations live in two files:
+- **`gigi/tool_registry.py`** — 90 `CANONICAL_TOOLS` + `SMS_EXCLUDE` + `VOICE_EXCLUDE` + `get_tools(channel)`. **Single source of truth.** Add new tools here.
+- **`gigi/tool_executor.py`** — `async execute(tool_name, tool_input)` with all 90 implementations. `set_google_service(svc)` for Google injection.
+
+**To add a new tool:** (1) Add definition to `CANONICAL_TOOLS` in `tool_registry.py`, (2) Add implementation to `tool_executor.py`. All channels inherit automatically.
+
 ### Tool Sets
-**Telegram tools (37):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_ar_report`, `get_polybot_status`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`, `run_terminal`, `sequential_thinking`, `get_thinking_summary`, `update_knowledge_graph`, `query_knowledge_graph`
+| Channel | Count | Source |
+|---------|-------|--------|
+| Telegram / Ask-Gigi | 90 | `get_tools("telegram")` = full CANONICAL_TOOLS |
+| Voice | 92 | `get_tools("voice")` (86) + 6 voice-exclusive tools |
+| RC SMS | ~47 | `get_tools("sms")` = CANONICAL_TOOLS minus SMS_EXCLUDE |
+| RC DM/Team Chat | 90 | `get_tools("dm")` = full CANONICAL_TOOLS |
 
-**Voice tools (38):** All Telegram tools minus browser/get_polybot_status, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
+**Voice-exclusive tools** (NOT in registry — appended in `voice_brain.py` via `_VOICE_ONLY_TOOLS`):
+`transfer_call`, `lookup_caller`, `report_call_out`, `send_sms`, `send_email`, `send_team_message`
 
-**RC SMS tools (15):** `get_client_current_status`, `identify_caller`, `get_wellsky_shifts`, `get_wellsky_clients`, `get_wellsky_caregivers`, `log_call_out`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `get_ar_report`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
+**VOICE_EXCLUDE** (in registry but blocked for voice): `browse_webpage`, `take_screenshot`, `browse_with_claude`, `get_polybot_status`
 
-**RC DM/Team Chat tools (36):** Full Telegram-like set including browser tools + `check_recent_sms`, `send_sms`, `log_call_out`, `identify_caller`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
+**Channel delegation pattern:**
+- `telegram_bot.py` — imports CANONICAL_TOOLS from registry; `execute_tool()` delegates to `tool_executor` (~740 lines)
+- `voice_brain.py` — handles 6 voice-exclusive tools locally; delegates rest to `tool_executor` (~1176 lines, was 3016)
+- `ringcentral_bot.py` — `_execute_sms_tool` (3 RC-local + delegate), `_execute_dm_tool` (5 RC-local + delegate) (~3075 lines, was 4136)
 
 ### Gigi's Core Capabilities
 - **WellSky Integration**: Full CRUD on Patients, Practitioners, Appointments, Encounters, DocumentReferences, Subscriptions, ProfileTags, and RelatedPersons. Clock in/out, task logs, shift search, and webhook event subscriptions. See `docs/WELLSKY_HOME_CONNECT_API_REFERENCE.md` for complete endpoint reference.
@@ -197,6 +213,13 @@ The Sales Dashboard is the source of truth for new leads. WellSky is the hub for
 - Deal/Contact navigation buttons on Dashboard
 - Stage history tracking (`stage_entered_at` timestamps)
 - Brevo CRM bidirectional sync
+
+### Recruiting Dashboard API (Feb 26)
+- `GET /recruiting/api/leads` — paginated lead list (filterable by status)
+- `GET /recruiting/api/applicants` — alias for /api/leads (same data, `applicants` key)
+- `GET /recruiting/api/pipeline` — stage breakdown: new/contacted/interested/sent_to_ep/hired/not_interested counts
+- `GET /recruiting/api/stats` — aggregate stats (total, new today, contacted, wants_work, hired)
+- All routes require session auth (`@require_auth`)
 
 ---
 
@@ -350,9 +373,11 @@ careassist-unified/
 ├── portal/                # Portal web app (FastAPI)
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
-│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (multi-provider, 33 tools)
-│   ├── telegram_bot.py    # Telegram interface (multi-provider, 32 tools)
-│   ├── ringcentral_bot.py # RC polling, SMS (15 tools), DM/Team (31 tools), scheduled messages
+│   ├── tool_registry.py   # ⭐ CANONICAL_TOOLS (90), SMS_EXCLUDE, VOICE_EXCLUDE, get_tools(channel)
+│   ├── tool_executor.py   # ⭐ Shared execute(tool_name, tool_input) — all 90 implementations
+│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (92 tools, ~1176 lines)
+│   ├── telegram_bot.py    # Telegram interface (90 tools, delegates to tool_executor)
+│   ├── ringcentral_bot.py # RC polling, SMS/DM/Team chat, delegates to tool_executor (~3075 lines)
 │   ├── main.py            # Retell webhooks + /api/ask-gigi + /webhook/imessage
 │   ├── ask_gigi.py        # Generic ask-gigi function (reuses telegram tools, no duplication)
 │   ├── browser_automation.py  # Playwright headless Chromium (browse + screenshot)
@@ -369,7 +394,6 @@ careassist-unified/
 │   ├── simulation_service.py  # Voice simulation runner (WebSocket-based)
 │   ├── simulation_evaluator.py # Simulation scoring (tool 40% + behavior 60%)
 │   ├── google_service.py  # Google Calendar + Gmail API (OAuth2)
-│   ├── chief_of_staff_tools.py  # Shared tool implementations
 │   ├── terminal_tools.py  # Headless terminal via ht-mcp (run_terminal)
 │   ├── sequential_thinking.py  # Structured reasoning chains
 │   ├── knowledge_graph.py # PostgreSQL entity-relation knowledge graph
