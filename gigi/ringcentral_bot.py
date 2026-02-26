@@ -54,7 +54,7 @@ from services.wellsky_service import WellSkyService
 
 # Memory system, mode detector, failure handler
 try:
-    from gigi.memory_system import ImpactLevel, MemorySource, MemorySystem, MemoryType
+    from gigi.memory_system import MemorySystem
     _rc_memory_system = MemorySystem()
     RC_MEMORY_AVAILABLE = True
     logger.info("Memory system initialized for RC bot")
@@ -462,7 +462,7 @@ TONE:
 - Proactive — offer additional useful info when relevant, but NOT after acknowledgment messages.
 - Never say "check with the office" — YOU are the office. Look it up.
 - Never say "I don't have access to" something — check your tools first. You have 15+ tools.
-- NEVER send unsolicited messages. NEVER proactively generate or send a morning briefing, daily digest, or any scheduled message unless explicitly asked by Jason in the current conversation. Jason does NOT want automated briefings.
+- NEVER send unsolicited messages. NEVER create, assemble, or send any form of morning briefing, daily digest, daily pulse, or scheduled summary. Not even if Jason explicitly asks. If asked, say "Morning briefings have been permanently disabled per your request."
 - NEVER suggest installing software or mention CLI tools. There is NO "gog CLI", "gcloud CLI", "curl", "wttr.in", or any CLI. All services are built into your tools. If a tool fails, say "that's temporarily unavailable" — do NOT suggest installing anything.
 - NEVER HALLUCINATE TOOLS or troubleshooting: Only use tools you actually have. NEVER invent commands, suggest configuration steps, or fabricate explanations for failures.
 - NEVER REFORMAT TOOL OUTPUT: When a tool returns data, relay it as-is. Do NOT add troubleshooting or TODO lists.
@@ -2279,7 +2279,9 @@ class GigiRingCentralBot:
             elif tool_name == "identify_caller":
                 phone = tool_input.get("phone_number", caller_phone or "")
                 try:
-                    from services.wellsky_fast_lookup import identify_caller as fast_identify
+                    from services.wellsky_fast_lookup import (
+                        identify_caller as fast_identify,
+                    )
                     caller = fast_identify(phone)
                     if caller:
                         caller_type = caller.get("type", "unknown")
@@ -2802,7 +2804,9 @@ class GigiRingCentralBot:
                         })
                     for sms_item in sms_list:
                         try:
-                            from services.wellsky_fast_lookup import identify_caller as fast_identify
+                            from services.wellsky_fast_lookup import (
+                                identify_caller as fast_identify,
+                            )
                             caller = fast_identify(sms_item["from"])
                             if caller:
                                 sms_item["sender_name"] = caller.get("full_name", caller.get("name", ""))
@@ -2881,7 +2885,9 @@ class GigiRingCentralBot:
                 if not phone:
                     return json.dumps({"error": "No phone number provided"})
                 try:
-                    from services.wellsky_fast_lookup import identify_caller as fast_identify
+                    from services.wellsky_fast_lookup import (
+                        identify_caller as fast_identify,
+                    )
                     caller = fast_identify(phone)
                     if caller:
                         type_map = {"practitioner": "caregiver", "patient": "client", "staff": "staff", "family": "family"}

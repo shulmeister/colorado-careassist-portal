@@ -80,6 +80,12 @@ def _build_system_prompt(channel: str, conversation_store=None, user_message=Non
     return "\n".join(parts)
 
 
+_BRIEFING_KEYWORDS = (
+    "morning briefing", "daily briefing", "daily digest", "daily summary",
+    "daily pulse", "morning update", "give me my morning",
+)
+
+
 async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> str:
     """
     Send a message to Gigi and get a response with full tool support.
@@ -92,6 +98,12 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
     Returns:
         Gigi's response text
     """
+    # Hard block — morning briefings are permanently disabled
+    lower = text.lower()
+    if any(kw in lower for kw in _BRIEFING_KEYWORDS):
+        logger.info(f"ask_gigi: blocked morning briefing request from channel={channel}")
+        return "Morning briefings have been permanently disabled."
+
     from gigi.telegram_bot import (
         LLM_PROVIDER,
     )
