@@ -613,7 +613,7 @@ ANTHROPIC_TOOLS = [
     },
     {
         "name": "save_memory",
-        "description": "Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred, assumed, or fabricated information. If unsure, ask before saving.",
+        "description": "Save an important operational fact, caregiver pattern, client preference, or instruction to long-term memory. Use when something notable emerges from this call that should be remembered.",
         "input_schema": {
             "type": "object",
             "properties": {
