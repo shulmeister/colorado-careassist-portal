@@ -7128,23 +7128,12 @@ class AskGigiRequest(BaseModel):
 
 
 @app.post("/api/ask-gigi")
-async def ask_gigi_endpoint(request: AskGigiRequest, authorization: str = Header(None)):
+async def ask_gigi_endpoint(request: AskGigiRequest, _=Depends(require_gigi_token)):
     """
     Generic Ask-Gigi endpoint — send text, get Gigi's response with full tool support.
 
     Auth: Bearer token (GIGI_API_TOKEN env var)
     """
-    # Verify bearer token
-    if not GIGI_API_TOKEN:
-        raise HTTPException(status_code=503, detail="GIGI_API_TOKEN not configured")
-
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Bearer token")
-
-    token = authorization[7:]  # Strip "Bearer "
-    if token != GIGI_API_TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid API token")
-
     if not request.text.strip():
         raise HTTPException(status_code=400, detail="Empty text")
 

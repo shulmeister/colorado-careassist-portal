@@ -4,7 +4,7 @@ import hmac
 import logging
 import os
 from datetime import date as date_cls
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import quote_plus, urlencode
 
@@ -24,6 +24,13 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
+
 from portal_auth import get_current_user, get_current_user_optional, oauth_manager
 from portal_database import db_manager, get_db
 from portal_models import (
@@ -41,12 +48,6 @@ from services.marketing.metrics_service import (
     get_social_metrics,
 )
 from services.search_service import search_service
-
-# Rate limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
 
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
@@ -1547,9 +1548,12 @@ async def api_gigi_reports(
     if not db_url:
         return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
 
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    conn = None
+    cur = None
     try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
         # Total interactions = distinct (user_id, channel, date) combos in last 30 days
         cur.execute("""
             SELECT COUNT(*) FROM (
@@ -1634,11 +1638,13 @@ async def api_gigi_reports(
             stats["daily_volume"].append({"date": ds, "count": daily_rows.get(ds, 0)})
 
     except Exception as e:
-        logger.warning(f"Reports stats error: {e}")
-        return JSONResponse({"success": False, "error": str(e)})
+        logger.error(f"Error in api_gigi_reports: {e}")
+        return JSONResponse({"success": False, "error": "Internal server error"})
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
     return JSONResponse({"success": True, "stats": stats})
 
@@ -1798,9 +1804,12 @@ async def api_gigi_communication_stats(
     if not db_url:
         return JSONResponse({"success": True, "stats": stats})
 
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    conn = None
+    cur = None
     try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
         # Total conversations by channel (last 30 days)
         cur.execute("""
             SELECT channel, COUNT(*) FROM gigi_conversations
@@ -1824,10 +1833,13 @@ async def api_gigi_communication_stats(
             stats["reviewed"] += cnt
 
     except Exception as e:
-        logger.warning(f"Communication stats error: {e}")
+        logger.error(f"Error in api_gigi_communication_stats: {e}")
+        return JSONResponse({"success": False, "error": "Internal server error"})
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
     return JSONResponse({"success": True, "stats": stats})
 
@@ -2094,9 +2106,12 @@ async def api_gigi_get_clients(
     if not db_url:
         return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
 
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    conn = None
+    cur = None
     try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
         # Get all active clients from cached_patients with any existing prompts
         cur.execute("""
             SELECT cp.id, cp.full_name, cp.phone, cp.city, cp.state, cp.is_active,
@@ -2128,11 +2143,13 @@ async def api_gigi_get_clients(
 
         return JSONResponse({"success": True, "clients": clients})
     except Exception as e:
-        logger.error(f"Failed to fetch clients: {e}")
-        return JSONResponse({"success": False, "error": str(e)})
+        logger.error(f"Error in api_gigi_get_clients: {e}")
+        return JSONResponse({"success": False, "error": "Internal server error"})
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 @app.post("/api/gigi/knowledge/clients/{client_id}/prompt")
@@ -2151,9 +2168,12 @@ async def api_gigi_save_client_prompt(
     if not db_url:
         return JSONResponse({"success": False, "error": "DATABASE_URL not set"})
 
-    conn = psycopg2.connect(db_url)
-    cur = conn.cursor()
+    conn = None
+    cur = None
     try:
+        conn = psycopg2.connect(db_url)
+        cur = conn.cursor()
+
         cur.execute("""
             INSERT INTO gigi_client_prompts (client_id, client_name, prompt, updated_at)
             VALUES (%s, %s, %s, NOW())
@@ -2164,11 +2184,13 @@ async def api_gigi_save_client_prompt(
         conn.commit()
         return JSONResponse({"success": True, "message": "Client prompt saved"})
     except Exception as e:
-        logger.error(f"Failed to save client prompt: {e}")
-        return JSONResponse({"success": False, "error": str(e)})
+        logger.error(f"Error in api_gigi_save_client_prompt: {e}")
+        return JSONResponse({"success": False, "error": "Internal server error"})
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 # API endpoints for tools
@@ -2437,7 +2459,7 @@ async def sync_client_assessment(request: Request):
         signature = data.pop("signature", "")
         assessment_date = data.get("assessment_date") or None
 
-        db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
 
@@ -4788,7 +4810,7 @@ async def api_operations_at_risk(
                 name = row[1] or f"{row[2] or ''} {row[3] or ''}".strip() or "Unknown"
                 days_since = None
                 if row[5]:
-                    days_since = (datetime.now() - row[5]).days
+                    days_since = (datetime.now(timezone.utc) - row[5]).days
 
                 clients.append({
                     "id": row[0],
