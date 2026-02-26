@@ -2270,172 +2270,51 @@ class GigiRingCentralBot:
     # SMS Tool Execution
     # =========================================================================
 
-    def _execute_sms_tool(self, tool_name: str, tool_input: dict, caller_phone: str = None) -> str:
-        """Execute a tool call and return the result as a JSON string"""
+    async def _execute_sms_tool(self, tool_name: str, tool_input: dict, caller_phone: str = None) -> str:
+        """Execute a tool call. RC-specific tools handled locally; shared tools delegate to tool_executor."""
         try:
             if tool_name == "get_client_current_status":
                 return self._get_client_current_status(tool_input.get("client_name", ""))
 
             elif tool_name == "identify_caller":
                 phone = tool_input.get("phone_number", caller_phone or "")
-                # Use fast SQL lookup (checks all 4 tables: staff, practitioners, patients, family)
                 try:
-                    from services.wellsky_fast_lookup import (
-                        identify_caller as fast_identify,
-                    )
+                    from services.wellsky_fast_lookup import identify_caller as fast_identify
                     caller = fast_identify(phone)
                     if caller:
-                        caller_type = caller.get('type', 'unknown')
-                        # Map type to identified_as value
-                        type_map = {
-                            'practitioner': 'caregiver',
-                            'patient': 'client',
-                            'staff': 'staff',
-                            'family': 'family'
-                        }
+                        caller_type = caller.get("type", "unknown")
+                        type_map = {"practitioner": "caregiver", "patient": "client", "staff": "staff", "family": "family"}
                         result = {
                             "identified_as": type_map.get(caller_type, caller_type),
-                            "id": caller.get('id', ''),
-                            "name": caller.get('full_name', caller.get('name', '')),
-                            "first_name": caller.get('first_name', ''),
-                            "status": caller.get('status', caller.get('role', ''))
+                            "id": caller.get("id", ""),
+                            "name": caller.get("full_name", caller.get("name", "")),
+                            "first_name": caller.get("first_name", ""),
+                            "status": caller.get("status", caller.get("role", ""))
                         }
-                        # Add extra context for family members
-                        if caller_type == 'family':
-                            result["relationship"] = caller.get('relationship', '')
-                            result["client_name"] = caller.get('client_name', '')
-                            result["patient_id"] = caller.get('patient_id', '')
+                        if caller_type == "family":
+                            result["relationship"] = caller.get("relationship", "")
+                            result["client_name"] = caller.get("client_name", "")
+                            result["patient_id"] = caller.get("patient_id", "")
                         return json.dumps(result)
                 except Exception as e:
                     logger.warning(f"Fast caller ID failed, trying fallback: {e}")
-
-                # Fallback to WellSky API if fast lookup fails
                 try:
                     cg = self.wellsky.get_caregiver_by_phone(phone)
                     if cg:
                         return json.dumps({
-                            "identified_as": "caregiver",
-                            "id": cg.id,
-                            "name": cg.full_name,
-                            "first_name": cg.first_name,
-                            "status": cg.status.value if hasattr(cg.status, 'value') else str(cg.status)
+                            "identified_as": "caregiver", "id": cg.id,
+                            "name": cg.full_name, "first_name": cg.first_name,
+                            "status": cg.status.value if hasattr(cg.status, "value") else str(cg.status)
                         })
                 except Exception:
                     pass
-
                 return json.dumps({"identified_as": "unknown", "message": "Phone number not found in records"})
-
-            elif tool_name == "get_wellsky_shifts":
-                days = min(tool_input.get("days", 7), 14)
-                client_id = tool_input.get("client_id")
-                caregiver_id = tool_input.get("caregiver_id")
-                date_from = date.today()
-                date_to = date.today() + timedelta(days=days)
-
-                shifts = self.wellsky.get_shifts(
-                    date_from=date_from, date_to=date_to,
-                    client_id=client_id, caregiver_id=caregiver_id,
-                    limit=20
-                )
-                shift_list = []
-                for s in shifts[:10]:
-                    shift_list.append({
-                        "date": s.date.isoformat() if hasattr(s, 'date') and s.date else "unknown",
-                        "day": s.date.strftime("%a") if hasattr(s, 'date') and s.date else "",
-                        "time": f"{s.start_time}-{s.end_time}" if hasattr(s, 'start_time') and s.start_time else "TBD",
-                        "client": s.client_name if hasattr(s, 'client_name') else "",
-                        "caregiver": s.caregiver_name if hasattr(s, 'caregiver_name') else "",
-                        "caregiver_id": s.caregiver_id if hasattr(s, 'caregiver_id') else "",
-                        "client_id": s.client_id if hasattr(s, 'client_id') else "",
-                        "status": s.status.value if hasattr(s.status, 'value') else str(s.status) if hasattr(s, 'status') else ""
-                    })
-                # Enrich with names from cached database when WellSky API returns blanks
-                conn = None
-                try:
-                    import psycopg2
-                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-                    for shift in shift_list:
-                        if shift.get("caregiver_id") and not shift.get("caregiver"):
-                            cur.execute("SELECT full_name FROM cached_practitioners WHERE id = %s", (shift["caregiver_id"],))
-                            row = cur.fetchone()
-                            if row:
-                                shift["caregiver"] = row[0]
-                        if shift.get("client_id") and not shift.get("client"):
-                            cur.execute("SELECT full_name FROM cached_patients WHERE id = %s", (shift["client_id"],))
-                            row = cur.fetchone()
-                            if row:
-                                shift["client"] = row[0]
-                except Exception as e:
-                    logger.warning(f"Shift name enrichment failed (non-fatal): {e}")
-                finally:
-                    if conn:
-                        conn.close()
-                return json.dumps({"count": len(shifts), "shifts": shift_list})
-
-            elif tool_name == "get_wellsky_clients":
-                # Use cached database for reliable client lookup (synced daily from WellSky)
-                import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
-                search_name = tool_input.get("search_name", "")
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-                    if search_name:
-                        search_lower = f"%{search_name.lower()}%"
-                        cur.execute("""SELECT id, full_name, phone FROM cached_patients
-                                      WHERE is_active = true AND (lower(full_name) LIKE %s
-                                      OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
-                                      ORDER BY full_name LIMIT 10""",
-                                   (search_lower, search_lower, search_lower))
-                    else:
-                        cur.execute("SELECT id, full_name, phone FROM cached_patients WHERE is_active = true ORDER BY full_name LIMIT 100")
-                    rows = cur.fetchall()
-                    client_list = [{"id": str(r[0]), "name": r[1], "phone": r[2] or ""} for r in rows]
-                    return json.dumps({"count": len(client_list), "clients": client_list})
-                except Exception as e:
-                    logger.error(f"Client cache lookup failed: {e}")
-                    return json.dumps({"error": f"Client lookup failed: {str(e)}"})
-                finally:
-                    if conn:
-                        conn.close()
-
-            elif tool_name == "get_wellsky_caregivers":
-                # Use cached database for reliable caregiver lookup (synced daily from WellSky)
-                import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
-                search_name = tool_input.get("search_name", "")
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-                    if search_name:
-                        search_lower = f"%{search_name.lower()}%"
-                        cur.execute("""SELECT id, full_name, phone FROM cached_practitioners
-                                      WHERE is_active = true AND (lower(full_name) LIKE %s
-                                      OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)
-                                      ORDER BY full_name LIMIT 10""",
-                                   (search_lower, search_lower, search_lower))
-                    else:
-                        cur.execute("SELECT id, full_name, phone FROM cached_practitioners WHERE is_active = true ORDER BY full_name LIMIT 100")
-                    rows = cur.fetchall()
-                    cg_list = [{"id": str(r[0]), "name": r[1], "phone": r[2] or ""} for r in rows]
-                    return json.dumps({"count": len(cg_list), "caregivers": cg_list})
-                except Exception as e:
-                    logger.error(f"Caregiver cache lookup failed: {e}")
-                    return json.dumps({"error": f"Caregiver lookup failed: {str(e)}"})
-                finally:
-                    if conn:
-                        conn.close()
 
             elif tool_name == "log_call_out":
                 caregiver_id = tool_input.get("caregiver_id")
                 caregiver_name = tool_input.get("caregiver_name", "Unknown")
                 reason = tool_input.get("reason", "not specified")
                 shift_date = tool_input.get("shift_date", date.today().isoformat())
-
                 note_title = f"CALL-OUT: {caregiver_name} - {reason}"
                 note_body = (
                     f"Via SMS\n"
@@ -2444,375 +2323,45 @@ class GigiRingCentralBot:
                     f"Shift date: {shift_date}\n"
                     f"ACTION: Find coverage immediately."
                 )
-
-                # 1. Care Alert: TaskLog on encounter (shows in Care Alerts on Dashboard)
-                # 2. Admin Task: escalation for coverage (shows in Tasks on Dashboard)
                 logged_to = "local only"
                 shift_client_id = None
                 try:
                     shifts = self.wellsky.get_shifts(
                         caregiver_id=caregiver_id,
-                        date_from=date.today(),
-                        date_to=date.today()
+                        date_from=date.today(), date_to=date.today()
                     )
                     for s in (shifts or []):
-                        sid = getattr(s, 'client_id', None) or (s.get('client_id') if isinstance(s, dict) else None)
+                        sid = getattr(s, "client_id", None) or (s.get("client_id") if isinstance(s, dict) else None)
                         if sid:
                             shift_client_id = str(sid)
-                            cname = getattr(s, 'client_name', None) or (s.get('client') if isinstance(s, dict) else None)
+                            cname = getattr(s, "client_name", None) or (s.get("client") if isinstance(s, dict) else None)
                             if cname:
                                 note_title = f"CALL-OUT: {caregiver_name} - {reason} — {cname} shift"
                             break
-
                     if shift_client_id:
                         success, result_msg = self.wellsky.add_note_to_client(
-                            client_id=shift_client_id,
-                            note=note_body,
-                            note_type="callout",
-                            source="gigi_manager",
-                            title=note_title
+                            client_id=shift_client_id, note=note_body,
+                            note_type="callout", source="gigi_manager", title=note_title
                         )
-                        if success and "WellSky" in str(result_msg):
-                            logged_to = "WellSky Care Alert"
-                        else:
-                            logged_to = "local (no encounter found)"
+                        logged_to = "WellSky Care Alert" if success and "WellSky" in str(result_msg) else "local (no encounter found)"
                     else:
                         logger.info(f"No shifts today for {caregiver_name} — call-out logged locally")
                 except Exception as e:
                     logger.warning(f"Call-out schedule lookup failed: {e}")
-
-                # Escalation task for coverage (separate from the Care Alert)
                 try:
                     self.wellsky.create_admin_task(
-                        title=f"COVERAGE NEEDED: {note_title}",
-                        description=note_body,
-                        priority="urgent",
-                        related_client_id=shift_client_id,
-                        related_caregiver_id=caregiver_id
+                        title=f"COVERAGE NEEDED: {note_title}", description=note_body,
+                        priority="urgent", related_client_id=shift_client_id, related_caregiver_id=caregiver_id
                     )
                     logged_to += " + Task"
                 except Exception as e:
                     logger.warning(f"Call-out admin task creation failed: {e}")
-
                 return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name} ({logged_to})."})
 
-            elif tool_name == "save_memory":
-                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
-                    return json.dumps({"error": "Memory system not available"})
-                content = tool_input.get("content", "")
-                category = tool_input.get("category", "general")
-                importance = tool_input.get("importance", "medium")
-                impact_map = {"high": ImpactLevel.HIGH, "medium": ImpactLevel.MEDIUM, "low": ImpactLevel.LOW}
-                memory_id = _rc_memory_system.create_memory(
-                    content=content, memory_type=MemoryType.EXPLICIT_INSTRUCTION,
-                    source=MemorySource.EXPLICIT, confidence=1.0,
-                    category=category, impact_level=impact_map.get(importance, ImpactLevel.MEDIUM)
-                )
-                return json.dumps({"saved": True, "memory_id": memory_id, "content": content})
-
-            elif tool_name == "recall_memories":
-                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
-                    return json.dumps({"memories": [], "message": "Memory system not available"})
-                category = tool_input.get("category")
-                search_text = tool_input.get("search_text")
-                memories = _rc_memory_system.query_memories(category=category, min_confidence=0.3, limit=10)
-                if search_text:
-                    search_lower = search_text.lower()
-                    memories = [m for m in memories if search_lower in m.content.lower()]
-                results = [{"id": m.id, "content": m.content, "category": m.category,
-                           "confidence": float(m.confidence), "type": m.type.value} for m in memories]
-                return json.dumps({"memories": results, "count": len(results)})
-
-            elif tool_name == "forget_memory":
-                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
-                    return json.dumps({"error": "Memory system not available"})
-                memory_id = tool_input.get("memory_id", "")
-                memory = _rc_memory_system.get_memory(memory_id)
-                if not memory:
-                    return json.dumps({"error": f"Memory {memory_id} not found"})
-                with _rc_memory_system._get_connection() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("UPDATE gigi_memories SET status = 'archived' WHERE id = %s", (memory_id,))
-                        _rc_memory_system._log_event(cur, memory_id, "archived", memory.confidence, memory.confidence, "User requested forget")
-                    conn.commit()
-                return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
-
-            elif tool_name == "search_memory_logs":
-                from gigi.memory_logger import MemoryLogger
-                ml = MemoryLogger()
-                query = tool_input.get("query", "")
-                days_back = tool_input.get("days_back", 30)
-                results = ml.search_logs(query, days_back=days_back)
-                return json.dumps({"query": query, "results": results[:10], "total": len(results)})
-
-            # get_morning_briefing REMOVED — morning briefing permanently deleted
-
-            elif tool_name == "get_ar_report":
-                from sales.quickbooks_service import QuickBooksService
-                qb = QuickBooksService()
-                if not qb.load_tokens_from_db():
-                    return json.dumps({"error": "QuickBooks not connected. Visit https://portal.coloradocareassist.com/auth/quickbooks to authorize."})
-                detail_level = tool_input.get("detail_level", "summary")
-                result = qb.generate_ar_report(detail_level)
-                if result.get("success"):
-                    return result["report"]
-                return json.dumps(result)
-
-            elif tool_name == "deep_research":
-                question = tool_input.get("question", "")
-                try:
-                    import httpx
-                    with httpx.Client(timeout=150.0) as client:
-                        resp = client.post(
-                            "http://localhost:3002/api/research/deep",
-                            json={"question": question}
-                        )
-                        data = resp.json()
-                        answer = data.get("answer", "Research unavailable.")
-                        confidence = data.get("confidence", 0)
-                        tools_used = data.get("metadata", {}).get("tools_used", [])
-                        duration = data.get("metadata", {}).get("total_duration_seconds", 0)
-                        return f"{answer}\n\n---\nConfidence: {confidence:.0%} | Data sources: {len(tools_used)} | Research time: {duration:.0f}s"
-                except Exception as e:
-                    logger.error(f"Deep research failed: {e}")
-                    return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
-
-            elif tool_name == "get_weather_arb_status":
-                try:
-                    import httpx
-                    result = {"polymarket": {"status": "offline"}, "kalshi": {"status": "offline"}}
-                    with httpx.Client(timeout=15.0) as client:
-                        try:
-                            status_resp = client.get("http://127.0.0.1:3010/status")
-                            pnl_resp = client.get("http://127.0.0.1:3010/pnl")
-                            poly = {"status": "online"}
-                            if status_resp.status_code == 200:
-                                st = status_resp.json()
-                                sniper = st.get("sniper", {})
-                                poly["running"] = bool(st.get("running"))
-                                poly["scans"] = sniper.get("scan_count", 0)
-                            if pnl_resp.status_code == 200:
-                                data = pnl_resp.json()
-                                poly["portfolio_value"] = data.get("portfolio_value", 0)
-                                poly["cash"] = data.get("cash", 0)
-                                poly["unrealized_pnl"] = data.get("unrealized_pnl", 0)
-                                poly["num_positions"] = len(data.get("positions", []))
-                                poly["positions"] = [
-                                    {"title": p.get("title", "?")[:60], "pnl": round(p.get("pnl", 0), 2), "pnl_pct": round(p.get("pnl_pct", 0), 1)}
-                                    for p in data.get("positions", [])[:10]
-                                ]
-                            result["polymarket"] = poly
-                        except Exception:
-                            pass
-                        try:
-                            kalshi_resp = client.get("http://127.0.0.1:3011/pnl")
-                            if kalshi_resp.status_code == 200:
-                                data = kalshi_resp.json()
-                                result["kalshi"] = {
-                                    "status": "online",
-                                    "portfolio_value": data.get("portfolio_value", 0),
-                                    "cash": data.get("cash", 0),
-                                    "unrealized_pnl": data.get("unrealized_pnl", 0),
-                                    "num_positions": len(data.get("positions", [])),
-                                    "positions": [
-                                        {"ticker": p.get("ticker", "?"), "count": p.get("count", 0), "pnl": round(p.get("pnl", 0), 2)}
-                                        for p in data.get("positions", [])[:10]
-                                    ]
-                                }
-                        except Exception:
-                            pass
-                    return json.dumps(result)
-                except Exception as e:
-                    logger.error(f"Weather arb status failed: {e}")
-                    return json.dumps({"error": f"Weather bots unavailable: {str(e)}"})
-
-            elif tool_name == "watch_tickets":
-                from gigi.ticket_monitor import create_watch
-                result = create_watch(tool_input.get("artist", ""), tool_input.get("venue"), tool_input.get("city", "Denver"))
-                return json.dumps(result)
-
-            elif tool_name == "list_ticket_watches":
-                from gigi.ticket_monitor import list_watches
-                return json.dumps(list_watches())
-
-            elif tool_name == "remove_ticket_watch":
-                from gigi.ticket_monitor import remove_watch
-                return json.dumps(remove_watch(int(tool_input.get("watch_id", 0))))
-
-            elif tool_name == "clock_in_shift":
-                appointment_id = tool_input.get("appointment_id", "")
-                caregiver_name = tool_input.get("caregiver_name", "")
-                notes = tool_input.get("notes", "Clocked in via Gigi SMS")
-                if not appointment_id:
-                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
-                try:
-                    from services.wellsky_service import WellSkyService
-                    ws = WellSkyService()
-                    success, message = ws.clock_in_shift(appointment_id, notes=notes)
-                    return json.dumps({"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name})
-                except Exception as e:
-                    return json.dumps({"error": f"Clock-in failed: {str(e)}"})
-
-            elif tool_name == "clock_out_shift":
-                appointment_id = tool_input.get("appointment_id", "")
-                caregiver_name = tool_input.get("caregiver_name", "")
-                notes = tool_input.get("notes", "Clocked out via Gigi SMS")
-                if not appointment_id:
-                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
-                try:
-                    from services.wellsky_service import WellSkyService
-                    ws = WellSkyService()
-                    success, message = ws.clock_out_shift(appointment_id, notes=notes)
-                    return json.dumps({"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name})
-                except Exception as e:
-                    return json.dumps({"error": f"Clock-out failed: {str(e)}"})
-
-            elif tool_name == "find_replacement_caregiver":
-                shift_id = tool_input.get("shift_id", "")
-                original_caregiver_id = tool_input.get("original_caregiver_id", "")
-                reason = tool_input.get("reason", "called out")
-                if not shift_id or not original_caregiver_id:
-                    return json.dumps({"error": "Missing shift_id or original_caregiver_id"})
-                try:
-                    from sales.shift_filling.engine import shift_filling_engine
-                    campaign = shift_filling_engine.process_calloff(
-                        shift_id=shift_id, caregiver_id=original_caregiver_id,
-                        reason=reason, reported_by="gigi_sms"
-                    )
-                    if not campaign:
-                        return json.dumps({"success": False, "error": "Could not create replacement campaign"})
-                    return json.dumps({
-                        "success": True, "campaign_id": campaign.id,
-                        "status": campaign.status.value if hasattr(campaign.status, 'value') else str(campaign.status),
-                        "caregivers_contacted": campaign.total_contacted,
-                        "message": f"Replacement search started. Contacting {campaign.total_contacted} caregivers via SMS."
-                    })
-                except ImportError:
-                    return json.dumps({"error": "Shift filling engine not available"})
-                except Exception as e:
-                    return json.dumps({"error": f"Shift filling failed: {str(e)}"})
-
-            elif tool_name == "get_task_board":
-                try:
-                    with open(os.path.expanduser("~/Task Board.md"), "r") as f:
-                        return json.dumps({"task_board": f.read()})
-                except FileNotFoundError:
-                    return json.dumps({"task_board": "(empty)"})
-
-            elif tool_name == "add_task":
-                task_text = tool_input.get("task", "").strip()
-                section = tool_input.get("section", "Today").strip()
-                if not task_text:
-                    return json.dumps({"error": "No task text provided"})
-                valid_sections = ["Today", "Soon", "Later", "Waiting", "Agenda", "Inbox", "Reference"]
-                section_match = next((s for s in valid_sections if s.lower() == section.lower()), "Today")
-                path = os.path.expanduser("~/Task Board.md")
-                try:
-                    with open(path, "r") as f:
-                        content = f.read()
-                    marker = f"## {section_match}\n"
-                    if marker in content:
-                        idx = content.index(marker) + len(marker)
-                        rest = content[idx:]
-                        if rest.startswith("-\n") or rest.startswith("- \n"):
-                            content = content[:idx] + f"- [ ] {task_text}\n" + rest[rest.index("\n") + 1:]
-                        else:
-                            content = content[:idx] + f"- [ ] {task_text}\n" + rest
-                    else:
-                        content += f"\n## {section_match}\n- [ ] {task_text}\n"
-                    with open(path, "w") as f:
-                        f.write(content)
-                    return json.dumps({"success": True, "task": task_text, "section": section_match})
-                except Exception as e:
-                    return json.dumps({"error": f"Failed: {str(e)}"})
-
-            elif tool_name == "complete_task":
-                task_text = tool_input.get("task_text", "").strip().lower()
-                if not task_text:
-                    return json.dumps({"error": "No task text provided"})
-                try:
-                    path = os.path.expanduser("~/Task Board.md")
-                    with open(path, "r") as f:
-                        lines = f.readlines()
-                    completed = False
-                    completed_task = ""
-                    new_lines = []
-                    for line in lines:
-                        if not completed and "- [ ]" in line and task_text in line.lower():
-                            completed_task = line.replace("- [ ]", "- [x]").strip()
-                            completed = True
-                        else:
-                            new_lines.append(line)
-                    if not completed:
-                        return json.dumps({"error": f"No uncompleted task matching '{task_text}'"})
-                    content = "".join(new_lines)
-                    done_marker = "## Done\n"
-                    if done_marker in content:
-                        idx = content.index(done_marker) + len(done_marker)
-                        rest = content[idx:]
-                        if rest.startswith("-\n") or rest.startswith("- \n"):
-                            content = content[:idx] + completed_task + "\n" + rest[rest.index("\n") + 1:]
-                        else:
-                            content = content[:idx] + completed_task + "\n" + rest
-                    else:
-                        content += f"\n## Done\n{completed_task}\n"
-                    with open(path, "w") as f:
-                        f.write(content)
-                    return json.dumps({"success": True, "completed": completed_task})
-                except Exception as e:
-                    return json.dumps({"error": f"Failed: {str(e)}"})
-
-            elif tool_name == "capture_note":
-                note = tool_input.get("note", "").strip()
-                if not note:
-                    return json.dumps({"error": "No note provided"})
-                path = os.path.expanduser("~/Scratchpad.md")
-                try:
-                    try:
-                        with open(path, "r") as f:
-                            content = f.read()
-                    except FileNotFoundError:
-                        content = "# Scratchpad\n\n---\n"
-                    from datetime import datetime as dt
-                    timestamp = dt.now().strftime("%I:%M %p")
-                    content = content.rstrip() + f"\n- {note} ({timestamp})\n"
-                    with open(path, "w") as f:
-                        f.write(content)
-                    return json.dumps({"success": True, "note": note})
-                except Exception as e:
-                    return json.dumps({"error": f"Failed: {str(e)}"})
-
-            elif tool_name == "get_daily_notes":
-                target_date = tool_input.get("date", "")
-                try:
-                    import glob as g
-                    import re as _re
-                    from datetime import datetime as dt
-                    d = target_date if _re.match(r"^\d{4}-\d{2}-\d{2}$", target_date) else dt.now().strftime("%Y-%m-%d")
-                    matches = g.glob(os.path.join(os.path.expanduser("~/Daily Notes"), f"{d}*"))
-                    if matches:
-                        with open(matches[0], "r") as f:
-                            return json.dumps({"date": d, "notes": f.read()})
-                    return json.dumps({"date": d, "notes": "(no daily notes for this date)"})
-                except Exception as e:
-                    return json.dumps({"error": f"Failed: {str(e)}"})
-
+            # --- All other tools: delegate to shared executor ---
             else:
-                # Delegate to Telegram bot for shared tools not natively handled
-                try:
-                    if not hasattr(self, '_shared_tele_bot'):
-                        from gigi.telegram_bot import GigiTelegramBot
-                        self._shared_tele_bot = GigiTelegramBot()
-                    loop = asyncio.new_event_loop()
-                    try:
-                        result = loop.run_until_complete(
-                            self._shared_tele_bot.execute_tool(tool_name, tool_input))
-                    finally:
-                        loop.close()
-                    return result
-                except Exception as e:
-                    logger.error(f"Delegated SMS tool {tool_name} failed: {e}")
-                    return json.dumps({"error": f"Tool '{tool_name}' is not available right now."})
+                import gigi.tool_executor as _tex
+                return await _tex.execute(tool_name, tool_input)
 
         except Exception as e:
             logger.error(f"SMS tool error ({tool_name}): {e}")
@@ -3201,251 +2750,10 @@ class GigiRingCentralBot:
     # =========================================================================
 
     async def _execute_dm_tool(self, tool_name: str, tool_input: dict) -> str:
-        """Execute a DM tool — full feature parity with Telegram bot."""
-        import psycopg2
-        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
-
+        """Execute a DM tool. RC-specific tools handled locally; shared tools delegate to tool_executor."""
         try:
             if tool_name == "get_client_current_status":
                 return self._get_client_current_status(tool_input.get("client_name", ""))
-
-            elif tool_name == "get_wellsky_clients":
-                search_name = tool_input.get("search_name", "")
-                active_only = tool_input.get("active_only", True)
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-                    if search_name:
-                        search_lower = f"%{search_name.lower()}%"
-                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email
-                                 FROM cached_patients WHERE (lower(full_name) LIKE %s
-                                 OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
-                        params = [search_lower, search_lower, search_lower]
-                        if active_only:
-                            sql += " AND is_active = true"
-                        sql += " ORDER BY full_name LIMIT 20"
-                        cur.execute(sql, params)
-                    else:
-                        sql = "SELECT id, first_name, last_name, full_name, phone, home_phone, email FROM cached_patients"
-                        if active_only:
-                            sql += " WHERE is_active = true"
-                        sql += " ORDER BY full_name LIMIT 100"
-                        cur.execute(sql)
-                    rows = cur.fetchall()
-                    clients = [{"id": str(r[0]), "name": r[3], "phone": r[4] or r[5] or ""} for r in rows]
-                    return json.dumps({"count": len(clients), "clients": clients})
-                finally:
-                    if conn:
-                        conn.close()
-
-            elif tool_name == "get_wellsky_caregivers":
-                search_name = tool_input.get("search_name", "")
-                active_only = tool_input.get("active_only", True)
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-                    if search_name:
-                        search_lower = f"%{search_name.lower()}%"
-                        sql = """SELECT id, first_name, last_name, full_name, phone, home_phone, email
-                                 FROM cached_practitioners WHERE (lower(full_name) LIKE %s
-                                 OR lower(first_name) LIKE %s OR lower(last_name) LIKE %s)"""
-                        params = [search_lower, search_lower, search_lower]
-                        if active_only:
-                            sql += " AND is_active = true"
-                        sql += " ORDER BY full_name LIMIT 20"
-                        cur.execute(sql, params)
-                    else:
-                        sql = "SELECT id, first_name, last_name, full_name, phone, home_phone, email FROM cached_practitioners"
-                        if active_only:
-                            sql += " WHERE is_active = true"
-                        sql += " ORDER BY full_name LIMIT 100"
-                        cur.execute(sql)
-                    rows = cur.fetchall()
-                    caregivers = [{"id": str(r[0]), "name": r[3], "phone": r[4] or r[5] or ""} for r in rows]
-                    return json.dumps({"count": len(caregivers), "caregivers": caregivers})
-                finally:
-                    if conn:
-                        conn.close()
-
-            elif tool_name == "get_wellsky_shifts":
-                days = min(tool_input.get("days", 7), 30)
-                past_days = min(tool_input.get("past_days", 0), 90)
-                open_only = tool_input.get("open_only", False)
-                client_id = tool_input.get("client_id")
-                caregiver_id = tool_input.get("caregiver_id")
-                if past_days > 0:
-                    date_from = date.today() - timedelta(days=past_days)
-                    date_to = date.today()
-                else:
-                    date_from = date.today()
-                    date_to = date.today() + timedelta(days=days)
-                conn = None
-                try:
-                    conn = psycopg2.connect(db_url)
-                    cur = conn.cursor()
-                    conditions = ["a.scheduled_start >= %s", "a.scheduled_start < %s"]
-                    params = [date_from, date_to]
-                    if client_id:
-                        conditions.append("a.patient_id = %s")
-                        params.append(client_id)
-                    if caregiver_id:
-                        conditions.append("a.practitioner_id = %s")
-                        params.append(caregiver_id)
-                    if open_only:
-                        conditions.append("(a.practitioner_id IS NULL OR a.status IN ('open', 'pending', 'proposed'))")
-                    where = " AND ".join(conditions)
-                    cur.execute(f"""
-                        SELECT a.id, a.scheduled_start, a.scheduled_end, a.status,
-                               p.full_name as client_name, pr.full_name as caregiver_name
-                        FROM cached_appointments a
-                        LEFT JOIN cached_patients p ON a.patient_id = p.id
-                        LEFT JOIN cached_practitioners pr ON a.practitioner_id = pr.id
-                        WHERE {where} ORDER BY a.scheduled_start LIMIT 50
-                    """, params)
-                    shift_list = []
-                    total_hours = 0
-                    for row in cur.fetchall():
-                        hours = round((row[2] - row[1]).total_seconds() / 3600, 1) if row[1] and row[2] else None
-                        if hours:
-                            total_hours += hours
-                        shift_list.append({
-                            "date": row[1].strftime("%a %m/%d") if row[1] else None,
-                            "start": row[1].strftime("%I:%M %p") if row[1] else None,
-                            "end": row[2].strftime("%I:%M %p") if row[2] else None,
-                            "status": row[3], "client": row[4] or "Unknown",
-                            "caregiver": row[5] or "Unassigned", "hours": hours
-                        })
-                    return json.dumps({"count": len(shift_list), "total_hours": round(total_hours, 1),
-                                       "date_range": f"{date_from} to {date_to}", "shifts": shift_list})
-                finally:
-                    if conn:
-                        conn.close()
-
-            elif tool_name == "get_weather":
-                location = tool_input.get("location", "")
-                if not location:
-                    return json.dumps({"error": "No location provided"})
-                import httpx
-                try:
-                    async with httpx.AsyncClient(timeout=5.0) as client:
-                        resp = await client.get(f"https://wttr.in/{location}?format=j1")
-                        if resp.status_code == 200:
-                            w = resp.json()
-                            current = w.get("current_condition", [{}])[0]
-                            forecast = w.get("weather", [{}])[0]
-                            area = w.get("nearest_area", [{}])[0].get("areaName", [{}])[0].get("value", location)
-                            return json.dumps({"location": area, "temp_f": current.get("temp_F"),
-                                "feels_like_f": current.get("FeelsLikeF"),
-                                "description": current.get("weatherDesc", [{}])[0].get("value"),
-                                "humidity": current.get("humidity"), "wind_mph": current.get("windspeedMiles"),
-                                "high_f": forecast.get("maxtempF"), "low_f": forecast.get("mintempF")})
-                except Exception as e:
-                    logger.warning(f"Weather API failed: {e}")
-                try:
-                    from ddgs import DDGS
-                    results = DDGS().text(f"current weather {location}", max_results=1)
-                    if results:
-                        return json.dumps({"location": location, "weather": results[0].get("body")})
-                except Exception:
-                    pass
-                return json.dumps({"error": "Weather service temporarily unavailable"})
-
-            elif tool_name == "web_search":
-                query = tool_input.get("query", "")
-                if not query:
-                    return json.dumps({"error": "No search query provided"})
-                try:
-                    from ddgs import DDGS
-                    results = DDGS().text(query, max_results=5)
-                    if results:
-                        formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "url": r.get("href", "")} for r in results]
-                        return json.dumps({"query": query, "results": formatted})
-                except Exception as e:
-                    logger.warning(f"Web search failed: {e}")
-                return json.dumps({"query": query, "message": "No results found."})
-
-            elif tool_name == "get_stock_price":
-                symbol = tool_input.get("symbol", "").upper()
-                if not symbol:
-                    return json.dumps({"error": "No stock symbol provided"})
-                import httpx
-                try:
-                    async with httpx.AsyncClient(timeout=5.0) as client:
-                        resp = await client.get(f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1d",
-                            headers={"User-Agent": "Mozilla/5.0 (CareAssist/1.0)"})
-                        if resp.status_code == 200:
-                            meta = resp.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
-                            price = meta.get("regularMarketPrice")
-                            if price:
-                                prev = meta.get("chartPreviousClose") or meta.get("previousClose", 0)
-                                change = price - prev if prev else 0
-                                pct = (change / prev * 100) if prev else 0
-                                return json.dumps({"symbol": symbol, "price": f"${price:.2f}",
-                                    "change": f"${change:+.2f}", "change_percent": f"{pct:+.2f}%"})
-                except Exception as e:
-                    logger.warning(f"Stock price error: {e}")
-                return json.dumps({"error": f"Could not find stock price for {symbol}"})
-
-            elif tool_name == "get_crypto_price":
-                symbol = tool_input.get("symbol", "").upper()
-                if not symbol:
-                    return json.dumps({"error": "No crypto symbol provided"})
-                crypto_map = {"BTC": "bitcoin", "BITCOIN": "bitcoin", "ETH": "ethereum",
-                    "DOGE": "dogecoin", "SOL": "solana", "XRP": "ripple", "ADA": "cardano",
-                    "AVAX": "avalanche-2", "LINK": "chainlink", "DOT": "polkadot"}
-                coin_id = crypto_map.get(symbol, symbol.lower())
-                import httpx
-                try:
-                    async with httpx.AsyncClient(timeout=5.0) as client:
-                        resp = await client.get(f"https://api.coingecko.com/api/v3/simple/price?ids={coin_id}&vs_currencies=usd&include_24hr_change=true")
-                        if resp.status_code == 200:
-                            data = resp.json()
-                            if coin_id in data:
-                                info = data[coin_id]
-                                return json.dumps({"symbol": symbol, "price": f"${info['usd']:,.2f}",
-                                    "24h_change": f"{info.get('usd_24h_change', 0):+.2f}%"})
-                except Exception as e:
-                    logger.warning(f"Crypto price error: {e}")
-                return json.dumps({"error": f"Could not find crypto price for {symbol}"})
-
-            elif tool_name == "search_concerts":
-                query = tool_input.get("query", "concerts in Denver")
-                try:
-                    from ddgs import DDGS
-                    results = DDGS().text(f"{query} concerts tickets 2026", max_results=5)
-                    if results:
-                        formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "url": r.get("href", "")} for r in results]
-                        return json.dumps({"query": query, "results": formatted})
-                except Exception as e:
-                    logger.warning(f"Concert search failed: {e}")
-                return json.dumps({"query": query, "message": "No concert results found."})
-
-            elif tool_name == "get_calendar_events":
-                try:
-                    from gigi.google_service import GoogleService
-                    google = GoogleService()
-                    if google.is_configured:
-                        days = tool_input.get("days", 1)
-                        events = google.get_calendar_events(days=min(days, 7))
-                        return json.dumps({"events": events or [], "count": len(events or [])})
-                except Exception as e:
-                    logger.warning(f"Calendar error: {e}")
-                return json.dumps({"error": "Google Calendar not available"})
-
-            elif tool_name == "search_emails":
-                try:
-                    from gigi.google_service import GoogleService
-                    google = GoogleService()
-                    if google.is_configured:
-                        query = tool_input.get("query", "is:unread")
-                        max_results = tool_input.get("max_results", 5)
-                        emails = google.search_emails(query=query, max_results=max_results)
-                        return json.dumps({"emails": emails or [], "count": len(emails or [])})
-                except Exception as e:
-                    logger.warning(f"Email search error: {e}")
-                return json.dumps({"error": "Gmail not available"})
 
             elif tool_name == "check_recent_sms":
                 hours = min(tool_input.get("hours", 12), 48)
@@ -3457,11 +2765,9 @@ class GigiRingCentralBot:
                     params = {
                         "messageType": "SMS",
                         "dateFrom": (datetime.utcnow() - timedelta(hours=hours)).isoformat(),
-                        "perPage": 50,
-                        "direction": "Inbound"
+                        "perPage": 50, "direction": "Inbound"
                     }
                     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
-                    # Poll Gigi's extension + all company line extensions
                     all_records = []
                     for ext_info in [{"ext_id": "~", "label": "307"}] + COMPANY_LINE_EXTENSIONS:
                         try:
@@ -3483,34 +2789,29 @@ class GigiRingCentralBot:
                         from_phone = sms.get("from", {}).get("phoneNumber", "")
                         if filter_phone and filter_phone not in from_phone:
                             continue
-                        # Skip messages from our own numbers
                         own_numbers = [RINGCENTRAL_FROM_NUMBER, "+13074598220", "+17194283999", "+13037571777"]
                         if from_phone in own_numbers:
                             continue
                         to_phone = sms.get("to", [{}])[0].get("phoneNumber", "")
                         sms_list.append({
-                            "from": from_phone,
-                            "to": to_phone,
+                            "from": from_phone, "to": to_phone,
                             "line": sms.get("_line", ""),
                             "text": sms.get("subject", ""),
                             "time": sms.get("creationTime", ""),
                             "read_status": sms.get("readStatus", ""),
                         })
-                    # Try to identify senders
                     for sms_item in sms_list:
                         try:
-                            from services.wellsky_fast_lookup import (
-                                identify_caller as fast_identify,
-                            )
+                            from services.wellsky_fast_lookup import identify_caller as fast_identify
                             caller = fast_identify(sms_item["from"])
                             if caller:
                                 sms_item["sender_name"] = caller.get("full_name", caller.get("name", ""))
                                 sms_item["sender_type"] = caller.get("type", "unknown")
                         except Exception:
                             pass
-                    # Sort by time descending
                     sms_list.sort(key=lambda x: x.get("time", ""), reverse=True)
-                    return json.dumps({"count": len(sms_list), "hours_back": hours, "lines_monitored": ["307-459-8220", "719-428-3999"], "messages": sms_list})
+                    return json.dumps({"count": len(sms_list), "hours_back": hours,
+                                       "lines_monitored": ["307-459-8220", "719-428-3999"], "messages": sms_list})
                 except Exception as e:
                     logger.error(f"check_recent_sms failed: {e}")
                     return json.dumps({"error": f"Failed to check SMS: {str(e)}"})
@@ -3532,7 +2833,6 @@ class GigiRingCentralBot:
                 caregiver_name = tool_input.get("caregiver_name", "Unknown")
                 reason = tool_input.get("reason", "not specified")
                 shift_date = tool_input.get("shift_date", date.today().isoformat())
-
                 note_title = f"CALL-OUT: {caregiver_name} - {reason}"
                 note_body = (
                     f"Via Team Chat\n"
@@ -3541,56 +2841,39 @@ class GigiRingCentralBot:
                     f"Shift date: {shift_date}\n"
                     f"ACTION: Find coverage immediately."
                 )
-
-                # 1. Care Alert: TaskLog on encounter (shows in Care Alerts on Dashboard)
-                # 2. Admin Task: escalation for coverage (shows in Tasks on Dashboard)
                 logged_to = "local only"
                 shift_client_id = None
                 try:
                     shifts = self.wellsky.get_shifts(
                         caregiver_id=caregiver_id,
-                        date_from=date.today(),
-                        date_to=date.today()
+                        date_from=date.today(), date_to=date.today()
                     )
                     for s in (shifts or []):
-                        sid = getattr(s, 'client_id', None) or (s.get('client_id') if isinstance(s, dict) else None)
+                        sid = getattr(s, "client_id", None) or (s.get("client_id") if isinstance(s, dict) else None)
                         if sid:
                             shift_client_id = str(sid)
-                            cname = getattr(s, 'client_name', None) or (s.get('client') if isinstance(s, dict) else None)
+                            cname = getattr(s, "client_name", None) or (s.get("client") if isinstance(s, dict) else None)
                             if cname:
                                 note_title = f"CALL-OUT: {caregiver_name} - {reason} — {cname} shift"
                             break
-
                     if shift_client_id:
                         success, result_msg = self.wellsky.add_note_to_client(
-                            client_id=shift_client_id,
-                            note=note_body,
-                            note_type="callout",
-                            source="gigi_manager",
-                            title=note_title
+                            client_id=shift_client_id, note=note_body,
+                            note_type="callout", source="gigi_manager", title=note_title
                         )
-                        if success and "WellSky" in str(result_msg):
-                            logged_to = "WellSky Care Alert"
-                        else:
-                            logged_to = "local (no encounter found)"
+                        logged_to = "WellSky Care Alert" if success and "WellSky" in str(result_msg) else "local (no encounter found)"
                     else:
                         logger.info(f"No shifts today for {caregiver_name} — call-out logged locally")
                 except Exception as e:
                     logger.warning(f"Call-out schedule lookup failed: {e}")
-
-                # Escalation task for coverage (separate from the Care Alert)
                 try:
                     self.wellsky.create_admin_task(
-                        title=f"COVERAGE NEEDED: {note_title}",
-                        description=note_body,
-                        priority="urgent",
-                        related_client_id=shift_client_id,
-                        related_caregiver_id=caregiver_id
+                        title=f"COVERAGE NEEDED: {note_title}", description=note_body,
+                        priority="urgent", related_client_id=shift_client_id, related_caregiver_id=caregiver_id
                     )
                     logged_to += " + Task"
                 except Exception as e:
                     logger.warning(f"Call-out admin task creation failed: {e}")
-
                 return json.dumps({"success": True, "message": f"Call-out logged for {caregiver_name} ({logged_to})."})
 
             elif tool_name == "identify_caller":
@@ -3598,9 +2881,7 @@ class GigiRingCentralBot:
                 if not phone:
                     return json.dumps({"error": "No phone number provided"})
                 try:
-                    from services.wellsky_fast_lookup import (
-                        identify_caller as fast_identify,
-                    )
+                    from services.wellsky_fast_lookup import identify_caller as fast_identify
                     caller = fast_identify(phone)
                     if caller:
                         type_map = {"practitioner": "caregiver", "patient": "client", "staff": "staff", "family": "family"}
@@ -3618,353 +2899,10 @@ class GigiRingCentralBot:
                     logger.warning(f"Fast caller ID failed: {e}")
                 return json.dumps({"identified_as": "unknown", "message": f"Phone number {phone} not found in records"})
 
-            elif tool_name == "save_memory":
-                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
-                    return json.dumps({"error": "Memory system not available"})
-                content = tool_input.get("content", "")
-                category = tool_input.get("category", "general")
-                importance = tool_input.get("importance", "medium")
-                impact_map = {"high": ImpactLevel.HIGH, "medium": ImpactLevel.MEDIUM, "low": ImpactLevel.LOW}
-                memory_id = _rc_memory_system.create_memory(
-                    content=content, memory_type=MemoryType.EXPLICIT_INSTRUCTION,
-                    source=MemorySource.EXPLICIT, confidence=1.0,
-                    category=category, impact_level=impact_map.get(importance, ImpactLevel.MEDIUM)
-                )
-                return json.dumps({"saved": True, "memory_id": memory_id, "content": content})
-
-            elif tool_name == "recall_memories":
-                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
-                    return json.dumps({"memories": [], "message": "Memory system not available"})
-                category = tool_input.get("category")
-                search_text = tool_input.get("search_text")
-                memories = _rc_memory_system.query_memories(category=category, min_confidence=0.3, limit=10)
-                if search_text:
-                    search_lower = search_text.lower()
-                    memories = [m for m in memories if search_lower in m.content.lower()]
-                results = [{"id": m.id, "content": m.content, "category": m.category,
-                           "confidence": float(m.confidence), "type": m.type.value} for m in memories]
-                return json.dumps({"memories": results, "count": len(results)})
-
-            elif tool_name == "forget_memory":
-                if not RC_MEMORY_AVAILABLE or not _rc_memory_system:
-                    return json.dumps({"error": "Memory system not available"})
-                memory_id = tool_input.get("memory_id", "")
-                memory = _rc_memory_system.get_memory(memory_id)
-                if not memory:
-                    return json.dumps({"error": f"Memory {memory_id} not found"})
-                with _rc_memory_system._get_connection() as conn:
-                    with conn.cursor() as cur:
-                        cur.execute("UPDATE gigi_memories SET status = 'archived' WHERE id = %s", (memory_id,))
-                        _rc_memory_system._log_event(cur, memory_id, "archived", memory.confidence, memory.confidence, "User requested forget")
-                    conn.commit()
-                return json.dumps({"archived": True, "memory_id": memory_id, "content": memory.content})
-
-            elif tool_name == "search_memory_logs":
-                from gigi.memory_logger import MemoryLogger
-                ml = MemoryLogger()
-                query = tool_input.get("query", "")
-                days_back = tool_input.get("days_back", 30)
-                results = ml.search_logs(query, days_back=days_back)
-                return json.dumps({"query": query, "results": results[:10], "total": len(results)})
-
-            elif tool_name == "browse_webpage":
-                # Redirect to browse_with_claude (replaces old Playwright path)
-                from gigi.claude_code_tools import browse_with_claude
-                url = tool_input.get("url", "")
-                result = await browse_with_claude(task=f"Navigate to {url} and extract the main text content of the page.", url=url)
-                return json.dumps(result)
-
-            elif tool_name == "take_screenshot":
-                # Redirect to browse_with_claude (replaces old Playwright path)
-                from gigi.claude_code_tools import browse_with_claude
-                url = tool_input.get("url", "")
-                result = await browse_with_claude(task=f"Navigate to {url} and take a screenshot. Describe what the page looks like.", url=url)
-                return json.dumps(result)
-
-            # get_morning_briefing REMOVED — morning briefing permanently deleted
-
-            elif tool_name == "get_ar_report":
-                from sales.quickbooks_service import QuickBooksService
-                qb = QuickBooksService()
-                loaded = await asyncio.to_thread(qb.load_tokens_from_db)
-                if not loaded:
-                    return json.dumps({"error": "QuickBooks not connected. Visit https://portal.coloradocareassist.com/auth/quickbooks to authorize."})
-                detail_level = tool_input.get("detail_level", "summary")
-                result = await asyncio.to_thread(qb.generate_ar_report, detail_level)
-                if result.get("success"):
-                    return result["report"]
-                return json.dumps(result)
-
-            elif tool_name == "deep_research":
-                question = tool_input.get("question", "")
-                try:
-                    import httpx
-                    async with httpx.AsyncClient(timeout=150.0) as client:
-                        resp = await client.post(
-                            "http://localhost:3002/api/research/deep",
-                            json={"question": question}
-                        )
-                        data = resp.json()
-                        answer = data.get("answer", "Research unavailable.")
-                        confidence = data.get("confidence", 0)
-                        tools_used = data.get("metadata", {}).get("tools_used", [])
-                        duration = data.get("metadata", {}).get("total_duration_seconds", 0)
-                        return f"{answer}\n\n---\nConfidence: {confidence:.0%} | Data sources: {len(tools_used)} | Research time: {duration:.0f}s"
-                except Exception as e:
-                    logger.error(f"Deep research failed: {e}")
-                    return json.dumps({"error": f"Elite Trading research unavailable: {e}"})
-
-            elif tool_name == "get_weather_arb_status":
-                try:
-                    import httpx
-                    result = {"polymarket": {"status": "offline"}, "kalshi": {"status": "offline"}}
-                    async with httpx.AsyncClient(timeout=15.0) as client:
-                        try:
-                            status_resp, pnl_resp = await asyncio.gather(
-                                client.get("http://127.0.0.1:3010/status"),
-                                client.get("http://127.0.0.1:3010/pnl"),
-                                return_exceptions=True,
-                            )
-                            poly = {"status": "online"}
-                            if not isinstance(status_resp, Exception) and status_resp.status_code == 200:
-                                st = status_resp.json()
-                                sniper = st.get("sniper", {})
-                                poly["running"] = bool(st.get("running"))
-                                poly["scans"] = sniper.get("scan_count", 0)
-                            if not isinstance(pnl_resp, Exception) and pnl_resp.status_code == 200:
-                                data = pnl_resp.json()
-                                poly["portfolio_value"] = data.get("portfolio_value", 0)
-                                poly["cash"] = data.get("cash", 0)
-                                poly["unrealized_pnl"] = data.get("unrealized_pnl", 0)
-                                poly["num_positions"] = len(data.get("positions", []))
-                                poly["positions"] = [
-                                    {"title": p.get("title", "?")[:60], "pnl": round(p.get("pnl", 0), 2), "pnl_pct": round(p.get("pnl_pct", 0), 1)}
-                                    for p in data.get("positions", [])[:10]
-                                ]
-                            result["polymarket"] = poly
-                        except Exception:
-                            pass
-                        try:
-                            kalshi_resp = await client.get("http://127.0.0.1:3011/pnl")
-                            if kalshi_resp.status_code == 200:
-                                data = kalshi_resp.json()
-                                result["kalshi"] = {
-                                    "status": "online",
-                                    "portfolio_value": data.get("portfolio_value", 0),
-                                    "cash": data.get("cash", 0),
-                                    "unrealized_pnl": data.get("unrealized_pnl", 0),
-                                    "num_positions": len(data.get("positions", [])),
-                                    "positions": [
-                                        {"ticker": p.get("ticker", "?"), "count": p.get("count", 0), "pnl": round(p.get("pnl", 0), 2)}
-                                        for p in data.get("positions", [])[:10]
-                                    ]
-                                }
-                        except Exception:
-                            pass
-                    return json.dumps(result)
-                except Exception as e:
-                    logger.error(f"Weather arb status failed: {e}")
-                    return json.dumps({"error": f"Weather bots unavailable: {str(e)}"})
-
-            elif tool_name == "watch_tickets":
-                from gigi.ticket_monitor import create_watch
-                result = await asyncio.to_thread(create_watch, tool_input.get("artist", ""), tool_input.get("venue"), tool_input.get("city", "Denver"))
-                return json.dumps(result)
-
-            elif tool_name == "list_ticket_watches":
-                from gigi.ticket_monitor import list_watches
-                return json.dumps(await asyncio.to_thread(list_watches))
-
-            elif tool_name == "remove_ticket_watch":
-                from gigi.ticket_monitor import remove_watch
-                return json.dumps(await asyncio.to_thread(remove_watch, int(tool_input.get("watch_id", 0))))
-
-            elif tool_name == "clock_in_shift":
-                appointment_id = tool_input.get("appointment_id", "")
-                caregiver_name = tool_input.get("caregiver_name", "")
-                notes = tool_input.get("notes", "Clocked in via Gigi DM")
-                if not appointment_id:
-                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
-                def _dm_clock_in():
-                    from services.wellsky_service import WellSkyService
-                    ws = WellSkyService()
-                    success, message = ws.clock_in_shift(appointment_id, notes=notes)
-                    return {"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name}
-                return json.dumps(await asyncio.to_thread(_dm_clock_in))
-
-            elif tool_name == "clock_out_shift":
-                appointment_id = tool_input.get("appointment_id", "")
-                caregiver_name = tool_input.get("caregiver_name", "")
-                notes = tool_input.get("notes", "Clocked out via Gigi DM")
-                if not appointment_id:
-                    return json.dumps({"error": "Missing appointment_id. Use get_wellsky_shifts first."})
-                def _dm_clock_out():
-                    from services.wellsky_service import WellSkyService
-                    ws = WellSkyService()
-                    success, message = ws.clock_out_shift(appointment_id, notes=notes)
-                    return {"success": success, "message": message, "appointment_id": appointment_id, "caregiver_name": caregiver_name}
-                return json.dumps(await asyncio.to_thread(_dm_clock_out))
-
-            elif tool_name == "find_replacement_caregiver":
-                shift_id = tool_input.get("shift_id", "")
-                original_caregiver_id = tool_input.get("original_caregiver_id", "")
-                reason = tool_input.get("reason", "called out")
-                if not shift_id or not original_caregiver_id:
-                    return json.dumps({"error": "Missing shift_id or original_caregiver_id"})
-                def _dm_find_replacement():
-                    try:
-                        from sales.shift_filling.engine import shift_filling_engine
-                        campaign = shift_filling_engine.process_calloff(
-                            shift_id=shift_id, caregiver_id=original_caregiver_id,
-                            reason=reason, reported_by="gigi_dm"
-                        )
-                        if not campaign:
-                            return {"success": False, "error": "Could not create replacement campaign"}
-                        return {
-                            "success": True, "campaign_id": campaign.id,
-                            "status": campaign.status.value if hasattr(campaign.status, 'value') else str(campaign.status),
-                            "caregivers_contacted": campaign.total_contacted,
-                            "message": f"Replacement search started. Contacting {campaign.total_contacted} caregivers via SMS."
-                        }
-                    except ImportError:
-                        return {"error": "Shift filling engine not available"}
-                    except Exception as e:
-                        return {"error": f"Shift filling failed: {str(e)}"}
-                return json.dumps(await asyncio.to_thread(_dm_find_replacement))
-
-            elif tool_name == "get_task_board":
-                def _dm_read_board():
-                    try:
-                        with open(os.path.expanduser("~/Task Board.md"), "r") as f:
-                            return {"task_board": f.read()}
-                    except FileNotFoundError:
-                        return {"task_board": "(empty)"}
-                return json.dumps(await asyncio.to_thread(_dm_read_board))
-
-            elif tool_name == "add_task":
-                task_text = tool_input.get("task", "").strip()
-                section = tool_input.get("section", "Today").strip()
-                if not task_text:
-                    return json.dumps({"error": "No task text provided"})
-                valid_sections = ["Today", "Soon", "Later", "Waiting", "Agenda", "Inbox", "Reference"]
-                section_match = next((s for s in valid_sections if s.lower() == section.lower()), "Today")
-                def _dm_add_task():
-                    try:
-                        path = os.path.expanduser("~/Task Board.md")
-                        with open(path, "r") as f:
-                            content = f.read()
-                        marker = f"## {section_match}\n"
-                        if marker in content:
-                            idx = content.index(marker) + len(marker)
-                            rest = content[idx:]
-                            if rest.startswith("-\n") or rest.startswith("- \n"):
-                                content = content[:idx] + f"- [ ] {task_text}\n" + rest[rest.index("\n") + 1:]
-                            else:
-                                content = content[:idx] + f"- [ ] {task_text}\n" + rest
-                        else:
-                            content += f"\n## {section_match}\n- [ ] {task_text}\n"
-                        with open(path, "w") as f:
-                            f.write(content)
-                        return {"success": True, "task": task_text, "section": section_match}
-                    except Exception as e:
-                        return {"error": f"Failed: {str(e)}"}
-                return json.dumps(await asyncio.to_thread(_dm_add_task))
-
-            elif tool_name == "complete_task":
-                task_text = tool_input.get("task_text", "").strip().lower()
-                if not task_text:
-                    return json.dumps({"error": "No task text provided"})
-                def _dm_complete_task():
-                    try:
-                        path = os.path.expanduser("~/Task Board.md")
-                        with open(path, "r") as f:
-                            lines = f.readlines()
-                        completed = False
-                        completed_task = ""
-                        new_lines = []
-                        for line in lines:
-                            if not completed and "- [ ]" in line and task_text in line.lower():
-                                completed_task = line.replace("- [ ]", "- [x]").strip()
-                                completed = True
-                            else:
-                                new_lines.append(line)
-                        if not completed:
-                            return {"error": f"No uncompleted task matching '{task_text}'"}
-                        content = "".join(new_lines)
-                        done_marker = "## Done\n"
-                        if done_marker in content:
-                            idx = content.index(done_marker) + len(done_marker)
-                            rest = content[idx:]
-                            if rest.startswith("-\n") or rest.startswith("- \n"):
-                                content = content[:idx] + completed_task + "\n" + rest[rest.index("\n") + 1:]
-                            else:
-                                content = content[:idx] + completed_task + "\n" + rest
-                        else:
-                            content += f"\n## Done\n{completed_task}\n"
-                        with open(path, "w") as f:
-                            f.write(content)
-                        return {"success": True, "completed": completed_task}
-                    except Exception as e:
-                        return {"error": f"Failed: {str(e)}"}
-                return json.dumps(await asyncio.to_thread(_dm_complete_task))
-
-            elif tool_name == "capture_note":
-                note = tool_input.get("note", "").strip()
-                if not note:
-                    return json.dumps({"error": "No note provided"})
-                def _dm_capture_note():
-                    try:
-                        path = os.path.expanduser("~/Scratchpad.md")
-                        try:
-                            with open(path, "r") as f:
-                                content = f.read()
-                        except FileNotFoundError:
-                            content = "# Scratchpad\n\n---\n"
-                        from datetime import datetime as dt
-                        timestamp = dt.now().strftime("%I:%M %p")
-                        content = content.rstrip() + f"\n- {note} ({timestamp})\n"
-                        with open(path, "w") as f:
-                            f.write(content)
-                        return {"success": True, "note": note}
-                    except Exception as e:
-                        return {"error": f"Failed: {str(e)}"}
-                return json.dumps(await asyncio.to_thread(_dm_capture_note))
-
-            elif tool_name == "get_daily_notes":
-                target_date = tool_input.get("date", "")
-                def _dm_read_notes():
-                    try:
-                        import glob as g
-                        import re as _re
-                        from datetime import datetime as dt
-                        d = target_date if _re.match(r"^\d{4}-\d{2}-\d{2}$", target_date) else dt.now().strftime("%Y-%m-%d")
-                        matches = g.glob(os.path.join(os.path.expanduser("~/Daily Notes"), f"{d}*"))
-                        if matches:
-                            with open(matches[0], "r") as f:
-                                return {"date": d, "notes": f.read()}
-                        return {"date": d, "notes": "(no daily notes for this date)"}
-                    except Exception as e:
-                        return {"error": f"Failed: {str(e)}"}
-                return json.dumps(await asyncio.to_thread(_dm_read_notes))
-
-            # === GOOGLE WORKSPACE ADMIN (GAM) — READ ONLY ===
-            elif tool_name == "query_workspace":
-                from gigi.gam_tools import query_workspace
-                result = await query_workspace(
-                    command=tool_input.get("command", ""),
-                )
-                return json.dumps(result)
-
+            # --- All other tools: delegate to shared executor ---
             else:
-                # Delegate to Telegram bot for shared tools not natively handled
-                try:
-                    if not hasattr(self, '_shared_tele_bot'):
-                        from gigi.telegram_bot import GigiTelegramBot
-                        self._shared_tele_bot = GigiTelegramBot()
-                    return await self._shared_tele_bot.execute_tool(tool_name, tool_input)
-                except Exception as e:
-                    logger.error(f"Delegated DM tool {tool_name} failed: {e}")
-                    return json.dumps({"error": f"Tool '{tool_name}' is not available right now."})
+                import gigi.tool_executor as _tex
+                return await _tex.execute(tool_name, tool_input)
 
         except Exception as e:
             logger.error(f"DM tool execution error ({tool_name}): {e}")
