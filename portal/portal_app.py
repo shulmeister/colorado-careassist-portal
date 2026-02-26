@@ -2404,7 +2404,11 @@ async def assessment_page():
 
 @app.post("/api/client-assessments/sync")
 async def sync_client_assessment(request: Request):
-    """Receive a synced assessment from the offline form and store in PostgreSQL."""
+    """Receive a synced assessment from the offline form.
+    Stores in PostgreSQL, uploads to Google Drive, and creates WellSky prospect.
+    """
+    import json as _json
+
     import psycopg2
     try:
         payload = await request.json()
@@ -2421,10 +2425,9 @@ async def sync_client_assessment(request: Request):
         signature = data.pop("signature", "")
         assessment_date = data.get("assessment_date") or None
 
-        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        db_url = os.getenv("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
         conn = psycopg2.connect(db_url)
         cur = conn.cursor()
-        import json as _json
 
         cur.execute("""
             INSERT INTO client_assessments (local_id, client_name, contact_name, assessment_date,
@@ -2451,12 +2454,169 @@ async def sync_client_assessment(request: Request):
             updated_at,
         ))
         conn.commit()
+
+        cur.execute("SELECT id FROM client_assessments WHERE local_id = %s", (local_id,))
+        row = cur.fetchone()
+        assessment_db_id = row[0] if row else None
+
+        logger.info(f"Synced assessment to DB: {client_name} (local_id={local_id})")
+
+        # ── Google Drive upload (best-effort) ────────────────────────────────
+        google_drive_link = None
+        file_bytes = None  # shared with WellSky DocumentReference upload below
+        try:
+            from gigi.google_service import google_service
+            if google_service._creds:
+                from portal.pdf_generator import generate_client_assessment_pdf
+                file_bytes = generate_client_assessment_pdf(data, {
+                    "client_name": client_name,
+                    "assessment_date": assessment_date,
+                    "taken_by": data.get("taken_by"),
+                    "referral_source": data.get("referral"),
+                })
+                safe_date = (str(assessment_date) if assessment_date else "unknown").replace("-", "_")
+                safe_name = client_name.replace("/", "_").replace("\\", "_")
+                filename = f"Assessment {safe_name} {safe_date}.pdf"
+
+                root_folder_id = os.getenv("GOOGLE_DRIVE_CLIENT_FOLDER_ID", "root")
+                folder_id = google_service.drive_get_or_create_folder(root_folder_id, "Client Assessments")
+                if folder_id:
+                    result = google_service.drive_upload_file(file_bytes, filename, folder_id, "application/pdf")
+                    if result:
+                        google_drive_link = result.get("url") or result.get("webViewLink")
+                        cur2 = conn.cursor()
+                        cur2.execute("UPDATE client_assessments SET google_drive_link = %s WHERE local_id = %s",
+                                     (google_drive_link, local_id))
+                        conn.commit()
+                        cur2.close()
+                        logger.info(f"Assessment uploaded to Drive: {filename} → {google_drive_link}")
+        except Exception as gdrive_err:
+            logger.warning(f"Google Drive upload failed (non-fatal): {gdrive_err}")
+
+        # ── WellSky prospect creation + update (best-effort) ────────────────
+        wellsky_id = None
+        try:
+            from services.wellsky_service import WellSkyService
+            ws = WellSkyService()
+            if not ws.is_mock_mode:
+                import re as _re
+                # Split client_name into first/last
+                name_parts = client_name.strip().split()
+                first_name = name_parts[0] if name_parts else client_name
+                last_name = " ".join(name_parts[1:]) if len(name_parts) > 1 else ""
+
+                phone = (data.get("client_cell_phone") or data.get("client_home_phone") or
+                         data.get("contact_phone") or "").strip()
+                address = (data.get("client_address") or data.get("assessment_address") or "").strip()
+                dob = data.get("client_dob", "")
+
+                # Normalize DOB to YYYY-MM-DD (handles MM/DD/YYYY input)
+                birth_date = None
+                if dob:
+                    m = _re.match(r'^(\d{1,2})/(\d{1,2})/(\d{4})$', dob.strip())
+                    if m:
+                        birth_date = f"{m.group(3)}-{m.group(1).zfill(2)}-{m.group(2).zfill(2)}"
+                    elif _re.match(r'^\d{4}-\d{2}-\d{2}$', dob.strip()):
+                        birth_date = dob.strip()
+
+                # Build rich notes including Drive PDF link
+                notes_parts = [
+                    f"Assessment completed {assessment_date or 'unknown date'}.",
+                    f"Taken by: {data.get('taken_by', 'unknown')}.",
+                    f"Referral: {data.get('referral', '')}.",
+                ]
+                diag = data.get("diagnosis") or data.get("c02_diagnosis", "")
+                if diag:
+                    notes_parts.append(f"Diagnosis: {diag}.")
+                if data.get("care_goal"):
+                    notes_parts.append(f"Goal: {data.get('care_goal')[:150]}")
+                if google_drive_link:
+                    notes_parts.append(f"Assessment PDF: {google_drive_link}")
+                notes_text = " ".join(notes_parts)
+
+                prospect_data = {
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "phone": phone,
+                    "address": address,
+                    "city": "",
+                    "state": "CO",
+                    "zip_code": "",
+                    "referral_source": data.get("referral", ""),
+                    "referral_date": str(assessment_date) if assessment_date else None,
+                    "status": "assessment_completed",
+                    "notes": notes_text,
+                }
+                prospect = ws.create_prospect(prospect_data)
+                if prospect:
+                    wellsky_id = prospect.id
+                    cur3 = conn.cursor()
+                    cur3.execute("UPDATE client_assessments SET wellsky_id = %s WHERE local_id = %s",
+                                 (wellsky_id, local_id))
+                    conn.commit()
+                    cur3.close()
+                    logger.info(f"WellSky prospect created: {wellsky_id} for {client_name}")
+
+                    # Second pass: set status=30 + full demographics + notes with PDF link
+                    ws.update_patient(
+                        str(wellsky_id),
+                        phone=phone or None,
+                        address=address or None,
+                        state="CO",
+                        birth_date=birth_date,
+                        status_id=30,
+                        is_client=False,
+                        notes=notes_text,
+                    )
+                    logger.info(f"WellSky patient {wellsky_id} updated: status=30, demographics set")
+
+                    # Create care plan activities from required_tasks/care_plan (best-effort)
+                    care_plan_text = (
+                        data.get("required_tasks") or data.get("care_plan") or
+                        data.get("services_requested") or ""
+                    )
+                    if care_plan_text:
+                        try:
+                            activities = ws.build_care_plan_from_text(care_plan_text)
+                            if activities:
+                                ws.create_care_plan_activities(str(wellsky_id), activities)
+                                logger.info(f"WellSky care plan created for {wellsky_id}: {len(activities)} activities")
+                        except Exception as cp_err:
+                            logger.warning(f"Care plan creation failed (non-fatal): {cp_err}")
+
+                    # Upload assessment PDF as DocumentReference to WellSky (best-effort)
+                    # NOTE: WellSky DocumentReference API has a known server-side 500 error for
+                    # this agency. Attempting anyway — will succeed if/when WellSky fixes it.
+                    if file_bytes:
+                        try:
+                            import base64 as _b64
+                            pdf_b64 = _b64.b64encode(file_bytes).decode("utf-8")
+                            safe_date = (str(assessment_date) if assessment_date else "unknown")
+                            ws.create_document_reference(
+                                patient_id=str(wellsky_id),
+                                document_type="Client Assessment",
+                                content_type="application/pdf",
+                                data_base64=pdf_b64,
+                                description=f"CCA Client Assessment - {client_name} - {safe_date}",
+                                filename=f"Assessment_{client_name.replace(' ', '_')}_{safe_date.replace('-', '_')}.pdf",
+                            )
+                        except Exception as dr_err:
+                            logger.warning(f"DocumentReference upload failed (non-fatal): {dr_err}")
+
+        except Exception as ws_err:
+            logger.warning(f"WellSky prospect creation failed (non-fatal): {ws_err}")
+
         cur.close()
         conn.close()
 
-        logger.info(f"Synced assessment: {client_name} (local_id={local_id})")
         return JSONResponse(
-            {"success": True, "message": f"Assessment for {client_name} synced"},
+            {
+                "success": True,
+                "id": assessment_db_id,
+                "google_drive_link": google_drive_link,
+                "wellsky_id": wellsky_id,
+                "message": f"Assessment for {client_name} synced",
+            },
             headers={"Access-Control-Allow-Origin": "*"},
         )
 
@@ -2592,63 +2752,19 @@ async def sync_monitoring_visit(request: Request):
         try:
             from gigi.google_service import google_service
             if google_service._creds:
-                # Build a simple text-based report for Drive
-                date_str = visit_date or "unknown"
-                lines = [
-                    "MONITORING VISIT REPORT",
-                    f"{'='*50}",
-                    f"Client: {client_name}",
-                    f"Date: {date_str}",
-                    f"Submitted By: {submitted_by}",
-                    "",
-                    "CARE PLAN COMPLIANCE",
-                    "-" * 30,
-                    f"Care plan followed: {data.get('care_plan_followed', 'N/A')}",
-                    f"Comments: {data.get('care_plan_comments', 'N/A')}",
-                    f"Client satisfied: {data.get('client_satisfied', 'N/A')}",
-                    f"Satisfaction comments: {data.get('satisfaction_comments', 'N/A')}",
-                    "",
-                    f"PRIMARY CAREGIVER: {data.get('caregiver1_name', 'N/A')}",
-                    "-" * 30,
-                    f"Companionship: {data.get('caregiver1_companionship', 'N/A')}",
-                    f"Housekeeping: {data.get('caregiver1_housekeeping', 'N/A')}",
-                    f"Meal Preparation: {data.get('caregiver1_meal_prep', 'N/A')}",
-                    f"Personal Care: {data.get('caregiver1_personal_care', 'N/A')}",
-                    f"Caring: {data.get('caregiver1_caring', 'N/A')}",
-                    f"Professional: {data.get('caregiver1_professional', 'N/A')}",
-                    f"Comments: {data.get('caregiver1_comments', 'N/A')}",
-                ]
-                cg2_name = data.get("caregiver2_name", "").strip()
-                if cg2_name:
-                    lines += [
-                        "",
-                        f"SECOND CAREGIVER: {cg2_name}",
-                        "-" * 30,
-                        f"Companionship: {data.get('caregiver2_companionship', 'N/A')}",
-                        f"Housekeeping: {data.get('caregiver2_housekeeping', 'N/A')}",
-                        f"Meal Preparation: {data.get('caregiver2_meal_prep', 'N/A')}",
-                        f"Personal Care: {data.get('caregiver2_personal_care', 'N/A')}",
-                        f"Caring: {data.get('caregiver2_caring', 'N/A')}",
-                        f"Professional: {data.get('caregiver2_professional', 'N/A')}",
-                        f"Comments: {data.get('caregiver2_comments', 'N/A')}",
-                    ]
-                lines += [
-                    "",
-                    "OVERALL COMMENTS",
-                    "-" * 30,
-                    f"{data.get('overall_comments', 'N/A')}",
-                ]
-                report_text = "\n".join(lines)
-                file_bytes = report_text.encode("utf-8")
+                from portal.pdf_generator import generate_monitoring_visit_pdf
+                file_bytes = generate_monitoring_visit_pdf(data, {
+                    "client_name": client_name,
+                    "visit_date": visit_date,
+                    "submitted_by": submitted_by,
+                })
                 safe_date = (visit_date or "unknown").replace("-", "_")
-                filename = f"MV {client_name} {safe_date}.txt"
+                filename = f"MV {client_name} {safe_date}.pdf"
 
-                # Find or create "Monitoring Visits" folder in Drive root
-                # Use a known parent folder or root
                 root_folder_id = os.getenv("GOOGLE_DRIVE_MV_FOLDER_ID", "root")
                 folder_id = google_service.drive_get_or_create_folder(root_folder_id, "Monitoring Visits")
                 if folder_id:
-                    result = google_service.drive_upload_file(file_bytes, filename, folder_id, "text/plain")
+                    result = google_service.drive_upload_file(file_bytes, filename, folder_id, "application/pdf")
                     if result:
                         google_drive_link = result.get("url") or result.get("webViewLink")
                         # Update the DB record with the drive link
@@ -2660,6 +2776,28 @@ async def sync_monitoring_visit(request: Request):
                         logger.info(f"MV uploaded to Drive: {filename} → {google_drive_link}")
         except Exception as gdrive_err:
             logger.warning(f"Google Drive upload failed (non-fatal): {gdrive_err}")
+
+        # ── WellSky Care Alert (best-effort) ─────────────────────────────────
+        if client_id:
+            try:
+                from services.wellsky_service import WellSkyService
+                ws = WellSkyService()
+                if not ws.is_mock_mode:
+                    note = (
+                        f"Monitoring visit completed on {visit_date or 'unknown date'}. "
+                        f"Submitted by: {submitted_by}. "
+                        f"Care plan followed: {data.get('care_plan_followed', 'N/A')}. "
+                        f"Client satisfied: {data.get('client_satisfied', 'N/A')}."
+                    )
+                    ws.add_note_to_client(
+                        client_id, note,
+                        note_type="monitoring_visit",
+                        source="portal",
+                        title=f"Monitoring Visit – {visit_date or 'unknown'}",
+                    )
+                    logger.info(f"WellSky Care Alert created for monitoring visit: {client_name}")
+            except Exception as ws_err:
+                logger.warning(f"WellSky Care Alert failed (non-fatal): {ws_err}")
 
         cur.close()
         conn.close()
@@ -2886,84 +3024,19 @@ async def sync_incident_report(request: Request):
         try:
             from gigi.google_service import google_service
             if google_service._creds:
-                def _fmt_time(t):
-                    """Convert 24-hour 'HH:MM' to '12:MM AM/PM'."""
-                    if not t or t == "N/A":
-                        return "N/A"
-                    try:
-                        h, m = t.split(":")[:2]
-                        h = int(h)
-                        suffix = "AM" if h < 12 else "PM"
-                        h = h % 12 or 12
-                        return f"{h}:{m} {suffix}"
-                    except Exception:
-                        return t
-
-                def _get_radio(key):
-                    """Get radio value — handles both 'key' and legacy 'radio_key' format."""
-                    return data.get(key) or data.get(f"radio_{key}") or ""
-
-                date_str = incident_date or "unknown"
-                employee_str = data.get("employee_name", "").strip()
-                lines = [
-                    "GENERAL INCIDENT REPORT",
-                    f"{'='*50}",
-                    f"Client: {client_name}",
-                    f"Birth Date: {client_birth_date or 'N/A'}",
-                    f"Employee: {employee_str or 'N/A'}",
-                    "",
-                    "INCIDENT",
-                    "-" * 30,
-                    f"1. Date: {incident_date or 'N/A'}  Time: {_fmt_time(data.get('incident_time', 'N/A'))}",
-                    f"2. Reported Date: {data.get('reported_date', 'N/A')}  Time: {_fmt_time(data.get('reported_time', 'N/A'))}",
-                    f"3. Reported by: {data.get('reported_by_name', 'N/A')} ({data.get('reported_by_role', 'N/A')})",
-                    f"4. Reported to: {data.get('reported_to_name', 'N/A')} ({data.get('reported_to_role', 'N/A')})",
-                    f"5. Location: {data.get('location', 'N/A')}",
-                    "6. Other Individuals:",
-                ]
-                for i in range(1, 4):
-                    n = data.get(f"other{i}_name", "").strip()
-                    r = data.get(f"other{i}_role", "").strip()
-                    if n:
-                        lines.append(f"   - {n} ({r})")
-                lines += [
-                    "7. Witness Description:",
-                    f"   {data.get('witness_description', 'N/A')}",
-                    f"8. Resulted in injury: {_get_radio('resulted_in_injury') or 'N/A'}",
-                ]
-                if _get_radio("resulted_in_injury") == "Yes":
-                    lines.append(f"   Injury: {data.get('injury_description', 'N/A')}")
-                lines += [
-                    "",
-                    "INVESTIGATION / FINDINGS",
-                    "-" * 30,
-                    "9. Supervisor Comments:",
-                    f"   {data.get('supervisor_comments', 'N/A')}",
-                    f"10. Preventable: {_get_radio('was_preventable') or 'N/A'}",
-                ]
-                if _get_radio("was_preventable") == "Yes":
-                    lines.append(f"    Corrective Actions: {data.get('corrective_actions', 'N/A')}")
-                lines += [
-                    f"11. Reported to External Agency: {_get_radio('reported_to_external') or 'N/A'}",
-                ]
-                if _get_radio("reported_to_external") == "Yes":
-                    lines += [
-                        f"    Agency: {data.get('external_agency_name', 'N/A')}",
-                        f"    Reported by: {data.get('external_reported_by', 'N/A')} ({data.get('external_reported_role', 'N/A')})",
-                    ]
-                lines += [
-                    "12. Manager Review:",
-                    f"   {data.get('manager_review', 'N/A')}",
-                ]
-                report_text = "\n".join(lines)
-                file_bytes = report_text.encode("utf-8")
+                from portal.pdf_generator import generate_incident_report_pdf
+                file_bytes = generate_incident_report_pdf(data, {
+                    "client_name": client_name,
+                    "incident_date": incident_date,
+                    "client_birth_date": client_birth_date,
+                })
                 safe_date = (str(incident_date) if incident_date else "unknown").replace("-", "_")
-                filename = f"IR {client_name} {safe_date}.txt"
+                filename = f"IR {client_name} {safe_date}.pdf"
 
                 hr_folder_id = os.getenv("GOOGLE_DRIVE_HR_FOLDER_ID", "root")
                 ir_folder_id = google_service.drive_get_or_create_folder(hr_folder_id, "Incident Reports")
                 if ir_folder_id:
-                    result = google_service.drive_upload_file(file_bytes, filename, ir_folder_id, "text/plain")
+                    result = google_service.drive_upload_file(file_bytes, filename, ir_folder_id, "application/pdf")
                     if result:
                         google_drive_link = result.get("url") or result.get("webViewLink")
                         cur2 = conn.cursor()
@@ -2974,6 +3047,45 @@ async def sync_incident_report(request: Request):
                         logger.info(f"IR uploaded to Drive: {filename} → {google_drive_link}")
         except Exception as gdrive_err:
             logger.warning(f"Google Drive IR upload failed (non-fatal): {gdrive_err}")
+
+        # ── WellSky Care Alert + Admin Task (best-effort) ────────────────────
+        if client_id:
+            try:
+                from datetime import date as _date
+
+                from services.wellsky_service import WellSkyService
+                ws = WellSkyService()
+                if not ws.is_mock_mode:
+                    injury = data.get("resulted_in_injury") or data.get("radio_resulted_in_injury", "")
+                    note = (
+                        f"Incident report filed for {incident_date or 'unknown date'}. "
+                        f"Reported by: {data.get('reported_by_name', 'N/A')} ({data.get('reported_by_role', 'N/A')}). "
+                        f"Location: {data.get('location', 'N/A')}. "
+                        f"Resulted in injury: {injury}. "
+                        f"Witness: {data.get('witness_description', 'N/A')}."
+                    )
+                    ws.add_note_to_client(
+                        client_id, note,
+                        note_type="incident_report",
+                        source="portal",
+                        title=f"Incident Report – {incident_date or 'unknown'}",
+                    )
+                    # Admin Task for follow-up
+                    ws.create_admin_task(
+                        title=f"Incident Report Review – {client_name} ({incident_date or 'unknown'})",
+                        description=(
+                            f"An incident report was submitted for {client_name}. "
+                            f"Injury: {injury}. "
+                            f"Reported by: {data.get('reported_by_name', 'N/A')}. "
+                            f"Please review and complete corrective actions."
+                        ),
+                        due_date=_date.today(),
+                        related_client_id=str(client_id),
+                        priority="high" if injury == "Yes" else "normal",
+                    )
+                    logger.info(f"WellSky Care Alert + Admin Task created for incident report: {client_name}")
+            except Exception as ws_err:
+                logger.warning(f"WellSky incident report sync failed (non-fatal): {ws_err}")
 
         cur.close()
         conn.close()
@@ -3915,7 +4027,10 @@ async def api_client_satisfaction_summary(
     if client_satisfaction_service is None:
         raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
-    summary = client_satisfaction_service.get_enhanced_dashboard_summary(db, days=days)
+    loop = asyncio.get_event_loop()
+    summary = await loop.run_in_executor(
+        None, lambda: client_satisfaction_service.get_enhanced_dashboard_summary(db, days=days)
+    )
     return JSONResponse({"success": True, "data": summary})
 
 
@@ -3971,7 +4086,8 @@ async def api_satisfaction_alerts(
     if client_satisfaction_service is None:
         raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
-    alerts = client_satisfaction_service.get_satisfaction_alerts()
+    loop = asyncio.get_event_loop()
+    alerts = await loop.run_in_executor(None, client_satisfaction_service.get_satisfaction_alerts)
     return JSONResponse({
         "success": True,
         "data": alerts,

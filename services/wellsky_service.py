@@ -506,6 +506,11 @@ class WellSkyService:
 
         self._access_token = None
         self._token_expires_at = None
+        self._appointment_forbidden = False  # Set True on first 403 from appointment endpoint
+
+        # Cache for get_operations_summary (TTL: 15 min)
+        self._ops_summary_cache: Optional[Dict] = None
+        self._ops_summary_expires: Optional[datetime] = None
 
         # Mock data cache (used when no API key)
         self._mock_clients: Dict[str, WellSkyClient] = {}
@@ -628,7 +633,7 @@ class WellSkyService:
             elif response.status_code == 204:
                 return True, {}
             else:
-                logger.error(f"WellSky API error: {response.status_code} - {response.text}")
+                logger.error(f"WellSky API error: {response.status_code} [{endpoint}] - {response.text[:200]}")
                 return False, {"error": response.text, "status_code": response.status_code}
 
         except requests.exceptions.Timeout:
@@ -1034,7 +1039,8 @@ class WellSkyService:
         birth_date: Optional[str] = None,
         active: Optional[bool] = None,
         status_id: Optional[int] = None,
-        is_client: Optional[bool] = None
+        is_client: Optional[bool] = None,
+        notes: Optional[str] = None
     ) -> Tuple[bool, Any]:
         """
         Update an existing patient (client) record.
@@ -1060,6 +1066,7 @@ class WellSkyService:
             active: Active status
             status_id: Status ID (1=New Lead, 80=Care Started, etc.)
             is_client: True for client, False for prospect
+            notes: Free-text notes (stored in meta.tag with code="notes")
         """
         if self.is_mock_mode:
             client = self._mock_clients.get(patient_id)
@@ -1133,11 +1140,13 @@ class WellSkyService:
         if birth_date is not None:
             fhir_patient["birthDate"] = birth_date
 
-        # Meta tags for status/isClient
+        # Meta tags for status/isClient/notes
         if status_id is not None:
             fhir_patient["meta"]["tag"].append({"code": "status", "display": str(status_id)})
         if is_client is not None:
             fhir_patient["meta"]["tag"].append({"code": "isClient", "display": "true" if is_client else "false"})
+        if notes is not None:
+            fhir_patient["meta"]["tag"].append({"code": "notes", "display": notes})
 
         success, response = self._make_request("PUT", f"patients/{patient_id}/", data=fhir_patient)
         if success:
@@ -1160,6 +1169,150 @@ class WellSkyService:
         success, response = self._make_request("DELETE", f"patients/{patient_id}/")
         if success:
             logger.info(f"Deleted patient {patient_id}")
+        return success, response
+
+    # ── Care Plan ──────────────────────────────────────────────────────────
+
+    def get_care_plan_activity_metadata(self, activity_type: str = "ADL") -> Tuple[bool, Any]:
+        """
+        GET /v1/careplan/activity-metadata
+        Fetch available ADL or IADL activity definitions for the agency.
+        activity_type: "ADL" or "IADL"
+        """
+        success, response = self._make_request(
+            "GET",
+            "careplan/activity-metadata",
+            params={"agency_id": self.agency_id, "activity_type": activity_type},
+        )
+        return success, response
+
+    @staticmethod
+    def _build_care_plan_activity(activity_id: str, description: str, status: str = "scheduled") -> dict:
+        """
+        Build a single WellSky CarePlan activity object using the confirmed working format.
+
+        WellSky encodes the activity ID as: coding[{"code": "activityId", "display": "<id>"}]
+        This is non-standard FHIR but is what WellSky's API actually requires.
+
+        Args:
+            activity_id: WellSky activity ID from metadata (e.g. "31542" for Housework)
+            description: Human-readable name (e.g. "Housework")
+            status: One of "scheduled", "not-started", "in-progress", "completed"
+        """
+        return {
+            "detail": {
+                "code": {
+                    "coding": [
+                        {"code": "activityId", "display": str(activity_id)},
+                    ]
+                },
+                "description": description,
+                "status": status,
+            }
+        }
+
+    @staticmethod
+    def build_care_plan_from_text(care_plan_text: str) -> list:
+        """
+        Map free-text care plan description to WellSky IADL activity IDs.
+        Returns a list of activity objects ready for create_care_plan_activities().
+
+        IADL IDs (from GET /v1/careplan/activity-metadata?activity_type=IADL):
+          32514 Encourage Exercise  |  35256 Errands  |  31542 Housework
+          31543 Laundry             |  31544 Medication|  31545 Money, Bills
+          31546 Pet Care            |  31547 Preparing Meals
+          34762 Protective Oversight|  31548 Shopping
+
+        ADL IDs (activity_type=ADL):
+          31536 Ambulation & Transfer | 31537 Bathing    | 31538 Continence
+          31539 Dressing & Grooming   | 31540 Eating     | 31541 Toileting
+        """
+        text_lower = care_plan_text.lower()
+        activities = []
+
+        IADL_MAP = [
+            (["housekeep", "housework", "dishes", "dust", "clean"], "31542", "Housework"),
+            (["laundry", "washing clothes", "ironing"], "31543", "Laundry"),
+            (["errand", "transport", "bus", "taxi", "appointment", "accompany"], "35256", "Errands"),
+            (["medication", "medicine", "med reminders", "pills"], "31544", "Medication"),
+            (["meal", "cooking", "prepari", "food prep"], "31547", "Preparing Meals"),
+            (["supervision", "companionship", "companion", "oversight", "monitor", "safety"], "34762", "Protective Oversight"),
+            (["pet care", "pet", "dog", "cat", "feeding pet"], "31546", "Pet Care"),
+            (["shopping", "grocery", "groceries", "store"], "31548", "Shopping"),
+            (["exercise", "walking", "walk"], "32514", "Encourage Exercise"),
+            (["money", "bills", "finances", "pay"], "31545", "Money, Bills"),
+        ]
+        ADL_MAP = [
+            (["bathing", "shower", "bath"], "31537", "Bathing"),
+            (["dressing", "grooming", "clothes"], "31539", "Dressing & Grooming"),
+            (["eating", "feeding"], "31540", "Eating"),
+            (["toileting", "commode", "toilet"], "31541", "Toileting"),
+            (["ambulation", "transfer", "walking", "mobility", "wheelchair"], "31536", "Ambulation & Transfer"),
+            (["continence", "incontinence", "catheter"], "31538", "Continence"),
+        ]
+
+        seen_ids = set()
+        for keywords, act_id, name in IADL_MAP + ADL_MAP:
+            if any(kw in text_lower for kw in keywords):
+                if act_id not in seen_ids:
+                    seen_ids.add(act_id)
+                    activities.append(
+                        WellSkyService._build_care_plan_activity(act_id, name)
+                    )
+
+        return activities
+
+    def create_care_plan_activities(
+        self, patient_id: str, activities: list, status: str = "active"
+    ) -> Tuple[bool, Any]:
+        """
+        POST /v1/careplan/activity/<patient_id>/
+        Creates CarePlan activities (ADLs/IADLs) for a patient.
+
+        activities: list of activity objects from _build_care_plan_activity() or
+                    build_care_plan_from_text().
+
+        Confirmed working format (discovered 2026-02-25):
+          Each activity: {"detail": {"code": {"coding": [{"code": "activityId", "display": "<id>"}]},
+                          "description": "<name>", "status": "scheduled"}}
+        """
+        if self.is_mock_mode:
+            logger.info(f"Mock: Created care plan activities for patient {patient_id}")
+            return True, {"resourceType": "CarePlan", "status": "success"}
+
+        payload = {
+            "resourceType": "CarePlan",
+            "status": status,
+            "activity": activities,
+        }
+        success, response = self._make_request(
+            "POST", f"careplan/activity/{patient_id}/", data=payload
+        )
+        if success:
+            logger.info(f"Created care plan activities for patient {patient_id} ({len(activities)} items)")
+        else:
+            logger.warning(f"Care plan creation failed for patient {patient_id}: {response}")
+        return success, response
+
+    def update_care_plan_activities(
+        self, patient_id: str, activities: list
+    ) -> Tuple[bool, Any]:
+        """
+        PUT /v1/careplan/activity/<patient_id>/
+        Updates CarePlan activities for a patient.
+        """
+        if self.is_mock_mode:
+            return True, {"resourceType": "CarePlan", "status": "success"}
+
+        payload = {
+            "resourceType": "CarePlan",
+            "activity": activities,
+        }
+        success, response = self._make_request(
+            "PUT", f"careplan/activity/{patient_id}/", data=payload
+        )
+        if success:
+            logger.info(f"Updated care plan activities for patient {patient_id}")
         return success, response
 
     def _parse_fhir_patient(self, fhir_data: Dict) -> WellSkyClient:
@@ -1972,10 +2125,16 @@ class WellSkyService:
             )
             all_shifts.extend(shifts)
         else:
+            # Bail early if appointment endpoint is known-forbidden (avoids N×403 cascade)
+            if self._appointment_forbidden:
+                logger.warning("Skipping appointment loop — endpoint returned 403 previously")
+                return []
             # Iterate through active clients if no IDs provided
             # This is heavy but necessary due to API limitations
             active_clients = self.get_clients(status=ClientStatus.ACTIVE, limit=1000)
             for client in active_clients:
+                if self._appointment_forbidden:
+                    break  # bail as soon as first 403 detected mid-loop
                 shifts = self.search_appointments(
                     client_id=client.id,
                     start_date=start_date,
@@ -2140,7 +2299,11 @@ class WellSkyService:
             )
 
         if not success:
-            logger.error(f"Appointment search failed: {data}")
+            if isinstance(data, dict) and data.get("status_code") == 403:
+                logger.warning("WellSky appointment endpoint returned 403 — marking as forbidden to skip future calls")
+                self._appointment_forbidden = True
+            else:
+                logger.error(f"Appointment search failed: {data}")
             return []
 
         # Parse FHIR Bundle response with pagination
@@ -2982,25 +3145,30 @@ class WellSkyService:
         if date is None:
             date = datetime.utcnow().isoformat() + "Z"
 
-        endpoint = "documentReferences/"
-        attachment = {
-            "contentType": content_type,
-            "data": data_base64,
-        }
-        if filename:
-            attachment["title"] = filename
+        # title is REQUIRED by WellSky — use filename or derive from document_type
+        title = filename or f"{document_type or 'document'}.pdf"
 
+        # NOTE: WellSky requires "content" as an Object (NOT an Array — array causes 500).
+        # Also requires "Patient/" not "Person/" in context.related[].ref.
+        # See docs/WELLSKY_DOCUMENT_REFERENCE_DEBUG.md for full debug history.
         doc_data = {
             "resourceType": "DocumentReference",
+            "description": description or document_type,
+            "date": date,
             "type": {
                 "text": document_type or "Document",
+                "coding": [{"code": "clinical-note", "display": "clinical-note"}],
             },
-            "content": [
-                {"attachment": attachment}
-            ],
+            "content": {
+                "attachment": {
+                    "contentType": content_type,
+                    "data": data_base64,
+                    "title": title,
+                }
+            },
             "context": {
                 "related": [
-                    {"ref": f"Person/{patient_id}"}
+                    {"ref": f"Patient/{patient_id}"}
                 ]
             },
             "meta": {
@@ -3010,10 +3178,15 @@ class WellSkyService:
             },
         }
 
-        success, response = self._make_request("POST", endpoint, data=doc_data)
+        success, response = self._make_request("POST", "documentReferences/", data=doc_data)
         if success:
             doc_id = response.get("id", "unknown")
             logger.info(f"Created DocumentReference {doc_id} for patient {patient_id}")
+        else:
+            logger.warning(
+                f"DocumentReference POST failed for patient {patient_id}: {response}. "
+                "WellSky API 500 is a known vendor-side issue — see WELLSKY_DOCUMENT_REFERENCE_DEBUG.md"
+            )
         return success, response
 
     def create_clinical_note(
@@ -4325,13 +4498,8 @@ class WellSkyService:
                         results.append((client, activity))
             return results
 
-        # In production, would call a specific endpoint
-        clients = self.get_clients(status=ClientStatus.ACTIVE)
-        for client in clients:
-            activity = self.get_family_activity(client.id)
-            if activity and activity.engagement_score < threshold:
-                results.append((client, activity))
-
+        # NOTE: get_family_activity → /clients/{id}/family-activity returns 403 for all clients
+        # (WellSky auth token + char issue — ticket open). Skip loop until resolved.
         return results
 
     # =========================================================================
@@ -5308,6 +5476,12 @@ class WellSkyService:
         - Open shifts
         - Care plan status
         """
+        # Serve from cache if fresh (15-minute TTL)
+        now = datetime.utcnow()
+        if self._ops_summary_cache and self._ops_summary_expires and now < self._ops_summary_expires:
+            logger.debug("get_operations_summary: returning cached result")
+            return self._ops_summary_cache
+
         if self.is_mock_mode:
             active_clients = len([c for c in self._mock_clients.values() if c.is_active])
             active_caregivers = len([c for c in self._mock_caregivers.values() if c.is_active])
@@ -5366,28 +5540,20 @@ class WellSkyService:
         except Exception as e:
             logger.error(f"Failed to get caregivers for summary: {e}")
 
-        try:
-            shifts = self.get_shifts(
-                date_from=date.today() - timedelta(days=days),
-                date_to=date.today()
-            )
-        except Exception as e:
-            logger.error(f"Failed to get shifts for summary: {e}")
+        # NOTE: get_shifts/get_open_shifts iterate all active clients via appointment/_search/
+        # which is unreliable (WellSky auth token + char issue — ticket open with WellSky).
+        # Skip to keep this endpoint fast. Shifts data will be 0 until WellSky resolves.
+        shifts = []
+        open_shifts = []
 
-        try:
-            open_shifts = self.get_open_shifts()
-        except Exception as e:
-            logger.error(f"Failed to get open shifts for summary: {e}")
-
-        try:
-            care_plans_due = self.get_care_plans_due_for_review()
-        except Exception as e:
-            logger.error(f"Failed to get care plans for summary: {e}")
+        # NOTE: care-plans/due-for-review also 403s (same WellSky auth + char issue).
+        # Skip until WellSky resolves.
+        care_plans_due = []
 
         completed = [s for s in shifts if s.status == ShiftStatus.COMPLETED]
         evv_verified = [s for s in completed if s.evv_verified]
 
-        return {
+        result = {
             "period_days": days,
             "clients": {
                 "active": len(clients),
@@ -5415,7 +5581,12 @@ class WellSkyService:
             },
             "generated_at": datetime.utcnow().isoformat(),
             "data_source": "wellsky_api",
+            "appointment_access": not self._appointment_forbidden,
         }
+        # Cache for 15 minutes
+        self._ops_summary_cache = result
+        self._ops_summary_expires = datetime.utcnow() + timedelta(minutes=15)
+        return result
 
     def get_client_satisfaction_indicators(self, client_id: str) -> Dict[str, Any]:
         """
@@ -5428,11 +5599,26 @@ class WellSkyService:
         - Family portal engagement
         - Care plan currency
         """
+        # NOTE: WellSky client sub-resource endpoints (care-plan, family-activity, appointment)
+        # all return 403 due to `+` char in Bearer token breaking WellSky's auth parser.
+        # Return unavailable stub until WellSky resolves (ticket open).
+        return {
+            "client_id": client_id,
+            "client_name": "",
+            "risk_score": 0,
+            "risk_level": "unavailable",
+            "risk_factors": [],
+            "metrics": {},
+            "recommendations": [],
+            "generated_at": datetime.utcnow().isoformat(),
+            "data_source": "unavailable",
+        }
+
+        # --- Everything below skipped until WellSky fixes the auth token + char issue ---
         client = self.get_client(client_id)
         if not client:
             return {"error": "Client not found"}
-
-        shifts = self.get_shifts_for_client(client_id, days=90)
+        shifts = []
         care_plan = self.get_care_plan(client_id)
         family_activity = self.get_family_activity(client_id)
 
