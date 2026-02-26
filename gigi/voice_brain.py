@@ -73,7 +73,7 @@ except Exception as e:
 
 # Memory system, mode detector, failure handler
 try:
-    from gigi.memory_system import ImpactLevel, MemorySource, MemorySystem, MemoryType
+    from gigi.memory_system import MemorySystem
     memory_system = MemorySystem()
     MEMORY_AVAILABLE = True
     logger.info("Memory system initialized for voice brain")
@@ -203,9 +203,116 @@ def _sync_db_execute(sql, params=None):
     finally:
         conn.close()
 
-# Anthropic-format tools — sourced from canonical registry
+# Anthropic-format tools — sourced from canonical registry + voice-exclusive additions
 from gigi.tool_registry import get_tools as _get_voice_tools
-ANTHROPIC_TOOLS = _get_voice_tools("voice")
+
+_VOICE_ONLY_TOOLS = [
+    {
+        "name": "transfer_call",
+        "description": "Transfer the current voice call to another person. Use this when the caller requests a human, needs to speak to Jason, or when Gigi cannot resolve the issue.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "destination": {
+                    "type": "string",
+                    "description": "Who to transfer to: 'jason' (owner/manager) or 'office' (main office line)."
+                }
+            },
+            "required": ["destination"]
+        }
+    },
+    {
+        "name": "lookup_caller",
+        "description": "Look up who is calling by their phone number. Returns their name and role (client, caregiver, or prospect) from the WellSky database.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "phone_number": {
+                    "type": "string",
+                    "description": "The caller's phone number (any format)."
+                }
+            },
+            "required": ["phone_number"]
+        }
+    },
+    {
+        "name": "report_call_out",
+        "description": "Report a caregiver call-out to the scheduling team via team chat. Use when a caregiver calls in sick or cannot make their shift.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "caregiver_name": {
+                    "type": "string",
+                    "description": "Full name of the caregiver calling out."
+                },
+                "reason": {
+                    "type": "string",
+                    "description": "Reason for calling out (e.g. 'sick', 'family emergency')."
+                },
+                "shift_date": {
+                    "type": "string",
+                    "description": "Date of the affected shift in YYYY-MM-DD format. Defaults to today."
+                }
+            },
+            "required": ["caregiver_name"]
+        }
+    },
+    {
+        "name": "send_sms",
+        "description": "Send an SMS text message to a phone number. Only approved numbers are whitelisted for outbound SMS from voice calls.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "phone_number": {
+                    "type": "string",
+                    "description": "Recipient phone number."
+                },
+                "message": {
+                    "type": "string",
+                    "description": "The message to send."
+                }
+            },
+            "required": ["phone_number", "message"]
+        }
+    },
+    {
+        "name": "send_email",
+        "description": "Send an email via Google Workspace (Gmail). Use for formal follow-ups or when the caller requests email confirmation.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "to": {
+                    "type": "string",
+                    "description": "Recipient email address."
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "Email subject line."
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Email body text."
+                }
+            },
+            "required": ["to", "subject", "body"]
+        }
+    },
+    {
+        "name": "send_team_message",
+        "description": "Send a message to the 'New Scheduling' team chat channel in RingCentral. Use to alert the scheduling team about urgent issues.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "message": {
+                    "type": "string",
+                    "description": "Message to send to the scheduling team."
+                }
+            },
+            "required": ["message"]
+        }
+    },
+]
+ANTHROPIC_TOOLS = _get_voice_tools("voice") + _VOICE_ONLY_TOOLS
 
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
 GEMINI_TOOLS = None
@@ -500,7 +607,9 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
                 return json.dumps({"error": "Missing message"})
             try:
                 def _send_team():
-                    from services.ringcentral_messaging_service import ringcentral_messaging_service
+                    from services.ringcentral_messaging_service import (
+                        ringcentral_messaging_service,
+                    )
                     return ringcentral_messaging_service.send_message_to_chat("New Scheduling", message)
                 result = await run_sync(_send_team)
                 return json.dumps(result)
@@ -541,7 +650,9 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
             shift_date = tool_input.get("shift_date", date.today().isoformat())
             try:
                 def _report():
-                    from services.ringcentral_messaging_service import ringcentral_messaging_service
+                    from services.ringcentral_messaging_service import (
+                        ringcentral_messaging_service,
+                    )
                     msg = f"CALL-OUT: {caregiver} called out for {shift_date}. Reason: {reason}"
                     ringcentral_messaging_service.send_message_to_chat("New Scheduling", msg)
                     return {"success": True, "message": f"Call-out reported for {caregiver}"}
