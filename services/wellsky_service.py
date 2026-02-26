@@ -506,6 +506,11 @@ class WellSkyService:
 
         self._access_token = None
         self._token_expires_at = None
+        self._appointment_forbidden = False  # Set True on first 403 from appointment endpoint
+
+        # Cache for get_operations_summary (TTL: 15 min)
+        self._ops_summary_cache: Optional[Dict] = None
+        self._ops_summary_expires: Optional[datetime] = None
 
         # Mock data cache (used when no API key)
         self._mock_clients: Dict[str, WellSkyClient] = {}
@@ -628,7 +633,7 @@ class WellSkyService:
             elif response.status_code == 204:
                 return True, {}
             else:
-                logger.error(f"WellSky API error: {response.status_code} - {response.text}")
+                logger.error(f"WellSky API error: {response.status_code} [{endpoint}] - {response.text[:200]}")
                 return False, {"error": response.text, "status_code": response.status_code}
 
         except requests.exceptions.Timeout:
@@ -2120,10 +2125,16 @@ class WellSkyService:
             )
             all_shifts.extend(shifts)
         else:
+            # Bail early if appointment endpoint is known-forbidden (avoids N×403 cascade)
+            if self._appointment_forbidden:
+                logger.warning("Skipping appointment loop — endpoint returned 403 previously")
+                return []
             # Iterate through active clients if no IDs provided
             # This is heavy but necessary due to API limitations
             active_clients = self.get_clients(status=ClientStatus.ACTIVE, limit=1000)
             for client in active_clients:
+                if self._appointment_forbidden:
+                    break  # bail as soon as first 403 detected mid-loop
                 shifts = self.search_appointments(
                     client_id=client.id,
                     start_date=start_date,
@@ -2288,7 +2299,11 @@ class WellSkyService:
             )
 
         if not success:
-            logger.error(f"Appointment search failed: {data}")
+            if isinstance(data, dict) and data.get("status_code") == 403:
+                logger.warning("WellSky appointment endpoint returned 403 — marking as forbidden to skip future calls")
+                self._appointment_forbidden = True
+            else:
+                logger.error(f"Appointment search failed: {data}")
             return []
 
         # Parse FHIR Bundle response with pagination
@@ -4483,13 +4498,8 @@ class WellSkyService:
                         results.append((client, activity))
             return results
 
-        # In production, would call a specific endpoint
-        clients = self.get_clients(status=ClientStatus.ACTIVE)
-        for client in clients:
-            activity = self.get_family_activity(client.id)
-            if activity and activity.engagement_score < threshold:
-                results.append((client, activity))
-
+        # NOTE: get_family_activity → /clients/{id}/family-activity returns 403 for all clients
+        # (WellSky auth token + char issue — ticket open). Skip loop until resolved.
         return results
 
     # =========================================================================
@@ -5466,6 +5476,12 @@ class WellSkyService:
         - Open shifts
         - Care plan status
         """
+        # Serve from cache if fresh (15-minute TTL)
+        now = datetime.utcnow()
+        if self._ops_summary_cache and self._ops_summary_expires and now < self._ops_summary_expires:
+            logger.debug("get_operations_summary: returning cached result")
+            return self._ops_summary_cache
+
         if self.is_mock_mode:
             active_clients = len([c for c in self._mock_clients.values() if c.is_active])
             active_caregivers = len([c for c in self._mock_caregivers.values() if c.is_active])
@@ -5524,28 +5540,20 @@ class WellSkyService:
         except Exception as e:
             logger.error(f"Failed to get caregivers for summary: {e}")
 
-        try:
-            shifts = self.get_shifts(
-                date_from=date.today() - timedelta(days=days),
-                date_to=date.today()
-            )
-        except Exception as e:
-            logger.error(f"Failed to get shifts for summary: {e}")
+        # NOTE: get_shifts/get_open_shifts iterate all active clients via appointment/_search/
+        # which is unreliable (WellSky auth token + char issue — ticket open with WellSky).
+        # Skip to keep this endpoint fast. Shifts data will be 0 until WellSky resolves.
+        shifts = []
+        open_shifts = []
 
-        try:
-            open_shifts = self.get_open_shifts()
-        except Exception as e:
-            logger.error(f"Failed to get open shifts for summary: {e}")
-
-        try:
-            care_plans_due = self.get_care_plans_due_for_review()
-        except Exception as e:
-            logger.error(f"Failed to get care plans for summary: {e}")
+        # NOTE: care-plans/due-for-review also 403s (same WellSky auth + char issue).
+        # Skip until WellSky resolves.
+        care_plans_due = []
 
         completed = [s for s in shifts if s.status == ShiftStatus.COMPLETED]
         evv_verified = [s for s in completed if s.evv_verified]
 
-        return {
+        result = {
             "period_days": days,
             "clients": {
                 "active": len(clients),
@@ -5573,7 +5581,12 @@ class WellSkyService:
             },
             "generated_at": datetime.utcnow().isoformat(),
             "data_source": "wellsky_api",
+            "appointment_access": not self._appointment_forbidden,
         }
+        # Cache for 15 minutes
+        self._ops_summary_cache = result
+        self._ops_summary_expires = datetime.utcnow() + timedelta(minutes=15)
+        return result
 
     def get_client_satisfaction_indicators(self, client_id: str) -> Dict[str, Any]:
         """
@@ -5586,11 +5599,26 @@ class WellSkyService:
         - Family portal engagement
         - Care plan currency
         """
+        # NOTE: WellSky client sub-resource endpoints (care-plan, family-activity, appointment)
+        # all return 403 due to `+` char in Bearer token breaking WellSky's auth parser.
+        # Return unavailable stub until WellSky resolves (ticket open).
+        return {
+            "client_id": client_id,
+            "client_name": "",
+            "risk_score": 0,
+            "risk_level": "unavailable",
+            "risk_factors": [],
+            "metrics": {},
+            "recommendations": [],
+            "generated_at": datetime.utcnow().isoformat(),
+            "data_source": "unavailable",
+        }
+
+        # --- Everything below skipped until WellSky fixes the auth token + char issue ---
         client = self.get_client(client_id)
         if not client:
             return {"error": "Client not found"}
-
-        shifts = self.get_shifts_for_client(client_id, days=90)
+        shifts = []
         care_plan = self.get_care_plan(client_id)
         family_activity = self.get_family_activity(client_id)
 

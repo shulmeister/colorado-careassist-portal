@@ -4027,7 +4027,10 @@ async def api_client_satisfaction_summary(
     if client_satisfaction_service is None:
         raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
-    summary = client_satisfaction_service.get_enhanced_dashboard_summary(db, days=days)
+    loop = asyncio.get_event_loop()
+    summary = await loop.run_in_executor(
+        None, lambda: client_satisfaction_service.get_enhanced_dashboard_summary(db, days=days)
+    )
     return JSONResponse({"success": True, "data": summary})
 
 
@@ -4083,7 +4086,8 @@ async def api_satisfaction_alerts(
     if client_satisfaction_service is None:
         raise HTTPException(status_code=503, detail="Client satisfaction service not available")
 
-    alerts = client_satisfaction_service.get_satisfaction_alerts()
+    loop = asyncio.get_event_loop()
+    alerts = await loop.run_in_executor(None, client_satisfaction_service.get_satisfaction_alerts)
     return JSONResponse({
         "success": True,
         "data": alerts,
