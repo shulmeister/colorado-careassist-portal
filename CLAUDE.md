@@ -397,7 +397,14 @@ careassist-unified/
 │   ├── terminal_tools.py  # Headless terminal via ht-mcp (run_terminal)
 │   ├── sequential_thinking.py  # Structured reasoning chains
 │   ├── knowledge_graph.py # PostgreSQL entity-relation knowledge graph
+│   ├── learning_pipeline.py # Shadow mode learning from graded decisions
+│   ├── travel_tools.py    # Sabre/Amadeus flight search + travel tools (~1095 lines)
+│   ├── chief_of_staff_tools.py # Shared tool implementations (~994 lines)
+│   ├── shift_lock.py      # Distributed shift processing locks
+│   ├── database.py        # DB connection helpers
+│   ├── claude_code_tools.py # Claude task bridge tools
 │   └── CONSTITUTION.md    # Gigi's 10 operating laws
+├── gigi_mcp_server.py     # FastMCP server for Claude Code (14 tools)
 ├── sales/                 # Sales CRM dashboard
 ├── recruiting/            # Recruiting dashboard (Flask)
 ├── powderpulse/           # Standalone ski weather app (NOT mounted in unified_app)
@@ -415,6 +422,28 @@ careassist-unified/
 │   └── security-audit.sh  # Security checks
 └── docs/                  # Additional documentation
 ```
+
+---
+
+## SECURITY & AUTH (Feb 26 Audit)
+
+### Auth-Protected API Endpoints
+These endpoints require `Depends(get_current_user)` — unauthenticated requests return 401:
+- `/api/incident-reports`, `/api/incident-reports/latest`
+- `/api/monitoring-visits`, `/api/monitoring-visits/latest`
+- `/api/internal/wellsky/shifts`
+
+### Gigi Token Auth
+Sensitive Gigi endpoints use `Depends(require_gigi_token)` (Bearer token via `GIGI_API_TOKEN`).
+**Do NOT add token auth to browser-accessible pages** like `/gigi/shadow` — they need to load in a browser without Bearer headers.
+
+### Webhook Verification
+- **Retell:** `from retell.lib.webhook_auth import verify` (NEVER custom HMAC)
+- **Fail-closed pattern:** Webhooks return 503 when secrets not configured (not silently skip verification)
+
+### Credentials
+- All secrets loaded via `resolved-secrets.env` at service start — never hardcode
+- `.gigi-env` is a legacy symlink — authoritative source is `~/.config/careassist/resolved-secrets.env`
 
 ---
 
@@ -493,6 +522,10 @@ This script will:
 3. Rebuild production
 4. Restart production
 5. Verify production is healthy (retries up to 60s for slow boots)
+
+### Promote Script Gotchas
+- **Vite hashed filenames** contain underscores and hyphens (e.g., `index-Lq_Vb-jD.js`). Regex must use `[A-Za-z0-9_-]+`, not just `[A-Za-z0-9]+`.
+- **Uncommitted changes in production** will block the merge — stash or commit them first.
 
 ### Key Scripts
 
