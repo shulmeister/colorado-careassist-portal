@@ -508,6 +508,9 @@ class WellSkyService:
         self._token_expires_at = None
         self._appointment_forbidden = False  # Set True on first 403 from appointment endpoint
 
+        self._session = requests.Session()
+        self._session.headers.update({"Content-Type": "application/json"})
+
         # Cache for get_operations_summary (TTL: 15 min)
         self._ops_summary_cache: Optional[Dict] = None
         self._ops_summary_expires: Optional[datetime] = None
@@ -618,13 +621,13 @@ class WellSkyService:
 
         try:
             if method.upper() == "GET":
-                response = requests.get(url, headers=headers, params=params, timeout=30)
+                response = self._session.get(url, headers=headers, params=params, timeout=30)
             elif method.upper() == "POST":
-                response = requests.post(url, headers=headers, json=data, params=params, timeout=30)
+                response = self._session.post(url, headers=headers, json=data, params=params, timeout=30)
             elif method.upper() == "PUT":
-                response = requests.put(url, headers=headers, json=data, params=params, timeout=30)
+                response = self._session.put(url, headers=headers, json=data, params=params, timeout=30)
             elif method.upper() == "DELETE":
-                response = requests.delete(url, headers=headers, params=params, timeout=30)
+                response = self._session.delete(url, headers=headers, params=params, timeout=30)
             else:
                 return False, {"error": f"Unsupported method: {method}"}
 

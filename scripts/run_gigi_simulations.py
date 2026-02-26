@@ -37,7 +37,7 @@ if os.path.exists(_GIGI_ENV):
                 os.environ[key] = value
 
 # Set defaults
-os.environ.setdefault("DATABASE_URL", "postgresql://careassist:careassist2026@localhost:5432/careassist")
+os.environ.setdefault("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 os.environ.setdefault("GIGI_LLM_MODEL", "claude-haiku-4-5-20251001")
 # Default to staging gigi port
 os.environ.setdefault("PORT", "8768")

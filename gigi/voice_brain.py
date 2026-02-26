@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import sys
+import time
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
@@ -317,12 +318,12 @@ ANTHROPIC_TOOLS = _get_voice_tools("voice") + _VOICE_ONLY_TOOLS
 # Gemini-format tools — auto-generated from ANTHROPIC_TOOLS
 GEMINI_TOOLS = None
 if GEMINI_AVAILABLE:
-    def _gs(type_str, desc):
+    def _make_gemini_prop(type_str, desc):
         return genai_types.Schema(type={"string":"STRING","integer":"INTEGER","boolean":"BOOLEAN"}.get(type_str, "STRING"), description=desc)
 
     _gem_decls = []
     for t in ANTHROPIC_TOOLS:
-        props = {k: _gs(v.get("type", "string"), v.get("description", k))
+        props = {k: _make_gemini_prop(v.get("type", "string"), v.get("description", k))
                  for k, v in t["input_schema"]["properties"].items()}
         req = t["input_schema"].get("required", [])
         _gem_decls.append(genai_types.FunctionDeclaration(
@@ -672,8 +673,8 @@ async def execute_tool(tool_name: str, tool_input: dict) -> str:
         if FAILURE_HANDLER_AVAILABLE and failure_handler:
             try:
                 failure_handler.handle_tool_failure(tool_name, e, {"tool_input": str(tool_input)[:200]})
-            except Exception:
-                pass
+            except Exception as fh_err:
+                logger.warning(f"FailureHandler raised an exception while handling tool failure for '{tool_name}': {fh_err}")
         return json.dumps({"error": str(e)})
 
 
@@ -710,7 +711,9 @@ async def _maybe_acknowledge(call_info, on_token):
 SIDE_EFFECT_TOOLS = {"send_sms", "send_team_message", "send_email", "transfer_call", "report_call_out", "send_fax", "file_fax_referral"}
 
 # Dedup: track recent team messages to prevent duplicates
-_recent_team_messages = {}  # message_hash -> timestamp
+_recent_team_messages: Dict[str, float] = {}  # message_hash -> timestamp
+MAX_DEDUP_ENTRIES = 100
+DEDUP_TTL_SECONDS = 3600  # 1 hour
 
 async def _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulation, on_tool_event=None):
     """Execute tools in parallel, check for transfers, return results and transfer_number."""
@@ -722,8 +725,8 @@ async def _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulat
             try:
                 await on_tool_event("invocation", tool_call_id=str(extra), name=name,
                                     arguments=json.dumps(inp) if isinstance(inp, dict) else str(inp))
-            except Exception:
-                pass
+            except Exception as evt_err:
+                logger.warning(f"Failed to report tool invocation event for '{name}': {evt_err}")
 
     # Block side-effect tools during test/simulation calls
     async def _safe_execute(name, inp):
@@ -734,16 +737,20 @@ async def _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulat
         # Dedup: prevent duplicate team messages within 60 seconds
         if name == "send_team_message":
             import hashlib
-            import time as _t
             msg_hash = hashlib.md5(json.dumps(inp, sort_keys=True).encode()).hexdigest()
-            now = _t.time()
+            now = time.time()
             if msg_hash in _recent_team_messages and now - _recent_team_messages[msg_hash] < 60:
                 logger.warning("[dedup] Blocked duplicate send_team_message within 60s")
                 return json.dumps({"success": True, "deduplicated": True, "message": "Message already sent"})
             _recent_team_messages[msg_hash] = now
-            # Clean old entries
-            for k in list(_recent_team_messages):
-                if now - _recent_team_messages[k] > 120:
+            # Age-based cleanup: remove entries older than TTL
+            expired_keys = [k for k, v in _recent_team_messages.items() if now - v > DEDUP_TTL_SECONDS]
+            for k in expired_keys:
+                del _recent_team_messages[k]
+            # Size-based eviction: keep at most MAX_DEDUP_ENTRIES (remove oldest first)
+            if len(_recent_team_messages) > MAX_DEDUP_ENTRIES:
+                sorted_keys = sorted(_recent_team_messages, key=_recent_team_messages.get)
+                for k in sorted_keys[:len(_recent_team_messages) - MAX_DEDUP_ENTRIES]:
                     del _recent_team_messages[k]
 
         return await execute_tool(name, inp)
@@ -763,15 +770,15 @@ async def _execute_tools_and_check_transfer(tool_calls_info, call_id, is_simulat
                 rd = json.loads(result)
                 if rd.get("transfer_number"):
                     transfer_number = rd["transfer_number"]
-            except:
-                pass
+            except (json.JSONDecodeError, ValueError, KeyError) as e:
+                logger.warning(f"Failed to parse transfer_call result: {e}")
 
         # Report tool result to Retell
         if on_tool_event:
             try:
                 await on_tool_event("result", tool_call_id=str(extra), content=result[:500] if result else "")
-            except Exception:
-                pass
+            except Exception as evt_err:
+                logger.warning(f"Failed to report tool result event for '{name}': {evt_err}")
 
         processed.append((name, inp, extra, result))
 

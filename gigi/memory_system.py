@@ -13,16 +13,16 @@ Memory Types:
 - fact: Legacy type (treated same as explicit_instruction, confidence 1.0, never decays)
 """
 
-import os
-import json
-from contextlib import contextmanager
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
-from enum import Enum
-import psycopg2
-from psycopg2.extras import RealDictCursor, Json
 import logging
+import os
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
+import psycopg2
+from psycopg2.extras import Json, RealDictCursor
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +78,8 @@ class Memory:
 class MemorySystem:
     """Manages Gigi's memory with decay, confidence, and conflict detection."""
 
+    _schema_initialized = False
+
     def __init__(self, database_url: str = None):
         self.database_url = database_url or os.getenv("DATABASE_URL")
         if not self.database_url:
@@ -99,7 +101,9 @@ class MemorySystem:
             conn.close()
 
     def _init_schema(self):
-        """Initialize database schema if not exists."""
+        """Initialize database schema if not exists. Runs only once per process."""
+        if MemorySystem._schema_initialized:
+            return
         schema = """
         CREATE TABLE IF NOT EXISTS gigi_memories (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -141,6 +145,7 @@ class MemorySystem:
             with conn.cursor() as cur:
                 cur.execute(schema)
             conn.commit()
+        MemorySystem._schema_initialized = True
 
     def create_memory(
         self,

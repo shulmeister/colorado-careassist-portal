@@ -30,7 +30,7 @@ sentry_sdk.init(dsn=_GLITCHTIP_DSNS[_ENV], traces_sample_rate=0.1, environment=_
 
 import logging
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Header, HTTPException, WebSocket
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
@@ -100,27 +100,38 @@ async def health():
 
 # ==================== RC DIAGNOSTIC ====================
 @app.get("/api/diag/rc-status")
-async def diag_rc_status():
-    """RC status diagnostic"""
+async def diag_rc_status(authorization: str = Header(None)):
+    """RC status diagnostic (requires Bearer token)"""
+    _gigi_token = os.getenv("GIGI_API_TOKEN", "")
+    if not _gigi_token:
+        raise HTTPException(status_code=503, detail="GIGI_API_TOKEN not configured")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
+    if authorization[7:] != _gigi_token:
+        raise HTTPException(status_code=403, detail="Invalid API token")
     from datetime import datetime, timedelta
 
-    import requests
-    from gigi.ringcentral_bot import GigiRingCentralBot
-    bot = GigiRingCentralBot()
-    token = bot.rc_service._get_access_token()
+    import httpx
+    from services.ringcentral_messaging_service import ringcentral_messaging_service
+    token = ringcentral_messaging_service._get_access_token()
     if not token:
         return {"error": "Could not get token"}
 
     headers = {"Authorization": f"Bearer {token}"}
     server = os.getenv("RINGCENTRAL_SERVER_URL", "https://platform.ringcentral.com")
 
-    ext = requests.get(f"{server}/restapi/v1.0/account/~/extension/~", headers=headers).json()
-    nums = requests.get(f"{server}/restapi/v1.0/account/~/extension/~/phone-number", headers=headers).json()
-
     since = (datetime.utcnow() - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    sms = requests.get(f"{server}/restapi/v1.0/account/~/extension/~/message-store",
-                      headers=headers,
-                      params={"messageType": "SMS", "dateFrom": since}).json()
+    async with httpx.AsyncClient() as client:
+        ext_resp = await client.get(f"{server}/restapi/v1.0/account/~/extension/~", headers=headers)
+        ext = ext_resp.json()
+        nums_resp = await client.get(f"{server}/restapi/v1.0/account/~/extension/~/phone-number", headers=headers)
+        nums = nums_resp.json()
+        sms_resp = await client.get(
+            f"{server}/restapi/v1.0/account/~/extension/~/message-store",
+            headers=headers,
+            params={"messageType": "SMS", "dateFrom": since},
+        )
+        sms = sms_resp.json()
 
     return {
         "extension": {"number": ext.get("extensionNumber"), "name": ext.get("name"), "id": ext.get("id")},

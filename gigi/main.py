@@ -11,6 +11,7 @@ during conversations to look up information and take actions.
 """
 
 import asyncio
+import html as html_module
 import json
 import logging
 import os
@@ -43,6 +44,20 @@ app = FastAPI(title="Gigi AI Agent", version="1.0.0")
 _gigi_dir = os.path.dirname(os.path.abspath(__file__))
 _portal_templates = os.path.join(os.path.dirname(_gigi_dir), "portal", "templates")
 templates = Jinja2Templates(directory=_portal_templates)
+
+# ==================== AUTH DEPENDENCY ====================
+GIGI_API_TOKEN = os.getenv("GIGI_API_TOKEN", "")
+
+
+async def require_gigi_token(authorization: str = Header(None)):
+    """Reusable auth dependency — validates Bearer token against GIGI_API_TOKEN."""
+    if not GIGI_API_TOKEN:
+        raise HTTPException(status_code=503, detail="GIGI_API_TOKEN not configured")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
+    if authorization[7:] != GIGI_API_TOKEN:
+        raise HTTPException(status_code=403, detail="Invalid API token")
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -460,7 +475,7 @@ def log_shadow_action(action: str, details: Dict[str, Any], trigger: str = "Unkn
 # =============================================================================
 
 @app.post("/api/gigi/shadow/feedback")
-async def record_shadow_feedback(request: Request):
+async def record_shadow_feedback(request: Request, _auth=Depends(require_gigi_token)):
     """Record human feedback on a shadow mode decision."""
     data = await request.json()
     log_id = data.get("id")
@@ -491,7 +506,7 @@ async def record_shadow_feedback(request: Request):
     return {"success": False, "error": "Log entry not found"}
 
 @app.get("/api/gigi/learning/stats")
-async def get_learning_stats():
+async def get_learning_stats(_auth=Depends(require_gigi_token)):
     """Get stats from the shadow mode learning pipeline."""
     try:
         from gigi.learning_pipeline import get_learning_stats
@@ -499,11 +514,11 @@ async def get_learning_stats():
         return {"success": True, **stats}
     except Exception as e:
         logger.error(f"Learning stats error: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Failed to retrieve learning stats"}
 
 
 @app.post("/api/gigi/learning/run")
-async def run_learning_pipeline_endpoint():
+async def run_learning_pipeline_endpoint(_auth=Depends(require_gigi_token)):
     """Manually trigger the learning pipeline."""
     import asyncio
     try:
@@ -512,11 +527,11 @@ async def run_learning_pipeline_endpoint():
         return {"success": True, **results}
     except Exception as e:
         logger.error(f"Learning pipeline error: {e}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": "Failed to run learning pipeline"}
 
 
 @app.post("/simulate/callout")
-async def simulate_callout():
+async def simulate_callout(_auth=Depends(require_gigi_token)):
     """
     Simulate a caregiver call-out event to test Shadow Mode logic.
     Triggers execute_caregiver_call_out with mock data.
@@ -741,43 +756,51 @@ async def get_shadow_dashboard():
         elif log['feedback'] == 'bad':
             feedback_class = "feedback-given feedback-bad"
 
+        # SECURITY: Escape all user-controlled values to prevent XSS
+        safe_action = html_module.escape(str(log['action']))
+        safe_timestamp = html_module.escape(str(log['timestamp']))
+        safe_trigger = html_module.escape(str(log.get('trigger', 'Internal Event')))
+        safe_message = html_module.escape(str(log.get('message') or "Executed Logic: " + str(log['action'])))
+        safe_details = html_module.escape(json.dumps(log['details'], indent=2))
+        safe_id = html_module.escape(str(log['id']))
+
         html += f"""
-        <div class="review-card" id="card-{log['id']}">
+        <div class="review-card" id="card-{safe_id}">
             <div class="card-header">
-                <span class="fw-bold">{log['action']}</span>
-                <span class="timestamp">{log['timestamp']}</span>
+                <span class="fw-bold">{safe_action}</span>
+                <span class="timestamp">{safe_timestamp}</span>
             </div>
             <div class="card-body">
                 <div class="trigger-box">
                     <small class="text-uppercase fw-bold text-primary opacity-75">Trigger</small><br>
-                    {log.get('trigger', 'Internal Event')}
+                    {safe_trigger}
                 </div>
-                
+
                 <div class="action-box">
                     <small class="text-uppercase fw-bold text-warning opacity-75">Proposed Action</small><br>
-                    {log.get('message') or "Executed Logic: " + log['action']}
+                    {safe_message}
                 </div>
-                
-                <div class="accordion" id="accordion-{log['id']}">
+
+                <div class="accordion" id="accordion-{safe_id}">
                     <div class="accordion-item border-0">
                         <h2 class="accordion-header">
-                            <button class="accordion-button collapsed py-2 bg-light rounded" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{log['id']}">
+                            <button class="accordion-button collapsed py-2 bg-light rounded" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{safe_id}">
                                 <small>View Raw Data</small>
                             </button>
                         </h2>
-                        <div id="collapse-{log['id']}" class="accordion-collapse collapse">
+                        <div id="collapse-{safe_id}" class="accordion-collapse collapse">
                             <div class="json-dump">
-                                {json.dumps(log['details'], indent=2)}
+                                {safe_details}
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div class="feedback-actions {feedback_class}" id="actions-{log['id']}">
-                    <button onclick="rate('{log['id']}', 'good')" class="btn btn-outline-success btn-feedback">
+
+                <div class="feedback-actions {feedback_class}" id="actions-{safe_id}">
+                    <button onclick="rate('{safe_id}', 'good')" class="btn btn-outline-success btn-feedback">
                         👍 Good
                     </button>
-                    <button onclick="rate('{log['id']}', 'bad')" class="btn btn-outline-danger btn-feedback">
+                    <button onclick="rate('{safe_id}', 'bad')" class="btn btn-outline-danger btn-feedback">
                         👎 Bad
                     </button>
                 </div>
@@ -948,8 +971,8 @@ async def verify_retell_signature(request: Request) -> bool:
     See: https://docs.retellai.com/features/secure-webhook
     """
     if not RETELL_API_KEY:
-        logger.warning("RETELL_API_KEY not configured - skipping signature validation")
-        return True
+        logger.warning("RETELL_API_KEY not configured - rejecting webhook (fail-closed)")
+        return False
 
     # Extract signature from header
     x_retell_signature = request.headers.get("x-retell-signature") or request.headers.get("X-Retell-Signature")
@@ -965,8 +988,8 @@ async def verify_retell_signature(request: Request) -> bool:
         from retell.lib.webhook_auth import verify as retell_verify
         is_valid = retell_verify(body_str, RETELL_API_KEY, x_retell_signature)
     except ImportError:
-        logger.warning("retell-sdk not installed, falling back to allow webhook")
-        return True
+        logger.warning("retell-sdk not installed - rejecting webhook (fail-closed)")
+        return False
     except Exception as e:
         logger.error(f"Retell signature verification error: {e}")
         return False
@@ -4585,6 +4608,11 @@ async def retell_inbound_variables(request: Request):
     Called BEFORE the conversation starts — returns caller's name and type
     so the agent can greet them by first name immediately.
     """
+    # SECURITY: Verify Retell webhook signature
+    is_valid = await verify_retell_signature(request)
+    if not is_valid:
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
     body = await request.json()
     from_number = body.get("from_number", "")
     logger.info(f"Inbound variables requested for: {from_number}")
@@ -5025,7 +5053,7 @@ async def retell_webhook(request: Request):
                 logger.exception(f"Error executing tool {tool_name}: {e}")
                 results.append({
                     "tool_call_id": tool_call_id,
-                    "error": str(e)
+                    "error": "Internal tool execution error"
                 })
 
         return JSONResponse({"results": results})
@@ -5334,7 +5362,7 @@ async def retell_function_call(function_name: str, request: Request):
                         return JSONResponse({"success": False, "error": "Failed to send email"})
                 except Exception as e:
                     logger.error(f"send_email error: {e}")
-                    return JSONResponse({"success": False, "error": str(e)})
+                    return JSONResponse({"success": False, "error": "Failed to send email"})
             else:
                 return JSONResponse({"success": False, "error": "Email service not available"})
 
@@ -5357,7 +5385,7 @@ async def retell_function_call(function_name: str, request: Request):
                     return JSONResponse({"success": False, "error": result or "Failed to send SMS"})
             except Exception as e:
                 logger.error(f"send_sms error: {e}")
-                return JSONResponse({"success": False, "error": str(e)})
+                return JSONResponse({"success": False, "error": "Failed to send SMS"})
 
         elif function_name == "send_team_message":
             # Send message to RingCentral team chat (New Scheduling)
@@ -5384,7 +5412,7 @@ async def retell_function_call(function_name: str, request: Request):
                     return JSONResponse({"success": False, "error": "RingCentral service not available"})
             except Exception as e:
                 logger.error(f"send_team_message error: {e}")
-                return JSONResponse({"success": False, "error": str(e)})
+                return JSONResponse({"success": False, "error": "Failed to send team message"})
 
         elif function_name == "web_search":
             # Search the internet
@@ -5445,7 +5473,7 @@ async def retell_function_call(function_name: str, request: Request):
                 return JSONResponse({"success": False, "query": query, "message": "No results found"})
             except Exception as e:
                 logger.error(f"web_search error: {e}")
-                return JSONResponse({"success": False, "error": str(e)})
+                return JSONResponse({"success": False, "error": "Web search failed"})
 
         elif function_name == "execute_caregiver_call_out":
             result = await execute_caregiver_call_out(**args)
@@ -5950,7 +5978,7 @@ async def retell_function_call(function_name: str, request: Request):
                 return JSONResponse({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
             except Exception as e:
                 logger.error(f"create_claude_task error: {e}")
-                return JSONResponse({"success": False, "error": str(e)})
+                return JSONResponse({"success": False, "error": "Failed to create task"})
 
         elif function_name == "check_claude_task":
             task_id = args.get("task_id")
@@ -5980,14 +6008,14 @@ async def retell_function_call(function_name: str, request: Request):
                 })
             except Exception as e:
                 logger.error(f"check_claude_task error: {e}")
-                return JSONResponse({"success": False, "error": str(e)})
+                return JSONResponse({"success": False, "error": "Failed to check task status"})
 
         else:
             raise HTTPException(status_code=404, detail=f"Unknown function: {function_name}")
 
     except Exception as e:
         logger.exception(f"Error in function {function_name}: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # NOTE: Gigi dashboard is served by portal_app.py at /gigi/dashboard/* (with auth).
@@ -6019,8 +6047,9 @@ async def health_check():
                 "system_ready": True
             }
         except Exception as e:
+            logger.error(f"Health check memory stats error: {e}")
             health["memory_stats"] = {
-                "error": str(e),
+                "error": "unavailable",
                 "system_ready": False
             }
 
@@ -6036,8 +6065,9 @@ async def health_check():
                 "system_ready": True
             }
         except Exception as e:
+            logger.error(f"Health check mode detector error: {e}")
             health["current_mode"] = {
-                "error": str(e),
+                "error": "unavailable",
                 "system_ready": False
             }
 
@@ -6055,8 +6085,9 @@ async def health_check():
                 "system_ready": True
             }
         except Exception as e:
+            logger.error(f"Health check failure stats error: {e}")
             health["failure_stats"] = {
-                "error": str(e),
+                "error": "unavailable",
                 "system_ready": False
             }
 
@@ -6547,14 +6578,16 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
     3. Take action if possible (clock them out, report call-out)
     4. Generate a response that confirms the action
     """
-    # Verify webhook secret if configured and called externally
+    # SECURITY: Verify webhook secret (fail-closed — reject if not configured)
     if request:
         sms_secret = os.getenv("INBOUND_SMS_WEBHOOK_SECRET")
-        if sms_secret:
-            received_secret = request.headers.get("X-Webhook-Secret", "")
-            if received_secret != sms_secret:
-                logger.warning("Inbound SMS webhook: Invalid or missing webhook secret")
-                return SMSResponse(success=False, reply_text="", reply_sent=False, error="Unauthorized")
+        if not sms_secret:
+            logger.warning("Inbound SMS webhook: INBOUND_SMS_WEBHOOK_SECRET not configured")
+            raise HTTPException(status_code=503, detail="Webhook not configured")
+        received_secret = request.headers.get("X-Webhook-Secret", "")
+        if received_secret != sms_secret:
+            logger.warning("Inbound SMS webhook: Invalid or missing webhook secret")
+            return SMSResponse(success=False, reply_text="", reply_sent=False, error="Unauthorized")
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
 
     # FORCE REPLY for now to ensure reliability, ignoring office hours gates
@@ -6873,7 +6906,7 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
         return SMSResponse(
             success=False,
             reply_sent=False,
-            error=str(e)
+            error="Internal processing error"
         )
 
 
@@ -6885,13 +6918,15 @@ async def beetexting_webhook(request: Request):
     Receives the webhook payload, extracts the message,
     and triggers the auto-reply system.
     """
-    # Verify webhook secret if configured
+    # SECURITY: Verify webhook secret (fail-closed — reject if not configured)
     bt_secret = os.getenv("BEETEXTING_WEBHOOK_SECRET")
-    if bt_secret:
-        received_secret = request.headers.get("X-Webhook-Secret", "")
-        if received_secret != bt_secret:
-            logger.warning("Beetexting webhook: Invalid or missing webhook secret")
-            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+    if not bt_secret:
+        logger.warning("Beetexting webhook: BEETEXTING_WEBHOOK_SECRET not configured")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    received_secret = request.headers.get("X-Webhook-Secret", "")
+    if received_secret != bt_secret:
+        logger.warning("Beetexting webhook: Invalid or missing webhook secret")
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
     try:
         body = await request.json()
@@ -6958,7 +6993,7 @@ async def beetexting_webhook(request: Request):
 
     except Exception as e:
         logger.exception(f"Error in Beetexting webhook: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+        return JSONResponse({"status": "error", "message": "Internal server error"}, status_code=500)
 
 
 @app.post("/webhook/ringcentral-sms")
@@ -6979,13 +7014,15 @@ async def ringcentral_sms_webhook(request: Request):
             status_code=200
         )
 
-    # SECURITY: Verify RingCentral webhook signature if verification token is configured
+    # SECURITY: Verify RingCentral webhook signature (fail-closed — reject if not configured)
     rc_verification_token = os.getenv("RINGCENTRAL_WEBHOOK_VERIFICATION_TOKEN")
-    if rc_verification_token:
-        received_token = request.headers.get("X-RingCentral-Verification-Token", "")
-        if received_token != rc_verification_token:
-            logger.warning("RingCentral webhook: Invalid or missing verification token")
-            return JSONResponse({"error": "Invalid verification token"}, status_code=401)
+    if not rc_verification_token:
+        logger.warning("RingCentral webhook: RINGCENTRAL_WEBHOOK_VERIFICATION_TOKEN not configured")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
+    received_token = request.headers.get("X-RingCentral-Verification-Token", "")
+    if received_token != rc_verification_token:
+        logger.warning("RingCentral webhook: Invalid or missing verification token")
+        return JSONResponse({"error": "Invalid verification token"}, status_code=401)
 
     try:
         body = await request.json()
@@ -7053,7 +7090,7 @@ async def ringcentral_sms_webhook(request: Request):
 
     except Exception as e:
         logger.exception(f"Error in RingCentral SMS webhook: {e}")
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+        return JSONResponse({"status": "error", "message": "Internal server error"}, status_code=500)
 
 
 @app.post("/test/sms-reply")
@@ -7083,9 +7120,6 @@ async def test_sms_reply(
 # =============================================================================
 # Ask-Gigi API — Generic endpoint for Siri, Shortcuts, iMessage, Menu Bar, etc.
 # =============================================================================
-
-GIGI_API_TOKEN = os.getenv("GIGI_API_TOKEN", "")
-
 
 class AskGigiRequest(BaseModel):
     text: str = Field(..., description="The message to send to Gigi")
@@ -7124,7 +7158,7 @@ async def ask_gigi_endpoint(request: AskGigiRequest, authorization: str = Header
         return {"response": response_text, "channel": request.channel}
     except Exception as e:
         logger.error(f"Ask-Gigi endpoint error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 # =============================================================================
@@ -7239,7 +7273,7 @@ async def imessage_webhook(request: Request):
             await _send_imessage_reply(chat_guid, response_text)
         except Exception as e:
             logger.error(f"iMessage processing error: {e}", exc_info=True)
-            await _send_imessage_reply(chat_guid, f"Sorry, I hit an error: {str(e)[:100]}")
+            await _send_imessage_reply(chat_guid, "Sorry, I'm having a temporary issue. Please try again in a moment.")
 
     asyncio.ensure_future(_process_and_reply())
 
