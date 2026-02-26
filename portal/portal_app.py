@@ -2655,7 +2655,7 @@ async def sync_client_assessment(request: Request):
     except Exception as e:
         logger.error(f"Assessment sync error: {e}")
         return JSONResponse(
-            {"detail": str(e)},
+            {"detail": "Internal server error"},
             status_code=500,
             headers={"Access-Control-Allow-Origin": "*"},
         )
@@ -2848,7 +2848,7 @@ async def sync_monitoring_visit(request: Request):
     except Exception as e:
         logger.error(f"Monitoring visit sync error: {e}")
         return JSONResponse(
-            {"detail": str(e)}, status_code=500,
+            {"detail": "Internal server error"}, status_code=500,
             headers={"Access-Control-Allow-Origin": "*"},
         )
     finally:
@@ -3144,7 +3144,7 @@ async def sync_incident_report(request: Request):
     except Exception as e:
         logger.error(f"Incident report sync error: {e}")
         return JSONResponse(
-            {"detail": str(e)}, status_code=500,
+            {"detail": "Internal server error"}, status_code=500,
             headers={"Access-Control-Allow-Origin": "*"},
         )
     finally:
@@ -4810,7 +4810,8 @@ async def api_operations_at_risk(
                 name = row[1] or f"{row[2] or ''} {row[3] or ''}".strip() or "Unknown"
                 days_since = None
                 if row[5]:
-                    days_since = (datetime.now(timezone.utc) - row[5]).days
+                    # row[5] is naive timestamp from PostgreSQL — compare with naive UTC
+                    days_since = (datetime.now(timezone.utc).replace(tzinfo=None) - row[5]).days
 
                 clients.append({
                     "id": row[0],
