@@ -612,19 +612,6 @@ ANTHROPIC_TOOLS = [
         }
     },
     {
-        "name": "save_memory",
-        "description": "Save a fact or preference to long-term memory. ONLY use when someone EXPLICITLY states something to remember. NEVER save inferred, assumed, or fabricated information. If unsure, ask before saving.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "content": {"type": "string", "description": "The EXACT fact or preference stated by the user. Quote their words, don't paraphrase or embellish."},
-                "category": {"type": "string", "description": "Category: scheduling, communication, travel, health, operations, personal, general"},
-                "importance": {"type": "string", "description": "How important: high (money/legal/reputation), medium (scheduling/communication), low (preferences)", "enum": ["high", "medium", "low"]}
-            },
-            "required": ["content", "category"]
-        }
-    },
-    {
         "name": "recall_memories",
         "description": "Search your long-term memory for saved preferences, facts, or instructions. Use before asking a question that may have already been answered.",
         "input_schema": {
@@ -960,12 +947,13 @@ If you search for someone and they're not found in the system:
 # When to Transfer Calls (CRITICAL)
 Transfer to Jason when:
 - Caller is angry, upset, or escalating — after ONE attempt to help
-- Billing, payment, or invoice disputes
+- Billing, payment, or invoice disputes FROM CLIENTS OR FAMILY MEMBERS
 - Medical emergencies or safety concerns about a client
 - A client or family member ASKS for a human or supervisor
 - You've tried 2 tools and still can't resolve the issue
 - Employment questions (hiring, firing, pay rates, raises)
 - Legal questions or complaints about discrimination/harassment
+EXCEPTION — CAREGIVER payroll/pay disputes after hours: Do NOT transfer. Always look up the caregiver with get_wellsky_caregivers FIRST, then capture the details, and promise a callback from the office team next business day.
 Transfer to office when:
 - General office inquiries during business hours
 - Fax/mail requests
