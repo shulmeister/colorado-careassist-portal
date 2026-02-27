@@ -17,16 +17,16 @@
 
 ### API Endpoints (all require auth — expect 401 unauthenticated)
 
-| #   | Method | URL                             | Expected            |
-| --- | ------ | ------------------------------- | ------------------- |
-| 4   | GET    | `/api/tools`                    | 401                 |
-| 5   | GET    | `/api/activity-stream`          | 401                 |
-| 6   | GET    | `/api/vouchers`                 | 401                 |
-| 7   | GET    | `/api/incident-reports/latest`  | 401                 |
-| 8   | GET    | `/api/monitoring-visits/latest` | 401                 |
-| 9   | GET    | `/api/internal/wellsky/shifts`  | 401                 |
-| 10  | GET    | `/api/weather`                  | 200 (public) or 401 |
-| 11  | GET    | `/api/wellsky/status`           | 401                 |
+| #   | Method | URL                             | Expected                           |
+| --- | ------ | ------------------------------- | ---------------------------------- |
+| 4   | GET    | `/api/tools`                    | 401                                |
+| 5   | GET    | `/api/activity-stream`          | 401                                |
+| 6   | GET    | `/api/vouchers`                 | 401                                |
+| 7   | GET    | `/api/incident-reports/latest`  | 401                                |
+| 8   | GET    | `/api/monitoring-visits/latest` | 401                                |
+| 9   | GET    | `/api/internal/wellsky/shifts`  | 401                                |
+| 10  | GET    | `/api/weather`                  | 400 (requires query params) or 401 |
+| 11  | GET    | `/api/wellsky/status`           | 401                                |
 
 ### Gigi Learning/Evaluation API (require auth)
 
@@ -197,11 +197,11 @@
 
 ### Hesed Home Care (localhost:3001)
 
-| #   | Method | URL                          | Expected                    |
-| --- | ------ | ---------------------------- | --------------------------- |
-| 68  | GET    | `http://localhost:3001/test` | 200, JSON `{"status":"ok"}` |
+| #   | Method | URL                          | Expected              |
+| --- | ------ | ---------------------------- | --------------------- |
+| 68  | GET    | `http://localhost:3001/test` | 301 redirect to HTTPS |
 
-**Note:** Port 3001 forces HTTPS redirect on `/` in production mode. Use `/test` for health checks.
+**Note:** Port 3001 forces HTTPS redirect on ALL routes in production mode (including `/test`). Use external URL or skip in local testing.
 
 ### Elite Trading MCP (localhost:3002)
 
