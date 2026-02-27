@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 # In-memory session store for pending purchases
 pending_sessions = {}
 
+
 def send_2fa_text(message: str):
     """Send a confirmation text to Jason via RingCentral or Telegram"""
     # Using Telegram as the secondary 'secure' channel for 2FA
@@ -22,7 +23,7 @@ def send_2fa_text(message: str):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
-        "text": f"🔐 GIGI 2FA REQUEST:\n\n{message}\n\nReply 'YES' to Gigi on the call to proceed."
+        "text": f"🔐 GIGI 2FA REQUEST:\n\n{message}\n\nReply 'YES' to Gigi on the call to proceed.",
     }
     try:
         requests.post(url, json=payload, timeout=5)
@@ -30,26 +31,28 @@ def send_2fa_text(message: str):
     except Exception as e:
         logger.error(f"Failed to send 2FA text: {e}")
 
+
 class ChiefOfStaffTools:
     def __init__(self):
         pass
 
-    async def search_events(self, query: str = "", city: str = "Denver", state: str = "CO",
-                           start_date: str = None, end_date: str = None, limit: int = 10):
-        """Search events on Ticketmaster: concerts, sports, theater, comedy."""
+    async def search_events(
+        self,
+        query: str = "",
+        city: str = "Denver",
+        state: str = "CO",
+        start_date: str = None,
+        end_date: str = None,
+        limit: int = 10,
+    ):
+        """Search events via Ticketmaster + Bandsintown fallback."""
         from datetime import timedelta
 
         import httpx
 
-        api_key = os.environ.get("TICKETMASTER_API_KEY")
-        if not api_key:
-            logger.error("TICKETMASTER_API_KEY not configured")
-            return {"success": False, "error": "Ticketmaster API not configured"}
-
         if not query:
             query = "all"
 
-        # Default date range: today through next 30 days
         now = datetime.now()
         if not start_date:
             start_dt = now.strftime("%Y-%m-%dT00:00:00Z")
@@ -61,73 +64,152 @@ class ChiefOfStaffTools:
         else:
             end_dt = f"{end_date}T23:59:59Z"
 
-        params = {
-            "apikey": api_key,
+        events = []
+
+        # --- Source 1: Ticketmaster ---
+        api_key = os.environ.get("TICKETMASTER_API_KEY")
+        if api_key:
+            try:
+                params = {
+                    "apikey": api_key,
+                    "city": city,
+                    "stateCode": state,
+                    "startDateTime": start_dt,
+                    "endDateTime": end_dt,
+                    "size": min(limit, 20),
+                    "sort": "date,asc",
+                }
+                if query.lower() not in ("all", "events", "anything", ""):
+                    params["keyword"] = query
+
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(
+                        "https://app.ticketmaster.com/discovery/v2/events.json",
+                        params=params,
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        embedded = data.get("_embedded")
+                        if embedded and "events" in embedded:
+                            for ev in embedded["events"][:limit]:
+                                name = ev.get("name", "Unknown Event")
+                                event_date = (
+                                    ev.get("dates", {})
+                                    .get("start", {})
+                                    .get("localDate", "TBA")
+                                )
+                                event_time = (
+                                    ev.get("dates", {})
+                                    .get("start", {})
+                                    .get("localTime", "")
+                                )
+                                try:
+                                    dt = datetime.strptime(event_date, "%Y-%m-%d")
+                                    formatted_date = dt.strftime("%A, %B %d")
+                                except Exception:
+                                    formatted_date = event_date
+
+                                venues = ev.get("_embedded", {}).get("venues", [])
+                                venue_name = (
+                                    venues[0].get("name", "Venue TBA")
+                                    if venues
+                                    else "Venue TBA"
+                                )
+
+                                price_range = ""
+                                price_ranges = ev.get("priceRanges", [])
+                                if price_ranges:
+                                    mn = price_ranges[0].get("min", 0)
+                                    mx = price_ranges[0].get("max", 0)
+                                    if mn and mx:
+                                        price_range = f"${mn:.0f}-${mx:.0f}"
+                                    elif mn:
+                                        price_range = f"from ${mn:.0f}"
+
+                                events.append(
+                                    {
+                                        "name": name,
+                                        "date": formatted_date,
+                                        "raw_date": event_date,
+                                        "time": event_time,
+                                        "venue": venue_name,
+                                        "price_range": price_range,
+                                        "url": ev.get("url", ""),
+                                        "status": ev.get("dates", {})
+                                        .get("status", {})
+                                        .get("code", ""),
+                                        "source": "ticketmaster",
+                                    }
+                                )
+                    else:
+                        logger.warning(f"Ticketmaster API returned {resp.status_code}")
+            except Exception as e:
+                logger.error(f"Ticketmaster search failed: {e}")
+
+        # --- Source 2: Bandsintown (fallback when Ticketmaster returns nothing) ---
+        if not events and query.lower() not in ("all", "events", "anything", ""):
+            try:
+                bit_app_id = os.environ.get("BANDSINTOWN_APP_ID", "gigi_careassist")
+                from urllib.parse import quote
+
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.get(
+                        f"https://rest.bandsintown.com/artists/{quote(query)}/events",
+                        params={"app_id": bit_app_id},
+                    )
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        if isinstance(data, list):
+                            for ev in data[:limit]:
+                                venue_info = ev.get("venue", {})
+                                ev_city = venue_info.get("city", "")
+                                # Filter to requested city if specified
+                                if (
+                                    city.lower() not in ("all", "")
+                                    and ev_city
+                                    and city.lower() not in ev_city.lower()
+                                ):
+                                    continue
+                                event_date = ev.get("datetime", "")[:10]
+                                event_time = (
+                                    ev.get("datetime", "")[11:16]
+                                    if "T" in ev.get("datetime", "")
+                                    else ""
+                                )
+                                try:
+                                    dt = datetime.strptime(event_date, "%Y-%m-%d")
+                                    formatted_date = dt.strftime("%A, %B %d")
+                                except Exception:
+                                    formatted_date = event_date
+
+                                events.append(
+                                    {
+                                        "name": ev.get("title")
+                                        or f"{query} at {venue_info.get('name', '')}",
+                                        "date": formatted_date,
+                                        "raw_date": event_date,
+                                        "time": event_time,
+                                        "venue": venue_info.get("name", ""),
+                                        "price_range": "",
+                                        "url": ev.get("url", ""),
+                                        "status": "",
+                                        "source": "bandsintown",
+                                    }
+                                )
+                        if events:
+                            logger.info(
+                                f"Bandsintown fallback found {len(events)} events for '{query}'"
+                            )
+            except Exception as e:
+                logger.error(f"Bandsintown search failed: {e}")
+
+        return {
+            "success": True,
+            "events": events,
+            "count": len(events),
+            "query": query,
             "city": city,
-            "stateCode": state,
-            "startDateTime": start_dt,
-            "endDateTime": end_dt,
-            "size": min(limit, 20),
-            "sort": "date,asc",
         }
-        if query.lower() not in ("all", "events", "anything", ""):
-            params["keyword"] = query
-
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.get("https://app.ticketmaster.com/discovery/v2/events.json", params=params)
-                if resp.status_code != 200:
-                    logger.error(f"Ticketmaster API error: {resp.status_code}")
-                    return {"success": False, "error": f"Ticketmaster API returned {resp.status_code}"}
-
-                data = resp.json()
-                embedded = data.get("_embedded")
-                if not embedded or "events" not in embedded:
-                    return {"success": True, "events": [], "count": 0, "query": query, "city": city}
-
-                events = []
-                for ev in embedded["events"][:limit]:
-                    name = ev.get("name", "Unknown Event")
-                    event_date = ev.get("dates", {}).get("start", {}).get("localDate", "TBA")
-                    event_time = ev.get("dates", {}).get("start", {}).get("localTime", "")
-                    try:
-                        dt = datetime.strptime(event_date, "%Y-%m-%d")
-                        formatted_date = dt.strftime("%A, %B %d")
-                    except Exception:
-                        formatted_date = event_date
-
-                    venues = ev.get("_embedded", {}).get("venues", [])
-                    venue_name = venues[0].get("name", "Venue TBA") if venues else "Venue TBA"
-
-                    price_range = ""
-                    price_ranges = ev.get("priceRanges", [])
-                    if price_ranges:
-                        mn = price_ranges[0].get("min", 0)
-                        mx = price_ranges[0].get("max", 0)
-                        if mn and mx:
-                            price_range = f"${mn:.0f}-${mx:.0f}"
-                        elif mn:
-                            price_range = f"from ${mn:.0f}"
-
-                    status = ev.get("dates", {}).get("status", {}).get("code", "")
-                    url = ev.get("url", "")
-
-                    events.append({
-                        "name": name,
-                        "date": formatted_date,
-                        "raw_date": event_date,
-                        "time": event_time,
-                        "venue": venue_name,
-                        "price_range": price_range,
-                        "url": url,
-                        "status": status,
-                    })
-
-                return {"success": True, "events": events, "count": len(events), "query": query, "city": city}
-
-        except Exception as e:
-            logger.error(f"Ticketmaster search failed: {e}")
-            return {"success": False, "error": str(e)}
 
     async def search_concerts(self, query: str = ""):
         """Search concerts — wrapper for search_events."""
@@ -140,6 +222,7 @@ class ChiefOfStaffTools:
         # Use browse_with_claude to search Ticketmaster/AXS for real availability
         try:
             from gigi.claude_code_tools import browse_with_claude
+
             browse_result = await browse_with_claude(
                 task=(
                     f"Search for {quantity} tickets to {artist} at {venue}. "
@@ -150,7 +233,9 @@ class ChiefOfStaffTools:
                     f"Do NOT purchase anything — just gather availability info."
                 )
             )
-            availability_info = browse_result.get("result", "Could not find ticket information.")
+            availability_info = browse_result.get(
+                "result", "Could not find ticket information."
+            )
         except Exception as e:
             logger.error(f"Ticket search browse failed: {e}")
             availability_info = f"Search failed: {str(e)}"
@@ -162,7 +247,7 @@ class ChiefOfStaffTools:
             "venue": venue,
             "quantity": quantity,
             "availability": availability_info,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Send 2FA with REAL availability info
@@ -177,16 +262,19 @@ class ChiefOfStaffTools:
             "session_id": session_id,
             "availability": availability_info,
             "message": f"I found ticket options for {artist} at {venue}. I've sent the details to your phone — review and confirm if you'd like me to proceed.",
-            "requires_2fa": True
+            "requires_2fa": True,
         }
 
-    async def book_table_request(self, restaurant: str, party_size: int, date: str, time: str):
+    async def book_table_request(
+        self, restaurant: str, party_size: int, date: str, time: str
+    ):
         """Search OpenTable for real availability, then send 2FA with actual options."""
         session_id = str(uuid.uuid4())[:8]
 
         # Use browse_with_claude to search OpenTable for real availability
         try:
             from gigi.claude_code_tools import browse_with_claude
+
             browse_result = await browse_with_claude(
                 task=(
                     f"Search for a restaurant reservation on OpenTable. "
@@ -197,7 +285,9 @@ class ChiefOfStaffTools:
                     f"Do NOT make a reservation — just check availability."
                 )
             )
-            availability_info = browse_result.get("result", "Could not find availability.")
+            availability_info = browse_result.get(
+                "result", "Could not find availability."
+            )
         except Exception as e:
             logger.error(f"Restaurant search browse failed: {e}")
             availability_info = f"Search failed: {str(e)}"
@@ -210,7 +300,7 @@ class ChiefOfStaffTools:
             "date": date,
             "time": time,
             "availability": availability_info,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         # Send 2FA with REAL availability
@@ -225,7 +315,7 @@ class ChiefOfStaffTools:
             "session_id": session_id,
             "availability": availability_info,
             "message": f"I checked {restaurant} for {date} at {time}. I've sent the availability details to your phone — confirm and I'll complete the reservation.",
-            "requires_2fa": True
+            "requires_2fa": True,
         }
 
     async def confirm_purchase(self, session_id: str):
@@ -286,7 +376,7 @@ class ChiefOfStaffTools:
             logger.error(f"Confirm purchase failed: {e}")
             return {
                 "success": False,
-                "error": f"Automation failed: {str(e)}. I'll need to do this manually."
+                "error": f"Automation failed: {str(e)}. I'll need to do this manually.",
             }
 
     async def watch_tickets(self, artist: str, venue: str = None, city: str = "Denver"):
@@ -294,6 +384,7 @@ class ChiefOfStaffTools:
         import asyncio
 
         from gigi.ticket_monitor import create_watch
+
         return await asyncio.to_thread(create_watch, artist, venue, city)
 
     async def list_ticket_watches(self):
@@ -301,6 +392,7 @@ class ChiefOfStaffTools:
         import asyncio
 
         from gigi.ticket_monitor import list_watches
+
         return await asyncio.to_thread(list_watches)
 
     async def remove_ticket_watch(self, watch_id: int):
@@ -308,10 +400,17 @@ class ChiefOfStaffTools:
         import asyncio
 
         from gigi.ticket_monitor import remove_watch
+
         return await asyncio.to_thread(remove_watch, int(watch_id))
 
-    async def explore_national_parks(self, action: str = "parks", query: str = None,
-                                     park_code: str = None, state: str = None, limit: int = 5):
+    async def explore_national_parks(
+        self,
+        action: str = "parks",
+        query: str = None,
+        park_code: str = None,
+        state: str = None,
+        limit: int = 5,
+    ):
         """Search the National Park Service API. Actions: parks, campgrounds, alerts,
         thingstodo, visitorcenters, events, tours, webcams, amenities, fees."""
         import httpx
@@ -332,82 +431,182 @@ class ChiefOfStaffTools:
 
         # Map action to endpoint
         endpoints = {
-            "parks": "parks", "campgrounds": "campgrounds", "alerts": "alerts",
-            "thingstodo": "thingstodo", "visitorcenters": "visitorcenters",
-            "events": "events", "tours": "tours", "webcams": "webcams",
-            "amenities": "amenities", "fees": "feespasses",
+            "parks": "parks",
+            "campgrounds": "campgrounds",
+            "alerts": "alerts",
+            "thingstodo": "thingstodo",
+            "visitorcenters": "visitorcenters",
+            "events": "events",
+            "tours": "tours",
+            "webcams": "webcams",
+            "amenities": "amenities",
+            "fees": "feespasses",
         }
         endpoint = endpoints.get(action)
         if not endpoint:
-            return {"success": False, "error": f"Unknown action '{action}'. Use: {', '.join(endpoints.keys())}"}
+            return {
+                "success": False,
+                "error": f"Unknown action '{action}'. Use: {', '.join(endpoints.keys())}",
+            }
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(f"{base}/{endpoint}", params=params)
                 if resp.status_code != 200:
-                    return {"success": False, "error": f"NPS API returned {resp.status_code}"}
+                    return {
+                        "success": False,
+                        "error": f"NPS API returned {resp.status_code}",
+                    }
 
                 data = resp.json()
                 items = data.get("data", [])
                 total = data.get("total", "0")
 
                 if action == "parks":
-                    results = [{"name": p.get("fullName", ""), "code": p.get("parkCode", ""),
-                                "description": p.get("description", "")[:200], "state": p.get("states", ""),
-                                "activities": [a["name"] for a in p.get("activities", [])[:8]],
-                                "url": p.get("url", ""),
-                                "directions": p.get("directionsInfo", "")[:150],
-                                "fees": [{"title": f.get("title", ""), "cost": f.get("cost", "")} for f in p.get("entranceFees", [])[:3]],
-                                } for p in items]
+                    results = [
+                        {
+                            "name": p.get("fullName", ""),
+                            "code": p.get("parkCode", ""),
+                            "description": p.get("description", "")[:200],
+                            "state": p.get("states", ""),
+                            "activities": [
+                                a["name"] for a in p.get("activities", [])[:8]
+                            ],
+                            "url": p.get("url", ""),
+                            "directions": p.get("directionsInfo", "")[:150],
+                            "fees": [
+                                {"title": f.get("title", ""), "cost": f.get("cost", "")}
+                                for f in p.get("entranceFees", [])[:3]
+                            ],
+                        }
+                        for p in items
+                    ]
                 elif action == "campgrounds":
-                    results = [{"name": c.get("name", ""), "description": c.get("description", "")[:150],
-                                "total_sites": c.get("campsites", {}).get("totalSites", ""),
-                                "reservable": c.get("reservationInfo", "")[:100],
-                                "fees": [f.get("cost", "") for f in c.get("fees", [])],
-                                "amenities": {k: v for k, v in c.get("amenities", {}).items() if v and v not in ("0", "", "No")},
-                                "url": c.get("reservationUrl") or c.get("url", ""),
-                                } for c in items]
+                    results = [
+                        {
+                            "name": c.get("name", ""),
+                            "description": c.get("description", "")[:150],
+                            "total_sites": c.get("campsites", {}).get("totalSites", ""),
+                            "reservable": c.get("reservationInfo", "")[:100],
+                            "fees": [f.get("cost", "") for f in c.get("fees", [])],
+                            "amenities": {
+                                k: v
+                                for k, v in c.get("amenities", {}).items()
+                                if v and v not in ("0", "", "No")
+                            },
+                            "url": c.get("reservationUrl") or c.get("url", ""),
+                        }
+                        for c in items
+                    ]
                 elif action == "alerts":
-                    results = [{"title": a.get("title", ""), "category": a.get("category", ""),
-                                "description": a.get("description", "")[:200],
-                                "url": a.get("url", "")} for a in items]
+                    results = [
+                        {
+                            "title": a.get("title", ""),
+                            "category": a.get("category", ""),
+                            "description": a.get("description", "")[:200],
+                            "url": a.get("url", ""),
+                        }
+                        for a in items
+                    ]
                 elif action == "thingstodo":
-                    results = [{"title": t.get("title", ""), "description": t.get("shortDescription", "")[:150],
-                                "activities": [a["name"] for a in t.get("activities", [])[:5]],
-                                "duration": t.get("duration", ""), "url": t.get("url", "")} for t in items]
+                    results = [
+                        {
+                            "title": t.get("title", ""),
+                            "description": t.get("shortDescription", "")[:150],
+                            "activities": [
+                                a["name"] for a in t.get("activities", [])[:5]
+                            ],
+                            "duration": t.get("duration", ""),
+                            "url": t.get("url", ""),
+                        }
+                        for t in items
+                    ]
                 elif action == "visitorcenters":
-                    results = [{"name": v.get("name", ""), "description": v.get("description", "")[:150],
-                                "directions": v.get("directionsInfo", "")[:100],
-                                "url": v.get("url", "")} for v in items]
+                    results = [
+                        {
+                            "name": v.get("name", ""),
+                            "description": v.get("description", "")[:150],
+                            "directions": v.get("directionsInfo", "")[:100],
+                            "url": v.get("url", ""),
+                        }
+                        for v in items
+                    ]
                 elif action == "events":
-                    results = [{"title": e.get("title", ""), "date": e.get("dateStart", ""),
-                                "time": e.get("times", [{}])[0].get("timeStart", "") if e.get("times") else "",
-                                "description": e.get("description", "")[:150],
-                                "location": e.get("location", ""), "fee": e.get("feeInfo", "")} for e in items]
+                    results = [
+                        {
+                            "title": e.get("title", ""),
+                            "date": e.get("dateStart", ""),
+                            "time": e.get("times", [{}])[0].get("timeStart", "")
+                            if e.get("times")
+                            else "",
+                            "description": e.get("description", "")[:150],
+                            "location": e.get("location", ""),
+                            "fee": e.get("feeInfo", ""),
+                        }
+                        for e in items
+                    ]
                 elif action == "tours":
-                    results = [{"title": t.get("title", ""), "description": t.get("description", "")[:150],
-                                "duration": t.get("duration", ""),
-                                "activities": [a["name"] for a in t.get("activities", [])[:5]]} for t in items]
+                    results = [
+                        {
+                            "title": t.get("title", ""),
+                            "description": t.get("description", "")[:150],
+                            "duration": t.get("duration", ""),
+                            "activities": [
+                                a["name"] for a in t.get("activities", [])[:5]
+                            ],
+                        }
+                        for t in items
+                    ]
                 elif action == "webcams":
-                    results = [{"title": w.get("title", ""), "description": w.get("description", "")[:100],
-                                "url": w.get("url", ""), "status": w.get("status", "")} for w in items]
+                    results = [
+                        {
+                            "title": w.get("title", ""),
+                            "description": w.get("description", "")[:100],
+                            "url": w.get("url", ""),
+                            "status": w.get("status", ""),
+                        }
+                        for w in items
+                    ]
                 elif action == "amenities":
-                    results = [{"name": a.get("name", ""), "parks": [p.get("parkCode", "") for p in a.get("parks", [])[:5]]} for a in items]
+                    results = [
+                        {
+                            "name": a.get("name", ""),
+                            "parks": [
+                                p.get("parkCode", "") for p in a.get("parks", [])[:5]
+                            ],
+                        }
+                        for a in items
+                    ]
                 elif action == "fees":
                     results = items[:limit]
                 else:
                     results = items[:limit]
 
-                return {"success": True, "action": action, "total": total, "count": len(results),
-                        "park_code": park_code, "results": results}
+                return {
+                    "success": True,
+                    "action": action,
+                    "total": total,
+                    "count": len(results),
+                    "park_code": park_code,
+                    "results": results,
+                }
 
         except Exception as e:
             logger.error(f"NPS API failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def explore_art(self, action: str = "search", query: str = None, artwork_id: int = None,
-                          art_type: str = None, origin: str = None, material: str = None,
-                          earliest_year: int = None, latest_year: int = None, limit: int = 5):
+    async def explore_art(
+        self,
+        action: str = "search",
+        query: str = None,
+        artwork_id: int = None,
+        art_type: str = None,
+        origin: str = None,
+        material: str = None,
+        earliest_year: int = None,
+        latest_year: int = None,
+        limit: int = 5,
+    ):
         """Search and explore artworks via ArtSearch API. Actions: search, detail, random."""
         import httpx
 
@@ -420,28 +619,54 @@ class ChiefOfStaffTools:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 if action == "random":
-                    resp = await client.get(f"{base}/random", params={"api-key": api_key})
+                    resp = await client.get(
+                        f"{base}/random", params={"api-key": api_key}
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"ArtSearch API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"ArtSearch API returned {resp.status_code}",
+                        }
                     a = resp.json()
-                    return {"success": True, "action": "random", "artwork": {
-                        "id": a.get("id"), "title": a.get("title", ""), "author": a.get("author", "Unknown"),
-                        "image": a.get("image", ""), "start_date": a.get("start_date"),
-                        "end_date": a.get("end_date"), "types": a.get("art_types", []),
-                        "description": a.get("description", ""),
-                    }}
+                    return {
+                        "success": True,
+                        "action": "random",
+                        "artwork": {
+                            "id": a.get("id"),
+                            "title": a.get("title", ""),
+                            "author": a.get("author", "Unknown"),
+                            "image": a.get("image", ""),
+                            "start_date": a.get("start_date"),
+                            "end_date": a.get("end_date"),
+                            "types": a.get("art_types", []),
+                            "description": a.get("description", ""),
+                        },
+                    }
 
                 elif action == "detail" and artwork_id:
-                    resp = await client.get(f"{base}/{artwork_id}", params={"api-key": api_key})
+                    resp = await client.get(
+                        f"{base}/{artwork_id}", params={"api-key": api_key}
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Artwork {artwork_id} not found"}
+                        return {
+                            "success": False,
+                            "error": f"Artwork {artwork_id} not found",
+                        }
                     a = resp.json()
-                    return {"success": True, "action": "detail", "artwork": {
-                        "id": a.get("id"), "title": a.get("title", ""), "author": a.get("author", "Unknown"),
-                        "image": a.get("image", ""), "start_date": a.get("start_date"),
-                        "end_date": a.get("end_date"), "types": a.get("art_types", []),
-                        "description": a.get("description", ""),
-                    }}
+                    return {
+                        "success": True,
+                        "action": "detail",
+                        "artwork": {
+                            "id": a.get("id"),
+                            "title": a.get("title", ""),
+                            "author": a.get("author", "Unknown"),
+                            "image": a.get("image", ""),
+                            "start_date": a.get("start_date"),
+                            "end_date": a.get("end_date"),
+                            "types": a.get("art_types", []),
+                            "description": a.get("description", ""),
+                        },
+                    }
 
                 else:  # search
                     params = {"api-key": api_key, "number": min(limit, 10)}
@@ -460,19 +685,39 @@ class ChiefOfStaffTools:
 
                     resp = await client.get(base, params=params)
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"ArtSearch API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"ArtSearch API returned {resp.status_code}",
+                        }
                     data = resp.json()
-                    artworks = [{"id": a.get("id"), "title": a.get("title", ""), "image": a.get("image", "")}
-                                for a in data.get("artworks", [])]
-                    return {"success": True, "action": "search", "total": data.get("available", 0),
-                            "count": len(artworks), "artworks": artworks}
+                    artworks = [
+                        {
+                            "id": a.get("id"),
+                            "title": a.get("title", ""),
+                            "image": a.get("image", ""),
+                        }
+                        for a in data.get("artworks", [])
+                    ]
+                    return {
+                        "success": True,
+                        "action": "search",
+                        "total": data.get("available", 0),
+                        "count": len(artworks),
+                        "artworks": artworks,
+                    }
 
         except Exception as e:
             logger.error(f"ArtSearch API failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def search_phish(self, action: str = "shows", query: str = None,
-                           date: str = None, song_slug: str = None, limit: int = 5):
+    async def search_phish(
+        self,
+        action: str = "shows",
+        query: str = None,
+        date: str = None,
+        song_slug: str = None,
+        limit: int = 5,
+    ):
         """Search Phish.in API for shows, songs, setlists, tours, and venues. No API key needed."""
         import httpx
 
@@ -487,16 +732,29 @@ class ChiefOfStaffTools:
                     if resp.status_code != 200:
                         return {"success": False, "error": f"Show {date} not found"}
                     s = resp.json().get("show", resp.json())
-                    tracks = [{"position": t.get("position"), "title": t.get("title", ""),
-                               "duration_min": round(t.get("duration", 0) / 60000, 1),
-                               "set": t.get("set_name", ""), "mp3": t.get("mp3_url", "")}
-                              for t in s.get("tracks", [])]
-                    return {"success": True, "action": "show", "show": {
-                        "date": s.get("date"), "venue": s.get("venue_name", ""),
-                        "location": s.get("venue", {}).get("location", ""),
-                        "tour": s.get("tour_name", ""), "taper_notes": (s.get("taper_notes") or "")[:300],
-                        "tracks": tracks, "album_zip": s.get("album_zip_url", ""),
-                    }}
+                    tracks = [
+                        {
+                            "position": t.get("position"),
+                            "title": t.get("title", ""),
+                            "duration_min": round(t.get("duration", 0) / 60000, 1),
+                            "set": t.get("set_name", ""),
+                            "mp3": t.get("mp3_url", ""),
+                        }
+                        for t in s.get("tracks", [])
+                    ]
+                    return {
+                        "success": True,
+                        "action": "show",
+                        "show": {
+                            "date": s.get("date"),
+                            "venue": s.get("venue_name", ""),
+                            "location": s.get("venue", {}).get("location", ""),
+                            "tour": s.get("tour_name", ""),
+                            "taper_notes": (s.get("taper_notes") or "")[:300],
+                            "tracks": tracks,
+                            "album_zip": s.get("album_zip_url", ""),
+                        },
+                    }
 
                 elif action == "song" and (song_slug or query):
                     slug = song_slug or query.lower().replace(" ", "-")
@@ -504,63 +762,141 @@ class ChiefOfStaffTools:
                     if resp.status_code != 200:
                         return {"success": False, "error": f"Song '{slug}' not found"}
                     s = resp.json().get("song", resp.json())
-                    return {"success": True, "action": "song", "song": {
-                        "title": s.get("title", ""), "slug": s.get("slug", ""),
-                        "times_played": s.get("tracks_count", 0),
-                        "original": s.get("original", True),
-                    }}
+                    return {
+                        "success": True,
+                        "action": "song",
+                        "song": {
+                            "title": s.get("title", ""),
+                            "slug": s.get("slug", ""),
+                            "times_played": s.get("tracks_count", 0),
+                            "original": s.get("original", True),
+                        },
+                    }
 
                 elif action == "songs":
                     params = {"per_page": min(limit, 20), "sort": "title:asc"}
                     if query:
                         params["filter"] = query
-                    resp = await client.get(f"{base}/songs", headers=headers, params=params)
+                    resp = await client.get(
+                        f"{base}/songs", headers=headers, params=params
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Songs API returned {resp.status_code}"}
-                    songs = [{"title": s.get("title", ""), "slug": s.get("slug", ""),
-                              "times_played": s.get("tracks_count", 0)}
-                             for s in resp.json().get("songs", [])]
-                    return {"success": True, "action": "songs", "count": len(songs), "songs": songs}
+                        return {
+                            "success": False,
+                            "error": f"Songs API returned {resp.status_code}",
+                        }
+                    songs = [
+                        {
+                            "title": s.get("title", ""),
+                            "slug": s.get("slug", ""),
+                            "times_played": s.get("tracks_count", 0),
+                        }
+                        for s in resp.json().get("songs", [])
+                    ]
+                    return {
+                        "success": True,
+                        "action": "songs",
+                        "count": len(songs),
+                        "songs": songs,
+                    }
 
                 elif action == "tours":
-                    resp = await client.get(f"{base}/tours", headers=headers, params={"per_page": min(limit, 20)})
+                    resp = await client.get(
+                        f"{base}/tours",
+                        headers=headers,
+                        params={"per_page": min(limit, 20)},
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Tours API returned {resp.status_code}"}
-                    tours = [{"name": t.get("name", ""), "shows_count": t.get("shows_count", 0),
-                              "starts_on": t.get("starts_on", ""), "ends_on": t.get("ends_on", "")}
-                             for t in resp.json().get("tours", [])]
-                    return {"success": True, "action": "tours", "count": len(tours), "tours": tours}
+                        return {
+                            "success": False,
+                            "error": f"Tours API returned {resp.status_code}",
+                        }
+                    tours = [
+                        {
+                            "name": t.get("name", ""),
+                            "shows_count": t.get("shows_count", 0),
+                            "starts_on": t.get("starts_on", ""),
+                            "ends_on": t.get("ends_on", ""),
+                        }
+                        for t in resp.json().get("tours", [])
+                    ]
+                    return {
+                        "success": True,
+                        "action": "tours",
+                        "count": len(tours),
+                        "tours": tours,
+                    }
 
                 elif action == "venues":
                     params = {"per_page": min(limit, 20), "sort": "shows_count:desc"}
-                    resp = await client.get(f"{base}/venues", headers=headers, params=params)
+                    resp = await client.get(
+                        f"{base}/venues", headers=headers, params=params
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Venues API returned {resp.status_code}"}
-                    venues = [{"name": v.get("name", ""), "location": v.get("location", ""),
-                               "shows_count": v.get("shows_count", 0)}
-                              for v in resp.json().get("venues", [])]
-                    return {"success": True, "action": "venues", "count": len(venues), "venues": venues}
+                        return {
+                            "success": False,
+                            "error": f"Venues API returned {resp.status_code}",
+                        }
+                    venues = [
+                        {
+                            "name": v.get("name", ""),
+                            "location": v.get("location", ""),
+                            "shows_count": v.get("shows_count", 0),
+                        }
+                        for v in resp.json().get("venues", [])
+                    ]
+                    return {
+                        "success": True,
+                        "action": "venues",
+                        "count": len(venues),
+                        "venues": venues,
+                    }
 
                 else:  # shows (default)
                     params = {"per_page": min(limit, 20), "sort": "date:desc"}
-                    resp = await client.get(f"{base}/shows", headers=headers, params=params)
+                    resp = await client.get(
+                        f"{base}/shows", headers=headers, params=params
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Shows API returned {resp.status_code}"}
-                    shows = [{"date": s.get("date", ""), "venue": s.get("venue_name", ""),
-                              "location": s.get("venue", {}).get("location", ""),
-                              "tour": s.get("tour_name", ""),
-                              "duration_min": round(s.get("duration", 0) / 60000),
-                              "tracks_count": len(s.get("tracks", [])) if "tracks" in s else None}
-                             for s in resp.json().get("shows", [])]
-                    return {"success": True, "action": "shows", "count": len(shows), "shows": shows}
+                        return {
+                            "success": False,
+                            "error": f"Shows API returned {resp.status_code}",
+                        }
+                    shows = [
+                        {
+                            "date": s.get("date", ""),
+                            "venue": s.get("venue_name", ""),
+                            "location": s.get("venue", {}).get("location", ""),
+                            "tour": s.get("tour_name", ""),
+                            "duration_min": round(s.get("duration", 0) / 60000),
+                            "tracks_count": len(s.get("tracks", []))
+                            if "tracks" in s
+                            else None,
+                        }
+                        for s in resp.json().get("shows", [])
+                    ]
+                    return {
+                        "success": True,
+                        "action": "shows",
+                        "count": len(shows),
+                        "shows": shows,
+                    }
 
         except Exception as e:
             logger.error(f"Phish.in API failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def search_books(self, action: str = "search", query: str = None,
-                           book_id: str = None, author: str = None, subject: str = None,
-                           isbn: str = None, filter_type: str = None, limit: int = 5):
+    async def search_books(
+        self,
+        action: str = "search",
+        query: str = None,
+        book_id: str = None,
+        author: str = None,
+        subject: str = None,
+        isbn: str = None,
+        filter_type: str = None,
+        limit: int = 5,
+    ):
         """Search Google Books API for book recommendations, details, and discovery."""
         import httpx
 
@@ -576,28 +912,43 @@ class ChiefOfStaffTools:
                         params["key"] = api_key
                     resp = await client.get(f"{base}/volumes/{book_id}", params=params)
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Book not found (ID: {book_id})"}
+                        return {
+                            "success": False,
+                            "error": f"Book not found (ID: {book_id})",
+                        }
                     vol = resp.json().get("volumeInfo", {})
                     sale = resp.json().get("saleInfo", {})
-                    return {"success": True, "action": "detail", "book": {
-                        "title": vol.get("title", ""),
-                        "authors": vol.get("authors", []),
-                        "publisher": vol.get("publisher", ""),
-                        "published_date": vol.get("publishedDate", ""),
-                        "description": (vol.get("description") or "")[:500],
-                        "page_count": vol.get("pageCount"),
-                        "categories": vol.get("categories", []),
-                        "average_rating": vol.get("averageRating"),
-                        "ratings_count": vol.get("ratingsCount"),
-                        "language": vol.get("language", ""),
-                        "isbn": next((i["identifier"] for i in vol.get("industryIdentifiers", [])
-                                     if i.get("type") == "ISBN_13"), None),
-                        "preview_link": vol.get("previewLink", ""),
-                        "info_link": vol.get("infoLink", ""),
-                        "thumbnail": vol.get("imageLinks", {}).get("thumbnail", ""),
-                        "price": f"${sale['listPrice']['amount']}" if sale.get("listPrice") else None,
-                        "buy_link": sale.get("buyLink", ""),
-                    }}
+                    return {
+                        "success": True,
+                        "action": "detail",
+                        "book": {
+                            "title": vol.get("title", ""),
+                            "authors": vol.get("authors", []),
+                            "publisher": vol.get("publisher", ""),
+                            "published_date": vol.get("publishedDate", ""),
+                            "description": (vol.get("description") or "")[:500],
+                            "page_count": vol.get("pageCount"),
+                            "categories": vol.get("categories", []),
+                            "average_rating": vol.get("averageRating"),
+                            "ratings_count": vol.get("ratingsCount"),
+                            "language": vol.get("language", ""),
+                            "isbn": next(
+                                (
+                                    i["identifier"]
+                                    for i in vol.get("industryIdentifiers", [])
+                                    if i.get("type") == "ISBN_13"
+                                ),
+                                None,
+                            ),
+                            "preview_link": vol.get("previewLink", ""),
+                            "info_link": vol.get("infoLink", ""),
+                            "thumbnail": vol.get("imageLinks", {}).get("thumbnail", ""),
+                            "price": f"${sale['listPrice']['amount']}"
+                            if sale.get("listPrice")
+                            else None,
+                            "buy_link": sale.get("buyLink", ""),
+                        },
+                    }
 
                 else:  # search (default)
                     # Build search query with special keywords
@@ -611,21 +962,31 @@ class ChiefOfStaffTools:
                     if isbn:
                         q_parts.append(f"isbn:{isbn}")
                     if not q_parts:
-                        return {"success": False, "error": "Provide query, author, subject, or isbn"}
+                        return {
+                            "success": False,
+                            "error": "Provide query, author, subject, or isbn",
+                        }
 
                     params = {
                         "q": " ".join(q_parts),
                         "maxResults": min(limit, 20),
                         "orderBy": "relevance",
                     }
-                    if filter_type and filter_type in ("ebooks", "free-ebooks", "paid-ebooks"):
+                    if filter_type and filter_type in (
+                        "ebooks",
+                        "free-ebooks",
+                        "paid-ebooks",
+                    ):
                         params["filter"] = filter_type
                     if api_key:
                         params["key"] = api_key
 
                     resp = await client.get(f"{base}/volumes", params=params)
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Google Books API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Google Books API returned {resp.status_code}",
+                        }
 
                     data = resp.json()
                     total = data.get("totalItems", 0)
@@ -633,31 +994,49 @@ class ChiefOfStaffTools:
                     for item in data.get("items", [])[:limit]:
                         vol = item.get("volumeInfo", {})
                         sale = item.get("saleInfo", {})
-                        books.append({
-                            "id": item.get("id", ""),
-                            "title": vol.get("title", ""),
-                            "authors": vol.get("authors", []),
-                            "published_date": vol.get("publishedDate", ""),
-                            "description": (vol.get("description") or "")[:200],
-                            "page_count": vol.get("pageCount"),
-                            "categories": vol.get("categories", []),
-                            "average_rating": vol.get("averageRating"),
-                            "ratings_count": vol.get("ratingsCount"),
-                            "thumbnail": vol.get("imageLinks", {}).get("thumbnail", ""),
-                            "preview_link": vol.get("previewLink", ""),
-                            "price": f"${sale['listPrice']['amount']}" if sale.get("listPrice") else None,
-                        })
-                    return {"success": True, "action": "search", "total_results": total,
-                            "count": len(books), "books": books}
+                        books.append(
+                            {
+                                "id": item.get("id", ""),
+                                "title": vol.get("title", ""),
+                                "authors": vol.get("authors", []),
+                                "published_date": vol.get("publishedDate", ""),
+                                "description": (vol.get("description") or "")[:200],
+                                "page_count": vol.get("pageCount"),
+                                "categories": vol.get("categories", []),
+                                "average_rating": vol.get("averageRating"),
+                                "ratings_count": vol.get("ratingsCount"),
+                                "thumbnail": vol.get("imageLinks", {}).get(
+                                    "thumbnail", ""
+                                ),
+                                "preview_link": vol.get("previewLink", ""),
+                                "price": f"${sale['listPrice']['amount']}"
+                                if sale.get("listPrice")
+                                else None,
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "search",
+                        "total_results": total,
+                        "count": len(books),
+                        "books": books,
+                    }
 
         except Exception as e:
             logger.error(f"Google Books API failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def search_nytimes(self, action: str = "top_stories", query: str = None,
-                             section: str = "home", period: int = 1,
-                             begin_date: str = None, end_date: str = None,
-                             list_name: str = None, limit: int = 5):
+    async def search_nytimes(
+        self,
+        action: str = "top_stories",
+        query: str = None,
+        section: str = "home",
+        period: int = 1,
+        begin_date: str = None,
+        end_date: str = None,
+        list_name: str = None,
+        limit: int = 5,
+    ):
         """Search NYTimes APIs: top stories, article search, best sellers, most popular."""
         import httpx
 
@@ -667,102 +1046,175 @@ class ChiefOfStaffTools:
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-
                 if action == "top_stories":
                     # Sections: home, world, us, politics, business, technology, science, health, sports, arts, opinion, etc.
-                    valid_sections = ["home", "world", "us", "politics", "business", "technology",
-                                     "science", "health", "sports", "arts", "books", "movies",
-                                     "theater", "opinion", "fashion", "food", "travel", "magazine", "realestate"]
+                    valid_sections = [
+                        "home",
+                        "world",
+                        "us",
+                        "politics",
+                        "business",
+                        "technology",
+                        "science",
+                        "health",
+                        "sports",
+                        "arts",
+                        "books",
+                        "movies",
+                        "theater",
+                        "opinion",
+                        "fashion",
+                        "food",
+                        "travel",
+                        "magazine",
+                        "realestate",
+                    ]
                     sec = section.lower() if section else "home"
                     if sec not in valid_sections:
                         sec = "home"
-                    resp = await client.get(f"https://api.nytimes.com/svc/topstories/v2/{sec}.json",
-                                           params={"api-key": api_key})
+                    resp = await client.get(
+                        f"https://api.nytimes.com/svc/topstories/v2/{sec}.json",
+                        params={"api-key": api_key},
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Top Stories API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Top Stories API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     articles = []
                     for r in data.get("results", [])[:limit]:
-                        articles.append({
-                            "title": r.get("title", ""),
-                            "abstract": r.get("abstract", ""),
-                            "section": r.get("section", ""),
-                            "byline": r.get("byline", ""),
-                            "published": r.get("published_date", "")[:10],
-                            "url": r.get("url", ""),
-                        })
-                    return {"success": True, "action": "top_stories", "section": sec,
-                            "count": len(articles), "articles": articles}
+                        articles.append(
+                            {
+                                "title": r.get("title", ""),
+                                "abstract": r.get("abstract", ""),
+                                "section": r.get("section", ""),
+                                "byline": r.get("byline", ""),
+                                "published": r.get("published_date", "")[:10],
+                                "url": r.get("url", ""),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "top_stories",
+                        "section": sec,
+                        "count": len(articles),
+                        "articles": articles,
+                    }
 
                 elif action == "search":
                     if not query:
-                        return {"success": False, "error": "Provide a query for article search"}
+                        return {
+                            "success": False,
+                            "error": "Provide a query for article search",
+                        }
                     params = {"q": query, "api-key": api_key, "sort": "newest"}
                     if begin_date:
                         params["begin_date"] = begin_date.replace("-", "")
                     if end_date:
                         params["end_date"] = end_date.replace("-", "")
-                    resp = await client.get("https://api.nytimes.com/svc/search/v2/articlesearch.json",
-                                           params=params)
+                    resp = await client.get(
+                        "https://api.nytimes.com/svc/search/v2/articlesearch.json",
+                        params=params,
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Article Search API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Article Search API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     meta = data.get("response", {}).get("meta", {})
                     articles = []
                     for doc in data.get("response", {}).get("docs", [])[:limit]:
-                        articles.append({
-                            "title": doc.get("headline", {}).get("main", ""),
-                            "abstract": doc.get("abstract", ""),
-                            "lead": (doc.get("lead_paragraph") or "")[:200],
-                            "section": doc.get("section_name", ""),
-                            "byline": doc.get("byline", {}).get("original", "") if isinstance(doc.get("byline"), dict) else "",
-                            "published": doc.get("pub_date", "")[:10],
-                            "url": doc.get("web_url", ""),
-                            "type": doc.get("document_type", ""),
-                        })
-                    return {"success": True, "action": "search", "query": query,
-                            "total_hits": meta.get("hits", 0), "count": len(articles),
-                            "articles": articles}
+                        articles.append(
+                            {
+                                "title": doc.get("headline", {}).get("main", ""),
+                                "abstract": doc.get("abstract", ""),
+                                "lead": (doc.get("lead_paragraph") or "")[:200],
+                                "section": doc.get("section_name", ""),
+                                "byline": doc.get("byline", {}).get("original", "")
+                                if isinstance(doc.get("byline"), dict)
+                                else "",
+                                "published": doc.get("pub_date", "")[:10],
+                                "url": doc.get("web_url", ""),
+                                "type": doc.get("document_type", ""),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "search",
+                        "query": query,
+                        "total_hits": meta.get("hits", 0),
+                        "count": len(articles),
+                        "articles": articles,
+                    }
 
                 elif action == "best_sellers":
                     # Get current best seller list
                     list_slug = list_name or "hardcover-fiction"
                     resp = await client.get(
                         f"https://api.nytimes.com/svc/books/v3/lists/current/{list_slug}.json",
-                        params={"api-key": api_key})
+                        params={"api-key": api_key},
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Books API returned {resp.status_code}. Try: hardcover-fiction, hardcover-nonfiction, paperback-nonfiction, young-adult-hardcover, series-books"}
+                        return {
+                            "success": False,
+                            "error": f"Books API returned {resp.status_code}. Try: hardcover-fiction, hardcover-nonfiction, paperback-nonfiction, young-adult-hardcover, series-books",
+                        }
                     data = resp.json()
                     results = data.get("results", {})
                     books = []
                     for b in results.get("books", [])[:limit]:
-                        books.append({
-                            "rank": b.get("rank"),
-                            "title": b.get("title", ""),
-                            "author": b.get("author", ""),
-                            "description": b.get("description", ""),
-                            "publisher": b.get("publisher", ""),
-                            "weeks_on_list": b.get("weeks_on_list", 0),
-                            "buy_links": [{"name": l.get("name", ""), "url": l.get("url", "")}
-                                         for l in b.get("buy_links", [])[:3]],
-                        })
-                    return {"success": True, "action": "best_sellers",
-                            "list_name": results.get("display_name", list_slug),
-                            "date": results.get("bestsellers_date", ""),
-                            "count": len(books), "books": books}
+                        books.append(
+                            {
+                                "rank": b.get("rank"),
+                                "title": b.get("title", ""),
+                                "author": b.get("author", ""),
+                                "description": b.get("description", ""),
+                                "publisher": b.get("publisher", ""),
+                                "weeks_on_list": b.get("weeks_on_list", 0),
+                                "buy_links": [
+                                    {"name": l.get("name", ""), "url": l.get("url", "")}
+                                    for l in b.get("buy_links", [])[:3]
+                                ],
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "best_sellers",
+                        "list_name": results.get("display_name", list_slug),
+                        "date": results.get("bestsellers_date", ""),
+                        "count": len(books),
+                        "books": books,
+                    }
 
                 elif action == "best_seller_lists":
-                    resp = await client.get("https://api.nytimes.com/svc/books/v3/lists/names.json",
-                                           params={"api-key": api_key})
+                    resp = await client.get(
+                        "https://api.nytimes.com/svc/books/v3/lists/names.json",
+                        params={"api-key": api_key},
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Lists API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Lists API returned {resp.status_code}",
+                        }
                     data = resp.json()
-                    lists = [{"name": r.get("display_name", ""), "slug": r.get("list_name_encoded", ""),
-                              "frequency": r.get("updated", ""), "oldest": r.get("oldest_published_date", ""),
-                              "newest": r.get("newest_published_date", "")}
-                             for r in data.get("results", [])[:min(limit, 20)]]
-                    return {"success": True, "action": "best_seller_lists",
-                            "count": len(lists), "lists": lists}
+                    lists = [
+                        {
+                            "name": r.get("display_name", ""),
+                            "slug": r.get("list_name_encoded", ""),
+                            "frequency": r.get("updated", ""),
+                            "oldest": r.get("oldest_published_date", ""),
+                            "newest": r.get("newest_published_date", ""),
+                        }
+                        for r in data.get("results", [])[: min(limit, 20)]
+                    ]
+                    return {
+                        "success": True,
+                        "action": "best_seller_lists",
+                        "count": len(lists),
+                        "lists": lists,
+                    }
 
                 elif action == "most_popular":
                     # type: viewed, emailed, shared; period: 1, 7, 30
@@ -772,101 +1224,165 @@ class ChiefOfStaffTools:
                     p = period if period in (1, 7, 30) else 1
                     resp = await client.get(
                         f"https://api.nytimes.com/svc/mostpopular/v2/{pop_type}/{p}.json",
-                        params={"api-key": api_key})
+                        params={"api-key": api_key},
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Most Popular API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Most Popular API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     articles = []
                     for r in data.get("results", [])[:limit]:
-                        articles.append({
-                            "title": r.get("title", ""),
-                            "abstract": r.get("abstract", ""),
-                            "section": r.get("section", ""),
-                            "byline": r.get("byline", ""),
-                            "published": r.get("published_date", ""),
-                            "url": r.get("url", ""),
-                        })
-                    return {"success": True, "action": "most_popular", "type": pop_type,
-                            "period_days": p, "count": len(articles), "articles": articles}
+                        articles.append(
+                            {
+                                "title": r.get("title", ""),
+                                "abstract": r.get("abstract", ""),
+                                "section": r.get("section", ""),
+                                "byline": r.get("byline", ""),
+                                "published": r.get("published_date", ""),
+                                "url": r.get("url", ""),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "most_popular",
+                        "type": pop_type,
+                        "period_days": p,
+                        "count": len(articles),
+                        "articles": articles,
+                    }
 
                 else:
-                    return {"success": False, "error": f"Unknown action '{action}'. Use: top_stories, search, best_sellers, best_seller_lists, most_popular"}
+                    return {
+                        "success": False,
+                        "error": f"Unknown action '{action}'. Use: top_stories, search, best_sellers, best_seller_lists, most_popular",
+                    }
 
         except Exception as e:
             logger.error(f"NYTimes API failed: {e}")
             return {"success": False, "error": str(e)}
 
-    async def search_f1(self, action: str = "standings", query: str = None,
-                        year: int = None, round_num: int = None, limit: int = 10):
+    async def search_f1(
+        self,
+        action: str = "standings",
+        query: str = None,
+        year: int = None,
+        round_num: int = None,
+        limit: int = 10,
+    ):
         """Search F1 API — standings, race results, schedules, drivers, teams, circuits. No key needed."""
         import httpx
 
         base = "https://f1api.dev/api"
 
         def _driver(d):
-            return {"name": f"{d.get('name','')} {d.get('surname','')}", "number": d.get("number"),
-                    "short": d.get("shortName", ""), "nationality": d.get("nationality", "")}
+            return {
+                "name": f"{d.get('name', '')} {d.get('surname', '')}",
+                "number": d.get("number"),
+                "short": d.get("shortName", ""),
+                "nationality": d.get("nationality", ""),
+            }
 
         def _team(t):
-            return {"name": t.get("teamName", ""), "country": t.get("country", ""),
-                    "wcc": t.get("constructorsChampionships", 0), "wdc": t.get("driversChampionships", 0)}
+            return {
+                "name": t.get("teamName", ""),
+                "country": t.get("country", ""),
+                "wcc": t.get("constructorsChampionships", 0),
+                "wdc": t.get("driversChampionships", 0),
+            }
 
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
-
                 if action == "standings" or action == "drivers_championship":
                     yr = year or "current"
                     resp = await client.get(f"{base}/{yr}/drivers-championship")
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Standings API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Standings API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     standings = []
                     for s in data.get("drivers_championship", [])[:limit]:
-                        standings.append({
-                            "position": s.get("position"), "points": s.get("points"),
-                            "wins": s.get("wins", 0), "driver": _driver(s.get("driver", {})),
-                            "team": s.get("team", {}).get("teamName", ""),
-                        })
-                    return {"success": True, "action": "drivers_championship",
-                            "season": data.get("season"), "count": len(standings), "standings": standings}
+                        standings.append(
+                            {
+                                "position": s.get("position"),
+                                "points": s.get("points"),
+                                "wins": s.get("wins", 0),
+                                "driver": _driver(s.get("driver", {})),
+                                "team": s.get("team", {}).get("teamName", ""),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "drivers_championship",
+                        "season": data.get("season"),
+                        "count": len(standings),
+                        "standings": standings,
+                    }
 
                 elif action == "constructors_championship":
                     yr = year or "current"
                     resp = await client.get(f"{base}/{yr}/constructors-championship")
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Constructors API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Constructors API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     standings = []
                     for s in data.get("constructors_championship", [])[:limit]:
-                        standings.append({
-                            "position": s.get("position"), "points": s.get("points"),
-                            "wins": s.get("wins", 0), "team": _team(s.get("team", {})),
-                        })
-                    return {"success": True, "action": "constructors_championship",
-                            "season": data.get("season"), "count": len(standings), "standings": standings}
+                        standings.append(
+                            {
+                                "position": s.get("position"),
+                                "points": s.get("points"),
+                                "wins": s.get("wins", 0),
+                                "team": _team(s.get("team", {})),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "constructors_championship",
+                        "season": data.get("season"),
+                        "count": len(standings),
+                        "standings": standings,
+                    }
 
                 elif action == "next_race":
                     resp = await client.get(f"{base}/current/next")
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Next race API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Next race API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     races = data.get("race", [])
                     if not races:
-                        return {"success": True, "action": "next_race", "message": "No upcoming race scheduled"}
+                        return {
+                            "success": True,
+                            "action": "next_race",
+                            "message": "No upcoming race scheduled",
+                        }
                     r = races[0]
                     sched = r.get("schedule", {})
                     circuit = r.get("circuit", {})
-                    return {"success": True, "action": "next_race", "season": data.get("season"),
-                            "round": data.get("round"), "race": {
-                                "name": r.get("raceName", ""),
-                                "date": sched.get("race", {}).get("date", ""),
-                                "time_utc": sched.get("race", {}).get("time", ""),
-                                "qualifying": sched.get("qualy", {}).get("date", ""),
-                                "fp1": sched.get("fp1", {}).get("date", ""),
-                                "circuit": circuit.get("circuitName", ""),
-                                "city": circuit.get("city", ""),
-                                "country": circuit.get("country", ""),
-                            }}
+                    return {
+                        "success": True,
+                        "action": "next_race",
+                        "season": data.get("season"),
+                        "round": data.get("round"),
+                        "race": {
+                            "name": r.get("raceName", ""),
+                            "date": sched.get("race", {}).get("date", ""),
+                            "time_utc": sched.get("race", {}).get("time", ""),
+                            "qualifying": sched.get("qualy", {}).get("date", ""),
+                            "fp1": sched.get("fp1", {}).get("date", ""),
+                            "circuit": circuit.get("circuitName", ""),
+                            "city": circuit.get("city", ""),
+                            "country": circuit.get("country", ""),
+                        },
+                    }
 
                 elif action == "last_race" or action == "race_results":
                     if year and round_num:
@@ -875,25 +1391,37 @@ class ChiefOfStaffTools:
                         url = f"{base}/current/last/race"
                     resp = await client.get(url)
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Race results API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Race results API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     race_info = data.get("races", {})
                     results = []
                     for r in race_info.get("results", [])[:limit]:
-                        results.append({
-                            "position": r.get("position"), "grid": r.get("grid"),
-                            "points": r.get("points"), "time": r.get("time", ""),
-                            "fast_lap": r.get("fastLap", ""),
-                            "driver": _driver(r.get("driver", {})),
-                            "team": r.get("team", {}).get("teamName", ""),
-                            "retired": r.get("retired"),
-                        })
-                    return {"success": True, "action": "race_results",
-                            "race": race_info.get("raceName", ""),
-                            "date": race_info.get("date", ""),
-                            "circuit": race_info.get("circuit", {}).get("circuitName", ""),
-                            "season": data.get("season"), "round": race_info.get("round"),
-                            "count": len(results), "results": results}
+                        results.append(
+                            {
+                                "position": r.get("position"),
+                                "grid": r.get("grid"),
+                                "points": r.get("points"),
+                                "time": r.get("time", ""),
+                                "fast_lap": r.get("fastLap", ""),
+                                "driver": _driver(r.get("driver", {})),
+                                "team": r.get("team", {}).get("teamName", ""),
+                                "retired": r.get("retired"),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "race_results",
+                        "race": race_info.get("raceName", ""),
+                        "date": race_info.get("date", ""),
+                        "circuit": race_info.get("circuit", {}).get("circuitName", ""),
+                        "season": data.get("season"),
+                        "round": race_info.get("round"),
+                        "count": len(results),
+                        "results": results,
+                    }
 
                 elif action == "qualifying":
                     if year and round_num:
@@ -902,93 +1430,159 @@ class ChiefOfStaffTools:
                         url = f"{base}/current/last/qualy"
                     resp = await client.get(url)
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Qualifying API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Qualifying API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     race_info = data.get("races", {})
                     results = []
                     for r in race_info.get("results", [])[:limit]:
-                        results.append({
-                            "position": r.get("position"), "q1": r.get("q1", ""),
-                            "q2": r.get("q2", ""), "q3": r.get("q3", ""),
-                            "driver": _driver(r.get("driver", {})),
-                            "team": r.get("team", {}).get("teamName", ""),
-                        })
-                    return {"success": True, "action": "qualifying",
-                            "race": race_info.get("raceName", ""),
-                            "count": len(results), "results": results}
+                        results.append(
+                            {
+                                "position": r.get("position"),
+                                "q1": r.get("q1", ""),
+                                "q2": r.get("q2", ""),
+                                "q3": r.get("q3", ""),
+                                "driver": _driver(r.get("driver", {})),
+                                "team": r.get("team", {}).get("teamName", ""),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "qualifying",
+                        "race": race_info.get("raceName", ""),
+                        "count": len(results),
+                        "results": results,
+                    }
 
                 elif action == "schedule":
                     yr = year or "current"
                     resp = await client.get(f"{base}/{yr}/races")
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Schedule API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Schedule API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     races = []
                     for r in data.get("races", [])[:limit]:
                         sched = r.get("schedule", {})
                         circuit = r.get("circuit", {})
-                        races.append({
-                            "round": r.get("round"), "name": r.get("raceName", ""),
-                            "date": sched.get("race", {}).get("date", ""),
-                            "circuit": circuit.get("circuitName", ""),
-                            "city": circuit.get("city", ""),
-                            "country": circuit.get("country", ""),
-                        })
-                    return {"success": True, "action": "schedule", "season": data.get("season"),
-                            "count": len(races), "races": races}
+                        races.append(
+                            {
+                                "round": r.get("round"),
+                                "name": r.get("raceName", ""),
+                                "date": sched.get("race", {}).get("date", ""),
+                                "circuit": circuit.get("circuitName", ""),
+                                "city": circuit.get("city", ""),
+                                "country": circuit.get("country", ""),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "schedule",
+                        "season": data.get("season"),
+                        "count": len(races),
+                        "races": races,
+                    }
 
                 elif action == "drivers":
                     yr = year or "current"
                     resp = await client.get(f"{base}/{yr}/drivers")
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Drivers API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Drivers API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     drivers = [_driver(d) for d in data.get("drivers", [])[:limit]]
-                    return {"success": True, "action": "drivers", "season": data.get("season"),
-                            "count": len(drivers), "drivers": drivers}
+                    return {
+                        "success": True,
+                        "action": "drivers",
+                        "season": data.get("season"),
+                        "count": len(drivers),
+                        "drivers": drivers,
+                    }
 
                 elif action == "driver" and query:
                     # Search by name
-                    resp = await client.get(f"{base}/drivers/search", params={"q": query})
+                    resp = await client.get(
+                        f"{base}/drivers/search", params={"q": query}
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Driver search returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Driver search returned {resp.status_code}",
+                        }
                     data = resp.json()
                     drivers = [_driver(d) for d in data.get("drivers", [])[:limit]]
-                    return {"success": True, "action": "driver_search", "query": query,
-                            "count": len(drivers), "drivers": drivers}
+                    return {
+                        "success": True,
+                        "action": "driver_search",
+                        "query": query,
+                        "count": len(drivers),
+                        "drivers": drivers,
+                    }
 
                 elif action == "teams":
                     yr = year or "current"
                     resp = await client.get(f"{base}/{yr}/teams")
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Teams API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Teams API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     teams = [_team(t) for t in data.get("teams", [])[:limit]]
-                    return {"success": True, "action": "teams", "season": data.get("season"),
-                            "count": len(teams), "teams": teams}
+                    return {
+                        "success": True,
+                        "action": "teams",
+                        "season": data.get("season"),
+                        "count": len(teams),
+                        "teams": teams,
+                    }
 
                 elif action == "circuits":
-                    resp = await client.get(f"{base}/circuits", params={"limit": min(limit, 30)})
+                    resp = await client.get(
+                        f"{base}/circuits", params={"limit": min(limit, 30)}
+                    )
                     if resp.status_code != 200:
-                        return {"success": False, "error": f"Circuits API returned {resp.status_code}"}
+                        return {
+                            "success": False,
+                            "error": f"Circuits API returned {resp.status_code}",
+                        }
                     data = resp.json()
                     circuits = []
                     for c in data.get("circuits", [])[:limit]:
-                        circuits.append({
-                            "name": c.get("circuitName", ""), "id": c.get("circuitId", ""),
-                            "city": c.get("city", ""), "country": c.get("country", ""),
-                            "length": c.get("circuitLength", ""), "corners": c.get("corners"),
-                            "lap_record": c.get("lapRecord", ""),
-                        })
-                    return {"success": True, "action": "circuits",
-                            "count": len(circuits), "circuits": circuits}
+                        circuits.append(
+                            {
+                                "name": c.get("circuitName", ""),
+                                "id": c.get("circuitId", ""),
+                                "city": c.get("city", ""),
+                                "country": c.get("country", ""),
+                                "length": c.get("circuitLength", ""),
+                                "corners": c.get("corners"),
+                                "lap_record": c.get("lapRecord", ""),
+                            }
+                        )
+                    return {
+                        "success": True,
+                        "action": "circuits",
+                        "count": len(circuits),
+                        "circuits": circuits,
+                    }
 
                 else:
-                    return {"success": False, "error": f"Unknown action '{action}'. Use: standings, constructors_championship, next_race, last_race, race_results, qualifying, schedule, drivers, driver, teams, circuits"}
+                    return {
+                        "success": False,
+                        "error": f"Unknown action '{action}'. Use: standings, constructors_championship, next_race, last_race, race_results, qualifying, schedule, drivers, driver, teams, circuits",
+                    }
 
         except Exception as e:
             logger.error(f"F1 API failed: {e}")
             return {"success": False, "error": str(e)}
+
 
 # Singleton
 cos_tools = ChiefOfStaffTools()

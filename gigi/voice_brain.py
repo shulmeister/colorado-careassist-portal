@@ -399,6 +399,7 @@ _VOICE_SYSTEM_PROMPT_BASE = """You are Gigi, the AI Chief of Staff for Colorado 
   - Say "phone number is" NOT "phone:"
   - Spell out numbers naturally ("six-six-six-six-two-one-six" not "6666216")
 - Use gender-neutral language ("they/them") unless you know someone's gender. Do NOT assume.
+- ABSOLUTELY NO MARKDOWN FORMATTING. Never use **bold**, *italic*, #headers, `backticks`, bullet points (- or *), numbered lists (1. 2. 3.), or [links](url). The text-to-speech engine reads these characters literally — the caller hears "asterisk asterisk" which is terrible. Use word choice and natural emphasis instead. This rule is NON-NEGOTIABLE even if the user asks you to emphasize something.
 
 # Who You're Talking To
 - Caregivers: scheduling, call-outs, shift questions
@@ -534,6 +535,12 @@ DO NOT transfer if you can handle it with your tools. Caregivers asking about sh
   - Tickets: Ask about seat preference — GA, reserved, VIP, pit, balcony, floor, etc. Also ask about price range.
   - Restaurants: Ask about seating preference — indoor, outdoor, booth, bar, patio. Ask about occasion or special requests.
   - Never assume seat location or seating preference. Gather the details, confirm with the caller, then execute.
+
+# Proactive Behavior
+- If the user mentions a venue, date, or event — SEARCH FOR IT immediately. Don't ask "what band?" — search the venue plus the date and tell them what you find.
+- If a tool returns no results, try alternative queries before saying you couldn't find anything. Try: different spelling, venue name as keyword, broader date range, or web_search as fallback.
+- Infer intent from context. "There's a good show Friday" means search for shows this Friday in the local area. "Boulder Theatre this weekend" means search Boulder Theatre plus this weekend's dates.
+- When the caller hints at wanting something, ACT on it. Don't interrogate — investigate. You can always confirm details after you have results to share.
 
 # Tone
 - NO sycophantic language: never say "locked in", "inner circle", "absolutely", "on it".
@@ -1571,10 +1578,14 @@ class VoiceBrainHandler:
                     on_tool_event=on_tool_event,
                 )
 
-                # Strip hallucinated CLI/install suggestions
-                from gigi.response_filter import strip_banned_content
+                # Strip hallucinated CLI/install suggestions + markdown for voice
+                from gigi.response_filter import (
+                    strip_banned_content,
+                    strip_markdown_for_voice,
+                )
 
                 response_text = strip_banned_content(response_text)
+                response_text = strip_markdown_for_voice(response_text)
 
                 # Check staleness before sending final response
                 if response_id != self.current_response_id:
