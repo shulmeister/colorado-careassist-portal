@@ -748,7 +748,7 @@ async def api_gigi_run_simulation(
 
     except Exception as e:
         logger.error(f"Failed to launch simulation: {e}", exc_info=True)
-        return JSONResponse({"success": False, "error": str(e)})
+        return JSONResponse({"success": False, "error": "Internal server error"})
 
 
 @app.post("/api/gigi/settings")
@@ -1698,7 +1698,7 @@ async def api_gigi_get_calls(
                 return JSONResponse({"success": False, "error": response.text})
     except Exception as e:
         logger.error(f"Failed to fetch Retell calls: {e}")
-        return JSONResponse({"success": False, "error": str(e)})
+        return JSONResponse({"success": False, "error": "Internal server error"})
 
 
 @app.get("/api/gigi/reports")
@@ -2217,8 +2217,8 @@ async def api_gigi_get_sop(current_user: Dict[str, Any] = Depends(get_current_us
             return JSONResponse({"success": True, "content": content})
         else:
             return JSONResponse({"success": False, "error": "SOP file not found"})
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)})
+    except Exception:
+        return JSONResponse({"success": False, "error": "Internal server error"})
 
 
 @app.post("/api/gigi/knowledge/sop")
@@ -2240,7 +2240,7 @@ async def api_gigi_save_sop(
         return JSONResponse({"success": True, "message": "SOP updated successfully"})
     except Exception as e:
         logger.error(f"Failed to save SOP: {e}")
-        return JSONResponse({"success": False, "error": str(e)})
+        return JSONResponse({"success": False, "error": "Internal server error"})
 
 
 @app.get("/api/gigi/knowledge/memories")
@@ -2284,7 +2284,7 @@ async def api_gigi_get_memories(
         )
     except Exception as e:
         logger.error(f"Failed to fetch memories: {e}")
-        return JSONResponse({"success": False, "error": str(e)})
+        return JSONResponse({"success": False, "error": "Internal server error"})
 
 
 @app.get("/api/gigi/knowledge/clients")
@@ -2368,8 +2368,10 @@ async def api_gigi_learning_stats(
 
         stats = get_evaluation_stats()
         return JSONResponse({"success": True, **stats})
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    except Exception:
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/gigi/learning/flagged")
@@ -2384,8 +2386,10 @@ async def api_gigi_learning_flagged(
 
         flagged = get_flagged_responses(limit=limit, channel=channel)
         return JSONResponse({"success": True, "flagged": flagged}, default=str)
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    except Exception:
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/gigi/learning/evaluations")
@@ -2397,11 +2401,8 @@ async def api_gigi_learning_evaluations(
 ):
     """Paginated list of all evaluations."""
     limit = min(limit, 200)
-    conn = psycopg2.connect(
-        os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
-    )
     try:
-        with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        with get_pg_conn(cursor_factory=psycopg2.extras.RealDictCursor) as (conn, cur):
             where = "1=1"
             params = []
             if channel:
@@ -2421,11 +2422,12 @@ async def api_gigi_learning_evaluations(
                 params + [limit, offset],
             )
             evals = [dict(row) for row in cur.fetchall()]
-        return JSONResponse({"success": True, "evaluations": evals}, default=str)
+            return JSONResponse({"success": True, "evaluations": evals}, default=str)
     except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
-    finally:
-        conn.close()
+        logger.error(f"Failed to fetch evaluations: {e}", exc_info=True)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 # API endpoints for tools
@@ -2462,7 +2464,9 @@ async def global_search(
         return JSONResponse({"success": True, "results": results})
     except Exception as e:
         logger.error(f"Search error: {e}")
-        return JSONResponse({"success": False, "error": str(e), "results": []})
+        return JSONResponse(
+            {"success": False, "error": "Internal server error", "results": []}
+        )
 
 
 @app.get("/api/activity-stream")
@@ -4251,7 +4255,9 @@ async def api_fax_send(
         return JSONResponse(result)
     except Exception as e:
         logger.error(f"Fax send error: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/fax/view/{fax_id}")
@@ -4335,7 +4341,9 @@ async def api_fax_poll(current_user: Dict[str, Any] = Depends(get_current_user))
         )
     except Exception as e:
         logger.error(f"Fax poll error: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/api/fax/retry-wellsky")
@@ -4350,7 +4358,7 @@ async def api_fax_retry_wellsky(
         return JSONResponse(result)
     except Exception as e:
         logger.error(f"WellSky retry error: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
 
 
 # ── End Fax ───────────────────────────────────────────────────────────────────
@@ -4768,7 +4776,9 @@ async def api_wellsky_caregivers(
         )
     except Exception as e:
         logger.error(f"Error getting caregivers: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/internal/wellsky/clients")
@@ -4812,7 +4822,9 @@ async def api_wellsky_clients(
         )
     except Exception as e:
         logger.error(f"Error getting clients: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/internal/wellsky/shifts")
@@ -4879,7 +4891,9 @@ async def api_wellsky_shifts(
         )
     except Exception as e:
         logger.error(f"Error getting shifts: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 #
@@ -5672,7 +5686,7 @@ async def api_gigi_ringcentral_command(request: Request):
         return JSONResponse(
             {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
             },
             status_code=500,
         )
@@ -5724,7 +5738,9 @@ async def api_gigi_command_simple(
 
     except Exception as e:
         logger.error(f"Error processing Gigi command: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 #
@@ -5901,7 +5917,9 @@ async def goformz_wellsky_webhook(request: Request):
 
     except Exception as e:
         logger.exception(f"Error processing GoFormz→WellSky webhook: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/goformz/wellsky-sync/status")
@@ -7330,8 +7348,10 @@ async def get_predis_posts(
     try:
         posts = predis_service.get_recent_creations(page=page)
         return JSONResponse({"success": True, "posts": posts, "page": page})
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    except Exception:
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/api/marketing/predis/generate")
@@ -7354,8 +7374,10 @@ async def generate_predis_content(
         result = predis_service.generate_content(prompt=prompt, media_type=media_type)
         return JSONResponse(result)
 
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    except Exception:
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/marketing/predis/templates")
@@ -7368,8 +7390,10 @@ async def get_predis_templates(
     try:
         templates = predis_service.get_templates(page=page)
         return JSONResponse({"success": True, "templates": templates, "page": page})
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    except Exception:
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/marketing/test-gbp")
@@ -7766,7 +7790,7 @@ async def api_marketing_pinterest(
         return JSONResponse(
             {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "data": pinterest_service._get_placeholder_metrics(start, end),
             }
         )
@@ -7899,8 +7923,8 @@ async def pinterest_oauth_callback(
                     "details": response.text,
                 }
             )
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)})
+    except Exception:
+        return JSONResponse({"success": False, "error": "Internal server error"})
 
 
 @app.get("/api/marketing/linkedin")
@@ -7946,7 +7970,7 @@ async def api_marketing_linkedin(
         return JSONResponse(
             {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "data": linkedin_service._get_placeholder_metrics(start, end),
             }
         )
@@ -8104,7 +8128,7 @@ async def api_marketing_tiktok(
         return JSONResponse(
             {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "data": tiktok_service._get_placeholder_metrics(start, end),
             }
         )
@@ -8599,7 +8623,7 @@ async def get_sms_log(
 
     except Exception as e:
         logger.error(f"SMS log fetch error: {e}")
-        return JSONResponse({"messages": [], "error": str(e)})
+        return JSONResponse({"messages": [], "error": "Internal server error"})
 
 
 #
@@ -8660,7 +8684,9 @@ async def api_log_client_issue(request: Request):
 
     except Exception as e:
         logger.error(f"Error logging client issue: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/api/operations/sync-rc-to-wellsky")
@@ -8749,7 +8775,9 @@ async def api_log_call_out(request: Request):
 
     except Exception as e:
         logger.error(f"Error logging call-out: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 #
@@ -8843,7 +8871,9 @@ async def api_update_wellsky_shift(shift_id: str, request: Request):
 
     except Exception as e:
         logger.error(f"Error updating WellSky shift: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/api/operations/replacement-blast")
@@ -8957,7 +8987,9 @@ async def api_trigger_replacement_blast(request: Request):
 
     except Exception as e:
         logger.error(f"Error triggering replacement blast: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 #
@@ -9011,7 +9043,9 @@ async def internal_match_caregivers(shift_id: str, max_results: int = 10):
 
     except Exception as e:
         logger.error(f"Error matching caregivers: {e}")
-        return JSONResponse({"candidates": [], "count": 0, "error": str(e)})
+        return JSONResponse(
+            {"candidates": [], "count": 0, "error": "Internal server error"}
+        )
 
 
 @app.post("/api/internal/shift-filling/calloff")
@@ -9085,7 +9119,7 @@ async def internal_process_calloff(request: Request):
                 "message": "Error starting shift filling. On-call manager will be notified.",
                 "campaign_id": None,
                 "candidates_contacted": 0,
-                "error": str(e),
+                "error": "Internal server error",
             }
         )
 
@@ -9127,7 +9161,7 @@ async def internal_get_campaign_status(campaign_id: str):
 
     except Exception as e:
         logger.error(f"Error getting campaign status: {e}")
-        return JSONResponse({"found": False, "error": str(e)})
+        return JSONResponse({"found": False, "error": "Internal server error"})
 
 
 @app.post("/api/internal/shift-filling/voice-followups")
@@ -9146,7 +9180,7 @@ async def internal_check_voice_followups():
         )
     except Exception as e:
         logger.error(f"Voice followup check error: {e}")
-        return JSONResponse({"calls_made": 0, "error": str(e)})
+        return JSONResponse({"calls_made": 0, "error": "Internal server error"})
 
 
 # In-memory set for Retell call_id idempotency (backed by DB)
@@ -9337,7 +9371,9 @@ async def internal_send_shift_offer(request: Request):
 
     except Exception as e:
         logger.error(f"Error sending shift offer: {e}")
-        return JSONResponse({"success": False, "sms_sent": False, "error": str(e)})
+        return JSONResponse(
+            {"success": False, "sms_sent": False, "error": "Internal server error"}
+        )
 
 
 @app.post("/api/internal/shift-filling/sms-response")
@@ -9486,7 +9522,11 @@ async def internal_process_sms_response(request: Request):
     except Exception as e:
         logger.error(f"Error processing SMS response: {e}")
         return JSONResponse(
-            {"success": False, "found_campaign": False, "error": str(e)},
+            {
+                "success": False,
+                "found_campaign": False,
+                "error": "Internal server error",
+            },
             status_code=500,
         )
 
@@ -9534,7 +9574,9 @@ async def internal_add_client_note(
 
     except Exception as e:
         logger.error(f"Error adding note to client {client_id}: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/api/internal/wellsky/notes/caregiver/{caregiver_id}")
@@ -9575,7 +9617,9 @@ async def internal_add_caregiver_note(
 
     except Exception as e:
         logger.error(f"Error adding note to caregiver {caregiver_id}: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.get("/api/internal/wellsky/clients/{client_id}/shifts")
@@ -9625,7 +9669,8 @@ async def internal_get_client_shifts(
     except Exception as e:
         logger.error(f"Error getting client shifts: {e}")
         return JSONResponse(
-            {"success": False, "shifts": [], "error": str(e)}, status_code=500
+            {"success": False, "shifts": [], "error": "Internal server error"},
+            status_code=500,
         )
 
 
@@ -9673,7 +9718,9 @@ async def internal_assign_shift(
 
     except Exception as e:
         logger.error(f"Error assigning shift: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.put("/api/internal/wellsky/shifts/{shift_id}/cancel")
@@ -9708,7 +9755,9 @@ async def internal_cancel_shift(
 
     except Exception as e:
         logger.error(f"Error cancelling shift: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/api/internal/wellsky/shifts/{shift_id}/late-notification")
@@ -9749,7 +9798,9 @@ async def internal_late_notification(
 
     except Exception as e:
         logger.error(f"Error sending late notification: {e}")
-        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+        return JSONResponse(
+            {"success": False, "error": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/api/parse-va-form-10-7080")
@@ -10637,7 +10688,11 @@ Return ONLY the JSON object, no other text."""
     except Exception as e:
         print(f"Error parsing VA RFS referral: {e}")
         return JSONResponse(
-            {"success": False, "error": str(e), "message": "Failed to parse PDF"},
+            {
+                "success": False,
+                "error": "Internal server error",
+                "message": "Failed to parse PDF",
+            },
             status_code=200,
         )
 
@@ -10842,7 +10897,7 @@ async def fill_va_rfs_form(
         return JSONResponse(
             {
                 "success": False,
-                "error": str(e),
+                "error": "Internal server error",
                 "message": "Failed to fill VA RFS form",
             },
             status_code=500,
