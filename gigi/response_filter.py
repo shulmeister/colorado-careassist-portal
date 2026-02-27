@@ -66,6 +66,42 @@ SECTION_HEADERS_TO_STRIP = re.compile(
 )
 
 
+def strip_markdown_for_voice(text: str) -> str:
+    """
+    Strip markdown formatting that TTS engines read literally.
+
+    Removes: **bold**, *italic*, `backticks`, # headers, [links](url),
+    bullet points (- / * / •), numbered lists (1. 2. 3.).
+
+    This is applied ONLY to voice channel responses.
+    """
+    if not text:
+        return text
+
+    # Strip bold/italic: **text** → text, *text* → text
+    text = re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", text)
+
+    # Strip backticks: `code` → code, ```code``` → code
+    text = re.sub(r"`{1,3}([^`]*)`{1,3}", r"\1", text)
+
+    # Strip markdown links: [text](url) → text
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+
+    # Strip header markers: ### Header → Header
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+
+    # Strip bullet points at line start: - item / * item / • item → item
+    text = re.sub(r"^[\s]*[-*•]\s+", "", text, flags=re.MULTILINE)
+
+    # Strip numbered lists: 1. item / 2) item → item
+    text = re.sub(r"^[\s]*\d+[.)]\s+", "", text, flags=re.MULTILINE)
+
+    # Collapse multiple newlines into one (markdown often has double-newlines)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
+
+
 def strip_banned_content(text: str) -> str:
     """
     Remove any lines/sections containing banned CLI/install references.
@@ -87,9 +123,11 @@ def strip_banned_content(text: str) -> str:
         return text
 
     # Banned content detected — strip it line by line
-    logger.warning("BANNED CONTENT DETECTED in LLM response — stripping hallucinated CLI references")
+    logger.warning(
+        "BANNED CONTENT DETECTED in LLM response — stripping hallucinated CLI references"
+    )
 
-    lines = text.split('\n')
+    lines = text.split("\n")
     cleaned = []
     skip_section = False
 
@@ -103,7 +141,9 @@ def strip_banned_content(text: str) -> str:
         is_setup_header = bool(SECTION_HEADERS_TO_STRIP.match(ll))
 
         # Check if this is a checklist item (often part of hallucinated setup steps)
-        is_checklist = ll.startswith("• [ ]") or ll.startswith("- [ ]") or ll.startswith("* [ ]")
+        is_checklist = (
+            ll.startswith("• [ ]") or ll.startswith("- [ ]") or ll.startswith("* [ ]")
+        )
 
         if has_banned or is_setup_header or is_checklist:
             skip_section = True
@@ -112,16 +152,22 @@ def strip_banned_content(text: str) -> str:
         # If we're in a skip section, keep skipping continuation lines
         # (bullets, numbered items, indented lines, empty lines)
         if skip_section:
-            if (ll.startswith("•") or ll.startswith("-") or ll.startswith("*") or
-                ll.startswith("  ") or ll.startswith("\t") or
-                re.match(r"^\d+[\.\)]\s", ll) or ll == ""):
+            if (
+                ll.startswith("•")
+                or ll.startswith("-")
+                or ll.startswith("*")
+                or ll.startswith("  ")
+                or ll.startswith("\t")
+                or re.match(r"^\d+[\.\)]\s", ll)
+                or ll == ""
+            ):
                 continue
             # Non-continuation line — stop skipping
             skip_section = False
 
         cleaned.append(line)
 
-    result = '\n'.join(cleaned).strip()
+    result = "\n".join(cleaned).strip()
 
     if not result:
         result = "Here's what I found. Let me know if you need anything else."
