@@ -44,6 +44,12 @@ const buildListQuery = (params: GetListParams) => {
   if (filter["created_at@lte"]) {
     searchParams.set("created_at_lte", filter["created_at@lte"]);
   }
+  if ("archived_at@is" in filter && filter["archived_at@is"] === null) {
+    searchParams.set("archived", "false");
+  }
+  if ("archived_at@not.is" in filter && filter["archived_at@not.is"] === null) {
+    searchParams.set("archived", "true");
+  }
 
   const query = searchParams.toString();
   return query ? `?${query}` : "";
