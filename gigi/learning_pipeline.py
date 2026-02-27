@@ -40,8 +40,8 @@ PAIRING_WINDOW_MINUTES = 60
 MIN_DIFFERENCE_SCORE = 3  # out of 10
 
 # --- Evaluation Pipeline Constants ---
-EVAL_MODEL_NIGHTLY = "claude-sonnet-4-6-20250514"
-EVAL_MODEL_ON_DEMAND = "claude-opus-4-6-20250514"
+EVAL_MODEL_NIGHTLY = "claude-sonnet-4-20250514"
+EVAL_MODEL_ON_DEMAND = "claude-opus-4-20250514"
 EVAL_MAX_PER_RUN = 100
 EVAL_FLAG_THRESHOLD = 2.5
 
@@ -771,10 +771,10 @@ def _get_unevaluated_conversations(
             c1.id           AS user_msg_id,
             c1.user_id      AS user_id,
             c1.channel      AS channel,
-            c1.message      AS user_message,
+            c1.content      AS user_message,
             c1.created_at   AS user_time,
             c2.id           AS assistant_msg_id,
-            c2.message      AS gigi_response,
+            c2.content      AS gigi_response,
             c2.created_at   AS assistant_time,
             EXTRACT(EPOCH FROM (c2.created_at - c1.created_at)) * 1000 AS latency_ms
         FROM gigi_conversations c1
@@ -1065,6 +1065,7 @@ def _check_and_flag(
     # Find worst criterion
     worst_criterion = None
     worst_score = 6  # higher than max
+    worst_reasoning = ""
 
     for criterion in ["accuracy", "helpfulness", "tone", "tool_selection", "safety"]:
         score_data = scores.get(criterion)

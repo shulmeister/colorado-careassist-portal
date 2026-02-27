@@ -2396,12 +2396,11 @@ async def api_gigi_learning_evaluations(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Paginated list of all evaluations."""
+    limit = min(limit, 200)
+    conn = psycopg2.connect(
+        os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+    )
     try:
-        conn = psycopg2.connect(
-            os.getenv(
-                "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
-            )
-        )
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             where = "1=1"
             params = []
@@ -2422,10 +2421,11 @@ async def api_gigi_learning_evaluations(
                 params + [limit, offset],
             )
             evals = [dict(row) for row in cur.fetchall()]
-        conn.close()
         return JSONResponse({"success": True, "evaluations": evals}, default=str)
     except Exception as e:
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
+    finally:
+        conn.close()
 
 
 # API endpoints for tools
