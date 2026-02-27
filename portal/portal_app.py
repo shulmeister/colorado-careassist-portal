@@ -24,13 +24,6 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-
-# Rate limiting
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
-from sqlalchemy.orm import Session
-
 from portal_auth import get_current_user, get_current_user_optional, oauth_manager
 from portal_database import db_manager, get_db
 from portal_models import (
@@ -48,6 +41,12 @@ from services.marketing.metrics_service import (
     get_social_metrics,
 )
 from services.search_service import search_service
+
+# Rate limiting
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from sqlalchemy.orm import Session
 
 # Import client satisfaction service at module load time (before sales path takes precedence)
 try:
@@ -4007,7 +4006,7 @@ async def go_employee_portal(
     current_user: Dict[str, Any] = Depends(get_current_user)
 ):
     """Redirect to employee portal admin"""
-    return RedirectResponse(url="https://employee.coloradocareassist.com/admin", status_code=302)
+    return RedirectResponse(url="https://employee.coloradocareassist.com/admin/login", status_code=302)
 
 
 @app.get("/go/client-portal")
