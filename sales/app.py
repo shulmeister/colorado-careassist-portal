@@ -6268,6 +6268,7 @@ def _apply_deal_filters(
     stage: Optional[str],
     created_gte: Optional[Any] = None,
     created_lte: Optional[Any] = None,
+    archived: Optional[str] = None,
 ):
     if stage:
         query = query.filter(Deal.stage == stage)
@@ -6279,6 +6280,10 @@ def _apply_deal_filters(
         dt = _coerce_datetime(created_lte)
         if dt:
             query = query.filter(Deal.created_at <= dt)
+    if archived == "false":
+        query = query.filter(Deal.archived_at.is_(None))
+    elif archived == "true":
+        query = query.filter(Deal.archived_at.isnot(None))
     return query
 
 
@@ -6873,6 +6878,7 @@ async def get_deals(
     range: Optional[str] = Query(default=None),
     created_at_gte: Optional[str] = Query(default=None, alias="created_at@gte"),
     created_at_lte: Optional[str] = Query(default=None, alias="created_at@lte"),
+    archived: Optional[str] = Query(default=None),
     filter: Optional[str] = Query(default=None),
 ):
     try:
@@ -6884,6 +6890,7 @@ async def get_deals(
                     stage = stage or parsed.get("stage")
                     created_at_gte = created_at_gte or parsed.get("created_at_gte") or parsed.get("created_at@gte")
                     created_at_lte = created_at_lte or parsed.get("created_at_lte") or parsed.get("created_at@lte")
+                    archived = archived or parsed.get("archived")
             except Exception:
                 pass
 
@@ -6892,7 +6899,7 @@ async def get_deals(
         start, end = _parse_range(range_param)
 
         query = db.query(Deal)
-        query = _apply_deal_filters(query, stage, created_at_gte, created_at_lte)
+        query = _apply_deal_filters(query, stage, created_at_gte, created_at_lte, archived)
         total = query.count()
 
         deals = (
