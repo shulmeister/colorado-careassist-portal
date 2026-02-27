@@ -5,17 +5,24 @@ Enterprise-grade data access layer for Gigi.
 Provides fast lookups for caller recognition, shift details, and availability.
 """
 
-import os
 import logging
-from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+import os
 from contextlib import contextmanager
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
-from sqlalchemy import create_engine, and_, or_
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy import and_, create_engine, or_
+from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
 
-from .models import Base, GigiCaregiver, GigiClient, GigiShift, GigiUnavailability, GigiSyncLog
+from .models import (
+    Base,
+    GigiCaregiver,
+    GigiClient,
+    GigiShift,
+    GigiSyncLog,
+    GigiUnavailability,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,23 +49,31 @@ class GigiDatabase:
             else:
                 # Fix PostgreSQL URL format
                 if database_url.startswith("postgres://"):
-                    database_url = database_url.replace("postgres://", "postgresql+psycopg2://", 1)
+                    database_url = database_url.replace(
+                        "postgres://", "postgresql+psycopg2://", 1
+                    )
                 elif database_url.startswith("postgresql://"):
-                    database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+                    database_url = database_url.replace(
+                        "postgresql://", "postgresql+psycopg2://", 1
+                    )
 
             # Create engine with connection pooling
             if database_url.startswith("sqlite"):
-                self.engine = create_engine(database_url, connect_args={"check_same_thread": False})
+                self.engine = create_engine(
+                    database_url, connect_args={"check_same_thread": False}
+                )
             else:
                 self.engine = create_engine(
                     database_url,
                     poolclass=QueuePool,
                     pool_size=5,
                     max_overflow=10,
-                    pool_pre_ping=True
+                    pool_pre_ping=True,
                 )
 
-            self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
+            self.SessionLocal = sessionmaker(
+                autocommit=False, autoflush=False, bind=self.engine
+            )
 
             # Create tables if they don't exist
             Base.metadata.create_all(bind=self.engine)
@@ -95,53 +110,62 @@ class GigiDatabase:
         Look up a caller by phone number.
         Returns caregiver or client info if found, None otherwise.
         """
-        clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+        clean_phone = "".join(filter(str.isdigit, phone))[-10:]
 
         with self.get_session() as session:
             # Check caregivers first (more common callers)
-            caregiver = session.query(GigiCaregiver).filter(
-                GigiCaregiver.phone == clean_phone
-            ).first()
+            caregiver = (
+                session.query(GigiCaregiver)
+                .filter(GigiCaregiver.phone == clean_phone)
+                .first()
+            )
 
             if caregiver:
-                logger.info(f"DB: Found caregiver {caregiver.name} for phone {clean_phone}")
-                return {
-                    "type": "caregiver",
-                    **caregiver.to_dict()
-                }
+                logger.info(
+                    f"DB: Found caregiver id={caregiver.id} for phone ...{clean_phone[-4:]}"
+                )
+                return {"type": "caregiver", **caregiver.to_dict()}
 
             # Check clients
-            client = session.query(GigiClient).filter(
-                GigiClient.phone == clean_phone
-            ).first()
+            client = (
+                session.query(GigiClient)
+                .filter(GigiClient.phone == clean_phone)
+                .first()
+            )
 
             if client:
-                logger.info(f"DB: Found client {client.name} for phone {clean_phone}")
-                return {
-                    "type": "client",
-                    **client.to_dict()
-                }
+                logger.info(
+                    f"DB: Found client id={client.id} for phone ...{clean_phone[-4:]}"
+                )
+                return {"type": "client", **client.to_dict()}
 
-        logger.info(f"DB: No match for phone {clean_phone}")
+        logger.info(f"DB: No match for phone ...{clean_phone[-4:]}")
         return None
 
     # =========================================================================
     # SHIFT LOOKUP
     # =========================================================================
 
-    def get_caregiver_shifts(self, caregiver_name: str, days_ahead: int = 30) -> List[Dict]:
+    def get_caregiver_shifts(
+        self, caregiver_name: str, days_ahead: int = 30
+    ) -> List[Dict]:
         """Get upcoming shifts for a caregiver."""
         now = datetime.now()
         end_date = now + timedelta(days=days_ahead)
 
         with self.get_session() as session:
-            shifts = session.query(GigiShift).filter(
-                and_(
-                    GigiShift.caregiver_name.ilike(f"%{caregiver_name}%"),
-                    GigiShift.start_time >= now,
-                    GigiShift.start_time <= end_date
+            shifts = (
+                session.query(GigiShift)
+                .filter(
+                    and_(
+                        GigiShift.caregiver_name.ilike(f"%{caregiver_name}%"),
+                        GigiShift.start_time >= now,
+                        GigiShift.start_time <= end_date,
+                    )
                 )
-            ).order_by(GigiShift.start_time).all()
+                .order_by(GigiShift.start_time)
+                .all()
+            )
 
             return [s.to_dict() for s in shifts]
 
@@ -151,13 +175,18 @@ class GigiDatabase:
         end_date = now + timedelta(days=days_ahead)
 
         with self.get_session() as session:
-            shifts = session.query(GigiShift).filter(
-                and_(
-                    GigiShift.client_name.ilike(f"%{client_name}%"),
-                    GigiShift.start_time >= now,
-                    GigiShift.start_time <= end_date
+            shifts = (
+                session.query(GigiShift)
+                .filter(
+                    and_(
+                        GigiShift.client_name.ilike(f"%{client_name}%"),
+                        GigiShift.start_time >= now,
+                        GigiShift.start_time <= end_date,
+                    )
                 )
-            ).order_by(GigiShift.start_time).all()
+                .order_by(GigiShift.start_time)
+                .all()
+            )
 
             return [s.to_dict() for s in shifts]
 
@@ -165,46 +194,60 @@ class GigiDatabase:
     # AVAILABILITY CHECKING
     # =========================================================================
 
-    def is_caregiver_available(self, caregiver_name: str, shift_time: datetime = None) -> bool:
+    def is_caregiver_available(
+        self, caregiver_name: str, shift_time: datetime = None
+    ) -> bool:
         """Check if a caregiver is available (not blocked by unavailability)."""
         shift_time = shift_time or datetime.now()
         shift_day = shift_time.strftime("%A").lower()
 
         with self.get_session() as session:
-            blocks = session.query(GigiUnavailability).filter(
-                GigiUnavailability.caregiver_name.ilike(f"%{caregiver_name}%")
-            ).all()
+            blocks = (
+                session.query(GigiUnavailability)
+                .filter(GigiUnavailability.caregiver_name.ilike(f"%{caregiver_name}%"))
+                .all()
+            )
 
             for block in blocks:
                 # Check recurring blocks
                 if block.is_recurring and block.recurring_days:
                     if shift_day in [d.lower() for d in block.recurring_days]:
-                        logger.info(f"Caregiver {caregiver_name} unavailable on {shift_day}s (recurring)")
+                        logger.info(
+                            f"Caregiver {caregiver_name} unavailable on {shift_day}s (recurring)"
+                        )
                         return False
 
                 # Check date-specific blocks
                 if block.start_date and block.all_day:
                     if block.start_date.date() == shift_time.date():
-                        logger.info(f"Caregiver {caregiver_name} unavailable on {shift_time.date()}")
+                        logger.info(
+                            f"Caregiver {caregiver_name} unavailable on {shift_time.date()}"
+                        )
                         return False
 
         return True
 
-    def get_available_caregivers(self, location: str, shift_time: datetime = None) -> List[Dict]:
+    def get_available_caregivers(
+        self, location: str, shift_time: datetime = None
+    ) -> List[Dict]:
         """Get caregivers available for a shift at a specific location/time."""
         shift_time = shift_time or datetime.now()
 
         with self.get_session() as session:
             # Get caregivers in location
-            caregivers = session.query(GigiCaregiver).filter(
-                and_(
-                    or_(
-                        GigiCaregiver.location.ilike(f"%{location}%"),
-                        GigiCaregiver.city.ilike(f"%{location}%")
-                    ),
-                    GigiCaregiver.status == "active"
+            caregivers = (
+                session.query(GigiCaregiver)
+                .filter(
+                    and_(
+                        or_(
+                            GigiCaregiver.location.ilike(f"%{location}%"),
+                            GigiCaregiver.city.ilike(f"%{location}%"),
+                        ),
+                        GigiCaregiver.status == "active",
+                    )
                 )
-            ).all()
+                .all()
+            )
 
             available = []
             for cg in caregivers:
@@ -212,7 +255,9 @@ class GigiDatabase:
                     available.append(cg.to_dict())
 
             # Prioritize SMS-enabled caregivers
-            available.sort(key=lambda x: (not x.get("can_sms", False), x.get("name", "")))
+            available.sort(
+                key=lambda x: (not x.get("can_sms", False), x.get("name", ""))
+            )
 
             logger.info(f"Found {len(available)} available caregivers in {location}")
             return available
@@ -230,9 +275,11 @@ class GigiDatabase:
                 if not phone or len(phone) != 10:
                     continue
 
-                existing = session.query(GigiCaregiver).filter(
-                    GigiCaregiver.phone == phone
-                ).first()
+                existing = (
+                    session.query(GigiCaregiver)
+                    .filter(GigiCaregiver.phone == phone)
+                    .first()
+                )
 
                 if existing:
                     # Update existing
@@ -257,9 +304,9 @@ class GigiDatabase:
                 if not phone or len(phone) != 10:
                     continue
 
-                existing = session.query(GigiClient).filter(
-                    GigiClient.phone == phone
-                ).first()
+                existing = (
+                    session.query(GigiClient).filter(GigiClient.phone == phone).first()
+                )
 
                 if existing:
                     for key, value in cl_data.items():
@@ -297,7 +344,7 @@ class GigiDatabase:
                     start_time=start_time,
                     status=shift_data.get("status", "Scheduled"),
                     pay_amount=shift_data.get("pay_amount"),
-                    pay_method=shift_data.get("pay_method")
+                    pay_method=shift_data.get("pay_method"),
                 )
                 session.add(shift)
                 count += 1
@@ -323,13 +370,21 @@ class GigiDatabase:
 
                 # Extract recurring days
                 recurring_days = []
-                for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
+                for day in [
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                    "sunday",
+                ]:
                     if day in desc:
                         recurring_days.append(day)
 
                 # Extract date for one-time blocks
                 start_date = None
-                date_match = re.search(r'(\d{2}/\d{2}/\d{4})', desc)
+                date_match = re.search(r"(\d{2}/\d{2}/\d{4})", desc)
                 if date_match:
                     try:
                         start_date = datetime.strptime(date_match.group(1), "%m/%d/%Y")
@@ -343,7 +398,7 @@ class GigiDatabase:
                     is_recurring=is_recurring,
                     recurring_days=recurring_days if recurring_days else None,
                     start_date=start_date,
-                    all_day=all_day
+                    all_day=all_day,
                 )
                 session.add(block)
                 count += 1
@@ -363,7 +418,7 @@ class GigiDatabase:
                 unavailability_synced=stats.get("unavailability", 0),
                 error_message=stats.get("error"),
                 duration_seconds=stats.get("duration"),
-                completed_at=datetime.utcnow() if status == "completed" else None
+                completed_at=datetime.utcnow() if status == "completed" else None,
             )
             session.add(log)
 
