@@ -64,9 +64,11 @@ async def startup_event():
     """Start background services on app startup"""
     logger.info("Gigi main.py startup — RC bot runs as standalone LaunchAgent")
 
+
 # Import WellSky service for shift management
 try:
     from services.wellsky_service import ShiftStatus, WellSkyService
+
     wellsky = WellSkyService()
     WELLSKY_AVAILABLE = True
 except ImportError:
@@ -76,6 +78,7 @@ except ImportError:
 # Import RingCentral messaging service for team notifications
 try:
     from services.ringcentral_messaging_service import ringcentral_messaging_service
+
     RC_MESSAGING_AVAILABLE = True
 except ImportError:
     ringcentral_messaging_service = None
@@ -90,6 +93,7 @@ try:
         MemorySystem,
         MemoryType,
     )
+
     memory_system = MemorySystem()
     MEMORY_SYSTEM_AVAILABLE = True
     logger.info("✓ Gigi Memory System initialized")
@@ -103,6 +107,7 @@ try:
     from gigi.mode_detector import (
         ModeDetector,
     )
+
     mode_detector = ModeDetector()
     MODE_DETECTOR_AVAILABLE = True
     logger.info("✓ Gigi Mode Detector initialized")
@@ -117,6 +122,7 @@ try:
         FailureHandler,
         FailureSeverity,
     )
+
     failure_handler = FailureHandler()
     FAILURE_HANDLER_AVAILABLE = True
     logger.info("✓ Gigi Failure Handler initialized")
@@ -126,7 +132,9 @@ except Exception as e:
     logger.warning(f"Failure Handler not available: {e}")
 
 
-def handle_tool_error(tool_name: str, error: Exception, context: dict = None) -> Dict[str, Any]:
+def handle_tool_error(
+    tool_name: str, error: Exception, context: dict = None
+) -> Dict[str, Any]:
     """Graceful error handler for tool failures. Returns a user-friendly error dict."""
     logger.error(f"Tool '{tool_name}' failed: {error}", exc_info=True)
     if failure_handler and FAILURE_HANDLER_AVAILABLE:
@@ -144,6 +152,7 @@ def handle_tool_error(tool_name: str, error: Exception, context: dict = None) ->
 # Import Google Service for Email/Calendar
 try:
     from gigi.google_service import google_service
+
     GOOGLE_AVAILABLE = True
     logger.info("✓ Gigi Google Service initialized")
 except Exception as e:
@@ -154,6 +163,7 @@ except Exception as e:
 # Import Chief of Staff Tools (Concerts, Restaurants)
 try:
     from gigi.chief_of_staff_tools import cos_tools
+
     COS_AVAILABLE = True
     logger.info("✓ Gigi Chief of Staff Tools initialized")
 except Exception as e:
@@ -165,6 +175,7 @@ except Exception as e:
 try:
     from gigi.shift_lock import ShiftLockConflictError as CoordinatorLockError
     from gigi.shift_lock import get_shift_lock_manager
+
     shift_lock_manager = get_shift_lock_manager()
     SHIFT_LOCK_AVAILABLE = True
     logger.info("✓ Gigi Shift Lock Manager initialized")
@@ -180,6 +191,7 @@ except Exception as e:
 # Import Partial Availability Parser for nuanced call-out handling
 try:
     from gigi.partial_availability_parser import detect_partial_availability
+
     PARTIAL_AVAILABILITY_PARSER_AVAILABLE = True
     logger.info("✓ Partial Availability Parser loaded")
 except Exception as e:
@@ -190,6 +202,7 @@ except Exception as e:
 # Import Caregiver Matching Engine
 try:
     from services.caregiver_matching_engine import CaregiverMatchingEngine, ShiftUrgency
+
     matching_engine = CaregiverMatchingEngine()
     MATCHING_ENGINE_AVAILABLE = True
     logger.info("✓ Caregiver Matching Engine loaded")
@@ -201,6 +214,7 @@ except ImportError:
 # Import Entity Resolution Service
 try:
     from services.entity_resolution_service import entity_resolver
+
     ENTITY_RESOLUTION_AVAILABLE = True
     logger.info("✓ Entity Resolution Service loaded")
 except ImportError:
@@ -208,7 +222,10 @@ except ImportError:
     ENTITY_RESOLUTION_AVAILABLE = False
     logger.warning("Entity Resolution Service not available")
 
-async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any], reason: str = "Call Transfer"):
+
+async def log_call_transfer_to_wellsky(
+    call_id: str, caller_info: Dict[str, Any], reason: str = "Call Transfer"
+):
     """
     Automatically log call transfers to WellSky as Care Alerts and Admin Tasks.
     Ensures 24/7/365 documentation trail for phone interactions.
@@ -227,7 +244,9 @@ async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any]
             client_name = caller_info.get("name", "Unknown Client")
 
         if not client_id:
-            logger.info(f"Transfer logging skipped: Caller is not an identified client ({client_name})")
+            logger.info(
+                f"Transfer logging skipped: Caller is not an identified client ({client_name})"
+            )
             return
 
         # 1. Log Care Alert Note
@@ -235,10 +254,7 @@ async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any]
         note_text = f"🚨 CARE ALERT: Call forwarded to Jason Shulman at {timestamp}. Reason: {reason}. (Source: Gigi Voice Agent)"
 
         wellsky.add_note_to_client(
-            client_id=client_id,
-            note=note_text,
-            note_type="call",
-            source="gigi_voice"
+            client_id=client_id, note=note_text, note_type="call", source="gigi_voice"
         )
         logger.info(f"✅ Documented Call Transfer for {client_name} in WellSky Note")
 
@@ -247,7 +263,7 @@ async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any]
             title=f"FOLLOW UP: Call Transfer - {client_name}",
             description=f"Gigi forwarded a call to Jason at {timestamp}.\nReason: {reason}\n\nPlease verify that the client was helped and issue resolved.",
             priority="high",
-            related_client_id=client_id
+            related_client_id=client_id,
         )
         logger.info(f"✅ Created WellSky Task for Call Transfer: {client_name}")
 
@@ -257,11 +273,16 @@ async def log_call_transfer_to_wellsky(call_id: str, caller_info: Dict[str, Any]
             event_type="call_transfer",
             details=f"Reason: {reason} | Time: {timestamp}",
             icon="📲",
-            metadata={"client_id": client_id, "client_name": client_name, "call_id": call_id}
+            metadata={
+                "client_id": client_id,
+                "client_name": client_name,
+                "call_id": call_id,
+            },
         )
 
     except Exception as e:
         logger.error(f"Error logging call transfer to WellSky: {e}")
+
 
 # Import enhanced webhook functionality for caller ID, transfer, and message taking
 try:
@@ -273,9 +294,12 @@ try:
         send_telegram_message,
         transfer_call,
     )
+
     ENHANCED_WEBHOOK_AVAILABLE = True
 except ImportError:
-    logger.warning("Enhanced webhook not available - caller ID and transfer features disabled")
+    logger.warning(
+        "Enhanced webhook not available - caller ID and transfer features disabled"
+    )
     ENHANCED_WEBHOOK_AVAILABLE = False
 
 # Configure logging
@@ -301,34 +325,52 @@ RETELL_API_KEY = os.getenv("RETELL_API_KEY")
 # See: https://docs.retellai.com/features/secure-webhook
 PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "https://portal.coloradocareassist.com")
 # SECURITY: Test endpoints disabled by default in production
-GIGI_ENABLE_TEST_ENDPOINTS = os.getenv("GIGI_ENABLE_TEST_ENDPOINTS", "false").lower() == "true"
+GIGI_ENABLE_TEST_ENDPOINTS = (
+    os.getenv("GIGI_ENABLE_TEST_ENDPOINTS", "false").lower() == "true"
+)
+
 
 def require_gigi_test_endpoints_enabled():
     if not GIGI_ENABLE_TEST_ENDPOINTS:
         raise HTTPException(status_code=404, detail="Not found")
 
+
 # BeeTexting OAuth2 credentials (required for SMS)
 BEETEXTING_CLIENT_ID = os.getenv("BEETEXTING_CLIENT_ID")
 BEETEXTING_CLIENT_SECRET = os.getenv("BEETEXTING_CLIENT_SECRET")
 BEETEXTING_API_KEY = os.getenv("BEETEXTING_API_KEY")
-BEETEXTING_AUTH_URL = os.getenv("BEETEXTING_AUTH_URL", "https://auth.beetexting.com/oauth2/token/")
-BEETEXTING_API_URL = os.getenv("BEETEXTING_API_URL", "https://connect.beetexting.com/prod")
+BEETEXTING_AUTH_URL = os.getenv(
+    "BEETEXTING_AUTH_URL", "https://auth.beetexting.com/oauth2/token/"
+)
+BEETEXTING_API_URL = os.getenv(
+    "BEETEXTING_API_URL", "https://connect.beetexting.com/prod"
+)
 
 # Phone numbers (safe defaults - these are public business numbers)
-BEETEXTING_FROM_NUMBER = os.getenv("BEETEXTING_FROM_NUMBER", "+17194283999")  # 719-428-3999
+BEETEXTING_FROM_NUMBER = os.getenv(
+    "BEETEXTING_FROM_NUMBER", "+17194283999"
+)  # 719-428-3999
 RINGCENTRAL_FROM_NUMBER = os.getenv("RINGCENTRAL_FROM_NUMBER", "+17194283999")
 SMS_PROVIDER = os.getenv("GIGI_SMS_PROVIDER", "ringcentral").lower()
-ON_CALL_MANAGER_PHONE = os.getenv("ON_CALL_MANAGER_PHONE", "+13037571777")    # 303-757-1777
+ON_CALL_MANAGER_PHONE = os.getenv(
+    "ON_CALL_MANAGER_PHONE", "+13037571777"
+)  # 303-757-1777
 JASON_PHONE = "+16039971495"  # Jason Shulman - for call transfers
-SCHEDULING_PHONE = os.getenv("SCHEDULING_PHONE", "+13038794468")  # Israt - scheduling team
-SALES_PHONE = os.getenv("SALES_PHONE", "+12272335188")            # Jacob - sales team
+SCHEDULING_PHONE = os.getenv(
+    "SCHEDULING_PHONE", "+13038794468"
+)  # Israt - scheduling team
+SALES_PHONE = os.getenv("SALES_PHONE", "+12272335188")  # Jacob - sales team
 
 # Escalation contacts (RingCentral extensions for urgent client issues)
-ESCALATION_CYNTHIA_EXT = os.getenv("ESCALATION_CYNTHIA_EXT", "105")  # Cynthia Pointe - Care Manager
-ESCALATION_JASON_EXT = os.getenv("ESCALATION_JASON_EXT", "101")      # Jason Shulman - Owner
+ESCALATION_CYNTHIA_EXT = os.getenv(
+    "ESCALATION_CYNTHIA_EXT", "105"
+)  # Cynthia Pointe - Care Manager
+ESCALATION_JASON_EXT = os.getenv("ESCALATION_JASON_EXT", "101")  # Jason Shulman - Owner
 
 # SMS Auto-Reply Toggle (default ON - Gigi replies outside office hours)
-SMS_AUTOREPLY_ENABLED = os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true"
+SMS_AUTOREPLY_ENABLED = (
+    os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower() == "true"
+)
 
 # After-hours auto-reply (default ON; replies only outside office hours)
 SMS_AFTER_HOURS_ONLY = os.getenv("GIGI_SMS_AFTER_HOURS_ONLY", "true").lower() == "true"
@@ -337,45 +379,55 @@ OFFICE_HOURS_END = os.getenv("GIGI_OFFICE_HOURS_END", "17:00")
 
 # Operations SMS Toggle (set to "true" to enable SMS from call-out operations)
 # DEFAULT IS OFF - Must be explicitly enabled when WellSky is fully connected
-OPERATIONS_SMS_ENABLED = os.getenv("GIGI_OPERATIONS_SMS_ENABLED", "false").lower() == "true"
+OPERATIONS_SMS_ENABLED = (
+    os.getenv("GIGI_OPERATIONS_SMS_ENABLED", "false").lower() == "true"
+)
 
 # =============================================================================
 # SMS LOOP PREVENTION - Critical safeguards against duplicate/repeating messages
 # =============================================================================
 SMS_REPLY_COOLDOWN_MINUTES = 15  # Don't reply to same number within this window
-SMS_MAX_REPLIES_PER_HOUR = 30    # Global hourly limit
+SMS_MAX_REPLIES_PER_HOUR = 30  # Global hourly limit
 SMS_MAX_REPLIES_PER_NUMBER_DAY = 5  # Max replies to single number per day
 
 # In-memory SMS tracking (backed by file for persistence)
 _sms_reply_history = {
-    'replies': [],
-    'hourly_count': 0,
-    'hourly_reset': datetime.utcnow().isoformat()
+    "replies": [],
+    "hourly_count": 0,
+    "hourly_reset": datetime.utcnow().isoformat(),
 }
 _SMS_HISTORY_FILE = "/Users/shulmeister/.gigi-sms-webhook-history.json"
+
 
 def _load_sms_history():
     """Load SMS reply history from disk"""
     global _sms_reply_history
     try:
         from pathlib import Path
+
         if Path(_SMS_HISTORY_FILE).exists():
-            with open(_SMS_HISTORY_FILE, 'r') as f:
+            with open(_SMS_HISTORY_FILE, "r") as f:
                 data = json.load(f)
                 # Clean old entries (older than 24 hours)
                 cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
-                data['replies'] = [r for r in data.get('replies', []) if r.get('timestamp', '') > cutoff]
+                data["replies"] = [
+                    r
+                    for r in data.get("replies", [])
+                    if r.get("timestamp", "") > cutoff
+                ]
                 _sms_reply_history = data
     except Exception as e:
         logger.warning(f"Could not load SMS history: {e}")
 
+
 def _save_sms_history():
     """Save SMS reply history to disk"""
     try:
-        with open(_SMS_HISTORY_FILE, 'w') as f:
+        with open(_SMS_HISTORY_FILE, "w") as f:
             json.dump(_sms_reply_history, f)
     except Exception as e:
         logger.warning(f"Could not save SMS history: {e}")
+
 
 def _can_send_sms(to_phone: str) -> tuple:
     """
@@ -387,49 +439,60 @@ def _can_send_sms(to_phone: str) -> tuple:
 
     # Check global hourly rate limit
     try:
-        hourly_reset = datetime.fromisoformat(_sms_reply_history.get('hourly_reset', now.isoformat()))
+        hourly_reset = datetime.fromisoformat(
+            _sms_reply_history.get("hourly_reset", now.isoformat())
+        )
         if (now - hourly_reset).total_seconds() > 3600:
-            _sms_reply_history['hourly_count'] = 0
-            _sms_reply_history['hourly_reset'] = now.isoformat()
+            _sms_reply_history["hourly_count"] = 0
+            _sms_reply_history["hourly_reset"] = now.isoformat()
     except:
-        _sms_reply_history['hourly_reset'] = now.isoformat()
+        _sms_reply_history["hourly_reset"] = now.isoformat()
 
-    if _sms_reply_history.get('hourly_count', 0) >= SMS_MAX_REPLIES_PER_HOUR:
+    if _sms_reply_history.get("hourly_count", 0) >= SMS_MAX_REPLIES_PER_HOUR:
         return False, f"Global hourly limit reached ({SMS_MAX_REPLIES_PER_HOUR}/hr)"
 
     # Normalize phone for comparison
-    clean_phone = ''.join(filter(str.isdigit, to_phone))[-10:]
+    clean_phone = "".join(filter(str.isdigit, to_phone))[-10:]
     today = now.date().isoformat()
     replies_today = 0
 
-    for reply in _sms_reply_history.get('replies', []):
-        reply_phone = ''.join(filter(str.isdigit, reply.get('phone', '')))[-10:]
+    for reply in _sms_reply_history.get("replies", []):
+        reply_phone = "".join(filter(str.isdigit, reply.get("phone", "")))[-10:]
         if reply_phone == clean_phone:
             try:
-                reply_time = datetime.fromisoformat(reply.get('timestamp', '2000-01-01'))
+                reply_time = datetime.fromisoformat(
+                    reply.get("timestamp", "2000-01-01")
+                )
                 minutes_since = (now - reply_time).total_seconds() / 60
                 if minutes_since < SMS_REPLY_COOLDOWN_MINUTES:
-                    return False, f"Cooldown active ({int(SMS_REPLY_COOLDOWN_MINUTES - minutes_since)} min remaining)"
-                if reply.get('timestamp', '').startswith(today):
+                    return (
+                        False,
+                        f"Cooldown active ({int(SMS_REPLY_COOLDOWN_MINUTES - minutes_since)} min remaining)",
+                    )
+                if reply.get("timestamp", "").startswith(today):
                     replies_today += 1
             except:
                 pass
 
     if replies_today >= SMS_MAX_REPLIES_PER_NUMBER_DAY:
-        return False, f"Daily limit for this number ({SMS_MAX_REPLIES_PER_NUMBER_DAY}/day)"
+        return (
+            False,
+            f"Daily limit for this number ({SMS_MAX_REPLIES_PER_NUMBER_DAY}/day)",
+        )
 
     return True, "OK"
+
 
 def _record_sms_sent(to_phone: str):
     """Record that we sent an SMS to this number"""
     global _sms_reply_history
-    clean_phone = ''.join(filter(str.isdigit, to_phone))[-10:]
-    _sms_reply_history.setdefault('replies', []).append({
-        'phone': clean_phone,
-        'timestamp': datetime.utcnow().isoformat()
-    })
-    _sms_reply_history['hourly_count'] = _sms_reply_history.get('hourly_count', 0) + 1
+    clean_phone = "".join(filter(str.isdigit, to_phone))[-10:]
+    _sms_reply_history.setdefault("replies", []).append(
+        {"phone": clean_phone, "timestamp": datetime.utcnow().isoformat()}
+    )
+    _sms_reply_history["hourly_count"] = _sms_reply_history.get("hourly_count", 0) + 1
     _save_sms_history()
+
 
 # Load history on module import
 _load_sms_history()
@@ -460,7 +523,7 @@ def log_shadow_action(action: str, details: Dict[str, Any], trigger: str = "Unkn
         "trigger": trigger,
         "action": action,
         "details": details,
-        "feedback": None  # 'good', 'bad', or None
+        "feedback": None,  # 'good', 'bad', or None
     }
     SHADOW_LOGS.append(entry)
     # Keep last 100 logs
@@ -468,11 +531,13 @@ def log_shadow_action(action: str, details: Dict[str, Any], trigger: str = "Unkn
         SHADOW_LOGS.pop(0)
     logger.info(f"[SHADOW MODE] {action}: {details}")
 
+
 # ... (Existing config status code) ...
 
 # =============================================================================
 # SIMULATION ENDPOINTS (For Testing Shadow Mode)
 # =============================================================================
+
 
 @app.post("/api/gigi/shadow/feedback")
 async def record_shadow_feedback(request: Request, _auth=Depends(require_gigi_token)):
@@ -497,7 +562,7 @@ async def record_shadow_feedback(request: Request, _auth=Depends(require_gigi_to
                         confidence=0.9,
                         category="behavior_correction",
                         impact_level=ImpactLevel.HIGH,
-                        metadata={"log_id": log_id, "original_details": log['details']}
+                        metadata={"log_id": log_id, "original_details": log["details"]},
                     )
                 except Exception as mem_err:
                     logger.warning(f"Failed to store correction memory: {mem_err}")
@@ -505,11 +570,13 @@ async def record_shadow_feedback(request: Request, _auth=Depends(require_gigi_to
 
     return {"success": False, "error": "Log entry not found"}
 
+
 @app.get("/api/gigi/learning/stats")
 async def get_learning_stats(_auth=Depends(require_gigi_token)):
     """Get stats from the shadow mode learning pipeline."""
     try:
         from gigi.learning_pipeline import get_learning_stats
+
         stats = get_learning_stats()
         return {"success": True, **stats}
     except Exception as e:
@@ -521,8 +588,10 @@ async def get_learning_stats(_auth=Depends(require_gigi_token)):
 async def run_learning_pipeline_endpoint(_auth=Depends(require_gigi_token)):
     """Manually trigger the learning pipeline."""
     import asyncio
+
     try:
         from gigi.learning_pipeline import run_learning_pipeline
+
         results = await asyncio.to_thread(run_learning_pipeline)
         return {"success": True, **results}
     except Exception as e:
@@ -550,23 +619,18 @@ async def simulate_callout(_auth=Depends(require_gigi_token)):
             {
                 "type": "caregiver_call_out",
                 "caregiver_id": mock_caregiver_id,
-                "shift_id": mock_shift_id
+                "shift_id": mock_shift_id,
             },
-            trigger="Manual Simulation Button"
+            trigger="Manual Simulation Button",
         )
 
     # Execute the tool (which handles Shadow Mode internally)
     result = await execute_caregiver_call_out(
-        caregiver_id=mock_caregiver_id,
-        shift_id=mock_shift_id,
-        reason=mock_reason
+        caregiver_id=mock_caregiver_id, shift_id=mock_shift_id, reason=mock_reason
     )
 
-    return {
-        "status": "simulation_complete",
-        "mode": GIGI_MODE,
-        "result": result
-    }
+    return {"status": "simulation_complete", "mode": GIGI_MODE, "result": result}
+
 
 @app.get("/shadow", response_class=HTMLResponse)
 async def get_shadow_dashboard():
@@ -575,8 +639,8 @@ async def get_shadow_dashboard():
 
     # Calculate stats
     total_logs = len(SHADOW_LOGS)
-    rated_logs = [l for l in SHADOW_LOGS if l['feedback'] is not None]
-    good_logs = [l for l in rated_logs if l['feedback'] == 'good']
+    rated_logs = [l for l in SHADOW_LOGS if l["feedback"] is not None]
+    good_logs = [l for l in rated_logs if l["feedback"] == "good"]
 
     approval_rate = (len(good_logs) / len(rated_logs) * 100) if rated_logs else 0
 
@@ -744,25 +808,27 @@ async def get_shadow_dashboard():
             
             <h3 class="mb-3">Recent Decisions</h3>
             
-            {'<div class="text-center py-5 text-muted">No actions recorded yet. Waiting for incoming messages...</div>' if not SHADOW_LOGS else ''}
+            {'<div class="text-center py-5 text-muted">No actions recorded yet. Waiting for incoming messages...</div>' if not SHADOW_LOGS else ""}
             
             <div id="logs">
     """
 
     for log in reversed(SHADOW_LOGS):
         feedback_class = ""
-        if log['feedback'] == 'good':
+        if log["feedback"] == "good":
             feedback_class = "feedback-given feedback-good"
-        elif log['feedback'] == 'bad':
+        elif log["feedback"] == "bad":
             feedback_class = "feedback-given feedback-bad"
 
         # SECURITY: Escape all user-controlled values to prevent XSS
-        safe_action = html_module.escape(str(log['action']))
-        safe_timestamp = html_module.escape(str(log['timestamp']))
-        safe_trigger = html_module.escape(str(log.get('trigger', 'Internal Event')))
-        safe_message = html_module.escape(str(log.get('message') or "Executed Logic: " + str(log['action'])))
-        safe_details = html_module.escape(json.dumps(log['details'], indent=2))
-        safe_id = html_module.escape(str(log['id']))
+        safe_action = html_module.escape(str(log["action"]))
+        safe_timestamp = html_module.escape(str(log["timestamp"]))
+        safe_trigger = html_module.escape(str(log.get("trigger", "Internal Event")))
+        safe_message = html_module.escape(
+            str(log.get("message") or "Executed Logic: " + str(log["action"]))
+        )
+        safe_details = html_module.escape(json.dumps(log["details"], indent=2))
+        safe_id = html_module.escape(str(log["id"]))
 
         html += f"""
         <div class="review-card" id="card-{safe_id}">
@@ -855,7 +921,14 @@ async def get_shadow_dashboard():
     """
     return html
 
-async def _log_portal_event(description: str, event_type: str = "info", details: str = None, icon: str = None, metadata: dict = None):
+
+async def _log_portal_event(
+    description: str,
+    event_type: str = "info",
+    details: str = None,
+    icon: str = None,
+    metadata: dict = None,
+):
     """Log event to the central portal activity stream"""
     try:
         # Determine URL - all services run on localhost (Mac Mini)
@@ -863,19 +936,17 @@ async def _log_portal_event(description: str, event_type: str = "info", details:
         portal_url = os.getenv("PORTAL_URL", f"http://localhost:{port}")
 
         payload = {
-                    "source": "Gigi",
-                    "description": description,
-                    "event_type": event_type,
-                    "details": details,
-                    "icon": icon or "🤖"
-                }
+            "source": "Gigi",
+            "description": description,
+            "event_type": event_type,
+            "details": details,
+            "icon": icon or "🤖",
+        }
         if metadata:
             payload["metadata"] = metadata
         async with httpx.AsyncClient() as client:
             await client.post(
-                f"{portal_url}/api/internal/event",
-                json=payload,
-                timeout=2.0
+                f"{portal_url}/api/internal/event", json=payload, timeout=2.0
             )
     except Exception as e:
         logger.warning(f"Failed to log portal event: {e}")
@@ -884,6 +955,7 @@ async def _log_portal_event(description: str, event_type: str = "info", details:
 # =============================================================================
 # Pydantic Models
 # =============================================================================
+
 
 class CallerType(str, Enum):
     CAREGIVER = "caregiver"
@@ -934,6 +1006,7 @@ class ClientIssueReport(BaseModel):
 
 class RetellToolCall(BaseModel):
     """Retell AI tool call request format"""
+
     tool_call_id: str
     name: str
     arguments: Dict[str, Any]
@@ -941,6 +1014,7 @@ class RetellToolCall(BaseModel):
 
 class RetellWebhookPayload(BaseModel):
     """Retell AI webhook payload"""
+
     event: str
     call_id: str
     agent_id: Optional[str] = None
@@ -962,6 +1036,7 @@ class RetellWebhookPayload(BaseModel):
 # Retell Signature Validation
 # =============================================================================
 
+
 async def verify_retell_signature(request: Request) -> bool:
     """
     Verify the Retell webhook signature to ensure request authenticity.
@@ -971,21 +1046,26 @@ async def verify_retell_signature(request: Request) -> bool:
     See: https://docs.retellai.com/features/secure-webhook
     """
     if not RETELL_API_KEY:
-        logger.warning("RETELL_API_KEY not configured - rejecting webhook (fail-closed)")
+        logger.warning(
+            "RETELL_API_KEY not configured - rejecting webhook (fail-closed)"
+        )
         return False
 
     # Extract signature from header
-    x_retell_signature = request.headers.get("x-retell-signature") or request.headers.get("X-Retell-Signature")
+    x_retell_signature = request.headers.get(
+        "x-retell-signature"
+    ) or request.headers.get("X-Retell-Signature")
 
     if not x_retell_signature:
         logger.warning("Missing X-Retell-Signature header")
         return False
 
     body = await request.body()
-    body_str = body.decode('utf-8')
+    body_str = body.decode("utf-8")
 
     try:
         from retell.lib.webhook_auth import verify as retell_verify
+
         is_valid = retell_verify(body_str, RETELL_API_KEY, x_retell_signature)
     except ImportError:
         logger.warning("retell-sdk not installed - rejecting webhook (fail-closed)")
@@ -1007,6 +1087,7 @@ async def verify_retell_signature(request: Request) -> bool:
 # Import database module (lazy initialization)
 _gigi_db = None
 
+
 def _get_db():
     """Get the Gigi database instance (lazy initialization)."""
     global _gigi_db
@@ -1018,6 +1099,7 @@ def _get_db():
             # Method 1: Absolute import (works when gigi is in PYTHONPATH)
             try:
                 from gigi.database import gigi_db
+
                 logger.info("Loaded gigi.database via absolute import")
             except ImportError:
                 pass
@@ -1026,6 +1108,7 @@ def _get_db():
             if gigi_db is None:
                 try:
                     from .database import gigi_db
+
                     logger.info("Loaded database via relative import")
                 except ImportError:
                     pass
@@ -1034,16 +1117,21 @@ def _get_db():
             if gigi_db is None:
                 import importlib.util
                 import os
+
                 db_file = os.path.join(os.path.dirname(__file__), "database.py")
                 if os.path.exists(db_file):
-                    spec = importlib.util.spec_from_file_location("gigi_database", db_file)
+                    spec = importlib.util.spec_from_file_location(
+                        "gigi_database", db_file
+                    )
                     db_module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(db_module)
                     gigi_db = db_module.gigi_db
                     logger.info("Loaded database via importlib file location")
 
             if gigi_db is None:
-                raise ImportError("Could not import gigi database module via any method")
+                raise ImportError(
+                    "Could not import gigi database module via any method"
+                )
 
             gigi_db.initialize()
             _gigi_db = gigi_db
@@ -1063,6 +1151,7 @@ _contacts_cache = None
 _cache_load_time = None
 CACHE_REFRESH_HOURS = 24
 
+
 def _load_contacts_cache() -> Dict[str, Any]:
     """Load contacts cache from JSON file (fallback if database unavailable)."""
     global _contacts_cache, _cache_load_time
@@ -1076,10 +1165,12 @@ def _load_contacts_cache() -> Dict[str, Any]:
 
     try:
         if os.path.exists(CONTACTS_CACHE_FILE):
-            with open(CONTACTS_CACHE_FILE, 'r') as f:
+            with open(CONTACTS_CACHE_FILE, "r") as f:
                 _contacts_cache = json.load(f)
                 _cache_load_time = now
-                logger.info(f"Loaded JSON cache fallback: {len(_contacts_cache.get('caregivers', {}))} caregivers")
+                logger.info(
+                    f"Loaded JSON cache fallback: {len(_contacts_cache.get('caregivers', {}))} caregivers"
+                )
                 return _contacts_cache
     except Exception as e:
         logger.error(f"Error loading JSON cache: {e}")
@@ -1093,7 +1184,7 @@ def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
     Returns dict with 'type' (caregiver/client), 'name', 'status' if found.
     Returns None if not found.
     """
-    clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+    clean_phone = "".join(filter(str.isdigit, phone))[-10:]
 
     # Try database first (enterprise solution)
     db = _get_db()
@@ -1101,7 +1192,9 @@ def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
         try:
             result = db.lookup_caller(clean_phone)
             if result:
-                logger.info(f"DB HIT: Found {result.get('type')} {result.get('name')} for {clean_phone}")
+                logger.info(
+                    f"DB HIT: Found {result.get('type')} {result.get('name')} for {clean_phone}"
+                )
                 return result
         except Exception as e:
             logger.warning(f"Database lookup failed, falling back to cache: {e}")
@@ -1112,12 +1205,14 @@ def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
     caregivers = cache.get("caregivers", {})
     if clean_phone in caregivers:
         cg = caregivers[clean_phone]
-        logger.info(f"JSON Cache HIT: Found caregiver {cg.get('name')} for {clean_phone}")
+        logger.info(
+            f"JSON Cache HIT: Found caregiver {cg.get('name')} for {clean_phone}"
+        )
         return {
             "type": "caregiver",
             "name": cg.get("name"),
             "status": cg.get("status", "active"),
-            "phone": clean_phone
+            "phone": clean_phone,
         }
 
     clients = cache.get("clients", {})
@@ -1129,14 +1224,16 @@ def _lookup_in_cache(phone: str) -> Optional[Dict[str, Any]]:
             "name": cl.get("name"),
             "status": cl.get("status", "active"),
             "phone": clean_phone,
-            "location": cl.get("location")
+            "location": cl.get("location"),
         }
 
     logger.info(f"MISS: Phone {clean_phone} not found in database or cache")
     return None
 
 
-def _get_shifts_from_cache(caregiver_name: str = None, client_name: str = None) -> List[Dict[str, Any]]:
+def _get_shifts_from_cache(
+    caregiver_name: str = None, client_name: str = None
+) -> List[Dict[str, Any]]:
     """
     Look up shifts from the local cache.
     Can filter by caregiver name or client name.
@@ -1167,7 +1264,9 @@ def _get_shifts_from_cache(caregiver_name: str = None, client_name: str = None) 
         try:
             start_time = shift.get("start_time", "")
             if start_time:
-                shift_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00").replace("+00:00", ""))
+                shift_dt = datetime.fromisoformat(
+                    start_time.replace("Z", "+00:00").replace("+00:00", "")
+                )
                 if shift_dt < now:
                     continue
         except (ValueError, TypeError):
@@ -1175,7 +1274,9 @@ def _get_shifts_from_cache(caregiver_name: str = None, client_name: str = None) 
 
         results.append(shift)
 
-    logger.info(f"Cache: Found {len(results)} shifts (caregiver={caregiver_name}, client={client_name})")
+    logger.info(
+        f"Cache: Found {len(results)} shifts (caregiver={caregiver_name}, client={client_name})"
+    )
     return results
 
 
@@ -1195,15 +1296,17 @@ def _get_caregivers_by_location(location: str) -> List[Dict[str, Any]]:
 
         # Match on location or city containing the search term
         if location_lower in cg_location or cg_location in location_lower:
-            results.append({
-                "phone": phone,
-                "name": cg.get("name"),
-                "location": cg.get("location"),
-                "city": cg.get("city"),
-                "email": cg.get("email"),
-                "can_sms": cg.get("can_sms", False),
-                "status": cg.get("status", "active")
-            })
+            results.append(
+                {
+                    "phone": phone,
+                    "name": cg.get("name"),
+                    "location": cg.get("location"),
+                    "city": cg.get("city"),
+                    "email": cg.get("email"),
+                    "can_sms": cg.get("can_sms", False),
+                    "status": cg.get("status", "active"),
+                }
+            )
 
     # Prioritize SMS-enabled caregivers for faster outreach
     results.sort(key=lambda x: (not x.get("can_sms", False), x.get("name", "")))
@@ -1265,18 +1368,28 @@ def _is_caregiver_available(caregiver_name: str, shift_date: datetime = None) ->
 
         if "occurs once all day on" in desc:
             try:
-                date_match = re.search(r'(\d{2}/\d{2}/\d{4})', desc)
+                date_match = re.search(r"(\d{2}/\d{2}/\d{4})", desc)
                 if date_match:
                     block_date = datetime.strptime(date_match.group(1), "%m/%d/%Y")
                     if shift_date.date() == block_date.date():
-                        logger.info(f"Caregiver {caregiver_name} unavailable on {shift_date.date()}")
+                        logger.info(
+                            f"Caregiver {caregiver_name} unavailable on {shift_date.date()}"
+                        )
                         return False
             except Exception:
                 pass
 
         if "repeats weekly" in desc:
             days_in_desc = []
-            for day in ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]:
+            for day in [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+                "sunday",
+            ]:
                 if day in desc:
                     days_in_desc.append(day)
 
@@ -1288,7 +1401,9 @@ def _is_caregiver_available(caregiver_name: str, shift_date: datetime = None) ->
     return True
 
 
-def _get_available_caregivers_for_shift(location: str, shift_time: datetime = None) -> List[Dict[str, Any]]:
+def _get_available_caregivers_for_shift(
+    location: str, shift_time: datetime = None
+) -> List[Dict[str, Any]]:
     """
     Get caregivers who are available for a shift at a specific location/time.
     Uses DATABASE first for enterprise-grade reliability.
@@ -1314,7 +1429,9 @@ def _get_available_caregivers_for_shift(location: str, shift_time: datetime = No
     if db:
         try:
             available = db.get_available_caregivers(location, shift_time)
-            logger.info(f"DB: Found {len(available)} available caregivers in {location}")
+            logger.info(
+                f"DB: Found {len(available)} available caregivers in {location}"
+            )
             return available
         except Exception as e:
             logger.warning(f"DB get_available_caregivers failed: {e}")
@@ -1336,8 +1453,10 @@ def _get_available_caregivers_for_shift(location: str, shift_time: datetime = No
 
         available.append(cg)
 
-    logger.info(f"Found {len(available)} available caregivers in {location} "
-                f"(filtered from {len(all_caregivers)} total)")
+    logger.info(
+        f"Found {len(available)} available caregivers in {location} "
+        f"(filtered from {len(all_caregivers)} total)"
+    )
     return available
 
 
@@ -1345,24 +1464,24 @@ def _get_available_caregivers_for_shift(location: str, shift_time: datetime = No
 # WellSky Integration Helpers (used as FALLBACK when not in cache)
 # =============================================================================
 
+
 async def _query_wellsky_caregiver(phone: str) -> Optional[Dict[str, Any]]:
     """Query WellSky for caregiver by phone number."""
     try:
         # First try the portal's WellSky API
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers",
-                timeout=10.0
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers", timeout=10.0
             )
             if response.status_code == 200:
                 data = response.json()
                 caregivers = data.get("caregivers", [])
 
                 # Normalize phone for comparison
-                clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+                clean_phone = "".join(filter(str.isdigit, phone))[-10:]
 
                 for cg in caregivers:
-                    cg_phone = ''.join(filter(str.isdigit, cg.get("phone", "")))[-10:]
+                    cg_phone = "".join(filter(str.isdigit, cg.get("phone", "")))[-10:]
                     if cg_phone == clean_phone and cg.get("status") == "active":
                         return cg
     except Exception as e:
@@ -1376,8 +1495,7 @@ async def _lookup_caregiver_by_name(name: str) -> Optional[Dict[str, Any]]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers",
-                timeout=10.0
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers", timeout=10.0
             )
             if response.status_code == 200:
                 data = response.json()
@@ -1389,14 +1507,18 @@ async def _lookup_caregiver_by_name(name: str) -> Optional[Dict[str, Any]]:
                 for cg in caregivers:
                     full_name = f"{cg.get('first_name', '')} {cg.get('last_name', '')}".lower().strip()
                     # Check for exact match or partial match
-                    if search_name == full_name or search_name in full_name or full_name in search_name:
+                    if (
+                        search_name == full_name
+                        or search_name in full_name
+                        or full_name in search_name
+                    ):
                         if cg.get("status") == "active":
                             return cg
 
                 # Second pass: looser matching
                 for cg in caregivers:
-                    first = cg.get('first_name', '').lower()
-                    last = cg.get('last_name', '').lower()
+                    first = cg.get("first_name", "").lower()
+                    last = cg.get("last_name", "").lower()
                     if first and first in search_name:
                         return cg
                     if last and last in search_name:
@@ -1407,14 +1529,16 @@ async def _lookup_caregiver_by_name(name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-async def _lookup_shift_for_caregiver(caregiver_id: str, shift_date: str = None, client_name: str = None) -> Optional[Dict[str, Any]]:
+async def _lookup_shift_for_caregiver(
+    caregiver_id: str, shift_date: str = None, client_name: str = None
+) -> Optional[Dict[str, Any]]:
     """Look up upcoming shift for a caregiver."""
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{PORTAL_BASE_URL}/api/internal/wellsky/caregivers/{caregiver_id}/shifts",
                 params={"days": 7},
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -1426,7 +1550,10 @@ async def _lookup_shift_for_caregiver(caregiver_id: str, shift_date: str = None,
                         search_client = client_name.lower().strip()
                         for shift in shifts:
                             shift_client = f"{shift.get('client_first_name', '')} {shift.get('client_last_name', '')}".lower().strip()
-                            if search_client in shift_client or shift_client in search_client:
+                            if (
+                                search_client in shift_client
+                                or shift_client in search_client
+                            ):
                                 return shift
 
                     # Otherwise return the next upcoming shift
@@ -1442,22 +1569,25 @@ async def _query_wellsky_client(phone: str) -> Optional[Dict[str, Any]]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(
-                f"{PORTAL_BASE_URL}/api/internal/wellsky/clients",
-                timeout=10.0
+                f"{PORTAL_BASE_URL}/api/internal/wellsky/clients", timeout=10.0
             )
             if response.status_code == 200:
                 data = response.json()
                 clients = data.get("clients", [])
 
                 # Normalize phone for comparison
-                clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+                clean_phone = "".join(filter(str.isdigit, phone))[-10:]
 
                 for cl in clients:
                     # Check primary phone and emergency contact
-                    cl_phone = ''.join(filter(str.isdigit, cl.get("phone", "")))[-10:]
-                    emergency_phone = ''.join(filter(str.isdigit, cl.get("emergency_contact_phone", "")))[-10:]
+                    cl_phone = "".join(filter(str.isdigit, cl.get("phone", "")))[-10:]
+                    emergency_phone = "".join(
+                        filter(str.isdigit, cl.get("emergency_contact_phone", ""))
+                    )[-10:]
 
-                    if (cl_phone == clean_phone or emergency_phone == clean_phone) and cl.get("status") == "active":
+                    if (
+                        cl_phone == clean_phone or emergency_phone == clean_phone
+                    ) and cl.get("status") == "active":
                         return cl
     except Exception as e:
         logger.error(f"Error querying WellSky for client: {e}")
@@ -1472,7 +1602,7 @@ async def _get_caregiver_shifts(caregiver_id: str) -> List[Dict[str, Any]]:
             response = await client.get(
                 f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts",
                 params={"caregiver_id": caregiver_id, "upcoming": "true"},
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -1496,11 +1626,17 @@ async def _get_beetexting_token() -> Optional[str]:
     global _beetexting_token_cache
 
     # Check cache
-    if _beetexting_token_cache.get("token") and _beetexting_token_cache.get("expires_at"):
+    if _beetexting_token_cache.get("token") and _beetexting_token_cache.get(
+        "expires_at"
+    ):
         if datetime.now() < _beetexting_token_cache["expires_at"]:
             return _beetexting_token_cache["token"]
 
-    if not BEETEXTING_CLIENT_ID or not BEETEXTING_CLIENT_SECRET or not BEETEXTING_API_KEY:
+    if (
+        not BEETEXTING_CLIENT_ID
+        or not BEETEXTING_CLIENT_SECRET
+        or not BEETEXTING_API_KEY
+    ):
         logger.warning("BeeTexting credentials not configured")
         return None
 
@@ -1512,14 +1648,14 @@ async def _get_beetexting_token() -> Optional[str]:
                 data={
                     "grant_type": "client_credentials",
                     "client_id": BEETEXTING_CLIENT_ID,
-                    "client_secret": BEETEXTING_CLIENT_SECRET
+                    "client_secret": BEETEXTING_CLIENT_SECRET,
                 },
                 headers={
                     "x-api-key": BEETEXTING_API_KEY,
                     "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json"
+                    "Accept": "application/json",
                 },
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -1528,12 +1664,14 @@ async def _get_beetexting_token() -> Optional[str]:
 
                 _beetexting_token_cache = {
                     "token": token,
-                    "expires_at": datetime.now() + timedelta(seconds=expires_in - 60)
+                    "expires_at": datetime.now() + timedelta(seconds=expires_in - 60),
                 }
                 logger.info("BeeTexting OAuth token obtained successfully")
                 return token
             else:
-                logger.error(f"BeeTexting OAuth error: {response.status_code} - {response.text}")
+                logger.error(
+                    f"BeeTexting OAuth error: {response.status_code} - {response.text}"
+                )
                 return None
     except Exception as e:
         logger.error(f"Error getting BeeTexting token: {e}")
@@ -1554,20 +1692,22 @@ async def _send_sms_beetexting(to_phone: str, message: str) -> bool:
                 f"{BEETEXTING_API_URL}/message/sendsms",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "x-api-key": BEETEXTING_API_KEY
+                    "x-api-key": BEETEXTING_API_KEY,
                 },
                 params={
                     "from": BEETEXTING_FROM_NUMBER,
                     "to": to_phone,
-                    "text": message
+                    "text": message,
                 },
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code in (200, 201):
                 logger.info(f"SMS sent successfully via BeeTexting to {to_phone}")
                 return True
             else:
-                logger.error(f"BeeTexting API error: {response.status_code} - {response.text}")
+                logger.error(
+                    f"BeeTexting API error: {response.status_code} - {response.text}"
+                )
                 # Fall back to RingCentral
                 logger.info("Falling back to RingCentral SMS")
                 return await _send_sms_ringcentral(to_phone, message)
@@ -1585,7 +1725,9 @@ async def _get_ringcentral_token() -> Optional[str]:
     global _ringcentral_token_cache
 
     # Check cache
-    if _ringcentral_token_cache.get("token") and _ringcentral_token_cache.get("expires_at"):
+    if _ringcentral_token_cache.get("token") and _ringcentral_token_cache.get(
+        "expires_at"
+    ):
         if datetime.now() < _ringcentral_token_cache["expires_at"]:
             return _ringcentral_token_cache["token"]
 
@@ -1600,10 +1742,10 @@ async def _get_ringcentral_token() -> Optional[str]:
                 f"{RINGCENTRAL_SERVER}/restapi/oauth/token",
                 data={
                     "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                    "assertion": RINGCENTRAL_JWT
+                    "assertion": RINGCENTRAL_JWT,
                 },
                 auth=(RINGCENTRAL_CLIENT_ID, RINGCENTRAL_CLIENT_SECRET),
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -1612,12 +1754,14 @@ async def _get_ringcentral_token() -> Optional[str]:
 
                 _ringcentral_token_cache = {
                     "token": token,
-                    "expires_at": datetime.now() + timedelta(seconds=expires_in - 60)
+                    "expires_at": datetime.now() + timedelta(seconds=expires_in - 60),
                 }
                 logger.info("RingCentral OAuth token obtained successfully")
                 return token
             else:
-                logger.error(f"RingCentral OAuth error: {response.status_code} - {response.text}")
+                logger.error(
+                    f"RingCentral OAuth error: {response.status_code} - {response.text}"
+                )
                 return None
     except Exception as e:
         logger.error(f"Error getting RingCentral token: {e}")
@@ -1634,10 +1778,10 @@ async def _send_sms_ringcentral(to_phone: str, message: str) -> bool:
         return False
 
     # Normalize phone number to E.164 format
-    clean_to = ''.join(filter(str.isdigit, to_phone))
+    clean_to = "".join(filter(str.isdigit, to_phone))
     if len(clean_to) == 10:
         clean_to = f"+1{clean_to}"
-    elif len(clean_to) == 11 and clean_to.startswith('1'):
+    elif len(clean_to) == 11 and clean_to.startswith("1"):
         clean_to = f"+{clean_to}"
 
     try:
@@ -1646,27 +1790,31 @@ async def _send_sms_ringcentral(to_phone: str, message: str) -> bool:
                 f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/sms",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 json={
                     "from": {"phoneNumber": RINGCENTRAL_FROM_NUMBER},
                     "to": [{"phoneNumber": clean_to}],
-                    "text": message
+                    "text": message,
                 },
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code in (200, 201):
                 logger.info(f"SMS sent successfully via RingCentral to {to_phone}")
                 return True
             else:
-                logger.error(f"RingCentral SMS error: {response.status_code} - {response.text}")
+                logger.error(
+                    f"RingCentral SMS error: {response.status_code} - {response.text}"
+                )
                 return False
     except Exception as e:
         logger.error(f"Error sending RingCentral SMS: {e}")
         return False
 
 
-async def _send_sms_primary(to_phone: str, message: str, bypass_loop_check: bool = False) -> bool:
+async def _send_sms_primary(
+    to_phone: str, message: str, bypass_loop_check: bool = False
+) -> bool:
     """
     Send SMS via primary provider (RingCentral or BeeTexting).
 
@@ -1682,7 +1830,9 @@ async def _send_sms_primary(to_phone: str, message: str, bypass_loop_check: bool
     if not bypass_loop_check:
         can_send, reason = _can_send_sms(to_phone)
         if not can_send:
-            logger.warning(f"⛔ SMS LOOP PREVENTION: Blocking SMS to {to_phone}. Reason: {reason}")
+            logger.warning(
+                f"⛔ SMS LOOP PREVENTION: Blocking SMS to {to_phone}. Reason: {reason}"
+            )
             return False
 
     # Send via configured provider
@@ -1711,15 +1861,16 @@ async def send_glip_message(chat_id: str, text: str) -> bool:
                 f"{RINGCENTRAL_SERVER}/restapi/v1.0/glip/chats/{chat_id}/posts",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
                 json={"text": text},
-                timeout=10.0
+                timeout=10.0,
             )
             return response.status_code in (200, 201)
     except Exception as e:
         logger.error(f"Error sending Glip message: {e}")
         return False
+
 
 async def assign_beetexting_conversation(from_phone: str, agent_email: str) -> bool:
     """Assign a BeeTexting conversation to a specific agent."""
@@ -1730,7 +1881,7 @@ async def assign_beetexting_conversation(from_phone: str, agent_email: str) -> b
 
     try:
         # BeeTexting usually identifies conversations by the contact's phone number
-        clean_phone = ''.join(filter(str.isdigit, from_phone))[-10:]
+        clean_phone = "".join(filter(str.isdigit, from_phone))[-10:]
         async with httpx.AsyncClient() as client:
             # Note: Endpoint path is hypothetical based on typical BeeTexting patterns
             # Would need to verify against their actual API docs for "Assign Conversation"
@@ -1738,13 +1889,10 @@ async def assign_beetexting_conversation(from_phone: str, agent_email: str) -> b
                 f"{BEETEXTING_API_URL}/conversation/assign",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "x-api-key": BEETEXTING_API_KEY
+                    "x-api-key": BEETEXTING_API_KEY,
                 },
-                params={
-                    "phone_number": clean_phone,
-                    "agent_email": agent_email
-                },
-                timeout=10.0
+                params={"phone_number": clean_phone, "agent_email": agent_email},
+                timeout=10.0,
             )
             return response.status_code == 200
     except Exception as e:
@@ -1780,26 +1928,27 @@ async def _send_ringcentral_pager(extension_ids: list, message: str) -> bool:
                 f"{RINGCENTRAL_SERVER}/restapi/v1.0/account/~/extension/~/company-pager",
                 headers={
                     "Authorization": f"Bearer {token}",
-                    "Content-Type": "application/json"
+                    "Content-Type": "application/json",
                 },
-                json={
-                    "to": recipients,
-                    "text": message
-                },
-                timeout=10.0
+                json={"to": recipients, "text": message},
+                timeout=10.0,
             )
             if response.status_code in (200, 201):
                 logger.info(f"Pager sent successfully to extensions: {extension_ids}")
                 return True
             else:
-                logger.error(f"RingCentral pager error: {response.status_code} - {response.text}")
+                logger.error(
+                    f"RingCentral pager error: {response.status_code} - {response.text}"
+                )
                 return False
     except Exception as e:
         logger.error(f"Error sending RingCentral pager: {e}")
         return False
 
 
-async def notify_escalation_contacts(issue_type: str, client_name: str, summary: str, priority: str = "urgent") -> bool:
+async def notify_escalation_contacts(
+    issue_type: str, client_name: str, summary: str, priority: str = "urgent"
+) -> bool:
     """
     Notify Cynthia and Jason about urgent client escalations.
 
@@ -1819,7 +1968,9 @@ async def notify_escalation_contacts(issue_type: str, client_name: str, summary:
     if issue_type == "cancel_threat":
         message = f"🚨 CLIENT CANCEL THREAT: {client_name}\n{summary}\nGigi promised Cynthia will call before 9 AM."
     else:
-        message = f"⚠️ URGENT CLIENT ISSUE: {client_name}\n{summary}\nPriority: {priority}"
+        message = (
+            f"⚠️ URGENT CLIENT ISSUE: {client_name}\n{summary}\nPriority: {priority}"
+        )
 
     success = False
 
@@ -1852,7 +2003,9 @@ async def notify_escalation_contacts(issue_type: str, client_name: str, summary:
         pager_success = await _send_ringcentral_pager(extensions, message)
 
         if pager_success:
-            logger.info(f"Escalation pager sent to Cynthia ({ESCALATION_CYNTHIA_EXT}) and Jason ({ESCALATION_JASON_EXT})")
+            logger.info(
+                f"Escalation pager sent to Cynthia ({ESCALATION_CYNTHIA_EXT}) and Jason ({ESCALATION_JASON_EXT})"
+            )
             success = True
         else:
             # Final fallback: SMS to on-call manager
@@ -1860,7 +2013,9 @@ async def notify_escalation_contacts(issue_type: str, client_name: str, summary:
             success = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, message)
 
     if not success:
-        logger.warning(f"[ALL CHANNELS FAILED] Could not notify about: {issue_type} - {client_name}")
+        logger.warning(
+            f"[ALL CHANNELS FAILED] Could not notify about: {issue_type} - {client_name}"
+        )
 
     return success
 
@@ -1868,6 +2023,7 @@ async def notify_escalation_contacts(issue_type: str, client_name: str, summary:
 # =============================================================================
 # Tool Functions (Called by Gigi via Retell)
 # =============================================================================
+
 
 async def verify_caller(phone_number: str) -> CallerInfo:
     """
@@ -1882,11 +2038,13 @@ async def verify_caller(phone_number: str) -> CallerInfo:
     Returns:
         CallerInfo with caller_type, person_id, name, and active status
     """
-    logger.info(f"verify_caller called with phone: {phone_number}")
+    logger.info(
+        f"verify_caller called with phone: ...{phone_number[-4:] if phone_number else '?'}"
+    )
 
     # Normalize phone number
-    clean_phone = ''.join(filter(str.isdigit, phone_number))
-    if len(clean_phone) == 11 and clean_phone.startswith('1'):
+    clean_phone = "".join(filter(str.isdigit, phone_number))
+    if len(clean_phone) == 11 and clean_phone.startswith("1"):
         clean_phone = clean_phone[1:]
 
     # =========================================================================
@@ -1899,7 +2057,7 @@ async def verify_caller(phone_number: str) -> CallerInfo:
                 caller_type=CallerType.CAREGIVER,
                 name=cached.get("name"),
                 phone=phone_number,
-                is_active=cached.get("status") == "active"
+                is_active=cached.get("status") == "active",
             )
         elif cached["type"] == "client":
             return CallerInfo(
@@ -1907,7 +2065,7 @@ async def verify_caller(phone_number: str) -> CallerInfo:
                 name=cached.get("name"),
                 phone=phone_number,
                 is_active=cached.get("status") == "active",
-                additional_info={"location": cached.get("location")}
+                additional_info={"location": cached.get("location")},
             )
 
     # =========================================================================
@@ -1927,8 +2085,8 @@ async def verify_caller(phone_number: str) -> CallerInfo:
             additional_info={
                 "certifications": caregiver.get("certifications", []),
                 "hire_date": caregiver.get("hire_date"),
-                "supervisor": caregiver.get("supervisor")
-            }
+                "supervisor": caregiver.get("supervisor"),
+            },
         )
 
     # Check if caller is a client
@@ -1943,19 +2101,19 @@ async def verify_caller(phone_number: str) -> CallerInfo:
             additional_info={
                 "care_plan": client.get("care_plan_summary"),
                 "primary_caregiver": client.get("primary_caregiver_name"),
-                "service_hours": client.get("authorized_hours_weekly")
-            }
+                "service_hours": client.get("authorized_hours_weekly"),
+            },
         )
 
     # Unknown caller
     return CallerInfo(
-        caller_type=CallerType.UNKNOWN,
-        phone=phone_number,
-        is_active=False
+        caller_type=CallerType.UNKNOWN, phone=phone_number, is_active=False
     )
 
 
-async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optional[ShiftDetails]:
+async def get_shift_details(
+    person_id: str, caregiver_name: str = None
+) -> Optional[ShiftDetails]:
     """
     Pulls the next scheduled shift for a caregiver.
 
@@ -1971,7 +2129,9 @@ async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optio
     Returns:
         ShiftDetails for the next upcoming shift, or None if no shifts scheduled
     """
-    logger.info(f"get_shift_details called for person_id: {person_id}, name: {caregiver_name}")
+    logger.info(
+        f"get_shift_details called for person_id: {person_id}, name: {caregiver_name}"
+    )
 
     # =========================================================================
     # STEP 1: Check local cache FIRST (instant, no API call)
@@ -1982,7 +2142,9 @@ async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optio
             next_shift = cached_shifts[0]  # Already sorted by time
             try:
                 start_str = next_shift.get("start_time", "")
-                start_time = datetime.fromisoformat(start_str.replace("Z", "+00:00").replace("+00:00", ""))
+                start_time = datetime.fromisoformat(
+                    start_str.replace("Z", "+00:00").replace("+00:00", "")
+                )
                 # Estimate 3-hour shift if no end time
                 end_time = start_time + timedelta(hours=3)
 
@@ -1998,7 +2160,7 @@ async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optio
                     end_time=end_time,
                     hours=3.0,
                     status=next_shift.get("status", "Scheduled"),
-                    notes=""
+                    notes="",
                 )
             except Exception as e:
                 logger.warning(f"Cache shift parse error: {e}")
@@ -2024,7 +2186,9 @@ async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optio
             if date_str and start_time_str:
                 start_time = datetime.fromisoformat(f"{date_str}T{start_time_str}")
             else:
-                start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+                start_time = datetime.fromisoformat(
+                    start_time_str.replace("Z", "+00:00")
+                )
 
             if start_time > now:
                 upcoming_shifts.append((start_time, shift))
@@ -2063,7 +2227,7 @@ async def get_shift_details(person_id: str, caregiver_name: str = None) -> Optio
         end_time=end_time,
         hours=(end_time - start_time).total_seconds() / 3600,
         status=next_shift.get("status", "scheduled"),
-        notes=next_shift.get("notes", "")
+        notes=next_shift.get("notes", ""),
     )
 
 
@@ -2096,20 +2260,24 @@ async def get_active_shifts(person_id: str) -> List[Dict[str, Any]]:
         for shift in shifts:
             try:
                 start_time_str = shift.get("start_time", "")
-                start_time = datetime.fromisoformat(start_time_str.replace("Z", "+00:00"))
+                start_time = datetime.fromisoformat(
+                    start_time_str.replace("Z", "+00:00")
+                )
 
                 # Include shifts starting in next 24 hours
                 if now <= start_time <= cutoff:
-                    active_shifts.append({
-                        "shift_id": shift.get("id", ""),
-                        "client_name": shift.get("client_name", "Unknown Client"),
-                        "client_id": shift.get("client_id", ""),
-                        "start_time": start_time.strftime("%I:%M %p"),
-                        "start_time_iso": start_time_str,
-                        "end_time": shift.get("end_time", ""),
-                        "status": shift.get("status", "scheduled"),
-                        "client_address": shift.get("client_address", "")
-                    })
+                    active_shifts.append(
+                        {
+                            "shift_id": shift.get("id", ""),
+                            "client_name": shift.get("client_name", "Unknown Client"),
+                            "client_id": shift.get("client_id", ""),
+                            "start_time": start_time.strftime("%I:%M %p"),
+                            "start_time_iso": start_time_str,
+                            "end_time": shift.get("end_time", ""),
+                            "status": shift.get("status", "scheduled"),
+                            "client_address": shift.get("client_address", ""),
+                        }
+                    )
             except (ValueError, TypeError) as e:
                 logger.warning(f"Error parsing shift date: {e}")
                 continue
@@ -2124,14 +2292,14 @@ async def get_active_shifts(person_id: str) -> List[Dict[str, Any]]:
         logger.error(f"Error in get_active_shifts: {e}")
         # Return empty list on failure rather than crashing conversation
         # This is a "Degrade" action
-        failure_handler.handle_tool_failure("get_active_shifts", e, {"person_id": person_id})
+        failure_handler.handle_tool_failure(
+            "get_active_shifts", e, {"person_id": person_id}
+        )
         return []
 
 
 async def execute_caregiver_call_out(
-    caregiver_id: str,
-    shift_id: str,
-    reason: str = "sick"
+    caregiver_id: str, shift_id: str, reason: str = "sick"
 ) -> Dict[str, Any]:
     """
     TOOL: execute_caregiver_call_out(caregiver_id, shift_id)
@@ -2156,7 +2324,9 @@ async def execute_caregiver_call_out(
         Dict with success status, steps completed, and message for Gigi to read
     """
     try:
-        logger.info(f"execute_caregiver_call_out: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
+        logger.info(
+            f"execute_caregiver_call_out: caregiver={caregiver_id}, shift={shift_id}, reason={reason}"
+        )
 
         # =========================================================================
         # COORDINATOR COORDINATION: Acquire shift lock to prevent collisions
@@ -2168,9 +2338,7 @@ async def execute_caregiver_call_out(
         if GIGI_MODE == "shadow":
             logger.info(f"SHADOW MODE: Skipping shift lock for {shift_id}")
             return await _execute_caregiver_call_out_locked(
-                caregiver_id=caregiver_id,
-                shift_id=shift_id,
-                reason=reason
+                caregiver_id=caregiver_id, shift_id=shift_id, reason=reason
             )
 
         if SHIFT_LOCK_AVAILABLE and shift_lock_manager:
@@ -2179,14 +2347,12 @@ async def execute_caregiver_call_out(
                     shift_id=shift_id,
                     locked_by="gigi_ai",
                     reason="processing_callout",
-                    timeout_minutes=10
+                    timeout_minutes=10,
                 ) as lock_info:
                     logger.info(f"Shift lock acquired: {shift_id} by gigi_ai")
                     # Proceed with call-out processing inside the lock
                     return await _execute_caregiver_call_out_locked(
-                        caregiver_id=caregiver_id,
-                        shift_id=shift_id,
-                        reason=reason
+                        caregiver_id=caregiver_id, shift_id=shift_id, reason=reason
                     )
             except CoordinatorLockError as e:
                 # Someone else (human coordinator or another Gigi instance) is processing this shift
@@ -2205,30 +2371,28 @@ async def execute_caregiver_call_out(
                     ),
                     "errors": [f"Shift locked by {locked_by}"],
                     "action_completed": True,
-                    "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
+                    "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else.",
                 }
         else:
             # Shift lock not available - proceed without lock (development mode)
-            logger.warning(f"Shift lock manager not available - proceeding without lock for shift {shift_id}")
+            logger.warning(
+                f"Shift lock manager not available - proceeding without lock for shift {shift_id}"
+            )
             return await _execute_caregiver_call_out_locked(
-                caregiver_id=caregiver_id,
-                shift_id=shift_id,
-                reason=reason
+                caregiver_id=caregiver_id, shift_id=shift_id, reason=reason
             )
 
     except Exception as e:
         # Phase 3 Failure Protocol: Handle tool failure gracefully
-        return handle_tool_error("execute_caregiver_call_out", e, {
-            "caregiver_id": caregiver_id,
-            "shift_id": shift_id,
-            "reason": reason
-        })
+        return handle_tool_error(
+            "execute_caregiver_call_out",
+            e,
+            {"caregiver_id": caregiver_id, "shift_id": shift_id, "reason": reason},
+        )
 
 
 async def _execute_caregiver_call_out_locked(
-    caregiver_id: str,
-    shift_id: str,
-    reason: str = "sick"
+    caregiver_id: str, shift_id: str, reason: str = "sick"
 ) -> Dict[str, Any]:
     """
     Internal implementation of execute_caregiver_call_out.
@@ -2246,7 +2410,9 @@ async def _execute_caregiver_call_out_locked(
 
         # RULE 1: Only allow unassigning shifts within 24 hours
         if time_until_shift > 24:
-            logger.warning(f"Shift {shift_id} starts in {time_until_shift:.1f} hours - outside 24hr window")
+            logger.warning(
+                f"Shift {shift_id} starts in {time_until_shift:.1f} hours - outside 24hr window"
+            )
             return {
                 "success": False,
                 "requires_manual_handoff": False,
@@ -2255,12 +2421,14 @@ async def _execute_caregiver_call_out_locked(
                     f"For shifts more than 24 hours away, please contact the office during business hours "
                     f"at 719-428-3999. They can help reschedule if needed."
                 ),
-                "errors": ["Shift outside 24-hour call-out window"]
+                "errors": ["Shift outside 24-hour call-out window"],
             }
 
         # RULE 2: If shift starts in less than 2 hours, MANUAL HANDOFF required
         if time_until_shift < 2:
-            logger.warning(f"Shift {shift_id} starts in {time_until_shift:.1f} hours - URGENT handoff required")
+            logger.warning(
+                f"Shift {shift_id} starts in {time_until_shift:.1f} hours - URGENT handoff required"
+            )
 
             # Still log the call-out attempt for the manager
             urgent_message = (
@@ -2273,7 +2441,9 @@ async def _execute_caregiver_call_out_locked(
                 await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, urgent_message)
                 manager_notified = True
             else:
-                logger.info(f"[DISABLED] Would send urgent SMS to {ON_CALL_MANAGER_PHONE}: {urgent_message}")
+                logger.info(
+                    f"[DISABLED] Would send urgent SMS to {ON_CALL_MANAGER_PHONE}: {urgent_message}"
+                )
                 manager_notified = False
 
             return {
@@ -2288,10 +2458,12 @@ async def _execute_caregiver_call_out_locked(
                     f"we can get coverage immediately. I've already alerted them about your call-out. "
                     f"Please hold while I transfer you, or call the on-call line directly at 303-757-1777."
                 ),
-                "errors": ["Shift starts within 2 hours - requires manual handoff"]
+                "errors": ["Shift starts within 2 hours - requires manual handoff"],
             }
 
-        logger.info(f"Shift {shift_id} starts in {time_until_shift:.1f} hours - within valid window")
+        logger.info(
+            f"Shift {shift_id} starts in {time_until_shift:.1f} hours - within valid window"
+        )
 
     result = {
         "success": False,
@@ -2300,7 +2472,7 @@ async def _execute_caregiver_call_out_locked(
         "step_c_replacement_blast_sent": False,
         "call_out_id": None,
         "message": "",
-        "errors": []
+        "errors": [],
     }
 
     # Get shift details for context
@@ -2308,7 +2480,9 @@ async def _execute_caregiver_call_out_locked(
     caregiver_name = shift.caregiver_name if shift else f"Caregiver {caregiver_id}"
     client_name = shift.client_name if shift else "Unknown Client"
     client_id = shift.client_id if shift else None
-    shift_time = shift.start_time.strftime("%B %d at %I:%M %p") if shift else "Unknown Time"
+    shift_time = (
+        shift.start_time.strftime("%B %d at %I:%M %p") if shift else "Unknown Time"
+    )
 
     # =========================================================================
     # SHADOW MODE INTERCEPTION
@@ -2317,28 +2491,33 @@ async def _execute_caregiver_call_out_locked(
         logger.info(f"SHADOW MODE: Intercepting call-out for {shift_id}")
 
         # Log Step A
-        log_shadow_action("UPDATE_WELLSKY_SHIFT", {
-            "shift_id": shift_id,
-            "status": "open",
-            "reason": reason,
-            "caregiver": caregiver_name,
-            "client": client_name
-        })
+        log_shadow_action(
+            "UPDATE_WELLSKY_SHIFT",
+            {
+                "shift_id": shift_id,
+                "status": "open",
+                "reason": reason,
+                "caregiver": caregiver_name,
+                "client": client_name,
+            },
+        )
 
         # Log Step B (simulated data)
-        log_shadow_action("LOG_PORTAL_EVENT", {
-            "caregiver": caregiver_name,
-            "client": client_name,
-            "reason": reason,
-            "status": "pending_coverage"
-        })
+        log_shadow_action(
+            "LOG_PORTAL_EVENT",
+            {
+                "caregiver": caregiver_name,
+                "client": client_name,
+                "reason": reason,
+                "status": "pending_coverage",
+            },
+        )
 
         # Log Step C (simulated)
-        log_shadow_action("TRIGGER_REPLACEMENT_BLAST", {
-            "client": client_name,
-            "shift_time": shift_time,
-            "urgency": "high"
-        })
+        log_shadow_action(
+            "TRIGGER_REPLACEMENT_BLAST",
+            {"client": client_name, "shift_time": shift_time, "urgency": "high"},
+        )
 
         return {
             "success": True,
@@ -2352,7 +2531,7 @@ async def _execute_caregiver_call_out_locked(
                 f"The shift with {client_name} would be marked as open. "
                 f"(No actual changes made)"
             ),
-            "errors": []
+            "errors": [],
         }
 
     # =========================================================================
@@ -2362,7 +2541,10 @@ async def _execute_caregiver_call_out_locked(
     wellsky_failure_reason = ""
 
     if GIGI_MODE == "shadow":
-        log_shadow_action("UNASSIGN_CAREIVER_FROM_SHIFT", {"shift_id": shift_id, "caregiver_id": caregiver_id})
+        log_shadow_action(
+            "UNASSIGN_CAREIVER_FROM_SHIFT",
+            {"shift_id": shift_id, "caregiver_id": caregiver_id},
+        )
         result["step_a_wellsky_updated"] = True
     elif WELLSKY_AVAILABLE and wellsky:
         try:
@@ -2373,17 +2555,21 @@ async def _execute_caregiver_call_out_locked(
                 appointment_obj["caregiver"] = None
 
                 # 3. PUT the modified object back
-                update_success, update_response = wellsky.update_appointment(shift_id, appointment_obj)
+                update_success, update_response = wellsky.update_appointment(
+                    shift_id, appointment_obj
+                )
 
                 if update_success:
                     result["step_a_wellsky_updated"] = True
-                    logger.info(f"STEP A SUCCESS: Caregiver {caregiver_id} un-assigned from shift {shift_id} in WellSky.")
+                    logger.info(
+                        f"STEP A SUCCESS: Caregiver {caregiver_id} un-assigned from shift {shift_id} in WellSky."
+                    )
 
                     # 4. Add a Note to the Client (Care Alert)
                     wellsky.add_note_to_client(
                         client_id=client_id,
                         note=f"🚨 CARE ALERT: Caregiver {caregiver_name} called out for shift on {shift_time}. Reason: {reason}",
-                        note_type="callout"
+                        note_type="callout",
                     )
 
                     # 5. Create WellSky Task for coverage
@@ -2392,25 +2578,35 @@ async def _execute_caregiver_call_out_locked(
                         description=f"Caregiver {caregiver_name} called out for shift on {shift_time}.\nReason: {reason}\nShift ID: {shift_id}\nClient: {client_name}",
                         priority="urgent",
                         related_client_id=client_id,
-                        assigned_to=os.getenv("WELLSKY_SCHEDULER_USER_ID")  # Assign to scheduler if configured
+                        assigned_to=os.getenv(
+                            "WELLSKY_SCHEDULER_USER_ID"
+                        ),  # Assign to scheduler if configured
                     )
                     if task_created:
-                        logger.info(f"✅ WellSky Task created for shift {shift_id} coverage")
+                        logger.info(
+                            f"✅ WellSky Task created for shift {shift_id} coverage"
+                        )
                     else:
-                        logger.warning(f"⚠️ Failed to create WellSky Task for shift {shift_id}")
+                        logger.warning(
+                            f"⚠️ Failed to create WellSky Task for shift {shift_id}"
+                        )
                 else:
                     wellsky_update_failed = True
                     wellsky_failure_reason = str(update_response)
             else:
                 wellsky_update_failed = True
-                wellsky_failure_reason = "Could not fetch original appointment to modify."
+                wellsky_failure_reason = (
+                    "Could not fetch original appointment to modify."
+                )
         except Exception as e:
             wellsky_update_failed = True
             wellsky_failure_reason = str(e)
 
     # CRITICAL CHECK: If the update failed, STOP and escalate.
     if wellsky_update_failed:
-        logger.error(f"⚠️ ABORTING call-out process - WellSky update failed for shift {shift_id}: {wellsky_failure_reason}")
+        logger.error(
+            f"⚠️ ABORTING call-out process - WellSky update failed for shift {shift_id}: {wellsky_failure_reason}"
+        )
         # (Escalation block follows)
         pass
 
@@ -2431,7 +2627,9 @@ async def _execute_caregiver_call_out_locked(
                 await send_glip_message(schedulers_chat_id, team_msg)
 
             # 2. Assign BeeTexting conversation to Israt
-            scheduler_email = os.getenv("BEETEXTING_SCHEDULER_EMAIL", "israt@coloradocareassist.com")
+            scheduler_email = os.getenv(
+                "BEETEXTING_SCHEDULER_EMAIL", "israt@coloradocareassist.com"
+            )
             await assign_beetexting_conversation(caregiver_id, scheduler_email)
             result["step_b_portal_logged"] = True
 
@@ -2442,7 +2640,9 @@ async def _execute_caregiver_call_out_locked(
     # CRITICAL CHECK: If WellSky update failed, STOP and escalate to human
     # =========================================================================
     if wellsky_update_failed:
-        logger.error(f"⚠️ ABORTING call-out process - WellSky update failed for shift {shift_id}")
+        logger.error(
+            f"⚠️ ABORTING call-out process - WellSky update failed for shift {shift_id}"
+        )
 
         # Escalate to Jason immediately
         escalation_message = (
@@ -2462,7 +2662,9 @@ async def _execute_caregiver_call_out_locked(
             await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_message)
             logger.critical(f"ESCALATED to on-call manager ({ON_CALL_MANAGER_PHONE})")
         else:
-            logger.critical(f"[SMS DISABLED] Would escalate to Jason: {escalation_message}")
+            logger.critical(
+                f"[SMS DISABLED] Would escalate to Jason: {escalation_message}"
+            )
 
         result["success"] = False
         result["human_escalation_required"] = True
@@ -2474,7 +2676,9 @@ async def _execute_caregiver_call_out_locked(
             f"to confirm. Feel better!"
         )
         result["action_completed"] = True
-        result["next_step"] = "Tell caregiver manager was notified. Ask 'Is there anything else?'"
+        result["next_step"] = (
+            "Tell caregiver manager was notified. Ask 'Is there anything else?'"
+        )
 
         logger.info("execute_caregiver_call_out ABORTED - human escalation sent")
         return result  # ⛔ STOP HERE - do NOT proceed with Steps B & C
@@ -2494,15 +2698,15 @@ async def _execute_caregiver_call_out_locked(
         "reported_via": "gigi_ai_agent",
         "priority": "high",
         "status": "pending_coverage",
-        "wellsky_updated": result["step_a_wellsky_updated"]
+        "wellsky_updated": result["step_a_wellsky_updated"],
     }
 
     if GIGI_MODE == "shadow":
         log_shadow_action("LOG_PORTAL_EVENT", call_out_data)
-        log_shadow_action("NOTIFY_TEAM", {
-            "team": "New Schedulers",
-            "message": f"Call-Out from {caregiver_name}"
-        })
+        log_shadow_action(
+            "NOTIFY_TEAM",
+            {"team": "New Schedulers", "message": f"Call-Out from {caregiver_name}"},
+        )
     else:
         try:
             # 1. Log to Portal (Internal Record)
@@ -2516,12 +2720,14 @@ async def _execute_caregiver_call_out_locked(
                 team_msg = (
                     f"📢 GIGI ALERT: {caregiver_name} called out for {client_name} ({shift_time}).\n"
                     f"Reason: {reason}.\n"
-                    f"A task has been created in WellSky to un-assign and find coverage." # This message is now slightly inaccurate, but still conveys the need for action.
+                    f"A task has been created in WellSky to un-assign and find coverage."  # This message is now slightly inaccurate, but still conveys the need for action.
                 )
                 await send_glip_message(schedulers_chat_id, team_msg)
 
             # 3. Assign BeeTexting conversation to Israt
-            scheduler_email = os.getenv("BEETEXTING_SCHEDULER_EMAIL", "israt@coloradocareassist.com")
+            scheduler_email = os.getenv(
+                "BEETEXTING_SCHEDULER_EMAIL", "israt@coloradocareassist.com"
+            )
             await assign_beetexting_conversation(caregiver_id, scheduler_email)
 
         except Exception as e:
@@ -2543,7 +2749,7 @@ async def _execute_caregiver_call_out_locked(
         "call_out_caregiver_name": caregiver_name,
         "reason": reason,
         "urgency": "high",
-        "source": "gigi_ai_agent"
+        "source": "gigi_ai_agent",
     }
 
     try:
@@ -2552,13 +2758,17 @@ async def _execute_caregiver_call_out_locked(
             blast_response = await client.post(
                 f"{PORTAL_BASE_URL}/api/operations/replacement-blast",
                 json=replacement_blast_data,
-                timeout=30.0  # Longer timeout for SMS sending
+                timeout=30.0,  # Longer timeout for SMS sending
             )
             if blast_response.status_code in (200, 201):
                 blast_result = blast_response.json()
                 result["step_c_replacement_blast_sent"] = True
-                result["caregivers_notified"] = blast_result.get("caregivers_notified", 0)
-                logger.info(f"STEP C SUCCESS: Replacement blast sent to {result.get('caregivers_notified', 0)} caregivers")
+                result["caregivers_notified"] = blast_result.get(
+                    "caregivers_notified", 0
+                )
+                logger.info(
+                    f"STEP C SUCCESS: Replacement blast sent to {result.get('caregivers_notified', 0)} caregivers"
+                )
             else:
                 error_msg = f"Replacement blast returned {blast_response.status_code}: {blast_response.text}"
                 result["errors"].append(f"Step C: {error_msg}")
@@ -2573,8 +2783,13 @@ async def _execute_caregiver_call_out_locked(
     # =========================================================================
     # Scenario: WellSky updated (shift is open) but NO ONE was notified
     # Result: Zero coverage attempt, but shift shows as "open" in system
-    if not result["step_b_portal_logged"] and not result["step_c_replacement_blast_sent"]:
-        logger.error(f"⚠️ CRITICAL: Steps B & C both failed for shift {shift_id} - shift is open but no notifications sent!")
+    if (
+        not result["step_b_portal_logged"]
+        and not result["step_c_replacement_blast_sent"]
+    ):
+        logger.error(
+            f"⚠️ CRITICAL: Steps B & C both failed for shift {shift_id} - shift is open but no notifications sent!"
+        )
 
         escalation_message = (
             f"🚨 GIGI NOTIFICATION FAILURE: {caregiver_name} called out for {client_name} "
@@ -2591,7 +2806,9 @@ async def _execute_caregiver_call_out_locked(
             logger.critical(f"[SMS DISABLED] Would escalate: {escalation_message}")
 
         result["human_escalation_required"] = True
-        result["escalation_reason"] = "Notification systems failed - manual intervention needed"
+        result["escalation_reason"] = (
+            "Notification systems failed - manual intervention needed"
+        )
 
     # Also send direct notification to On-Call Manager (only if operations SMS is enabled)
     elif result["step_c_replacement_blast_sent"]:
@@ -2606,18 +2823,22 @@ async def _execute_caregiver_call_out_locked(
             await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
             logger.info("SMS notification sent to on-call manager")
         else:
-            logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
+            logger.info(
+                f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}"
+            )
 
     # =========================================================================
     # Build final result and message for Gigi to speak
     # =========================================================================
     # NOTE: If we reach here, Step A (WellSky) succeeded (otherwise we would have
     # returned early with escalation). So we only check Steps B & C.
-    steps_completed = sum([
-        result["step_a_wellsky_updated"],
-        result["step_b_portal_logged"],
-        result["step_c_replacement_blast_sent"]
-    ])
+    steps_completed = sum(
+        [
+            result["step_a_wellsky_updated"],
+            result["step_b_portal_logged"],
+            result["step_c_replacement_blast_sent"],
+        ]
+    )
 
     # Success requires:
     # - Step A MUST succeed (critical - we aborted early if it failed)
@@ -2648,16 +2869,18 @@ async def _execute_caregiver_call_out_locked(
 
     # Critical: Signal to LLM that this action is complete
     result["action_completed"] = True
-    result["next_step"] = "DO NOT call this tool again. Tell the caregiver it's handled and ask 'Is there anything else?'"
+    result["next_step"] = (
+        "DO NOT call this tool again. Tell the caregiver it's handled and ask 'Is there anything else?'"
+    )
 
-    logger.info(f"execute_caregiver_call_out completed: success={result['success']}, steps={steps_completed}/3")
+    logger.info(
+        f"execute_caregiver_call_out completed: success={result['success']}, steps={steps_completed}/3"
+    )
     return result
 
 
 async def cancel_shift_acceptance(
-    caregiver_id: str,
-    shift_id: str,
-    reason: str = "Unable to work shift"
+    caregiver_id: str, shift_id: str, reason: str = "Unable to work shift"
 ) -> Dict[str, Any]:
     """
     Cancel a previously accepted shift assignment.
@@ -2686,7 +2909,9 @@ async def cancel_shift_acceptance(
         Gigi: "I understand. I've cancelled your assignment and we're finding someone else..."
     """
     try:
-        logger.info(f"cancel_shift_acceptance called: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
+        logger.info(
+            f"cancel_shift_acceptance called: caregiver={caregiver_id}, shift={shift_id}, reason={reason}"
+        )
 
         # =========================================================================
         # COORDINATOR COORDINATION: Acquire shift lock to prevent collisions
@@ -2697,13 +2922,13 @@ async def cancel_shift_acceptance(
                     shift_id=shift_id,
                     locked_by="gigi_ai",
                     reason="cancelling_acceptance",
-                    timeout_minutes=10
+                    timeout_minutes=10,
                 ) as lock_info:
-                    logger.info(f"Shift lock acquired for cancellation: {shift_id} by gigi_ai")
+                    logger.info(
+                        f"Shift lock acquired for cancellation: {shift_id} by gigi_ai"
+                    )
                     return await _cancel_shift_acceptance_locked(
-                        caregiver_id=caregiver_id,
-                        shift_id=shift_id,
-                        reason=reason
+                        caregiver_id=caregiver_id, shift_id=shift_id, reason=reason
                     )
             except CoordinatorLockError as e:
                 logger.warning(f"Shift lock conflict for cancellation {shift_id}: {e}")
@@ -2720,29 +2945,25 @@ async def cancel_shift_acceptance(
                     ),
                     "errors": [f"Shift locked by {locked_by}"],
                     "action_completed": True,
-                    "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else."
+                    "next_step": "Tell caregiver the shift is being handled. Ask if they need anything else.",
                 }
         else:
             logger.warning("Shift lock manager not available - proceeding without lock")
             return await _cancel_shift_acceptance_locked(
-                caregiver_id=caregiver_id,
-                shift_id=shift_id,
-                reason=reason
+                caregiver_id=caregiver_id, shift_id=shift_id, reason=reason
             )
 
     except Exception as e:
         # Phase 3 Failure Protocol: Handle tool failure gracefully
-        return handle_tool_error("cancel_shift_acceptance", e, {
-            "caregiver_id": caregiver_id,
-            "shift_id": shift_id,
-            "reason": reason
-        })
+        return handle_tool_error(
+            "cancel_shift_acceptance",
+            e,
+            {"caregiver_id": caregiver_id, "shift_id": shift_id, "reason": reason},
+        )
 
 
 async def _cancel_shift_acceptance_locked(
-    caregiver_id: str,
-    shift_id: str,
-    reason: str = "Unable to work shift"
+    caregiver_id: str, shift_id: str, reason: str = "Unable to work shift"
 ) -> Dict[str, Any]:
     """
     Internal implementation of cancel_shift_acceptance.
@@ -2755,12 +2976,16 @@ async def _cancel_shift_acceptance_locked(
         return {
             "success": False,
             "error": "Could not find shift details",
-            "message": "I'm having trouble finding that shift in the system. Can you tell me which client it was for?"
+            "message": "I'm having trouble finding that shift in the system. Can you tell me which client it was for?",
         }
 
     caregiver_name = shift.caregiver_name or f"Caregiver {caregiver_id}"
     client_name = shift.client_name or "Unknown Client"
-    shift_time = shift.start_time.strftime("%B %d at %I:%M %p") if shift.start_time else "Unknown Time"
+    shift_time = (
+        shift.start_time.strftime("%B %d at %I:%M %p")
+        if shift.start_time
+        else "Unknown Time"
+    )
 
     result = {
         "success": False,
@@ -2773,7 +2998,7 @@ async def _cancel_shift_acceptance_locked(
         "errors": [],
         "step_a_wellsky_unassigned": False,
         "step_b_replacement_search_started": False,
-        "step_c_manager_notified": False
+        "step_c_manager_notified": False,
     }
 
     # =========================================================================
@@ -2789,9 +3014,9 @@ async def _cancel_shift_acceptance_locked(
                     "cancellation_reason": reason,
                     "cancelled_by_caregiver_id": caregiver_id,
                     "cancelled_at": datetime.now().isoformat(),
-                    "notes": f"Cancelled by {caregiver_name} via Gigi AI: {reason}"
+                    "notes": f"Cancelled by {caregiver_name} via Gigi AI: {reason}",
                 },
-                timeout=15.0
+                timeout=15.0,
             )
             if wellsky_response.status_code in (200, 201, 204):
                 result["step_a_wellsky_unassigned"] = True
@@ -2828,7 +3053,9 @@ async def _cancel_shift_acceptance_locked(
             escalation_msg = f"🚨 GIGI ERROR: Cannot cancel shift for {caregiver_name}/{client_name}. Error: {e}"
             await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, escalation_msg)
 
-        result["message"] = "I'm having technical difficulties. A manager will call you back shortly."
+        result["message"] = (
+            "I'm having technical difficulties. A manager will call you back shortly."
+        )
         return result
 
     # =========================================================================
@@ -2844,18 +3071,26 @@ async def _cancel_shift_acceptance_locked(
                     "shift_time": shift_time,
                     "urgency": "high",
                     "reason": f"Cancellation by {caregiver_name}: {reason}",
-                    "exclude_caregiver_ids": [caregiver_id],  # Don't offer to same caregiver
-                    "source": "gigi_cancellation"
+                    "exclude_caregiver_ids": [
+                        caregiver_id
+                    ],  # Don't offer to same caregiver
+                    "source": "gigi_cancellation",
                 },
-                timeout=30.0
+                timeout=30.0,
             )
             if replacement_response.status_code in (200, 201):
                 replacement_result = replacement_response.json()
                 result["step_b_replacement_search_started"] = True
-                result["caregivers_notified"] = replacement_result.get("caregivers_notified", 0)
-                logger.info(f"STEP B SUCCESS: Replacement search started, {result['caregivers_notified']} caregivers notified")
+                result["caregivers_notified"] = replacement_result.get(
+                    "caregivers_notified", 0
+                )
+                logger.info(
+                    f"STEP B SUCCESS: Replacement search started, {result['caregivers_notified']} caregivers notified"
+                )
             else:
-                error_msg = f"Replacement blast returned {replacement_response.status_code}"
+                error_msg = (
+                    f"Replacement blast returned {replacement_response.status_code}"
+                )
                 result["errors"].append(f"Step B: {error_msg}")
                 logger.warning(error_msg)
 
@@ -2875,7 +3110,9 @@ async def _cancel_shift_acceptance_locked(
     if result["step_b_replacement_search_started"]:
         manager_message += f"Replacement search started - {result.get('caregivers_notified', 0)} caregivers notified."
     else:
-        manager_message += "URGENT: Replacement search FAILED - manual intervention needed."
+        manager_message += (
+            "URGENT: Replacement search FAILED - manual intervention needed."
+        )
 
     if OPERATIONS_SMS_ENABLED:
         await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, manager_message)
@@ -2909,16 +3146,16 @@ async def _cancel_shift_acceptance_locked(
         )
 
     result["action_completed"] = True
-    result["next_step"] = "Cancellation handled. Ask caregiver if there's anything else."
+    result["next_step"] = (
+        "Cancellation handled. Ask caregiver if there's anything else."
+    )
 
     logger.info(f"cancel_shift_acceptance completed: success={result['success']}")
     return result
 
 
 async def report_call_out(
-    caregiver_id: str,
-    shift_id: str,
-    reason: str
+    caregiver_id: str, shift_id: str, reason: str
 ) -> CallOutReport:
     """
     Reports a caregiver call-out and ACTIVELY starts finding replacement coverage.
@@ -2940,25 +3177,29 @@ async def report_call_out(
     Returns:
         CallOutReport with success status and what Gigi is DOING about it
     """
-    logger.info(f"report_call_out called: caregiver={caregiver_id}, shift={shift_id}, reason={reason}")
+    logger.info(
+        f"report_call_out called: caregiver={caregiver_id}, shift={shift_id}, reason={reason}"
+    )
 
     # Get shift details for context
     shift = await get_shift_details(caregiver_id)
     caregiver_name = shift.caregiver_name if shift else f"Caregiver {caregiver_id}"
     client_name = shift.client_name if shift else "Unknown Client"
-    shift_time = shift.start_time.strftime("%B %d at %I:%M %p") if shift else "Unknown Time"
+    shift_time = (
+        shift.start_time.strftime("%B %d at %I:%M %p") if shift else "Unknown Time"
+    )
 
     # =========================================================================
     # STEP 1: Start the shift filling campaign - THIS IS THE ACTIVE PART!
     # =========================================================================
     filling_result = await start_shift_filling_campaign(
-        shift_id=shift_id,
-        caregiver_id=caregiver_id,
-        reason=reason
+        shift_id=shift_id, caregiver_id=caregiver_id, reason=reason
     )
 
-    logger.info(f"Shift filling campaign result: success={filling_result.success}, "
-                f"contacted={filling_result.candidates_contacted}")
+    logger.info(
+        f"Shift filling campaign result: success={filling_result.success}, "
+        f"contacted={filling_result.candidates_contacted}"
+    )
 
     # =========================================================================
     # STEP 2: Also post to Client Ops Portal for tracking
@@ -2974,7 +3215,7 @@ async def report_call_out(
         "reported_via": "gigi_ai_agent",
         "priority": "high",
         "campaign_id": filling_result.campaign_id,
-        "candidates_contacted": filling_result.candidates_contacted
+        "candidates_contacted": filling_result.candidates_contacted,
     }
 
     call_out_id = None
@@ -2983,14 +3224,16 @@ async def report_call_out(
             response = await client.post(
                 f"{PORTAL_BASE_URL}/api/operations/call-outs",
                 json=call_out_data,
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code in (200, 201):
                 result = response.json()
                 call_out_id = result.get("id")
                 logger.info(f"Call-out posted to portal: {call_out_id}")
             else:
-                logger.warning(f"Portal returned {response.status_code}: {response.text}")
+                logger.warning(
+                    f"Portal returned {response.status_code}: {response.text}"
+                )
     except Exception as e:
         logger.error(f"Error posting call-out to portal: {e}")
 
@@ -3014,11 +3257,15 @@ async def report_call_out(
             if scheduler_notified:
                 logger.info("RingCentral notification sent to New Scheduler chat")
             else:
-                logger.warning(f"Failed to notify New Scheduler chat: {result.get('error')}")
+                logger.warning(
+                    f"Failed to notify New Scheduler chat: {result.get('error')}"
+                )
         except Exception as e:
             logger.error(f"Error sending RingCentral notification: {e}")
     else:
-        logger.info(f"[RC MESSAGING UNAVAILABLE] Would send to New Scheduler: {rc_message}")
+        logger.info(
+            f"[RC MESSAGING UNAVAILABLE] Would send to New Scheduler: {rc_message}"
+        )
 
     # =========================================================================
     # STEP 4: Also notify On-Call Manager via SMS as backup
@@ -3033,9 +3280,13 @@ async def report_call_out(
     manager_notified = False
     if OPERATIONS_SMS_ENABLED and not scheduler_notified:
         # Only SMS if RingCentral messaging failed
-        manager_notified = await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, sms_message)
+        manager_notified = await _send_sms_beetexting(
+            ON_CALL_MANAGER_PHONE, sms_message
+        )
     elif not scheduler_notified:
-        logger.info(f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}")
+        logger.info(
+            f"[DISABLED] Would send SMS to {ON_CALL_MANAGER_PHONE}: {sms_message}"
+        )
 
     # =========================================================================
     # STEP 5: Build confirmation message - Tell the caller what we're DOING
@@ -3068,10 +3319,11 @@ async def report_call_out(
         manager_notified=manager_notified,
         notification_details=(
             f"Campaign started: {filling_result.candidates_contacted} caregivers being contacted"
-            if filling_result.success else "Manual follow-up required"
+            if filling_result.success
+            else "Manual follow-up required"
         ),
         action_completed=True,
-        next_step="DO NOT call this tool again. Tell the caregiver it's handled and ask 'Is there anything else?'"
+        next_step="DO NOT call this tool again. Tell the caregiver it's handled and ask 'Is there anything else?'",
     )
 
 
@@ -3079,9 +3331,11 @@ async def report_call_out(
 # SHIFT FILLING FUNCTIONS - These make Gigi actually fill shifts!
 # =============================================================================
 
+
 @dataclass
 class ReplacementCandidate:
     """A potential replacement caregiver for an open shift"""
+
     caregiver_id: str
     name: str
     phone: str
@@ -3091,9 +3345,11 @@ class ReplacementCandidate:
     distance_miles: Optional[float] = None
     has_worked_with_client: bool = False
 
+
 @dataclass
 class ShiftFillingResult:
     """Result of shift filling operation"""
+
     success: bool
     message: str
     campaign_id: Optional[str] = None
@@ -3104,8 +3360,7 @@ class ShiftFillingResult:
 
 
 async def find_replacement_caregivers(
-    shift_id: str,
-    max_results: int = 10
+    shift_id: str, max_results: int = 10
 ) -> List[ReplacementCandidate]:
     """
     Find available caregivers who can cover an open shift.
@@ -3134,22 +3389,27 @@ async def find_replacement_caregivers(
             response = await client.get(
                 f"{PORTAL_BASE_URL}/api/internal/shift-filling/match/{shift_id}",
                 params={"max_results": max_results},
-                timeout=15.0
+                timeout=15.0,
             )
 
             if response.status_code == 200:
                 data = response.json()
                 for match in data.get("matches", []):
-                    candidates.append(ReplacementCandidate(
-                        caregiver_id=match.get("caregiver_id"),
-                        name=match.get("caregiver_name"),
-                        phone=match.get("phone", ""),
-                        score=match.get("score", 0),
-                        tier=match.get("tier", 3),
-                        reasons=match.get("reasons", []),
-                        has_worked_with_client="prior_client" in " ".join(match.get("reasons", []))
-                    ))
-                logger.info(f"Found {len(candidates)} replacement candidates for shift {shift_id}")
+                    candidates.append(
+                        ReplacementCandidate(
+                            caregiver_id=match.get("caregiver_id"),
+                            name=match.get("caregiver_name"),
+                            phone=match.get("phone", ""),
+                            score=match.get("score", 0),
+                            tier=match.get("tier", 3),
+                            reasons=match.get("reasons", []),
+                            has_worked_with_client="prior_client"
+                            in " ".join(match.get("reasons", [])),
+                        )
+                    )
+                logger.info(
+                    f"Found {len(candidates)} replacement candidates for shift {shift_id}"
+                )
             else:
                 logger.warning(f"Shift filling API returned {response.status_code}")
 
@@ -3160,9 +3420,7 @@ async def find_replacement_caregivers(
 
 
 async def start_shift_filling_campaign(
-    shift_id: str,
-    caregiver_id: str,
-    reason: str
+    shift_id: str, caregiver_id: str, reason: str
 ) -> ShiftFillingResult:
     """
     Start an automated shift filling campaign after a call-out.
@@ -3182,7 +3440,9 @@ async def start_shift_filling_campaign(
     Returns:
         ShiftFillingResult with campaign status
     """
-    logger.info(f"start_shift_filling_campaign: shift={shift_id}, caregiver={caregiver_id}")
+    logger.info(
+        f"start_shift_filling_campaign: shift={shift_id}, caregiver={caregiver_id}"
+    )
 
     try:
         async with httpx.AsyncClient() as client:
@@ -3193,9 +3453,9 @@ async def start_shift_filling_campaign(
                     "shift_id": shift_id,
                     "caregiver_id": caregiver_id,
                     "reason": reason,
-                    "reported_by": "gigi_ai_agent"
+                    "reported_by": "gigi_ai_agent",
                 },
-                timeout=30.0
+                timeout=30.0,
             )
 
             if response.status_code == 200:
@@ -3203,26 +3463,30 @@ async def start_shift_filling_campaign(
                 campaign_id = data.get("campaign_id")
                 total_contacted = data.get("total_contacted", 0)
 
-                logger.info(f"Shift filling campaign started: {campaign_id}, contacted {total_contacted} caregivers")
+                logger.info(
+                    f"Shift filling campaign started: {campaign_id}, contacted {total_contacted} caregivers"
+                )
 
                 return ShiftFillingResult(
                     success=True,
                     message=f"I've started finding coverage. I'm reaching out to {total_contacted} available caregivers right now.",
                     campaign_id=campaign_id,
-                    candidates_contacted=total_contacted
+                    candidates_contacted=total_contacted,
                 )
             else:
-                logger.warning(f"Shift filling API returned {response.status_code}: {response.text}")
+                logger.warning(
+                    f"Shift filling API returned {response.status_code}: {response.text}"
+                )
                 return ShiftFillingResult(
                     success=False,
-                    message="I logged your call-out but had trouble starting the automated coverage search. The on-call manager has been notified."
+                    message="I logged your call-out but had trouble starting the automated coverage search. The on-call manager has been notified.",
                 )
 
     except Exception as e:
         logger.error(f"Error starting shift filling campaign: {e}")
         return ShiftFillingResult(
             success=False,
-            message="I logged your call-out. The on-call manager will work on finding coverage."
+            message="I logged your call-out. The on-call manager will work on finding coverage.",
         )
 
 
@@ -3232,7 +3496,7 @@ async def offer_shift_to_caregiver(
     caregiver_phone: str,
     client_name: str,
     shift_time: str,
-    shift_hours: float
+    shift_hours: float,
 ) -> bool:
     """
     Send a shift offer to a specific caregiver via SMS.
@@ -3260,14 +3524,14 @@ async def offer_shift_to_caregiver(
     if OPERATIONS_SMS_ENABLED:
         return await _send_sms_beetexting(caregiver_phone, message)
     else:
-        logger.info(f"[DISABLED] Would send shift offer to {caregiver_phone}: {message}")
+        logger.info(
+            f"[DISABLED] Would send shift offer to {caregiver_phone}: {message}"
+        )
         return False
 
 
 async def confirm_shift_assignment(
-    shift_id: str,
-    caregiver_id: str,
-    caregiver_name: str
+    shift_id: str, caregiver_id: str, caregiver_name: str
 ) -> ShiftFillingResult:
     """
     Confirm that a shift has been assigned to a caregiver.
@@ -3283,7 +3547,9 @@ async def confirm_shift_assignment(
     Returns:
         ShiftFillingResult with confirmation
     """
-    logger.info(f"confirm_shift_assignment: shift={shift_id} to caregiver={caregiver_id}")
+    logger.info(
+        f"confirm_shift_assignment: shift={shift_id} to caregiver={caregiver_id}"
+    )
 
     try:
         # Update via WellSky service if available
@@ -3291,7 +3557,7 @@ async def confirm_shift_assignment(
             success = wellsky.update_shift_assignment(
                 shift_id=shift_id,
                 caregiver_id=caregiver_id,
-                status=ShiftStatus.ASSIGNED
+                status=ShiftStatus.ASSIGNED,
             )
 
             if success:
@@ -3300,7 +3566,7 @@ async def confirm_shift_assignment(
                     success=True,
                     message=f"Great news! {caregiver_name} has accepted the shift and it's been updated in the system.",
                     shift_filled=True,
-                    assigned_to=caregiver_name
+                    assigned_to=caregiver_name,
                 )
 
         # Fallback: Notify via portal API
@@ -3312,9 +3578,9 @@ async def confirm_shift_assignment(
                     "caregiver_id": caregiver_id,
                     "caregiver_name": caregiver_name,
                     "assigned_by": "gigi_ai_agent",
-                    "assigned_at": datetime.now().isoformat()
+                    "assigned_at": datetime.now().isoformat(),
                 },
-                timeout=10.0
+                timeout=10.0,
             )
 
             if response.status_code in (200, 201):
@@ -3322,7 +3588,7 @@ async def confirm_shift_assignment(
                     success=True,
                     message=f"{caregiver_name} has accepted the shift!",
                     shift_filled=True,
-                    assigned_to=caregiver_name
+                    assigned_to=caregiver_name,
                 )
 
     except Exception as e:
@@ -3330,7 +3596,7 @@ async def confirm_shift_assignment(
 
     return ShiftFillingResult(
         success=False,
-        message="The acceptance was received but I had trouble updating the system. Please verify manually."
+        message="The acceptance was received but I had trouble updating the system. Please verify manually.",
     )
 
 
@@ -3350,7 +3616,7 @@ async def get_shift_filling_status(campaign_id: str) -> Dict[str, Any]:
         async with httpx.AsyncClient() as client:
             response = await client.get(
                 f"{PORTAL_BASE_URL}/api/internal/shift-filling/campaigns/{campaign_id}",
-                timeout=10.0
+                timeout=10.0,
             )
 
             if response.status_code == 200:
@@ -3366,7 +3632,7 @@ async def log_client_issue(
     client_id: Optional[str],
     note: str,
     issue_type: str = "general",
-    priority: str = "normal"
+    priority: str = "normal",
 ) -> ClientIssueReport:
     """
     Logs a client service issue or satisfaction concern to the Portal.
@@ -3389,10 +3655,19 @@ async def log_client_issue(
     """
     # Handle None or missing client_id
     effective_client_id = client_id if client_id else "UNKNOWN"
-    logger.info(f"log_client_issue called: client={effective_client_id}, type={issue_type}, priority={priority}")
+    logger.info(
+        f"log_client_issue called: client={effective_client_id}, type={issue_type}, priority={priority}"
+    )
 
     # Detect cancel threats in the note
-    cancel_keywords = ["cancel", "we're done", "find another agency", "leaving", "switching", "done with you"]
+    cancel_keywords = [
+        "cancel",
+        "we're done",
+        "find another agency",
+        "leaving",
+        "switching",
+        "done with you",
+    ]
     is_cancel_threat = any(keyword in note.lower() for keyword in cancel_keywords)
 
     # Auto-escalate cancel threats to urgent
@@ -3408,7 +3683,7 @@ async def log_client_issue(
         "source": "gigi_ai_agent",
         "reported_at": datetime.now().isoformat(),
         "status": "new",
-        "is_cancel_threat": is_cancel_threat
+        "is_cancel_threat": is_cancel_threat,
     }
 
     issue_id = None
@@ -3417,14 +3692,16 @@ async def log_client_issue(
             response = await client.post(
                 f"{PORTAL_BASE_URL}/api/client-satisfaction/issues",
                 json=issue_data,
-                timeout=10.0
+                timeout=10.0,
             )
             if response.status_code in (200, 201):
                 result = response.json()
                 issue_id = result.get("id")
                 logger.info(f"Client issue logged: {issue_id}")
             else:
-                logger.warning(f"Portal returned {response.status_code}: {response.text}")
+                logger.warning(
+                    f"Portal returned {response.status_code}: {response.text}"
+                )
     except Exception as e:
         logger.error(f"Error logging client issue: {e}")
 
@@ -3432,32 +3709,47 @@ async def log_client_issue(
     # WORKFLOW: Create WellSky Task & Notify Team
     # ==========================================================================
     if GIGI_MODE == "shadow":
-        log_shadow_action("CREATE_WELLSKY_TASK", {
-            "title": f"Client Issue: {issue_type}",
-            "description": note,
-            "client_id": effective_client_id
-        })
-        log_shadow_action("NOTIFY_TEAM", {
-            "team": "New Schedulers",
-            "message": f"Client Issue: {note}"
-        })
+        log_shadow_action(
+            "CREATE_WELLSKY_TASK",
+            {
+                "title": f"Client Issue: {issue_type}",
+                "description": note,
+                "client_id": effective_client_id,
+            },
+        )
+        log_shadow_action(
+            "NOTIFY_TEAM",
+            {"team": "New Schedulers", "message": f"Client Issue: {note}"},
+        )
     else:
         # 1. Create WellSky Task for client issue
         if WELLSKY_AVAILABLE and wellsky:
-            task_priority = "urgent" if priority == "urgent" else "high" if priority == "high" else "normal"
+            task_priority = (
+                "urgent"
+                if priority == "urgent"
+                else "high"
+                if priority == "high"
+                else "normal"
+            )
 
             # Use effective_client_id or fallback to None for generic task
-            ws_client_id = effective_client_id if effective_client_id != "UNKNOWN" else None
+            ws_client_id = (
+                effective_client_id if effective_client_id != "UNKNOWN" else None
+            )
 
             task_created = wellsky.create_admin_task(
                 title=f"Client Issue: {issue_type}",
                 description=f"{note}\n\nPriority: {priority}\nLogged by: Gigi AI\nRequires follow-up call within 30 minutes",
                 priority=task_priority,
                 related_client_id=ws_client_id,
-                assigned_to=os.getenv("WELLSKY_CARE_MANAGER_USER_ID")  # Assign to care manager if configured
+                assigned_to=os.getenv(
+                    "WELLSKY_CARE_MANAGER_USER_ID"
+                ),  # Assign to care manager if configured
             )
             if task_created:
-                logger.info(f"✅ WellSky Task created for client issue: {issue_type} (Client: {ws_client_id or 'GENERAL'})")
+                logger.info(
+                    f"✅ WellSky Task created for client issue: {issue_type} (Client: {ws_client_id or 'GENERAL'})"
+                )
             else:
                 logger.warning("⚠️ Failed to create WellSky Task for client issue")
 
@@ -3473,14 +3765,18 @@ async def log_client_issue(
     escalation_sent = False
     if priority == "urgent" or is_cancel_threat:
         # Extract client name from note if possible (simple extraction)
-        client_name = effective_client_id if effective_client_id != "UNKNOWN" else "Unknown Client"
+        client_name = (
+            effective_client_id
+            if effective_client_id != "UNKNOWN"
+            else "Unknown Client"
+        )
 
         issue_category = "cancel_threat" if is_cancel_threat else "urgent"
         escalation_sent = await notify_escalation_contacts(
             issue_type=issue_category,
             client_name=client_name,
             summary=note[:200],  # First 200 chars
-            priority=priority
+            priority=priority,
         )
         if escalation_sent:
             logger.info("Escalation notification sent to Cynthia and Jason")
@@ -3493,14 +3789,14 @@ async def log_client_issue(
             issue_id=issue_id,
             message="Issue logged successfully. Tell the caller it's recorded and someone will call back within 30 minutes. Then ask 'Is there anything else?'",
             action_completed=True,
-            next_step="DO NOT call log_client_issue again. Confirm with caller and close."
+            next_step="DO NOT call log_client_issue again. Confirm with caller and close.",
         )
     else:
         return ClientIssueReport(
             success=False,
             message="Could not log issue. Apologize briefly and offer to take a message instead.",
             action_completed=True,
-            next_step="DO NOT retry. Move on."
+            next_step="DO NOT retry. Move on.",
         )
 
 
@@ -3508,9 +3804,11 @@ async def log_client_issue(
 # NEW GIGI TOOLS - Production Readiness Features
 # =============================================================================
 
+
 @dataclass
 class NoteResult:
     """Result of adding a note to WellSky."""
+
     success: bool
     message: str
 
@@ -3518,6 +3816,7 @@ class NoteResult:
 @dataclass
 class ClientScheduleResult:
     """Result of getting client schedule."""
+
     success: bool
     shifts: List[Dict[str, Any]]
     message: str
@@ -3526,16 +3825,14 @@ class ClientScheduleResult:
 @dataclass
 class ShiftActionResult:
     """Result of a shift action (assign, cancel, late notification)."""
+
     success: bool
     message: str
     shift_id: Optional[str] = None
 
 
 async def add_note_to_wellsky(
-    person_type: str,
-    person_id: str,
-    note: str,
-    note_type: str = "general"
+    person_type: str, person_id: str, note: str, note_type: str = "general"
 ) -> NoteResult:
     """
     Add a note to a client or caregiver profile in WellSky.
@@ -3558,24 +3855,18 @@ async def add_note_to_wellsky(
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{PORTAL_BASE_URL}{endpoint}",
-                json={
-                    "note": note,
-                    "note_type": note_type,
-                    "source": "gigi_ai"
-                },
-                timeout=15.0
+                json={"note": note, "note_type": note_type, "source": "gigi_ai"},
+                timeout=15.0,
             )
             if response.status_code in (200, 201):
                 logger.info(f"Note added to {person_type} {person_id}")
                 return NoteResult(
-                    success=True,
-                    message=f"Note added to {person_type}'s profile."
+                    success=True, message=f"Note added to {person_type}'s profile."
                 )
             else:
                 logger.warning(f"Failed to add note: {response.status_code}")
                 return NoteResult(
-                    success=False,
-                    message="Could not add note to profile."
+                    success=False, message="Could not add note to profile."
                 )
     except Exception as e:
         logger.error(f"Error adding note: {e}")
@@ -3583,8 +3874,7 @@ async def add_note_to_wellsky(
 
 
 async def get_client_schedule(
-    client_id: str,
-    days_ahead: int = 7
+    client_id: str, days_ahead: int = 7
 ) -> ClientScheduleResult:
     """
     Get upcoming shifts for a client.
@@ -3604,7 +3894,7 @@ async def get_client_schedule(
             response = await client.get(
                 f"{PORTAL_BASE_URL}/api/internal/wellsky/clients/{client_id}/shifts",
                 params={"days": days_ahead},
-                timeout=15.0
+                timeout=15.0,
             )
             if response.status_code == 200:
                 data = response.json()
@@ -3614,7 +3904,7 @@ async def get_client_schedule(
                     return ClientScheduleResult(
                         success=True,
                         shifts=[],
-                        message="I don't see any visits scheduled in the next week. Would you like me to have someone from the office call you to schedule?"
+                        message="I don't see any visits scheduled in the next week. Would you like me to have someone from the office call you to schedule?",
                     )
 
                 # Format the response nicely
@@ -3625,33 +3915,31 @@ async def get_client_schedule(
 
                 message = f"Your next visit is on {shift_date} at {shift_time} with {caregiver}."
                 if len(shifts) > 1:
-                    message += f" You have {len(shifts)} total visits scheduled this week."
+                    message += (
+                        f" You have {len(shifts)} total visits scheduled this week."
+                    )
 
                 return ClientScheduleResult(
-                    success=True,
-                    shifts=shifts,
-                    message=message
+                    success=True, shifts=shifts, message=message
                 )
             else:
                 logger.warning(f"Failed to get client schedule: {response.status_code}")
                 return ClientScheduleResult(
                     success=False,
                     shifts=[],
-                    message="I'm having trouble looking up your schedule. Let me take a message and have someone call you back."
+                    message="I'm having trouble looking up your schedule. Let me take a message and have someone call you back.",
                 )
     except Exception as e:
         logger.error(f"Error getting client schedule: {e}")
         return ClientScheduleResult(
             success=False,
             shifts=[],
-            message="I'm having trouble looking up your schedule right now."
+            message="I'm having trouble looking up your schedule right now.",
         )
 
 
 async def report_late(
-    shift_id: str,
-    delay_minutes: int,
-    reason: str = ""
+    shift_id: str, delay_minutes: int, reason: str = ""
 ) -> ShiftActionResult:
     """
     Report that a caregiver will be late and notify the client.
@@ -3671,11 +3959,8 @@ async def report_late(
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts/{shift_id}/late-notification",
-                json={
-                    "delay_minutes": delay_minutes,
-                    "reason": reason
-                },
-                timeout=15.0
+                json={"delay_minutes": delay_minutes, "reason": reason},
+                timeout=15.0,
             )
             if response.status_code in (200, 201):
                 data = response.json()
@@ -3685,7 +3970,10 @@ async def report_late(
                 # WORKFLOW: Notify Team
                 # ==========================================================================
                 if GIGI_MODE == "shadow":
-                    log_shadow_action("NOTIFY_TEAM", {"team": "New Schedulers", "message": f"Late: {shift_id}"})
+                    log_shadow_action(
+                        "NOTIFY_TEAM",
+                        {"team": "New Schedulers", "message": f"Late: {shift_id}"},
+                    )
                 else:
                     schedulers_chat_id = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
                     if schedulers_chat_id:
@@ -3695,14 +3983,16 @@ async def report_late(
                 return ShiftActionResult(
                     success=True,
                     message=f"Got it. I've notified the client that you're running about {delay_minutes} minutes late. Drive safe.",
-                    shift_id=shift_id
+                    shift_id=shift_id,
                 )
             else:
-                logger.warning(f"Failed to send late notification: {response.status_code}")
+                logger.warning(
+                    f"Failed to send late notification: {response.status_code}"
+                )
                 return ShiftActionResult(
                     success=False,
                     message="I had trouble notifying the client. Please call them directly if possible.",
-                    shift_id=shift_id
+                    shift_id=shift_id,
                 )
     except Exception as e:
         logger.error(f"Error reporting late: {e}")
@@ -3710,9 +4000,7 @@ async def report_late(
 
 
 async def cancel_client_visit(
-    shift_id: str,
-    reason: str,
-    cancelled_by: str = "client"
+    shift_id: str, reason: str, cancelled_by: str = "client"
 ) -> ShiftActionResult:
     """
     Cancel a client's scheduled visit.
@@ -3732,25 +4020,22 @@ async def cancel_client_visit(
         async with httpx.AsyncClient() as client:
             response = await client.put(
                 f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts/{shift_id}/cancel",
-                json={
-                    "reason": reason,
-                    "cancelled_by": cancelled_by
-                },
-                timeout=15.0
+                json={"reason": reason, "cancelled_by": cancelled_by},
+                timeout=15.0,
             )
             if response.status_code in (200, 201):
                 logger.info(f"Shift {shift_id} cancelled")
                 return ShiftActionResult(
                     success=True,
                     message="I've cancelled that visit. The caregiver will be notified. Is there anything else?",
-                    shift_id=shift_id
+                    shift_id=shift_id,
                 )
             else:
                 logger.warning(f"Failed to cancel shift: {response.status_code}")
                 return ShiftActionResult(
                     success=False,
                     message="I had trouble cancelling that visit. Let me take a note and have someone call you back to confirm.",
-                    shift_id=shift_id
+                    shift_id=shift_id,
                 )
     except Exception as e:
         logger.error(f"Error cancelling visit: {e}")
@@ -3758,8 +4043,7 @@ async def cancel_client_visit(
 
 
 async def assign_shift_to_caregiver(
-    shift_id: str,
-    caregiver_id: str
+    shift_id: str, caregiver_id: str
 ) -> ShiftActionResult:
     """
     Assign a caregiver to an open shift.
@@ -3773,31 +4057,30 @@ async def assign_shift_to_caregiver(
     Returns:
         ShiftActionResult with status
     """
-    logger.info(f"assign_shift_to_caregiver: shift={shift_id}, caregiver={caregiver_id}")
+    logger.info(
+        f"assign_shift_to_caregiver: shift={shift_id}, caregiver={caregiver_id}"
+    )
 
     try:
         async with httpx.AsyncClient() as client:
             response = await client.put(
                 f"{PORTAL_BASE_URL}/api/internal/wellsky/shifts/{shift_id}/assign",
-                json={
-                    "caregiver_id": caregiver_id,
-                    "notify_caregiver": True
-                },
-                timeout=15.0
+                json={"caregiver_id": caregiver_id, "notify_caregiver": True},
+                timeout=15.0,
             )
             if response.status_code in (200, 201):
                 logger.info(f"Caregiver {caregiver_id} assigned to shift {shift_id}")
                 return ShiftActionResult(
                     success=True,
                     message="Shift assigned successfully.",
-                    shift_id=shift_id
+                    shift_id=shift_id,
                 )
             else:
                 logger.warning(f"Failed to assign shift: {response.status_code}")
                 return ShiftActionResult(
                     success=False,
                     message="Could not assign the shift.",
-                    shift_id=shift_id
+                    shift_id=shift_id,
                 )
     except Exception as e:
         logger.error(f"Error assigning shift: {e}")
@@ -3807,6 +4090,7 @@ async def assign_shift_to_caregiver(
 @dataclass
 class VisitNotesResult:
     """Result of adding visit notes."""
+
     success: bool
     message: str
     shift_id: Optional[str] = None
@@ -3815,6 +4099,7 @@ class VisitNotesResult:
 @dataclass
 class EmergencyEscalationResult:
     """Result of emergency escalation."""
+
     success: bool
     message: str
     escalation_id: Optional[str] = None
@@ -3824,6 +4109,7 @@ class EmergencyEscalationResult:
 @dataclass
 class StockPriceResult:
     """Result of stock price lookup."""
+
     success: bool
     symbol: Optional[str] = None
     price: Optional[str] = None
@@ -3836,6 +4122,7 @@ class StockPriceResult:
 @dataclass
 class CryptoPriceResult:
     """Result of crypto price lookup."""
+
     success: bool
     symbol: Optional[str] = None
     price: Optional[str] = None
@@ -3848,6 +4135,7 @@ class CryptoPriceResult:
 @dataclass
 class EventsResult:
     """Result of events/concerts lookup."""
+
     success: bool
     events: Optional[List[Dict[str, str]]] = None
     count: int = 0
@@ -3858,6 +4146,7 @@ class EventsResult:
 @dataclass
 class SetlistResult:
     """Result of setlist lookup."""
+
     success: bool
     setlists: Optional[List[Dict[str, Any]]] = None
     count: int = 0
@@ -3865,10 +4154,7 @@ class SetlistResult:
     error: Optional[str] = None
 
 
-async def get_setlist(
-    artist_name: str,
-    limit: int = 5
-) -> SetlistResult:
+async def get_setlist(artist_name: str, limit: int = 5) -> SetlistResult:
     """
     Get recent setlists for an artist using setlist.fm API.
 
@@ -3883,7 +4169,7 @@ async def get_setlist(
         return SetlistResult(
             success=False,
             error="Setlist.fm API key not configured",
-            message="I don't have access to setlist information right now."
+            message="I don't have access to setlist information right now.",
         )
 
     try:
@@ -3903,7 +4189,7 @@ async def get_setlist(
         headers = {
             "x-api-key": SETLIST_FM_API_KEY,
             "Accept": "application/json",
-            "User-Agent": "ColoradoCareAssist/1.0 (shulmeister@gmail.com)"
+            "User-Agent": "ColoradoCareAssist/1.0 (shulmeister@gmail.com)",
         }
 
         logger.info(f"Searching setlists for artist: {artist_name}")
@@ -3915,15 +4201,17 @@ async def get_setlist(
                 return SetlistResult(
                     success=False,
                     count=0,
-                    message=f"I couldn't find any setlists for {artist_name}. They might not have recent concert data available."
+                    message=f"I couldn't find any setlists for {artist_name}. They might not have recent concert data available.",
                 )
 
             if response.status_code != 200:
-                logger.error(f"Setlist.fm API error: {response.status_code} - {response.text}")
+                logger.error(
+                    f"Setlist.fm API error: {response.status_code} - {response.text}"
+                )
                 return SetlistResult(
                     success=False,
                     error=f"API returned status {response.status_code}",
-                    message="I'm having trouble accessing setlist information right now."
+                    message="I'm having trouble accessing setlist information right now.",
                 )
 
             data = response.json()
@@ -3935,7 +4223,7 @@ async def get_setlist(
                 return SetlistResult(
                     success=False,
                     count=0,
-                    message=f"I couldn't find any setlists for {artist_name}. They might not have recent concert data available."
+                    message=f"I couldn't find any setlists for {artist_name}. They might not have recent concert data available.",
                 )
 
             # Format setlists for response (limit to requested number)
@@ -3950,7 +4238,9 @@ async def get_setlist(
 
                 # Build location string
                 location_parts = [p for p in [city, state, country] if p]
-                location = ", ".join(location_parts) if location_parts else "Unknown Location"
+                location = (
+                    ", ".join(location_parts) if location_parts else "Unknown Location"
+                )
 
                 # Parse date
                 event_date = setlist.get("eventDate", "Unknown Date")
@@ -3968,35 +4258,41 @@ async def get_setlist(
                                     songs.append(song_name)
 
                 # Format setlist description
-                setlist_desc = f"{artist_name} at {venue_name}, {location} on {event_date}"
+                setlist_desc = (
+                    f"{artist_name} at {venue_name}, {location} on {event_date}"
+                )
                 if songs:
                     setlist_desc += f" - {len(songs)} songs"
 
-                setlists_list.append({
-                    "artist": setlist.get("artist", {}).get("name", artist_name),
-                    "venue": venue_name,
-                    "location": location,
-                    "date": event_date,
-                    "songs": songs[:10],  # Limit to first 10 songs for brevity
-                    "total_songs": len(songs),
-                    "description": setlist_desc,
-                    "url": setlist.get("url", "")
-                })
+                setlists_list.append(
+                    {
+                        "artist": setlist.get("artist", {}).get("name", artist_name),
+                        "venue": venue_name,
+                        "location": location,
+                        "date": event_date,
+                        "songs": songs[:10],  # Limit to first 10 songs for brevity
+                        "total_songs": len(songs),
+                        "description": setlist_desc,
+                        "url": setlist.get("url", ""),
+                    }
+                )
 
             if not setlists_list:
                 return SetlistResult(
                     success=False,
                     count=0,
-                    message=f"I found some setlists for {artist_name} but couldn't parse them properly."
+                    message=f"I found some setlists for {artist_name} but couldn't parse them properly.",
                 )
 
             # Build friendly message
-            message = f"I found {len(setlists_list)} recent setlists for {artist_name}:\n\n"
+            message = (
+                f"I found {len(setlists_list)} recent setlists for {artist_name}:\n\n"
+            )
             for i, setlist in enumerate(setlists_list, 1):
                 message += f"{i}. {setlist['venue']}, {setlist['location']} - {setlist['date']}\n"
-                if setlist['songs']:
-                    song_sample = ", ".join(setlist['songs'][:3])
-                    if setlist['total_songs'] > 3:
+                if setlist["songs"]:
+                    song_sample = ", ".join(setlist["songs"][:3])
+                    if setlist["total_songs"] > 3:
                         message += f"   Songs include: {song_sample}, and {setlist['total_songs'] - 3} more\n"
                     else:
                         message += f"   Songs: {song_sample}\n"
@@ -4005,7 +4301,7 @@ async def get_setlist(
                 success=True,
                 setlists=setlists_list,
                 count=len(setlists_list),
-                message=message
+                message=message,
             )
 
     except Exception as e:
@@ -4013,7 +4309,7 @@ async def get_setlist(
         return SetlistResult(
             success=False,
             error=str(e),
-            message="I encountered an error looking up setlists."
+            message="I encountered an error looking up setlists.",
         )
 
 
@@ -4021,7 +4317,7 @@ async def add_visit_notes(
     caregiver_phone: str,
     client_name: str,
     tasks_completed: str,
-    notes: Optional[str] = None
+    notes: Optional[str] = None,
 ) -> VisitNotesResult:
     """
     Log caregiver task completion notes for a visit.
@@ -4042,7 +4338,9 @@ async def add_visit_notes(
     Returns:
         VisitNotesResult with confirmation
     """
-    logger.info(f"add_visit_notes: caregiver={caregiver_phone}, client={client_name}")
+    logger.info(
+        f"add_visit_notes: caregiver=...{caregiver_phone[-4:] if caregiver_phone else '?'}, client=redacted"
+    )
     logger.info(f"  Tasks: {tasks_completed}")
 
     try:
@@ -4056,9 +4354,9 @@ async def add_visit_notes(
                     "tasks_completed": tasks_completed,
                     "notes": notes,
                     "source": "sms",
-                    "recorded_by": "gigi_ai"
+                    "recorded_by": "gigi_ai",
                 },
-                timeout=15.0
+                timeout=15.0,
             )
 
             if response.status_code in (200, 201):
@@ -4068,7 +4366,7 @@ async def add_visit_notes(
                 return VisitNotesResult(
                     success=True,
                     message="Got it! I've logged your visit notes. Thank you for the update.",
-                    shift_id=shift_id
+                    shift_id=shift_id,
                 )
             else:
                 logger.warning(f"Failed to log visit notes: {response.status_code}")
@@ -4076,7 +4374,7 @@ async def add_visit_notes(
                 return VisitNotesResult(
                     success=True,
                     message="Thanks for the update! I've noted your completed tasks.",
-                    shift_id=None
+                    shift_id=None,
                 )
 
     except Exception as e:
@@ -4085,7 +4383,7 @@ async def add_visit_notes(
         return VisitNotesResult(
             success=True,
             message="Thanks for letting us know what you completed.",
-            shift_id=None
+            shift_id=None,
         )
 
 
@@ -4094,7 +4392,7 @@ async def escalate_emergency(
     caller_name: str,
     situation: str,
     location: Optional[str] = None,
-    client_name: Optional[str] = None
+    client_name: Optional[str] = None,
 ) -> EmergencyEscalationResult:
     """
     URGENT: Escalate an emergency situation requiring immediate human attention.
@@ -4124,9 +4422,11 @@ async def escalate_emergency(
     Returns:
         EmergencyEscalationResult with status and next steps
     """
-    logger.warning(f"EMERGENCY ESCALATION: {caller_name} ({caller_phone})")
+    logger.warning(
+        f"EMERGENCY ESCALATION: caller=...{caller_phone[-4:] if caller_phone else '?'}"
+    )
     logger.warning(f"  Situation: {situation}")
-    logger.warning(f"  Client: {client_name}, Location: {location}")
+    logger.warning(f"  Client: redacted, Location: {location}")
 
     contacts_notified = []
 
@@ -4199,9 +4499,9 @@ async def escalate_emergency(
                     "location": location,
                     "situation": situation,
                     "contacts_notified": contacts_notified,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now().isoformat(),
                 },
-                timeout=10.0
+                timeout=10.0,
             )
 
         # Determine response based on situation
@@ -4222,7 +4522,7 @@ async def escalate_emergency(
             success=True,
             message=guidance,
             escalation_id=f"ESC-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            contacts_notified=contacts_notified
+            contacts_notified=contacts_notified,
         )
 
     except Exception as e:
@@ -4234,7 +4534,7 @@ async def escalate_emergency(
                 "I'm having trouble reaching the team automatically. "
                 "Please call the office directly at 303-757-1777 or 911 if this is a medical emergency."
             ),
-            contacts_notified=[]
+            contacts_notified=[],
         )
 
 
@@ -4254,7 +4554,7 @@ async def get_stock_price(symbol: str) -> StockPriceResult:
         return StockPriceResult(
             success=False,
             error="Stock price service not configured",
-            message="I'm unable to check stock prices right now. Please try again later."
+            message="I'm unable to check stock prices right now. Please try again later.",
         )
 
     try:
@@ -4267,9 +4567,9 @@ async def get_stock_price(symbol: str) -> StockPriceResult:
                 params={
                     "function": "GLOBAL_QUOTE",
                     "symbol": symbol,
-                    "apikey": ALPHA_VANTAGE_API_KEY
+                    "apikey": ALPHA_VANTAGE_API_KEY,
                 },
-                timeout=10.0
+                timeout=10.0,
             )
 
             if response.status_code != 200:
@@ -4277,7 +4577,7 @@ async def get_stock_price(symbol: str) -> StockPriceResult:
                 return StockPriceResult(
                     success=False,
                     error="API error",
-                    message="I'm having trouble getting stock data right now."
+                    message="I'm having trouble getting stock data right now.",
                 )
 
             data = response.json()
@@ -4288,7 +4588,7 @@ async def get_stock_price(symbol: str) -> StockPriceResult:
                 return StockPriceResult(
                     success=False,
                     error="Stock not found",
-                    message=f"I couldn't find a stock with the symbol {symbol}. Please check the ticker symbol and try again."
+                    message=f"I couldn't find a stock with the symbol {symbol}. Please check the ticker symbol and try again.",
                 )
 
             if "Note" in data or "Information" in data:
@@ -4296,7 +4596,7 @@ async def get_stock_price(symbol: str) -> StockPriceResult:
                 return StockPriceResult(
                     success=False,
                     error="Rate limit",
-                    message="The stock price service is temporarily busy. Please try again in a moment."
+                    message="The stock price service is temporarily busy. Please try again in a moment.",
                 )
 
             # Parse the quote data
@@ -4305,7 +4605,7 @@ async def get_stock_price(symbol: str) -> StockPriceResult:
                 return StockPriceResult(
                     success=False,
                     error="No data returned",
-                    message=f"I couldn't find price data for {symbol}."
+                    message=f"I couldn't find price data for {symbol}.",
                 )
 
             price = quote.get("05. price")
@@ -4326,7 +4626,7 @@ async def get_stock_price(symbol: str) -> StockPriceResult:
                 price=price,
                 change=change,
                 change_percent=change_percent,
-                message=message
+                message=message,
             )
 
     except Exception as e:
@@ -4334,7 +4634,7 @@ async def get_stock_price(symbol: str) -> StockPriceResult:
         return StockPriceResult(
             success=False,
             error=str(e),
-            message="I encountered an error looking up that stock price."
+            message="I encountered an error looking up that stock price.",
         )
 
 
@@ -4355,7 +4655,7 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
         return CryptoPriceResult(
             success=False,
             error="Crypto price service not configured",
-            message="I'm unable to check crypto prices right now. Please try again later."
+            message="I'm unable to check crypto prices right now. Please try again later.",
         )
 
     try:
@@ -4370,9 +4670,9 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
                     "function": "CURRENCY_EXCHANGE_RATE",
                     "from_currency": symbol,
                     "to_currency": market,
-                    "apikey": ALPHA_VANTAGE_API_KEY
+                    "apikey": ALPHA_VANTAGE_API_KEY,
                 },
-                timeout=10.0
+                timeout=10.0,
             )
 
             if response.status_code != 200:
@@ -4380,7 +4680,7 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
                 return CryptoPriceResult(
                     success=False,
                     error="API error",
-                    message="I'm having trouble getting crypto data right now."
+                    message="I'm having trouble getting crypto data right now.",
                 )
 
             data = response.json()
@@ -4391,7 +4691,7 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
                 return CryptoPriceResult(
                     success=False,
                     error="Crypto not found",
-                    message=f"I couldn't find cryptocurrency {symbol}. Please check the symbol and try again."
+                    message=f"I couldn't find cryptocurrency {symbol}. Please check the symbol and try again.",
                 )
 
             if "Note" in data or "Information" in data:
@@ -4399,7 +4699,7 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
                 return CryptoPriceResult(
                     success=False,
                     error="Rate limit",
-                    message="The crypto price service is temporarily busy. Please try again in a moment."
+                    message="The crypto price service is temporarily busy. Please try again in a moment.",
                 )
 
             # Parse the exchange rate data
@@ -4408,7 +4708,7 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
                 return CryptoPriceResult(
                     success=False,
                     error="No data returned",
-                    message=f"I couldn't find price data for {symbol}."
+                    message=f"I couldn't find price data for {symbol}.",
                 )
 
             from_symbol = rate_data.get("1. From_Currency Code")
@@ -4422,7 +4722,7 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
             if price_float >= 1:
                 formatted_price = f"${price_float:,.2f}"
             else:
-                formatted_price = f"${price_float:.6f}".rstrip('0').rstrip('.')
+                formatted_price = f"${price_float:.6f}".rstrip("0").rstrip(".")
 
             message = f"{from_name} ({from_symbol}) is currently trading at {formatted_price} {to_symbol}."
 
@@ -4432,7 +4732,7 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
                 price=exchange_rate,
                 market=to_symbol,
                 last_updated=last_updated,
-                message=message
+                message=message,
             )
 
     except Exception as e:
@@ -4440,7 +4740,7 @@ async def get_crypto_price(symbol: str, market: str = "USD") -> CryptoPriceResul
         return CryptoPriceResult(
             success=False,
             error=str(e),
-            message="I encountered an error looking up that crypto price."
+            message="I encountered an error looking up that crypto price.",
         )
 
 
@@ -4450,7 +4750,7 @@ async def get_events(
     state: str = "CO",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    limit: int = 5
+    limit: int = 5,
 ) -> EventsResult:
     """
     Get upcoming events (concerts, sports, theater) in a specific area.
@@ -4472,7 +4772,7 @@ async def get_events(
         return EventsResult(
             success=False,
             error="Events service not configured",
-            message="I'm unable to check events right now. Please try again later."
+            message="I'm unable to check events right now. Please try again later.",
         )
 
     try:
@@ -4497,7 +4797,7 @@ async def get_events(
             "startDateTime": start_date,
             "endDateTime": end_date,
             "size": limit,
-            "sort": "date,asc"
+            "sort": "date,asc",
         }
 
         # Add keyword filter if specific query provided
@@ -4512,7 +4812,7 @@ async def get_events(
                 return EventsResult(
                     success=False,
                     error="API error",
-                    message="I'm having trouble getting events right now."
+                    message="I'm having trouble getting events right now.",
                 )
 
             data = response.json()
@@ -4523,7 +4823,7 @@ async def get_events(
                 return EventsResult(
                     success=False,
                     count=0,
-                    message=f"I couldn't find any {query} in {city} this week. Try a different search or check back later."
+                    message=f"I couldn't find any {query} in {city} this week. Try a different search or check back later.",
                 )
 
             events_data = embedded["events"]
@@ -4531,8 +4831,12 @@ async def get_events(
 
             for event in events_data[:limit]:
                 name = event.get("name", "Unknown Event")
-                event_date = event.get("dates", {}).get("start", {}).get("localDate", "TBA")
-                event_time = event.get("dates", {}).get("start", {}).get("localTime", "")
+                event_date = (
+                    event.get("dates", {}).get("start", {}).get("localDate", "TBA")
+                )
+                event_time = (
+                    event.get("dates", {}).get("start", {}).get("localTime", "")
+                )
 
                 # Format date nicely
                 try:
@@ -4543,7 +4847,9 @@ async def get_events(
 
                 # Get venue
                 venues = event.get("_embedded", {}).get("venues", [])
-                venue_name = venues[0].get("name", "Venue TBA") if venues else "Venue TBA"
+                venue_name = (
+                    venues[0].get("name", "Venue TBA") if venues else "Venue TBA"
+                )
 
                 # Get price range if available
                 price_ranges = event.get("priceRanges", [])
@@ -4560,24 +4866,32 @@ async def get_events(
                     event_desc += f" at {event_time}"
                 event_desc += f" at {venue_name}{price_info}"
 
-                events_list.append({
-                    "name": name,
-                    "date": formatted_date,
-                    "time": event_time,
-                    "venue": venue_name,
-                    "description": event_desc
-                })
+                events_list.append(
+                    {
+                        "name": name,
+                        "date": formatted_date,
+                        "time": event_time,
+                        "venue": venue_name,
+                        "description": event_desc,
+                    }
+                )
 
             if not events_list:
                 return EventsResult(
                     success=False,
                     count=0,
-                    message=f"I couldn't find any {query} in {city} this week."
+                    message=f"I couldn't find any {query} in {city} this week.",
                 )
 
             # Build friendly message
-            event_type = query if query.lower() not in ["all", "events", "anything"] else "events"
-            message = f"I found {len(events_list)} {event_type} in {city} this week:\n\n"
+            event_type = (
+                query
+                if query.lower() not in ["all", "events", "anything"]
+                else "events"
+            )
+            message = (
+                f"I found {len(events_list)} {event_type} in {city} this week:\n\n"
+            )
             for i, evt in enumerate(events_list, 1):
                 message += f"{i}. {evt['description']}\n"
 
@@ -4585,7 +4899,7 @@ async def get_events(
                 success=True,
                 events=events_list,
                 count=len(events_list),
-                message=message
+                message=message,
             )
 
     except Exception as e:
@@ -4593,13 +4907,14 @@ async def get_events(
         return EventsResult(
             success=False,
             error=str(e),
-            message="I encountered an error looking up events."
+            message="I encountered an error looking up events.",
         )
 
 
 # =============================================================================
 # Retell Webhook Endpoints
 # =============================================================================
+
 
 @app.post("/webhook/retell/inbound-variables")
 async def retell_inbound_variables(request: Request):
@@ -4622,23 +4937,29 @@ async def retell_inbound_variables(request: Request):
     caller_full_name = ""
 
     if from_number:
-        clean_phone = ''.join(filter(str.isdigit, from_number))[-10:]
+        clean_phone = "".join(filter(str.isdigit, from_number))[-10:]
 
         # Check cached database for caller ID (fast, reliable)
         conn = None
         try:
             import psycopg2
-            db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+
+            db_url = os.getenv(
+                "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
+            )
             conn = psycopg2.connect(db_url)
             cur = conn.cursor()
 
             # Check staff first (Jason, Israt, Jacob, Cynthia)
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT first_name, full_name, role FROM cached_staff
                 WHERE phone IS NOT NULL
                 AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
                 LIMIT 1
-            """, (clean_phone,))
+            """,
+                (clean_phone,),
+            )
             row = cur.fetchone()
             if row:
                 caller_name = row[0]
@@ -4646,12 +4967,15 @@ async def retell_inbound_variables(request: Request):
                 caller_type = "staff"
             else:
                 # Check caregivers
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT first_name, full_name FROM cached_practitioners
                     WHERE is_active = true AND phone IS NOT NULL
                     AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
                     LIMIT 1
-                """, (clean_phone,))
+                """,
+                    (clean_phone,),
+                )
                 row = cur.fetchone()
                 if row:
                     caller_name = row[0]
@@ -4659,12 +4983,15 @@ async def retell_inbound_variables(request: Request):
                     caller_type = "caregiver"
                 else:
                     # Check clients
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT first_name, full_name FROM cached_patients
                         WHERE is_active = true AND phone IS NOT NULL
                         AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
                         LIMIT 1
-                    """, (clean_phone,))
+                    """,
+                        (clean_phone,),
+                    )
                     row = cur.fetchone()
                     if row:
                         caller_name = row[0]
@@ -4672,12 +4999,15 @@ async def retell_inbound_variables(request: Request):
                         caller_type = "client"
                     else:
                         # Check family/emergency contacts
-                        cur.execute("""
+                        cur.execute(
+                            """
                             SELECT first_name, full_name FROM cached_related_persons
                             WHERE phone IS NOT NULL
                             AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
                             LIMIT 1
-                        """, (clean_phone,))
+                        """,
+                            (clean_phone,),
+                        )
                         row = cur.fetchone()
                         if row:
                             caller_name = row[0]
@@ -4690,14 +5020,18 @@ async def retell_inbound_variables(request: Request):
             if conn:
                 conn.close()
 
-    logger.info(f"Inbound variables: caller_name={caller_name}, caller_type={caller_type}")
+    logger.info(
+        f"Inbound variables: caller_name={caller_name}, caller_type={caller_type}"
+    )
 
-    return JSONResponse({
-        "caller_name": caller_name or "",
-        "caller_type": caller_type,
-        "caller_full_name": caller_full_name or "",
-        "from_number": from_number
-    })
+    return JSONResponse(
+        {
+            "caller_name": caller_name or "",
+            "caller_type": caller_type,
+            "caller_full_name": caller_full_name or "",
+            "from_number": from_number,
+        }
+    )
 
 
 @app.post("/webhook/retell")
@@ -4736,8 +5070,14 @@ async def retell_webhook(request: Request):
                         # Try Caregiver
                         cg = wellsky.get_caregiver_by_phone(phone)
                         if cg:
-                            logger.info(f"Caller ID (WellSky): Found Caregiver {cg.full_name}")
-                            return {"name": cg.first_name, "type": "caregiver", "full_name": cg.full_name}
+                            logger.info(
+                                f"Caller ID (WellSky): Found Caregiver {cg.full_name}"
+                            )
+                            return {
+                                "name": cg.first_name,
+                                "type": "caregiver",
+                                "full_name": cg.full_name,
+                            }
 
                         # Try Client (heuristic search if direct lookup missing)
                         # clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
@@ -4757,7 +5097,7 @@ async def retell_webhook(request: Request):
 
             lookup_service = CallerLookupService(
                 db_lookup_fn=db_lookup,
-                cache_lookup_fn=lambda phone: _lookup_in_cache(phone)
+                cache_lookup_fn=lambda phone: _lookup_in_cache(phone),
             )
 
             caller_info = lookup_service.lookup(from_number)
@@ -4780,10 +5120,7 @@ async def retell_webhook(request: Request):
                 "caller_info": caller_info,
                 "initial_greeting": greeting,
                 # Override Retell agent config to use personalized greeting
-                "config_override": {
-                    "initial_greeting": greeting,
-                    "agent_name": "Gigi"
-                }
+                "config_override": {"initial_greeting": greeting, "agent_name": "Gigi"},
             }
 
             # Set action based on caller type
@@ -4792,10 +5129,16 @@ async def retell_webhook(request: Request):
                 logger.info(f"Will transfer call to Jason after greeting: '{greeting}'")
 
                 # Log to WellSky 24/7/365
-                asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Auto-routing (Known Client)"))
+                asyncio.create_task(
+                    log_call_transfer_to_wellsky(
+                        call_id, caller_info, reason="Auto-routing (Known Client)"
+                    )
+                )
             elif caller_info.get("take_message"):
                 response_data["action"] = "take_message"
-                logger.info(f"Unknown caller - will take message. Greeting: '{greeting}'")
+                logger.info(
+                    f"Unknown caller - will take message. Greeting: '{greeting}'"
+                )
             else:
                 logger.info(f"Caller greeted with: '{greeting}'")
 
@@ -4804,25 +5147,28 @@ async def retell_webhook(request: Request):
             # Fallback to original logic if enhanced webhook not available
             caller_info = None
             if from_number:
-                clean_phone = ''.join(filter(str.isdigit, from_number))[-10:]
+                clean_phone = "".join(filter(str.isdigit, from_number))[-10:]
                 cached = _lookup_in_cache(clean_phone)
                 if cached:
                     caller_info = {
                         "caller_type": cached.get("type"),
                         "caller_name": cached.get("name"),
-                        "is_known": True
+                        "is_known": True,
                     }
-                    logger.info(f"AUTO-LOOKUP: Identified {cached.get('type')} {cached.get('name')}")
+                    logger.info(
+                        f"AUTO-LOOKUP: Identified {cached.get('type')} {cached.get('name')}"
+                    )
                 else:
-                    caller_info = {"caller_type": "unknown", "caller_name": None, "is_known": False}
+                    caller_info = {
+                        "caller_type": "unknown",
+                        "caller_name": None,
+                        "is_known": False,
+                    }
                     logger.info(f"AUTO-LOOKUP: Unknown caller from {clean_phone}")
 
                 _store_call_context(call_id, caller_info)
 
-            return JSONResponse({
-                "status": "ok",
-                "caller_info": caller_info
-            })
+            return JSONResponse({"status": "ok", "caller_info": caller_info})
 
     elif event == "call_ended":
         transcript = body.get("transcript", "")
@@ -4844,14 +5190,26 @@ async def retell_webhook(request: Request):
             elif duration_sec < 15 and len(transcript.strip()) < 30:
                 is_voicemail = True
             else:
-                vm_keywords = ["leave a message", "voicemail", "after the tone", "not available", "please record"]
+                vm_keywords = [
+                    "leave a message",
+                    "voicemail",
+                    "after the tone",
+                    "not available",
+                    "please record",
+                ]
                 if any(kw in transcript.lower() for kw in vm_keywords):
                     is_voicemail = True
 
         event_type = "voicemail_detected" if is_voicemail else "call_ended"
-        event_desc = f"Voicemail detected ({duration_sec}s)" if is_voicemail else f"Gigi Call Completed ({duration_sec}s)"
+        event_desc = (
+            f"Voicemail detected ({duration_sec}s)"
+            if is_voicemail
+            else f"Gigi Call Completed ({duration_sec}s)"
+        )
         if is_voicemail:
-            logger.info(f"Voicemail detected for call {call_id} to {body.get('to_number', 'unknown')}")
+            logger.info(
+                f"Voicemail detected for call {call_id} to {body.get('to_number', 'unknown')}"
+            )
 
         await _log_portal_event(
             description=event_desc,
@@ -4863,8 +5221,8 @@ async def retell_webhook(request: Request):
                 "duration": duration_sec,
                 "recording_url": recording_url,
                 "transcript_preview": transcript[:200] if transcript else "",
-                "voicemail": is_voicemail
-            }
+                "voicemail": is_voicemail,
+            },
         )
 
         return JSONResponse({"status": "ok"})
@@ -4884,19 +5242,17 @@ async def retell_webhook(request: Request):
             try:
                 if tool_name == "verify_caller":
                     result = await verify_caller(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": result.model_dump()
-                    })
+                    results.append(
+                        {"tool_call_id": tool_call_id, "result": result.model_dump()}
+                    )
 
                 # NEW: Enhanced webhook tools for caller ID, weather, transfer, and messages
                 elif tool_name == "get_weather" and ENHANCED_WEBHOOK_AVAILABLE:
                     location = tool_args.get("location", "Boulder CO")
                     weather_result = get_weather(location)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": weather_result
-                    })
+                    results.append(
+                        {"tool_call_id": tool_call_id, "result": weather_result}
+                    )
                     logger.info(f"Weather requested for {location}: {weather_result}")
 
                 elif tool_name == "transfer_to_jason" and ENHANCED_WEBHOOK_AVAILABLE:
@@ -4906,16 +5262,26 @@ async def retell_webhook(request: Request):
                     # Log to WellSky if success
                     if success:
                         caller_info = _get_call_context(call_id)
-                        asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=reason))
+                        asyncio.create_task(
+                            log_call_transfer_to_wellsky(
+                                call_id, caller_info, reason=reason
+                            )
+                        )
 
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": {
-                            "success": success,
-                            "message": "Transferring you to Jason now" if success else "I'm having trouble transferring right now. Let me take a message instead."
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "result": {
+                                "success": success,
+                                "message": "Transferring you to Jason now"
+                                if success
+                                else "I'm having trouble transferring right now. Let me take a message instead.",
+                            },
                         }
-                    })
-                    logger.info(f"Transfer to Jason initiated (reason: {reason}): {'success' if success else 'failed'}")
+                    )
+                    logger.info(
+                        f"Transfer to Jason initiated (reason: {reason}): {'success' if success else 'failed'}"
+                    )
 
                 elif tool_name == "take_message" and ENHANCED_WEBHOOK_AVAILABLE:
                     caller_phone = tool_args.get("caller_phone", "Unknown")
@@ -4926,135 +5292,145 @@ async def retell_webhook(request: Request):
                     caller_info = {
                         "phone": caller_phone,
                         "name": caller_name if caller_name else None,
-                        "type": "unknown"
+                        "type": "unknown",
                     }
 
                     # Send to Telegram
                     handle_message_received(caller_info, message_text, call_id)
 
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": {
-                            "success": True,
-                            "message": "I've sent your message to Jason. He'll get back to you as soon as possible. Have a great day!"
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "result": {
+                                "success": True,
+                                "message": "I've sent your message to Jason. He'll get back to you as soon as possible. Have a great day!",
+                            },
                         }
-                    })
-                    logger.info(f"Message taken from {caller_phone} ({caller_name or 'anonymous'})")
+                    )
+                    logger.info(
+                        f"Message taken from {caller_phone} ({caller_name or 'anonymous'})"
+                    )
 
                 elif tool_name == "get_shift_details":
                     result = await get_shift_details(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": result.model_dump() if result else None
-                    })
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "result": result.model_dump() if result else None,
+                        }
+                    )
 
                 elif tool_name == "get_active_shifts":
                     result = await get_active_shifts(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": {"shifts": result, "count": len(result)}
-                    })
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "result": {"shifts": result, "count": len(result)},
+                        }
+                    )
 
                 elif tool_name == "execute_caregiver_call_out":
                     result = await execute_caregiver_call_out(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": result
-                    })
+                    results.append({"tool_call_id": tool_call_id, "result": result})
 
                 elif tool_name == "cancel_shift_acceptance":
                     result = await cancel_shift_acceptance(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": result
-                    })
+                    results.append({"tool_call_id": tool_call_id, "result": result})
 
                 elif tool_name == "report_call_out":
                     result = await report_call_out(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": result.model_dump()
-                    })
+                    results.append(
+                        {"tool_call_id": tool_call_id, "result": result.model_dump()}
+                    )
 
                 elif tool_name == "log_client_issue":
                     result = await log_client_issue(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": result.model_dump()
-                    })
+                    results.append(
+                        {"tool_call_id": tool_call_id, "result": result.model_dump()}
+                    )
 
                 # SHIFT FILLING TOOLS - Gigi actively fills shifts!
                 elif tool_name == "find_replacement_caregivers":
                     result = await find_replacement_caregivers(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": {
-                            "candidates": [
-                                {
-                                    "caregiver_id": c.caregiver_id,
-                                    "name": c.name,
-                                    "phone": c.phone,
-                                    "score": c.score,
-                                    "tier": c.tier,
-                                    "reasons": c.reasons,
-                                    "has_worked_with_client": c.has_worked_with_client
-                                } for c in result
-                            ],
-                            "count": len(result)
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "result": {
+                                "candidates": [
+                                    {
+                                        "caregiver_id": c.caregiver_id,
+                                        "name": c.name,
+                                        "phone": c.phone,
+                                        "score": c.score,
+                                        "tier": c.tier,
+                                        "reasons": c.reasons,
+                                        "has_worked_with_client": c.has_worked_with_client,
+                                    }
+                                    for c in result
+                                ],
+                                "count": len(result),
+                            },
                         }
-                    })
+                    )
 
                 elif tool_name == "start_shift_filling_campaign":
                     result = await start_shift_filling_campaign(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": {
-                            "success": result.success,
-                            "message": result.message,
-                            "campaign_id": result.campaign_id,
-                            "candidates_contacted": result.candidates_contacted
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "result": {
+                                "success": result.success,
+                                "message": result.message,
+                                "campaign_id": result.campaign_id,
+                                "candidates_contacted": result.candidates_contacted,
+                            },
                         }
-                    })
+                    )
 
                 elif tool_name == "offer_shift_to_caregiver":
                     result = await offer_shift_to_caregiver(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": {"success": result, "sms_sent": result}
-                    })
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "result": {"success": result, "sms_sent": result},
+                        }
+                    )
 
                 elif tool_name == "confirm_shift_assignment":
                     result = await confirm_shift_assignment(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": {
-                            "success": result.success,
-                            "message": result.message,
-                            "shift_filled": result.shift_filled,
-                            "assigned_to": result.assigned_to
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "result": {
+                                "success": result.success,
+                                "message": result.message,
+                                "shift_filled": result.shift_filled,
+                                "assigned_to": result.assigned_to,
+                            },
                         }
-                    })
+                    )
 
                 elif tool_name == "get_shift_filling_status":
                     result = await get_shift_filling_status(**tool_args)
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "result": result
-                    })
+                    results.append({"tool_call_id": tool_call_id, "result": result})
 
                 else:
                     logger.warning(f"Unknown tool: {tool_name}")
-                    results.append({
-                        "tool_call_id": tool_call_id,
-                        "error": f"Unknown tool: {tool_name}"
-                    })
+                    results.append(
+                        {
+                            "tool_call_id": tool_call_id,
+                            "error": f"Unknown tool: {tool_name}",
+                        }
+                    )
 
             except Exception as e:
                 logger.exception(f"Error executing tool {tool_name}: {e}")
-                results.append({
-                    "tool_call_id": tool_call_id,
-                    "error": "Internal tool execution error"
-                })
+                results.append(
+                    {
+                        "tool_call_id": tool_call_id,
+                        "error": "Internal tool execution error",
+                    }
+                )
 
         return JSONResponse({"results": results})
 
@@ -5076,7 +5452,11 @@ async def retell_function_call(function_name: str, request: Request):
     args = body.get("args", body.get("arguments", {}))
 
     # Extract call_id for deduplication (Retell sends this in the body or we use a fallback)
-    call_id = body.get("call_id") or body.get("call", {}).get("call_id") or args.get("call_id", "")
+    call_id = (
+        body.get("call_id")
+        or body.get("call", {}).get("call_id")
+        or args.get("call_id", "")
+    )
 
     # If no call_id, try to use the from_number as a pseudo-call-id
     if not call_id:
@@ -5086,7 +5466,9 @@ async def retell_function_call(function_name: str, request: Request):
             window = int(time.time() / 300)  # 5-minute windows
             call_id = f"phone_{phone}_{window}"
 
-    logger.info(f"Direct function call: {function_name} with args: {args} (call_id: {call_id})")
+    logger.info(
+        f"Direct function call: {function_name} with args: {args} (call_id: {call_id})"
+    )
 
     # =========================================================================
     # ANTI-LOOP: Check if this tool was already called in this conversation
@@ -5103,34 +5485,42 @@ async def retell_function_call(function_name: str, request: Request):
         elif function_name == "lookup_caller":
             # Simple database lookup - returns caller type and name
             phone = args.get("phone_number", args.get("from_number", ""))
-            clean_phone = ''.join(filter(str.isdigit, phone))[-10:]
+            clean_phone = "".join(filter(str.isdigit, phone))[-10:]
 
             # Check call context first (set at call_started)
             caller_info = _get_call_context(call_id)
             if caller_info:
-                return JSONResponse({
-                    "found": caller_info.get("is_known", False),
-                    "caller_type": caller_info.get("caller_type", "unknown"),
-                    "name": caller_info.get("caller_name"),
-                    "greeting": f"Hi {caller_info.get('caller_name', 'there')}" if caller_info.get("caller_name") else "Hi there"
-                })
+                return JSONResponse(
+                    {
+                        "found": caller_info.get("is_known", False),
+                        "caller_type": caller_info.get("caller_type", "unknown"),
+                        "name": caller_info.get("caller_name"),
+                        "greeting": f"Hi {caller_info.get('caller_name', 'there')}"
+                        if caller_info.get("caller_name")
+                        else "Hi there",
+                    }
+                )
 
             # Fall back to database lookup
             cached = _lookup_in_cache(clean_phone)
             if cached:
-                return JSONResponse({
-                    "found": True,
-                    "caller_type": cached.get("type"),
-                    "name": cached.get("name"),
-                    "greeting": f"Hi {cached.get('name')}"
-                })
+                return JSONResponse(
+                    {
+                        "found": True,
+                        "caller_type": cached.get("type"),
+                        "name": cached.get("name"),
+                        "greeting": f"Hi {cached.get('name')}",
+                    }
+                )
 
-            return JSONResponse({
-                "found": False,
-                "caller_type": "unknown",
-                "name": None,
-                "greeting": "Hi there"
-            })
+            return JSONResponse(
+                {
+                    "found": False,
+                    "caller_type": "unknown",
+                    "name": None,
+                    "greeting": "Hi there",
+                }
+            )
 
         elif function_name == "get_shift_details":
             result = await get_shift_details(**args)
@@ -5146,14 +5536,19 @@ async def retell_function_call(function_name: str, request: Request):
             person_type = args.get("person_type", "caregiver")
             days = int(args.get("days", 7))
 
-            logger.info(f"get_schedule called: name={person_name}, type={person_type}, days={days}")
+            logger.info(
+                f"get_schedule called: name={person_name}, type={person_type}, days={days}"
+            )
 
             try:
                 from datetime import date as date_cls
                 from datetime import timedelta
 
                 import psycopg2
-                db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+
+                db_url = os.getenv(
+                    "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
+                )
                 conn = psycopg2.connect(db_url)
                 cur = conn.cursor()
 
@@ -5161,28 +5556,36 @@ async def retell_function_call(function_name: str, request: Request):
                 person_id = None
                 if person_type == "caregiver":
                     search = f"%{person_name.lower()}%"
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT id, full_name FROM cached_practitioners
                         WHERE is_active = true AND lower(full_name) LIKE %s
                         LIMIT 1
-                    """, (search,))
+                    """,
+                        (search,),
+                    )
                 else:
                     search = f"%{person_name.lower()}%"
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT id, full_name FROM cached_patients
                         WHERE is_active = true AND lower(full_name) LIKE %s
                         LIMIT 1
-                    """, (search,))
+                    """,
+                        (search,),
+                    )
 
                 row = cur.fetchone()
                 conn.close()
 
                 if not row:
-                    return JSONResponse({
-                        "found": False,
-                        "message": f"No {person_type} found with name '{person_name}'",
-                        "shifts": []
-                    })
+                    return JSONResponse(
+                        {
+                            "found": False,
+                            "message": f"No {person_type} found with name '{person_name}'",
+                            "shifts": [],
+                        }
+                    )
 
                 person_id = str(row[0])
                 full_name = row[1]
@@ -5193,18 +5596,18 @@ async def retell_function_call(function_name: str, request: Request):
                         shifts = wellsky.get_shifts(
                             caregiver_id=person_id,
                             date_from=date_cls.today(),
-                            date_to=date_cls.today() + timedelta(days=days)
+                            date_to=date_cls.today() + timedelta(days=days),
                         )
                     else:
                         shifts = wellsky.get_shifts(
                             client_id=person_id,
                             date_from=date_cls.today(),
-                            date_to=date_cls.today() + timedelta(days=days)
+                            date_to=date_cls.today() + timedelta(days=days),
                         )
 
                     # Format shifts for speech
                     shift_list = []
-                    for s in (shifts or []):
+                    for s in shifts or []:
                         shift_info = {}
                         if isinstance(s, dict):
                             shift_info = s
@@ -5213,8 +5616,10 @@ async def retell_function_call(function_name: str, request: Request):
                                 "date": getattr(s, "date", ""),
                                 "start_time": getattr(s, "start_time", ""),
                                 "end_time": getattr(s, "end_time", ""),
-                                "client": getattr(s, "client_name", "") or getattr(s, "client", ""),
-                                "caregiver": getattr(s, "caregiver_name", "") or getattr(s, "caregiver", ""),
+                                "client": getattr(s, "client_name", "")
+                                or getattr(s, "client", ""),
+                                "caregiver": getattr(s, "caregiver_name", "")
+                                or getattr(s, "caregiver", ""),
                                 "status": getattr(s, "status", ""),
                             }
 
@@ -5222,13 +5627,23 @@ async def retell_function_call(function_name: str, request: Request):
                         try:
                             conn2 = psycopg2.connect(db_url)
                             cur2 = conn2.cursor()
-                            if shift_info.get("caregiver_id") and not shift_info.get("caregiver"):
-                                cur2.execute("SELECT full_name FROM cached_practitioners WHERE id = %s", (shift_info["caregiver_id"],))
+                            if shift_info.get("caregiver_id") and not shift_info.get(
+                                "caregiver"
+                            ):
+                                cur2.execute(
+                                    "SELECT full_name FROM cached_practitioners WHERE id = %s",
+                                    (shift_info["caregiver_id"],),
+                                )
                                 r = cur2.fetchone()
                                 if r:
                                     shift_info["caregiver"] = r[0]
-                            if shift_info.get("client_id") and not shift_info.get("client"):
-                                cur2.execute("SELECT full_name FROM cached_patients WHERE id = %s", (shift_info["client_id"],))
+                            if shift_info.get("client_id") and not shift_info.get(
+                                "client"
+                            ):
+                                cur2.execute(
+                                    "SELECT full_name FROM cached_patients WHERE id = %s",
+                                    (shift_info["client_id"],),
+                                )
                                 r = cur2.fetchone()
                                 if r:
                                     shift_info["client"] = r[0]
@@ -5238,53 +5653,68 @@ async def retell_function_call(function_name: str, request: Request):
 
                         shift_list.append(shift_info)
 
-                    return JSONResponse({
-                        "found": True,
-                        "person_name": full_name,
-                        "person_type": person_type,
-                        "shift_count": len(shift_list),
-                        "shifts": shift_list[:10]
-                    })
+                    return JSONResponse(
+                        {
+                            "found": True,
+                            "person_name": full_name,
+                            "person_type": person_type,
+                            "shift_count": len(shift_list),
+                            "shifts": shift_list[:10],
+                        }
+                    )
                 else:
-                    return JSONResponse({
-                        "found": True,
-                        "person_name": full_name,
-                        "message": "Schedule system temporarily unavailable",
-                        "shifts": []
-                    })
+                    return JSONResponse(
+                        {
+                            "found": True,
+                            "person_name": full_name,
+                            "message": "Schedule system temporarily unavailable",
+                            "shifts": [],
+                        }
+                    )
             except Exception as e:
                 logger.error(f"get_schedule error: {e}")
-                return JSONResponse({
-                    "found": False,
-                    "message": f"Error looking up schedule: {str(e)}",
-                    "shifts": []
-                })
+                return JSONResponse(
+                    {
+                        "found": False,
+                        "message": f"Error looking up schedule: {str(e)}",
+                        "shifts": [],
+                    }
+                )
 
         elif function_name == "lookup_caller":
             # Look up caller by phone number from cached database
             phone_number = args.get("phone_number", "")
-            logger.info(f"lookup_caller called for: {phone_number}")
+            logger.info(
+                f"lookup_caller called for: ...{phone_number[-4:] if phone_number else '?'}"
+            )
 
             caller_name = ""
             caller_type = "unknown"
             caller_full_name = ""
 
             if phone_number:
-                clean_phone = ''.join(filter(str.isdigit, phone_number))[-10:]
+                clean_phone = "".join(filter(str.isdigit, phone_number))[-10:]
 
                 try:
                     import psycopg2
-                    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+
+                    db_url = os.getenv(
+                        "DATABASE_URL",
+                        "postgresql://careassist@localhost:5432/careassist",
+                    )
                     conn = psycopg2.connect(db_url)
                     cur = conn.cursor()
 
                     # Check staff first (Jason, Israt, Jacob, Cynthia)
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT first_name, full_name, role FROM cached_staff
                         WHERE phone IS NOT NULL
                         AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
                         LIMIT 1
-                    """, (clean_phone,))
+                    """,
+                        (clean_phone,),
+                    )
                     row = cur.fetchone()
                     if row:
                         caller_name = row[0]
@@ -5292,12 +5722,15 @@ async def retell_function_call(function_name: str, request: Request):
                         caller_type = "staff"
                     else:
                         # Check caregivers
-                        cur.execute("""
+                        cur.execute(
+                            """
                             SELECT first_name, full_name FROM cached_practitioners
                             WHERE is_active = true AND phone IS NOT NULL
                             AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
                             LIMIT 1
-                        """, (clean_phone,))
+                        """,
+                            (clean_phone,),
+                        )
                         row = cur.fetchone()
                         if row:
                             caller_name = row[0]
@@ -5305,12 +5738,15 @@ async def retell_function_call(function_name: str, request: Request):
                             caller_type = "caregiver"
                         else:
                             # Check clients
-                            cur.execute("""
+                            cur.execute(
+                                """
                                 SELECT first_name, full_name FROM cached_patients
                                 WHERE is_active = true AND phone IS NOT NULL
                                 AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
                                 LIMIT 1
-                            """, (clean_phone,))
+                            """,
+                                (clean_phone,),
+                            )
                             row = cur.fetchone()
                             if row:
                                 caller_name = row[0]
@@ -5318,12 +5754,15 @@ async def retell_function_call(function_name: str, request: Request):
                                 caller_type = "client"
                             else:
                                 # Check family/emergency contacts
-                                cur.execute("""
+                                cur.execute(
+                                    """
                                     SELECT first_name, full_name FROM cached_related_persons
                                     WHERE phone IS NOT NULL
                                     AND RIGHT(REGEXP_REPLACE(phone, '[^0-9]', '', 'g'), 10) = %s
                                     LIMIT 1
-                                """, (clean_phone,))
+                                """,
+                                    (clean_phone,),
+                                )
                                 row = cur.fetchone()
                                 if row:
                                     caller_name = row[0]
@@ -5334,14 +5773,18 @@ async def retell_function_call(function_name: str, request: Request):
                 except Exception as e:
                     logger.error(f"lookup_caller DB error: {e}")
 
-            logger.info(f"lookup_caller result: name={caller_name}, type={caller_type}")
-            return JSONResponse({
-                "found": bool(caller_name),
-                "caller_name": caller_name or "",
-                "caller_type": caller_type,
-                "caller_full_name": caller_full_name or "",
-                "phone_number": phone_number
-            })
+            logger.info(
+                f"lookup_caller result: type={caller_type}, found={bool(caller_name)}"
+            )
+            return JSONResponse(
+                {
+                    "found": bool(caller_name),
+                    "caller_name": caller_name or "",
+                    "caller_type": caller_type,
+                    "caller_full_name": caller_full_name or "",
+                    "phone_number": phone_number,
+                }
+            )
 
         elif function_name == "send_email":
             # Send email via Gmail
@@ -5351,38 +5794,71 @@ async def retell_function_call(function_name: str, request: Request):
             logger.info(f"send_email: to={to}, subject={subject}")
 
             if not to or not subject or not body:
-                return JSONResponse({"success": False, "error": "Missing required fields: to, subject, body"})
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "error": "Missing required fields: to, subject, body",
+                    }
+                )
 
             if GOOGLE_AVAILABLE and google_service:
                 try:
-                    result = google_service.send_email(to=to, subject=subject, body=body)
+                    result = google_service.send_email(
+                        to=to, subject=subject, body=body
+                    )
                     if result:
-                        return JSONResponse({"success": True, "message": f"Email sent to {to}"})
+                        return JSONResponse(
+                            {"success": True, "message": f"Email sent to {to}"}
+                        )
                     else:
-                        return JSONResponse({"success": False, "error": "Failed to send email"})
+                        return JSONResponse(
+                            {"success": False, "error": "Failed to send email"}
+                        )
                 except Exception as e:
                     logger.error(f"send_email error: {e}")
-                    return JSONResponse({"success": False, "error": "Failed to send email"})
+                    return JSONResponse(
+                        {"success": False, "error": "Failed to send email"}
+                    )
             else:
-                return JSONResponse({"success": False, "error": "Email service not available"})
+                return JSONResponse(
+                    {"success": False, "error": "Email service not available"}
+                )
 
         elif function_name == "send_sms":
             # Send SMS via RingCentral SMS Service
             phone_number = args.get("phone_number", "")
             message = args.get("message", "")
-            logger.info(f"send_sms: to={phone_number}, message_len={len(message)}")
+            logger.info(
+                f"send_sms: to=...{phone_number[-4:] if phone_number else '?'}, message_len={len(message)}"
+            )
 
             if not phone_number or not message:
-                return JSONResponse({"success": False, "error": "Missing required fields: phone_number, message"})
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "error": "Missing required fields: phone_number, message",
+                    }
+                )
 
             try:
                 from sales.shift_filling.sms_service import SMSService
+
                 sms_service = SMSService()
-                success, result = sms_service.send_sms(to_phone=phone_number, message=message)
+                success, result = sms_service.send_sms(
+                    to_phone=phone_number, message=message
+                )
                 if success:
-                    return JSONResponse({"success": True, "message": f"SMS sent to {phone_number}", "message_id": result})
+                    return JSONResponse(
+                        {
+                            "success": True,
+                            "message": f"SMS sent to {phone_number}",
+                            "message_id": result,
+                        }
+                    )
                 else:
-                    return JSONResponse({"success": False, "error": result or "Failed to send SMS"})
+                    return JSONResponse(
+                        {"success": False, "error": result or "Failed to send SMS"}
+                    )
             except Exception as e:
                 logger.error(f"send_sms error: {e}")
                 return JSONResponse({"success": False, "error": "Failed to send SMS"})
@@ -5393,26 +5869,41 @@ async def retell_function_call(function_name: str, request: Request):
             logger.info(f"send_team_message: message_len={len(message)}")
 
             if not message:
-                return JSONResponse({"success": False, "error": "Missing required field: message"})
+                return JSONResponse(
+                    {"success": False, "error": "Missing required field: message"}
+                )
 
             try:
                 from services.ringcentral_messaging_service import (
                     ringcentral_messaging_service,
                 )
+
                 if ringcentral_messaging_service:
                     result = ringcentral_messaging_service.send_message_to_chat(
-                        chat_name="New Scheduling",
-                        message=message
+                        chat_name="New Scheduling", message=message
                     )
                     if result.get("success"):
-                        return JSONResponse({"success": True, "message": "Message posted to team chat"})
+                        return JSONResponse(
+                            {"success": True, "message": "Message posted to team chat"}
+                        )
                     else:
-                        return JSONResponse({"success": False, "error": result.get("error", "Failed to post team message")})
+                        return JSONResponse(
+                            {
+                                "success": False,
+                                "error": result.get(
+                                    "error", "Failed to post team message"
+                                ),
+                            }
+                        )
                 else:
-                    return JSONResponse({"success": False, "error": "RingCentral service not available"})
+                    return JSONResponse(
+                        {"success": False, "error": "RingCentral service not available"}
+                    )
             except Exception as e:
                 logger.error(f"send_team_message error: {e}")
-                return JSONResponse({"success": False, "error": "Failed to send team message"})
+                return JSONResponse(
+                    {"success": False, "error": "Failed to send team message"}
+                )
 
         elif function_name == "web_search":
             # Search the internet
@@ -5420,10 +5911,13 @@ async def retell_function_call(function_name: str, request: Request):
             logger.info(f"web_search: query={query}")
 
             if not query:
-                return JSONResponse({"success": False, "error": "Missing required field: query"})
+                return JSONResponse(
+                    {"success": False, "error": "Missing required field: query"}
+                )
 
             try:
                 import httpx
+
                 # Try Brave Search API first (premium)
                 brave_api_key = os.getenv("BRAVE_API_KEY")
                 if brave_api_key:
@@ -5431,31 +5925,59 @@ async def retell_function_call(function_name: str, request: Request):
                         resp = await client.get(
                             "https://api.search.brave.com/res/v1/web/search",
                             headers={"X-Subscription-Token": brave_api_key},
-                            params={"q": query, "count": 5}
+                            params={"q": query, "count": 5},
                         )
                         if resp.status_code == 200:
                             data = resp.json()
                             results = []
                             for r in data.get("web", {}).get("results", [])[:5]:
-                                results.append({
-                                    "title": r.get("title"),
-                                    "description": r.get("description"),
-                                    "url": r.get("url")
-                                })
-                            return JSONResponse({"success": True, "query": query, "results": results})
+                                results.append(
+                                    {
+                                        "title": r.get("title"),
+                                        "description": r.get("description"),
+                                        "url": r.get("url"),
+                                    }
+                                )
+                            return JSONResponse(
+                                {"success": True, "query": query, "results": results}
+                            )
 
                 # Full DuckDuckGo web search via ddgs library
                 try:
                     from ddgs import DDGS
+
                     results = DDGS().text(query, max_results=5)
                     if results:
-                        formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "url": r.get("href", "")} for r in results]
-                        return JSONResponse({"success": True, "query": query, "results": formatted})
+                        formatted = [
+                            {
+                                "title": r.get("title", ""),
+                                "description": r.get("body", ""),
+                                "url": r.get("href", ""),
+                            }
+                            for r in results
+                        ]
+                        return JSONResponse(
+                            {"success": True, "query": query, "results": formatted}
+                        )
                     # Try news search as fallback
                     results = DDGS().news(query, max_results=5)
                     if results:
-                        formatted = [{"title": r.get("title", ""), "description": r.get("body", ""), "date": r.get("date", "")} for r in results]
-                        return JSONResponse({"success": True, "query": query, "results": formatted, "type": "news"})
+                        formatted = [
+                            {
+                                "title": r.get("title", ""),
+                                "description": r.get("body", ""),
+                                "date": r.get("date", ""),
+                            }
+                            for r in results
+                        ]
+                        return JSONResponse(
+                            {
+                                "success": True,
+                                "query": query,
+                                "results": formatted,
+                                "type": "news",
+                            }
+                        )
                 except Exception as ddg_err:
                     logger.warning(f"DDG search library failed: {ddg_err}")
 
@@ -5468,9 +5990,18 @@ async def retell_function_call(function_name: str, request: Request):
                         data = resp.json()
                         answer = data.get("AbstractText") or data.get("Answer") or ""
                         if answer:
-                            return JSONResponse({"success": True, "query": query, "answer": answer, "source": data.get("AbstractSource", "DuckDuckGo")})
+                            return JSONResponse(
+                                {
+                                    "success": True,
+                                    "query": query,
+                                    "answer": answer,
+                                    "source": data.get("AbstractSource", "DuckDuckGo"),
+                                }
+                            )
 
-                return JSONResponse({"success": False, "query": query, "message": "No results found"})
+                return JSONResponse(
+                    {"success": False, "query": query, "message": "No results found"}
+                )
             except Exception as e:
                 logger.error(f"web_search error: {e}")
                 return JSONResponse({"success": False, "error": "Web search failed"})
@@ -5503,13 +6034,15 @@ async def retell_function_call(function_name: str, request: Request):
 
         # === CHIEF OF STAFF TOOLS ===
         elif function_name == "search_concerts":
-            if not COS_AVAILABLE: return JSONResponse({"error": "COS tools not available"})
+            if not COS_AVAILABLE:
+                return JSONResponse({"error": "COS tools not available"})
             query = args.get("query", "")
             result = await cos_tools.search_concerts(query)
             return JSONResponse(result)
 
         elif function_name == "buy_tickets":
-            if not COS_AVAILABLE: return JSONResponse({"error": "COS tools not available"})
+            if not COS_AVAILABLE:
+                return JSONResponse({"error": "COS tools not available"})
             artist = args.get("artist")
             venue = args.get("venue")
             quantity = args.get("quantity", 2)
@@ -5517,16 +6050,20 @@ async def retell_function_call(function_name: str, request: Request):
             return JSONResponse(result)
 
         elif function_name == "book_table":
-            if not COS_AVAILABLE: return JSONResponse({"error": "COS tools not available"})
+            if not COS_AVAILABLE:
+                return JSONResponse({"error": "COS tools not available"})
             restaurant = args.get("restaurant")
             party_size = args.get("party_size", 2)
             date = args.get("date", "today")
             time = args.get("time")
-            result = await cos_tools.book_table_request(restaurant, party_size, date, time)
+            result = await cos_tools.book_table_request(
+                restaurant, party_size, date, time
+            )
             return JSONResponse(result)
 
         elif function_name == "confirm_chief_action":
-            if not COS_AVAILABLE: return JSONResponse({"error": "COS tools not available"})
+            if not COS_AVAILABLE:
+                return JSONResponse({"error": "COS tools not available"})
             session_id = args.get("session_id")
             result = await cos_tools.confirm_purchase(session_id)
             return JSONResponse(result)
@@ -5539,19 +6076,27 @@ async def retell_function_call(function_name: str, request: Request):
             client_name = args.get("client_name")
 
             # Look up caregiver by name
-            caregiver = await _lookup_caregiver_by_name(caregiver_name) if caregiver_name else None
+            caregiver = (
+                await _lookup_caregiver_by_name(caregiver_name)
+                if caregiver_name
+                else None
+            )
             if not caregiver:
                 logger.warning(f"Could not find caregiver: {caregiver_name}")
-                return JSONResponse({
-                    "success": False,
-                    "message": f"I couldn't find {caregiver_name} in our records. I've flagged this for the care team to follow up on manually.",
-                    "manual_follow_up": True
-                })
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "message": f"I couldn't find {caregiver_name} in our records. I've flagged this for the care team to follow up on manually.",
+                        "manual_follow_up": True,
+                    }
+                )
 
             caregiver_id = caregiver.get("id")
 
             # Look up their shift
-            shift = await _lookup_shift_for_caregiver(caregiver_id, shift_date, client_name)
+            shift = await _lookup_shift_for_caregiver(
+                caregiver_id, shift_date, client_name
+            )
             shift_id = shift.get("id") if shift else "unknown"
 
             result = await report_call_out(caregiver_id, shift_id, reason)
@@ -5565,11 +6110,16 @@ async def retell_function_call(function_name: str, request: Request):
 
         elif function_name == "resolve_person":
             if not ENTITY_RESOLUTION_AVAILABLE:
-                raise HTTPException(status_code=503, detail="Entity Resolution service is not available.")
+                raise HTTPException(
+                    status_code=503,
+                    detail="Entity Resolution service is not available.",
+                )
 
             name = args.get("name")
             if not name:
-                raise HTTPException(status_code=400, detail="Name is required for resolution.")
+                raise HTTPException(
+                    status_code=400, detail="Name is required for resolution."
+                )
 
             # Get caller context to help with resolution
             caller_context = _get_call_context(call_id)
@@ -5583,20 +6133,23 @@ async def retell_function_call(function_name: str, request: Request):
         # SHIFT FILLING FUNCTIONS - Gigi actively fills shifts!
         elif function_name == "find_replacement_caregivers":
             result = await find_replacement_caregivers(**args)
-            return JSONResponse({
-                "candidates": [
-                    {
-                        "caregiver_id": c.caregiver_id,
-                        "name": c.name,
-                        "phone": c.phone,
-                        "score": c.score,
-                        "tier": c.tier,
-                        "reasons": c.reasons,
-                        "has_worked_with_client": c.has_worked_with_client
-                    } for c in result
-                ],
-                "count": len(result)
-            })
+            return JSONResponse(
+                {
+                    "candidates": [
+                        {
+                            "caregiver_id": c.caregiver_id,
+                            "name": c.name,
+                            "phone": c.phone,
+                            "score": c.score,
+                            "tier": c.tier,
+                            "reasons": c.reasons,
+                            "has_worked_with_client": c.has_worked_with_client,
+                        }
+                        for c in result
+                    ],
+                    "count": len(result),
+                }
+            )
 
         elif function_name == "start_shift_filling_campaign":
             # Gigi provides names, we need to look up IDs
@@ -5607,7 +6160,9 @@ async def retell_function_call(function_name: str, request: Request):
 
             # For shift filling, we need to find the shift by client name
             # This triggers the portal's shift filling engine
-            logger.info(f"Starting shift filling for client: {client_name}, date: {shift_date}, time: {shift_time}")
+            logger.info(
+                f"Starting shift filling for client: {client_name}, date: {shift_date}, time: {shift_time}"
+            )
 
             try:
                 async with httpx.AsyncClient() as http_client:
@@ -5618,33 +6173,41 @@ async def retell_function_call(function_name: str, request: Request):
                             "shift_date": shift_date,
                             "shift_time": shift_time,
                             "urgency": urgency,
-                            "triggered_by": "gigi_ai_agent"
+                            "triggered_by": "gigi_ai_agent",
                         },
-                        timeout=30.0
+                        timeout=30.0,
                     )
 
                     if response.status_code == 200:
                         data = response.json()
                         record_tool_call(call_id, function_name)
-                        return JSONResponse({
-                            "success": True,
-                            "message": f"I'm texting {data.get('candidates_contacted', 'available')} caregivers now to find coverage for {client_name}.",
-                            "campaign_id": data.get("campaign_id"),
-                            "candidates_contacted": data.get("candidates_contacted", 0)
-                        })
+                        return JSONResponse(
+                            {
+                                "success": True,
+                                "message": f"I'm texting {data.get('candidates_contacted', 'available')} caregivers now to find coverage for {client_name}.",
+                                "campaign_id": data.get("campaign_id"),
+                                "candidates_contacted": data.get(
+                                    "candidates_contacted", 0
+                                ),
+                            }
+                        )
                     else:
-                        logger.warning(f"Shift filling API returned {response.status_code}")
+                        logger.warning(
+                            f"Shift filling API returned {response.status_code}"
+                        )
             except Exception as e:
                 logger.error(f"Error starting shift filling campaign: {e}")
 
             # Fallback - still report success to Gigi so she can reassure the caller
             record_tool_call(call_id, function_name)
-            return JSONResponse({
-                "success": True,
-                "message": f"I've notified the care team to find coverage for {client_name}. They're on it!",
-                "campaign_id": None,
-                "candidates_contacted": 0
-            })
+            return JSONResponse(
+                {
+                    "success": True,
+                    "message": f"I've notified the care team to find coverage for {client_name}. They're on it!",
+                    "campaign_id": None,
+                    "candidates_contacted": 0,
+                }
+            )
 
         elif function_name == "offer_shift_to_caregiver":
             result = await offer_shift_to_caregiver(**args)
@@ -5652,12 +6215,14 @@ async def retell_function_call(function_name: str, request: Request):
 
         elif function_name == "confirm_shift_assignment":
             result = await confirm_shift_assignment(**args)
-            return JSONResponse({
-                "success": result.success,
-                "message": result.message,
-                "shift_filled": result.shift_filled,
-                "assigned_to": result.assigned_to
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "message": result.message,
+                    "shift_filled": result.shift_filled,
+                    "assigned_to": result.assigned_to,
+                }
+            )
 
         elif function_name == "get_shift_filling_status":
             result = await get_shift_filling_status(**args)
@@ -5666,64 +6231,73 @@ async def retell_function_call(function_name: str, request: Request):
         # NEW PRODUCTION READINESS FUNCTIONS
         elif function_name == "get_client_schedule":
             result = await get_client_schedule(**args)
-            return JSONResponse({
-                "success": result.success,
-                "shifts": result.shifts,
-                "message": result.message
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "shifts": result.shifts,
+                    "message": result.message,
+                }
+            )
 
         elif function_name == "report_late":
             result = await report_late(**args)
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
-            return JSONResponse({
-                "success": result.success,
-                "message": result.message,
-                "shift_id": result.shift_id
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "message": result.message,
+                    "shift_id": result.shift_id,
+                }
+            )
 
         elif function_name == "cancel_client_visit":
             result = await cancel_client_visit(**args)
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
-            return JSONResponse({
-                "success": result.success,
-                "message": result.message,
-                "shift_id": result.shift_id
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "message": result.message,
+                    "shift_id": result.shift_id,
+                }
+            )
 
         elif function_name == "add_note_to_wellsky":
             result = await add_note_to_wellsky(**args)
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
-            return JSONResponse({
-                "success": result.success,
-                "message": result.message
-            })
+            return JSONResponse({"success": result.success, "message": result.message})
 
         elif function_name == "assign_shift_to_caregiver":
             result = await assign_shift_to_caregiver(**args)
-            return JSONResponse({
-                "success": result.success,
-                "message": result.message,
-                "shift_id": result.shift_id
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "message": result.message,
+                    "shift_id": result.shift_id,
+                }
+            )
 
         elif function_name == "add_visit_notes":
             result = await add_visit_notes(**args)
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
-            return JSONResponse({
-                "success": result.success,
-                "message": result.message,
-                "shift_id": result.shift_id
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "message": result.message,
+                    "shift_id": result.shift_id,
+                }
+            )
 
         elif function_name == "escalate_emergency":
             result = await escalate_emergency(**args)
             record_tool_call(call_id, function_name)  # ANTI-LOOP: Record this call
-            return JSONResponse({
-                "success": result.success,
-                "message": result.message,
-                "escalation_id": result.escalation_id,
-                "contacts_notified": result.contacts_notified or []
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "message": result.message,
+                    "escalation_id": result.escalation_id,
+                    "contacts_notified": result.contacts_notified or [],
+                }
+            )
 
         elif function_name == "transfer_to_jason":
             # Transfer call to Jason's cell phone
@@ -5732,13 +6306,19 @@ async def retell_function_call(function_name: str, request: Request):
 
             # Log to WellSky 24/7/365
             caller_info = _get_call_context(call_id)
-            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Direct tool call: transfer_to_jason"))
+            asyncio.create_task(
+                log_call_transfer_to_wellsky(
+                    call_id, caller_info, reason="Direct tool call: transfer_to_jason"
+                )
+            )
 
-            return JSONResponse({
-                "response_type": "transfer_call",
-                "transfer_to": "+16039971495",
-                "message": "I'm transferring you to Jason now. Please hold."
-            })
+            return JSONResponse(
+                {
+                    "response_type": "transfer_call",
+                    "transfer_to": "+16039971495",
+                    "message": "I'm transferring you to Jason now. Please hold.",
+                }
+            )
 
         elif function_name == "transfer_to_oncall":
             # Transfer call to on-call manager line
@@ -5747,35 +6327,57 @@ async def retell_function_call(function_name: str, request: Request):
 
             # Log to WellSky 24/7/365
             caller_info = _get_call_context(call_id)
-            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason="Direct tool call: transfer_to_oncall"))
+            asyncio.create_task(
+                log_call_transfer_to_wellsky(
+                    call_id, caller_info, reason="Direct tool call: transfer_to_oncall"
+                )
+            )
 
-            return JSONResponse({
-                "response_type": "transfer_call",
-                "transfer_to": "+13037571777",
-                "message": "I'm transferring you to our on-call manager now. Please hold."
-            })
+            return JSONResponse(
+                {
+                    "response_type": "transfer_call",
+                    "transfer_to": "+13037571777",
+                    "message": "I'm transferring you to our on-call manager now. Please hold.",
+                }
+            )
 
         elif function_name == "transfer_to_scheduling":
             logger.info(f"Transferring call to scheduling at {SCHEDULING_PHONE}")
             record_tool_call(call_id, function_name)
             caller_info = _get_call_context(call_id)
-            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=f"Transfer to scheduling: {args.get('reason', '')}"))
-            return JSONResponse({
-                "response_type": "transfer_call",
-                "transfer_to": SCHEDULING_PHONE,
-                "message": "I'm transferring you to our scheduling team now. Please hold."
-            })
+            asyncio.create_task(
+                log_call_transfer_to_wellsky(
+                    call_id,
+                    caller_info,
+                    reason=f"Transfer to scheduling: {args.get('reason', '')}",
+                )
+            )
+            return JSONResponse(
+                {
+                    "response_type": "transfer_call",
+                    "transfer_to": SCHEDULING_PHONE,
+                    "message": "I'm transferring you to our scheduling team now. Please hold.",
+                }
+            )
 
         elif function_name == "transfer_to_sales":
             logger.info(f"Transferring call to sales at {SALES_PHONE}")
             record_tool_call(call_id, function_name)
             caller_info = _get_call_context(call_id)
-            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=f"Transfer to sales: {args.get('reason', '')}"))
-            return JSONResponse({
-                "response_type": "transfer_call",
-                "transfer_to": SALES_PHONE,
-                "message": "I'm connecting you with our care team now to discuss your options. Please hold."
-            })
+            asyncio.create_task(
+                log_call_transfer_to_wellsky(
+                    call_id,
+                    caller_info,
+                    reason=f"Transfer to sales: {args.get('reason', '')}",
+                )
+            )
+            return JSONResponse(
+                {
+                    "response_type": "transfer_call",
+                    "transfer_to": SALES_PHONE,
+                    "message": "I'm connecting you with our care team now to discuss your options. Please hold.",
+                }
+            )
 
         elif function_name == "create_prospect_in_wellsky":
             first_name = args.get("first_name", "")
@@ -5791,10 +6393,12 @@ async def retell_function_call(function_name: str, request: Request):
                 "phone": phone,
                 "city": city,
                 "state": "CO",
-                "care_needs": [n.strip() for n in care_needs.split(",") if n.strip()] if care_needs else [],
+                "care_needs": [n.strip() for n in care_needs.split(",") if n.strip()]
+                if care_needs
+                else [],
                 "payer_type": payer_type,
                 "referral_source": "inbound_call_gigi",
-                "notes": f"Lead captured by Gigi AI during inbound call. Care needs: {care_needs}"
+                "notes": f"Lead captured by Gigi AI during inbound call. Care needs: {care_needs}",
             }
 
             prospect_id = None
@@ -5803,7 +6407,9 @@ async def retell_function_call(function_name: str, request: Request):
                     result_prospect = wellsky.create_prospect(prospect_data)
                     if result_prospect:
                         prospect_id = result_prospect.id
-                        logger.info(f"Prospect created in WellSky: {prospect_id} - {first_name} {last_name}")
+                        logger.info(
+                            f"Prospect created in WellSky: {prospect_id} - {first_name} {last_name}"
+                        )
                 except Exception as e:
                     logger.error(f"Error creating prospect in WellSky: {e}")
 
@@ -5815,22 +6421,26 @@ async def retell_function_call(function_name: str, request: Request):
                 pass
 
             record_tool_call(call_id, function_name)
-            return JSONResponse({
-                "response_type": "response",
-                "response": f"I've created a record for {first_name} and our care team will call them at {phone} within 30 minutes.",
-                "prospect_id": prospect_id
-            })
+            return JSONResponse(
+                {
+                    "response_type": "response",
+                    "response": f"I've created a record for {first_name} and our care team will call them at {phone} within 30 minutes.",
+                    "prospect_id": prospect_id,
+                }
+            )
 
         elif function_name == "transfer_call":
             # Generic transfer to specified number
             transfer_to = args.get("phone_number", args.get("transfer_to", ""))
             if not transfer_to:
-                return JSONResponse({
-                    "success": False,
-                    "message": "No phone number provided for transfer"
-                })
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "message": "No phone number provided for transfer",
+                    }
+                )
             # Normalize phone number
-            clean_number = ''.join(filter(str.isdigit, transfer_to))
+            clean_number = "".join(filter(str.isdigit, transfer_to))
             if len(clean_number) == 10:
                 clean_number = "+1" + clean_number
             elif len(clean_number) == 11 and clean_number.startswith("1"):
@@ -5840,80 +6450,102 @@ async def retell_function_call(function_name: str, request: Request):
 
             # Log to WellSky 24/7/365
             caller_info = _get_call_context(call_id)
-            asyncio.create_task(log_call_transfer_to_wellsky(call_id, caller_info, reason=f"Direct tool call: transfer_call to {clean_number}"))
+            asyncio.create_task(
+                log_call_transfer_to_wellsky(
+                    call_id,
+                    caller_info,
+                    reason=f"Direct tool call: transfer_call to {clean_number}",
+                )
+            )
 
-            return JSONResponse({
-                "response_type": "transfer_call",
-                "transfer_to": clean_number,
-                "message": "I'm transferring your call now. Please hold."
-            })
+            return JSONResponse(
+                {
+                    "response_type": "transfer_call",
+                    "transfer_to": clean_number,
+                    "message": "I'm transferring your call now. Please hold.",
+                }
+            )
 
         elif function_name == "get_weather":
             location = args.get("location", "Boulder")
             logger.info(f"Getting weather for: {location}")
             weather_result = get_weather(location)
-            return JSONResponse({
-                "response_type": "response",
-                "response": weather_result,
-                "content": weather_result
-            })
+            return JSONResponse(
+                {
+                    "response_type": "response",
+                    "response": weather_result,
+                    "content": weather_result,
+                }
+            )
 
         elif function_name == "take_message":
             caller_name = args.get("caller_name", "Unknown caller")
             caller_phone = args.get("caller_phone", "")
             message = args.get("message", "")
 
-            logger.info(f"Taking message from {caller_name} ({caller_phone}): {message}")
+            logger.info(
+                f"Taking message from caller ...{caller_phone[-4:] if caller_phone else '?'}"
+            )
 
             # Send to Telegram
             telegram_text = f"📞 NEW MESSAGE\n\nFrom: {caller_name}\nPhone: {caller_phone}\nMessage: {message}"
             send_telegram_message(telegram_text)
 
             record_tool_call(call_id, function_name)
-            return JSONResponse({
-                "response_type": "response",
-                "response": "Got it. I'll make sure Jason gets your message.",
-                "content": "Message recorded and sent to Jason"
-            })
+            return JSONResponse(
+                {
+                    "response_type": "response",
+                    "response": "Got it. I'll make sure Jason gets your message.",
+                    "content": "Message recorded and sent to Jason",
+                }
+            )
 
         elif function_name == "get_stock_price":
             symbol = args.get("symbol")
             if not symbol:
-                return JSONResponse({
-                    "success": False,
-                    "error": "Symbol required",
-                    "message": "I need a stock ticker symbol to look up. What stock are you interested in?"
-                })
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "error": "Symbol required",
+                        "message": "I need a stock ticker symbol to look up. What stock are you interested in?",
+                    }
+                )
             result = await get_stock_price(symbol)
-            return JSONResponse({
-                "success": result.success,
-                "symbol": result.symbol,
-                "price": result.price,
-                "change": result.change,
-                "change_percent": result.change_percent,
-                "message": result.message,
-                "error": result.error
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "symbol": result.symbol,
+                    "price": result.price,
+                    "change": result.change,
+                    "change_percent": result.change_percent,
+                    "message": result.message,
+                    "error": result.error,
+                }
+            )
 
         elif function_name == "get_crypto_price":
             symbol = args.get("symbol")
             market = args.get("market", "USD")
             if not symbol:
-                return JSONResponse({
-                    "success": False,
-                    "error": "Symbol required",
-                    "message": "I need a cryptocurrency symbol to look up. What crypto are you interested in?"
-                })
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "error": "Symbol required",
+                        "message": "I need a cryptocurrency symbol to look up. What crypto are you interested in?",
+                    }
+                )
             result = await get_crypto_price(symbol, market)
-            return JSONResponse({
-                "success": result.success,
-                "symbol": result.symbol,
-                "price": result.price,
-                "market": result.market,
-                "last_updated": result.last_updated,
-                "message": result.message,
-                "error": result.error
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "symbol": result.symbol,
+                    "price": result.price,
+                    "market": result.market,
+                    "last_updated": result.last_updated,
+                    "message": result.message,
+                    "error": result.error,
+                }
+            )
 
         elif function_name == "get_events":
             query = args.get("query", "concerts")
@@ -5924,73 +6556,112 @@ async def retell_function_call(function_name: str, request: Request):
             limit = args.get("limit", 5)
 
             result = await get_events(query, city, state, start_date, end_date, limit)
-            return JSONResponse({
-                "success": result.success,
-                "events": result.events,
-                "count": result.count,
-                "message": result.message,
-                "error": result.error
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "events": result.events,
+                    "count": result.count,
+                    "message": result.message,
+                    "error": result.error,
+                }
+            )
 
         elif function_name == "get_setlist":
             artist_name = args.get("artist_name", "")
             limit = args.get("limit", 5)
 
             if not artist_name:
-                return JSONResponse({
-                    "success": False,
-                    "error": "Artist name is required",
-                    "message": "I need an artist or band name to look up setlists."
-                })
+                return JSONResponse(
+                    {
+                        "success": False,
+                        "error": "Artist name is required",
+                        "message": "I need an artist or band name to look up setlists.",
+                    }
+                )
 
             result = await get_setlist(artist_name, limit)
-            return JSONResponse({
-                "success": result.success,
-                "setlists": result.setlists,
-                "count": result.count,
-                "message": result.message,
-                "error": result.error
-            })
+            return JSONResponse(
+                {
+                    "success": result.success,
+                    "setlists": result.setlists,
+                    "count": result.count,
+                    "message": result.message,
+                    "error": result.error,
+                }
+            )
 
         elif function_name == "create_claude_task":
             title = args.get("title", "")
             description = args.get("description", "")
             priority = args.get("priority", "normal")
-            working_dir = args.get("working_directory", "/Users/shulmeister/mac-mini-apps/careassist-unified")
+            working_dir = args.get(
+                "working_directory",
+                "/Users/shulmeister/mac-mini-apps/careassist-unified",
+            )
 
             if not title or not description:
-                return JSONResponse({"success": False, "error": "Missing title or description"})
+                return JSONResponse(
+                    {"success": False, "error": "Missing title or description"}
+                )
 
             try:
                 import psycopg2
-                conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
+
+                conn = psycopg2.connect(
+                    os.getenv(
+                        "DATABASE_URL",
+                        "postgresql://careassist@localhost:5432/careassist",
+                    )
+                )
                 cur = conn.cursor()
-                cur.execute("""
+                cur.execute(
+                    """
                     INSERT INTO claude_code_tasks (title, description, priority, status, requested_by, working_directory, created_at)
                     VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
                     RETURNING id
-                """, (title, description, priority, f"voice:{call_id}", working_dir))
+                """,
+                    (title, description, priority, f"voice:{call_id}", working_dir),
+                )
                 task_id = cur.fetchone()[0]
                 conn.commit()
                 cur.close()
                 conn.close()
                 record_tool_call(call_id, function_name)
-                return JSONResponse({"success": True, "task_id": task_id, "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly."})
+                return JSONResponse(
+                    {
+                        "success": True,
+                        "task_id": task_id,
+                        "message": f"Task #{task_id} created: {title}. Claude Code will pick it up shortly.",
+                    }
+                )
             except Exception as e:
                 logger.error(f"create_claude_task error: {e}")
-                return JSONResponse({"success": False, "error": "Failed to create task"})
+                return JSONResponse(
+                    {"success": False, "error": "Failed to create task"}
+                )
 
         elif function_name == "check_claude_task":
             task_id = args.get("task_id")
 
             try:
                 import psycopg2
-                conn = psycopg2.connect(os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"))
+
+                conn = psycopg2.connect(
+                    os.getenv(
+                        "DATABASE_URL",
+                        "postgresql://careassist@localhost:5432/careassist",
+                    )
+                )
                 cur = conn.cursor()
                 if task_id:
-                    cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s", (int(task_id),))
+                    cur.execute(
+                        "SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks WHERE id = %s",
+                        (int(task_id),),
+                    )
                 else:
-                    cur.execute("SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1")
+                    cur.execute(
+                        "SELECT id, title, status, result, error, created_at, completed_at FROM claude_code_tasks ORDER BY id DESC LIMIT 1"
+                    )
                 row = cur.fetchone()
                 cur.close()
                 conn.close()
@@ -5999,19 +6670,28 @@ async def retell_function_call(function_name: str, request: Request):
                     return JSONResponse({"success": True, "message": "No tasks found"})
 
                 result_preview = row[3][:300] if row[3] else None
-                return JSONResponse({
-                    "success": True,
-                    "task_id": row[0], "title": row[1], "status": row[2],
-                    "result_preview": result_preview, "error": row[4],
-                    "created_at": row[5].isoformat() if row[5] else None,
-                    "completed_at": row[6].isoformat() if row[6] else None
-                })
+                return JSONResponse(
+                    {
+                        "success": True,
+                        "task_id": row[0],
+                        "title": row[1],
+                        "status": row[2],
+                        "result_preview": result_preview,
+                        "error": row[4],
+                        "created_at": row[5].isoformat() if row[5] else None,
+                        "completed_at": row[6].isoformat() if row[6] else None,
+                    }
+                )
             except Exception as e:
                 logger.error(f"check_claude_task error: {e}")
-                return JSONResponse({"success": False, "error": "Failed to check task status"})
+                return JSONResponse(
+                    {"success": False, "error": "Failed to check task status"}
+                )
 
         else:
-            raise HTTPException(status_code=404, detail=f"Unknown function: {function_name}")
+            raise HTTPException(
+                status_code=404, detail=f"Unknown function: {function_name}"
+            )
 
     except Exception as e:
         logger.exception(f"Error in function {function_name}: {e}")
@@ -6025,6 +6705,7 @@ async def retell_function_call(function_name: str, request: Request):
 # Health & Status Endpoints
 # =============================================================================
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
@@ -6034,24 +6715,25 @@ async def health_check():
         "version": "2.2.0",  # Version 2.2: Memory + Mode Detection + Failure Protocols
         "memory_system": MEMORY_SYSTEM_AVAILABLE,
         "mode_detector": MODE_DETECTOR_AVAILABLE,
-        "failure_handler": FAILURE_HANDLER_AVAILABLE
+        "failure_handler": FAILURE_HANDLER_AVAILABLE,
     }
 
     # Add memory stats if available
     if MEMORY_SYSTEM_AVAILABLE:
         try:
-            active_memories = memory_system.query_memories(status=MemoryStatus.ACTIVE, limit=1000)
+            active_memories = memory_system.query_memories(
+                status=MemoryStatus.ACTIVE, limit=1000
+            )
             health["memory_stats"] = {
                 "active_memories": len(active_memories),
-                "high_confidence": len([m for m in active_memories if m.confidence >= 0.7]),
-                "system_ready": True
+                "high_confidence": len(
+                    [m for m in active_memories if m.confidence >= 0.7]
+                ),
+                "system_ready": True,
             }
         except Exception as e:
             logger.error(f"Health check memory stats error: {e}")
-            health["memory_stats"] = {
-                "error": "unavailable",
-                "system_ready": False
-            }
+            health["memory_stats"] = {"error": "unavailable", "system_ready": False}
 
     # Add mode detector info if available
     if MODE_DETECTOR_AVAILABLE:
@@ -6061,35 +6743,33 @@ async def health_check():
                 "mode": current_mode.mode.value,
                 "source": current_mode.source.value,
                 "confidence": float(current_mode.confidence),
-                "set_at": current_mode.set_at.isoformat() if current_mode.set_at else None,
-                "system_ready": True
+                "set_at": current_mode.set_at.isoformat()
+                if current_mode.set_at
+                else None,
+                "system_ready": True,
             }
         except Exception as e:
             logger.error(f"Health check mode detector error: {e}")
-            health["current_mode"] = {
-                "error": "unavailable",
-                "system_ready": False
-            }
+            health["current_mode"] = {"error": "unavailable", "system_ready": False}
 
     # Add failure handler stats if available
     if FAILURE_HANDLER_AVAILABLE:
         try:
             stats = failure_handler.get_failure_stats(days=1)
-            recent_critical = failure_handler.get_recent_failures(hours=1, severity=FailureSeverity.CRITICAL)
+            recent_critical = failure_handler.get_recent_failures(
+                hours=1, severity=FailureSeverity.CRITICAL
+            )
             is_meltdown = failure_handler.detect_meltdown()
 
             health["failure_stats"] = {
-                "failures_24h": stats['total_failures'],
+                "failures_24h": stats["total_failures"],
                 "critical_1h": len(recent_critical),
                 "meltdown_detected": is_meltdown,
-                "system_ready": True
+                "system_ready": True,
             }
         except Exception as e:
             logger.error(f"Health check failure stats error: {e}")
-            health["failure_stats"] = {
-                "error": "unavailable",
-                "system_ready": False
-            }
+            health["failure_stats"] = {"error": "unavailable", "system_ready": False}
 
     return health
 
@@ -6116,10 +6796,10 @@ async def root():
             "Shift assignment confirmation",
             "Client issue logging",
             "Shift verification",
-            "Emergency notifications"
+            "Emergency notifications",
         ],
         "webhook_url": "/webhook/retell",
-        "documentation": "/docs"
+        "documentation": "/docs",
     }
 
 
@@ -6127,10 +6807,10 @@ async def root():
 # Development/Testing Endpoints
 # =============================================================================
 
+
 @app.post("/test/verify-caller")
 async def test_verify_caller(
-    phone_number: str,
-    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+    phone_number: str, _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
 ):
     """Test endpoint for verify_caller function."""
     result = await verify_caller(phone_number)
@@ -6139,8 +6819,7 @@ async def test_verify_caller(
 
 @app.post("/test/get-shift-details")
 async def test_get_shift_details(
-    person_id: str,
-    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+    person_id: str, _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
 ):
     """Test endpoint for get_shift_details function."""
     result = await get_shift_details(person_id)
@@ -6152,7 +6831,7 @@ async def test_report_call_out(
     caregiver_id: str,
     shift_id: str,
     reason: str,
-    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+    _test_ok: None = Depends(require_gigi_test_endpoints_enabled),
 ):
     """Test endpoint for report_call_out function."""
     result = await report_call_out(caregiver_id, shift_id, reason)
@@ -6164,7 +6843,7 @@ async def test_log_client_issue(
     client_id: str,
     note: str,
     issue_type: str = "general",
-    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+    _test_ok: None = Depends(require_gigi_test_endpoints_enabled),
 ):
     """Test endpoint for log_client_issue function."""
     result = await log_client_issue(client_id, note, issue_type)
@@ -6178,7 +6857,9 @@ async def test_log_client_issue(
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
-    logger.warning("GEMINI_API_KEY not found in environment. AI features will be disabled.")
+    logger.warning(
+        "GEMINI_API_KEY not found in environment. AI features will be disabled."
+    )
 
 # SMS Response prompt for Gigi
 SMS_SYSTEM_PROMPT = """You are Gigi, a real team member at Colorado Care Assist, a non-medical home care agency.
@@ -6228,6 +6909,7 @@ Office hours: Mon-Fri 8AM-5PM MT | 719-428-3999 or 303-757-1777"""
 
 class InboundSMS(BaseModel):
     """Inbound SMS message from Beetexting webhook."""
+
     from_number: str = Field(..., description="Sender's phone number")
     to_number: str = Field(default="+17194283999", description="Receiving number")
     message: str = Field(..., description="Message content")
@@ -6237,6 +6919,7 @@ class InboundSMS(BaseModel):
 
 class SMSResponse(BaseModel):
     """Response for SMS auto-reply."""
+
     success: bool
     reply_sent: bool
     reply_text: Optional[str] = None
@@ -6247,7 +6930,7 @@ async def generate_sms_response(
     message: str,
     caller_info: Optional[CallerInfo] = None,
     shift_context: Optional[str] = None,
-    action_taken: Optional[str] = None
+    action_taken: Optional[str] = None,
 ) -> str:
     """
     Generate a thoughtful SMS response using Gemini AI.
@@ -6271,28 +6954,36 @@ async def generate_sms_response(
         context_parts.append(f"ACTION ALREADY TAKEN: {action_taken}")
 
     context = "\n".join(context_parts)
-    user_prompt = f"{context}\n\nCaregiver's message: \"{message}\"\n\nWrite a brief SMS reply:"
+    user_prompt = (
+        f'{context}\n\nCaregiver\'s message: "{message}"\n\nWrite a brief SMS reply:'
+    )
 
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
                 json={
-                    "contents": [{"parts": [{"text": f"{SMS_SYSTEM_PROMPT}\n\n{user_prompt}"}]}],
-                    "generationConfig": {
-                        "maxOutputTokens": 150,
-                        "temperature": 0.7
-                    }
+                    "contents": [
+                        {"parts": [{"text": f"{SMS_SYSTEM_PROMPT}\n\n{user_prompt}"}]}
+                    ],
+                    "generationConfig": {"maxOutputTokens": 150, "temperature": 0.7},
                 },
-                timeout=15.0
+                timeout=15.0,
             )
             if response.status_code == 200:
                 data = response.json()
-                reply = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                reply = (
+                    data.get("candidates", [{}])[0]
+                    .get("content", {})
+                    .get("parts", [{}])[0]
+                    .get("text", "")
+                )
                 if reply:
                     return reply.strip()
             else:
-                logger.error(f"Gemini API error: {response.status_code} - {response.text[:200]}")
+                logger.error(
+                    f"Gemini API error: {response.status_code} - {response.text[:200]}"
+                )
     except Exception as e:
         logger.error(f"Gemini API error: {e}")
 
@@ -6312,68 +7003,149 @@ def detect_sms_intent(message: str) -> str:
     # Check this FIRST since YES responses should take priority
     if msg_lower in ["yes", "yes!", "yep", "yeah", "yea", "y", "sure", "ok", "okay"]:
         return "shift_accept"
-    if any(phrase in msg_lower for phrase in [
-        "yes i can", "yes, i can", "i can take it", "i'll take it",
-        "i will take it", "count me in", "i'm available", "im available",
-        "i can do it", "i'll do it", "i will do it", "sign me up"
-    ]):
+    if any(
+        phrase in msg_lower
+        for phrase in [
+            "yes i can",
+            "yes, i can",
+            "i can take it",
+            "i'll take it",
+            "i will take it",
+            "count me in",
+            "i'm available",
+            "im available",
+            "i can do it",
+            "i'll do it",
+            "i will do it",
+            "sign me up",
+        ]
+    ):
         return "shift_accept"
 
     # Shift decline - short negative responses to shift offers
     if msg_lower in ["no", "no!", "nope", "n", "can't", "cant", "pass"]:
         return "shift_decline"
-    if any(phrase in msg_lower for phrase in [
-        "no i can't", "no, i can't", "i can't take it", "i cannot",
-        "not available", "i'm not available", "im not available",
-        "i can't do it", "count me out", "sorry no", "sorry, no"
-    ]):
+    if any(
+        phrase in msg_lower
+        for phrase in [
+            "no i can't",
+            "no, i can't",
+            "i can't take it",
+            "i cannot",
+            "not available",
+            "i'm not available",
+            "im not available",
+            "i can't do it",
+            "count me out",
+            "sorry no",
+            "sorry, no",
+        ]
+    ):
         return "shift_decline"
 
     # Clock out issues
-    if any(phrase in msg_lower for phrase in [
-        "clock out", "clockout", "cant clock out", "can't clock out",
-        "wont let me clock", "won't let me clock", "forgot to clock out",
-        "didnt clock out", "didn't clock out", "clock me out"
-    ]):
+    if any(
+        phrase in msg_lower
+        for phrase in [
+            "clock out",
+            "clockout",
+            "cant clock out",
+            "can't clock out",
+            "wont let me clock",
+            "won't let me clock",
+            "forgot to clock out",
+            "didnt clock out",
+            "didn't clock out",
+            "clock me out",
+        ]
+    ):
         return "clock_out"
 
     # Clock in issues
-    if any(phrase in msg_lower for phrase in [
-        "clock in", "clockin", "cant clock in", "can't clock in",
-        "forgot to clock in", "didnt clock in", "didn't clock in",
-        "clock me in"
-    ]):
+    if any(
+        phrase in msg_lower
+        for phrase in [
+            "clock in",
+            "clockin",
+            "cant clock in",
+            "can't clock in",
+            "forgot to clock in",
+            "didnt clock in",
+            "didn't clock in",
+            "clock me in",
+        ]
+    ):
         return "clock_in"
 
     # Call out / can't make shift
-    if any(phrase in msg_lower for phrase in [
-        "call out", "callout", "calling out", "can't make it",
-        "cant make it", "won't make it", "wont make it", "sick",
-        "can't come in", "cant come in", "not going to make",
-        "car broke", "emergency", "need to cancel"
-    ]):
+    if any(
+        phrase in msg_lower
+        for phrase in [
+            "call out",
+            "callout",
+            "calling out",
+            "can't make it",
+            "cant make it",
+            "won't make it",
+            "wont make it",
+            "sick",
+            "can't come in",
+            "cant come in",
+            "not going to make",
+            "car broke",
+            "emergency",
+            "need to cancel",
+        ]
+    ):
         return "callout"
 
     # Schedule questions
-    if any(phrase in msg_lower for phrase in [
-        "my schedule", "when do i work", "what shifts", "next shift",
-        "shifts this week", "working tomorrow", "work tomorrow"
-    ]):
+    if any(
+        phrase in msg_lower
+        for phrase in [
+            "my schedule",
+            "when do i work",
+            "what shifts",
+            "next shift",
+            "shifts this week",
+            "working tomorrow",
+            "work tomorrow",
+        ]
+    ):
         return "schedule"
 
     # Payroll questions
-    if any(phrase in msg_lower for phrase in [
-        "pay stub", "paystub", "paycheck", "when do we get paid",
-        "paid", "payroll", "direct deposit"
-    ]):
+    if any(
+        phrase in msg_lower
+        for phrase in [
+            "pay stub",
+            "paystub",
+            "paycheck",
+            "when do we get paid",
+            "paid",
+            "payroll",
+            "direct deposit",
+        ]
+    ):
         return "payroll"
 
     # New Client Inquiry / Biz Dev
-    if any(phrase in msg_lower for phrase in [
-        "looking for care", "need a caregiver", "rates", "cost",
-        "new client", "sign up", "services", "help for my mom", "help for my dad",
-        "care for my", "interested in services"
-    ]):
+    if any(
+        phrase in msg_lower
+        for phrase in [
+            "looking for care",
+            "need a caregiver",
+            "rates",
+            "cost",
+            "new client",
+            "sign up",
+            "services",
+            "help for my mom",
+            "help for my dad",
+            "care for my",
+            "interested in services",
+        ]
+    ):
         return "inquiry"
 
     return "general"
@@ -6408,7 +7180,9 @@ def format_shift_context(shift) -> str:
     if shift.clock_out_time:
         parts.append(f"Clocked out: {shift.clock_out_time.strftime('%I:%M %p')}")
 
-    status_str = shift.status.value if hasattr(shift.status, 'value') else str(shift.status)
+    status_str = (
+        shift.status.value if hasattr(shift.status, "value") else str(shift.status)
+    )
     parts.append(f"Status: {status_str}")
 
     return "\n".join(parts)
@@ -6445,10 +7219,7 @@ def _should_reply_now() -> bool:
 
 
 def _log_clock_issue_to_wellsky(
-    shift,
-    caller_name: Optional[str],
-    intent: str,
-    message: str
+    shift, caller_name: Optional[str], intent: str, message: str
 ) -> None:
     """Create WellSky task + care alert note for clock-in/out issues."""
     caregiver_name = caller_name or "Caregiver"
@@ -6457,12 +7228,21 @@ def _log_clock_issue_to_wellsky(
     # 1. ALWAYS LOG LOCALLY FIRST (Safety Backup)
     try:
         import sqlite3
-        conn = sqlite3.connect('portal.db')
+
+        conn = sqlite3.connect("portal.db")
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute(
+            """
             INSERT INTO wellsky_documentation (type, title, description, related_id)
             VALUES (?, ?, ?, ?)
-        ''', ('SMS_REQUEST', f'Request: {action_label}', f'{caregiver_name}: {message}', getattr(shift, 'id', 'N/A')))
+        """,
+            (
+                "SMS_REQUEST",
+                f"Request: {action_label}",
+                f"{caregiver_name}: {message}",
+                getattr(shift, "id", "N/A"),
+            ),
+        )
         conn.commit()
         conn.close()
         logger.info(f"Logged {action_label} request locally.")
@@ -6486,6 +7266,7 @@ def _log_clock_issue_to_wellsky(
             success, in_resp = wellsky.clock_in_shift(str(appointment_id))
             if success:
                 import re
+
                 match = re.search(r"Carelog ID: (\d+)", in_resp)
                 if match:
                     carelog_id = match.group(1)
@@ -6494,9 +7275,11 @@ def _log_clock_issue_to_wellsky(
                         encounter_id=carelog_id,
                         title=f"Gigi AI - SMS {action_label.upper()}",
                         description=f"Caregiver {caregiver_name} confirmed {action_label} via SMS. Gigi documented this request. Message: {message}",
-                        status="COMPLETE"
+                        status="COMPLETE",
                     )
-                    logger.info(f"Documented SMS {action_label} in WellSky TaskLog for shift {appointment_id}")
+                    logger.info(
+                        f"Documented SMS {action_label} in WellSky TaskLog for shift {appointment_id}"
+                    )
         except Exception as e:
             logger.error(f"Failed to document in TaskLog: {e}")
 
@@ -6513,15 +7296,12 @@ def _log_clock_issue_to_wellsky(
             title=f"SMS {action_label.upper()} - {caregiver_name}",
             description=f"Caregiver: {caregiver_name}\nMessage: {message}\nShift: {getattr(shift, 'id', 'unknown')}",
             priority="high",
-            related_caregiver_id=str(caregiver_id) if caregiver_id else None
+            related_caregiver_id=str(caregiver_id) if caregiver_id else None,
         )
 
 
 def _log_unmatched_sms_to_wellsky(
-    caller_name: Optional[str],
-    intent: str,
-    message: str,
-    phone: str
+    caller_name: Optional[str], intent: str, message: str, phone: str
 ) -> None:
     """Create WellSky task for caregiver SMS that couldn't be matched to a shift."""
     caregiver_name = caller_name or "Unknown Caregiver"
@@ -6530,12 +7310,21 @@ def _log_unmatched_sms_to_wellsky(
     # ALWAYS LOG LOCALLY FIRST (Safety Backup)
     try:
         import sqlite3
-        conn = sqlite3.connect('portal.db')
+
+        conn = sqlite3.connect("portal.db")
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute(
+            """
             INSERT INTO wellsky_documentation (type, title, description, related_id)
             VALUES (?, ?, ?, ?)
-        ''', ('UNMATCHED_SMS', f'Unmatched {action_label}', f'{caregiver_name} ({phone}): {message}', 'N/A'))
+        """,
+            (
+                "UNMATCHED_SMS",
+                f"Unmatched {action_label}",
+                f"{caregiver_name} ({phone}): {message}",
+                "N/A",
+            ),
+        )
         conn.commit()
         conn.close()
         logger.info(f"Logged unmatched {action_label} request locally.")
@@ -6563,7 +7352,7 @@ def _log_unmatched_sms_to_wellsky(
             f"Note: Gigi could not find a matching shift for this request."
         ),
         priority="high",
-        related_caregiver_id=str(caregiver_id) if caregiver_id else None
+        related_caregiver_id=str(caregiver_id) if caregiver_id else None,
     )
 
 
@@ -6582,12 +7371,16 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
     if request:
         sms_secret = os.getenv("INBOUND_SMS_WEBHOOK_SECRET")
         if not sms_secret:
-            logger.warning("Inbound SMS webhook: INBOUND_SMS_WEBHOOK_SECRET not configured")
+            logger.warning(
+                "Inbound SMS webhook: INBOUND_SMS_WEBHOOK_SECRET not configured"
+            )
             raise HTTPException(status_code=503, detail="Webhook not configured")
         received_secret = request.headers.get("X-Webhook-Secret", "")
         if received_secret != sms_secret:
             logger.warning("Inbound SMS webhook: Invalid or missing webhook secret")
-            return SMSResponse(success=False, reply_text="", reply_sent=False, error="Unauthorized")
+            return SMSResponse(
+                success=False, reply_text="", reply_sent=False, error="Unauthorized"
+            )
     logger.info(f"Inbound SMS from {sms.from_number}: {sms.message[:100]}...")
 
     # FORCE REPLY for now to ensure reliability, ignoring office hours gates
@@ -6607,15 +7400,17 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
         # These are responses to "Reply YES to accept" shift offers
         if intent in ("shift_accept", "shift_decline"):
             try:
-                logger.info(f"Processing shift response from {sms.from_number}: {intent}")
+                logger.info(
+                    f"Processing shift response from {sms.from_number}: {intent}"
+                )
                 async with httpx.AsyncClient() as client:
                     response = await client.post(
                         f"{PORTAL_BASE_URL}/api/internal/shift-filling/sms-response",
                         json={
                             "phone_number": sms.from_number,
-                            "message_text": sms.message
+                            "message_text": sms.message,
                         },
-                        timeout=15.0
+                        timeout=15.0,
                     )
                     if response.status_code == 200:
                         result = response.json()
@@ -6629,22 +7424,26 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                                     f"Thank you for stepping up!"
                                 )
                             elif action == "declined":
-                                reply_text = "Got it, no problem. Thank you for letting us know!"
+                                reply_text = (
+                                    "Got it, no problem. Thank you for letting us know!"
+                                )
                             elif action == "already_filled":
                                 reply_text = "Thanks for responding! This shift was already filled by another caregiver."
                             else:
                                 reply_text = "Thanks for your response. We'll be in touch if needed."
 
                             # Send the reply
-                            sms_sent = await _send_sms_primary(sms.from_number, reply_text)
+                            sms_sent = await _send_sms_primary(
+                                sms.from_number, reply_text
+                            )
                             return SMSResponse(
-                                success=True,
-                                reply_sent=sms_sent,
-                                reply_text=reply_text
+                                success=True, reply_sent=sms_sent, reply_text=reply_text
                             )
                         else:
                             # No pending shift offer - fall through to normal processing
-                            logger.info(f"No pending shift offer for {sms.from_number}, continuing normal flow")
+                            logger.info(
+                                f"No pending shift offer for {sms.from_number}, continuing normal flow"
+                            )
             except Exception as shift_err:
                 logger.warning(f"Error checking shift response: {shift_err}")
                 # Fall through to normal processing
@@ -6659,22 +7458,26 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
 
                 if partial_avail.offers_alternative:
                     # Caregiver is cancelling BUT offering an alternative time
-                    logger.info(f"Detected partial availability: {partial_avail.start_time}-{partial_avail.end_time}")
+                    logger.info(
+                        f"Detected partial availability: {partial_avail.start_time}-{partial_avail.end_time}"
+                    )
 
                     # Build context message for coordinator
                     coordinator_message = (
                         f"📋 PARTIAL AVAILABILITY from {caller_info.name or sms.from_number}\n\n"
-                        f"Original message: \"{sms.message}\"\n\n"
+                        f'Original message: "{sms.message}"\n\n'
                         f"Parsed details:\n"
                         f"  • Cancelling original shift: {partial_avail.is_cancelling}\n"
                         f"  • Alternative time offered: {partial_avail.start_time} - {partial_avail.end_time}\n"
-                        f"  • Raw time text: \"{partial_avail.raw_time_text}\"\n\n"
+                        f'  • Raw time text: "{partial_avail.raw_time_text}"\n\n'
                         f"ACTION NEEDED: Contact caregiver to confirm if modified schedule works for client."
                     )
 
                     # Send to on-call manager
                     if OPERATIONS_SMS_ENABLED:
-                        await _send_sms_beetexting(ON_CALL_MANAGER_PHONE, coordinator_message)
+                        await _send_sms_beetexting(
+                            ON_CALL_MANAGER_PHONE, coordinator_message
+                        )
                         logger.info("Sent partial availability alert to coordinator")
 
                     # Generate empathetic response to caregiver
@@ -6694,11 +7497,13 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                         reply_text=reply_text,
                         caller_type=caller_info.caller_type,
                         caller_name=caller_info.name,
-                        original_message=sms.message
+                        original_message=sms.message,
                     )
 
             except Exception as partial_err:
-                logger.warning(f"Error in partial availability detection: {partial_err}")
+                logger.warning(
+                    f"Error in partial availability detection: {partial_err}"
+                )
                 # Fall through to normal processing
 
         # Look up shift data from WellSky
@@ -6717,21 +7522,35 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                         # Actually clock them out
                         success, message = wellsky.clock_out_shift(
                             current_shift.id,
-                            notes=f"Clocked out via Gigi SMS: {sms.message[:100]}"
+                            notes=f"Clocked out via Gigi SMS: {sms.message[:100]}",
                         )
                         if success:
                             action_taken = message
-                            logger.info(f"Clocked out shift {current_shift.id}: {message}")
-                            _log_clock_issue_to_wellsky(current_shift, caller_info.name, "clock_out", sms.message)
+                            logger.info(
+                                f"Clocked out shift {current_shift.id}: {message}"
+                            )
+                            _log_clock_issue_to_wellsky(
+                                current_shift,
+                                caller_info.name,
+                                "clock_out",
+                                sms.message,
+                            )
                             reply_text = f"Got it{f', {caller_info.name}' if caller_info.name else ''} — I’ve clocked you out."
                         else:
                             reply_text = "I’m having trouble clocking you out. I’ve logged this and the scheduler will follow up shortly."
                             # STILL LOG TO WELLSKY even if clock out fails
-                            _log_clock_issue_to_wellsky(current_shift, caller_info.name, "clock_out", sms.message)
+                            _log_clock_issue_to_wellsky(
+                                current_shift,
+                                caller_info.name,
+                                "clock_out",
+                                sms.message,
+                            )
                     else:
                         reply_text = "I couldn’t find your current shift. I’ve logged this for the scheduler to follow up."
                         # LOG GENERIC TASK if no shift found
-                        _log_unmatched_sms_to_wellsky(caller_info.name, "clock_out", sms.message, sms.from_number)
+                        _log_unmatched_sms_to_wellsky(
+                            caller_info.name, "clock_out", sms.message, sms.from_number
+                        )
 
                 elif intent == "clock_in":
                     # Get their upcoming shift
@@ -6741,23 +7560,35 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                         # Clock them in
                         success, message = wellsky.clock_in_shift(
                             current_shift.id,
-                            notes=f"Clocked in via Gigi SMS: {sms.message[:100]}"
+                            notes=f"Clocked in via Gigi SMS: {sms.message[:100]}",
                         )
                         if success:
                             action_taken = message
-                            logger.info(f"Clocked in shift {current_shift.id}: {message}")
-                            _log_clock_issue_to_wellsky(current_shift, caller_info.name, "clock_in", sms.message)
+                            logger.info(
+                                f"Clocked in shift {current_shift.id}: {message}"
+                            )
+                            _log_clock_issue_to_wellsky(
+                                current_shift, caller_info.name, "clock_in", sms.message
+                            )
                             reply_text = f"Got it{f', {caller_info.name}' if caller_info.name else ''} — I’ve clocked you in."
                         else:
                             reply_text = "I’m having trouble clocking you in. I’ve logged this and the scheduler will follow up shortly."
-                            _log_clock_issue_to_wellsky(current_shift, caller_info.name, "clock_in", sms.message)
+                            _log_clock_issue_to_wellsky(
+                                current_shift, caller_info.name, "clock_in", sms.message
+                            )
                     else:
                         reply_text = "I couldn’t find your current shift. I’ve logged this for the scheduler to follow up."
-                        _log_unmatched_sms_to_wellsky(caller_info.name, "clock_in", sms.message, sms.from_number)
+                        _log_unmatched_sms_to_wellsky(
+                            caller_info.name, "clock_in", sms.message, sms.from_number
+                        )
 
                 elif intent == "callout":
                     # Smart Call-Out Handling (Continuity First)
-                    if caller_info and caller_info.caller_type == CallerType.CAREGIVER and caller_info.person_id:
+                    if (
+                        caller_info
+                        and caller_info.caller_type == CallerType.CAREGIVER
+                        and caller_info.person_id
+                    ):
                         caregiver_id = caller_info.person_id
 
                         # Find the shift they mean (upcoming or current)
@@ -6769,69 +7600,113 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                             result = await execute_caregiver_call_out(
                                 caregiver_id=caregiver_id,
                                 shift_id=shift_details.shift_id,
-                                reason=sms.message[:200]
+                                reason=sms.message[:200],
                             )
 
-                            if result.get("success") or result.get("step_a_wellsky_updated"):
-                                action_taken = "Processed call-out and started finding coverage."
+                            if result.get("success") or result.get(
+                                "step_a_wellsky_updated"
+                            ):
+                                action_taken = (
+                                    "Processed call-out and started finding coverage."
+                                )
 
                                 # Create a mock shift object for context formatting
                                 current_shift = SimpleNamespace(
-                                    client_first_name=shift_details.client_name.split()[0] if shift_details.client_name else "Client",
-                                    client_last_name=" ".join(shift_details.client_name.split()[1:]) if shift_details.client_name else "",
+                                    client_first_name=shift_details.client_name.split()[
+                                        0
+                                    ]
+                                    if shift_details.client_name
+                                    else "Client",
+                                    client_last_name=" ".join(
+                                        shift_details.client_name.split()[1:]
+                                    )
+                                    if shift_details.client_name
+                                    else "",
                                     date=shift_details.start_time.date(),
-                                    start_time=shift_details.start_time.strftime("%I:%M %p"),
-                                    end_time=shift_details.end_time.strftime("%I:%M %p"),
+                                    start_time=shift_details.start_time.strftime(
+                                        "%I:%M %p"
+                                    ),
+                                    end_time=shift_details.end_time.strftime(
+                                        "%I:%M %p"
+                                    ),
                                     address=shift_details.client_address,
                                     city="",
                                     clock_in_time=None,
                                     clock_out_time=None,
-                                    status=SimpleNamespace(value="open") # It's open now
+                                    status=SimpleNamespace(
+                                        value="open"
+                                    ),  # It's open now
                                 )
                                 shift_context = format_shift_context(current_shift)
-                                logger.info(f"Smart SMS Call-out success: {result.get('message')}")
+                                logger.info(
+                                    f"Smart SMS Call-out success: {result.get('message')}"
+                                )
                             else:
-                                logger.warning(f"Smart SMS Call-out failed: {result.get('errors')}")
+                                logger.warning(
+                                    f"Smart SMS Call-out failed: {result.get('errors')}"
+                                )
                                 action_taken = "Logged call-out but notified manager for manual follow-up."
                         else:
-                             logger.warning(f"SMS Call-out: No shift found for caregiver {caregiver_id}")
+                            logger.warning(
+                                f"SMS Call-out: No shift found for caregiver {caregiver_id}"
+                            )
                     else:
-                        logger.warning(f"SMS Call-out from unknown or unverified caller: {sms.from_number}")
+                        logger.warning(
+                            f"SMS Call-out from unknown or unverified caller: {sms.from_number}"
+                        )
 
                 elif intent == "schedule":
                     # Get upcoming shifts
-                    shifts = wellsky.get_caregiver_upcoming_shifts(sms.from_number, days=7)
+                    shifts = wellsky.get_caregiver_upcoming_shifts(
+                        sms.from_number, days=7
+                    )
                     if shifts:
                         shift_lines = []
                         for shift in shifts[:5]:  # Max 5 shifts
                             client = f"{shift.client_first_name} {shift.client_last_name}".strip()
-                            date_str = shift.date.strftime("%a %m/%d") if shift.date else ""
-                            shift_lines.append(f"- {date_str} {shift.start_time}: {client}")
+                            date_str = (
+                                shift.date.strftime("%a %m/%d") if shift.date else ""
+                            )
+                            shift_lines.append(
+                                f"- {date_str} {shift.start_time}: {client}"
+                            )
                         shift_context = "UPCOMING SHIFTS:\n" + "\n".join(shift_lines)
 
                     # Notify Schedulers
                     schedulers_chat = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
                     if schedulers_chat:
-                        await send_glip_message(schedulers_chat, f"📅 SCHEDULE QUESTION: {sms.from_number}\n{sms.message}")
+                        await send_glip_message(
+                            schedulers_chat,
+                            f"📅 SCHEDULE QUESTION: {sms.from_number}\n{sms.message}",
+                        )
 
                 elif intent == "payroll":
                     # Notify Schedulers (or HR if separate, but user said 'caregiver issue to New Scheduling')
                     schedulers_chat = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
                     if schedulers_chat:
-                        await send_glip_message(schedulers_chat, f"💰 PAYROLL QUESTION: {sms.from_number}\n{sms.message}")
+                        await send_glip_message(
+                            schedulers_chat,
+                            f"💰 PAYROLL QUESTION: {sms.from_number}\n{sms.message}",
+                        )
                     action_taken = "Notified administrative team."
 
                 elif intent == "inquiry":
                     # Route to Biz Dev
                     biz_dev_chat = os.getenv("RINGCENTRAL_BIZ_DEV_CHAT_ID")
                     if biz_dev_chat:
-                        await send_glip_message(biz_dev_chat, f"💼 NEW LEAD (SMS): {sms.from_number}\nMsg: {sms.message}")
+                        await send_glip_message(
+                            biz_dev_chat,
+                            f"💼 NEW LEAD (SMS): {sms.from_number}\nMsg: {sms.message}",
+                        )
                         action_taken = "Notified Business Development team."
                     else:
                         # Fallback to schedulers if biz dev not set
                         schedulers_chat = os.getenv("RINGCENTRAL_SCHEDULERS_CHAT_ID")
                         if schedulers_chat:
-                            await send_glip_message(schedulers_chat, f"💼 NEW LEAD (SMS): {sms.from_number}\nMsg: {sms.message}")
+                            await send_glip_message(
+                                schedulers_chat,
+                                f"💼 NEW LEAD (SMS): {sms.from_number}\nMsg: {sms.message}",
+                            )
                         action_taken = "Notified office staff."
 
                 else:
@@ -6850,7 +7725,7 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                 sms.message,
                 caller_info,
                 shift_context=shift_context,
-                action_taken=action_taken
+                action_taken=action_taken,
             )
 
         # =====================================================================
@@ -6859,8 +7734,12 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
         # =====================================================================
         if WELLSKY_AVAILABLE and wellsky and caller_info and caller_info.person_id:
             try:
-                person_type = caller_info.caller_type.value # 'caregiver' or 'client'
-                reply_status = "(Gigi replied)" if should_reply else "(Office hours - no auto-reply)"
+                person_type = caller_info.caller_type.value  # 'caregiver' or 'client'
+                reply_status = (
+                    "(Gigi replied)"
+                    if should_reply
+                    else "(Office hours - no auto-reply)"
+                )
                 log_note = f"SMS INTERACTION {reply_status}:\nCaregiver: {sms.message}\nGigi response: {reply_text}"
 
                 # Use the internal add_note_to_wellsky tool logic
@@ -6868,18 +7747,16 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
                     person_type=person_type,
                     person_id=caller_info.person_id,
                     note=log_note,
-                    note_type="communication"
+                    note_type="communication",
                 )
-                logger.info(f"Full conversation documented in WellSky for {caller_info.name}")
+                logger.info(
+                    f"Full conversation documented in WellSky for {caller_info.name}"
+                )
             except Exception as doc_err:
                 logger.warning(f"Failed to document full conversation: {doc_err}")
 
         if not should_reply:
-            return SMSResponse(
-                success=True,
-                reply_sent=False,
-                reply_text=reply_text
-            )
+            return SMSResponse(success=True, reply_sent=False, reply_text=reply_text)
 
         # Send reply via BeeTexting SMS (falls back to RingCentral)
         # This ensures the reply shows up in the BeeTexting thread we just assigned
@@ -6887,26 +7764,20 @@ async def handle_inbound_sms(sms: InboundSMS, request: Request = None):
 
         if sms_sent:
             logger.info(f"SMS reply sent to {sms.from_number}: {reply_text[:50]}...")
-            return SMSResponse(
-                success=True,
-                reply_sent=True,
-                reply_text=reply_text
-            )
+            return SMSResponse(success=True, reply_sent=True, reply_text=reply_text)
         else:
             logger.warning(f"Failed to send SMS reply to {sms.from_number}")
             return SMSResponse(
                 success=True,
                 reply_sent=False,
                 reply_text=reply_text,
-                error="Failed to send SMS reply"
+                error="Failed to send SMS reply",
             )
 
     except Exception as e:
         logger.exception(f"Error handling inbound SMS: {e}")
         return SMSResponse(
-            success=False,
-            reply_sent=False,
-            error="Internal processing error"
+            success=False, reply_sent=False, error="Internal processing error"
         )
 
 
@@ -6937,27 +7808,25 @@ async def beetexting_webhook(request: Request):
 
         # Get phone numbers
         from_number = (
-            payload.get("from") or
-            payload.get("fromNumber") or
-            payload.get("mobileNumber") or
-            body.get("from")
+            payload.get("from")
+            or payload.get("fromNumber")
+            or payload.get("mobileNumber")
+            or body.get("from")
         )
         to_number = payload.get("to") or payload.get("toNumber") or "+17194283999"
 
         # Get message text
         message = (
-            payload.get("text") or
-            payload.get("message") or
-            payload.get("body") or
-            body.get("text") or
-            body.get("message")
+            payload.get("text")
+            or payload.get("message")
+            or payload.get("body")
+            or body.get("text")
+            or body.get("message")
         )
 
         # Get direction - only auto-reply to inbound messages
         direction = (
-            payload.get("direction") or
-            body.get("direction") or
-            "inbound"
+            payload.get("direction") or body.get("direction") or "inbound"
         ).lower()
 
         if direction == "outbound":
@@ -6966,7 +7835,10 @@ async def beetexting_webhook(request: Request):
 
         if not from_number or not message:
             logger.warning("Missing from_number or message in webhook payload")
-            return JSONResponse({"status": "error", "message": "Missing required fields"}, status_code=400)
+            return JSONResponse(
+                {"status": "error", "message": "Missing required fields"},
+                status_code=400,
+            )
 
         # Handle the inbound SMS
         sms = InboundSMS(
@@ -6982,18 +7854,24 @@ async def beetexting_webhook(request: Request):
             description=f"SMS from {from_number}",
             event_type="sms_received",
             details=f"Msg: {message[:50]}...\nReply: {'Yes' if result.reply_sent else 'No'}",
-            icon="💬"
+            icon="💬",
         )
 
-        return JSONResponse({
-            "status": "ok",
-            "reply_sent": result.reply_sent,
-            "reply_preview": result.reply_text[:50] + "..." if result.reply_text else None
-        })
+        return JSONResponse(
+            {
+                "status": "ok",
+                "reply_sent": result.reply_sent,
+                "reply_preview": result.reply_text[:50] + "..."
+                if result.reply_text
+                else None,
+            }
+        )
 
     except Exception as e:
         logger.exception(f"Error in Beetexting webhook: {e}")
-        return JSONResponse({"status": "error", "message": "Internal server error"}, status_code=500)
+        return JSONResponse(
+            {"status": "error", "message": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/webhook/ringcentral-sms")
@@ -7011,13 +7889,15 @@ async def ringcentral_sms_webhook(request: Request):
         return Response(
             content=validation_token,
             headers={"Validation-Token": validation_token},
-            status_code=200
+            status_code=200,
         )
 
     # SECURITY: Verify RingCentral webhook signature (fail-closed — reject if not configured)
     rc_verification_token = os.getenv("RINGCENTRAL_WEBHOOK_VERIFICATION_TOKEN")
     if not rc_verification_token:
-        logger.warning("RingCentral webhook: RINGCENTRAL_WEBHOOK_VERIFICATION_TOKEN not configured")
+        logger.warning(
+            "RingCentral webhook: RINGCENTRAL_WEBHOOK_VERIFICATION_TOKEN not configured"
+        )
         raise HTTPException(status_code=503, detail="Webhook not configured")
     received_token = request.headers.get("X-RingCentral-Verification-Token", "")
     if received_token != rc_verification_token:
@@ -7038,7 +7918,9 @@ async def ringcentral_sms_webhook(request: Request):
             to_number = body.get("to")
             message = body.get("message")
             contact_name = body.get("name")
-            logger.info(f"Processing simple format webhook: from={from_number}, to={to_number}")
+            logger.info(
+                f"Processing simple format webhook: from={from_number}, to={to_number}"
+            )
         else:
             # COMPLEX FORMAT from native RingCentral webhook subscription
             event = body.get("event", "")
@@ -7059,7 +7941,9 @@ async def ringcentral_sms_webhook(request: Request):
             from_info = message_body.get("from", {})
             to_info = message_body.get("to", [{}])[0] if message_body.get("to") else {}
 
-            from_number = from_info.get("phoneNumber") or from_info.get("extensionNumber")
+            from_number = from_info.get("phoneNumber") or from_info.get(
+                "extensionNumber"
+            )
             to_number = to_info.get("phoneNumber") or to_info.get("extensionNumber")
 
             # Get message text - RingCentral uses "subject" for SMS content
@@ -7070,34 +7954,43 @@ async def ringcentral_sms_webhook(request: Request):
 
         if not from_number or not message:
             logger.warning("Missing from_number or message in RingCentral payload")
-            return JSONResponse({"status": "error", "message": "Missing required fields"}, status_code=400)
+            return JSONResponse(
+                {"status": "error", "message": "Missing required fields"},
+                status_code=400,
+            )
 
         # Handle the inbound SMS
         sms = InboundSMS(
             from_number=from_number,
             to_number=to_number or "+17194283999",
             message=message,
-            contact_name=contact_name
+            contact_name=contact_name,
         )
 
         result = await handle_inbound_sms(sms)
 
-        return JSONResponse({
-            "status": "ok",
-            "reply_sent": result.reply_sent,
-            "reply_preview": result.reply_text[:50] + "..." if result.reply_text else None
-        })
+        return JSONResponse(
+            {
+                "status": "ok",
+                "reply_sent": result.reply_sent,
+                "reply_preview": result.reply_text[:50] + "..."
+                if result.reply_text
+                else None,
+            }
+        )
 
     except Exception as e:
         logger.exception(f"Error in RingCentral SMS webhook: {e}")
-        return JSONResponse({"status": "error", "message": "Internal server error"}, status_code=500)
+        return JSONResponse(
+            {"status": "error", "message": "Internal server error"}, status_code=500
+        )
 
 
 @app.post("/test/sms-reply")
 async def test_sms_reply(
     from_number: str,
     message: str,
-    _test_ok: None = Depends(require_gigi_test_endpoints_enabled)
+    _test_ok: None = Depends(require_gigi_test_endpoints_enabled),
 ):
     """
     Test endpoint for SMS auto-reply.
@@ -7113,7 +8006,7 @@ async def test_sms_reply(
         "original_message": message,
         "caller_type": caller_info.caller_type.value,
         "caller_name": caller_info.name,
-        "generated_reply": reply
+        "generated_reply": reply,
     }
 
 
@@ -7121,10 +8014,14 @@ async def test_sms_reply(
 # Ask-Gigi API — Generic endpoint for Siri, Shortcuts, iMessage, Menu Bar, etc.
 # =============================================================================
 
+
 class AskGigiRequest(BaseModel):
     text: str = Field(..., description="The message to send to Gigi")
     user_id: str = Field(default="jason", description="User identifier")
-    channel: str = Field(default="api", description="Channel name (api, shortcut, siri, imessage, menubar)")
+    channel: str = Field(
+        default="api",
+        description="Channel name (api, shortcut, siri, imessage, menubar)",
+    )
 
 
 @app.post("/api/ask-gigi")
@@ -7139,6 +8036,7 @@ async def ask_gigi_endpoint(request: AskGigiRequest, _=Depends(require_gigi_toke
 
     try:
         from gigi.ask_gigi import ask_gigi
+
         response_text = await ask_gigi(
             text=request.text.strip(),
             user_id=request.user_id,
@@ -7163,6 +8061,7 @@ JASON_PHONE = "6039971495"
 async def _send_imessage_reply(chat_guid: str, text: str):
     """Send a reply via BlueBubbles REST API."""
     import uuid
+
     try:
         # BlueBubbles API requires "any;-;+1..." format — do NOT convert to "iMessage;-;"
         send_guid = chat_guid
@@ -7200,13 +8099,19 @@ async def imessage_webhook(request: Request):
     # makes remote requests appear as localhost, so IP check alone is insufficient)
     if not BLUEBUBBLES_PASSWORD:
         logger.error("BLUEBUBBLES_PASSWORD not configured, rejecting iMessage webhook")
-        return JSONResponse(status_code=503, content={"status": "error", "message": "not configured"})
+        return JSONResponse(
+            status_code=503, content={"status": "error", "message": "not configured"}
+        )
 
     bb_password = request.query_params.get("password", "")
     if bb_password != BLUEBUBBLES_PASSWORD:
         client_host = request.client.host if request.client else "unknown"
-        logger.warning(f"iMessage webhook rejected: invalid password from {client_host}")
-        return JSONResponse(status_code=401, content={"status": "error", "message": "unauthorized"})
+        logger.warning(
+            f"iMessage webhook rejected: invalid password from {client_host}"
+        )
+        return JSONResponse(
+            status_code=401, content={"status": "error", "message": "unauthorized"}
+        )
 
     try:
         body = await request.json()
@@ -7254,6 +8159,7 @@ async def imessage_webhook(request: Request):
     async def _process_and_reply():
         try:
             from gigi.ask_gigi import ask_gigi
+
             response_text = await ask_gigi(
                 text=text,
                 user_id=user_id,
@@ -7262,7 +8168,10 @@ async def imessage_webhook(request: Request):
             await _send_imessage_reply(chat_guid, response_text)
         except Exception as e:
             logger.error(f"iMessage processing error: {e}", exc_info=True)
-            await _send_imessage_reply(chat_guid, "Sorry, I'm having a temporary issue. Please try again in a moment.")
+            await _send_imessage_reply(
+                chat_guid,
+                "Sorry, I'm having a temporary issue. Please try again in a moment.",
+            )
 
     asyncio.ensure_future(_process_and_reply())
 
@@ -7275,5 +8184,6 @@ async def imessage_webhook(request: Request):
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.environ.get("PORT", 8001))
     uvicorn.run(app, host="127.0.0.1", port=port)

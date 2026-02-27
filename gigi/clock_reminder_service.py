@@ -7,10 +7,11 @@ who haven't clocked in/out within 5 minutes of shift start/end.
 Integrates with the RC bot's check_and_act() polling loop.
 """
 
-import os
 import logging
-from datetime import datetime, date, timedelta, time as dt_time
-from typing import Dict, List, Optional, Tuple, Callable
+import os
+from datetime import date, datetime, timedelta
+from datetime import time as dt_time
+from typing import Callable, Dict, List, Optional
 
 try:
     import psycopg2
@@ -19,12 +20,16 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
+)
 
 CLOCK_REMINDER_ENABLED = os.getenv("CLOCK_REMINDER_ENABLED", "false").lower() == "true"
-REMINDER_THRESHOLD_MINUTES = 5   # Send reminder after this many minutes past shift start/end
-REMINDER_COOLDOWN_MINUTES = 60   # Don't re-remind for same shift within this window
-MAX_LATE_MINUTES = 120           # Don't send reminders if shift started > 2 hours ago
+REMINDER_THRESHOLD_MINUTES = (
+    5  # Send reminder after this many minutes past shift start/end
+)
+REMINDER_COOLDOWN_MINUTES = 60  # Don't re-remind for same shift within this window
+MAX_LATE_MINUTES = 120  # Don't send reminders if shift started > 2 hours ago
 
 
 class ClockReminderService:
@@ -73,13 +78,17 @@ class ClockReminderService:
             if self._needs_clock_in_reminder(shift, now):
                 sent = self._send_clock_in_reminder(shift, now)
                 if sent:
-                    actions.append(f"clock_in_reminder:{shift.get('caregiver_name', '?')}")
+                    actions.append(
+                        f"clock_in_reminder:{shift.get('caregiver_name', '?')}"
+                    )
 
             # Check clock-out reminder
             if self._needs_clock_out_reminder(shift, now):
                 sent = self._send_clock_out_reminder(shift, now)
                 if sent:
-                    actions.append(f"clock_out_reminder:{shift.get('caregiver_name', '?')}")
+                    actions.append(
+                        f"clock_out_reminder:{shift.get('caregiver_name', '?')}"
+                    )
 
         # Clean up old reminder tracking entries
         self._cleanup_old_reminders(now)
@@ -95,15 +104,13 @@ class ClockReminderService:
         """Fetch today's shifts and cache them locally."""
         try:
             today = date.today()
-            shifts = self.wellsky.get_shifts(
-                date_from=today, date_to=today, limit=500
-            )
+            shifts = self.wellsky.get_shifts(date_from=today, date_to=today, limit=500)
 
             self._cached_shifts = []
             for s in shifts:
                 if not s.caregiver_id:
                     continue
-                if hasattr(s, 'status') and hasattr(s.status, 'value'):
+                if hasattr(s, "status") and hasattr(s.status, "value"):
                     status = s.status.value
                 else:
                     status = str(s.status) if s.status else "scheduled"
@@ -113,7 +120,7 @@ class ClockReminderService:
 
                 # Get caregiver phone from the shift or look up
                 phone = ""
-                if hasattr(s, 'caregiver_phone') and s.caregiver_phone:
+                if hasattr(s, "caregiver_phone") and s.caregiver_phone:
                     phone = s.caregiver_phone
                 else:
                     try:
@@ -123,33 +130,43 @@ class ClockReminderService:
                         pass
 
                 caregiver_name = ""
-                if hasattr(s, 'caregiver_first_name') and s.caregiver_first_name:
+                if hasattr(s, "caregiver_first_name") and s.caregiver_first_name:
                     caregiver_name = s.caregiver_first_name
-                elif hasattr(s, 'caregiver_name') and s.caregiver_name:
+                elif hasattr(s, "caregiver_name") and s.caregiver_name:
                     caregiver_name = s.caregiver_name
 
                 client_name = ""
-                if hasattr(s, 'client_first_name') and s.client_first_name:
+                if hasattr(s, "client_first_name") and s.client_first_name:
                     client_name = s.client_first_name
-                elif hasattr(s, 'client_name') and s.client_name:
+                elif hasattr(s, "client_name") and s.client_name:
                     client_name = s.client_name
 
-                self._cached_shifts.append({
-                    "shift_id": s.id,
-                    "caregiver_id": s.caregiver_id,
-                    "caregiver_phone": phone,
-                    "caregiver_name": caregiver_name,
-                    "client_name": client_name,
-                    "shift_date": s.date if hasattr(s, 'date') else today,
-                    "start_time": s.start_time if hasattr(s, 'start_time') else None,
-                    "end_time": s.end_time if hasattr(s, 'end_time') else None,
-                    "clock_in_time": s.clock_in_time if hasattr(s, 'clock_in_time') else None,
-                    "clock_out_time": s.clock_out_time if hasattr(s, 'clock_out_time') else None,
-                    "status": status,
-                })
+                self._cached_shifts.append(
+                    {
+                        "shift_id": s.id,
+                        "caregiver_id": s.caregiver_id,
+                        "caregiver_phone": phone,
+                        "caregiver_name": caregiver_name,
+                        "client_name": client_name,
+                        "shift_date": s.date if hasattr(s, "date") else today,
+                        "start_time": s.start_time
+                        if hasattr(s, "start_time")
+                        else None,
+                        "end_time": s.end_time if hasattr(s, "end_time") else None,
+                        "clock_in_time": s.clock_in_time
+                        if hasattr(s, "clock_in_time")
+                        else None,
+                        "clock_out_time": s.clock_out_time
+                        if hasattr(s, "clock_out_time")
+                        else None,
+                        "status": status,
+                    }
+                )
 
             self._last_cache_refresh = datetime.now()
-            logger.info(f"Clock reminder cache refreshed: {len(self._cached_shifts)} shifts today")
+            logger.info(
+                f"Clock reminder cache refreshed: {len(self._cached_shifts)} shifts today"
+            )
 
         except Exception as e:
             logger.error(f"Failed to refresh shift cache: {e}")
@@ -234,7 +251,7 @@ class ClockReminderService:
             key = f"{shift['shift_id']}:clock_in"
             self._sent_reminders[key] = datetime.now()
             self._persist_reminder(key)
-            logger.info(f"Clock-in reminder sent to {name} for shift {shift['shift_id']}")
+            logger.info(f"Clock-in reminder sent for shift {shift['shift_id']}")
         return success
 
     def _send_clock_out_reminder(self, shift: Dict, now: datetime) -> bool:
@@ -252,16 +269,13 @@ class ClockReminderService:
             key = f"{shift['shift_id']}:clock_out"
             self._sent_reminders[key] = datetime.now()
             self._persist_reminder(key)
-            logger.info(f"Clock-out reminder sent to {name} for shift {shift['shift_id']}")
+            logger.info(f"Clock-out reminder sent for shift {shift['shift_id']}")
         return success
 
     def _cleanup_old_reminders(self, now: datetime):
         """Remove reminder tracking entries older than 24 hours."""
         cutoff = now - timedelta(hours=24)
-        keys_to_remove = [
-            k for k, v in self._sent_reminders.items()
-            if v < cutoff
-        ]
+        keys_to_remove = [k for k, v in self._sent_reminders.items() if v < cutoff]
         for k in keys_to_remove:
             del self._sent_reminders[k]
         # Also clean DB
@@ -292,12 +306,14 @@ class ClockReminderService:
             )
             for row in cur.fetchall():
                 # Strip prefix to get the original key
-                original_key = row[0].replace('clock_reminder:', '', 1)
+                original_key = row[0].replace("clock_reminder:", "", 1)
                 reminders[original_key] = row[1]
             cur.close()
             conn.close()
             if reminders:
-                logger.info(f"Loaded {len(reminders)} clock reminders from persistent storage")
+                logger.info(
+                    f"Loaded {len(reminders)} clock reminders from persistent storage"
+                )
         except Exception as e:
             logger.warning(f"Could not load sent reminders: {e}")
         return reminders
@@ -311,11 +327,14 @@ class ClockReminderService:
             expires = datetime.now() + timedelta(minutes=REMINDER_COOLDOWN_MINUTES)
             conn = psycopg2.connect(DATABASE_URL)
             cur = conn.cursor()
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO gigi_dedup_state (key, value, created_at, expires_at)
                 VALUES (%s, 'sent', NOW(), %s)
                 ON CONFLICT (key) DO UPDATE SET value = 'sent', created_at = NOW(), expires_at = EXCLUDED.expires_at
-            """, (db_key, expires))
+            """,
+                (db_key, expires),
+            )
             conn.commit()
             cur.close()
             conn.close()
