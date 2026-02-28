@@ -71,12 +71,18 @@ def strip_markdown_for_voice(text: str) -> str:
     Strip markdown formatting that TTS engines read literally.
 
     Removes: **bold**, *italic*, `backticks`, # headers, [links](url),
-    bullet points (- / * / •), numbered lists (1. 2. 3.).
+    bullet points (- / * / •), numbered lists (1. 2. 3.),
+    and <think>...</think> reasoning blocks from reasoning models.
 
     This is applied ONLY to voice channel responses.
     """
     if not text:
         return text
+
+    # Strip <think>...</think> reasoning blocks (MiniMax M2.5, DeepSeek, etc.)
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    # Also strip unclosed <think> blocks (model started thinking but didn't close)
+    text = re.sub(r"<think>.*", "", text, flags=re.DOTALL)
 
     # Strip bold/italic: **text** → text, *text* → text
     text = re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", text)
@@ -160,6 +166,17 @@ def strip_markdown_for_sms(text: str, max_chars: int = 500) -> str:
     return text
 
 
+def strip_thinking_tags(text: str) -> str:
+    """Strip <think>...</think> reasoning blocks from reasoning models (MiniMax, DeepSeek, etc.)."""
+    if not text or "<think>" not in text:
+        return text
+    # Strip closed think blocks
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    # Strip unclosed think blocks (model started but didn't close tag)
+    text = re.sub(r"<think>.*", "", text, flags=re.DOTALL)
+    return text.strip()
+
+
 def strip_banned_content(text: str) -> str:
     """
     Remove any lines/sections containing banned CLI/install references.
@@ -173,6 +190,9 @@ def strip_banned_content(text: str) -> str:
     """
     if not text:
         return text
+
+    # Strip reasoning blocks FIRST (before any other processing)
+    text = strip_thinking_tags(text)
 
     text_lower = text.lower()
 
