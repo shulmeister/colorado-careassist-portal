@@ -154,12 +154,14 @@ except ImportError:
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 
 LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "anthropic").lower()
 _DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash-preview-05-20",
     "anthropic": "claude-haiku-4-5-20251001",
     "openai": "gpt-4o-mini",
+    "minimax": "MiniMax-M2.5",
 }
 LLM_MODEL = os.getenv(
     "GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "claude-haiku-4-5-20251001")
@@ -169,6 +171,10 @@ LLM_MODEL = os.getenv(
 llm_client = None
 if LLM_PROVIDER == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
     llm_client = genai.Client(api_key=GEMINI_API_KEY)
+elif LLM_PROVIDER == "minimax" and OPENAI_AVAILABLE and MINIMAX_API_KEY:
+    llm_client = openai.OpenAI(
+        base_url="https://api.minimax.io/v1", api_key=MINIMAX_API_KEY
+    )
 elif LLM_PROVIDER == "openai" and OPENAI_AVAILABLE and OPENAI_API_KEY:
     llm_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
@@ -1045,7 +1051,7 @@ async def generate_response(
                 on_tool_event,
                 caller_id,
             )
-        elif LLM_PROVIDER == "openai":
+        elif LLM_PROVIDER in ("openai", "minimax"):
             text, transfer = await _generate_openai(
                 messages,
                 call_info,
