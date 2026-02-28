@@ -41,6 +41,14 @@ try:
 except ImportError:
     GEMINI_AVAILABLE = False
 
+try:
+    import openai
+
+    OPENAI_AVAILABLE = True
+except ImportError:
+    openai = None
+    OPENAI_AVAILABLE = False
+
 # RingCentral SDK for WebSocket subscriptions (real-time SMS)
 from ringcentral import SDK as RingCentralSDK
 from ringcentral.websocket.events import WebSocketEvents
@@ -1069,6 +1077,28 @@ if GEMINI_AVAILABLE:
         f"Gemini tools auto-generated: SMS={len(SMS_TOOLS)}, DM={len(DM_TOOLS)}"
     )
 
+
+def _auto_openai_tools(tools_list):
+    """Auto-generate OpenAI/MiniMax function-call tools from Anthropic-format tools."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": t["input_schema"],
+            },
+        }
+        for t in tools_list
+    ]
+
+
+OPENAI_SMS_TOOLS = _auto_openai_tools(SMS_TOOLS)
+OPENAI_DM_TOOLS = _auto_openai_tools(DM_TOOLS)
+logger.info(
+    f"OpenAI/MiniMax tools auto-generated: SMS={len(OPENAI_SMS_TOOLS)}, DM={len(OPENAI_DM_TOOLS)}"
+)
+
 GLIP_DM_SYSTEM_PROMPT = """You are Gigi, the AI Chief of Staff for Colorado Care Assist, a home care agency in Colorado. You are responding via RingCentral internal messaging (Glip DM or Team Chat).
 
 ## Operating Laws (non-negotiable)
@@ -1239,6 +1269,11 @@ class GigiRingCentralBot:
         if LLM_PROVIDER == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
             self.llm = genai.Client(api_key=GEMINI_API_KEY)
             logger.info(f"Gemini LLM initialized ({LLM_MODEL}) for SMS/DM replies")
+        elif LLM_PROVIDER == "minimax" and OPENAI_AVAILABLE and MINIMAX_API_KEY:
+            self.llm = openai.OpenAI(
+                base_url="https://api.minimax.io/v1", api_key=MINIMAX_API_KEY
+            )
+            logger.info(f"MiniMax LLM initialized ({LLM_MODEL}) for SMS/DM replies")
         elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
             self.llm = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
             logger.info(f"Anthropic LLM initialized ({LLM_MODEL}) for SMS/DM replies")
@@ -3590,6 +3625,16 @@ class GigiRingCentralBot:
                         ),
                         "SMS",
                     )
+                elif self.llm_provider in ("minimax", "openai"):
+                    final_text = await self._call_minimax(
+                        system,
+                        conv_history,
+                        OPENAI_SMS_TOOLS,
+                        lambda name, inp: self._execute_sms_tool(
+                            name, inp, caller_phone=phone
+                        ),
+                        "SMS",
+                    )
                 else:
                     final_text = await self._call_anthropic(
                         system,
@@ -3716,6 +3761,14 @@ class GigiRingCentralBot:
                         system,
                         conv_history,
                         GEMINI_DM_TOOLS,
+                        lambda name, inp: self._execute_dm_tool(name, inp),
+                        "DM",
+                    )
+                elif self.llm_provider in ("minimax", "openai"):
+                    final_text = await self._call_minimax(
+                        system,
+                        conv_history,
+                        OPENAI_DM_TOOLS,
                         lambda name, inp: self._execute_dm_tool(name, inp),
                         "DM",
                     )
@@ -4030,6 +4083,91 @@ class GigiRingCentralBot:
 
         logger.info(
             f"{channel} Anthropic reply ({tool_round} tool rounds, {len(final_text)} chars)"
+        )
+        return final_text
+
+    # =========================================================================
+    # MiniMax / OpenAI Provider — tool calling loop (OpenAI SDK compatible)
+    # =========================================================================
+
+    async def _call_minimax(
+        self, system_prompt: str, conv_history: list, tools, tool_executor, channel: str
+    ) -> str:
+        """Call MiniMax (or OpenAI) with tool support via OpenAI SDK. conv_history is text-only [{role, content}]."""
+        messages = [{"role": "system", "content": system_prompt}]
+        for m in conv_history:
+            if isinstance(m.get("content"), str):
+                messages.append({"role": m["role"], "content": m["content"]})
+
+        response = await asyncio.to_thread(
+            self.llm.chat.completions.create,
+            model=LLM_MODEL,
+            max_tokens=LLM_MAX_TOKENS,
+            messages=messages,
+            tools=tools,
+        )
+
+        tool_round = 0
+        while tool_round < LLM_MAX_TOOL_ROUNDS:
+            choice = response.choices[0]
+            if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+                break
+            tool_round += 1
+            logger.info(f"{channel} MiniMax tool round {tool_round}")
+
+            messages.append(choice.message)
+
+            for tc in choice.message.tool_calls:
+                tool_input = json.loads(tc.function.arguments)
+                logger.info(
+                    f"  Tool: {tc.function.name}({json.dumps(tool_input)[:100]})"
+                )
+
+                result = tool_executor(tc.function.name, tool_input)
+                if asyncio.iscoroutine(result):
+                    result = await result
+                logger.info(f"  Result: {result[:200]}")
+
+                messages.append(
+                    {"role": "tool", "tool_call_id": tc.id, "content": result}
+                )
+
+            response = await asyncio.to_thread(
+                self.llm.chat.completions.create,
+                model=LLM_MODEL,
+                max_tokens=LLM_MAX_TOKENS,
+                messages=messages,
+                tools=tools,
+            )
+
+        final_text = response.choices[0].message.content or ""
+
+        if not final_text and tool_round >= LLM_MAX_TOOL_ROUNDS:
+            logger.info(
+                f"{channel} MiniMax exhausted {tool_round} tool rounds — forcing text summary"
+            )
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": "Based on the information I've gathered, let me summarize:",
+                }
+            )
+            messages.append(
+                {
+                    "role": "user",
+                    "content": "Please summarize what you found from the tools you just called. Give a direct, complete answer.",
+                }
+            )
+            summary_response = await asyncio.to_thread(
+                self.llm.chat.completions.create,
+                model=LLM_MODEL,
+                max_tokens=LLM_MAX_TOKENS,
+                messages=messages,
+            )
+            final_text = summary_response.choices[0].message.content or ""
+
+        logger.info(
+            f"{channel} MiniMax reply ({tool_round} tool rounds, {len(final_text)} chars)"
         )
         return final_text
 
