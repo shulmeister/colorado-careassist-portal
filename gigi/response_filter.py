@@ -80,9 +80,7 @@ def strip_markdown_for_voice(text: str) -> str:
         return text
 
     # Strip <think>...</think> reasoning blocks (MiniMax M2.5, DeepSeek, etc.)
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    # Also strip unclosed <think> blocks (model started thinking but didn't close)
-    text = re.sub(r"<think>.*", "", text, flags=re.DOTALL)
+    text = strip_thinking_tags(text)
 
     # Strip bold/italic: **text** → text, *text* → text
     text = re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", text)
