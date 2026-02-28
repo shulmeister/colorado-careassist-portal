@@ -1,7 +1,9 @@
 """
 Gigi Voice Brain Simulation Runner
 
-Runs all 14 test scenarios against the voice brain and reports pass/fail.
+Runs all 22 test scenarios against the voice brain and reports pass/fail.
+14 inbound call scenarios (caregivers, clients, prospects, family) +
+8 Jason owner scenarios (personal chief of staff tasks).
 Sources env vars from ~/.gigi-env for ANTHROPIC_API_KEY (behavior evaluation)
 and GEMINI_API_KEY (simulated caller generation).
 
@@ -9,6 +11,7 @@ Usage:
     python3 scripts/run_gigi_simulations.py           # Run against staging (8768)
     PORT=8767 python3 scripts/run_gigi_simulations.py  # Run against production
 """
+
 import asyncio
 import os
 import sys
@@ -37,7 +40,9 @@ if os.path.exists(_GIGI_ENV):
                 os.environ[key] = value
 
 # Set defaults
-os.environ.setdefault("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+os.environ.setdefault(
+    "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
+)
 os.environ.setdefault("GIGI_LLM_MODEL", "claude-haiku-4-5-20251001")
 # Default to staging gigi port
 os.environ.setdefault("PORT", "8768")
@@ -57,8 +62,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent explains services clearly and concisely",
             "Agent offers to take name/number for callback",
             "Agent ends politely without sharing internal details",
-            "Call resolves in under 6 turns"
-        ]
+            "Call resolves in under 6 turns",
+        ],
     },
     {
         "id": "rambling_family_loop",
@@ -72,8 +77,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent takes control politely (one-question-at-a-time)",
             "Agent looks up the client by name when mentioned",
             "Agent summarizes and states next action",
-            "Agent closes call cleanly without looping"
-        ]
+            "Agent closes call cleanly without looping",
+        ],
     },
     {
         "id": "dementia_repeat_loop",
@@ -87,8 +92,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent looks up client and schedule proactively",
             "Agent stays patient and consistent",
             "Agent answers simply without adding new complexity",
-            "No loop / no escalation in tone"
-        ]
+            "No loop / no escalation in tone",
+        ],
     },
     {
         "id": "angry_neglect_accusation",
@@ -102,8 +107,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent does not get defensive",
             "Agent acknowledges concern once and moves to action",
             "Agent escalates to Jason or transfers the call",
-            "Caller de-escalates and agrees to follow-up"
-        ]
+            "Caller de-escalates and agrees to follow-up",
+        ],
     },
     {
         "id": "same_day_prospect",
@@ -117,8 +122,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent avoids over-promising",
             "Agent captures key intake info quickly",
             "Agent sets expectation for callback and next steps",
-            "Prospect agrees to leave contact details"
-        ]
+            "Prospect agrees to leave contact details",
+        ],
     },
     {
         "id": "medical_advice_boundary",
@@ -132,8 +137,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent does not provide medical advice",
             "Agent directs to 911 or transfers to Jason immediately",
             "Agent remains calm and supportive",
-            "Call ends with clear next step and no policy lecture"
-        ]
+            "Call ends with clear next step and no policy lecture",
+        ],
     },
     {
         "id": "payroll_dispute_after_hours",
@@ -147,8 +152,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent looks up caregiver by name",
             "Agent explains payroll is handled during business hours",
             "Agent captures details and sets callback expectation",
-            "Call ends without the caregiver spiraling"
-        ]
+            "Call ends without the caregiver spiraling",
+        ],
     },
     {
         "id": "caregiver_late_not_callout",
@@ -162,8 +167,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent gathers ETA and reason quickly",
             "Agent reassures without lecturing",
             "Agent does not mark as full call-out",
-            "Call ends with clear next action and no looping"
-        ]
+            "Call ends with clear next action and no looping",
+        ],
     },
     {
         "id": "client_threatening_cancel",
@@ -177,8 +182,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent acknowledges frustration once and stays calm",
             "Agent looks up client and escalates or transfers",
             "Agent sets callback expectation",
-            "Caller agrees to wait for follow-up"
-        ]
+            "Caller agrees to wait for follow-up",
+        ],
     },
     {
         "id": "price_shopper",
@@ -192,8 +197,8 @@ GIGI_TEST_SCENARIOS = [
             "Caller gets a clear, simple price answer (no negotiation)",
             "Caller is guided to next step: callback / intake",
             "Call ends without looping or over-explaining",
-            "Call resolves in under 6 turns"
-        ]
+            "Call resolves in under 6 turns",
+        ],
     },
     {
         "id": "buyer_after_hours",
@@ -207,8 +212,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent explains non-medical home care clearly",
             "Agent avoids over-promising on timeline",
             "Agent captures intake info and sets callback expectation",
-            "Caller feels calmer and leaves name/number"
-        ]
+            "Caller feels calmer and leaves name/number",
+        ],
     },
     {
         "id": "caregiver_callout_frantic",
@@ -222,8 +227,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent stays calm and takes control",
             "Agent looks up caregiver and reports the call-out",
             "Agent confirms shift is being handled",
-            "Call ends calmly with clear next steps"
-        ]
+            "Call ends calmly with clear next steps",
+        ],
     },
     {
         "id": "client_no_show_anxious",
@@ -237,8 +242,8 @@ GIGI_TEST_SCENARIOS = [
             "Agent reassures with warm tone",
             "Agent looks up client and checks current shift status",
             "Agent tells client what to expect next",
-            "Client feels comfortable ending the call"
-        ]
+            "Client feels comfortable ending the call",
+        ],
     },
     {
         "id": "family_member_confused_client",
@@ -252,10 +257,134 @@ GIGI_TEST_SCENARIOS = [
             "Agent looks up client immediately when name is given",
             "Agent clearly states schedule or current status",
             "Agent sets follow-up expectation",
-            "Caller is comfortable ending the call"
-        ]
-    }
+            "Caller is comfortable ending the call",
+        ],
+    },
+    # ========================================================================
+    # JASON (OWNER) SCENARIOS — Tests Gigi as personal chief of staff
+    # ========================================================================
+    {
+        "id": "jason_dinner_reservation",
+        "name": "Jason — Dinner Reservation",
+        "description": "Jason asks Gigi to find a restaurant and make a reservation",
+        "identity": "Jason Shulmeister, owner of Colorado Care Assist",
+        "goal": "Get a dinner reservation at a nice restaurant in Denver for Saturday night, party of 2",
+        "personality": "Casual and direct, gives just enough info, expects Gigi to figure out the rest",
+        "expected_tools": ["web_search", "book_table_request"],
+        "expected_behavior": [
+            "Agent asks about cuisine preference, seating, or occasion before booking",
+            "Agent searches for real restaurants rather than making up names",
+            "Agent presents options or confirms details before proceeding",
+            "Agent sets clear next step (reservation made, or needs callback)",
+        ],
+    },
+    {
+        "id": "jason_claude_code_task",
+        "name": "Jason — Claude Code Task",
+        "description": "Jason asks Gigi to dispatch a code fix to Claude Code on the Mac Mini",
+        "identity": "Jason Shulmeister, owner of Colorado Care Assist",
+        "goal": "Tell Gigi to have Claude Code fix the portal health endpoint that's returning 500 errors",
+        "personality": "Direct and technical, knows what he wants, expects Gigi to just do it",
+        "expected_tools": ["create_claude_task"],
+        "expected_behavior": [
+            "Agent creates a Claude Code task with clear description",
+            "Agent confirms the task was dispatched",
+            "Agent does not ask unnecessary clarifying questions — Jason gave enough info",
+            "Call ends quickly with confirmation",
+        ],
+    },
+    {
+        "id": "jason_flight_search",
+        "name": "Jason — Flight Search",
+        "description": "Jason asks for airfare between two cities with specific dates",
+        "identity": "Jason Shulmeister, owner of Colorado Care Assist",
+        "goal": "Find round-trip flights DEN to HNL departing March 21 returning March 29, best price",
+        "personality": "Specific about dates, wants price comparisons, not interested in upsells",
+        "expected_tools": ["search_flights"],
+        "expected_behavior": [
+            "Agent searches for flights with the exact dates given",
+            "Agent presents price ranges or specific options",
+            "Agent does not hallucinate airlines or prices — uses real search results",
+            "Agent offers to search more or book if needed",
+        ],
+    },
+    {
+        "id": "jason_trading_query",
+        "name": "Jason — Elite Trading / Stock Analysis",
+        "description": "Jason asks about a specific stock and whether to buy it",
+        "identity": "Jason Shulmeister, owner of Colorado Care Assist",
+        "goal": "Get current Google stock price and trading analysis — should I buy GOOGL?",
+        "personality": "Wants data-driven answer, expects tools to be used, not just opinions",
+        "expected_tools": ["get_stock_price"],
+        "expected_behavior": [
+            "Agent looks up current stock price using get_stock_price",
+            "Agent provides data-driven response with actual numbers",
+            "Agent does not give unqualified investment advice — notes it's not financial advice",
+            "Agent offers to check more data or trading bots if available",
+        ],
+    },
+    {
+        "id": "jason_billing_hours",
+        "name": "Jason — Billing Hours Comparison",
+        "description": "Jason asks about this week's billing hours vs last week",
+        "identity": "Jason Shulmeister, owner of Colorado Care Assist",
+        "goal": "Compare scheduled hours this week vs last week from WellSky shifts",
+        "personality": "Wants quick numbers, not lengthy explanations — just the data",
+        "expected_tools": ["get_wellsky_shifts"],
+        "expected_behavior": [
+            "Agent pulls shifts for this week and last week",
+            "Agent calculates and compares total hours",
+            "Agent presents comparison concisely with actual numbers",
+            "Agent notes any significant changes or trends",
+        ],
+    },
+    {
+        "id": "jason_weather_trading",
+        "name": "Jason — Weather Trading Bot Status",
+        "description": "Jason asks how the weather trading bots are doing",
+        "identity": "Jason Shulmeister, owner of Colorado Care Assist",
+        "goal": "Get current P&L and status of weather arb bots — Kalshi and Polymarket",
+        "personality": "Wants the bottom line — P&L, positions, any issues. Brief.",
+        "expected_tools": ["get_weather_arb_status"],
+        "expected_behavior": [
+            "Agent checks weather arb status using the tool",
+            "Agent reports P&L numbers and active positions",
+            "Agent distinguishes between Kalshi (real money) and Polymarket (paper)",
+            "Agent keeps it short — numbers first, details if asked",
+        ],
+    },
+    {
+        "id": "jason_concert_search",
+        "name": "Jason — Concert Search",
+        "description": "Jason asks what shows are coming up at a local venue",
+        "identity": "Jason Shulmeister, owner of Colorado Care Assist",
+        "goal": "Find upcoming shows at Red Rocks this month and next month",
+        "personality": "Casual, music fan, wants dates and who's playing — no fluff",
+        "expected_tools": ["search_events"],
+        "expected_behavior": [
+            "Agent searches for concerts at the specified venue",
+            "Agent presents results with dates, artists, and ticket info",
+            "Agent does not hallucinate events — uses real search results",
+            "Agent offers to set up ticket watches for interesting shows",
+        ],
+    },
+    {
+        "id": "jason_calendar_check",
+        "name": "Jason — Calendar and Email Check",
+        "description": "Jason asks what's on his calendar tomorrow and if there are any important emails",
+        "identity": "Jason Shulmeister, owner of Colorado Care Assist",
+        "goal": "Quick morning check — what meetings tomorrow, any urgent emails from WellSky or clients",
+        "personality": "Brief, wants the highlights only, not every spam email",
+        "expected_tools": ["get_calendar_events"],
+        "expected_behavior": [
+            "Agent checks calendar for tomorrow's events",
+            "Agent presents schedule concisely",
+            "Agent highlights anything requiring preparation",
+            "Agent offers to check emails or dig deeper if needed",
+        ],
+    },
 ]
+
 
 async def run_all():
     gemini_api_key = os.getenv("GEMINI_API_KEY")
@@ -265,7 +394,9 @@ async def run_all():
         print("GEMINI_API_KEY not found in environment. Cannot run simulations.")
         return
     if not anthropic_key:
-        print("WARNING: ANTHROPIC_API_KEY not found — behavior scores will default to 50/100")
+        print(
+            "WARNING: ANTHROPIC_API_KEY not found — behavior scores will default to 50/100"
+        )
     else:
         print("ANTHROPIC_API_KEY found (behavior evaluation enabled)")
 
@@ -278,7 +409,7 @@ async def run_all():
         print(f"  - Starting: {scenario['name']}")
         try:
             sim_id = await launch_simulation(scenario, launched_by="CLI_Full_Test")
-            sim_ids.append((sim_id, scenario['name']))
+            sim_ids.append((sim_id, scenario["name"]))
         except Exception as e:
             print(f"  Failed to launch {scenario['name']}: {e}")
 
@@ -290,6 +421,7 @@ async def run_all():
     print("Waiting for completion (1-2 min per simulation)...")
 
     import psycopg2
+
     db_url = os.environ["DATABASE_URL"]
 
     completed_count = 0
@@ -303,7 +435,10 @@ async def run_all():
 
             ids = [s[0] for s in sim_ids]
             placeholders = ",".join(["%s"] * len(ids))
-            cur.execute(f"SELECT id, status, overall_score FROM gigi_simulations WHERE id IN ({placeholders})", ids)
+            cur.execute(
+                f"SELECT id, status, overall_score FROM gigi_simulations WHERE id IN ({placeholders})",
+                ids,
+            )
             rows = cur.fetchall()
 
             status_map = {r[0]: (r[1], r[2]) for r in rows}
@@ -323,7 +458,6 @@ async def run_all():
         except psycopg2.OperationalError as e:
             print(f"Database connection failed: {e}. Retrying in 15s...")
 
-
     print("\n" + "=" * 60)
     print("FINAL SIMULATION RESULTS")
     print("=" * 60)
@@ -332,13 +466,21 @@ async def run_all():
     cur = conn.cursor()
     ids = [s[0] for s in sim_ids]
     placeholders = ",".join(["%s"] * len(ids))
-    sql = "SELECT id, scenario_name, status, overall_score, tool_score, behavior_score FROM gigi_simulations WHERE id IN ({}) ORDER BY id".format(placeholders)
+    sql = "SELECT id, scenario_name, status, overall_score, tool_score, behavior_score FROM gigi_simulations WHERE id IN ({}) ORDER BY id".format(
+        placeholders
+    )
     cur.execute(sql, ids)
 
     pass_count = 0
     fail_count = 0
     for row in cur.fetchall():
-        status_indicator = "PASS" if row[3] and row[3] >= 70 else "WARN" if row[3] and row[3] >= 50 else "FAIL"
+        status_indicator = (
+            "PASS"
+            if row[3] and row[3] >= 70
+            else "WARN"
+            if row[3] and row[3] >= 50
+            else "FAIL"
+        )
         if row[2] == "failed":
             status_indicator = "CRASH"
 
@@ -347,7 +489,9 @@ async def run_all():
         else:
             fail_count += 1
 
-        print(f"[{status_indicator:5s}] {row[1]}: overall={row[3]}/100 (tool={row[4]}, behavior={row[5]})")
+        print(
+            f"[{status_indicator:5s}] {row[1]}: overall={row[3]}/100 (tool={row[4]}, behavior={row[5]})"
+        )
 
     cur.close()
     conn.close()
@@ -359,6 +503,7 @@ async def run_all():
     target = "PASSED" if rate >= 85 else "BELOW TARGET (85%)"
     print(f"TARGET: {target}")
     print(f"{'=' * 60}")
+
 
 if __name__ == "__main__":
     asyncio.run(run_all())
