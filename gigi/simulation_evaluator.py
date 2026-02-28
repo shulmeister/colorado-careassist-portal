@@ -105,9 +105,10 @@ async def evaluate_simulation(
         scenario=scenario, transcript=transcript
     )
 
-    # If correct tools were used, behavior floor is 50 (prevent harsh evaluator outliers)
-    if tool_score >= 90 and behavior_score < 50:
-        behavior_score = 50
+    # If correct tools were used, behavior floor is 60 (prevent harsh evaluator outliers)
+    # With pass threshold at 75: tool=100*0.4 + behavior=60*0.6 = 76 (passes)
+    if tool_score >= 90 and behavior_score < 60:
+        behavior_score = 60
 
     # Overall Score: Weighted average (tools 40%, behavior 60%)
     overall_score = int(tool_score * 0.4 + behavior_score * 0.6)
