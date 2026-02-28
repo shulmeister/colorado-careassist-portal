@@ -102,6 +102,64 @@ def strip_markdown_for_voice(text: str) -> str:
     return text.strip()
 
 
+def strip_markdown_for_sms(text: str, max_chars: int = 500) -> str:
+    """
+    Strip markdown formatting + enforce SMS length limits + remove internal IDs.
+
+    Applied ONLY to SMS channel responses. This is a safety net — the system prompt
+    already tells the LLM not to use markdown, but LLMs ignore instructions.
+
+    Strips: **bold**, *italic*, `backticks`, # headers, [links](url),
+    bullet points (- / * / •), numbered lists (1. 2. 3.), internal WellSky IDs.
+    Enforces max_chars limit with graceful truncation.
+    """
+    if not text:
+        return text
+
+    # Strip bold/italic: **text** → text, *text* → text
+    text = re.sub(r"\*{1,3}([^*]+)\*{1,3}", r"\1", text)
+
+    # Strip backticks: `code` → code, ```code``` → code
+    text = re.sub(r"`{1,3}([^`]*)`{1,3}", r"\1", text)
+
+    # Strip markdown links: [text](url) → text
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+
+    # Strip header markers: ### Header → Header
+    text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
+
+    # Strip bullet points at line start: - item / * item / • item → item
+    text = re.sub(r"^[\s]*[-*•]\s+", "", text, flags=re.MULTILINE)
+
+    # Strip numbered lists: 1. item / 2) item → item
+    text = re.sub(r"^[\s]*\d+[.)]\s+", "", text, flags=re.MULTILINE)
+
+    # Strip internal WellSky IDs: "client ID 8006814", "caregiver_id 12345", etc.
+    text = re.sub(
+        r"\b(client|caregiver|appointment|patient|practitioner)[_ ]?[Ii][Dd]\s*:?\s*\d+\b",
+        "",
+        text,
+    )
+
+    # Collapse multiple newlines — SMS should be compact
+    text = re.sub(r"\n{2,}", "\n", text)
+
+    text = text.strip()
+
+    # Enforce length limit with graceful truncation at sentence boundary
+    if len(text) > max_chars:
+        truncated = text[:max_chars]
+        # Try to break at last sentence boundary
+        for sep in [". ", "! ", "? ", "\n"]:
+            last_sep = truncated.rfind(sep)
+            if last_sep > max_chars // 2:
+                truncated = truncated[: last_sep + 1]
+                break
+        text = truncated.strip()
+
+    return text
+
+
 def strip_banned_content(text: str) -> str:
     """
     Remove any lines/sections containing banned CLI/install references.

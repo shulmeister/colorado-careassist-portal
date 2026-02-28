@@ -25,6 +25,7 @@ def _get_bot():
     global _bot_instance
     if _bot_instance is None:
         from gigi.telegram_bot import GigiTelegramBot
+
         _bot_instance = GigiTelegramBot()
         logger.info("Ask-Gigi: initialized shared bot instance for tool execution")
     return _bot_instance
@@ -43,14 +44,18 @@ def _build_system_prompt(channel: str, conversation_store=None, user_message=Non
     parts = [_TELEGRAM_SYSTEM_PROMPT_BASE]
 
     # Current date/time
-    parts.append(f"\n# Current Date\nToday is {datetime.now().strftime('%A, %B %d, %Y')}")
+    parts.append(
+        f"\n# Current Date\nToday is {datetime.now().strftime('%A, %B %d, %Y')}"
+    )
     parts.append(f"\n# Channel\nThis conversation is via the '{channel}' channel.")
 
     # Inject mode context
     if MODE_AVAILABLE and _mode_detector:
         try:
             mode_info = _mode_detector.get_current_mode()
-            parts.append(f"\n# Current Operating Mode\nMode: {mode_info.mode.value.upper()} (source: {mode_info.source.value})")
+            parts.append(
+                f"\n# Current Operating Mode\nMode: {mode_info.mode.value.upper()} (source: {mode_info.source.value})"
+            )
         except Exception as e:
             logger.warning(f"Mode detection failed: {e}")
 
@@ -59,7 +64,10 @@ def _build_system_prompt(channel: str, conversation_store=None, user_message=Non
         try:
             memories = _memory_system.query_memories(min_confidence=0.5, limit=25)
             if memories:
-                memory_lines = [f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})" for m in memories]
+                memory_lines = [
+                    f"- {m.content} (confidence: {m.confidence:.0%}, category: {m.category})"
+                    for m in memories
+                ]
                 parts.append("\n# Your Saved Memories\n" + "\n".join(memory_lines))
         except Exception as e:
             logger.warning(f"Memory injection failed: {e}")
@@ -67,7 +75,9 @@ def _build_system_prompt(channel: str, conversation_store=None, user_message=Non
     # Inject cross-channel context
     if conversation_store:
         try:
-            xc = conversation_store.get_cross_channel_summary("jason", channel, limit=5, hours=24)
+            xc = conversation_store.get_cross_channel_summary(
+                "jason", channel, limit=5, hours=24
+            )
             if xc:
                 parts.append(xc)
             # Long-term conversation history (summaries from past 30 days)
@@ -81,8 +91,13 @@ def _build_system_prompt(channel: str, conversation_store=None, user_message=Non
 
 
 _BRIEFING_KEYWORDS = (
-    "morning briefing", "daily briefing", "daily digest", "daily summary",
-    "daily pulse", "morning update", "give me my morning",
+    "morning briefing",
+    "daily briefing",
+    "daily digest",
+    "daily summary",
+    "daily pulse",
+    "morning update",
+    "give me my morning",
 )
 
 
@@ -101,7 +116,9 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
     # Hard block — morning briefings are permanently disabled
     lower = text.lower()
     if any(kw in lower for kw in _BRIEFING_KEYWORDS):
-        logger.info(f"ask_gigi: blocked morning briefing request from channel={channel}")
+        logger.info(
+            f"ask_gigi: blocked morning briefing request from channel={channel}"
+        )
         return "Morning briefings have been permanently disabled."
 
     from gigi.telegram_bot import (
@@ -131,9 +148,14 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
                 response_text = await _call_anthropic(bot, history, sys_prompt)
         except Exception as e:
             err_str = str(e).lower()
-            is_rate_limit = any(k in err_str for k in ("429", "resource_exhausted", "rate_limit", "quota"))
+            is_rate_limit = any(
+                k in err_str
+                for k in ("429", "resource_exhausted", "rate_limit", "quota")
+            )
             if is_rate_limit and LLM_PROVIDER != "anthropic":
-                logger.warning(f"Ask-Gigi {LLM_PROVIDER} rate limited, falling back to anthropic: {e}")
+                logger.warning(
+                    f"Ask-Gigi {LLM_PROVIDER} rate limited, falling back to anthropic: {e}"
+                )
                 response_text = await _call_anthropic(bot, history, sys_prompt)
             else:
                 raise
@@ -145,8 +167,13 @@ async def ask_gigi(text: str, user_id: str = "jason", channel: str = "api") -> s
         response_text = "I processed your request but have no text response."
 
     # Strip hallucinated CLI/install suggestions (Gemini keeps adding these)
-    from gigi.response_filter import strip_banned_content
+    from gigi.response_filter import strip_banned_content, strip_markdown_for_sms
+
     response_text = strip_banned_content(response_text)
+
+    # SMS channel: strip markdown and enforce length limit
+    if channel == "sms":
+        response_text = strip_markdown_for_sms(response_text)
 
     # Store assistant response
     store.append(user_id, channel, "assistant", response_text)
@@ -163,10 +190,9 @@ async def _call_gemini(bot, history, sys_prompt):
     contents = []
     for m in history:
         role = "user" if m["role"] == "user" else "model"
-        contents.append(genai_types.Content(
-            role=role,
-            parts=[genai_types.Part(text=m["content"])]
-        ))
+        contents.append(
+            genai_types.Content(role=role, parts=[genai_types.Part(text=m["content"])])
+        )
 
     config = genai_types.GenerateContentConfig(
         system_instruction=sys_prompt,
@@ -181,9 +207,13 @@ async def _call_gemini(bot, history, sys_prompt):
     fn_response_parts = []
     for tool_round in range(max_rounds):
         function_calls = []
-        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+        if (
+            response.candidates
+            and response.candidates[0].content
+            and response.candidates[0].content.parts
+        ):
             for part in response.candidates[0].content.parts:
-                if hasattr(part, 'function_call') and part.function_call:
+                if hasattr(part, "function_call") and part.function_call:
                     function_calls.append(part)
 
         if not function_calls:
@@ -218,19 +248,25 @@ async def _call_gemini(bot, history, sys_prompt):
         )
 
     text_parts = []
-    if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+    if (
+        response.candidates
+        and response.candidates[0].content
+        and response.candidates[0].content.parts
+    ):
         for part in response.candidates[0].content.parts:
-            if hasattr(part, 'text') and part.text:
+            if hasattr(part, "text") and part.text:
                 text_parts.append(part.text)
     final = "".join(text_parts)
 
     # Safety net: if Gemini returned no text after tool calls, use last tool result
     if not final and fn_response_parts:
-        logger.warning("Ask-Gigi: Gemini returned no text after tool call — using tool result as fallback")
+        logger.warning(
+            "Ask-Gigi: Gemini returned no text after tool call — using tool result as fallback"
+        )
         last_part = fn_response_parts[-1]
-        if hasattr(last_part, 'function_response') and last_part.function_response:
+        if hasattr(last_part, "function_response") and last_part.function_response:
             fr = last_part.function_response
-            resp_data = fr.response if hasattr(fr, 'response') else {}
+            resp_data = fr.response if hasattr(fr, "response") else {}
             if isinstance(resp_data, dict):
                 final = json.dumps(resp_data, indent=2, default=str)
             else:
@@ -244,10 +280,12 @@ async def _call_anthropic(bot, history, sys_prompt):
 
     messages = [{"role": m["role"], "content": m["content"]} for m in history]
 
-    response = bot.llm.messages.create(
-        model=LLM_MODEL, max_tokens=4096,
-        system=sys_prompt, tools=ANTHROPIC_TOOLS,
-        messages=messages
+    response = await bot.llm.messages.create(
+        model=LLM_MODEL,
+        max_tokens=4096,
+        system=sys_prompt,
+        tools=ANTHROPIC_TOOLS,
+        messages=messages,
     )
 
     max_rounds = 10
@@ -265,38 +303,51 @@ async def _call_anthropic(bot, history, sys_prompt):
                 logger.info(f"  Tool: {block.name} input: {block.input}")
                 result = await bot.execute_tool(block.name, block.input)
                 logger.info(f"  Result: {result[:200]}...")
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": result
-                })
-                assistant_content.append({
-                    "type": "tool_use", "id": block.id,
-                    "name": block.name, "input": block.input
-                })
+                tool_results.append(
+                    {"type": "tool_result", "tool_use_id": block.id, "content": result}
+                )
+                assistant_content.append(
+                    {
+                        "type": "tool_use",
+                        "id": block.id,
+                        "name": block.name,
+                        "input": block.input,
+                    }
+                )
             elif block.type == "text":
                 assistant_content.append({"type": "text", "text": block.text})
 
         messages.append({"role": "assistant", "content": assistant_content})
         messages.append({"role": "user", "content": tool_results})
 
-        response = bot.llm.messages.create(
-            model=LLM_MODEL, max_tokens=4096,
-            system=sys_prompt, tools=ANTHROPIC_TOOLS,
-            messages=messages
+        response = await bot.llm.messages.create(
+            model=LLM_MODEL,
+            max_tokens=4096,
+            system=sys_prompt,
+            tools=ANTHROPIC_TOOLS,
+            messages=messages,
         )
 
     final = "".join(b.text for b in response.content if b.type == "text")
 
     # Safety net: if Anthropic returned no text after tool calls, force a summary
     if not final and tool_results:
-        logger.warning("Ask-Gigi: Anthropic returned no text after tool calls — requesting summary")
+        logger.warning(
+            "Ask-Gigi: Anthropic returned no text after tool calls — requesting summary"
+        )
         try:
             # One more call WITHOUT tools to force text output
-            summary_resp = bot.llm.messages.create(
-                model=LLM_MODEL, max_tokens=4096,
+            summary_resp = await bot.llm.messages.create(
+                model=LLM_MODEL,
+                max_tokens=4096,
                 system=sys_prompt,
-                messages=messages + [{"role": "user", "content": "Please summarize your analysis in plain text."}],
+                messages=messages
+                + [
+                    {
+                        "role": "user",
+                        "content": "Please summarize your analysis in plain text.",
+                    }
+                ],
             )
             final = "".join(b.text for b in summary_resp.content if b.type == "text")
         except Exception as e:
@@ -338,11 +389,9 @@ async def _call_openai(bot, history, sys_prompt):
             result_str = await bot.execute_tool(tc.function.name, tool_input)
             logger.info(f"  Result: {result_str[:200]}...")
 
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result_str
-            })
+            messages.append(
+                {"role": "tool", "tool_call_id": tc.id, "content": result_str}
+            )
 
         response = bot.llm.chat.completions.create(
             model=LLM_MODEL, messages=messages, tools=OPENAI_TOOLS
