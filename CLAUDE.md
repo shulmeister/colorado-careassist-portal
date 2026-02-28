@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 27, 2026
+**Last Updated:** February 28, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -49,38 +49,38 @@ Each service has its own LaunchAgent, process, and port. Cloudflare path-based r
 
 | Channel             | Technology               | Handler              | Tools    | Status  |
 | ------------------- | ------------------------ | -------------------- | -------- | ------- |
-| **Voice**           | Retell AI Custom LLM     | `voice_brain.py`     | 38 tools | Working |
-| **SMS**             | RC message-store polling | `ringcentral_bot.py` | 15 tools | Working |
-| **Direct Messages** | RC Glip API polling      | `ringcentral_bot.py` | 36 tools | Working |
-| **Team Chat**       | RC Glip API polling      | `ringcentral_bot.py` | 36 tools | Working |
+| **Voice**           | Retell AI Custom LLM     | `voice_brain.py`     | 92 tools | Working |
+| **SMS**             | RC message-store polling | `ringcentral_bot.py` | 43 tools | Working |
+| **Direct Messages** | RC Glip API polling      | `ringcentral_bot.py` | 90 tools | Working |
+| **Team Chat**       | RC Glip API polling      | `ringcentral_bot.py` | 90 tools | Working |
 
 **Other Channels**
 
 | Channel                    | Technology               | Handler                   | Tools    | Status                         |
 | -------------------------- | ------------------------ | ------------------------- | -------- | ------------------------------ |
-| **Telegram**               | Telegram Bot API         | `telegram_bot.py`         | 37 tools | Working                        |
-| **Ask-Gigi API**           | REST `/api/ask-gigi`     | `ask_gigi.py`             | 37 tools | Working                        |
-| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py`             | 37 tools | Working                        |
-| **iMessage**               | BlueBubbles webhook      | `main.py` → `ask_gigi.py` | 37 tools | Code Done (needs BB GUI setup) |
-| **Menu Bar**               | SwiftUI → ask-gigi API   | `ask_gigi.py`             | 37 tools | Working                        |
+| **Telegram**               | Telegram Bot API         | `telegram_bot.py`         | 90 tools | Working                        |
+| **Ask-Gigi API**           | REST `/api/ask-gigi`     | `ask_gigi.py`             | 90 tools | Working                        |
+| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py`             | 90 tools | Working                        |
+| **iMessage**               | BlueBubbles webhook      | `main.py` → `ask_gigi.py` | 90 tools | Code Done (needs BB GUI setup) |
+| **Menu Bar**               | SwiftUI → ask-gigi API   | `ask_gigi.py`             | 90 tools | Working                        |
 
 ### Ask-Gigi API (Feb 8 — Foundation for Apple integrations)
 
 - **Endpoint:** `POST /gigi/api/ask-gigi` (served by gigi_app.py on port 8767)
 - **Auth:** Bearer token via `GIGI_API_TOKEN` env var
 - **Module:** `gigi/ask_gigi.py` — reuses GigiTelegramBot.execute_tool (no duplication)
-- **All channels that use ask_gigi.py** get the same 37 tools (all Telegram tools)
+- **All channels that use ask_gigi.py** get all 90 CANONICAL_TOOLS
 - **Cross-channel context:** API messages visible from Telegram/SMS and vice versa
 
-### Tool Sets
+### Tool Architecture
 
-**Telegram tools (37):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_ar_report`, `get_polybot_status`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`, `run_terminal`, `sequential_thinking`, `get_thinking_summary`, `update_knowledge_graph`, `query_knowledge_graph`
+All tool definitions live in `gigi/tool_registry.py` (90 CANONICAL_TOOLS). Channel filtering via `get_tools(channel)`:
 
-**Voice tools (38):** All Telegram tools minus browser/get_polybot_status, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
+- **Telegram / Ask-Gigi / DM / Team Chat**: All 90 tools
+- **Voice**: 86 from registry (4 excluded) + 6 voice-only (`transfer_call`, `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`) = 92 total
+- **SMS**: 43 tools (47 excluded — caregivers don't need browser, terminal, research tools)
 
-**RC SMS tools (15):** `get_client_current_status`, `identify_caller`, `get_wellsky_shifts`, `get_wellsky_clients`, `get_wellsky_caregivers`, `log_call_out`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `get_ar_report`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
-
-**RC DM/Team Chat tools (36):** Full Telegram-like set including browser tools + `check_recent_sms`, `send_sms`, `log_call_out`, `identify_caller`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
+Tool implementations in `gigi/tool_executor.py`. Voice-only tools handled locally in `voice_brain.py`. See `docs/GIGI_TOOL_ARCHITECTURE.md` for full details.
 
 ### Gigi's Core Capabilities
 
@@ -111,6 +111,7 @@ All 3 handlers (`telegram_bot.py`, `voice_brain.py`, `ringcentral_bot.py`) + `as
 - **Memory Logger** (`gigi/memory_logger.py`): Daily markdown journal at `~/.gigi-memory/YYYY-MM-DD.md`.
 - **Constitutional Preamble**: 10 Operating Laws injected into ALL system prompts.
 - **Dynamic System Prompts**: `_build_*_system_prompt()` builders inject memories + mode + date/time per-call.
+- **Learning Pipeline** (`gigi/learning_pipeline.py`): LLM-as-Judge scoring (accuracy, helpfulness, tone, tool_selection, safety). DB: `gigi_evaluations`. Cron every 6h. CLI: `python -m gigi.learning_pipeline [--hours N] [--limit N] [--channel CH]`. Portal → Gigi → Learning tab.
 
 ### Knowledge Graph, Terminal & Thinking (Feb 24)
 
@@ -372,17 +373,24 @@ careassist-unified/
 ├── portal/                # Portal web app (FastAPI)
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
-│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (multi-provider, 33 tools)
-│   ├── telegram_bot.py    # Telegram interface (multi-provider, 32 tools)
-│   ├── ringcentral_bot.py # RC polling, SMS (15 tools), DM/Team (31 tools), scheduled messages
+│   ├── tool_registry.py   # Single source of truth: 90 CANONICAL_TOOLS + channel filtering
+│   ├── tool_executor.py   # Shared execute(name, input) for all tool implementations
+│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (92 tools)
+│   ├── telegram_bot.py    # Telegram interface (90 tools)
+│   ├── ringcentral_bot.py # RC polling: SMS (43 tools), DM/Team (90 tools), scheduled messages
 │   ├── main.py            # Retell webhooks + /api/ask-gigi + /webhook/imessage
 │   ├── ask_gigi.py        # Generic ask-gigi function (reuses telegram tools, no duplication)
+│   ├── learning_pipeline.py   # LLM-as-Judge evaluation (cron every 6h)
+│   ├── travel_tools.py    # Sabre/Amadeus flights, hotel search, transfers
+│   ├── finance_tools.py   # QuickBooks AR, P&L, balance sheet, invoices
+│   ├── claude_code_tools.py   # Claude Code task creation/checking
 │   ├── browser_automation.py  # Playwright headless Chromium (browse + screenshot)
 │   ├── conversation_store.py  # PostgreSQL conversation persistence (all channels)
 │   ├── memory_system.py   # Gigi's memory (save/recall/forget via PostgreSQL)
 │   ├── mode_detector.py   # 8-mode auto-detection (focus, crisis, travel, etc.)
 │   ├── failure_handler.py # 10 failure protocols + meltdown detection
-│   ├── pattern_detector.py # Repeated failure + trend detection
+│   ├── pattern_detector.py    # Repeated failure + trend detection
+│   ├── response_filter.py # Response content filtering
 │   ├── self_monitor.py    # Weekly self-audit
 │   ├── memory_logger.py   # Daily markdown journal at ~/.gigi-memory/
 │   ├── clock_reminder_service.py    # SMS clock in/out reminders to caregivers
@@ -391,7 +399,6 @@ careassist-unified/
 │   ├── simulation_service.py  # Voice simulation runner (WebSocket-based)
 │   ├── simulation_evaluator.py # Simulation scoring (tool 40% + behavior 60%)
 │   ├── google_service.py  # Google Calendar + Gmail API (OAuth2)
-│   ├── chief_of_staff_tools.py  # Shared tool implementations
 │   ├── terminal_tools.py  # Headless terminal via ht-mcp (run_terminal)
 │   ├── sequential_thinking.py  # Structured reasoning chains
 │   ├── knowledge_graph.py # PostgreSQL entity-relation knowledge graph
@@ -410,6 +417,7 @@ careassist-unified/
 ├── scripts/
 │   ├── health-monitor.sh  # Service health monitoring
 │   ├── sync_wellsky_clients.py  # WellSky FHIR sync (every 2 hours)
+│   ├── run_gigi_simulations.py  # 22 voice simulation scenarios + CLI runner
 │   └── security-audit.sh  # Security checks
 └── docs/                  # Additional documentation
 ```
