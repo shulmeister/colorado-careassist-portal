@@ -147,10 +147,12 @@ VOICE_OUTREACH_ENABLED = os.getenv("VOICE_OUTREACH_ENABLED", "false").lower() ==
 # LLM Provider Configuration — switch via env var (default: gemini to avoid API fees)
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "anthropic").lower()
 _DEFAULT_MODELS = {
     "gemini": "gemini-2.5-flash-preview-05-20",
     "anthropic": "claude-haiku-4-5-20251001",
+    "minimax": "MiniMax-M2.5",
 }
 LLM_MODEL = os.getenv(
     "GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "claude-haiku-4-5-20251001")
