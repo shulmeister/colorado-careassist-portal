@@ -25,7 +25,7 @@ async def evaluate_simulation(
     scenario: Dict,
     transcript: List[Dict],
     tool_calls: List[Dict],
-    tools_used: List[str]
+    tools_used: List[str],
 ) -> Dict[str, Any]:
     """
     Evaluate simulation against scenario expectations.
@@ -54,13 +54,22 @@ async def evaluate_simulation(
 
     # Related tool groups — using a related tool earns partial credit
     _RELATED_TOOLS = {
-        "get_wellsky_clients": {"get_wellsky_caregivers", "get_client_current_status", "get_wellsky_shifts"},
+        "get_wellsky_clients": {
+            "get_wellsky_caregivers",
+            "get_client_current_status",
+            "get_wellsky_shifts",
+        },
         "get_wellsky_caregivers": {"get_wellsky_clients", "get_wellsky_shifts"},
         "get_client_current_status": {"get_wellsky_clients", "get_wellsky_shifts"},
         "get_wellsky_shifts": {"get_wellsky_clients", "get_wellsky_caregivers"},
     }
     # Lookup-only tools (don't penalize for proactive use)
-    _LOOKUP_TOOLS = {"get_wellsky_clients", "get_wellsky_caregivers", "get_client_current_status", "get_wellsky_shifts"}
+    _LOOKUP_TOOLS = {
+        "get_wellsky_clients",
+        "get_wellsky_caregivers",
+        "get_client_current_status",
+        "get_wellsky_shifts",
+    }
 
     if expected_tools:
         matched = len(expected_tools & actual_tools)
@@ -68,7 +77,7 @@ async def evaluate_simulation(
 
         # Give partial credit for related tools used instead of expected ones
         partial_credit = 0.0
-        for missing_tool in (expected_tools - actual_tools):
+        for missing_tool in expected_tools - actual_tools:
             related = _RELATED_TOOLS.get(missing_tool, set())
             if actual_tools & related:
                 partial_credit += 0.5  # 50% credit per related tool match
@@ -87,12 +96,13 @@ async def evaluate_simulation(
     tools_missing = list(expected_tools - actual_tools)
     tools_extra = list(actual_tools - expected_tools)
 
-    logger.info(f"Tool evaluation: {len(expected_tools & actual_tools)}/{len(expected_tools)} expected tools used")
+    logger.info(
+        f"Tool evaluation: {len(expected_tools & actual_tools)}/{len(expected_tools)} expected tools used"
+    )
 
     # Behavior Score: Claude evaluation
     behavior_score, behavior_analysis = await _evaluate_behavior(
-        scenario=scenario,
-        transcript=transcript
+        scenario=scenario, transcript=transcript
     )
 
     # If correct tools were used, behavior floor is 50 (prevent harsh evaluator outliers)
@@ -114,12 +124,14 @@ async def evaluate_simulation(
             "behavior_analysis": behavior_analysis["analysis"],
             "strengths": behavior_analysis["strengths"],
             "weaknesses": behavior_analysis["weaknesses"],
-            "pass_fail": overall_score >= 70
-        }
+            "pass_fail": overall_score >= 75,
+        },
     }
 
 
-async def _evaluate_behavior(scenario: Dict, transcript: List[Dict]) -> tuple[int, Dict]:
+async def _evaluate_behavior(
+    scenario: Dict, transcript: List[Dict]
+) -> tuple[int, Dict]:
     """
     Use Claude to evaluate conversation behavior.
 
@@ -127,18 +139,22 @@ async def _evaluate_behavior(scenario: Dict, transcript: List[Dict]) -> tuple[in
     """
 
     # Format transcript
-    transcript_text = "\n\n".join([
-        f"{'Agent' if t['role'] == 'assistant' else 'Caller'}: {t['content']}"
-        for t in transcript
-    ])
+    transcript_text = "\n\n".join(
+        [
+            f"{'Agent' if t['role'] == 'assistant' else 'Caller'}: {t['content']}"
+            for t in transcript
+        ]
+    )
 
     # Build evaluation prompt
-    expected_behaviors = "\n".join([f"- {b}" for b in scenario.get("expected_behavior", [])])
+    expected_behaviors = "\n".join(
+        [f"- {b}" for b in scenario.get("expected_behavior", [])]
+    )
 
     evaluation_prompt = f"""Evaluate this voice AI agent conversation against the following criteria:
 
-SCENARIO: {scenario['name']}
-DESCRIPTION: {scenario['description']}
+SCENARIO: {scenario["name"]}
+DESCRIPTION: {scenario["description"]}
 
 EXPECTED BEHAVIORS:
 {expected_behaviors}
@@ -182,7 +198,7 @@ Provide your response in JSON format:
             "analysis": "Evaluation unavailable (API key not configured)",
             "strengths": [],
             "weaknesses": ["Cannot evaluate - API key missing"],
-            "met_expectations": False
+            "met_expectations": False,
         }
 
     try:
@@ -191,10 +207,7 @@ Provide your response in JSON format:
         response = claude.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": evaluation_prompt
-            }]
+            messages=[{"role": "user", "content": evaluation_prompt}],
         )
 
         # Parse response
@@ -224,7 +237,7 @@ Provide your response in JSON format:
             "analysis": "Evaluation parsing failed",
             "strengths": [],
             "weaknesses": ["Unable to parse evaluation"],
-            "met_expectations": False
+            "met_expectations": False,
         }
 
     except Exception as e:
@@ -235,23 +248,28 @@ Provide your response in JSON format:
             "analysis": f"Evaluation error: {str(e)}",
             "strengths": [],
             "weaknesses": ["Evaluation failed"],
-            "met_expectations": False
+            "met_expectations": False,
         }
 
 
 async def generate_simulation_report(simulation_id: int) -> str:
     """Generate a human-readable markdown report for a simulation"""
 
-    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+    db_url = os.getenv(
+        "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
+    )
     conn = psycopg2.connect(db_url)
     try:
         cur = conn.cursor()
 
-        cur.execute("""
+        cur.execute(
+            """
             SELECT scenario_name, call_id, turn_count, tool_score,
                    behavior_score, overall_score, evaluation_details, transcript
             FROM gigi_simulations WHERE id = %s
-        """, (simulation_id,))
+        """,
+            (simulation_id,),
+        )
 
         row = cur.fetchone()
     finally:
@@ -260,7 +278,16 @@ async def generate_simulation_report(simulation_id: int) -> str:
     if not row:
         return "Simulation not found"
 
-    scenario_name, call_id, turns, tool_score, behavior_score, overall_score, details_raw, transcript = row
+    (
+        scenario_name,
+        call_id,
+        turns,
+        tool_score,
+        behavior_score,
+        overall_score,
+        details_raw,
+        transcript,
+    ) = row
     # psycopg2 auto-parses JSONB columns — only json.loads() if it's still a string
     if details_raw is None:
         details = {}
@@ -270,12 +297,12 @@ async def generate_simulation_report(simulation_id: int) -> str:
         details = json.loads(details_raw)
 
     # Generate report
-    status_emoji = "✅" if overall_score >= 70 else "⚠️" if overall_score >= 50 else "❌"
-    pass_fail = "PASS" if overall_score >= 70 else "FAIL"
+    status_emoji = "✅" if overall_score >= 75 else "❌"
+    pass_fail = "PASS" if overall_score >= 75 else "FAIL"
 
     report = f"""# Simulation Report: {scenario_name}
 
-{status_emoji} **Overall Score: {overall_score}/100** {'(PASS)' if overall_score >= 70 else '(FAIL)'}
+{status_emoji} **Overall Score: {overall_score}/100** {"(PASS)" if overall_score >= 75 else "(FAIL)"}
 
 ## Metrics
 - **Conversation Length**: {turns} turns
@@ -283,27 +310,27 @@ async def generate_simulation_report(simulation_id: int) -> str:
 - **Behavior Score**: {behavior_score}/100
 
 ## Tool Usage
-- **Expected**: {', '.join(details.get('tools_expected', [])) or 'None'}
-- **Used**: {', '.join(details.get('tools_used', [])) or 'None'}
-{f"- **Missing**: {', '.join(details.get('tools_missing', []))}" if details.get('tools_missing') else ''}
-{f"- **Extra**: {', '.join(details.get('tools_extra', []))}" if details.get('tools_extra') else ''}
+- **Expected**: {", ".join(details.get("tools_expected", [])) or "None"}
+- **Used**: {", ".join(details.get("tools_used", [])) or "None"}
+{f"- **Missing**: {', '.join(details.get('tools_missing', []))}" if details.get("tools_missing") else ""}
+{f"- **Extra**: {', '.join(details.get('tools_extra', []))}" if details.get("tools_extra") else ""}
 
 ## Behavior Analysis
-{details.get('behavior_analysis', 'N/A')}
+{details.get("behavior_analysis", "N/A")}
 
 ### Strengths
-{chr(10).join(['- ' + s for s in details.get('strengths', [])]) if details.get('strengths') else '- None identified'}
+{chr(10).join(["- " + s for s in details.get("strengths", [])]) if details.get("strengths") else "- None identified"}
 
 ### Weaknesses
-{chr(10).join(['- ' + w for w in details.get('weaknesses', [])]) if details.get('weaknesses') else '- None identified'}
+{chr(10).join(["- " + w for w in details.get("weaknesses", [])]) if details.get("weaknesses") else "- None identified"}
 
 ## Transcript
-{transcript or 'Not available'}
+{transcript or "Not available"}
 
 ---
 
 **Call ID**: {call_id}
-**Generated**: {os.environ.get('TZ', 'UTC')} - {chr(169)} Colorado Care Assist 2026
+**Generated**: {os.environ.get("TZ", "UTC")} - {chr(169)} Colorado Care Assist 2026
 """
 
     return report
