@@ -1,6 +1,6 @@
 # CLAUDE.md — Colorado Care Assist Infrastructure
 
-**Last Updated:** February 26, 2026
+**Last Updated:** February 27, 2026
 **Status:** ✅ FULLY SELF-HOSTED ON MAC MINI (with Staging Environment)
 
 ---
@@ -47,61 +47,40 @@ Each service has its own LaunchAgent, process, and port. Cloudflare path-based r
 
 **RingCentral (307-459-8220) — Gigi's primary number**
 
-| Channel             | Technology               | Handler              | Tools     | Status  |
-| ------------------- | ------------------------ | -------------------- | --------- | ------- |
-| **Voice**           | Retell AI Custom LLM     | `voice_brain.py`     | ~92 tools | Working |
-| **SMS**             | RC message-store polling | `ringcentral_bot.py` | ~59 tools | Working |
-| **Direct Messages** | RC Glip API polling      | `ringcentral_bot.py` | ~94 tools | Working |
-| **Team Chat**       | RC Glip API polling      | `ringcentral_bot.py` | ~94 tools | Working |
+| Channel             | Technology               | Handler              | Tools    | Status  |
+| ------------------- | ------------------------ | -------------------- | -------- | ------- |
+| **Voice**           | Retell AI Custom LLM     | `voice_brain.py`     | 38 tools | Working |
+| **SMS**             | RC message-store polling | `ringcentral_bot.py` | 15 tools | Working |
+| **Direct Messages** | RC Glip API polling      | `ringcentral_bot.py` | 36 tools | Working |
+| **Team Chat**       | RC Glip API polling      | `ringcentral_bot.py` | 36 tools | Working |
 
 **Other Channels**
 
-| Channel                    | Technology               | Handler                   | Tools     | Status              |
-| -------------------------- | ------------------------ | ------------------------- | --------- | ------------------- |
-| **Telegram**               | Telegram Bot API         | `telegram_bot.py`         | ~90 tools | Working             |
-| **Ask-Gigi API**           | REST `/api/ask-gigi`     | `ask_gigi.py`             | ~90 tools | Working             |
-| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py`             | ~90 tools | Working             |
-| **iMessage**               | BlueBubbles webhook      | `main.py` → `ask_gigi.py` | ~90 tools | ✅ Working (Feb 25) |
-| **Menu Bar**               | SwiftUI → ask-gigi API   | `ask_gigi.py`             | ~90 tools | Working             |
-
-**Tool Count Note:** Counts are approximate because RC bot auto-extends SMS/DM from Telegram canonical set at runtime minus `_SMS_EXCLUDE`. Run `len(SMS_TOOLS)` / `len(DM_TOOLS)` after import for exact counts.
+| Channel                    | Technology               | Handler                   | Tools    | Status                         |
+| -------------------------- | ------------------------ | ------------------------- | -------- | ------------------------------ |
+| **Telegram**               | Telegram Bot API         | `telegram_bot.py`         | 37 tools | Working                        |
+| **Ask-Gigi API**           | REST `/api/ask-gigi`     | `ask_gigi.py`             | 37 tools | Working                        |
+| **Apple Shortcuts / Siri** | Shortcuts → ask-gigi API | `ask_gigi.py`             | 37 tools | Working                        |
+| **iMessage**               | BlueBubbles webhook      | `main.py` → `ask_gigi.py` | 37 tools | Code Done (needs BB GUI setup) |
+| **Menu Bar**               | SwiftUI → ask-gigi API   | `ask_gigi.py`             | 37 tools | Working                        |
 
 ### Ask-Gigi API (Feb 8 — Foundation for Apple integrations)
 
 - **Endpoint:** `POST /gigi/api/ask-gigi` (served by gigi_app.py on port 8767)
 - **Auth:** Bearer token via `GIGI_API_TOKEN` env var
 - **Module:** `gigi/ask_gigi.py` — reuses GigiTelegramBot.execute_tool (no duplication)
-- **All channels that use ask_gigi.py** get the same ~90 tools (all Telegram tools)
+- **All channels that use ask_gigi.py** get the same 37 tools (all Telegram tools)
 - **Cross-channel context:** API messages visible from Telegram/SMS and vice versa
-
-### FastMCP Tool Architecture (Feb 26)
-
-All Gigi tool definitions and implementations live in two files:
-
-- **`gigi/tool_registry.py`** — 90 `CANONICAL_TOOLS` + `SMS_EXCLUDE` + `VOICE_EXCLUDE` + `get_tools(channel)`. **Single source of truth.** Add new tools here.
-- **`gigi/tool_executor.py`** — `async execute(tool_name, tool_input)` with all 90 implementations. `set_google_service(svc)` for Google injection.
-
-**To add a new tool:** (1) Add definition to `CANONICAL_TOOLS` in `tool_registry.py`, (2) Add implementation to `tool_executor.py`. All channels inherit automatically.
 
 ### Tool Sets
 
-| Channel             | Count | Source                                                 |
-| ------------------- | ----- | ------------------------------------------------------ |
-| Telegram / Ask-Gigi | 90    | `get_tools("telegram")` = full CANONICAL_TOOLS         |
-| Voice               | 92    | `get_tools("voice")` (86) + 6 voice-exclusive tools    |
-| RC SMS              | ~47   | `get_tools("sms")` = CANONICAL_TOOLS minus SMS_EXCLUDE |
-| RC DM/Team Chat     | 90    | `get_tools("dm")` = full CANONICAL_TOOLS               |
+**Telegram tools (37):** `search_concerts`, `buy_tickets_request`, `book_table_request`, `get_client_current_status`, `get_calendar_events`, `search_emails`, `get_weather`, `get_wellsky_clients`, `get_wellsky_caregivers`, `get_wellsky_shifts`, `web_search`, `get_stock_price`, `get_crypto_price`, `create_claude_task`, `check_claude_task`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `browse_webpage`, `take_screenshot`, `get_ar_report`, `get_polybot_status`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`, `run_terminal`, `sequential_thinking`, `get_thinking_summary`, `update_knowledge_graph`, `query_knowledge_graph`
 
-**Voice-exclusive tools** (NOT in registry — appended in `voice_brain.py` via `_VOICE_ONLY_TOOLS`):
-`transfer_call`, `lookup_caller`, `report_call_out`, `send_sms`, `send_email`, `send_team_message`
+**Voice tools (38):** All Telegram tools minus browser/get_polybot_status, plus: `send_sms`, `send_team_message`, `send_email`, `lookup_caller`, `report_call_out`, `transfer_call`
 
-**VOICE_EXCLUDE** (in registry but blocked for voice): `browse_webpage`, `take_screenshot`, `browse_with_claude`, `get_polybot_status`
+**RC SMS tools (15):** `get_client_current_status`, `identify_caller`, `get_wellsky_shifts`, `get_wellsky_clients`, `get_wellsky_caregivers`, `log_call_out`, `save_memory`, `recall_memories`, `forget_memory`, `search_memory_logs`, `get_ar_report`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
 
-**Channel delegation pattern:**
-
-- `telegram_bot.py` — imports CANONICAL_TOOLS from registry; `execute_tool()` delegates to `tool_executor` (~740 lines)
-- `voice_brain.py` — handles 6 voice-exclusive tools locally; delegates rest to `tool_executor` (~1176 lines, was 3016)
-- `ringcentral_bot.py` — `_execute_sms_tool` (3 RC-local + delegate), `_execute_dm_tool` (5 RC-local + delegate) (~3075 lines, was 4136)
+**RC DM/Team Chat tools (36):** Full Telegram-like set including browser tools + `check_recent_sms`, `send_sms`, `log_call_out`, `identify_caller`, `get_weather_arb_status`, `deep_research`, `watch_tickets`, `list_ticket_watches`, `remove_ticket_watch`, `clock_in_shift`, `clock_out_shift`, `find_replacement_caregiver`
 
 ### Gigi's Core Capabilities
 
@@ -112,15 +91,14 @@ All Gigi tool definitions and implementations live in two files:
 - **Auto-Documentation**: Syncs RC messages → WellSky Care Alerts (TaskLog) + escalation Tasks (AdminTask)
 - **After-Hours Coverage**: Autonomous SMS/voice handling
 
-### Gigi Multi-LLM Provider (Updated Feb 25)
+### Gigi Multi-LLM Provider (Feb 7)
 
 All 3 handlers (`telegram_bot.py`, `voice_brain.py`, `ringcentral_bot.py`) + `ask_gigi.py` support 3 providers.
 
-- **Config:** `GIGI_LLM_PROVIDER=anthropic` + `GIGI_LLM_MODEL=claude-haiku-4-5-20251001` in plist env vars
+- **Config:** `GIGI_LLM_PROVIDER=anthropic` + `GIGI_LLM_MODEL=claude-haiku-4-5-20251001`
 - **Current production:** Anthropic Haiku 4.5 — all Gigi channels
-- **Code defaults (Feb 25):** All 3 handlers now default to `anthropic` (was `gemini`) — safe even without plist
-- **Default models:** Gemini=`gemini-2.5-flash-preview-05-20`, Anthropic=`claude-haiku-4-5-20251001`, OpenAI=`gpt-4o-mini`
-- **CRITICAL:** Plist env vars override code defaults. Always check plists if provider is wrong.
+- **Default models:** Gemini=`gemini-3-flash-preview`, Anthropic=`claude-haiku-4-5-20251001`, OpenAI=`gpt-5.1`
+- Gemini API: use `Part(text=...)` NOT `Part.from_text(...)` (API changed)
 
 ### Gigi Subsystems (Feb 8 — All Active)
 
@@ -155,7 +133,7 @@ Five features built for production readiness with clients and employees:
 2. **Transfer Call Rules** — Voice brain system prompt includes "When to Transfer Calls (CRITICAL)" section. Gigi transfers to a human for: emergencies, complaints, legal/HIPAA, billing, repeated failures (3+), explicit requests.
 3. **Shift Filling Engine** — `find_replacement_caregiver` tool wired across all channels. Queries WellSky for available caregivers matching skills/availability, ranks by proximity and past performance.
 4. **SMS Semantic Loop Detection** — `_detect_semantic_loop()` in RC bot. Detects when Gigi is repeating herself in SMS conversations (cosine similarity > 0.85 on last 3 messages). Breaks loop with escalation.
-5. **Simulation Testing** — End-to-end voice simulation via portal Simulations tab. WebSocket-based tool capture (cross-process safe). Evaluator scores tool usage (40%) + conversation behavior (60%). Best score: 85/100 on weather/concert scenario.
+5. **Simulation Testing** — 22 automated voice scenarios (14 inbound + 8 Jason owner) via portal Simulations tab or CLI. WebSocket-based tool capture (cross-process safe). Evaluator scores tool usage (40%) + conversation behavior (60%). **100% pass rate on production** (Feb 27). See `docs/GIGI_VOICE_SIMULATION.md` for full scenario catalog and `docs/GIGI_TOOL_ARCHITECTURE.md` for the shared tool registry/executor pattern.
 
 ### Ticket Watch System (Feb 16)
 
@@ -232,14 +210,6 @@ The Sales Dashboard is the source of truth for new leads. WellSky is the hub for
 - Deal/Contact navigation buttons on Dashboard
 - Stage history tracking (`stage_entered_at` timestamps)
 - Brevo CRM bidirectional sync
-
-### Recruiting Dashboard API (Feb 26)
-
-- `GET /recruiting/api/leads` — paginated lead list (filterable by status)
-- `GET /recruiting/api/applicants` — alias for /api/leads (same data, `applicants` key)
-- `GET /recruiting/api/pipeline` — stage breakdown: new/contacted/interested/sent_to_ep/hired/not_interested counts
-- `GET /recruiting/api/stats` — aggregate stats (total, new today, contacted, wants_work, hired)
-- All routes require session auth (`@require_auth`)
 
 ---
 
@@ -402,11 +372,9 @@ careassist-unified/
 ├── portal/                # Portal web app (FastAPI)
 │   └── portal_app.py      # Main portal routes
 ├── gigi/                  # Gigi AI assistant
-│   ├── tool_registry.py   # ⭐ CANONICAL_TOOLS (90), SMS_EXCLUDE, VOICE_EXCLUDE, get_tools(channel)
-│   ├── tool_executor.py   # ⭐ Shared execute(tool_name, tool_input) — all 90 implementations
-│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (92 tools, ~1176 lines)
-│   ├── telegram_bot.py    # Telegram interface (90 tools, delegates to tool_executor)
-│   ├── ringcentral_bot.py # RC polling, SMS/DM/Team chat, delegates to tool_executor (~3075 lines)
+│   ├── voice_brain.py     # Retell Custom LLM WebSocket handler (multi-provider, 33 tools)
+│   ├── telegram_bot.py    # Telegram interface (multi-provider, 32 tools)
+│   ├── ringcentral_bot.py # RC polling, SMS (15 tools), DM/Team (31 tools), scheduled messages
 │   ├── main.py            # Retell webhooks + /api/ask-gigi + /webhook/imessage
 │   ├── ask_gigi.py        # Generic ask-gigi function (reuses telegram tools, no duplication)
 │   ├── browser_automation.py  # Playwright headless Chromium (browse + screenshot)
@@ -423,17 +391,11 @@ careassist-unified/
 │   ├── simulation_service.py  # Voice simulation runner (WebSocket-based)
 │   ├── simulation_evaluator.py # Simulation scoring (tool 40% + behavior 60%)
 │   ├── google_service.py  # Google Calendar + Gmail API (OAuth2)
+│   ├── chief_of_staff_tools.py  # Shared tool implementations
 │   ├── terminal_tools.py  # Headless terminal via ht-mcp (run_terminal)
 │   ├── sequential_thinking.py  # Structured reasoning chains
 │   ├── knowledge_graph.py # PostgreSQL entity-relation knowledge graph
-│   ├── learning_pipeline.py # SMS shadow learning + evaluation pipeline (LLM-as-Judge, 5 criteria)
-│   ├── travel_tools.py    # Sabre/Amadeus flight search + travel tools (~1095 lines)
-│   ├── chief_of_staff_tools.py # Shared tool implementations (~994 lines)
-│   ├── shift_lock.py      # Distributed shift processing locks
-│   ├── database.py        # DB connection helpers
-│   ├── claude_code_tools.py # Claude task bridge tools
 │   └── CONSTITUTION.md    # Gigi's 10 operating laws
-├── gigi_mcp_server.py     # FastMCP server for Claude Code (14 tools)
 ├── sales/                 # Sales CRM dashboard
 ├── recruiting/            # Recruiting dashboard (Flask)
 ├── powderpulse/           # Standalone ski weather app (NOT mounted in unified_app)
@@ -451,33 +413,6 @@ careassist-unified/
 │   └── security-audit.sh  # Security checks
 └── docs/                  # Additional documentation
 ```
-
----
-
-## SECURITY & AUTH (Feb 26 Audit)
-
-### Auth-Protected API Endpoints
-
-These endpoints require `Depends(get_current_user)` — unauthenticated requests return 401:
-
-- `/api/incident-reports`, `/api/incident-reports/latest`
-- `/api/monitoring-visits`, `/api/monitoring-visits/latest`
-- `/api/internal/wellsky/shifts`
-
-### Gigi Token Auth
-
-Sensitive Gigi endpoints use `Depends(require_gigi_token)` (Bearer token via `GIGI_API_TOKEN`).
-**Do NOT add token auth to browser-accessible pages** like `/gigi/shadow` — they need to load in a browser without Bearer headers.
-
-### Webhook Verification
-
-- **Retell:** `from retell.lib.webhook_auth import verify` (NEVER custom HMAC)
-- **Fail-closed pattern:** Webhooks return 503 when secrets not configured (not silently skip verification)
-
-### Credentials
-
-- All secrets loaded via `resolved-secrets.env` at service start — never hardcode
-- `.gigi-env` is a legacy symlink — authoritative source is `~/.config/careassist/resolved-secrets.env`
 
 ---
 
@@ -541,8 +476,6 @@ cd ~/mac-mini-apps/careassist-staging
 # Then test at https://staging.coloradocareassist.com
 ```
 
-**IMPORTANT:** Code changes are NOT live until staging services restart. If you edited files without running `restart-staging.sh`, you're testing stale code. For individual services, use `launchctl bootout`/`bootstrap` on the specific staging LaunchAgent.
-
 ### Step 3: Commit Changes
 
 ```bash
@@ -564,13 +497,6 @@ This script will:
 3. Rebuild production
 4. Restart production
 5. Verify production is healthy (retries up to 60s for slow boots)
-
-### Promote Script Gotchas
-
-- **Vite hashed filenames** contain underscores and hyphens (e.g., `index-Lq_Vb-jD.js`). Regex must use `[A-Za-z0-9_-]+`, not just `[A-Za-z0-9]+`.
-- **Uncommitted changes in production** will block the merge — stash or commit them first.
-- **Confirmation prompt** expects `yes` (not `y`) — pipe with `echo "yes" |`
-- **Portal takes ~15-20s to start** after restart — promote script's 60s timeout is tight
 
 ### Key Scripts
 
