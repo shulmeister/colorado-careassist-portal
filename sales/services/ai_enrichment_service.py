@@ -1,7 +1,7 @@
 """
 AI Enrichment Service for CRM
 
-Uses Anthropic Haiku to:
+Uses configured LLM (MiniMax or Anthropic) to:
 - Enrich company data (size, industry, contacts)
 - Detect duplicate contacts
 - Summarize interactions
@@ -18,14 +18,32 @@ from sqlalchemy.orm import Session
 
 try:
     import anthropic
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
+try:
+    import openai
+
+    OPENAI_AVAILABLE = True
+except ImportError:
+    openai = None
+    OPENAI_AVAILABLE = False
+
 from models import ActivityLog, Contact, ReferralSource
 
-# Anthropic Haiku for text-only enrichment (fast, reliable, cheap)
-_ENRICHMENT_MODEL = "claude-haiku-4-5-20251001"
+# LLM provider config — follows same env vars as Gigi
+_LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "anthropic").lower()
+_MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
+_ENRICHMENT_MODELS = {
+    "anthropic": "claude-haiku-4-5-20251001",
+    "minimax": "MiniMax-M2.5",
+}
+_ENRICHMENT_MODEL = os.getenv(
+    "GIGI_LLM_MODEL",
+    _ENRICHMENT_MODELS.get(_LLM_PROVIDER, "claude-haiku-4-5-20251001"),
+)
 
 
 def _get_anthropic_client():
@@ -38,9 +56,34 @@ def _get_anthropic_client():
     return anthropic.Anthropic(api_key=api_key)
 
 
+def _call_llm(prompt: str, max_tokens: int = 500) -> str | None:
+    """Call the configured LLM provider. Returns text or None on failure."""
+    if _LLM_PROVIDER == "minimax" and OPENAI_AVAILABLE and _MINIMAX_API_KEY:
+        client = openai.OpenAI(
+            base_url="https://api.minimax.io/v1", api_key=_MINIMAX_API_KEY
+        )
+        response = client.chat.completions.create(
+            model=_ENRICHMENT_MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return (response.choices[0].message.content or "").strip()
+    else:
+        client = _get_anthropic_client()
+        if not client:
+            return None
+        response = client.messages.create(
+            model=_ENRICHMENT_MODEL,
+            max_tokens=max_tokens,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip()
+
+
 # =============================================================================
 # Company Enrichment
 # =============================================================================
+
 
 async def enrich_company(
     db: Session,
@@ -73,22 +116,18 @@ async def enrich_company(
                     "employee_count": company.employee_count,
                     "industry": company.industry,
                     "enrichment_confidence": company.enrichment_confidence,
-                }
+                },
             }
-
-    client = _get_anthropic_client()
-    if not client:
-        return {"error": "Anthropic not available"}
 
     # Build prompt
     prompt = f"""You are a business research assistant. Given the following company information,
 provide enriched data. Return ONLY valid JSON, no markdown.
 
 Company Name: {company.name}
-Organization: {company.organization or 'N/A'}
-Address: {company.address or 'N/A'}
-Source Type: {company.source_type or 'N/A'}
-Website: {company.website or 'N/A'}
+Organization: {company.organization or "N/A"}
+Address: {company.address or "N/A"}
+Source Type: {company.source_type or "N/A"}
+Website: {company.website or "N/A"}
 
 Return JSON with these fields:
 {{
@@ -102,15 +141,12 @@ If you cannot determine a field with reasonable confidence, use null.
 """
 
     try:
-        response = client.messages.create(
-            model=_ENRICHMENT_MODEL,
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        text = response.content[0].text.strip()
+        text = _call_llm(prompt)
+        if text is None:
+            return {"error": "LLM not available"}
 
         # Extract JSON from response
-        json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+        json_match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
         if json_match:
             data = json.loads(json_match.group())
         else:
@@ -136,7 +172,7 @@ If you cannot determine a field with reasonable confidence, use null.
                 "industry": company.industry,
                 "facility_type": company.facility_type_normalized,
                 "confidence": company.enrichment_confidence,
-            }
+            },
         }
 
     except Exception as e:
@@ -146,6 +182,7 @@ If you cannot determine a field with reasonable confidence, use null.
 # =============================================================================
 # Contact Deduplication
 # =============================================================================
+
 
 def find_duplicate_contacts(
     db: Session,
@@ -173,59 +210,74 @@ def find_duplicate_contacts(
 
     # 1. Exact email match (definite duplicate)
     if contact.email:
-        email_matches = db.query(Contact).filter(
-            Contact.id != contact.id,
-            func.lower(Contact.email) == contact.email.lower()
-        ).all()
+        email_matches = (
+            db.query(Contact)
+            .filter(
+                Contact.id != contact.id,
+                func.lower(Contact.email) == contact.email.lower(),
+            )
+            .all()
+        )
         for match in email_matches:
-            duplicates.append({
-                "contact": match.to_dict(),
-                "match_type": "email",
-                "match_field": contact.email,
-                "confidence": 1.0,
-            })
+            duplicates.append(
+                {
+                    "contact": match.to_dict(),
+                    "match_type": "email",
+                    "match_field": contact.email,
+                    "confidence": 1.0,
+                }
+            )
 
     # 2. Phone match (likely duplicate)
     if contact.phone:
         # Normalize phone for comparison
-        phone_digits = re.sub(r'\D', '', contact.phone)
+        phone_digits = re.sub(r"\D", "", contact.phone)
         if len(phone_digits) >= 10:
-            phone_matches = db.query(Contact).filter(
-                Contact.id != contact.id,
-                Contact.phone.isnot(None)
-            ).all()
+            phone_matches = (
+                db.query(Contact)
+                .filter(Contact.id != contact.id, Contact.phone.isnot(None))
+                .all()
+            )
             for match in phone_matches:
-                match_digits = re.sub(r'\D', '', match.phone or '')
+                match_digits = re.sub(r"\D", "", match.phone or "")
                 if len(match_digits) >= 10 and phone_digits[-10:] == match_digits[-10:]:
                     # Avoid adding if already matched by email
                     if not any(d["contact"]["id"] == match.id for d in duplicates):
-                        duplicates.append({
-                            "contact": match.to_dict(),
-                            "match_type": "phone",
-                            "match_field": contact.phone,
-                            "confidence": 0.9,
-                        })
+                        duplicates.append(
+                            {
+                                "contact": match.to_dict(),
+                                "match_type": "phone",
+                                "match_field": contact.phone,
+                                "confidence": 0.9,
+                            }
+                        )
 
     # 3. Name + Company fuzzy match
     if contact.name and contact.company:
         name_parts = contact.name.lower().split()
         if len(name_parts) >= 2:
-            name_matches = db.query(Contact).filter(
-                Contact.id != contact.id,
-                func.lower(Contact.company) == contact.company.lower(),
-                or_(
-                    func.lower(Contact.name).contains(name_parts[0]),
-                    func.lower(Contact.name).contains(name_parts[-1])
+            name_matches = (
+                db.query(Contact)
+                .filter(
+                    Contact.id != contact.id,
+                    func.lower(Contact.company) == contact.company.lower(),
+                    or_(
+                        func.lower(Contact.name).contains(name_parts[0]),
+                        func.lower(Contact.name).contains(name_parts[-1]),
+                    ),
                 )
-            ).all()
+                .all()
+            )
             for match in name_matches:
                 if not any(d["contact"]["id"] == match.id for d in duplicates):
-                    duplicates.append({
-                        "contact": match.to_dict(),
-                        "match_type": "name+company",
-                        "match_field": f"{contact.name} @ {contact.company}",
-                        "confidence": 0.7,
-                    })
+                    duplicates.append(
+                        {
+                            "contact": match.to_dict(),
+                            "match_type": "name+company",
+                            "match_field": f"{contact.name} @ {contact.company}",
+                            "confidence": 0.7,
+                        }
+                    )
 
     # Sort by confidence
     duplicates.sort(key=lambda x: x["confidence"], reverse=True)
@@ -241,12 +293,12 @@ def scan_all_duplicates(db: Session, limit: int = 100) -> List[Dict[str, Any]]:
         List of duplicate groups
     """
     # Get contacts with email or phone
-    contacts = db.query(Contact).filter(
-        or_(
-            Contact.email.isnot(None),
-            Contact.phone.isnot(None)
-        )
-    ).limit(limit * 2).all()  # Get more to account for duplicates
+    contacts = (
+        db.query(Contact)
+        .filter(or_(Contact.email.isnot(None), Contact.phone.isnot(None)))
+        .limit(limit * 2)
+        .all()
+    )  # Get more to account for duplicates
 
     seen_pairs = set()
     duplicate_groups = []
@@ -258,12 +310,14 @@ def scan_all_duplicates(db: Session, limit: int = 100) -> List[Dict[str, Any]]:
             pair_key = tuple(sorted([contact.id, dupe["contact"]["id"]]))
             if pair_key not in seen_pairs:
                 seen_pairs.add(pair_key)
-                duplicate_groups.append({
-                    "primary": contact.to_dict(),
-                    "duplicate": dupe["contact"],
-                    "match_type": dupe["match_type"],
-                    "confidence": dupe["confidence"],
-                })
+                duplicate_groups.append(
+                    {
+                        "primary": contact.to_dict(),
+                        "duplicate": dupe["contact"],
+                        "match_type": dupe["match_type"],
+                        "confidence": dupe["confidence"],
+                    }
+                )
 
         if len(duplicate_groups) >= limit:
             break
@@ -302,15 +356,16 @@ def merge_contacts(
     merged_count = 0
     for dupe in duplicates:
         # Move activities
-        db.query(ActivityLog).filter_by(contact_id=dupe.id).update({
-            "contact_id": primary_id
-        })
+        db.query(ActivityLog).filter_by(contact_id=dupe.id).update(
+            {"contact_id": primary_id}
+        )
 
         # Move deal associations
         from models import DealContact
-        db.query(DealContact).filter_by(contact_id=dupe.id).update({
-            "contact_id": primary_id
-        })
+
+        db.query(DealContact).filter_by(contact_id=dupe.id).update(
+            {"contact_id": primary_id}
+        )
 
         # Fill in missing fields on primary
         if not primary.email and dupe.email:
@@ -326,7 +381,9 @@ def merge_contacts(
 
         # Append notes
         if dupe.notes:
-            primary.notes = (primary.notes or "") + f"\n\n[Merged from {dupe.name}]: {dupe.notes}"
+            primary.notes = (
+                primary.notes or ""
+            ) + f"\n\n[Merged from {dupe.name}]: {dupe.notes}"
 
         # Delete duplicate
         db.delete(dupe)
@@ -355,6 +412,7 @@ def merge_contacts(
 # Interaction Summarization
 # =============================================================================
 
+
 async def summarize_interactions(
     db: Session,
     contact_id: int = None,
@@ -371,10 +429,6 @@ async def summarize_interactions(
     Returns:
         AI-generated summary
     """
-    client = _get_anthropic_client()
-    if not client:
-        return {"error": "Anthropic not available"}
-
     # Get activities
     query = db.query(ActivityLog)
     if contact_id:
@@ -395,10 +449,12 @@ async def summarize_interactions(
         }
 
     # Build activity log text
-    activity_text = "\n".join([
-        f"- [{a.activity_type}] {a.occurred_at.strftime('%Y-%m-%d')}: {a.title or a.description or 'No description'}"
-        for a in activities[:30]
-    ])
+    activity_text = "\n".join(
+        [
+            f"- [{a.activity_type}] {a.occurred_at.strftime('%Y-%m-%d')}: {a.title or a.description or 'No description'}"
+            for a in activities[:30]
+        ]
+    )
 
     prompt = f"""Analyze these CRM activities and provide a summary. Return ONLY valid JSON, no markdown.
 
@@ -417,14 +473,11 @@ Return JSON with:
 """
 
     try:
-        response = client.messages.create(
-            model=_ENRICHMENT_MODEL,
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}]
-        )
-        text = response.content[0].text.strip()
+        text = _call_llm(prompt)
+        if text is None:
+            return {"error": "LLM not available"}
 
-        json_match = re.search(r'\{[^{}]*\}', text, re.DOTALL)
+        json_match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
         if json_match:
             data = json.loads(json_match.group())
             return data
