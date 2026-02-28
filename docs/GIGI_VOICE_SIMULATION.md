@@ -72,9 +72,8 @@ run_gigi_simulations.py          simulation_service.py            voice_brain.py
 
 | Score Range   | Status | Meaning                |
 | ------------- | ------ | ---------------------- |
-| >= 70         | PASS   | Acceptable performance |
-| 50-69         | WARN   | Needs attention        |
-| < 50          | FAIL   | Broken behavior        |
+| >= 75         | PASS   | Acceptable performance |
+| < 75          | FAIL   | Below standard         |
 | Runtime error | CRASH  | WebSocket/API failure  |
 
 **Suite target: 85% pass rate**

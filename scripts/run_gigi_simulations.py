@@ -474,17 +474,11 @@ async def run_all():
     pass_count = 0
     fail_count = 0
     for row in cur.fetchall():
-        status_indicator = (
-            "PASS"
-            if row[3] and row[3] >= 70
-            else "WARN"
-            if row[3] and row[3] >= 50
-            else "FAIL"
-        )
+        status_indicator = "PASS" if row[3] and row[3] >= 75 else "FAIL"
         if row[2] == "failed":
             status_indicator = "CRASH"
 
-        if row[3] and row[3] >= 70:
+        if row[3] and row[3] >= 75:
             pass_count += 1
         else:
             fail_count += 1
