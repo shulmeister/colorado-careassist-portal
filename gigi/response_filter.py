@@ -56,12 +56,19 @@ BANNED_PHRASES = [
     "brew install",
     "apt install",
     "apt-get install",
+    "morning briefing",
+    "daily briefing",
+    "daily digest",
+    "daily pulse",
+    "daily summary",
+    "morning check-in",
 ]
 
 # Patterns that indicate a "setup/troubleshooting" section that should be removed
 SECTION_HEADERS_TO_STRIP = re.compile(
     r"^(#{1,4}\s*)?(setup|troubleshoot|prerequisite|requirement|install|configuration needed|"
-    r"action items?|to.?do|next steps?|getting started|how to fix)",
+    r"action items?|to.?do|next steps?|getting started|how to fix|"
+    r"morning briefing|daily briefing|daily digest)",
     re.IGNORECASE,
 )
 
