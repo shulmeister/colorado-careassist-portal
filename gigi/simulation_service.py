@@ -25,6 +25,7 @@ import websockets
 try:
     from google import genai
     from google.genai import types as genai_types
+
     GENAI_AVAILABLE = True
 except ImportError:
     GENAI_AVAILABLE = False
@@ -32,6 +33,7 @@ except ImportError:
 # Anthropic SDK for simulation caller
 try:
     import anthropic as anthropic_sdk
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
@@ -42,10 +44,12 @@ logger = logging.getLogger(__name__)
 
 # Global state for tracking simulation tool calls
 SIMULATION_TOOL_CALLS: Dict[str, List[Dict]] = {}
-ACTIVE_SIMULATIONS: Dict[str, 'SimulationRunner'] = {}
+ACTIVE_SIMULATIONS: Dict[str, "SimulationRunner"] = {}
 
 
-def capture_simulation_tool_call(call_id: str, tool_name: str, tool_input: dict, result: str):
+def capture_simulation_tool_call(
+    call_id: str, tool_name: str, tool_input: dict, result: str
+):
     """
     Called by voice_brain.py to capture tool executions during simulations.
     Only captures for call_ids starting with "sim_"
@@ -56,12 +60,14 @@ def capture_simulation_tool_call(call_id: str, tool_name: str, tool_input: dict,
     if call_id not in SIMULATION_TOOL_CALLS:
         SIMULATION_TOOL_CALLS[call_id] = []
 
-    SIMULATION_TOOL_CALLS[call_id].append({
-        "tool": tool_name,
-        "input": tool_input,
-        "result": result,
-        "timestamp": datetime.now().isoformat()
-    })
+    SIMULATION_TOOL_CALLS[call_id].append(
+        {
+            "tool": tool_name,
+            "input": tool_input,
+            "result": result,
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
 
     logger.info(f"[Simulation {call_id}] Captured tool: {tool_name}")
 
@@ -69,7 +75,9 @@ def capture_simulation_tool_call(call_id: str, tool_name: str, tool_input: dict,
 class SimulationRunner:
     """Manages a single simulation run"""
 
-    def __init__(self, simulation_id: int, scenario: Dict, call_id: str, launched_by: str):
+    def __init__(
+        self, simulation_id: int, scenario: Dict, call_id: str, launched_by: str
+    ):
         self.simulation_id = simulation_id
         self.scenario = scenario
         self.call_id = call_id
@@ -91,10 +99,14 @@ class SimulationRunner:
             if not api_key:
                 raise ValueError("ANTHROPIC_API_KEY not set")
             self.anthropic_client = anthropic_sdk.Anthropic(api_key=api_key)
-            self.llm_model = os.getenv("SIMULATION_LLM_MODEL", "claude-sonnet-4-20250514")
+            self.llm_model = os.getenv(
+                "SIMULATION_LLM_MODEL", "claude-sonnet-4-20250514"
+            )
         else:
             if not GENAI_AVAILABLE:
-                raise ValueError("google.genai SDK not installed — cannot run simulations")
+                raise ValueError(
+                    "google.genai SDK not installed — cannot run simulations"
+                )
             gemini_api_key = os.getenv("GEMINI_API_KEY")
             if not gemini_api_key:
                 raise ValueError("GEMINI_API_KEY not set")
@@ -105,7 +117,9 @@ class SimulationRunner:
         ws_port = os.getenv("PORT", "8767")
         self.ws_url = f"ws://localhost:{ws_port}/llm-websocket/{call_id}"
 
-        logger.info(f"[Sim {call_id}] Initialized for scenario: {scenario['name']} -> {self.ws_url}")
+        logger.info(
+            f"[Sim {call_id}] Initialized for scenario: {scenario['name']} -> {self.ws_url}"
+        )
 
     async def run(self):
         """Execute the simulation"""
@@ -121,7 +135,9 @@ class SimulationRunner:
 
             # Connect to Voice Brain
             try:
-                async with websockets.connect(self.ws_url, open_timeout=10) as websocket:
+                async with websockets.connect(
+                    self.ws_url, open_timeout=10
+                ) as websocket:
                     logger.info(f"[Sim {self.call_id}] Connected to Voice Brain")
 
                     # Handle config + send call_details + receive greeting
@@ -134,22 +150,36 @@ class SimulationRunner:
 
                         # Generate user response
                         user_message = await self._generate_user_response()
-                        if not user_message or any(end_phrase in user_message.lower() for end_phrase in ["goodbye", "thanks, bye", "that's all", "thank you, bye"]):
+                        if not user_message or any(
+                            end_phrase in user_message.lower()
+                            for end_phrase in [
+                                "goodbye",
+                                "thanks, bye",
+                                "that's all",
+                                "thank you, bye",
+                            ]
+                        ):
                             logger.info(f"[Sim {self.call_id}] User ended conversation")
                             break
 
                         # Send to Voice Brain
                         await self._send_user_message(websocket, user_message)
-                        self.transcript.append({"role": "user", "content": user_message})
+                        self.transcript.append(
+                            {"role": "user", "content": user_message}
+                        )
 
                         # Receive response (may include ping/pong frames to skip)
                         assistant_response = await self._receive_response(websocket)
                         if assistant_response:
-                            self.transcript.append({"role": "assistant", "content": assistant_response})
+                            self.transcript.append(
+                                {"role": "assistant", "content": assistant_response}
+                            )
 
                             # Check for transfer (ends simulation)
                             if "transfer" in assistant_response.lower():
-                                logger.info(f"[Sim {self.call_id}] Call transferred, ending")
+                                logger.info(
+                                    f"[Sim {self.call_id}] Call transferred, ending"
+                                )
                                 break
                         else:
                             logger.warning(f"[Sim {self.call_id}] No response received")
@@ -162,7 +192,9 @@ class SimulationRunner:
                 logger.error(f"[Sim {self.call_id}] WebSocket connection timeout")
                 self.status = "failed"
                 self.error = "Connection timeout"
-                await self._update_db_status("failed", error_message="WebSocket connection timeout")
+                await self._update_db_status(
+                    "failed", error_message="WebSocket connection timeout"
+                )
 
             except websockets.exceptions.WebSocketException as e:
                 logger.error(f"[Sim {self.call_id}] WebSocket error: {e}")
@@ -179,11 +211,17 @@ class SimulationRunner:
     async def _generate_user_response(self) -> str:
         """Generate realistic user response using configured LLM provider."""
         import re
+
         turn_count = len([t for t in self.transcript if t["role"] == "user"])
+
+        # Jason (owner) scenarios need more turns — complex flows like
+        # restaurant reservations require search → confirm → book
+        is_owner_scenario = self.scenario.get("id", "").startswith("jason_")
+        wrap_up_turn = 6 if is_owner_scenario else 4
 
         if turn_count == 0:
             stage_hint = "This is your FIRST message. Introduce yourself and state your reason for calling clearly."
-        elif turn_count >= 4:
+        elif turn_count >= wrap_up_turn:
             stage_hint = "The conversation has gone on long enough. Wrap up — say thanks and goodbye."
         else:
             stage_hint = "Continue the conversation naturally. Answer any questions the agent asked."
@@ -191,9 +229,9 @@ class SimulationRunner:
         prompt = f"""You are role-playing a phone caller to a home care agency. Output ONLY the exact words you would speak.
 
 CALLER PROFILE:
-- Name/Role: {self.scenario['identity']}
-- Reason for calling: {self.scenario['goal']}
-- Personality: {self.scenario['personality']}
+- Name/Role: {self.scenario["identity"]}
+- Reason for calling: {self.scenario["goal"]}
+- Personality: {self.scenario["personality"]}
 
 STAGE: {stage_hint}
 
@@ -217,13 +255,13 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
             if text:
                 text = text.strip().strip('"').strip("'")
-                text = re.sub(r'\*[^*]+\*', '', text).strip()
-                text = re.sub(r'\([^)]+\)', '', text).strip()
+                text = re.sub(r"\*[^*]+\*", "", text).strip()
+                text = re.sub(r"\([^)]+\)", "", text).strip()
 
                 if len(text.split()) < 3:
                     return self._get_context_fallback()
 
-                if not any(text.rstrip().endswith(p) for p in '.!?'):
+                if not any(text.rstrip().endswith(p) for p in ".!?"):
                     text = text.rstrip() + "."
 
                 return text
@@ -231,7 +269,9 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
             return self._get_context_fallback()
 
         except Exception as e:
-            logger.error(f"[Sim {self.call_id}] Caller LLM error ({self.caller_provider}): {e}")
+            logger.error(
+                f"[Sim {self.call_id}] Caller LLM error ({self.caller_provider}): {e}"
+            )
             return self._get_context_fallback()
 
     async def _call_anthropic(self, prompt: str) -> Optional[str]:
@@ -259,20 +299,26 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
             contents=prompt,
             config=config,
         )
-        if response.candidates and response.candidates[0].content and response.candidates[0].content.parts:
+        if (
+            response.candidates
+            and response.candidates[0].content
+            and response.candidates[0].content.parts
+        ):
             for part in response.candidates[0].content.parts:
-                if hasattr(part, 'text') and part.text:
+                if hasattr(part, "text") and part.text:
                     return part.text
         return None
 
     def _get_context_fallback(self) -> str:
         """Generate a context-appropriate fallback when Gemini fails."""
         turn_count = len([t for t in self.transcript if t["role"] == "user"])
-        name = self.scenario['identity'].split(',')[0].strip()
+        name = self.scenario["identity"].split(",")[0].strip()
+        is_owner_scenario = self.scenario.get("id", "").startswith("jason_")
+        wrap_up_turn = 6 if is_owner_scenario else 4
 
         if turn_count == 0:
             return f"Hi, my name is {name}. {self.scenario['goal']}."
-        elif turn_count >= 4:
+        elif turn_count >= wrap_up_turn:
             return "Thank you for your help. Goodbye."
 
         # Build a contextual response based on last agent message
@@ -284,8 +330,14 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
         if "name" in last_agent_msg or "who" in last_agent_msg:
             return f"My name is {name}."
-        elif "shift" in last_agent_msg or "schedule" in last_agent_msg or "when" in last_agent_msg:
-            return "It is my afternoon shift tomorrow. I have a fever and cannot come in."
+        elif (
+            "shift" in last_agent_msg
+            or "schedule" in last_agent_msg
+            or "when" in last_agent_msg
+        ):
+            return (
+                "It is my afternoon shift tomorrow. I have a fever and cannot come in."
+            )
         elif "anything else" in last_agent_msg:
             return "No, that is everything. Thank you for your help. Goodbye."
         elif "sorry" in last_agent_msg or "trouble" in last_agent_msg:
@@ -305,17 +357,21 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
             # 2. Send call_details (simulating what Retell sends to trigger greeting)
             from_number = self.scenario.get("from_number", "+13074598220")
-            await websocket.send(json.dumps({
-                "interaction_type": "call_details",
-                "call": {
-                    "call_id": self.call_id,
-                    "from_number": from_number,
-                    "to_number": "+17208176600",
-                    "direction": "inbound",
-                    "call_type": "phone_call",
-                    "metadata": {"simulation": True}
-                }
-            }))
+            await websocket.send(
+                json.dumps(
+                    {
+                        "interaction_type": "call_details",
+                        "call": {
+                            "call_id": self.call_id,
+                            "from_number": from_number,
+                            "to_number": "+17208176600",
+                            "direction": "inbound",
+                            "call_type": "phone_call",
+                            "metadata": {"simulation": True},
+                        },
+                    }
+                )
+            )
             logger.info(f"[Sim {self.call_id}] Sent call_details (from: {from_number})")
 
             # 3. Receive greeting from voice brain
@@ -327,7 +383,9 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
                 self.transcript.append({"role": "assistant", "content": greeting})
                 logger.info(f"[Sim {self.call_id}] Greeting: {greeting[:100]}...")
             else:
-                logger.warning(f"[Sim {self.call_id}] Unexpected message type after call_details: {data.get('response_type')}")
+                logger.warning(
+                    f"[Sim {self.call_id}] Unexpected message type after call_details: {data.get('response_type')}"
+                )
 
         except asyncio.TimeoutError:
             logger.error(f"[Sim {self.call_id}] Timeout waiting for initial exchange")
@@ -341,7 +399,7 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
         payload = {
             "interaction_type": "response_required",
             "response_id": len(self.transcript),
-            "transcript": self.transcript + [{"role": "user", "content": message}]
+            "transcript": self.transcript + [{"role": "user", "content": message}],
         }
         await websocket.send(json.dumps(payload))
         logger.info(f"[Sim {self.call_id}] Sent: {message[:100]}...")
@@ -353,18 +411,26 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
         "Let me look that up") with content_complete=False BEFORE executing tools.
         We must skip those and wait for the final content_complete=True response.
         """
-        deadline = asyncio.get_event_loop().time() + 60  # 60s total timeout (tools can be slow)
+        deadline = (
+            asyncio.get_event_loop().time() + 60
+        )  # 60s total timeout (tools can be slow)
         try:
             while asyncio.get_event_loop().time() < deadline:
                 remaining = deadline - asyncio.get_event_loop().time()
-                msg = await asyncio.wait_for(websocket.recv(), timeout=max(remaining, 1))
+                msg = await asyncio.wait_for(
+                    websocket.recv(), timeout=max(remaining, 1)
+                )
                 data = json.loads(msg)
 
                 if data.get("response_type") == "ping_pong":
-                    await websocket.send(json.dumps({
-                        "interaction_type": "ping_pong",
-                        "timestamp": data.get("timestamp")
-                    }))
+                    await websocket.send(
+                        json.dumps(
+                            {
+                                "interaction_type": "ping_pong",
+                                "timestamp": data.get("timestamp"),
+                            }
+                        )
+                    )
                     continue
 
                 if data.get("response_type") == "response":
@@ -373,18 +439,22 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
                     if content_complete:
                         # This is the final response — return it
-                        logger.info(f"[Sim {self.call_id}] Final response: {content[:100]}...")
+                        logger.info(
+                            f"[Sim {self.call_id}] Final response: {content[:100]}..."
+                        )
                         return content
                     else:
                         # Intermediate thinking phrase — skip and keep waiting
-                        logger.info(f"[Sim {self.call_id}] Intermediate (skipped): {content[:80]}")
+                        logger.info(
+                            f"[Sim {self.call_id}] Intermediate (skipped): {content[:80]}"
+                        )
                         continue
 
                 # Capture tool calls from WebSocket events (cross-process safe)
                 if data.get("response_type") == "tool_call_invocation":
                     tool_call_id = data.get("tool_call_id", "")
                     tool_name = data.get("name", "unknown")
-                    if not hasattr(self, '_pending_tools'):
+                    if not hasattr(self, "_pending_tools"):
                         self._pending_tools = {}
                     self._pending_tools[tool_call_id] = tool_name
                     logger.info(f"[Sim {self.call_id}] Tool invocation: {tool_name}")
@@ -392,19 +462,23 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
                 if data.get("response_type") == "tool_call_result":
                     tool_call_id = data.get("tool_call_id", "")
-                    pending = getattr(self, '_pending_tools', {})
+                    pending = getattr(self, "_pending_tools", {})
                     tool_name = pending.pop(tool_call_id, "unknown")
                     result_content = data.get("content", "")
-                    self.captured_tool_calls.append({
-                        "tool": tool_name,
-                        "input": {},
-                        "result": result_content[:500],
-                        "timestamp": datetime.now().isoformat()
-                    })
+                    self.captured_tool_calls.append(
+                        {
+                            "tool": tool_name,
+                            "input": {},
+                            "result": result_content[:500],
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
                     logger.info(f"[Sim {self.call_id}] Tool captured: {tool_name}")
                     continue
 
-                logger.info(f"[Sim {self.call_id}] Skipping message type: {data.get('response_type')}")
+                logger.info(
+                    f"[Sim {self.call_id}] Skipping message type: {data.get('response_type')}"
+                )
 
             logger.error(f"[Sim {self.call_id}] Timeout waiting for final response")
             return None
@@ -420,29 +494,45 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
         """Evaluate and save results"""
         duration = (datetime.now() - self.started_at).seconds if self.started_at else 0
 
-        # Get tool calls — prefer WebSocket captures (cross-process safe),
-        # fall back to in-memory global dict (same-process only)
-        tool_calls = self.captured_tool_calls or SIMULATION_TOOL_CALLS.get(self.call_id, [])
+        # Merge both tool capture sources (WebSocket frames + in-memory global dict)
+        # Using 'or' missed tools when one source captured and the other didn't
+        ws_tools = self.captured_tool_calls or []
+        global_tools = SIMULATION_TOOL_CALLS.get(self.call_id, [])
+        all_tool_calls = ws_tools + global_tools
+        # Deduplicate by tool name + timestamp (same tool captured via both paths)
+        seen = set()
+        tool_calls = []
+        for t in all_tool_calls:
+            key = (t["tool"], t.get("timestamp", ""))
+            if key not in seen:
+                seen.add(key)
+                tool_calls.append(t)
         tools_used = list(set([t["tool"] for t in tool_calls]))
 
-        logger.info(f"[Sim {self.call_id}] Completing simulation - {len(self.transcript)} turns, {len(tool_calls)} tool calls (tools: {tools_used})")
+        logger.info(
+            f"[Sim {self.call_id}] Completing simulation - {len(self.transcript)} turns, {len(tool_calls)} tool calls (tools: {tools_used})"
+        )
 
         # Evaluate
         from gigi.simulation_evaluator import evaluate_simulation
+
         evaluation = await evaluate_simulation(
             scenario=self.scenario,
             transcript=self.transcript,
             tool_calls=tool_calls,
-            tools_used=tools_used
+            tools_used=tools_used,
         )
 
         # Update database
-        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        db_url = os.getenv(
+            "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
+        )
         conn = psycopg2.connect(db_url)
         try:
             cur = conn.cursor()
 
-            cur.execute("""
+            cur.execute(
+                """
                 UPDATE gigi_simulations
                 SET status = 'completed',
                     completed_at = %s,
@@ -457,27 +547,31 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
                     overall_score = %s,
                     evaluation_details = %s
                 WHERE id = %s
-            """, (
-                datetime.now(),
-                duration,
-                self._format_transcript_text(),
-                json.dumps(self.transcript),
-                len(self.transcript) // 2,
-                json.dumps(tool_calls),
-                json.dumps(tools_used),
-                evaluation["tool_score"],
-                evaluation["behavior_score"],
-                evaluation["overall_score"],
-                json.dumps(evaluation["details"]),
-                self.simulation_id
-            ))
+            """,
+                (
+                    datetime.now(),
+                    duration,
+                    self._format_transcript_text(),
+                    json.dumps(self.transcript),
+                    len(self.transcript) // 2,
+                    json.dumps(tool_calls),
+                    json.dumps(tools_used),
+                    evaluation["tool_score"],
+                    evaluation["behavior_score"],
+                    evaluation["overall_score"],
+                    json.dumps(evaluation["details"]),
+                    self.simulation_id,
+                ),
+            )
 
             conn.commit()
             cur.close()
         finally:
             conn.close()
 
-        logger.info(f"[Sim {self.call_id}] Completed - Score: {evaluation['overall_score']}/100")
+        logger.info(
+            f"[Sim {self.call_id}] Completed - Score: {evaluation['overall_score']}/100"
+        )
 
         # Cleanup
         if self.call_id in SIMULATION_TOOL_CALLS:
@@ -504,7 +598,9 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
     async def _update_db_status(self, status: str, **kwargs):
         """Update simulation status in database using parameterized queries"""
-        db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+        db_url = os.getenv(
+            "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
+        )
         conn = psycopg2.connect(db_url)
         try:
             cur = conn.cursor()
@@ -514,11 +610,18 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
             params = [status]
 
             # Whitelist of allowed column names to prevent SQL injection via key names
-            allowed_columns = {"started_at", "completed_at", "error_message", "duration_seconds"}
+            allowed_columns = {
+                "started_at",
+                "completed_at",
+                "error_message",
+                "duration_seconds",
+            }
 
             for key, value in kwargs.items():
                 if key not in allowed_columns:
-                    logger.warning(f"Ignoring unknown column in _update_db_status: {key}")
+                    logger.warning(
+                        f"Ignoring unknown column in _update_db_status: {key}"
+                    )
                     continue
                 set_parts.append(f"{key} = %s")
                 if isinstance(value, datetime):
@@ -544,24 +647,29 @@ async def launch_simulation(scenario: Dict, launched_by: str) -> int:
     call_id = f"sim_{uuid.uuid4().hex[:16]}"
 
     # Create database record
-    db_url = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
+    db_url = os.getenv(
+        "DATABASE_URL", "postgresql://careassist@localhost:5432/careassist"
+    )
     conn = psycopg2.connect(db_url)
     try:
         cur = conn.cursor()
 
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO gigi_simulations (
                 scenario_id, scenario_name, call_id, status,
                 expected_tools, launched_by, created_at
             ) VALUES (%s, %s, %s, 'pending', %s, %s, NOW())
             RETURNING id
-        """, (
-            scenario["id"],
-            scenario["name"],
-            call_id,
-            json.dumps(scenario.get("expected_tools", [])),
-            launched_by
-        ))
+        """,
+            (
+                scenario["id"],
+                scenario["name"],
+                call_id,
+                json.dumps(scenario.get("expected_tools", [])),
+                launched_by,
+            ),
+        )
 
         simulation_id = cur.fetchone()[0]
         conn.commit()
