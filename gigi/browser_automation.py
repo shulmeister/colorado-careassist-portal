@@ -15,23 +15,36 @@ import json
 import logging
 import os
 
+import requests as _requests
+
 logger = logging.getLogger("gigi.browser")
 
 NPX_PATH = "/opt/homebrew/bin/npx"
 MAX_CONTENT = 4000
-STARTUP_TIMEOUT = 20   # seconds to wait for MCP handshake
-TOOL_TIMEOUT = 30      # seconds per tool call
-NAV_TIMEOUT = 60       # seconds for page navigation
+STARTUP_TIMEOUT = 20  # seconds to wait for MCP handshake
+TOOL_TIMEOUT = 30  # seconds per tool call
+NAV_TIMEOUT = 60  # seconds for page navigation
+CDP_PORT = 9222
+
+
+def _get_cdp_ws_url() -> str | None:
+    """Get the WebSocket debugger URL from a running Chrome CDP endpoint."""
+    try:
+        r = _requests.get(f"http://127.0.0.1:{CDP_PORT}/json/version", timeout=2)
+        return r.json().get("webSocketDebuggerUrl")
+    except Exception:
+        return None
 
 
 class _MCPClient:
     """Single-use @playwright/mcp subprocess client (per request)."""
 
-    def __init__(self):
+    def __init__(self, cdp_endpoint: str | None = None):
         self._proc = None
         self._reader_task = None
         self._pending: dict[int, asyncio.Future] = {}
         self._seq = 0
+        self._cdp_endpoint = cdp_endpoint
 
     def _new_id(self) -> int:
         self._seq += 1
@@ -41,44 +54,64 @@ class _MCPClient:
 
     async def start(self):
         """Spawn @playwright/mcp and complete MCP handshake."""
+        if self._cdp_endpoint:
+            args = [
+                NPX_PATH,
+                "@playwright/mcp",
+                "--cdp-endpoint",
+                self._cdp_endpoint,
+            ]
+            logger.info(f"MCP connecting via CDP: {self._cdp_endpoint[:50]}...")
+        else:
+            args = [
+                NPX_PATH,
+                "@playwright/mcp",
+                "--headless",
+                "--no-sandbox",
+                "--snapshot-mode",
+                "full",
+                "--timeout-navigation",
+                str(NAV_TIMEOUT * 1000),
+            ]
         self._proc = await asyncio.create_subprocess_exec(
-            NPX_PATH, "@playwright/mcp",
-            "--headless",
-            "--isolated",
-            "--no-sandbox",
-            "--snapshot-mode", "full",
-            "--timeout-navigation", str(NAV_TIMEOUT * 1000),
+            *args,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,  # PIPE would block if stderr fills up
+            stderr=asyncio.subprocess.DEVNULL,
             env=os.environ.copy(),
         )
         self._reader_task = asyncio.create_task(self._read_loop())
 
         req_id = self._new_id()
-        await self._write({
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2024-11-05",
-                "capabilities": {},
-                "clientInfo": {"name": "gigi", "version": "1.0"},
-            },
-        })
+        await self._write(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "gigi", "version": "1.0"},
+                },
+            }
+        )
         await asyncio.wait_for(self._pending[req_id], timeout=STARTUP_TIMEOUT)
 
         # Send initialized notification (no id — it's a notification)
         await self._write({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
-    async def call_tool(self, name: str, arguments: dict, timeout: float = TOOL_TIMEOUT) -> dict:
+    async def call_tool(
+        self, name: str, arguments: dict, timeout: float = TOOL_TIMEOUT
+    ) -> dict:
         req_id = self._new_id()
-        await self._write({
-            "jsonrpc": "2.0",
-            "id": req_id,
-            "method": "tools/call",
-            "params": {"name": name, "arguments": arguments},
-        })
+        await self._write(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            }
+        )
         try:
             result = await asyncio.wait_for(self._pending[req_id], timeout=timeout)
         except asyncio.TimeoutError:
@@ -170,10 +203,13 @@ async def _run_browser_task(task_fn) -> dict:
 class BrowserAutomation:
     """Playwright-backed browser automation via @playwright/mcp."""
 
-    async def browse_webpage(self, url: str, extract_links: bool = False,
-                              max_length: int = MAX_CONTENT) -> dict:
+    async def browse_webpage(
+        self, url: str, extract_links: bool = False, max_length: int = MAX_CONTENT
+    ) -> dict:
         async def task(client: _MCPClient) -> dict:
-            await client.call_tool("browser_navigate", {"url": url}, timeout=NAV_TIMEOUT + 5)
+            await client.call_tool(
+                "browser_navigate", {"url": url}, timeout=NAV_TIMEOUT + 5
+            )
             result = await client.call_tool("browser_snapshot", {})
             content = _extract_text(result, max_length)
             return {"success": True, "content": content, "url": url}
@@ -183,7 +219,9 @@ class BrowserAutomation:
 
     async def take_screenshot(self, url: str, full_page: bool = False) -> dict:
         async def task(client: _MCPClient) -> dict:
-            await client.call_tool("browser_navigate", {"url": url}, timeout=NAV_TIMEOUT + 5)
+            await client.call_tool(
+                "browser_navigate", {"url": url}, timeout=NAV_TIMEOUT + 5
+            )
             result = await client.call_tool("browser_take_screenshot", {})
             description = _extract_text(result)
             return {"success": True, "description": description, "url": url}
