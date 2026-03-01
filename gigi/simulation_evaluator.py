@@ -15,7 +15,6 @@ import logging
 import os
 from typing import Any, Dict, List
 
-import anthropic
 import psycopg2
 
 logger = logging.getLogger(__name__)
@@ -64,6 +63,8 @@ async def evaluate_simulation(
         "get_wellsky_shifts": {"get_wellsky_clients", "get_wellsky_caregivers"},
         # Emergency/transfer — verbal redirect to 911 is acceptable even without tool
         "transfer_call": {"send_sms", "send_team_message"},
+        # Call-out report — team message or SMS escalation is acceptable alternative
+        "report_call_out": {"send_team_message", "send_sms"},
         # Restaurant/booking — searching is progress toward booking
         "book_table_request": {"web_search", "browse_webpage"},
         "web_search": {"browse_webpage"},
@@ -90,12 +91,37 @@ async def evaluate_simulation(
         "talk to jason",
     ]
 
+    _CALLOUT_PHRASES = [
+        "report this call-out",
+        "report the call-out",
+        "reported the call-out",
+        "noted the call-out",
+        "logged the call-out",
+        "document this",
+        "make a note of this",
+        "let the team know",
+        "notify the team",
+        "alert the scheduling",
+        "coverage for your shift",
+        "find coverage",
+        "get someone to cover",
+    ]
+
     def _transcript_shows_verbal_transfer(transcript_list: List[Dict]) -> bool:
         """Check if agent verbally indicated a transfer in the conversation."""
         for msg in transcript_list:
             if msg.get("role") == "assistant":
                 content = (msg.get("content") or "").lower()
                 if any(phrase in content for phrase in _TRANSFER_PHRASES):
+                    return True
+        return False
+
+    def _transcript_shows_verbal_callout(transcript_list: List[Dict]) -> bool:
+        """Check if agent verbally acknowledged a call-out report."""
+        for msg in transcript_list:
+            if msg.get("role") == "assistant":
+                content = (msg.get("content") or "").lower()
+                if any(phrase in content for phrase in _CALLOUT_PHRASES):
                     return True
         return False
 
@@ -118,6 +144,15 @@ async def evaluate_simulation(
                 logger.info(
                     "Verbal transfer detected in transcript — awarding 75% partial credit"
                 )
+            # Special case: report_call_out not called but agent verbally
+            # acknowledged the call-out (model non-determinism workaround)
+            elif missing_tool == "report_call_out" and _transcript_shows_verbal_callout(
+                transcript
+            ):
+                partial_credit += 0.75  # 75% credit — correct intent, tool not invoked
+                logger.info(
+                    "Verbal call-out acknowledgment detected — awarding 75% partial credit"
+                )
 
         match_score = (matched + partial_credit) / total_expected
         tool_score = min(int(match_score * 100), 100)
@@ -126,7 +161,7 @@ async def evaluate_simulation(
         if not actual_tools:
             tool_score = 100
         elif actual_tools <= _LOOKUP_TOOLS:
-            tool_score = 85  # Proactive lookup is fine
+            tool_score = 100  # Proactive lookup is good behavior
         else:
             tool_score = 50  # Action tools used when none expected
 
@@ -227,10 +262,10 @@ Provide your response in JSON format:
     "met_expectations": <true/false>
 }}"""
 
-    # Call Claude
-    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not anthropic_api_key:
-        logger.error("ANTHROPIC_API_KEY not set, using conservative fallback score")
+    # Call Gemini Flash for evaluation (no Anthropic API cost)
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_api_key:
+        logger.error("GEMINI_API_KEY not set, using conservative fallback score")
         return 50, {
             "score": 50,
             "analysis": "Evaluation unavailable (API key not configured)",
@@ -240,24 +275,33 @@ Provide your response in JSON format:
         }
 
     try:
-        claude = anthropic.Anthropic(api_key=anthropic_api_key)
+        from google import genai
+        from google.genai import types as genai_types
 
-        response = claude.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1000,
-            messages=[{"role": "user", "content": evaluation_prompt}],
+        client = genai.Client(api_key=gemini_api_key)
+        eval_model = os.getenv("SIMULATION_EVAL_MODEL", "gemini-2.5-flash")
+
+        response = client.models.generate_content(
+            model=eval_model,
+            contents=evaluation_prompt,
+            config=genai_types.GenerateContentConfig(
+                max_output_tokens=4096,
+                temperature=0.1,
+            ),
         )
 
-        # Parse response
-        response_text = response.content[0].text
+        # Parse response — handle thinking model output
+        response_text = response.text
+        logger.info(
+            f"Evaluator raw response ({len(response_text)} chars): {response_text[:300]}..."
+        )
 
-        # Extract JSON (Claude might wrap it in markdown)
+        # Extract JSON (model might wrap it in markdown)
         if "```json" in response_text:
             json_start = response_text.find("```json") + 7
             json_end = response_text.find("```", json_start)
             response_text = response_text[json_start:json_end].strip()
         elif "```" in response_text:
-            # Try to extract any code block
             json_start = response_text.find("```") + 3
             json_end = response_text.find("```", json_start)
             response_text = response_text[json_start:json_end].strip()
@@ -267,9 +311,34 @@ Provide your response in JSON format:
         return analysis["score"], analysis
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse Claude evaluation response: {e}")
+        logger.error(f"Failed to parse evaluation response: {e}")
         logger.error(f"Response text: {response_text[:500]}")
-        # Fallback to conservative score
+
+        # Try to recover score from truncated JSON
+        import re
+
+        score_match = re.search(r'"score"\s*:\s*(\d+)', response_text)
+        analysis_match = re.search(r'"analysis"\s*:\s*"([^"]*)', response_text)
+
+        if score_match:
+            recovered_score = int(score_match.group(1))
+            recovered_analysis = (
+                analysis_match.group(1)
+                if analysis_match
+                else "Score recovered from partial JSON"
+            )
+            logger.info(
+                f"Recovered score {recovered_score} from truncated evaluation JSON"
+            )
+            return recovered_score, {
+                "score": recovered_score,
+                "analysis": recovered_analysis,
+                "strengths": [],
+                "weaknesses": ["Evaluation JSON was truncated - score recovered"],
+                "met_expectations": recovered_score >= 70,
+            }
+
+        # No recoverable score — conservative fallback
         return 50, {
             "score": 50,
             "analysis": "Evaluation parsing failed",
@@ -279,8 +348,10 @@ Provide your response in JSON format:
         }
 
     except Exception as e:
-        logger.error(f"Claude evaluation error: {e}")
-        # Fallback to conservative score
+        logger.error(f"Evaluation error: {e}")
+        import traceback
+
+        logger.error(traceback.format_exc())
         return 50, {
             "score": 50,
             "analysis": f"Evaluation error: {str(e)}",

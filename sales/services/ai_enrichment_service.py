@@ -34,7 +34,7 @@ except ImportError:
 from models import ActivityLog, Contact, ReferralSource
 
 # LLM provider config — follows same env vars as Gigi
-_LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "anthropic").lower()
+_LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "minimax").lower()
 _MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
 _ENRICHMENT_MODELS = {
     "anthropic": "claude-haiku-4-5-20251001",
@@ -42,7 +42,7 @@ _ENRICHMENT_MODELS = {
 }
 _ENRICHMENT_MODEL = os.getenv(
     "GIGI_LLM_MODEL",
-    _ENRICHMENT_MODELS.get(_LLM_PROVIDER, "claude-haiku-4-5-20251001"),
+    _ENRICHMENT_MODELS.get(_LLM_PROVIDER, "MiniMax-M2.5"),
 )
 
 

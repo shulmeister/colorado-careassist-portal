@@ -1870,6 +1870,7 @@ _TELEGRAM_SYSTEM_PROMPT_BASE = """You are Gigi, Jason Shulman's Elite Chief of S
 - **NEVER send unsolicited messages.** You ONLY respond when Jason messages you first. NEVER proactively generate or send any scheduled message.
 - **NEVER suggest installing software or mention CLI tools.** There is NO "gog CLI", "gcloud CLI", "Google Cloud CLI", "curl", "wttr.in", or any CLI tool. All services are built into your tools. If a tool fails, say "that section isn't available right now" — do NOT suggest installing anything or mention any CLI/terminal commands. This rule has been violated repeatedly and the user is furious. OBEY IT.
 - **NEVER HALLUCINATE TOOLS or troubleshooting steps:** You can ONLY use the tools listed above. NEVER invent tools, CLI commands, bash commands, or any command not in your tool list. NEVER suggest "setup steps", "configuration needed", or "needs firewall check". If a tool returns partial data, relay what you got. If a tool fails, say it's temporarily unavailable. Do NOT fabricate explanations for why something failed.
+- **NEVER ask for or collect sensitive personal identification numbers** (passport numbers, Social Security numbers, driver's license numbers, bank account numbers, credit card numbers, dates of birth). You may reference that Jason HAS TSA PreCheck or a valid passport, but NEVER request document numbers, expiration dates, or issuing details from anyone. If someone volunteers sensitive info, acknowledge it briefly and move on — do NOT read it back or confirm digits.
 - **NEVER REFORMAT TOOL OUTPUT:** When a tool returns data, relay it as-is. Do NOT add "SETUP ISSUES" sections, troubleshooting advice, TODO lists, or commentary.
 - **Shifts:** If asked about shifts, hours, who's working, staffing — ALWAYS use `get_wellsky_shifts` FIRST. Do NOT search emails, memories, or the web instead.
 - **Trading Bots:** If asked about trading, bots, weather bots, Kalshi — use `get_weather_arb_status`. Kalshi is the ONLY trading bot Jason cares about. Focus on Kalshi P&L and positions. Do NOT mention Polymarket, Polybot, or paper trading unless Jason explicitly asks about them.
@@ -1955,16 +1956,16 @@ class GigiTelegramBot:
         elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
             self.llm = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
         else:
-            # Fallback: try any available provider
-            if ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
-                self.llm = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-                logger.warning(
-                    f"Provider '{LLM_PROVIDER}' not available, falling back to anthropic"
-                )
-            elif GEMINI_AVAILABLE and GEMINI_API_KEY:
+            # Fallback: try Gemini first (free tier), then Anthropic
+            if GEMINI_AVAILABLE and GEMINI_API_KEY:
                 self.llm = genai.Client(api_key=GEMINI_API_KEY)
                 logger.warning(
                     f"Provider '{LLM_PROVIDER}' not available, falling back to gemini"
+                )
+            elif ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+                self.llm = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+                logger.warning(
+                    f"Provider '{LLM_PROVIDER}' not available, falling back to anthropic"
                 )
 
         self.wellsky = WellSkyService() if WellSkyService else None
@@ -2071,13 +2072,13 @@ class GigiTelegramBot:
                         k in err_str
                         for k in ("429", "resource_exhausted", "rate_limit", "quota")
                     )
-                    if is_rate_limit and LLM_PROVIDER != "anthropic":
+                    if is_rate_limit and LLM_PROVIDER != "gemini":
                         logger.warning(
-                            f"{LLM_PROVIDER} rate limited, falling back to anthropic: {e}"
+                            f"{LLM_PROVIDER} rate limited, falling back to gemini: {e}"
                         )
-                        used_provider = "anthropic (fallback)"
+                        used_provider = "gemini (fallback)"
                         final_text = await asyncio.wait_for(
-                            self._call_anthropic(user_id, update), timeout=300.0
+                            self._call_gemini(user_id, update), timeout=300.0
                         )
                     else:
                         raise

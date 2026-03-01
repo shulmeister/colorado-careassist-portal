@@ -38,6 +38,14 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
 
+# OpenAI SDK for DeepSeek (OpenAI-compatible API)
+try:
+    import openai as openai_sdk
+
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -90,9 +98,19 @@ class SimulationRunner:
         self.started_at = None
 
         # Configure simulation caller LLM
-        self.caller_provider = os.getenv("SIMULATION_CALLER_PROVIDER", "anthropic")
+        self.caller_provider = os.getenv("SIMULATION_CALLER_PROVIDER", "gemini")
 
-        if self.caller_provider == "anthropic":
+        if self.caller_provider == "deepseek":
+            if not OPENAI_AVAILABLE:
+                raise ValueError("openai SDK not installed — cannot run simulations")
+            ds_key = os.getenv("DEEPSEEK_API_KEY")
+            if not ds_key:
+                raise ValueError("DEEPSEEK_API_KEY not set")
+            self.openai_client = openai_sdk.OpenAI(
+                api_key=ds_key, base_url="https://api.deepseek.com"
+            )
+            self.llm_model = os.getenv("SIMULATION_LLM_MODEL", "DeepSeek-V3.2-Speciale")
+        elif self.caller_provider == "anthropic":
             if not ANTHROPIC_AVAILABLE:
                 raise ValueError("anthropic SDK not installed — cannot run simulations")
             api_key = os.getenv("ANTHROPIC_API_KEY")
@@ -220,6 +238,10 @@ class SimulationRunner:
         wrap_up_turn = 6 if is_owner_scenario else 4
 
         if turn_count == 0:
+            # Use hardcoded first message if scenario provides one (avoids LLM truncation)
+            first_msg = self.scenario.get("first_message")
+            if first_msg:
+                return first_msg
             stage_hint = "This is your FIRST message. Introduce yourself and state your reason for calling clearly."
         elif turn_count >= wrap_up_turn:
             stage_hint = "The conversation has gone on long enough. Wrap up — say thanks and goodbye."
@@ -248,7 +270,9 @@ CONVERSATION SO FAR:
 YOUR NEXT SPOKEN WORDS (complete sentences only):"""
 
         try:
-            if self.caller_provider == "anthropic":
+            if self.caller_provider == "deepseek":
+                text = await self._call_deepseek(prompt)
+            elif self.caller_provider == "anthropic":
                 text = await self._call_anthropic(prompt)
             else:
                 text = await self._call_gemini(prompt)
@@ -285,6 +309,19 @@ YOUR NEXT SPOKEN WORDS (complete sentences only):"""
         )
         if response.content and response.content[0].text:
             return response.content[0].text
+        return None
+
+    async def _call_deepseek(self, prompt: str) -> Optional[str]:
+        """Call DeepSeek API (OpenAI-compatible) for simulation caller."""
+        response = await asyncio.to_thread(
+            self.openai_client.chat.completions.create,
+            model=self.llm_model,
+            max_tokens=300,
+            temperature=0.4,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        if response.choices and response.choices[0].message.content:
+            return response.choices[0].message.content
         return None
 
     async def _call_gemini(self, prompt: str) -> Optional[str]:
