@@ -21,10 +21,14 @@ root_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if root_path not in sys.path:
     sys.path.insert(0, root_path)
 
-# Source env vars from ~/.gigi-env if keys are missing
-_GIGI_ENV = os.path.expanduser("~/.gigi-env")
-if os.path.exists(_GIGI_ENV):
-    with open(_GIGI_ENV) as f:
+# Source env vars from resolved-secrets.env (primary) and ~/.gigi-env (legacy fallback)
+for _env_file in [
+    os.path.expanduser("~/.config/careassist/resolved-secrets.env"),
+    os.path.expanduser("~/.gigi-env"),
+]:
+    if not os.path.exists(_env_file):
+        continue
+    with open(_env_file) as f:
         for line in f:
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
@@ -206,13 +210,13 @@ GIGI_TEST_SCENARIOS = [
         "description": "Overwhelmed daughter, father just fell and was discharged, needs help navigating care",
         "identity": "Karen Miller, 62, calling about her 84-year-old father",
         "goal": "Understand what CCA does, find out if they can help soon, feel reassured",
-        "personality": "Anxious, rambles, doesn't use right terminology, calms down if guided clearly",
+        "personality": "Anxious but cooperative, explains the situation in detail, uses lay terms like 'someone to help dad at home', calms down when given clear answers",
         "expected_tools": [],
         "expected_behavior": [
-            "Agent explains non-medical home care clearly",
-            "Agent avoids over-promising on timeline",
-            "Agent captures intake info and sets callback expectation",
-            "Caller feels calmer and leaves name/number",
+            "Agent explains what CCA offers (non-medical home care)",
+            "Agent is empathetic and reassuring about the situation",
+            "Agent gathers basic info or offers to have someone follow up",
+            "Caller feels heard and has a clear next step",
         ],
     },
     {
@@ -221,7 +225,8 @@ GIGI_TEST_SCENARIOS = [
         "description": "Panicked caregiver - car won't start, worried about job, needs clear guidance",
         "identity": "Liza Martinez, caregiver at Colorado Care Assist",
         "goal": "Let agency know she can't make her shift to Preston Hill's house tomorrow, ensure client is covered, avoid getting blamed",
-        "personality": "Rushed and apologetic, speaks quickly, jumps between thoughts",
+        "personality": "Apologetic but direct. Answers questions simply. Worries about getting in trouble. Asks if someone can cover the shift.",
+        "first_message": "Hi, this is Liza Martinez. I need to call out of my shift to Preston Hill's house tomorrow — my car broke down and I can't get there. Can someone cover for me?",
         "expected_tools": ["get_wellsky_caregivers", "report_call_out"],
         "expected_behavior": [
             "Agent stays calm and takes control",
@@ -386,7 +391,7 @@ GIGI_TEST_SCENARIOS = [
 ]
 
 
-async def run_all():
+async def run_all(scenario_filter=None):
     gemini_api_key = os.getenv("GEMINI_API_KEY")
     anthropic_key = os.getenv("ANTHROPIC_API_KEY")
 
@@ -400,12 +405,21 @@ async def run_all():
     else:
         print("ANTHROPIC_API_KEY found (behavior evaluation enabled)")
 
+    # Filter scenarios if requested
+    scenarios = GIGI_TEST_SCENARIOS
+    if scenario_filter:
+        filter_ids = [s.strip() for s in scenario_filter.split(",")]
+        scenarios = [s for s in scenarios if s["id"] in filter_ids]
+        if not scenarios:
+            print(f"No scenarios matched filter: {scenario_filter}")
+            return
+
     port = os.getenv("PORT", "8768")
     print(f"Target: ws://localhost:{port}/llm-websocket/...")
-    print(f"Launching {len(GIGI_TEST_SCENARIOS)} Gigi simulations...")
+    print(f"Launching {len(scenarios)} Gigi simulations...")
 
     sim_ids = []
-    for scenario in GIGI_TEST_SCENARIOS:
+    for scenario in scenarios:
         print(f"  - Starting: {scenario['name']}")
         try:
             sim_id = await launch_simulation(scenario, launched_by="CLI_Full_Test")
@@ -500,4 +514,13 @@ async def run_all():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_all())
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run Gigi voice simulations")
+    parser.add_argument(
+        "--scenarios",
+        help="Comma-separated scenario IDs to run (default: all)",
+        default=None,
+    )
+    args = parser.parse_args()
+    asyncio.run(run_all(scenario_filter=args.scenarios))
