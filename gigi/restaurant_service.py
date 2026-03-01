@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import re  # noqa: F401 — used by _SNAPSHOT_JUNK below
 from urllib.parse import quote_plus
 
 import requests
@@ -25,6 +26,35 @@ logger = logging.getLogger("gigi.restaurant")
 RESY_BASE = "https://api.resy.com"
 DENVER = {"lat": 39.7392, "lng": -104.9903}
 OT_DENVER_METRO = 5
+
+# Lines in an accessibility snapshot that are browser metadata, not content
+_SNAPSHOT_JUNK = re.compile(
+    r"^("
+    r"Page URL:|Page Title:|Console:"
+    r"|#{1,4}\s*(Snapshot|Page|Open tabs)\s*$"
+    r"|- \d+:.*\(current\)"  # tab listing like "- 0: (current) [title]"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _clean_snapshot(raw: str, max_len: int = 600) -> str:
+    """Strip browser metadata from an accessibility snapshot, keep restaurant data."""
+    lines = []
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if _SNAPSHOT_JUNK.match(stripped):
+            continue
+        # Skip lines that are just URLs (leftover navigation links)
+        if stripped.startswith("http://") or stripped.startswith("https://"):
+            continue
+        lines.append(stripped)
+    text = "\n".join(lines)
+    if len(text) > max_len:
+        text = text[:max_len] + "..."
+    return text
 
 
 # ── Resy REST API ──────────────────────────────────────────────────────────
@@ -277,14 +307,16 @@ async def search_restaurant(
     logger.info(f"Not on Resy, trying OpenTable for '{restaurant}'")
     ot = await _opentable_snapshot(restaurant, date, time, party_size)
     if ot.get("success"):
+        cleaned = _clean_snapshot(ot["snapshot"])
         return {
             "platform": "opentable",
             "name": restaurant,
             "search_url": ot["url"],
+            "snapshot_raw": ot["snapshot"],  # keep raw for LLM context
             "summary": (
                 f"OpenTable results for '{restaurant}'"
                 f" ({party_size} guests, {date} at {time}):\n\n"
-                f"{ot['snapshot'][:800]}\n\n"
+                f"{cleaned}\n\n"
                 f"Book here: {ot['url']}"
             ),
         }

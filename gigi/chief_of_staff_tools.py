@@ -268,47 +268,42 @@ class ChiefOfStaffTools:
     async def book_table_request(
         self, restaurant: str, party_size: int, date: str, time: str
     ):
-        """Search OpenTable for real availability, then send 2FA with actual options."""
+        """Search Resy API / OpenTable for availability, then send 2FA."""
         session_id = str(uuid.uuid4())[:8]
 
-        # Use browse_with_claude to search OpenTable for real availability
+        # Resy REST API first (~1s), OpenTable Playwright fallback (~10-15s)
         try:
-            from gigi.claude_code_tools import browse_with_claude
+            from gigi.restaurant_service import search_restaurant
 
-            browse_result = await browse_with_claude(
-                task=(
-                    f"Search for a restaurant reservation on OpenTable. "
-                    f"Go to opentable.com and search for '{restaurant}' near Denver, CO. "
-                    f"Look for availability on {date} at {time} for {party_size} people. "
-                    f"List available time slots and any notes about the restaurant. "
-                    f"If not on OpenTable, try resy.com or the restaurant's own website. "
-                    f"Do NOT make a reservation — just check availability."
-                )
-            )
-            availability_info = browse_result.get(
-                "result", "Could not find availability."
-            )
+            result = await search_restaurant(restaurant, date, time, party_size)
+            availability_info = result.get("summary", "Could not find availability.")
         except Exception as e:
-            logger.error(f"Restaurant search browse failed: {e}")
+            logger.error(f"Restaurant search failed: {e}")
             availability_info = f"Search failed: {str(e)}"
+            result = {}
 
-        # Save to pending sessions with REAL availability data
+        # Save to pending sessions — include platform data for confirm step
         pending_sessions[session_id] = {
             "type": "restaurant",
             "restaurant": restaurant,
             "party_size": party_size,
             "date": date,
             "time": time,
+            "platform": result.get("platform", "none"),
+            "venue_id": result.get("venue_id"),
+            "slots": result.get("slots", []),
             "availability": availability_info,
             "timestamp": datetime.now().isoformat(),
         }
 
-        # Send 2FA with REAL availability
-        send_2fa_text(
-            f"Restaurant search for {restaurant} ({party_size} people, {date} at {time}):\n\n"
-            f"{availability_info[:500]}\n\n"
-            f"Reply YES to Gigi to proceed with booking."
-        )
+        # Send 2FA with clean summary (not raw snapshot data)
+        platform = result.get("platform", "search")
+        tfa_msg = f"Book {restaurant}?\n{party_size} guests, {date} at {time}\nSource: {platform.title()}"
+        if result.get("slots"):
+            times = ", ".join(s["time"].split("T")[-1] for s in result["slots"][:5])
+            tfa_msg += f"\nAvailable: {times}"
+        tfa_msg += "\n\nReply YES to Gigi to proceed."
+        send_2fa_text(tfa_msg)
 
         return {
             "success": True,
@@ -331,18 +326,15 @@ class ChiefOfStaffTools:
             from gigi.claude_code_tools import browse_with_claude
 
             if session_type == "restaurant":
-                result = await browse_with_claude(
-                    task=(
-                        f"Complete a restaurant reservation on OpenTable (or resy.com if not on OpenTable). "
-                        f"Restaurant: {session.get('restaurant')}. "
-                        f"Date: {session.get('date')}, Time: {session.get('time')}, "
-                        f"Party size: {session.get('party_size')}. "
-                        f"Make the reservation. Use name: Jason Schulmeister, email: jason@coloradocareassist.com, phone: 603-997-1495. "
-                        f"Take a screenshot of the confirmation. "
-                        f"If it asks for a credit card, STOP and report back."
+                from gigi.restaurant_service import confirm_restaurant_booking
+
+                booking = await confirm_restaurant_booking(session)
+                if booking.get("success"):
+                    confirmation = booking["message"]
+                else:
+                    confirmation = (
+                        f"Booking failed: {booking.get('error', 'Unknown error')}"
                     )
-                )
-                confirmation = result.get("result", "Reservation attempt completed.")
 
             elif session_type == "tickets":
                 result = await browse_with_claude(
