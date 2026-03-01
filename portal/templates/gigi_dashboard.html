@@ -3800,8 +3800,9 @@
                 console.error("Failed to load settings:", err);
               }
             }
-            // Load settings on tab open
+            {% if active_tab == 'settings' %}
             loadSettings();
+            {% endif %}
 
             async function saveSettings() {
               const btn = document.querySelector('button[onclick="saveSettings()"]');
