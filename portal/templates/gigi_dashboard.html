@@ -2048,6 +2048,26 @@
               document.getElementById("feedback-buttons").style.display = "flex";
               document.getElementById("improvement-input").style.display = "none";
               document.getElementById("feedback-result").style.display = "none";
+              // Restore button states (may be stuck with spinner from previous submission)
+              const fbBtns = document.getElementById("feedback-buttons");
+              if (fbBtns) {
+                const goodBtn = fbBtns.querySelector("button:first-child");
+                if (goodBtn) {
+                  goodBtn.disabled = false;
+                  goodBtn.innerHTML = '<i class="bi bi-hand-thumbs-up-fill"></i> Good Response';
+                }
+                const improvBtn = fbBtns.querySelector("button:nth-child(2)");
+                if (improvBtn) {
+                  improvBtn.disabled = false;
+                  improvBtn.innerHTML = '<i class="bi bi-hand-thumbs-down-fill"></i> Needs Improvement';
+                }
+              }
+              const submitCorrBtn = document.querySelector("#improvement-input button");
+              if (submitCorrBtn) {
+                submitCorrBtn.disabled = false;
+                submitCorrBtn.innerHTML = "Submit Correction";
+              }
+              document.getElementById("improvement-notes").value = "";
               document.getElementById("detail-audio-player").style.display = "none";
               document.getElementById("detail-messages").innerHTML =
                 '<div class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';

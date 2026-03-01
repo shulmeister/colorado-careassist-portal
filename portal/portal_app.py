@@ -2423,9 +2423,17 @@ async def api_gigi_submit_feedback(
         logger.warning(f"Memory creation for feedback failed: {e}")
 
     feedback.memory_id = memory_id
-    db.add(feedback)
-    db.commit()
-    db.refresh(feedback)
+    try:
+        db.add(feedback)
+        db.commit()
+        db.refresh(feedback)
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to save feedback for {interaction_id}: {e}")
+        return JSONResponse(
+            {"success": False, "error": "Failed to save feedback"},
+            status_code=500,
+        )
 
     return JSONResponse(
         {
