@@ -1363,6 +1363,201 @@ async def api_gigi_get_simulation_report(
         )
 
 
+_MODEL_OVERRIDE_PATH = "/tmp/gigi-voice-model-override.json"
+
+# Available voice models for the model selector
+_VOICE_MODELS = {
+    "minimax": {
+        "provider": "minimax",
+        "models": [
+            {"id": "MiniMax-M2.5", "name": "MiniMax M2.5"},
+            {"id": "MiniMax-M2.1", "name": "MiniMax M2.1"},
+        ],
+    },
+    "gemini": {
+        "provider": "gemini",
+        "models": [
+            {"id": "gemini-2.5-flash-preview-05-20", "name": "Gemini 2.5 Flash"},
+            {"id": "gemini-2.5-pro-preview-05-06", "name": "Gemini 2.5 Pro"},
+            {"id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash"},
+        ],
+    },
+    "deepseek": {
+        "provider": "deepseek",
+        "models": [
+            {"id": "deepseek-chat", "name": "DeepSeek V3"},
+            {"id": "deepseek-reasoner", "name": "DeepSeek R1"},
+        ],
+    },
+    "kimi": {
+        "provider": "kimi",
+        "models": [
+            {"id": "moonshot-v1-128k", "name": "Kimi Moonshot 128K"},
+            {"id": "moonshot-v1-32k", "name": "Kimi Moonshot 32K"},
+            {"id": "moonshot-v1-8k", "name": "Kimi Moonshot 8K"},
+        ],
+    },
+    "anthropic": {
+        "provider": "anthropic",
+        "models": [
+            {"id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5"},
+            {"id": "claude-sonnet-4-20250514", "name": "Claude Sonnet 4"},
+        ],
+    },
+}
+
+
+@app.get("/api/gigi/voice-model")
+async def api_gigi_get_voice_model(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Get the current voice model override and available models."""
+    current = {"provider": None, "model": None}
+    try:
+        if os.path.exists(_MODEL_OVERRIDE_PATH):
+            with open(_MODEL_OVERRIDE_PATH, "r") as f:
+                current = json.load(f)
+    except Exception:
+        pass
+
+    return JSONResponse(
+        {
+            "success": True,
+            "current": current,
+            "default_provider": os.getenv("GIGI_LLM_PROVIDER", "anthropic"),
+            "default_model": os.getenv("GIGI_LLM_MODEL", "claude-haiku-4-5-20251001"),
+            "available": _VOICE_MODELS,
+        }
+    )
+
+
+@app.post("/api/gigi/voice-model")
+async def api_gigi_set_voice_model(
+    payload: Dict[str, str],
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Set the voice model override for real-time testing."""
+    provider = payload.get("provider", "").lower()
+    model = payload.get("model", "")
+
+    if provider == "default":
+        # Remove override, revert to env var defaults
+        try:
+            if os.path.exists(_MODEL_OVERRIDE_PATH):
+                os.remove(_MODEL_OVERRIDE_PATH)
+        except Exception:
+            pass
+        return JSONResponse(
+            {
+                "success": True,
+                "message": "Reverted to default model",
+                "provider": os.getenv("GIGI_LLM_PROVIDER", "anthropic"),
+                "model": os.getenv("GIGI_LLM_MODEL", "claude-haiku-4-5-20251001"),
+            }
+        )
+
+    if provider not in _VOICE_MODELS:
+        return JSONResponse(
+            {"success": False, "error": f"Unknown provider: {provider}"}
+        )
+
+    valid_models = [m["id"] for m in _VOICE_MODELS[provider]["models"]]
+    if model not in valid_models:
+        return JSONResponse({"success": False, "error": f"Unknown model: {model}"})
+
+    try:
+        with open(_MODEL_OVERRIDE_PATH, "w") as f:
+            json.dump({"provider": provider, "model": model}, f)
+        logger.info(
+            f"Voice model override set: {provider}/{model} by {current_user.get('email')}"
+        )
+        return JSONResponse(
+            {
+                "success": True,
+                "message": f"Voice model set to {provider}/{model}",
+                "provider": provider,
+                "model": model,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Failed to set model override: {e}")
+        return JSONResponse(
+            {"success": False, "error": "Failed to save model override"}
+        )
+
+
+@app.get("/api/gigi/calls/history")
+async def api_gigi_call_history(
+    limit: int = Query(50, ge=1, le=100),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Fetch real call history from Retell AI API"""
+    import httpx
+
+    retell_api_key = os.getenv("RETELL_API_KEY")
+    if not retell_api_key:
+        return JSONResponse(
+            {"success": False, "error": "Retell API key not configured"}
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.post(
+                "https://api.retellai.com/v2/list-calls",
+                headers={
+                    "Authorization": f"Bearer {retell_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={"limit": limit, "sort_order": "descending"},
+            )
+            resp.raise_for_status()
+            calls_data = resp.json()
+
+        calls = []
+        for c in calls_data:
+            call_status = c.get("call_status", "")
+            if call_status != "ended":
+                continue
+
+            duration_ms = c.get("duration_ms", 0)
+            transcript = c.get("transcript", "") or ""
+            tool_calls = c.get("tool_calls", []) or []
+            analysis = c.get("call_analysis", {}) or {}
+            start_ts = c.get("start_timestamp", 0)
+
+            calls.append(
+                {
+                    "call_id": c.get("call_id"),
+                    "call_type": c.get("call_type", ""),
+                    "direction": c.get("direction", ""),
+                    "from_number": c.get("from_number", ""),
+                    "to_number": c.get("to_number", ""),
+                    "duration_seconds": duration_ms // 1000,
+                    "transcript": transcript,
+                    "transcript_preview": transcript[:120] + "..."
+                    if len(transcript) > 120
+                    else transcript,
+                    "tool_count": len(tool_calls),
+                    "tool_calls": tool_calls,
+                    "summary": analysis.get("call_summary", ""),
+                    "recording_url": c.get("recording_url", ""),
+                    "disconnection_reason": c.get("disconnection_reason", ""),
+                    "start_timestamp": start_ts,
+                    "latency": c.get("latency", {}),
+                    "call_cost": c.get("call_cost", {}),
+                }
+            )
+
+        return JSONResponse({"success": True, "calls": calls, "count": len(calls)})
+
+    except httpx.HTTPStatusError as e:
+        logger.error(f"Retell API error: {e.response.status_code}")
+        return JSONResponse({"success": False, "error": "Retell API error"})
+    except Exception as e:
+        logger.error(f"Failed to fetch call history: {e}", exc_info=True)
+        return JSONResponse({"success": False, "error": "Internal server error"})
+
+
 @app.get("/api/gigi/issues")
 async def api_gigi_get_issues(
     status: Optional[str] = Query(None),

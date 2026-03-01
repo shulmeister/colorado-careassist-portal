@@ -155,6 +155,8 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MINIMAX_API_KEY = os.getenv("MINIMAX_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+KIMI_API_KEY = os.getenv("KIMI_API_KEY")
 
 LLM_PROVIDER = os.getenv("GIGI_LLM_PROVIDER", "anthropic").lower()
 _DEFAULT_MODELS = {
@@ -162,29 +164,73 @@ _DEFAULT_MODELS = {
     "anthropic": "claude-haiku-4-5-20251001",
     "openai": "gpt-4o-mini",
     "minimax": "MiniMax-M2.5",
+    "deepseek": "deepseek-chat",
+    "kimi": "moonshot-v1-128k",
 }
+
+# Provider base URLs for OpenAI-compatible APIs
+_OPENAI_COMPAT_PROVIDERS = {
+    "minimax": ("https://api.minimax.io/v1", MINIMAX_API_KEY),
+    "deepseek": ("https://api.deepseek.com", DEEPSEEK_API_KEY),
+    "kimi": ("https://api.moonshot.cn/v1", KIMI_API_KEY),
+}
+
 LLM_MODEL = os.getenv(
     "GIGI_LLM_MODEL", _DEFAULT_MODELS.get(LLM_PROVIDER, "claude-haiku-4-5-20251001")
 )
 
-# Initialize LLM client
+# Runtime model override file — written by portal, read by voice brain per-call
+_MODEL_OVERRIDE_PATH = "/tmp/gigi-voice-model-override.json"
+
+
+def _get_runtime_override():
+    """Check for a runtime model override (set via portal UI)."""
+    try:
+        if os.path.exists(_MODEL_OVERRIDE_PATH):
+            with open(_MODEL_OVERRIDE_PATH, "r") as f:
+                data = json.load(f)
+            provider = data.get("provider", "").lower()
+            model = data.get("model", "")
+            if provider and model:
+                return provider, model
+    except Exception as e:
+        logger.warning(f"Failed to read model override: {e}")
+    return None, None
+
+
+def _create_llm_client(provider):
+    """Create an LLM client for the given provider."""
+    if provider == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
+        return genai.Client(api_key=GEMINI_API_KEY)
+    elif provider in _OPENAI_COMPAT_PROVIDERS and OPENAI_AVAILABLE:
+        base_url, api_key = _OPENAI_COMPAT_PROVIDERS[provider]
+        if api_key:
+            return openai.OpenAI(base_url=base_url, api_key=api_key)
+    elif provider == "openai" and OPENAI_AVAILABLE and OPENAI_API_KEY:
+        return openai.OpenAI(api_key=OPENAI_API_KEY)
+    elif provider == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+        return anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
+    return None
+
+
+# Initialize default LLM client
 llm_client = None
 if LLM_PROVIDER == "gemini" and GEMINI_AVAILABLE and GEMINI_API_KEY:
     llm_client = genai.Client(api_key=GEMINI_API_KEY)
-elif LLM_PROVIDER == "minimax" and OPENAI_AVAILABLE and MINIMAX_API_KEY:
-    llm_client = openai.OpenAI(
-        base_url="https://api.minimax.io/v1", api_key=MINIMAX_API_KEY
-    )
+elif LLM_PROVIDER in _OPENAI_COMPAT_PROVIDERS and OPENAI_AVAILABLE:
+    base_url, api_key = _OPENAI_COMPAT_PROVIDERS[LLM_PROVIDER]
+    if api_key:
+        llm_client = openai.OpenAI(base_url=base_url, api_key=api_key)
 elif LLM_PROVIDER == "openai" and OPENAI_AVAILABLE and OPENAI_API_KEY:
     llm_client = openai.OpenAI(api_key=OPENAI_API_KEY)
 elif LLM_PROVIDER == "anthropic" and ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
     llm_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 else:
-    # Fallback
-    if ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
-        llm_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
-    elif GEMINI_AVAILABLE and GEMINI_API_KEY:
+    # Fallback: prefer Gemini (free tier) over Anthropic (expensive)
+    if GEMINI_AVAILABLE and GEMINI_API_KEY:
         llm_client = genai.Client(api_key=GEMINI_API_KEY)
+    elif ANTHROPIC_AVAILABLE and ANTHROPIC_API_KEY:
+        llm_client = anthropic.AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
 logger.info(
     f"Voice Brain LLM: {LLM_PROVIDER} / {LLM_MODEL} ({'ready' if llm_client else 'NOT CONFIGURED'})"
@@ -1038,11 +1084,28 @@ async def generate_response(
         import time as _time
 
         _t0 = _time.time()
+
+        # Check for runtime model override (set via portal UI)
+        override_provider, override_model = _get_runtime_override()
+        active_provider = override_provider or LLM_PROVIDER
+        active_model = override_model or LLM_MODEL
+        active_client = llm_client
+
+        if override_provider:
+            active_client = _create_llm_client(override_provider)
+            if not active_client:
+                logger.warning(
+                    f"Failed to create client for override provider {override_provider}, falling back to {LLM_PROVIDER}"
+                )
+                active_provider = LLM_PROVIDER
+                active_model = LLM_MODEL
+                active_client = llm_client
+
         logger.info(
-            f"[voice] generate_response called, provider={LLM_PROVIDER}, caller={caller_id}, messages={len(messages)}, last_user={messages[-1]['content'][:80] if messages else 'none'}"
+            f"[voice] generate_response called, provider={active_provider}, model={active_model}, caller={caller_id}, messages={len(messages)}, last_user={messages[-1]['content'][:80] if messages else 'none'}"
         )
 
-        if LLM_PROVIDER == "gemini":
+        if active_provider == "gemini":
             text, transfer = await _generate_gemini(
                 messages,
                 call_info,
@@ -1051,8 +1114,10 @@ async def generate_response(
                 is_simulation,
                 on_tool_event,
                 caller_id,
+                _client=active_client,
+                _model=active_model,
             )
-        elif LLM_PROVIDER in ("openai", "minimax"):
+        elif active_provider in ("openai", "minimax", "deepseek", "kimi"):
             text, transfer = await _generate_openai(
                 messages,
                 call_info,
@@ -1061,6 +1126,8 @@ async def generate_response(
                 is_simulation,
                 on_tool_event,
                 caller_id,
+                _client=active_client,
+                _model=active_model,
             )
         else:
             text, transfer = await _generate_anthropic(
@@ -1071,10 +1138,14 @@ async def generate_response(
                 is_simulation,
                 on_tool_event,
                 caller_id,
+                _client=active_client,
+                _model=active_model,
             )
 
         _elapsed = round(_time.time() - _t0, 2)
-        logger.info(f"[voice] response generated in {_elapsed}s: {(text or '')[:100]}")
+        logger.info(
+            f"[voice] response generated in {_elapsed}s ({active_provider}/{active_model}): {(text or '')[:100]}"
+        )
 
         # Persist the user's last utterance + Gigi's response to conversation store
         if VOICE_STORE_AVAILABLE and _voice_store and caller_id != "unknown":
@@ -1112,11 +1183,15 @@ async def _generate_anthropic(
     is_simulation,
     on_tool_event=None,
     caller_id=None,
+    _client=None,
+    _model=None,
 ):
     transfer_number = None
+    client = _client or llm_client
+    model = _model or LLM_MODEL
     system_prompt = _build_voice_system_prompt(caller_id=caller_id)
-    response = await llm_client.messages.create(
-        model=LLM_MODEL,
+    response = await client.messages.create(
+        model=model,
         max_tokens=300,
         system=system_prompt,
         tools=ANTHROPIC_TOOLS,
@@ -1150,8 +1225,8 @@ async def _generate_anthropic(
         messages.append({"role": "assistant", "content": response.content})
         messages.append({"role": "user", "content": tool_results})
 
-        response = await llm_client.messages.create(
-            model=LLM_MODEL,
+        response = await client.messages.create(
+            model=model,
             max_tokens=300,
             system=system_prompt,
             tools=ANTHROPIC_TOOLS,
@@ -1175,10 +1250,14 @@ async def _generate_gemini(
     is_simulation,
     on_tool_event=None,
     caller_id=None,
+    _client=None,
+    _model=None,
 ):
     import time as _time
 
     transfer_number = None
+    client = _client or llm_client
+    model = _model or LLM_MODEL
 
     # Build Gemini contents
     contents = []
@@ -1196,8 +1275,8 @@ async def _generate_gemini(
     # Gemini's generate_content is sync — run in thread to avoid blocking
     _t0 = _time.time()
     response = await asyncio.to_thread(
-        llm_client.models.generate_content,
-        model=LLM_MODEL,
+        client.models.generate_content,
+        model=model,
         contents=contents,
         config=config,
     )
@@ -1262,8 +1341,8 @@ async def _generate_gemini(
 
         _t2 = _time.time()
         response = await asyncio.to_thread(
-            llm_client.models.generate_content,
-            model=LLM_MODEL,
+            client.models.generate_content,
+            model=model,
             contents=contents,
             config=config,
         )
@@ -1299,8 +1378,8 @@ async def _generate_gemini(
     )
     try:
         nudge_response = await asyncio.to_thread(
-            llm_client.models.generate_content,
-            model=LLM_MODEL,
+            client.models.generate_content,
+            model=model,
             contents=contents,
             config=config,
         )
@@ -1333,8 +1412,12 @@ async def _generate_openai(
     is_simulation,
     on_tool_event=None,
     caller_id=None,
+    _client=None,
+    _model=None,
 ):
     transfer_number = None
+    client = _client or llm_client
+    model = _model or LLM_MODEL
 
     oai_messages = [
         {"role": "system", "content": _build_voice_system_prompt(caller_id=caller_id)}
@@ -1343,8 +1426,8 @@ async def _generate_openai(
         oai_messages.append({"role": m["role"], "content": m["content"]})
 
     response = await asyncio.to_thread(
-        llm_client.chat.completions.create,
-        model=LLM_MODEL,
+        client.chat.completions.create,
+        model=model,
         messages=oai_messages,
         tools=OPENAI_TOOLS,
     )
@@ -1384,8 +1467,8 @@ async def _generate_openai(
             )
 
         response = await asyncio.to_thread(
-            llm_client.chat.completions.create,
-            model=LLM_MODEL,
+            client.chat.completions.create,
+            model=model,
             messages=oai_messages,
             tools=OPENAI_TOOLS,
         )
