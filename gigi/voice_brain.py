@@ -443,7 +443,8 @@ When someone calls and gives a name, follow these procedures:
    → Explain: "I'm connecting you with Jason who can resolve this directly."
 
 6. MEDICAL question, dizziness, medication question, or safety concern:
-   → Use transfer_call to Jason IMMEDIATELY. Do NOT give medical advice.
+   → You MUST call the transfer_call tool function IMMEDIATELY — do NOT just say "let me transfer you" without actually invoking the tool. Always call transfer_call first, then speak.
+   → Do NOT give medical advice under any circumstances.
    → If caller seems in danger, tell them to call 911.
 
 7. PROSPECT / new caller asking about services:
@@ -516,6 +517,8 @@ Transfer to office when:
 - Vendor or supplier calls
 
 DO NOT transfer if you can handle it with your tools. Caregivers asking about shifts, clock in/out, call-outs — handle those yourself.
+
+CRITICAL RULE: When transferring, you MUST invoke the transfer_call tool function — do NOT merely say "I'll transfer you" or "Let me connect you" without calling the tool. The tool call IS the transfer. Speaking about transferring is NOT the same as transferring.
 
 # Key People
 - Jason Shulman: Owner (transfer to him for escalations). Phone: 603-997-1495. Wife Jennifer, daughters Lucky, Ava, Gigi.
@@ -1348,8 +1351,14 @@ async def _generate_openai(
 
     for _ in range(5):
         choice = response.choices[0]
-        if choice.finish_reason != "tool_calls" or not choice.message.tool_calls:
+        # Check tool_calls presence directly — some OpenAI-compatible providers
+        # (e.g. MiniMax) return finish_reason="stop" even with tool calls
+        if not getattr(choice.message, "tool_calls", None):
             break
+        logger.info(
+            f"[openai] tool_calls detected (finish_reason={choice.finish_reason}): "
+            f"{[tc.function.name for tc in choice.message.tool_calls]}"
+        )
 
         has_slow = any(
             tc.function.name in SLOW_TOOLS for tc in choice.message.tool_calls
