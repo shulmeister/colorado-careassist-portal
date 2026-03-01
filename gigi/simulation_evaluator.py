@@ -62,6 +62,13 @@ async def evaluate_simulation(
         "get_wellsky_caregivers": {"get_wellsky_clients", "get_wellsky_shifts"},
         "get_client_current_status": {"get_wellsky_clients", "get_wellsky_shifts"},
         "get_wellsky_shifts": {"get_wellsky_clients", "get_wellsky_caregivers"},
+        # Emergency/transfer — verbal redirect to 911 is acceptable even without tool
+        "transfer_call": {"send_sms", "send_team_message"},
+        # Restaurant/booking — searching is progress toward booking
+        "book_table_request": {"web_search", "browse_webpage"},
+        "web_search": {"browse_webpage"},
+        # Ticket/event — searching is progress toward purchasing
+        "buy_tickets_request": {"web_search", "browse_webpage"},
     }
     # Lookup-only tools (don't penalize for proactive use)
     _LOOKUP_TOOLS = {
