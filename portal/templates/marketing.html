@@ -650,6 +650,7 @@
                 <a class="sidebar-link" href="#tab-paid" data-tab="paid"><span class="icon">🎯</span> Paid</a>
                 <a class="sidebar-link" href="#tab-email" data-tab="email"><span class="icon">📧</span> Email</a>
                 <a class="sidebar-link" href="#tab-website" data-tab="website"><span class="icon">🌐</span> Website & GBP</a>
+                <a class="sidebar-link" href="#tab-search-console" data-tab="search-console"><span class="icon">🔍</span> Organic Search</a>
                 <a class="sidebar-link disabled" href="#tab-settings" data-tab="settings"><span class="icon">⚙️</span> Settings (Coming Soon)</a>
             </nav>
         </aside>
@@ -1647,7 +1648,119 @@
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Organic Search (GSC) Tab -->
+            <div class="tab-content" id="tab-search-console">
+                <div class="content-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Organic Search Performance</h1>
+                        <div class="page-subtitle" id="gscDateRange">Last 30 days</div>
+                    </div>
+                    <div class="header-right">
+                        <select class="preset-select" id="gscPresetSelect">
+                            <option value="last_7_days">Last 7 Days</option>
+                            <option value="last_30_days" selected>Last 30 Days</option>
+                            <option value="last_90_days">Last 90 Days</option>
+                        </select>
+                        <button class="refresh-btn" id="gscRefreshBtn">↻ Refresh</button>
+                    </div>
+                </div>
+
+                <!-- KPI Cards Row -->
+                <div class="kpi-row">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Clicks</div>
+                        <div class="kpi-value" id="gscTotalClicks">—</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Impressions</div>
+                        <div class="kpi-value" id="gscTotalImpressions">—</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg CTR</div>
+                        <div class="kpi-value" id="gscAvgCtr">—</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Avg Position</div>
+                        <div class="kpi-value" id="gscAvgPosition">—</div>
+                    </div>
+                </div>
+
+                <!-- Clicks & Impressions Trend Chart -->
+                <div class="card card-wide">
+                    <div class="card-header">
+                        <div class="card-label">DAILY TREND</div>
+                        <div class="card-title">Clicks & Impressions Over Time</div>
+                    </div>
+                    <div class="chart-container-large">
+                        <canvas id="gscTrendChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <!-- Top Search Queries -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOP QUERIES</div>
+                            <div class="card-title">Search Queries Driving Traffic</div>
+                        </div>
+                        <div class="stats-table" id="gscTopQueries">
+                            <div class="stats-row"><div class="stats-label">Loading...</div></div>
+                        </div>
+                    </div>
+
+                    <!-- Top Landing Pages -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">TOP PAGES</div>
+                            <div class="card-title">Landing Pages by Clicks</div>
+                        </div>
+                        <div class="stats-table" id="gscTopPages">
+                            <div class="stats-row"><div class="stats-label">Loading...</div></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="two-col">
+                    <!-- Device Breakdown -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">DEVICES</div>
+                            <div class="card-title">Traffic by Device Type</div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="gscDeviceChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- CTR & Position Trend -->
+                    <div class="card card-compact">
+                        <div class="card-header">
+                            <div class="card-label">CTR TREND</div>
+                            <div class="card-title">Click-Through Rate Over Time</div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="gscCtrChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Not Configured Banner -->
+                <div class="card" id="gscNotConfigured" style="display:none;">
+                    <div class="card-header">
+                        <div class="card-title">Google Search Console Not Connected</div>
+                    </div>
+                    <div style="padding: 16px; color: #94a3b8; font-size: 14px;">
+                        <p>To see real organic search data, add the service account as a verified owner in Google Search Console.</p>
+                        <p style="margin-top: 8px;">
+                            <a href="https://search.google.com/search-console" target="_blank" style="color: #60a5fa;">
+                                Open Google Search Console →
+                            </a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 
