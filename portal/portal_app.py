@@ -701,17 +701,15 @@ async def api_gigi_get_settings(
         {
             "success": True,
             "settings": {
-                "mode": os.getenv("GIGI_MODE", "after_hours"),
-                "hours_start": os.getenv("GIGI_OFFICE_HOURS_START", "08:00"),
-                "hours_end": os.getenv("GIGI_OFFICE_HOURS_END", "17:00"),
-                "transfer_phone": os.getenv("JASON_PHONE", "+16039971495"),
-                "wellsky_sync": os.getenv("GIGI_WELLSKY_SYNC_ENABLED", "true").lower()
-                == "true",
-                "auto_sms": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "true").lower()
-                == "true",
-                # Additional runtime settings
-                "sms_autoreply": _gigi_settings.get("sms_autoreply", True),
-                "operations_sms": _gigi_settings.get("operations_sms", True),
+                "mode": _gigi_settings.get("mode", "after_hours"),
+                "hours_start": _gigi_settings.get("hours_start", "08:00"),
+                "hours_end": _gigi_settings.get("hours_end", "17:00"),
+                "transfer_phone": _gigi_settings.get("transfer_phone", "+16039971495"),
+                "wellsky_sync": _gigi_settings.get("wellsky_sync", True),
+                "auto_sms": _gigi_settings.get("sms_autoreply", False),
+                "sms_autoreply": _gigi_settings.get("sms_autoreply", False),
+                "operations_sms": _gigi_settings.get("operations_sms", False),
+                "log_level": _gigi_settings.get("log_level", "INFO"),
                 "wellsky_connected": wellsky_service is not None
                 and wellsky_service.is_configured,
             },
@@ -755,9 +753,47 @@ async def api_gigi_run_simulation(
 async def api_gigi_save_settings(
     payload: Dict[str, Any], current_user: Dict[str, Any] = Depends(get_current_user)
 ):
-    """Update Gigi system configuration (Mock update for now as it needs env var persistency)"""
-    logger.info(f"Settings update request from {current_user.get('email')}: {payload}")
-    return JSONResponse({"success": True, "message": "Settings updated"})
+    """Update Gigi system configuration — persisted to JSON config file."""
+    user_email = current_user.get("email", "unknown")
+    logger.info(f"Settings update from {user_email}: {payload}")
+
+    allowed_keys = {
+        "mode",
+        "hours_start",
+        "hours_end",
+        "transfer_phone",
+        "wellsky_sync",
+        "auto_sms",
+        "sms_autoreply",
+        "operations_sms",
+        "log_level",
+    }
+    changes = []
+    for key, val in payload.items():
+        if key not in allowed_keys:
+            continue
+        # Normalize auto_sms → sms_autoreply
+        store_key = "sms_autoreply" if key == "auto_sms" else key
+        old_val = _gigi_settings.get(store_key)
+        if old_val != val:
+            _gigi_settings[store_key] = val
+            changes.append(f"{store_key}: {old_val} → {val}")
+
+    if changes:
+        _save_gigi_settings()
+        log_gigi_activity(
+            "settings_change", f"{user_email}: {', '.join(changes)}", "success"
+        )
+
+    return JSONResponse(
+        {
+            "success": True,
+            "message": f"Settings updated ({len(changes)} changed)"
+            if changes
+            else "No changes",
+            "settings": _gigi_settings,
+        }
+    )
 
 
 # =============================================================================
@@ -1869,7 +1905,7 @@ async def api_gigi_get_calls(
 ):
     """Get Retell AI call logs with recordings"""
     retell_api_key = os.getenv("RETELL_API_KEY")
-    agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
+    agent_id = os.getenv("RETELL_AGENT_ID", "agent_5b425f858369d8df61c363d47f")
 
     if not retell_api_key:
         return JSONResponse({"success": False, "error": "RETELL_API_KEY not set"})
@@ -2008,11 +2044,13 @@ async def api_gigi_communications(
     current_user: Dict[str, Any] = Depends(get_current_user),
 ):
     """Unified communication feed — Retell voice calls + gigi_conversations (SMS, DM, team chat, etc.)."""
+    # Fetch more items internally so feedback-tagged items aren't cut off by pagination
+    fetch_limit = max(limit + offset, 200)
     items = []
 
     # Source 1: Retell voice calls
     retell_api_key = os.getenv("RETELL_API_KEY")
-    agent_id = os.getenv("RETELL_AGENT_ID", "agent_d5c3f32bdf48fa4f7f24af7d36")
+    agent_id = os.getenv("RETELL_AGENT_ID", "agent_5b425f858369d8df61c363d47f")
     if retell_api_key and (channel is None or channel == "voice"):
         try:
             async with httpx.AsyncClient() as client:
@@ -2022,7 +2060,7 @@ async def api_gigi_communications(
                         "Authorization": f"Bearer {retell_api_key}",
                         "Content-Type": "application/json",
                     },
-                    json={"agent_id": agent_id, "limit": 50},
+                    json={"agent_id": agent_id, "limit": 200},
                     timeout=10,
                 )
                 if response.status_code == 200:
@@ -2080,10 +2118,10 @@ async def api_gigi_communications(
         with get_pg_conn() as (conn, cur):
             if channel and channel != "voice":
                 channel_filter = "AND gc1.channel = %s"
-                query_params = (channel, limit + offset)
+                query_params = (channel, fetch_limit)
             else:
                 channel_filter = ""
-                query_params = (limit + offset,)
+                query_params = (fetch_limit,)
 
             cur.execute(
                 f"""
@@ -5614,12 +5652,46 @@ async def api_operations_at_risk(
 # Gigi AI Agent Control API
 #
 
-# In-memory Gigi settings (defaults from environment, can be toggled at runtime)
-_gigi_settings = {
-    "sms_autoreply": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "false").lower() == "true",
-    "operations_sms": os.getenv("GIGI_OPERATIONS_SMS_ENABLED", "false").lower()
-    == "true",
-}
+# Gigi settings — persisted to JSON file, loaded on startup
+_GIGI_SETTINGS_PATH = os.path.expanduser("~/.config/careassist/gigi-settings.json")
+
+
+def _load_gigi_settings() -> dict:
+    """Load settings from JSON file, falling back to env var defaults."""
+    defaults = {
+        "sms_autoreply": os.getenv("GIGI_SMS_AUTOREPLY_ENABLED", "false").lower()
+        == "true",
+        "operations_sms": os.getenv("GIGI_OPERATIONS_SMS_ENABLED", "false").lower()
+        == "true",
+        "mode": os.getenv("GIGI_MODE", "after_hours"),
+        "hours_start": os.getenv("GIGI_OFFICE_HOURS_START", "08:00"),
+        "hours_end": os.getenv("GIGI_OFFICE_HOURS_END", "17:00"),
+        "transfer_phone": os.getenv("JASON_PHONE", "+16039971495"),
+        "wellsky_sync": os.getenv("GIGI_WELLSKY_SYNC_ENABLED", "true").lower()
+        == "true",
+        "log_level": os.getenv("GIGI_LOG_LEVEL", "INFO"),
+    }
+    try:
+        if os.path.exists(_GIGI_SETTINGS_PATH):
+            with open(_GIGI_SETTINGS_PATH, "r") as f:
+                saved = json.load(f)
+            defaults.update(saved)
+    except Exception as e:
+        logger.warning(f"Failed to load gigi settings: {e}")
+    return defaults
+
+
+def _save_gigi_settings():
+    """Persist current settings to JSON file."""
+    try:
+        os.makedirs(os.path.dirname(_GIGI_SETTINGS_PATH), exist_ok=True)
+        with open(_GIGI_SETTINGS_PATH, "w") as f:
+            json.dump(_gigi_settings, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to save gigi settings: {e}")
+
+
+_gigi_settings = _load_gigi_settings()
 
 # In-memory activity log (recent Gigi actions)
 _gigi_activity_log = []
@@ -5670,9 +5742,10 @@ async def api_gigi_settings_update(
                     f"Operations SMS {'enabled' if _gigi_settings['operations_sms'] else 'disabled'}"
                 )
 
-        # Log the change
+        # Log and persist
         if changes:
             user_email = current_user.get("email", "unknown")
+            _save_gigi_settings()
             log_gigi_activity(
                 "settings_change", f"{user_email}: {', '.join(changes)}", "success"
             )
@@ -5820,6 +5893,7 @@ async def api_gigi_ringcentral_command(request: Request):
             # Disable all Gigi features
             _gigi_settings["sms_autoreply"] = False
             _gigi_settings["operations_sms"] = False
+            _save_gigi_settings()
             log_gigi_activity(
                 "command",
                 f"{sender_name} sent 'gigi stop' - all features disabled",
@@ -5832,6 +5906,7 @@ async def api_gigi_ringcentral_command(request: Request):
             # Enable all Gigi features
             _gigi_settings["sms_autoreply"] = True
             _gigi_settings["operations_sms"] = True
+            _save_gigi_settings()
             log_gigi_activity(
                 "command",
                 f"{sender_name} sent 'gigi go' - all features enabled",
@@ -5905,6 +5980,7 @@ async def api_gigi_command_simple(
         if command == "stop":
             _gigi_settings["sms_autoreply"] = False
             _gigi_settings["operations_sms"] = False
+            _save_gigi_settings()
             log_gigi_activity(
                 "command", f"{user_email} stopped Gigi via API", "success"
             )
@@ -5915,6 +5991,7 @@ async def api_gigi_command_simple(
         elif command == "go":
             _gigi_settings["sms_autoreply"] = True
             _gigi_settings["operations_sms"] = True
+            _save_gigi_settings()
             log_gigi_activity(
                 "command", f"{user_email} started Gigi via API", "success"
             )

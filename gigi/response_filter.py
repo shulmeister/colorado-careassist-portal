@@ -172,13 +172,19 @@ def strip_markdown_for_sms(text: str, max_chars: int = 500) -> str:
 
 
 def strip_thinking_tags(text: str) -> str:
-    """Strip <think>...</think> reasoning blocks from reasoning models (MiniMax, DeepSeek, etc.)."""
-    if not text or "<think>" not in text:
+    """Strip <think>/<thinking> reasoning blocks from reasoning models (MiniMax, DeepSeek, etc.)."""
+    if not text:
         return text
-    # Strip closed think blocks
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    # Strip unclosed think blocks (model started but didn't close tag)
-    text = re.sub(r"<think>.*", "", text, flags=re.DOTALL)
+    # Quick check — if no angle-bracket tag candidates, skip regex
+    text_lower = text.lower()
+    if "<think" not in text_lower:
+        return text
+    # Strip closed think/thinking blocks (case-insensitive)
+    text = re.sub(
+        r"<think(?:ing)?>.*?</think(?:ing)?>", "", text, flags=re.DOTALL | re.IGNORECASE
+    )
+    # Strip unclosed think/thinking blocks (model started but didn't close tag)
+    text = re.sub(r"<think(?:ing)?>.*", "", text, flags=re.DOTALL | re.IGNORECASE)
     return text.strip()
 
 
