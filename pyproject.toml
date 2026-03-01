@@ -1,0 +1,37 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "unit: Pure unit tests with no external dependencies",
+    "integration: Tests requiring database or external services",
+    "slow: Tests that take more than 5 seconds",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = [
+    "services",
+    "gigi",
+    "portal",
+    "sales",
+    "recruiting",
+]
+omit = [
+    "*/test_*",
+    "*/tests/*",
+    "*/__pycache__/*",
+    "legacy_tests/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+fail_under = 0
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "pass",
+]
