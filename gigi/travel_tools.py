@@ -1,9 +1,9 @@
 """
-Gigi Travel Tools — Full Amadeus Self-Service API integration.
+Gigi Travel Tools — Amadeus API + Expedia CDP browser automation.
 
 Uses Amadeus SDK v12.0.0 for flights, hotels, transfers, activities,
 airport/airline info, travel insights, and booking management.
-Falls back to browse_with_claude when API unavailable.
+Falls back to Expedia via Chrome CDP (logged-in session, real pricing).
 
 Env vars:
   AMADEUS_CLIENT_ID     — API key
@@ -16,6 +16,13 @@ import logging
 import os
 import re
 from typing import Optional
+
+from gigi.browser_automation import (  # noqa: F401 — used by CDP fallbacks below
+    NAV_TIMEOUT,
+    _extract_text,
+    _get_cdp_ws_url,
+    _MCPClient,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +40,14 @@ def _get_amadeus():
     hostname = os.getenv("AMADEUS_HOSTNAME", "test")
 
     if not client_id or not client_secret:
-        logger.warning("Amadeus credentials not set — travel tools will use browse fallback")
+        logger.warning(
+            "Amadeus credentials not set — travel tools will use browse fallback"
+        )
         return None
 
     try:
         from amadeus import Client
+
         _amadeus_client = Client(
             client_id=client_id,
             client_secret=client_secret,
@@ -76,6 +86,7 @@ async def _resolve_iata(query: str) -> Optional[str]:
 
     try:
         from amadeus import Location
+
         response = await asyncio.to_thread(
             amadeus.reference_data.locations.get,
             keyword=query,
@@ -117,6 +128,7 @@ async def _resolve_city_code(query: str) -> Optional[str]:
 # FLIGHT SEARCH (upgraded — added travel_class param)
 # ============================================================
 
+
 async def search_flights(
     origin: str,
     destination: str,
@@ -132,7 +144,9 @@ async def search_flights(
     """Search flights via Amadeus Flight Offers Search API."""
     amadeus = _get_amadeus()
     if not amadeus:
-        return await _browse_flight_search(origin, destination, departure_date, return_date, adults)
+        return await _browse_flight_search(
+            origin, destination, departure_date, return_date, adults
+        )
 
     origin_code = await _resolve_iata(origin) or origin.upper()
     dest_code = await _resolve_iata(destination) or destination.upper()
@@ -192,7 +206,9 @@ async def search_flights(
                 "arrival_airport": last_seg["arrival"]["iataCode"],
                 "arrival_time": last_seg["arrival"]["at"],
                 "duration": _parse_duration(outbound.get("duration", "")),
-                "stops": "Direct" if stops == 0 else f"{stops} stop{'s' if stops > 1 else ''}",
+                "stops": "Direct"
+                if stops == 0
+                else f"{stops} stop{'s' if stops > 1 else ''}",
                 "price": f"${price_info.get('grandTotal', '?')} {currency}",
                 "price_amount": float(price_info.get("grandTotal", 0)),
                 "cabin": cabin,
@@ -213,21 +229,231 @@ async def search_flights(
 
         if not flights:
             # Sandbox returns empty data for real dates — fall back to browse
-            logger.warning("Amadeus returned no flights (sandbox limitation?), falling back to browse")
-            return await _browse_flight_search(origin, destination, departure_date, return_date, adults)
+            logger.warning(
+                "Amadeus returned no flights (sandbox limitation?), falling back to browse"
+            )
+            return await _browse_flight_search(
+                origin, destination, departure_date, return_date, adults
+            )
 
-        return {"success": True, "source": "amadeus", "origin": origin_code, "destination": dest_code, "departure_date": departure_date, "return_date": return_date, "flights": flights, "total_results": len(flights), "currency": currency}
+        return {
+            "success": True,
+            "source": "amadeus",
+            "origin": origin_code,
+            "destination": dest_code,
+            "departure_date": departure_date,
+            "return_date": return_date,
+            "flights": flights,
+            "total_results": len(flights),
+            "currency": currency,
+        }
 
     except Exception as e:
         logger.error(f"Amadeus flight search failed: {e}")
-        return await _browse_flight_search(origin, destination, departure_date, return_date, adults)
+        return await _browse_flight_search(
+            origin, destination, departure_date, return_date, adults
+        )
 
 
-async def _browse_flight_search(origin, destination, departure_date, return_date, adults) -> dict:
-    """Fallback flight search: Brave Search → Kayak direct URL browse."""
-    # Step 1: Brave Search — fast, always available
+# ── CDP Browser Search Helpers ────────────────────────────────────────────
+# Kayak for flights (stable URLs, rich results)
+# Expedia for hotels (URL works, user logged in for member pricing)
+
+
+def _to_mdy(iso_date: str) -> str:
+    """Convert YYYY-MM-DD to MM/DD/YYYY for travel site URLs."""
+    parts = iso_date.split("-")
+    if len(parts) == 3:
+        return f"{parts[1]}/{parts[2]}/{parts[0]}"
+    return iso_date
+
+
+def _kayak_flight_url(
+    origin: str,
+    destination: str,
+    departure_date: str,
+    return_date: str = None,
+    adults: int = 1,
+) -> str:
+    """Build Kayak flight search URL."""
+    base = f"https://www.kayak.com/flights/{origin}-{destination}/{departure_date}"
+    if return_date:
+        base += f"/{return_date}"
+    base += f"/{adults}adults?sort=bestflight_a"
+    return base
+
+
+def _expedia_hotel_url(
+    city: str,
+    checkin: str,
+    checkout: str,
+    guests: int = 2,
+) -> str:
+    """Build Expedia hotel search URL."""
+    from urllib.parse import urlencode
+
+    params = {
+        "destination": city,
+        "startDate": _to_mdy(checkin),
+        "endDate": _to_mdy(checkout),
+        "rooms": 1,
+        "adults": guests,
+        "sort": "PRICE_LOW_TO_HIGH",
+    }
+    return f"https://www.expedia.com/Hotel-Search?{urlencode(params)}"
+
+
+_NAV_JUNK = re.compile(
+    r"^("
+    r"Edit search form|Go to \w|Sort[ :&]|Smart Filters"
+    r"|Save$|Share$|Ask AI$|Track prices|View Deal$|Select$"
+    r"|This is a paid placement|Ad$"
+    r"|Skip to main content|Shop travel|Open app"
+    r"|List your property|Support$|Trips$"
+    r"|Filter by$|Popular filters$|Popular locations$"
+    r"|One Key benefits|Compare properties"
+    r"|Search by property|e\.g\.|Neighborhood$"
+    r"|Payment type|Property cancellation"
+    r"|Fully refundable|Reserve now, pay"
+    r"|Pay over time|See more$|See less$"
+    r"|Min$|Max$|USD$|static map"
+    r"|### Result|### Ran Playwright|### Open tabs|### Page|### Events"
+    r"|```|await page\."
+    r"|- \d+:"
+    r"|Page URL:|Page Title:|Console:"
+    r"|Blue tier$|J$|Jason$"
+    r"|View in a map"
+    r"|Stops$|Amenities$|Book Now, Pay Later$"
+    r"|Times$|Airlines$|Airports$|Duration$|Price$"
+    r"|Layover airports$|Cabin$|Flight quality$|Aircraft$|Booking sites$"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _clean_travel_text(raw: str, max_len: int = 2000) -> str:
+    """Clean page text from Kayak/Expedia, stripping nav/filter junk."""
+    # Skip to actual results if a known marker is found
+    for marker in ("Search results\n", "Sort by price", "Sort: Best\n"):
+        idx = raw.find(marker)
+        if idx != -1:
+            raw = raw[idx + len(marker) :]
+            break
+
+    lines = []
+    for line in raw.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if _NAV_JUNK.match(stripped):
+            continue
+        lines.append(stripped)
+    result = "\n".join(lines)
+    if len(result) > max_len:
+        result = result[:max_len] + "..."
+    return result
+
+
+async def _cdp_page_text(url: str, wait_seconds: int = 10, max_len: int = 4000) -> dict:
+    """Navigate to a URL via Chrome CDP, extract visible page text via JS.
+
+    Uses document.body.innerText instead of accessibility snapshot —
+    much cleaner output for complex sites like Kayak and Expedia.
+    """
+    logger.info(f"CDP page text: {url}")
+    ws_url = _get_cdp_ws_url()
+    if not ws_url:
+        return {"success": False, "error": "Chrome CDP not available"}
+
+    client = _MCPClient(cdp_endpoint=ws_url)
+    try:
+        await client.start()
+
+        # Navigate via about:blank + JS redirect (avoids Playwright load-wait
+        # timeout on heavy sites like Kayak that never fully finish loading)
+        await client.call_tool("browser_navigate", {"url": "about:blank"}, timeout=10)
+        escaped_url = url.replace("\\", "\\\\").replace('"', '\\"')
+        await client.call_tool(
+            "browser_evaluate",
+            {
+                "function": f'() => {{ window.location.href = "{escaped_url}"; return "ok"; }}'
+            },
+        )
+        await asyncio.sleep(wait_seconds)
+
+        # Scroll down to trigger lazy-loaded content
+        await client.call_tool(
+            "browser_evaluate",
+            {"function": "() => { window.scrollBy(0, 1500); return 'ok'; }"},
+        )
+        await asyncio.sleep(2)
+
+        # Extract visible text via JS (much cleaner than accessibility tree)
+        result = await client.call_tool(
+            "browser_evaluate",
+            {
+                "function": f"() => {{ return document.body.innerText.substring(0, {max_len}); }}"
+            },
+        )
+        # Parse the JS return value out of the MCP wrapper
+        # MCP returns: ### Result\n"actual text here"\n### Ran Playwright...
+        raw = _extract_text(result, max_len + 500)
+        if '### Result\n"' in raw:
+            start = raw.index('### Result\n"') + len('### Result\n"')
+            end = raw.find('"\n### Ran Playwright', start)
+            if end == -1:
+                end = raw.find('"\n###', start)
+            if end > start:
+                raw = raw[start:end]
+        # Unescape JS string newlines
+        text = raw.replace("\\n", "\n").replace("\\t", " ")
+        return {"success": True, "text": text, "url": url}
+    except Exception as e:
+        logger.error(f"CDP page text failed: {e}")
+        return {"success": False, "error": str(e), "url": url}
+    finally:
+        await client.close()
+
+
+# ── Fallback search functions ─────────────────────────────────────────────
+
+
+async def _browse_flight_search(
+    origin, destination, departure_date, return_date, adults
+) -> dict:
+    """Fallback flight search: Kayak CDP → Brave Search."""
+    # Step 1: Kayak CDP (free, ~10-15s, real pricing, no auth needed)
+    try:
+        url = _kayak_flight_url(
+            origin, destination, departure_date, return_date, adults
+        )
+        result = await _cdp_page_text(url, wait_seconds=10, max_len=4000)
+        if result.get("success"):
+            cleaned = _clean_travel_text(result["text"], max_len=2000)
+            return {
+                "success": True,
+                "source": "kayak",
+                "origin": origin,
+                "destination": destination,
+                "departure_date": departure_date,
+                "return_date": return_date,
+                "results_text": cleaned,
+                "search_url": result["url"],
+                "summary": (
+                    f"Kayak flight results ({origin} → {destination}, {departure_date}"
+                    f"{', returning ' + return_date if return_date else ''}"
+                    f", {adults} adult{'s' if adults > 1 else ''}):\n\n"
+                    f"{cleaned}\n\n"
+                    f"Book on Kayak: {result['url']}"
+                ),
+            }
+    except Exception as e:
+        logger.warning(f"Kayak flight search failed: {e}")
+
+    # Step 2: Brave Search — fast, always available
     try:
         import httpx
+
         brave_api_key = os.getenv("BRAVE_API_KEY")
         if brave_api_key:
             trip_type = "round trip" if return_date else "one way"
@@ -236,17 +462,19 @@ async def _browse_flight_search(origin, destination, departure_date, return_date
                 resp = await client.get(
                     "https://api.search.brave.com/res/v1/web/search",
                     headers={"X-Subscription-Token": brave_api_key},
-                    params={"q": query, "count": 5}
+                    params={"q": query, "count": 5},
                 )
             if resp.status_code == 200:
                 data = resp.json()
                 results = []
                 for r in data.get("web", {}).get("results", [])[:5]:
-                    results.append({
-                        "title": r.get("title"),
-                        "description": r.get("description"),
-                        "url": r.get("url")
-                    })
+                    results.append(
+                        {
+                            "title": r.get("title"),
+                            "description": r.get("description"),
+                            "url": r.get("url"),
+                        }
+                    )
                 if results:
                     return {
                         "success": True,
@@ -255,54 +483,72 @@ async def _browse_flight_search(origin, destination, departure_date, return_date
                         "destination": destination,
                         "departure_date": departure_date,
                         "results": results,
-                        "note": "Web search results — click links for exact real-time pricing"
+                        "note": "Web search results — click links for exact real-time pricing",
                     }
     except Exception as e:
         logger.warning(f"Brave flight search failed: {e}")
 
-    # Step 2: Browse Kayak directly — real-time pricing via specific URL
-    try:
-        from gigi.claude_code_tools import browse_with_claude
-        if return_date:
-            kayak_url = f"https://www.kayak.com/flights/{origin}-{destination}/{departure_date}/{return_date}/{adults}adults"
-        else:
-            kayak_url = f"https://www.kayak.com/flights/{origin}-{destination}/{departure_date}/{adults}adults"
-        result = await browse_with_claude(
-            task="Extract the top 5 cheapest flight options shown on this page. For each flight include: airline, total price, departure time, arrival time, duration, and number of stops.",
-            url=kayak_url
-        )
-        return {"success": True, "source": "kayak_browse", "origin": origin, "destination": destination, "results": result}
-    except Exception as e:
-        logger.error(f"Browse flight search fallback failed: {e}")
-        return {"success": False, "error": f"Flight search unavailable: {str(e)}"}
+    return {
+        "success": False,
+        "error": "Flight search unavailable (Kayak CDP + Brave both failed)",
+    }
 
 
 # ============================================================
 # HOTEL SEARCH (upgraded — Amadeus Hotel List + Offers)
 # ============================================================
 
+
 async def search_hotels(
-    city: str, checkin: str, checkout: str, guests: int = 2,
-    max_price: int = None, sort: str = "price", limit: int = 5, currency: str = "USD",
+    city: str,
+    checkin: str,
+    checkout: str,
+    guests: int = 2,
+    max_price: int = None,
+    sort: str = "price",
+    limit: int = 5,
+    currency: str = "USD",
 ) -> dict:
     """Search hotels via Amadeus Hotel List + Hotel Offers Search APIs."""
     amadeus = _get_amadeus()
     if not amadeus:
-        return await _browse_hotel_search(city, checkin, checkout, guests, max_price, sort, limit, currency)
+        return await _browse_hotel_search(
+            city, checkin, checkout, guests, max_price, sort, limit, currency
+        )
 
     try:
         city_code = await _resolve_city_code(city) or city.upper()
-        hotel_response = await asyncio.to_thread(amadeus.reference_data.locations.hotels.by_city.get, cityCode=city_code)
+        hotel_response = await asyncio.to_thread(
+            amadeus.reference_data.locations.hotels.by_city.get, cityCode=city_code
+        )
         if not hotel_response.data:
-            return {"success": True, "source": "amadeus", "city": city_code, "hotels": [], "total_results": 0}
+            return {
+                "success": True,
+                "source": "amadeus",
+                "city": city_code,
+                "hotels": [],
+                "total_results": 0,
+            }
 
-        hotel_ids = [h.get("hotelId") for h in hotel_response.data[:20] if h.get("hotelId")]
+        hotel_ids = [
+            h.get("hotelId") for h in hotel_response.data[:20] if h.get("hotelId")
+        ]
         if not hotel_ids:
-            return {"success": True, "source": "amadeus", "city": city_code, "hotels": [], "total_results": 0}
+            return {
+                "success": True,
+                "source": "amadeus",
+                "city": city_code,
+                "hotels": [],
+                "total_results": 0,
+            }
 
         offers_response = await asyncio.to_thread(
             amadeus.shopping.hotel_offers_search.get,
-            hotelIds=",".join(hotel_ids), adults=guests, checkInDate=checkin, checkOutDate=checkout, currency=currency,
+            hotelIds=",".join(hotel_ids),
+            adults=guests,
+            checkInDate=checkin,
+            checkOutDate=checkout,
+            currency=currency,
         )
 
         hotels = []
@@ -311,55 +557,156 @@ async def search_hotels(
             offers = hotel_data.get("offers", [])
             best = offers[0] if offers else {}
             pi = best.get("price", {})
-            hotels.append({
-                "name": hi.get("name", "Unknown"), "hotel_id": hi.get("hotelId", ""), "city": hi.get("cityCode", city_code),
-                "latitude": hi.get("latitude"), "longitude": hi.get("longitude"),
-                "price_per_night": f"${pi.get('total', '?')} {currency}" if pi else "N/A",
-                "price_amount": float(pi.get("total", 0)) if pi.get("total") else None,
-                "check_in": checkin, "check_out": checkout,
-                "room_type": best.get("room", {}).get("description", {}).get("text", ""),
-                "offer_id": best.get("id", ""),
-                "cancellation": best.get("policies", {}).get("cancellation", {}).get("description", {}).get("text", ""),
-            })
+            hotels.append(
+                {
+                    "name": hi.get("name", "Unknown"),
+                    "hotel_id": hi.get("hotelId", ""),
+                    "city": hi.get("cityCode", city_code),
+                    "latitude": hi.get("latitude"),
+                    "longitude": hi.get("longitude"),
+                    "price_per_night": f"${pi.get('total', '?')} {currency}"
+                    if pi
+                    else "N/A",
+                    "price_amount": float(pi.get("total", 0))
+                    if pi.get("total")
+                    else None,
+                    "check_in": checkin,
+                    "check_out": checkout,
+                    "room_type": best.get("room", {})
+                    .get("description", {})
+                    .get("text", ""),
+                    "offer_id": best.get("id", ""),
+                    "cancellation": best.get("policies", {})
+                    .get("cancellation", {})
+                    .get("description", {})
+                    .get("text", ""),
+                }
+            )
         if sort == "price":
             hotels.sort(key=lambda h: h.get("price_amount") or float("inf"))
-        return {"success": True, "source": "amadeus", "city": city_code, "checkin": checkin, "checkout": checkout, "hotels": hotels[:limit], "total_results": len(hotels), "currency": currency}
+        return {
+            "success": True,
+            "source": "amadeus",
+            "city": city_code,
+            "checkin": checkin,
+            "checkout": checkout,
+            "hotels": hotels[:limit],
+            "total_results": len(hotels),
+            "currency": currency,
+        }
 
     except Exception as e:
         logger.error(f"Amadeus hotel search failed: {e}")
-        return await _browse_hotel_search(city, checkin, checkout, guests, max_price, sort, limit, currency)
-
-
-async def _browse_hotel_search(city, checkin, checkout, guests, max_price, sort, limit, currency) -> dict:
-    try:
-        from gigi.claude_code_tools import browse_with_claude
-        result = await browse_with_claude(
-            f"Search for hotels in {city} checking in {checkin} and checking out {checkout} for {guests} guests. "
-            + (f"Max price ${max_price / 100} per night. " if max_price else "")
-            + f"Sort by {sort}. List the top {limit} results with: hotel name, price per night, star rating, location, and booking link."
+        return await _browse_hotel_search(
+            city, checkin, checkout, guests, max_price, sort, limit, currency
         )
-        return {"success": True, "source": "browse", "city": city, "checkin": checkin, "checkout": checkout, "results": result}
+
+
+async def _browse_hotel_search(
+    city, checkin, checkout, guests, max_price, sort, limit, currency
+) -> dict:
+    """Fallback hotel search: Expedia CDP → Brave Search."""
+    # Step 1: Expedia CDP (free, ~12s, real pricing from logged-in session)
+    try:
+        url = _expedia_hotel_url(city, checkin, checkout, guests)
+        result = await _cdp_page_text(url, wait_seconds=12, max_len=4000)
+        if result.get("success"):
+            cleaned = _clean_travel_text(result["text"], max_len=2000)
+            return {
+                "success": True,
+                "source": "expedia",
+                "city": city,
+                "checkin": checkin,
+                "checkout": checkout,
+                "results_text": cleaned,
+                "search_url": result["url"],
+                "summary": (
+                    f"Expedia hotel results ({city}, {checkin} to {checkout}"
+                    f", {guests} guest{'s' if guests > 1 else ''}):\n\n"
+                    f"{cleaned}\n\n"
+                    f"Book on Expedia: {result['url']}"
+                ),
+            }
     except Exception as e:
-        logger.error(f"Hotel search fallback failed: {e}")
-        return {"success": False, "error": f"Hotel search unavailable. Error: {str(e)}"}
+        logger.warning(f"Expedia hotel search failed: {e}")
+
+    # Step 2: Brave Search — fast, always available
+    try:
+        import httpx
+
+        brave_api_key = os.getenv("BRAVE_API_KEY")
+        if brave_api_key:
+            query = (
+                f"hotels in {city} {checkin} to {checkout} {guests} guests best deals"
+            )
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.get(
+                    "https://api.search.brave.com/res/v1/web/search",
+                    headers={"X-Subscription-Token": brave_api_key},
+                    params={"q": query, "count": 5},
+                )
+            if resp.status_code == 200:
+                data = resp.json()
+                results = []
+                for r in data.get("web", {}).get("results", [])[:5]:
+                    results.append(
+                        {
+                            "title": r.get("title"),
+                            "description": r.get("description"),
+                            "url": r.get("url"),
+                        }
+                    )
+                if results:
+                    return {
+                        "success": True,
+                        "source": "brave_search",
+                        "city": city,
+                        "checkin": checkin,
+                        "checkout": checkout,
+                        "results": results,
+                        "note": "Web search results — click links for pricing",
+                    }
+    except Exception as e:
+        logger.warning(f"Brave hotel search failed: {e}")
+
+    return {
+        "success": False,
+        "error": "Hotel search unavailable (Expedia CDP + Brave both failed)",
+    }
 
 
 # ============================================================
 # TRANSFER SEARCH (replaces search_car_rentals)
 # ============================================================
 
+
 async def search_transfers(
-    start_location: str, end_location: str = None, start_date_time: str = "",
-    passengers: int = 1, transfer_type: str = "PRIVATE",
-    end_address: str = None, end_city: str = None, end_country: str = None,
+    start_location: str,
+    end_location: str = None,
+    start_date_time: str = "",
+    passengers: int = 1,
+    transfer_type: str = "PRIVATE",
+    end_address: str = None,
+    end_city: str = None,
+    end_country: str = None,
 ) -> dict:
     """Search ground transfers via Amadeus Transfer Offers API."""
     amadeus = _get_amadeus()
     if not amadeus:
-        return await _browse_transfer_search(start_location, end_location or end_address or end_city, start_date_time, passengers)
+        return await _browse_transfer_search(
+            start_location,
+            end_location or end_address or end_city,
+            start_date_time,
+            passengers,
+        )
 
     try:
-        body = {"startLocationCode": start_location.upper(), "transferType": transfer_type.upper(), "startDateTime": start_date_time, "passengers": passengers}
+        body = {
+            "startLocationCode": start_location.upper(),
+            "transferType": transfer_type.upper(),
+            "startDateTime": start_date_time,
+            "passengers": passengers,
+        }
         if end_location and len(end_location) <= 4:
             body["endLocationCode"] = end_location.upper()
         else:
@@ -374,71 +721,153 @@ async def search_transfers(
         transfers = []
         for offer in (response.data or [])[:10]:
             q = offer.get("quotation", {})
-            transfers.append({
-                "offer_id": offer.get("id", ""), "provider": offer.get("serviceProvider", {}).get("name", "Unknown"),
-                "vehicle": offer.get("vehicle", {}).get("description", ""), "transfer_type": offer.get("transferType", ""),
-                "price": f"${q.get('monetaryAmount', '?')} {q.get('currencyCode', 'USD')}", "price_amount": float(q.get("monetaryAmount", 0)),
-                "currency": q.get("currencyCode", "USD"), "cancellation_type": offer.get("cancellationType", ""),
-            })
-        return {"success": True, "source": "amadeus", "start": start_location, "end": end_location or end_address or end_city, "transfers": transfers, "total_results": len(transfers)}
+            transfers.append(
+                {
+                    "offer_id": offer.get("id", ""),
+                    "provider": offer.get("serviceProvider", {}).get("name", "Unknown"),
+                    "vehicle": offer.get("vehicle", {}).get("description", ""),
+                    "transfer_type": offer.get("transferType", ""),
+                    "price": f"${q.get('monetaryAmount', '?')} {q.get('currencyCode', 'USD')}",
+                    "price_amount": float(q.get("monetaryAmount", 0)),
+                    "currency": q.get("currencyCode", "USD"),
+                    "cancellation_type": offer.get("cancellationType", ""),
+                }
+            )
+        return {
+            "success": True,
+            "source": "amadeus",
+            "start": start_location,
+            "end": end_location or end_address or end_city,
+            "transfers": transfers,
+            "total_results": len(transfers),
+        }
 
     except Exception as e:
         logger.error(f"Amadeus transfer search failed: {e}")
-        return await _browse_transfer_search(start_location, end_location or end_address or end_city, start_date_time, passengers)
+        return await _browse_transfer_search(
+            start_location,
+            end_location or end_address or end_city,
+            start_date_time,
+            passengers,
+        )
 
 
-async def search_car_rentals(pickup_location: str, pickup_date: str, dropoff_date: str, dropoff_location: str = None, car_class: str = None) -> dict:
+async def search_car_rentals(
+    pickup_location: str,
+    pickup_date: str,
+    dropoff_date: str,
+    dropoff_location: str = None,
+    car_class: str = None,
+) -> dict:
     """Legacy wrapper — redirects to search_transfers."""
-    return await search_transfers(start_location=pickup_location, end_location=dropoff_location or pickup_location, start_date_time=f"{pickup_date}T10:00:00", passengers=2)
+    return await search_transfers(
+        start_location=pickup_location,
+        end_location=dropoff_location or pickup_location,
+        start_date_time=f"{pickup_date}T10:00:00",
+        passengers=2,
+    )
 
 
 async def _browse_transfer_search(start, end, date_time, passengers) -> dict:
     try:
         from gigi.claude_code_tools import browse_with_claude
-        result = await browse_with_claude(f"Search for ground transportation/transfers from {start} to {end} on {date_time} for {passengers} passenger(s). List the top 5 results with: provider, vehicle type, price, and booking link.")
+
+        result = await browse_with_claude(
+            f"Search for ground transportation/transfers from {start} to {end} on {date_time} for {passengers} passenger(s). List the top 5 results with: provider, vehicle type, price, and booking link."
+        )
         return {"success": True, "source": "browse", "results": result}
     except Exception as e:
         logger.error(f"Transfer search fallback failed: {e}")
-        return {"success": False, "error": f"Transfer search unavailable. Error: {str(e)}"}
+        return {
+            "success": False,
+            "error": f"Transfer search unavailable. Error: {str(e)}",
+        }
 
 
 # ============================================================
 # FLIGHT STATUS & DELAY PREDICTION
 # ============================================================
 
-async def get_flight_status(carrier_code: str, flight_number: str, departure_date: str, predict_delay: bool = True) -> dict:
+
+async def get_flight_status(
+    carrier_code: str,
+    flight_number: str,
+    departure_date: str,
+    predict_delay: bool = True,
+) -> dict:
     """Get real-time flight status and optional delay prediction."""
     amadeus = _get_amadeus()
     if not amadeus:
         return {"success": False, "error": "Amadeus not configured"}
     try:
-        response = await asyncio.to_thread(amadeus.schedule.flights.get, carrierCode=carrier_code.upper(), flightNumber=str(flight_number), scheduledDepartureDate=departure_date)
+        response = await asyncio.to_thread(
+            amadeus.schedule.flights.get,
+            carrierCode=carrier_code.upper(),
+            flightNumber=str(flight_number),
+            scheduledDepartureDate=departure_date,
+        )
         flights = []
-        for flight in (response.data or []):
+        for flight in response.data or []:
             points = flight.get("flightPoints", [])
             dep = points[0] if points else {}
             arr = points[-1] if len(points) > 1 else {}
             dep_timings = dep.get("departure", {}).get("timings", [])
             arr_timings = arr.get("arrival", {}).get("timings", [])
-            flights.append({
-                "carrier": flight.get("flightDesignator", {}).get("carrierCode", carrier_code),
-                "flight_number": flight.get("flightDesignator", {}).get("number", flight_number),
-                "departure_airport": dep.get("iataCode", ""), "departure_scheduled": dep_timings[0].get("value", "") if dep_timings else "",
-                "arrival_airport": arr.get("iataCode", ""), "arrival_scheduled": arr_timings[0].get("value", "") if arr_timings else "",
-                "aircraft": flight.get("legs", [{}])[0].get("aircraftEquipment", {}).get("aircraftType", "") if flight.get("legs") else "",
-            })
-        result = {"success": True, "source": "amadeus", "carrier": carrier_code.upper(), "flight_number": flight_number, "date": departure_date, "flights": flights}
+            flights.append(
+                {
+                    "carrier": flight.get("flightDesignator", {}).get(
+                        "carrierCode", carrier_code
+                    ),
+                    "flight_number": flight.get("flightDesignator", {}).get(
+                        "number", flight_number
+                    ),
+                    "departure_airport": dep.get("iataCode", ""),
+                    "departure_scheduled": dep_timings[0].get("value", "")
+                    if dep_timings
+                    else "",
+                    "arrival_airport": arr.get("iataCode", ""),
+                    "arrival_scheduled": arr_timings[0].get("value", "")
+                    if arr_timings
+                    else "",
+                    "aircraft": flight.get("legs", [{}])[0]
+                    .get("aircraftEquipment", {})
+                    .get("aircraftType", "")
+                    if flight.get("legs")
+                    else "",
+                }
+            )
+        result = {
+            "success": True,
+            "source": "amadeus",
+            "carrier": carrier_code.upper(),
+            "flight_number": flight_number,
+            "date": departure_date,
+            "flights": flights,
+        }
         if predict_delay and flights:
             try:
                 f = flights[0]
-                dr = await asyncio.to_thread(amadeus.travel.predictions.flight_delay.get,
-                    originLocationCode=f["departure_airport"], destinationLocationCode=f["arrival_airport"],
-                    departureDate=departure_date, departureTime=(f.get("departure_scheduled", "") or "12:00:00")[:8],
-                    arrivalDate=departure_date, arrivalTime=(f.get("arrival_scheduled", "") or "14:00:00")[:8],
-                    aircraftCode=f.get("aircraft", "320") or "320", carrierCode=carrier_code.upper(),
-                    flightNumber=str(flight_number), duration="PT2H")
+                dr = await asyncio.to_thread(
+                    amadeus.travel.predictions.flight_delay.get,
+                    originLocationCode=f["departure_airport"],
+                    destinationLocationCode=f["arrival_airport"],
+                    departureDate=departure_date,
+                    departureTime=(f.get("departure_scheduled", "") or "12:00:00")[:8],
+                    arrivalDate=departure_date,
+                    arrivalTime=(f.get("arrival_scheduled", "") or "14:00:00")[:8],
+                    aircraftCode=f.get("aircraft", "320") or "320",
+                    carrierCode=carrier_code.upper(),
+                    flightNumber=str(flight_number),
+                    duration="PT2H",
+                )
                 if dr.data:
-                    result["delay_prediction"] = [{"result": p.get("result", ""), "probability": p.get("probability", "")} for p in dr.data]
+                    result["delay_prediction"] = [
+                        {
+                            "result": p.get("result", ""),
+                            "probability": p.get("probability", ""),
+                        }
+                        for p in dr.data
+                    ]
             except Exception as e:
                 logger.warning(f"Delay prediction failed: {e}")
                 result["delay_prediction_error"] = str(e)
@@ -452,7 +881,13 @@ async def get_flight_status(carrier_code: str, flight_number: str, departure_dat
 # EXPLORE FLIGHTS (inspiration + cheapest dates + price analysis)
 # ============================================================
 
-async def explore_flights(origin: str, destination: str = None, departure_date: str = None, currency: str = "USD") -> dict:
+
+async def explore_flights(
+    origin: str,
+    destination: str = None,
+    departure_date: str = None,
+    currency: str = "USD",
+) -> dict:
     """Explore flights: origin only=inspiration, +destination=cheapest dates, +date=price analysis."""
     amadeus = _get_amadeus()
     if not amadeus:
@@ -460,21 +895,76 @@ async def explore_flights(origin: str, destination: str = None, departure_date: 
     origin_code = await _resolve_iata(origin) or origin.upper()
     try:
         if not destination:
-            response = await asyncio.to_thread(amadeus.shopping.flight_destinations.get, origin=origin_code)
-            dests = [{"destination": d.get("destination", ""), "departure_date": d.get("departureDate", ""), "return_date": d.get("returnDate", ""),
-                       "price": f"${d.get('price', {}).get('total', '?')} {currency}", "price_amount": float(d.get("price", {}).get("total", 0))} for d in (response.data or [])[:15]]
-            return {"success": True, "source": "amadeus", "type": "inspiration", "origin": origin_code, "destinations": dests}
+            response = await asyncio.to_thread(
+                amadeus.shopping.flight_destinations.get, origin=origin_code
+            )
+            dests = [
+                {
+                    "destination": d.get("destination", ""),
+                    "departure_date": d.get("departureDate", ""),
+                    "return_date": d.get("returnDate", ""),
+                    "price": f"${d.get('price', {}).get('total', '?')} {currency}",
+                    "price_amount": float(d.get("price", {}).get("total", 0)),
+                }
+                for d in (response.data or [])[:15]
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "type": "inspiration",
+                "origin": origin_code,
+                "destinations": dests,
+            }
 
         dest_code = await _resolve_iata(destination) or destination.upper()
         if not departure_date:
-            response = await asyncio.to_thread(amadeus.shopping.flight_dates.get, origin=origin_code, destination=dest_code)
-            dates = [{"departure_date": d.get("departureDate", ""), "return_date": d.get("returnDate", ""),
-                       "price": f"${d.get('price', {}).get('total', '?')} {currency}", "price_amount": float(d.get("price", {}).get("total", 0))} for d in (response.data or [])[:20]]
-            return {"success": True, "source": "amadeus", "type": "cheapest_dates", "origin": origin_code, "destination": dest_code, "dates": dates}
+            response = await asyncio.to_thread(
+                amadeus.shopping.flight_dates.get,
+                origin=origin_code,
+                destination=dest_code,
+            )
+            dates = [
+                {
+                    "departure_date": d.get("departureDate", ""),
+                    "return_date": d.get("returnDate", ""),
+                    "price": f"${d.get('price', {}).get('total', '?')} {currency}",
+                    "price_amount": float(d.get("price", {}).get("total", 0)),
+                }
+                for d in (response.data or [])[:20]
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "type": "cheapest_dates",
+                "origin": origin_code,
+                "destination": dest_code,
+                "dates": dates,
+            }
 
-        response = await asyncio.to_thread(amadeus.analytics.itinerary_price_metrics.get, originIataCode=origin_code, destinationIataCode=dest_code, departureDate=departure_date, currencyCode=currency)
-        metrics = [{"quartile": pm.get("quartileRanking", ""), "amount": f"${pm.get('amount', '?')} {currency}"} for m in (response.data or []) for pm in m.get("priceMetrics", [])]
-        return {"success": True, "source": "amadeus", "type": "price_analysis", "origin": origin_code, "destination": dest_code, "departure_date": departure_date, "price_metrics": metrics}
+        response = await asyncio.to_thread(
+            amadeus.analytics.itinerary_price_metrics.get,
+            originIataCode=origin_code,
+            destinationIataCode=dest_code,
+            departureDate=departure_date,
+            currencyCode=currency,
+        )
+        metrics = [
+            {
+                "quartile": pm.get("quartileRanking", ""),
+                "amount": f"${pm.get('amount', '?')} {currency}",
+            }
+            for m in (response.data or [])
+            for pm in m.get("priceMetrics", [])
+        ]
+        return {
+            "success": True,
+            "source": "amadeus",
+            "type": "price_analysis",
+            "origin": origin_code,
+            "destination": dest_code,
+            "departure_date": departure_date,
+            "price_metrics": metrics,
+        }
     except Exception as e:
         logger.error(f"Explore flights failed: {e}")
         return {"success": False, "error": str(e)}
@@ -484,7 +974,10 @@ async def explore_flights(origin: str, destination: str = None, departure_date: 
 # CONFIRM FLIGHT PRICE & BRANDED FARES
 # ============================================================
 
-async def confirm_flight_price(flight_offer: dict, include_bags: bool = False, include_branded_fares: bool = False) -> dict:
+
+async def confirm_flight_price(
+    flight_offer: dict, include_bags: bool = False, include_branded_fares: bool = False
+) -> dict:
     """Confirm pricing for a flight offer and optionally get branded fare upsells."""
     amadeus = _get_amadeus()
     if not amadeus:
@@ -493,13 +986,23 @@ async def confirm_flight_price(flight_offer: dict, include_bags: bool = False, i
         kwargs = {}
         if include_bags:
             kwargs["include"] = "bags"
-        response = await asyncio.to_thread(amadeus.shopping.flight_offers.pricing.post, flight_offer, **kwargs)
+        response = await asyncio.to_thread(
+            amadeus.shopping.flight_offers.pricing.post, flight_offer, **kwargs
+        )
         pricing_data = response.data if response.data else {}
         fos = pricing_data.get("flightOffers", [])
-        result = {"success": True, "source": "amadeus", "type": "price_confirmation", "confirmed_price": fos[0].get("price", {}) if fos else {}, "booking_requirements": pricing_data.get("bookingRequirements", {})}
+        result = {
+            "success": True,
+            "source": "amadeus",
+            "type": "price_confirmation",
+            "confirmed_price": fos[0].get("price", {}) if fos else {},
+            "booking_requirements": pricing_data.get("bookingRequirements", {}),
+        }
         if include_branded_fares:
             try:
-                ur = await asyncio.to_thread(amadeus.shopping.flight_offers.upselling.post, flight_offer)
+                ur = await asyncio.to_thread(
+                    amadeus.shopping.flight_offers.upselling.post, flight_offer
+                )
                 branded = []
                 for offer in (ur.data or [])[:5]:
                     price = offer.get("price", {})
@@ -510,7 +1013,14 @@ async def confirm_flight_price(flight_offer: dict, include_bags: bool = False, i
                         if fd:
                             cabin = fd[0].get("cabin", "ECONOMY")
                             branded_name = fd[0].get("brandedFare", "")
-                    branded.append({"cabin": cabin, "branded_fare": branded_name, "price": f"${price.get('grandTotal', '?')} {price.get('currency', 'USD')}", "price_amount": float(price.get("grandTotal", 0))})
+                    branded.append(
+                        {
+                            "cabin": cabin,
+                            "branded_fare": branded_name,
+                            "price": f"${price.get('grandTotal', '?')} {price.get('currency', 'USD')}",
+                            "price_amount": float(price.get("grandTotal", 0)),
+                        }
+                    )
                 result["branded_fares"] = branded
             except Exception as e:
                 logger.warning(f"Branded fares lookup failed: {e}")
@@ -525,6 +1035,7 @@ async def confirm_flight_price(flight_offer: dict, include_bags: bool = False, i
 # SEATMAP
 # ============================================================
 
+
 async def get_seatmap(flight_offer: dict = None, flight_order_id: str = None) -> dict:
     """Get seatmap for a flight offer or booked order."""
     amadeus = _get_amadeus()
@@ -532,14 +1043,27 @@ async def get_seatmap(flight_offer: dict = None, flight_order_id: str = None) ->
         return {"success": False, "error": "Amadeus not configured"}
     try:
         if flight_order_id:
-            response = await asyncio.to_thread(amadeus.shopping.seatmaps.get, flightOrderId=flight_order_id)
+            response = await asyncio.to_thread(
+                amadeus.shopping.seatmaps.get, flightOrderId=flight_order_id
+            )
         elif flight_offer:
-            response = await asyncio.to_thread(amadeus.shopping.seatmaps.post, flight_offer)
+            response = await asyncio.to_thread(
+                amadeus.shopping.seatmaps.post, flight_offer
+            )
         else:
-            return {"success": False, "error": "Provide flight_offer or flight_order_id"}
+            return {
+                "success": False,
+                "error": "Provide flight_offer or flight_order_id",
+            }
         seatmaps = []
-        for sm in (response.data or []):
-            seatmaps.append({"departure": sm.get("departure", {}).get("iataCode", ""), "arrival": sm.get("arrival", {}).get("iataCode", ""), "decks": len(sm.get("decks", []))})
+        for sm in response.data or []:
+            seatmaps.append(
+                {
+                    "departure": sm.get("departure", {}).get("iataCode", ""),
+                    "arrival": sm.get("arrival", {}).get("iataCode", ""),
+                    "decks": len(sm.get("decks", [])),
+                }
+            )
         return {"success": True, "source": "amadeus", "seatmaps": seatmaps}
     except Exception as e:
         logger.error(f"Seatmap lookup failed: {e}")
@@ -550,7 +1074,14 @@ async def get_seatmap(flight_offer: dict = None, flight_order_id: str = None) ->
 # FLIGHT AVAILABILITY
 # ============================================================
 
-async def search_flight_availability(origin: str, destination: str, departure_date: str, adults: int = 1, travel_class: str = None) -> dict:
+
+async def search_flight_availability(
+    origin: str,
+    destination: str,
+    departure_date: str,
+    adults: int = 1,
+    travel_class: str = None,
+) -> dict:
     """Search flight availability (seats per fare class)."""
     amadeus = _get_amadeus()
     if not amadeus:
@@ -558,19 +1089,62 @@ async def search_flight_availability(origin: str, destination: str, departure_da
     origin_code = await _resolve_iata(origin) or origin.upper()
     dest_code = await _resolve_iata(destination) or destination.upper()
     try:
-        body = {"originDestinations": [{"id": "1", "originLocationCode": origin_code, "destinationLocationCode": dest_code, "departureDateTime": {"date": departure_date}}],
-                "travelers": [{"id": str(i + 1), "travelerType": "ADULT"} for i in range(adults)], "sources": ["GDS"]}
+        body = {
+            "originDestinations": [
+                {
+                    "id": "1",
+                    "originLocationCode": origin_code,
+                    "destinationLocationCode": dest_code,
+                    "departureDateTime": {"date": departure_date},
+                }
+            ],
+            "travelers": [
+                {"id": str(i + 1), "travelerType": "ADULT"} for i in range(adults)
+            ],
+            "sources": ["GDS"],
+        }
         if travel_class:
-            body["searchCriteria"] = {"flightFilters": {"cabinRestrictions": [{"cabin": travel_class.upper(), "coverage": "MOST_SEGMENTS", "originDestinationIds": ["1"]}]}}
-        response = await asyncio.to_thread(amadeus.shopping.availability.flight_availabilities.post, body)
+            body["searchCriteria"] = {
+                "flightFilters": {
+                    "cabinRestrictions": [
+                        {
+                            "cabin": travel_class.upper(),
+                            "coverage": "MOST_SEGMENTS",
+                            "originDestinationIds": ["1"],
+                        }
+                    ]
+                }
+            }
+        response = await asyncio.to_thread(
+            amadeus.shopping.availability.flight_availabilities.post, body
+        )
         avails = []
         for avail in (response.data or [])[:10]:
             for seg in avail.get("segments", []):
-                avails.append({"carrier": seg.get("carrierCode", ""), "flight_number": seg.get("number", ""),
-                    "departure": seg.get("departure", {}).get("iataCode", ""), "arrival": seg.get("arrival", {}).get("iataCode", ""),
-                    "departure_time": seg.get("departure", {}).get("at", ""),
-                    "classes": [{"class": c.get("class", ""), "available_seats": c.get("numberOfBookableSeats", 0)} for c in seg.get("availabilityClasses", [])]})
-        return {"success": True, "source": "amadeus", "origin": origin_code, "destination": dest_code, "date": departure_date, "availabilities": avails}
+                avails.append(
+                    {
+                        "carrier": seg.get("carrierCode", ""),
+                        "flight_number": seg.get("number", ""),
+                        "departure": seg.get("departure", {}).get("iataCode", ""),
+                        "arrival": seg.get("arrival", {}).get("iataCode", ""),
+                        "departure_time": seg.get("departure", {}).get("at", ""),
+                        "classes": [
+                            {
+                                "class": c.get("class", ""),
+                                "available_seats": c.get("numberOfBookableSeats", 0),
+                            }
+                            for c in seg.get("availabilityClasses", [])
+                        ],
+                    }
+                )
+        return {
+            "success": True,
+            "source": "amadeus",
+            "origin": origin_code,
+            "destination": dest_code,
+            "date": departure_date,
+            "availabilities": avails,
+        }
     except Exception as e:
         logger.error(f"Flight availability search failed: {e}")
         return {"success": False, "error": str(e)}
@@ -579,6 +1153,7 @@ async def search_flight_availability(origin: str, destination: str, departure_da
 # ============================================================
 # BOOK FLIGHT
 # ============================================================
+
 
 async def book_flight(flight_offer: dict, travelers: list) -> dict:
     """Create a flight order (booking). NOTE: Sandbox mode = test bookings only."""
@@ -589,9 +1164,18 @@ async def book_flight(flight_offer: dict, travelers: list) -> dict:
     if hostname == "test":
         logger.warning("book_flight called in SANDBOX mode")
     try:
-        response = await asyncio.to_thread(amadeus.booking.flight_orders.post, flight_offer, travelers)
+        response = await asyncio.to_thread(
+            amadeus.booking.flight_orders.post, flight_offer, travelers
+        )
         order = response.data or {}
-        return {"success": True, "source": "amadeus", "sandbox_mode": hostname == "test", "order_id": order.get("id", ""), "associated_records": order.get("associatedRecords", []), "price": order.get("flightOffers", [{}])[0].get("price", {})}
+        return {
+            "success": True,
+            "source": "amadeus",
+            "sandbox_mode": hostname == "test",
+            "order_id": order.get("id", ""),
+            "associated_records": order.get("associatedRecords", []),
+            "price": order.get("flightOffers", [{}])[0].get("price", {}),
+        }
     except Exception as e:
         logger.error(f"Flight booking failed: {e}")
         return {"success": False, "error": str(e)}
@@ -601,6 +1185,7 @@ async def book_flight(flight_offer: dict, travelers: list) -> dict:
 # MANAGE FLIGHT BOOKING
 # ============================================================
 
+
 async def manage_flight_booking(order_id: str, action: str = "get") -> dict:
     """Get or cancel a flight booking."""
     amadeus = _get_amadeus()
@@ -609,12 +1194,28 @@ async def manage_flight_booking(order_id: str, action: str = "get") -> dict:
     try:
         if action == "cancel":
             await asyncio.to_thread(amadeus.booking.flight_order(order_id).delete)
-            return {"success": True, "source": "amadeus", "action": "cancelled", "order_id": order_id}
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "cancelled",
+                "order_id": order_id,
+            }
         else:
-            response = await asyncio.to_thread(amadeus.booking.flight_order(order_id).get)
+            response = await asyncio.to_thread(
+                amadeus.booking.flight_order(order_id).get
+            )
             order = response.data or {}
-            return {"success": True, "source": "amadeus", "action": "retrieved", "order_id": order.get("id", ""), "travelers": order.get("travelers", []),
-                    "price": order.get("flightOffers", [{}])[0].get("price", {}), "itineraries": order.get("flightOffers", [{}])[0].get("itineraries", [])}
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "retrieved",
+                "order_id": order.get("id", ""),
+                "travelers": order.get("travelers", []),
+                "price": order.get("flightOffers", [{}])[0].get("price", {}),
+                "itineraries": order.get("flightOffers", [{}])[0].get(
+                    "itineraries", []
+                ),
+            }
     except Exception as e:
         logger.error(f"Flight booking management failed: {e}")
         return {"success": False, "error": str(e)}
@@ -624,7 +1225,15 @@ async def manage_flight_booking(order_id: str, action: str = "get") -> dict:
 # AIRPORT INFO
 # ============================================================
 
-async def get_airport_info(action: str, query: str = None, airport_code: str = None, latitude: float = None, longitude: float = None, date: str = None) -> dict:
+
+async def get_airport_info(
+    action: str,
+    query: str = None,
+    airport_code: str = None,
+    latitude: float = None,
+    longitude: float = None,
+    date: str = None,
+) -> dict:
     """Get airport/city info. Actions: search, nearest, routes, performance."""
     amadeus = _get_amadeus()
     if not amadeus:
@@ -632,23 +1241,88 @@ async def get_airport_info(action: str, query: str = None, airport_code: str = N
     try:
         if action == "search" and query:
             from amadeus import Location
-            response = await asyncio.to_thread(amadeus.reference_data.locations.get, keyword=query, subType=Location.ANY)
-            locs = [{"name": l.get("name", ""), "iata_code": l.get("iataCode", ""), "type": l.get("subType", ""), "city": l.get("address", {}).get("cityName", ""), "country": l.get("address", {}).get("countryCode", "")} for l in (response.data or [])[:10]]
-            return {"success": True, "source": "amadeus", "action": "search", "locations": locs}
+
+            response = await asyncio.to_thread(
+                amadeus.reference_data.locations.get,
+                keyword=query,
+                subType=Location.ANY,
+            )
+            locs = [
+                {
+                    "name": l.get("name", ""),
+                    "iata_code": l.get("iataCode", ""),
+                    "type": l.get("subType", ""),
+                    "city": l.get("address", {}).get("cityName", ""),
+                    "country": l.get("address", {}).get("countryCode", ""),
+                }
+                for l in (response.data or [])[:10]
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "search",
+                "locations": locs,
+            }
         elif action == "nearest" and latitude is not None and longitude is not None:
-            response = await asyncio.to_thread(amadeus.reference_data.locations.airports.get, latitude=latitude, longitude=longitude)
-            airports = [{"name": a.get("name", ""), "iata_code": a.get("iataCode", ""), "city": a.get("address", {}).get("cityName", ""), "distance": a.get("distance", {}).get("value", ""), "unit": a.get("distance", {}).get("unit", "")} for a in (response.data or [])[:5]]
-            return {"success": True, "source": "amadeus", "action": "nearest", "airports": airports}
+            response = await asyncio.to_thread(
+                amadeus.reference_data.locations.airports.get,
+                latitude=latitude,
+                longitude=longitude,
+            )
+            airports = [
+                {
+                    "name": a.get("name", ""),
+                    "iata_code": a.get("iataCode", ""),
+                    "city": a.get("address", {}).get("cityName", ""),
+                    "distance": a.get("distance", {}).get("value", ""),
+                    "unit": a.get("distance", {}).get("unit", ""),
+                }
+                for a in (response.data or [])[:5]
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "nearest",
+                "airports": airports,
+            }
         elif action == "routes" and airport_code:
-            response = await asyncio.to_thread(amadeus.airport.direct_destinations.get, departureAirportCode=airport_code.upper())
-            dests = [{"destination": d.get("destination", ""), "name": d.get("name", "")} for d in (response.data or [])]
-            return {"success": True, "source": "amadeus", "action": "routes", "airport": airport_code.upper(), "direct_destinations": dests, "total": len(dests)}
+            response = await asyncio.to_thread(
+                amadeus.airport.direct_destinations.get,
+                departureAirportCode=airport_code.upper(),
+            )
+            dests = [
+                {"destination": d.get("destination", ""), "name": d.get("name", "")}
+                for d in (response.data or [])
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "routes",
+                "airport": airport_code.upper(),
+                "direct_destinations": dests,
+                "total": len(dests),
+            }
         elif action == "performance" and airport_code and date:
-            response = await asyncio.to_thread(amadeus.airport.predictions.on_time.get, airportCode=airport_code.upper(), date=date)
+            response = await asyncio.to_thread(
+                amadeus.airport.predictions.on_time.get,
+                airportCode=airport_code.upper(),
+                date=date,
+            )
             perf = response.data[0] if response.data else {}
-            return {"success": True, "source": "amadeus", "action": "performance", "airport": airport_code.upper(), "date": date, "probability": perf.get("probability", ""), "result": perf.get("result", "")}
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "performance",
+                "airport": airport_code.upper(),
+                "date": date,
+                "probability": perf.get("probability", ""),
+                "result": perf.get("result", ""),
+            }
         else:
-            return {"success": False, "error": f"Invalid action '{action}' or missing params"}
+            return {
+                "success": False,
+                "error": f"Invalid action '{action}' or missing params",
+            }
     except Exception as e:
         logger.error(f"Airport info lookup failed: {e}")
         return {"success": False, "error": str(e)}
@@ -658,7 +1332,10 @@ async def get_airport_info(action: str, query: str = None, airport_code: str = N
 # AIRLINE INFO
 # ============================================================
 
-async def get_airline_info(action: str, airline_code: str, airport_code: str = None) -> dict:
+
+async def get_airline_info(
+    action: str, airline_code: str, airport_code: str = None
+) -> dict:
     """Get airline info. Actions: lookup, routes, checkin."""
     amadeus = _get_amadeus()
     if not amadeus:
@@ -666,19 +1343,59 @@ async def get_airline_info(action: str, airline_code: str, airport_code: str = N
     code = airline_code.upper()
     try:
         if action == "lookup":
-            response = await asyncio.to_thread(amadeus.reference_data.airlines.get, airlineCodes=code)
-            airlines = [{"iata_code": a.get("iataCode", ""), "icao_code": a.get("icaoCode", ""), "name": a.get("businessName", a.get("commonName", ""))} for a in (response.data or [])]
-            return {"success": True, "source": "amadeus", "action": "lookup", "airlines": airlines}
+            response = await asyncio.to_thread(
+                amadeus.reference_data.airlines.get, airlineCodes=code
+            )
+            airlines = [
+                {
+                    "iata_code": a.get("iataCode", ""),
+                    "icao_code": a.get("icaoCode", ""),
+                    "name": a.get("businessName", a.get("commonName", "")),
+                }
+                for a in (response.data or [])
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "lookup",
+                "airlines": airlines,
+            }
         elif action == "routes":
-            response = await asyncio.to_thread(amadeus.airline.destinations.get, airlineCode=code)
-            dests = [{"destination": d.get("destination", ""), "name": d.get("name", "")} for d in (response.data or [])]
-            return {"success": True, "source": "amadeus", "action": "routes", "airline": code, "destinations": dests, "total": len(dests)}
+            response = await asyncio.to_thread(
+                amadeus.airline.destinations.get, airlineCode=code
+            )
+            dests = [
+                {"destination": d.get("destination", ""), "name": d.get("name", "")}
+                for d in (response.data or [])
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "routes",
+                "airline": code,
+                "destinations": dests,
+                "total": len(dests),
+            }
         elif action == "checkin":
-            response = await asyncio.to_thread(amadeus.reference_data.urls.checkin_links.get, airlineCode=code)
-            links = [{"channel": lnk.get("channel", ""), "url": lnk.get("href", "")} for lnk in (response.data or [])]
-            return {"success": True, "source": "amadeus", "action": "checkin", "airline": code, "checkin_links": links}
+            response = await asyncio.to_thread(
+                amadeus.reference_data.urls.checkin_links.get, airlineCode=code
+            )
+            links = [
+                {"channel": lnk.get("channel", ""), "url": lnk.get("href", "")}
+                for lnk in (response.data or [])
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": "checkin",
+                "airline": code,
+                "checkin_links": links,
+            }
         else:
-            return {"success": False, "error": f"Invalid action '{action}'. Use: lookup, routes, checkin"}
+            return {
+                "success": False,
+                "error": f"Invalid action '{action}'. Use: lookup, routes, checkin",
+            }
     except Exception as e:
         logger.error(f"Airline info lookup failed: {e}")
         return {"success": False, "error": str(e)}
@@ -688,14 +1405,25 @@ async def get_airline_info(action: str, airline_code: str, airport_code: str = N
 # HOTEL RATINGS
 # ============================================================
 
+
 async def get_hotel_ratings(hotel_ids: str) -> dict:
     """Get hotel sentiment/rating analysis. hotel_ids: comma-separated (max 3)."""
     amadeus = _get_amadeus()
     if not amadeus:
         return {"success": False, "error": "Amadeus not configured"}
     try:
-        response = await asyncio.to_thread(amadeus.e_reputation.hotel_sentiments.get, hotelIds=hotel_ids)
-        ratings = [{"hotel_id": h.get("hotelId", ""), "overall_rating": h.get("overallRating", ""), "number_of_reviews": h.get("numberOfReviews", 0), "sentiments": h.get("sentiments", {})} for h in (response.data or [])]
+        response = await asyncio.to_thread(
+            amadeus.e_reputation.hotel_sentiments.get, hotelIds=hotel_ids
+        )
+        ratings = [
+            {
+                "hotel_id": h.get("hotelId", ""),
+                "overall_rating": h.get("overallRating", ""),
+                "number_of_reviews": h.get("numberOfReviews", 0),
+                "sentiments": h.get("sentiments", {}),
+            }
+            for h in (response.data or [])
+        ]
         return {"success": True, "source": "amadeus", "ratings": ratings}
     except Exception as e:
         logger.error(f"Hotel ratings lookup failed: {e}")
@@ -706,6 +1434,7 @@ async def get_hotel_ratings(hotel_ids: str) -> dict:
 # BOOK HOTEL
 # ============================================================
 
+
 async def book_hotel(offer_id: str, guests: list, payment: dict) -> dict:
     """Book a hotel room. NOTE: Sandbox mode = test bookings only."""
     amadeus = _get_amadeus()
@@ -715,10 +1444,22 @@ async def book_hotel(offer_id: str, guests: list, payment: dict) -> dict:
     if hostname == "test":
         logger.warning("book_hotel called in SANDBOX mode")
     try:
-        response = await asyncio.to_thread(amadeus.booking.hotel_orders.post, guests=guests,
-            room_associations=[{"offerId": offer_id, "guestReferences": [{"guestReference": "1"}]}], payment=payment)
+        response = await asyncio.to_thread(
+            amadeus.booking.hotel_orders.post,
+            guests=guests,
+            room_associations=[
+                {"offerId": offer_id, "guestReferences": [{"guestReference": "1"}]}
+            ],
+            payment=payment,
+        )
         order = response.data or {}
-        return {"success": True, "source": "amadeus", "sandbox_mode": hostname == "test", "order_id": order.get("id", ""), "hotel": order.get("hotel", {})}
+        return {
+            "success": True,
+            "source": "amadeus",
+            "sandbox_mode": hostname == "test",
+            "order_id": order.get("id", ""),
+            "hotel": order.get("hotel", {}),
+        }
     except Exception as e:
         logger.error(f"Hotel booking failed: {e}")
         return {"success": False, "error": str(e)}
@@ -727,6 +1468,7 @@ async def book_hotel(offer_id: str, guests: list, payment: dict) -> dict:
 # ============================================================
 # BOOK TRANSFER
 # ============================================================
+
 
 async def book_transfer(offer_id: str, passengers: list, payment: dict = None) -> dict:
     """Book a ground transfer. NOTE: Sandbox mode = test bookings only."""
@@ -740,9 +1482,17 @@ async def book_transfer(offer_id: str, passengers: list, payment: dict = None) -
         body = {"passengers": passengers}
         if payment:
             body["payment"] = payment
-        response = await asyncio.to_thread(amadeus.ordering.transfer_orders.post, body, offerId=offer_id)
+        response = await asyncio.to_thread(
+            amadeus.ordering.transfer_orders.post, body, offerId=offer_id
+        )
         order = response.data or {}
-        return {"success": True, "source": "amadeus", "sandbox_mode": hostname == "test", "order_id": order.get("id", ""), "status": order.get("status", "")}
+        return {
+            "success": True,
+            "source": "amadeus",
+            "sandbox_mode": hostname == "test",
+            "order_id": order.get("id", ""),
+            "status": order.get("status", ""),
+        }
     except Exception as e:
         logger.error(f"Transfer booking failed: {e}")
         return {"success": False, "error": str(e)}
@@ -752,14 +1502,24 @@ async def book_transfer(offer_id: str, passengers: list, payment: dict = None) -
 # MANAGE TRANSFER (cancellation)
 # ============================================================
 
+
 async def manage_transfer(order_id: str, confirm_number: str) -> dict:
     """Cancel a transfer booking."""
     amadeus = _get_amadeus()
     if not amadeus:
         return {"success": False, "error": "Amadeus not configured"}
     try:
-        await asyncio.to_thread(amadeus.ordering.transfer_order(order_id).transfers.cancellation.post, {}, confirmNbr=confirm_number)
-        return {"success": True, "source": "amadeus", "action": "cancelled", "order_id": order_id}
+        await asyncio.to_thread(
+            amadeus.ordering.transfer_order(order_id).transfers.cancellation.post,
+            {},
+            confirmNbr=confirm_number,
+        )
+        return {
+            "success": True,
+            "source": "amadeus",
+            "action": "cancelled",
+            "order_id": order_id,
+        }
     except Exception as e:
         logger.error(f"Transfer cancellation failed: {e}")
         return {"success": False, "error": str(e)}
@@ -769,7 +1529,13 @@ async def manage_transfer(order_id: str, confirm_number: str) -> dict:
 # SEARCH ACTIVITIES (tours & activities)
 # ============================================================
 
-async def search_activities(city: str = None, latitude: float = None, longitude: float = None, radius: int = None) -> dict:
+
+async def search_activities(
+    city: str = None,
+    latitude: float = None,
+    longitude: float = None,
+    radius: int = None,
+) -> dict:
     """Search tours and activities at a destination."""
     amadeus = _get_amadeus()
     if not amadeus:
@@ -777,7 +1543,12 @@ async def search_activities(city: str = None, latitude: float = None, longitude:
     try:
         if city and latitude is None:
             from amadeus import Location
-            loc_response = await asyncio.to_thread(amadeus.reference_data.locations.get, keyword=city, subType=Location.CITY)
+
+            loc_response = await asyncio.to_thread(
+                amadeus.reference_data.locations.get,
+                keyword=city,
+                subType=Location.CITY,
+            )
             if loc_response.data:
                 geo = loc_response.data[0].get("geoCode", {})
                 latitude = geo.get("latitude")
@@ -790,10 +1561,27 @@ async def search_activities(city: str = None, latitude: float = None, longitude:
         response = await asyncio.to_thread(amadeus.shopping.activities.get, **params)
         activities = []
         for a in (response.data or [])[:15]:
-            activities.append({"id": a.get("id", ""), "name": a.get("name", ""), "description": (a.get("shortDescription") or a.get("description", ""))[:200],
-                "rating": a.get("rating", ""), "price": f"${a.get('price', {}).get('amount', '?')} {a.get('price', {}).get('currencyCode', 'USD')}" if a.get("price") else "N/A",
-                "booking_link": a.get("bookingLink", "")})
-        return {"success": True, "source": "amadeus", "location": city or f"{latitude},{longitude}", "activities": activities, "total_results": len(activities)}
+            activities.append(
+                {
+                    "id": a.get("id", ""),
+                    "name": a.get("name", ""),
+                    "description": (
+                        a.get("shortDescription") or a.get("description", "")
+                    )[:200],
+                    "rating": a.get("rating", ""),
+                    "price": f"${a.get('price', {}).get('amount', '?')} {a.get('price', {}).get('currencyCode', 'USD')}"
+                    if a.get("price")
+                    else "N/A",
+                    "booking_link": a.get("bookingLink", ""),
+                }
+            )
+        return {
+            "success": True,
+            "source": "amadeus",
+            "location": city or f"{latitude},{longitude}",
+            "activities": activities,
+            "total_results": len(activities),
+        }
     except Exception as e:
         logger.error(f"Activities search failed: {e}")
         return {"success": False, "error": str(e)}
@@ -803,38 +1591,142 @@ async def search_activities(city: str = None, latitude: float = None, longitude:
 # TRAVEL INSIGHTS
 # ============================================================
 
-async def get_travel_insights(action: str, origin: str = None, city: str = None, period: str = None,
-    destination: str = None, departure_date: str = None, return_date: str = None, country_code: str = "US") -> dict:
+
+async def get_travel_insights(
+    action: str,
+    origin: str = None,
+    city: str = None,
+    period: str = None,
+    destination: str = None,
+    departure_date: str = None,
+    return_date: str = None,
+    country_code: str = "US",
+) -> dict:
     """Get travel insights. Actions: most_traveled, most_booked, busiest_period, recommendations, trip_purpose."""
     amadeus = _get_amadeus()
     if not amadeus:
         return {"success": False, "error": "Amadeus not configured"}
     try:
         if action == "most_traveled" and origin and period:
-            response = await asyncio.to_thread(amadeus.travel.analytics.air_traffic.traveled.get, originCityCode=origin.upper(), period=period)
-            dests = [{"destination": d.get("destination", ""), "score": d.get("analytics", {}).get("flights", {}).get("score", "")} for d in (response.data or [])[:15]]
-            return {"success": True, "source": "amadeus", "action": action, "origin": origin.upper(), "period": period, "destinations": dests}
+            response = await asyncio.to_thread(
+                amadeus.travel.analytics.air_traffic.traveled.get,
+                originCityCode=origin.upper(),
+                period=period,
+            )
+            dests = [
+                {
+                    "destination": d.get("destination", ""),
+                    "score": d.get("analytics", {}).get("flights", {}).get("score", ""),
+                }
+                for d in (response.data or [])[:15]
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": action,
+                "origin": origin.upper(),
+                "period": period,
+                "destinations": dests,
+            }
         elif action == "most_booked" and origin and period:
-            response = await asyncio.to_thread(amadeus.travel.analytics.air_traffic.booked.get, originCityCode=origin.upper(), period=period)
-            dests = [{"destination": d.get("destination", ""), "score": d.get("analytics", {}).get("travelers", {}).get("score", "")} for d in (response.data or [])[:15]]
-            return {"success": True, "source": "amadeus", "action": action, "origin": origin.upper(), "period": period, "destinations": dests}
+            response = await asyncio.to_thread(
+                amadeus.travel.analytics.air_traffic.booked.get,
+                originCityCode=origin.upper(),
+                period=period,
+            )
+            dests = [
+                {
+                    "destination": d.get("destination", ""),
+                    "score": d.get("analytics", {})
+                    .get("travelers", {})
+                    .get("score", ""),
+                }
+                for d in (response.data or [])[:15]
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": action,
+                "origin": origin.upper(),
+                "period": period,
+                "destinations": dests,
+            }
         elif action == "busiest_period" and city and period:
             from amadeus import Direction
-            response = await asyncio.to_thread(amadeus.travel.analytics.air_traffic.busiest_period.get, cityCode=city.upper(), period=period, direction=Direction.ARRIVING)
-            periods = [{"period": p.get("period", ""), "score": p.get("analytics", {}).get("travelers", {}).get("score", "")} for p in (response.data or [])]
-            return {"success": True, "source": "amadeus", "action": action, "city": city.upper(), "year": period, "periods": periods}
+
+            response = await asyncio.to_thread(
+                amadeus.travel.analytics.air_traffic.busiest_period.get,
+                cityCode=city.upper(),
+                period=period,
+                direction=Direction.ARRIVING,
+            )
+            periods = [
+                {
+                    "period": p.get("period", ""),
+                    "score": p.get("analytics", {})
+                    .get("travelers", {})
+                    .get("score", ""),
+                }
+                for p in (response.data or [])
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": action,
+                "city": city.upper(),
+                "year": period,
+                "periods": periods,
+            }
         elif action == "recommendations" and origin:
-            response = await asyncio.to_thread(amadeus.reference_data.recommended_locations.get, cityCodes=origin.upper(), travelerCountryCode=country_code)
-            recs = [{"destination": r.get("iataCode", ""), "name": r.get("name", ""), "relevance": r.get("relevance", "")} for r in (response.data or [])[:10]]
-            return {"success": True, "source": "amadeus", "action": action, "origin": origin.upper(), "recommendations": recs}
-        elif action == "trip_purpose" and origin and destination and departure_date and return_date:
+            response = await asyncio.to_thread(
+                amadeus.reference_data.recommended_locations.get,
+                cityCodes=origin.upper(),
+                travelerCountryCode=country_code,
+            )
+            recs = [
+                {
+                    "destination": r.get("iataCode", ""),
+                    "name": r.get("name", ""),
+                    "relevance": r.get("relevance", ""),
+                }
+                for r in (response.data or [])[:10]
+            ]
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": action,
+                "origin": origin.upper(),
+                "recommendations": recs,
+            }
+        elif (
+            action == "trip_purpose"
+            and origin
+            and destination
+            and departure_date
+            and return_date
+        ):
             oc = await _resolve_iata(origin) or origin.upper()
             dc = await _resolve_iata(destination) or destination.upper()
-            response = await asyncio.to_thread(amadeus.travel.predictions.trip_purpose.get, originLocationCode=oc, destinationLocationCode=dc, departureDate=departure_date, returnDate=return_date)
+            response = await asyncio.to_thread(
+                amadeus.travel.predictions.trip_purpose.get,
+                originLocationCode=oc,
+                destinationLocationCode=dc,
+                departureDate=departure_date,
+                returnDate=return_date,
+            )
             pred = response.data or {}
-            return {"success": True, "source": "amadeus", "action": action, "purpose": pred.get("result", ""), "probability": pred.get("probability", "")}
+            return {
+                "success": True,
+                "source": "amadeus",
+                "action": action,
+                "purpose": pred.get("result", ""),
+                "probability": pred.get("probability", ""),
+            }
         else:
-            return {"success": False, "error": f"Invalid action '{action}' or missing params"}
+            return {
+                "success": False,
+                "error": f"Invalid action '{action}' or missing params",
+            }
     except Exception as e:
         logger.error(f"Travel insights failed: {e}")
         return {"success": False, "error": str(e)}

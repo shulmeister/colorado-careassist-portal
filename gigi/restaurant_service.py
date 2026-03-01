@@ -32,7 +32,7 @@ _SNAPSHOT_JUNK = re.compile(
     r"^("
     r"Page URL:|Page Title:|Console:"
     r"|#{1,4}\s*(Snapshot|Page|Open tabs)\s*$"
-    r"|- \d+:.*\(current\)"  # tab listing like "- 0: (current) [title]"
+    r"|- \d+:\s"  # ALL tab listings: "- 0: (current) [title]" and "- 1: [title]"
     r")",
     re.IGNORECASE,
 )
