@@ -7280,6 +7280,47 @@ async def api_marketing_website(
     )
 
 
+@app.get("/api/marketing/search-console")
+async def api_marketing_search_console(
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+):
+    """Return organic search metrics from Google Search Console."""
+    import logging
+
+    from services.marketing.gsc_service import gsc_service
+
+    logger = logging.getLogger(__name__)
+
+    end_default = datetime.now(timezone.utc).date()
+    start_default = end_default - timedelta(days=29)
+
+    start = _parse_date_param(from_date, start_default)
+    end = _parse_date_param(to_date, end_default)
+
+    if start > end:
+        raise HTTPException(
+            status_code=400, detail="'from' date must be before 'to' date."
+        )
+
+    logger.info(f"Fetching Search Console metrics from {start} to {end}")
+
+    gsc_data = gsc_service.get_search_metrics(start, end)
+
+    return JSONResponse(
+        {
+            "success": True,
+            "range": {
+                "start": start.isoformat(),
+                "end": end.isoformat(),
+                "days": (end - start).days + 1,
+            },
+            "data": gsc_data,
+        }
+    )
+
+
 @app.get("/api/marketing/test-ga4")
 async def test_ga4_connection(
     _test_ok: None = Depends(require_portal_test_endpoints_enabled),
