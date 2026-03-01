@@ -1394,13 +1394,12 @@
                         >OPERATING MODE</label
                       >
                       <select class="form-select" id="setting-mode">
-                        <option value="always" selected>
-                          Always Active (24/7)
-                        </option>
+                        <option value="always">Always Active (24/7)</option>
+                        <option value="after_hours">After Hours Only</option>
+                        <option value="shadow">Shadow Mode (Testing)</option>
                         <option value="disabled">
                           Disabled (Monitoring Only)
                         </option>
-                        <option value="shadow">Shadow Mode (Testing)</option>
                       </select>
                       <div class="form-text text-secondary small">
                         Controls when Gigi answers incoming calls.
@@ -1829,7 +1828,6 @@
             });
 
             async function loadUsers() {
-              const tbody = document.querySelector("#content-users-table"); // Need to add ID to table
               try {
                 const resp = await fetch("/api/gigi/users");
                 const data = await resp.json();
@@ -3784,10 +3782,31 @@
               callDetailModal.show();
             }
 
+            async function loadSettings() {
+              try {
+                const resp = await fetch("/api/gigi/settings");
+                const data = await resp.json();
+                if (data.success && data.settings) {
+                  const s = data.settings;
+                  document.getElementById("setting-mode").value = s.mode || "after_hours";
+                  document.getElementById("setting-hours-start").value = s.hours_start || "08:00";
+                  document.getElementById("setting-hours-end").value = s.hours_end || "17:00";
+                  document.getElementById("setting-transfer-phone").value = s.transfer_phone || "";
+                  document.getElementById("setting-log-level").value = s.log_level || "INFO";
+                  document.getElementById("setting-wellsky-sync").checked = !!s.wellsky_sync;
+                  document.getElementById("setting-auto-sms").checked = !!s.auto_sms;
+                }
+              } catch (err) {
+                console.error("Failed to load settings:", err);
+              }
+            }
+            // Load settings on tab open
+            loadSettings();
+
             async function saveSettings() {
               const btn = document.querySelector('button[onclick="saveSettings()"]');
               btn.disabled = true;
-              btn.innerHTML = "Saving...";
+              btn.textContent = "Saving...";
 
               const settings = {
                 mode: document.getElementById("setting-mode").value,
@@ -3806,22 +3825,41 @@
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(settings),
                 });
-                if (resp.ok) {
-                  alert("Settings updated successfully!");
+                const data = await resp.json();
+                if (data.success) {
+                  btn.textContent = "Saved!";
+                  setTimeout(() => { btn.textContent = "Save Changes"; }, 2000);
+                } else {
+                  alert("Failed to save: " + (data.message || "Unknown error"));
+                  btn.textContent = "Save Changes";
                 }
               } catch (err) {
                 alert("Failed to update settings");
+                btn.textContent = "Save Changes";
               } finally {
                 btn.disabled = false;
-                btn.innerHTML = "Save Changes";
               }
             }
 
             function resetGigi() {
               if (
-                confirm("Restarting the agent will drop any active calls. Continue?")
+                confirm("This will restart the Gigi voice service. Active calls will be dropped. Continue?")
               ) {
-                alert("Restarting agent service...");
+                fetch("/api/gigi/control", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ command: "stop" }),
+                }).then(() => {
+                  setTimeout(() => {
+                    fetch("/api/gigi/control", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ command: "go" }),
+                    }).then(() => {
+                      alert("Gigi has been restarted.");
+                    });
+                  }, 2000);
+                }).catch(() => alert("Restart failed."));
               }
             }
 

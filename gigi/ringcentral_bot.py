@@ -1247,6 +1247,7 @@ On the FIRST message in a conversation, ALWAYS use identify_caller with the call
 - OUTBOUND SMS: NEVER send texts to contacts without explicit confirmation from the requester.
 - NO sycophantic language. Be direct and real.
 - NEVER start with "Thanks for your message!" — just respond to what they said.
+- NEVER include your internal reasoning or thought process in your response. Do NOT narrate what you're observing ("The caller is...", "This is a prospect inquiry...", "I should..."). Think silently, then respond naturally.
 
 Today is {current_date}.
 The caller's phone number is {caller_phone}.
@@ -3612,7 +3613,7 @@ class GigiRingCentralBot:
                 system += xc
 
         try:
-            # Fallback chain: primary provider → anthropic haiku on rate limit
+            # Fallback chain: primary provider → gemini on rate limit
             final_text = None
             try:
                 if self.llm_provider == "gemini":
@@ -3651,14 +3652,14 @@ class GigiRingCentralBot:
                     k in err_str
                     for k in ("429", "resource_exhausted", "rate_limit", "quota")
                 )
-                if is_rate_limit and self.llm_provider != "anthropic":
+                if is_rate_limit and self.llm_provider != "gemini":
                     logger.warning(
-                        f"SMS {self.llm_provider} rate limited, falling back to anthropic: {e}"
+                        f"SMS {self.llm_provider} rate limited, falling back to gemini: {e}"
                     )
-                    final_text = await self._call_anthropic(
+                    final_text = await self._call_gemini(
                         system,
                         conv_history,
-                        SMS_TOOLS,
+                        GEMINI_SMS_TOOLS,
                         lambda name, inp: self._execute_sms_tool(
                             name, inp, caller_phone=phone
                         ),
@@ -3753,7 +3754,7 @@ class GigiRingCentralBot:
         conv_history.append({"role": "user", "content": text})
 
         try:
-            # Fallback chain: primary provider → anthropic haiku on rate limit
+            # Fallback chain: primary provider → gemini on rate limit
             final_text = None
             try:
                 if self.llm_provider == "gemini":
@@ -3786,14 +3787,14 @@ class GigiRingCentralBot:
                     k in err_str
                     for k in ("429", "resource_exhausted", "rate_limit", "quota")
                 )
-                if is_rate_limit and self.llm_provider != "anthropic":
+                if is_rate_limit and self.llm_provider != "gemini":
                     logger.warning(
-                        f"DM {self.llm_provider} rate limited, falling back to anthropic: {e}"
+                        f"DM {self.llm_provider} rate limited, falling back to gemini: {e}"
                     )
-                    final_text = await self._call_anthropic(
+                    final_text = await self._call_gemini(
                         system,
                         conv_history,
-                        DM_TOOLS,
+                        GEMINI_DM_TOOLS,
                         lambda name, inp: self._execute_dm_tool(name, inp),
                         "DM",
                     )
