@@ -7437,6 +7437,21 @@ async def get_predis_templates(
         )
 
 
+@app.post("/api/marketing/predis/webhook")
+async def predis_webhook(request: Request):
+    """Webhook endpoint for Predis AI post status notifications."""
+    try:
+        data = await request.json()
+        event_type = data.get("event", "unknown")
+        post_id = data.get("post_id") or data.get("content_id")
+        status = data.get("status", "unknown")
+        logger.info(f"Predis webhook: {event_type} post={post_id} status={status}")
+        return JSONResponse({"received": True})
+    except Exception as e:
+        logger.error(f"Predis webhook error: {e}")
+        return JSONResponse({"received": False, "error": str(e)}, status_code=500)
+
+
 @app.get("/api/marketing/test-gbp")
 async def test_gbp_connection(
     _test_ok: None = Depends(require_portal_test_endpoints_enabled),

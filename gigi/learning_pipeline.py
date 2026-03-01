@@ -21,17 +21,26 @@ import re
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-import anthropic
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 
 logger = logging.getLogger(__name__)
 
+
+def _strip_think_tags(text: str) -> str:
+    """Strip <think>...</think> reasoning blocks before evaluation."""
+    if not text or "<think>" not in text:
+        return text
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    text = re.sub(r"<think>.*", "", text, flags=re.DOTALL)
+    return text.strip()
+
+
 DB_URL = os.getenv("DATABASE_URL", "postgresql://careassist@localhost:5432/careassist")
 RINGCENTRAL_SERVER = os.getenv(
     "RINGCENTRAL_SERVER_URL", "https://platform.ringcentral.com"
 )
-ANALYSIS_MODEL = "claude-haiku-4-5-20251001"
+ANALYSIS_MODEL = os.getenv("LEARNING_ANALYSIS_MODEL", "gemini-2.5-flash")
 
 # How far back to look for staff replies (minutes after Gigi's draft)
 PAIRING_WINDOW_MINUTES = 60
@@ -40,8 +49,8 @@ PAIRING_WINDOW_MINUTES = 60
 MIN_DIFFERENCE_SCORE = 3  # out of 10
 
 # --- Evaluation Pipeline Constants ---
-EVAL_MODEL_NIGHTLY = "claude-sonnet-4-20250514"
-EVAL_MODEL_ON_DEMAND = "claude-opus-4-20250514"
+EVAL_MODEL_NIGHTLY = os.getenv("LEARNING_EVAL_MODEL", "gemini-2.5-flash")
+EVAL_MODEL_ON_DEMAND = os.getenv("LEARNING_EVAL_MODEL_ONDEMAND", "gemini-2.5-flash")
 EVAL_MAX_PER_RUN = 100
 EVAL_FLAG_THRESHOLD = 2.5
 
@@ -274,9 +283,9 @@ def analyze_draft_vs_reply(
     - correction (what Gigi should learn)
     - category (tone, content, action, escalation)
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        return {"error": "ANTHROPIC_API_KEY not set"}
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        return {"error": "GEMINI_API_KEY not set"}
 
     prompt = f"""Compare an AI assistant's draft SMS reply with what the human staff actually sent.
 The AI is "Gigi", a home care agency assistant. The staff member is experienced and their reply is the gold standard.
@@ -301,13 +310,19 @@ Analyze the difference and return ONLY valid JSON:
 }}"""
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
+        from google import genai
+        from google.genai import types as genai_types
+
+        client = genai.Client(api_key=gemini_key)
+        response = client.models.generate_content(
             model=ANALYSIS_MODEL,
-            max_tokens=500,
-            messages=[{"role": "user", "content": prompt}],
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                max_output_tokens=500,
+                temperature=0.1,
+            ),
         )
-        text = response.content[0].text.strip()
+        text = response.text.strip()
 
         # Extract JSON
         json_match = re.search(r"\{[^{}]*\}", text, re.DOTALL)
@@ -778,12 +793,17 @@ def _get_unevaluated_conversations(
             c2.created_at   AS assistant_time,
             EXTRACT(EPOCH FROM (c2.created_at - c1.created_at)) * 1000 AS latency_ms
         FROM gigi_conversations c1
-        JOIN gigi_conversations c2
-          ON  c2.user_id  = c1.user_id
-          AND c2.channel  = c1.channel
-          AND c2.role     = 'assistant'
-          AND c2.created_at > c1.created_at
-          AND c2.created_at < c1.created_at + INTERVAL '5 minutes'
+        JOIN LATERAL (
+            SELECT id, content, created_at
+            FROM gigi_conversations
+            WHERE user_id  = c1.user_id
+              AND channel  = c1.channel
+              AND role     = 'assistant'
+              AND created_at > c1.created_at
+              AND created_at < c1.created_at + INTERVAL '5 minutes'
+            ORDER BY created_at ASC
+            LIMIT 1
+        ) c2 ON TRUE
         WHERE c1.role = 'user'
           AND {where_clause}
           AND NOT EXISTS (
@@ -878,30 +898,60 @@ def evaluate_response(
 
     Returns a dict with per-criterion scores plus a ``judge_model`` key.
     """
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        return {"error": "ANTHROPIC_API_KEY not set"}
+    gemini_key = os.getenv("GEMINI_API_KEY")
+    if not gemini_key:
+        return {"error": "GEMINI_API_KEY not set"}
 
     judge_model = model or EVAL_MODEL_NIGHTLY
     prompt = _build_evaluation_prompt(channel, user_message, gigi_response, mode)
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
+        from google import genai
+        from google.genai import types as genai_types
+
+        client = genai.Client(api_key=gemini_key)
+        response = client.models.generate_content(
             model=judge_model,
-            max_tokens=1000,
-            messages=[{"role": "user", "content": prompt}],
+            contents=prompt,
+            config=genai_types.GenerateContentConfig(
+                max_output_tokens=4000,
+                temperature=0.1,
+            ),
         )
-        text = response.content[0].text.strip()
+        text = response.text.strip()
 
         # Extract JSON — may be wrapped in markdown code fences
         json_match = re.search(r"\{[\s\S]*\}", text)
         if json_match:
-            scores = json.loads(json_match.group())
-            scores["judge_model"] = judge_model
-            return scores
-        else:
-            return {"error": "Could not parse evaluation JSON", "raw": text[:300]}
+            try:
+                scores = json.loads(json_match.group())
+                scores["judge_model"] = judge_model
+                return scores
+            except json.JSONDecodeError:
+                pass  # Fall through to regex fallback
+
+        # Fallback: Gemini often puts unescaped quotes in evidence/reasoning
+        # fields which breaks JSON parsing.  Extract just the numeric scores.
+        scores_fallback: Dict[str, Any] = {"judge_model": judge_model}
+        for criterion in (
+            "accuracy",
+            "helpfulness",
+            "tone",
+            "tool_selection",
+            "safety",
+        ):
+            # Match "criterion": {..., "score": N} pattern
+            m = re.search(
+                rf'"{criterion}"[^{{]*\{{[^}}]*"score"\s*:\s*(\d)',
+                text,
+            )
+            if m:
+                scores_fallback[criterion] = {"score": int(m.group(1))}
+        if len(scores_fallback) >= 6:  # 5 criteria + judge_model
+            logger.info("Used regex fallback to extract evaluation scores")
+            return scores_fallback
+
+        return {"error": "Could not parse evaluation JSON", "raw": text[:300]}
     except Exception as e:
         return {"error": str(e)}
 
@@ -1208,7 +1258,7 @@ def run_evaluation_pipeline(model: Optional[str] = None) -> Dict[str, Any]:
         for conv in conversations:
             channel = conv["channel"] or "telegram"
             user_message = conv["user_message"] or ""
-            gigi_response = conv["gigi_response"] or ""
+            gigi_response = _strip_think_tags(conv["gigi_response"] or "")
             latency_ms = conv.get("latency_ms") or 0
 
             if not user_message.strip() or not gigi_response.strip():
@@ -1324,7 +1374,7 @@ def evaluate_conversation(
         conv = conversations[0]
         channel = conv["channel"] or "telegram"
         user_message = conv["user_message"] or ""
-        gigi_response = conv["gigi_response"] or ""
+        gigi_response = _strip_think_tags(conv["gigi_response"] or "")
         latency_ms = conv.get("latency_ms") or 0
 
         scores = evaluate_response(
@@ -1418,7 +1468,7 @@ def evaluate_channel(
         total_score = 0.0
         for conv in conversations:
             user_message = conv["user_message"] or ""
-            gigi_response = conv["gigi_response"] or ""
+            gigi_response = _strip_think_tags(conv["gigi_response"] or "")
             latency_ms = conv.get("latency_ms") or 0
 
             if not user_message.strip() or not gigi_response.strip():
